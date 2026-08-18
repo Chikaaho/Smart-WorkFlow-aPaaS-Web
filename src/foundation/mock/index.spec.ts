@@ -247,6 +247,81 @@ describe('foundation/mock/index', () => {
     expect(result!.data).toEqual([])
   })
 
+  // ── dept tree 名称/状态筛选（I31，与后端契约对齐） ─────────
+
+  describe('dept tree 筛选语义', () => {
+    type MockDept = { id: string; parentId: string; name: string; sort: number; status: number }
+
+    async function queryTree(query: Record<string, string>): Promise<MockDept[]> {
+      const mod = await import('@/foundation/mock/index')
+      const result = await mod.dispatchMock('GET', '/system/dept/tree', '/api', query, {})
+      expect(result).toBeDefined()
+      expect(result!.code).toBe(0)
+      return result!.data as MockDept[]
+    }
+
+    it('无参数返回全量部门列表（与现状一致）', async () => {
+      const list = await queryTree({})
+      expect(list).toHaveLength(7)
+      expect(list.map((d) => d.id)).toEqual(['1', '2', '3', '4', '5', '6', '7'])
+    })
+
+    it('name 包含匹配：命中节点 + 祖先补全，sort 升序稳定排序', async () => {
+      const list = await queryTree({ name: '组' })
+      // 命中 前端组(5)/后端组(6)，祖先 总公司(1)/技术部(2)。
+      // 上溯插入序 [5,2,1,6]，sort 全为 1/1/1/2 → 稳定排序保持 [5,2,1,6]（sort 升序非递减）
+      expect(list.map((d) => d.id)).toEqual(['5', '2', '1', '6'])
+      expect(list.map((d) => d.sort)).toEqual([1, 1, 1, 2])
+    })
+
+    it('status=1（停用）只返回停用命中 + 祖先', async () => {
+      const list = await queryTree({ status: '1' })
+      // 财务部(7,status=1) 命中，祖先 总公司(1)；其余正常部门不混入
+      expect(list.map((d) => d.id)).toEqual(['1', '7'])
+    })
+
+    it('组合条件：命中须同时满足名称与状态；祖先不须满足状态', async () => {
+      const hit = await queryTree({ name: '财', status: '1' })
+      expect(hit.map((d) => d.id)).toEqual(['1', '7'])
+
+      // 财务部名称命中但状态=0 条件不满足 → 无匹配（正常的总公司不得被祖先补全混入）
+      const miss = await queryTree({ name: '财', status: '0' })
+      expect(miss).toEqual([])
+    })
+
+    it('空白名称等价未填写 → 返回全量', async () => {
+      const list = await queryTree({ name: '   ' })
+      expect(list).toHaveLength(7)
+    })
+
+    it('无匹配返回空数组（不回退全量）', async () => {
+      const list = await queryTree({ name: '不存在的部门' })
+      expect(list).toEqual([])
+    })
+
+    it('多命中共享祖先时去重且按 sort 升序稳定排序', async () => {
+      const list = await queryTree({ name: '部' })
+      // 命中 技术部(2)/产品部(3)/人事部(4)/财务部(7) + 祖先 总公司(1)，无重复。
+      // 插入序 [2,1,3,4,7]，sort 1/1/2/3/4 → 稳定排序保持 [2,1,3,4,7]（sort 升序非递减）
+      expect(list.map((d) => d.id)).toEqual(['2', '1', '3', '4', '7'])
+      expect(new Set(list.map((d) => d.id)).size).toBe(5)
+    })
+
+    it('status=0（正常）返回全部正常部门', async () => {
+      const list = await queryTree({ status: '0' })
+      expect(list).toHaveLength(6)
+      expect(list.every((d) => d.status === 0)).toBe(true)
+    })
+
+    it('非法 status 显式 400（不静默退化为全量）', async () => {
+      const mod = await import('@/foundation/mock/index')
+      const result = await mod.dispatchMock('GET', '/system/dept/tree', '/api', { status: '2' }, {})
+      expect(result).toBeDefined()
+      expect(result!.code).toBe(400)
+      expect(result!.data).toBeNull()
+    })
+  })
+
   // ── 非 demo-form 仍走通用逻辑 ─────────────────────────────
 
   it('非 demo-form 的 definition handler 返回通用表单 JSON', async () => {

@@ -1132,6 +1132,16 @@ export const MOCK_DEPTS_LIST = [
     createTime: '2026-06-15 09:00:00',
     updateTime: '2026-07-01 10:00:00',
   },
+  {
+    id: '7',
+    parentId: '1',
+    name: '财务部',
+    code: 'FIN',
+    sort: 4,
+    status: 1,
+    createTime: '2026-06-01 10:00:00',
+    updateTime: '2026-07-01 10:00:00',
+  },
 ]
 
 export const MOCK_POSTS_LIST = [

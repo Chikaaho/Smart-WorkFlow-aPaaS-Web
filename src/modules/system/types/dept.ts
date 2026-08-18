@@ -19,3 +19,15 @@ export interface SysDept {
   /** 前端树形渲染用，后端不返回 */
   children?: SysDept[]
 }
+
+/**
+ * 部门树查询条件（GET /system/dept/tree 查询参数）。
+ *
+ * 与后端契约对齐（I31）：
+ * - name：部门名称包含匹配（LIKE %name%）；trim 后空白等价未填写，不传或空白 = 不筛选。
+ * - status：0=正常、1=停用（SYS_DEPT_STATUS）；不传 = 全部；非法值后端显式 400，前端不产生。
+ */
+export interface DeptQuery {
+  name?: string
+  status?: number
+}

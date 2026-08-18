@@ -1082,8 +1082,39 @@ export const mockRegistrations: MockRegistration[] = [
   {
     method: 'GET',
     pattern: '/api/system/dept/tree',
-    handler: () => {
-      return { code: 0, message: 'ok', data: [...MOCK_DEPTS_LIST] }
+    handler: (_params, query) => {
+      // 与后端契约对齐（I31）：name=包含匹配（trim 后空白等价未填写）、status=0/1 精确相等；
+      // 结果 = 直接命中 + 沿 parentId 上溯至 '0' 或断链的祖先，去重，sort 升序稳定排序；
+      // 无参数时返回全量（与旧行为一致）；非法 status 显式 400。
+      const name = String(query.name ?? '').trim()
+      const statusRaw = query.status
+      const hasStatus = statusRaw !== undefined && statusRaw !== ''
+      if (hasStatus && statusRaw !== '0' && statusRaw !== '1') {
+        return { code: 400, message: '非法部门状态参数', data: null }
+      }
+
+      let hits = [...MOCK_DEPTS_LIST]
+      if (name) hits = hits.filter((d) => d.name.includes(name))
+      if (hasStatus) hits = hits.filter((d) => d.status === Number(statusRaw))
+
+      if (!name && !hasStatus) {
+        // 无筛选条件：与现状一致，直接返回全量（保持既有顺序）
+        return { code: 0, message: 'ok', data: hits }
+      }
+
+      // 祖先补全：沿 parentId 上溯（断链即停），Map 去重保证无重复节点
+      const byId = new Map(MOCK_DEPTS_LIST.map((d) => [d.id, d]))
+      const result = new Map<string, (typeof MOCK_DEPTS_LIST)[number]>()
+      for (const hit of hits) {
+        let cur: (typeof MOCK_DEPTS_LIST)[number] | undefined = hit
+        while (cur && !result.has(cur.id)) {
+          result.set(cur.id, cur)
+          cur = cur.parentId && cur.parentId !== '0' ? byId.get(cur.parentId) : undefined
+        }
+      }
+      // sort 升序 + JS 稳定排序（同 sort 保持首次出现顺序）
+      const list = [...result.values()].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+      return { code: 0, message: 'ok', data: list }
     },
   },
   {

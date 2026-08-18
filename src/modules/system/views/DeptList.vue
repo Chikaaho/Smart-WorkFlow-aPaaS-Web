@@ -17,7 +17,7 @@ import {
   updateDept,
   deleteDept,
 } from '@/modules/system/api/dept'
-import type { SysDept } from '@/modules/system/types/dept'
+import type { SysDept, DeptQuery } from '@/modules/system/types/dept'
 import {
   SYS_DEPT_STATUS,
   deptStatusOptions,
@@ -33,7 +33,34 @@ const flatData = ref<SysDept[]>([])
 const loading = ref(false)
 const errorMsg = ref('')
 
-/** flat 数组 → 嵌套树转换 */
+// ─── 筛选状态 ───
+
+/**
+ * 筛选条件。status 用 '' 表示「全部」（不传 status），
+ * 正常=SYS_DEPT_STATUS.NORMAL(0)、停用=SYS_DEPT_STATUS.DISABLED(1)，严格对齐后端契约。
+ */
+const filter = reactive<{ name: string; status: number | '' }>({ name: '', status: '' })
+
+/** 状态下拉：全部（不传 status）+ 复用 deptStatusOptions 的 正常(0)/停用(1) 语义 */
+const statusFilterOptions: Array<{ label: string; value: number | '' }> = [
+  { label: '全部', value: '' },
+  ...deptStatusOptions.map((opt) => ({ label: opt.label, value: opt.value })),
+]
+
+/** 是否处于筛选状态（任一条件生效） */
+const hasFilter = computed(() => filter.name.trim() !== '' || filter.status !== '')
+
+/** 组装查询条件；无有效条件返回 undefined（等价无参调用） */
+function buildQuery(): DeptQuery | undefined {
+  const name = filter.name.trim()
+  if (!name && filter.status === '') return undefined
+  const query: DeptQuery = {}
+  if (name) query.name = name
+  if (filter.status !== '') query.status = filter.status
+  return query
+}
+
+/** flat 数组 → 嵌套树转换（筛选结果已含祖先，buildTree 后树形完整） */
 function buildTree(list: SysDept[], parentId = '0'): SysDept[] {
   return list
     .filter((item) => item.parentId === parentId)
@@ -47,7 +74,8 @@ async function loadTree() {
   loading.value = true
   errorMsg.value = ''
   try {
-    flatData.value = await listDeptTree()
+    const query = buildQuery()
+    flatData.value = query ? await listDeptTree(query) : await listDeptTree()
     treeData.value = buildTree(flatData.value)
   } catch (err) {
     if (err instanceof ApiError) {
@@ -60,7 +88,22 @@ async function loadTree() {
   }
 }
 
+/** 查询：携带当前筛选条件重新加载 */
+function handleQuery() {
+  void loadTree()
+}
+
+/** 重置：清空筛选条件并恢复全量树 */
+function handleReset() {
+  filter.name = ''
+  filter.status = ''
+  void loadTree()
+}
+
 const isEmpty = computed(() => !loading.value && !errorMsg.value && treeData.value.length === 0)
+
+/** 筛选条件下无匹配（区别于无筛选的空库空态，不显示新建入口） */
+const isFilterEmpty = computed(() => hasFilter.value && isEmpty.value)
 
 // ─── 弹窗状态 ───
 
@@ -216,6 +259,27 @@ onMounted(loadTree)
       </template>
     </ListToolbar>
 
+    <!-- 筛选区：名称（Enter 触发查询）+ 状态（全部/正常/停用）+ 查询/重置 -->
+    <div class="dept-list__filter">
+      <el-input
+        v-model="filter.name"
+        placeholder="部门名称"
+        clearable
+        style="width: 200px"
+        @keyup.enter="handleQuery"
+      />
+      <el-select v-model="filter.status" style="width: 120px">
+        <el-option
+          v-for="opt in statusFilterOptions"
+          :key="String(opt.value)"
+          :label="opt.label"
+          :value="opt.value"
+        />
+      </el-select>
+      <el-button type="primary" @click="handleQuery">查询</el-button>
+      <el-button @click="handleReset">重置</el-button>
+    </div>
+
     <!-- 错误提示 -->
     <el-alert
       v-if="errorMsg"
@@ -257,8 +321,13 @@ onMounted(loadTree)
         </el-table-column>
       </el-table>
 
-      <!-- 空态 -->
-      <div v-if="isEmpty" class="dept-list__empty">
+      <!-- 空态：筛选条件下无匹配（提示重置，不回退全量树、不显示新建入口） -->
+      <div v-if="isFilterEmpty" class="dept-list__empty">
+        <span class="dept-list__empty-text">无匹配部门</span>
+        <el-button @click="handleReset">重置筛选</el-button>
+      </div>
+      <!-- 空态：无筛选条件且数据为空（新建部门入口） -->
+      <div v-else-if="isEmpty" class="dept-list__empty">
         <el-button type="primary" @click="openCreate()">新建部门</el-button>
       </div>
     </div>
@@ -349,10 +418,22 @@ onMounted(loadTree)
   padding: var(--sw-space-16);
 }
 
+.dept-list__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--sw-space-12);
+  margin-bottom: var(--sw-space-16);
+}
+
 .dept-list__empty {
   text-align: center;
   padding: var(--sw-space-40) 0;
   color: var(--sw-text-tertiary);
+}
+
+.dept-list__empty-text {
+  display: block;
+  margin-bottom: var(--sw-space-12);
 }
 
 .form-field {

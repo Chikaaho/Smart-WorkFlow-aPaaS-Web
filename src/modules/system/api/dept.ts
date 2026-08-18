@@ -5,15 +5,26 @@
  * 不含 BackendPageResult / adaptPage / PageQuery / PageResult 导入。
  */
 import { request } from '@/foundation/request'
-import type { SysDept } from '@/modules/system/types/dept'
+import type { SysDept, DeptQuery } from '@/modules/system/types/dept'
 
 // ═══════════════════════════════════════
 
-/** GET /system/dept/tree → 全量部门列表（flat，前端自行组装树） */
-export async function listDeptTree(): Promise<SysDept[]> {
+/**
+ * GET /system/dept/tree → flat 部门列表（可选查询条件，前端自行组装树）。
+ *
+ * - name：部门名称包含匹配（LIKE %name%）；trim 后空白等价未填写，不传 = 不筛选。
+ * - status：0=正常、1=停用；不传 = 全部（无参数调用与旧行为完全一致）。
+ * - 响应只含直接命中节点 + 定位所需祖先节点，无重复，sort 升序稳定排序。
+ */
+export async function listDeptTree(params?: DeptQuery): Promise<SysDept[]> {
+  const query: Record<string, string | number> = {}
+  const name = params?.name?.trim()
+  if (name) query.name = name
+  if (params?.status !== undefined) query.status = params.status
   return request<SysDept[]>({
     method: 'GET',
     url: '/system/dept/tree',
+    ...(Object.keys(query).length > 0 ? { params: query } : {}),
   })
 }
 
