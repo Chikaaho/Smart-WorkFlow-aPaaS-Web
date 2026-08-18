@@ -1112,8 +1112,12 @@ export const mockRegistrations: MockRegistration[] = [
           cur = cur.parentId && cur.parentId !== '0' ? byId.get(cur.parentId) : undefined
         }
       }
-      // sort 升序 + JS 稳定排序（同 sort 保持首次出现顺序）
-      const list = [...result.values()].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+      // sort 升序（nullsLast）+ 同 sort 按 id 升序，与后端 Comparator(comparing(sort, nullsLast).thenComparing(id)) 一致
+      const list = [...result.values()].sort(
+        (a, b) =>
+          (a.sort ?? Number.MAX_SAFE_INTEGER) - (b.sort ?? Number.MAX_SAFE_INTEGER) ||
+          Number(a.id) - Number(b.id),
+      )
       return { code: 0, message: 'ok', data: list }
     },
   },

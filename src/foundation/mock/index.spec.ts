@@ -266,11 +266,11 @@ describe('foundation/mock/index', () => {
       expect(list.map((d) => d.id)).toEqual(['1', '2', '3', '4', '5', '6', '7'])
     })
 
-    it('name 包含匹配：命中节点 + 祖先补全，sort 升序稳定排序', async () => {
+    it('name 包含匹配：命中节点 + 祖先补全，sort 升序且同 sort 按 id 升序（与后端一致）', async () => {
       const list = await queryTree({ name: '组' })
       // 命中 前端组(5)/后端组(6)，祖先 总公司(1)/技术部(2)。
-      // 上溯插入序 [5,2,1,6]，sort 全为 1/1/1/2 → 稳定排序保持 [5,2,1,6]（sort 升序非递减）
-      expect(list.map((d) => d.id)).toEqual(['5', '2', '1', '6'])
+      // sort 1/1/1/2 → 后端 Comparator(comparing(sort, nullsLast).thenComparing(id))：同 sort=1 按 id 升序 [1,2,5]，sort=2 尾随 [6]
+      expect(list.map((d) => d.id)).toEqual(['1', '2', '5', '6'])
       expect(list.map((d) => d.sort)).toEqual([1, 1, 1, 2])
     })
 
@@ -299,11 +299,11 @@ describe('foundation/mock/index', () => {
       expect(list).toEqual([])
     })
 
-    it('多命中共享祖先时去重且按 sort 升序稳定排序', async () => {
+    it('多命中共享祖先时去重且按 sort 升序、同 sort 按 id 升序', async () => {
       const list = await queryTree({ name: '部' })
       // 命中 技术部(2)/产品部(3)/人事部(4)/财务部(7) + 祖先 总公司(1)，无重复。
-      // 插入序 [2,1,3,4,7]，sort 1/1/2/3/4 → 稳定排序保持 [2,1,3,4,7]（sort 升序非递减）
-      expect(list.map((d) => d.id)).toEqual(['2', '1', '3', '4', '7'])
+      // sort 1/1/2/3/4 → 同 sort=1 按 id 升序 [1,2]，其余按 sort 尾随 [3,4,7]
+      expect(list.map((d) => d.id)).toEqual(['1', '2', '3', '4', '7'])
       expect(new Set(list.map((d) => d.id)).size).toBe(5)
     })
 
