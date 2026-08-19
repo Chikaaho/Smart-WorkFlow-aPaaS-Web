@@ -250,8 +250,8 @@ describe('foundation/mock agent-models handler 一致性', () => {
     expect(delAgain!.code).toBe(0) // 幂等：不存在也返回 code 0
   })
 
-  it('连通性测试：可测 id 返回 {success,message,latencyMs}；锁定/不存在返回业务码 code≠0', async () => {
-    // 未锁定且 enabled → success=true 带 message 与 latencyMs
+  it('连通性测试：存在即 success=true，不读取 enabled/lockedUntil；不存在返回 404 业务码', async () => {
+    // 普通可达模型（ollama，id=2）→ success=true 带 message 与 latencyMs
     const ok = await mock<{ success: boolean; message: string; latencyMs: number }>(
       'POST',
       '/agent/models/2/test-connection',
@@ -261,22 +261,35 @@ describe('foundation/mock agent-models handler 一致性', () => {
     expect(typeof ok!.data.message).toBe('string')
     expect(typeof ok!.data.latencyMs).toBe('number')
 
-    // disabled 模型 → 业务失败以 success=false 表达（非 code≠0）
+    // disabled=true 模型（id=6）→ 仍 success=true：连通性为纯网络探测，不读取 enabled（对照后端 testConnection）
     const disabled = await mock<{ success: boolean; message: string; latencyMs: number }>(
       'POST',
       '/agent/models/6/test-connection',
     )
     expect(disabled!.code).toBe(0)
-    expect(disabled!.data.success).toBe(false)
+    expect(disabled!.data.success).toBe(true)
     expect(typeof disabled!.data.message).toBe('string')
     expect(typeof disabled!.data.latencyMs).toBe('number')
 
-    // lockedUntil 未来时间（id=4）→ 锁定不可测，code≠0（前端不得改判网络失败）
-    const locked = await mock('POST', '/agent/models/4/test-connection')
-    expect(locked!.code).not.toBe(0)
-    expect(locked!.data).toBeNull()
+    // other 协议且 disabled 模型（id=3）→ success=true：other 协议 GET baseUrl 根路径，200/404 均可达
+    const other = await mock<{ success: boolean; message: string; latencyMs: number }>(
+      'POST',
+      '/agent/models/3/test-connection',
+    )
+    expect(other!.code).toBe(0)
+    expect(other!.data.success).toBe(true)
 
-    // 不存在 id → 404 业务码
+    // lockedUntil 未来时间（id=4）→ 仍 success=true：连通性不读取 lockedUntil，与锁定无关
+    const locked = await mock<{ success: boolean; message: string; latencyMs: number }>(
+      'POST',
+      '/agent/models/4/test-connection',
+    )
+    expect(locked!.code).toBe(0)
+    expect(locked!.data.success).toBe(true)
+    expect(typeof locked!.data.message).toBe('string')
+    expect(typeof locked!.data.latencyMs).toBe('number')
+
+    // 不存在 id → 404 业务码（配置不存在，非连通性语义）
     const missing = await mock('POST', '/agent/models/99999/test-connection')
     expect(missing!.code).toBe(404)
     expect(missing!.data).toBeNull()

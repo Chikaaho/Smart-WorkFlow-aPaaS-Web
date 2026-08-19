@@ -1845,10 +1845,13 @@ export const mockRegistrations: MockRegistration[] = [
   },
 
   // POST /api/agent/models/:id/test-connection — 连通性测试
-  // 语义对齐后端 AgentModelTestConnectionRespDTO：{success,message,latencyMs}，
-  // 2xx-4xx 视为可达（success=true）；网络不可达/异常返回 success=false。
-  // 不可测情况（配置不存在 / 当前被锁定）以业务码 code≠0 表达，
-  // 前端不得把业务失败改判为网络失败。
+  // 语义对齐后端 AgentModelTestConnectionRespDTO：{success,message,latencyMs}。
+  // 真实后端 AgentModelConfigServiceImpl.testConnection 是纯只读网络探测：
+  // 方法体内无 getEnabled()/getLockedUntil() 调用，不读取 enabled / lockedUntil；
+  // 2xx-4xx 一律 success=true（message「服务可达（HTTP xxx）」），仅网络层异常
+  // （ResourceAccessException）才 success=false；other 协议 GET baseUrl 根路径，
+  // 200/404 均可达。故连通性与启停/锁定无关——mock 保持一致：存在即返回 success=true，
+  // 不读取 enabled/lockedUntil；仅「配置不存在」以业务码 404 表达（NOT_FOUND，非连通性语义）。
   {
     method: 'POST',
     pattern: '/api/agent/models/:id/test-connection',
@@ -1856,28 +1859,15 @@ export const mockRegistrations: MockRegistration[] = [
       const id = Number((params as Record<string, string>).id)
       const model = findModel(id)
       if (!model) return { code: 404, message: '模型配置不存在，无法发起连通性测试', data: null }
-      if (model.lockedUntil && model.lockedUntil > new Date().toISOString()) {
-        return {
-          code: 429,
-          message: '该模型配置当前处于限流锁定状态，暂不可测试',
-          data: null,
-        }
-      }
-      const reachable = model.enabled || model.protocolType === 'ollama'
+      // 纯网络探测语义：不读取 enabled / lockedUntil（对照后端 testConnection 无 getEnabled()/getLockedUntil()）
       return {
         code: 0,
         message: 'ok',
-        data: reachable
-          ? {
-              success: true,
-              message: `连接成功（${model.protocolType} / ${model.modelName}）`,
-              latencyMs: 120 + (id % 5) * 30,
-            }
-          : {
-              success: false,
-              message: '连接失败：网络不可达或服务未响应',
-              latencyMs: 500 + (id % 5) * 100,
-            },
+        data: {
+          success: true,
+          message: '服务可达（HTTP 200）',
+          latencyMs: 120 + (id % 5) * 30,
+        },
       }
     },
   },
