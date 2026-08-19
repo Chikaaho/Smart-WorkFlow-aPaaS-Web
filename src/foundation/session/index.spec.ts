@@ -105,13 +105,13 @@ describe('foundation/session loadSession', () => {
 
     const session = await loadSession()
 
-    // 用 admin seed 验证完整映射的正确性
+    // 用 superadmin seed 验证完整映射的正确性（双角色身份语义闭合后超管会话）
     expect(session.user.id).toBe('1')
-    expect(session.user.username).toBe('admin')
-    expect(session.user.displayName).toBe('管理员')
+    expect(session.user.username).toBe('superadmin')
+    expect(session.user.displayName).toBe('超级管理员')
     expect(session.permissions.has('system:view')).toBe(true)
     expect(session.permissions.has('form:form:view')).toBe(true)
-    expect(session.roles.has('admin')).toBe(true)
+    expect(session.roles.has('superadmin')).toBe(true)
     expect(session.superAdmin).toBe(true)
     // avatar: null → undefined
     expect(session.user.avatar).toBeUndefined()

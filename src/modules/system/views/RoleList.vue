@@ -218,6 +218,9 @@ async function openEdit(row: SysRole) {
     form.code = detail.code
     form.sort = detail.sort ?? 0
     form.status = detail.status
+    // 回填 builtIn：isProtectedRole（code=superadmin + builtIn）依赖此字段，
+    // 缺失会让 superadmin 编辑态权限树/保存按钮失去禁用保护（既有缺口，最小修复）
+    form.builtIn = detail.builtIn ?? false
     form.dataScope = detail.dataScope ?? DATA_SCOPE_DEFAULT
     form.deptIds = detail.deptIds ?? []
     form.description = detail.description ?? ''

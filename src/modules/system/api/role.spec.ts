@@ -3,11 +3,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/foundation/request', () => ({ request: vi.fn() }))
 
 import { request } from '@/foundation/request'
-import { pageRoles, getRole, createRole, updateRole, deleteRole } from './role'
+import {
+  pageRoles,
+  getRole,
+  createRole,
+  updateRole,
+  deleteRole,
+  getRoleMenus,
+  updateRoleMenus,
+} from './role'
 
 const mockRequest = vi.mocked(request)
 
-describe('modules/system/api/role — 角色管理 6 个', () => {
+describe('modules/system/api/role — 角色管理 8 个', () => {
   beforeEach(() => {
     mockRequest.mockReset()
   })
@@ -98,6 +106,46 @@ describe('modules/system/api/role — 角色管理 6 个', () => {
     await deleteRole('1')
     expect(mockRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'DELETE', url: '/system/role/1' }),
+    )
+  })
+
+  // ─── getRoleMenus / updateRoleMenus（M02-F02/F03 契约） ───
+
+  it('getRoleMenus: GET /system/role/{id}/menus，后端数字数组 → string[]（防腐转换）', async () => {
+    // 后端契约 R<List<Long>>：元素为数字（step1 §5：Long 序列化为数字）
+    mockRequest.mockResolvedValueOnce([1, 11, 12, 110])
+
+    const result = await getRoleMenus('2')
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'GET', url: '/system/role/2/menus' }),
+    )
+    expect(result).toEqual(['1', '11', '12', '110'])
+  })
+
+  it('getRoleMenus: 空绑定 → []（清空语义可回填）', async () => {
+    mockRequest.mockResolvedValueOnce([])
+    const result = await getRoleMenus('3')
+    expect(result).toEqual([])
+  })
+
+  it('updateRoleMenus: PUT /system/role/{id}/menus，string[] → 数字数组载荷（防腐转换）', async () => {
+    mockRequest.mockResolvedValueOnce(null)
+    await updateRoleMenus('2', ['1', '11', '12', '110'])
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'PUT',
+        url: '/system/role/2/menus',
+        data: [1, 11, 12, 110],
+      }),
+    )
+  })
+
+  it('updateRoleMenus: 空数组 → 载荷 []（清空），返回 void', async () => {
+    mockRequest.mockResolvedValueOnce(null)
+    await updateRoleMenus('2', [])
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'PUT', url: '/system/role/2/menus', data: [] }),
     )
   })
 })

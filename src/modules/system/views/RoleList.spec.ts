@@ -8,6 +8,13 @@ vi.mock('@/modules/system/api/role', () => ({
   createRole: vi.fn(),
   updateRole: vi.fn(),
   deleteRole: vi.fn(),
+  getRoleMenus: vi.fn(),
+  updateRoleMenus: vi.fn(),
+}))
+
+// loadPermissionTree 走 loadMenu()；权限树为 mock 菜单树 + 按钮节点（menuType=2）
+vi.mock('@/foundation/menu', () => ({
+  loadMenu: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -15,9 +22,76 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {}, params: {} }),
 }))
 
-import { pageRoles, deleteRole } from '@/modules/system/api/role'
+import {
+  pageRoles,
+  getRole,
+  createRole,
+  updateRole,
+  deleteRole,
+  getRoleMenus,
+  updateRoleMenus,
+} from '@/modules/system/api/role'
+import { loadMenu } from '@/foundation/menu'
+import type { MenuNode } from '@/contracts/menu'
 import type { SysRole } from '@/modules/system/types/role'
 import RoleList from './RoleList.vue'
+
+/** 混合权限树夹具：目录(0)/页面(1)/按钮(2)，父子/半选场景齐全。 */
+const MENU_TREE: MenuNode[] = [
+  {
+    id: '1',
+    parentId: null,
+    name: 'system',
+    title: '系统管理',
+    path: 'system',
+    component: null,
+    sort: 1,
+    menuType: 0,
+    permission: 'system:view',
+    hidden: false,
+    children: [
+      {
+        id: '11',
+        parentId: '1',
+        name: 'User',
+        title: '用户管理',
+        path: 'system/user',
+        component: 'system/views/UserList',
+        icon: 'User',
+        sort: 2,
+        menuType: 1,
+        permission: 'system:user:list',
+        hidden: false,
+        children: [
+          {
+            id: '110',
+            parentId: '11',
+            name: 'UserAdd',
+            title: '新增用户',
+            path: '',
+            component: null,
+            sort: 1,
+            menuType: 2,
+            permission: 'system:user:add',
+            hidden: true,
+          },
+          {
+            id: '111',
+            parentId: '11',
+            name: 'UserEdit',
+            title: '编辑用户',
+            path: '',
+            component: null,
+            sort: 2,
+            menuType: 2,
+            permission: 'system:user:edit',
+            hidden: true,
+          },
+        ],
+      },
+    ],
+  },
+]
 
 function stubPageResult() {
   return { list: [] as SysRole[], total: 0, pageNum: 1, pageSize: 10 }
@@ -27,6 +101,8 @@ describe('RoleList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(pageRoles).mockResolvedValue(stubPageResult())
+    vi.mocked(getRoleMenus).mockResolvedValue([])
+    vi.mocked(loadMenu).mockResolvedValue(MENU_TREE)
   })
 
   const minimalStubs = {
@@ -101,5 +177,153 @@ describe('RoleList', () => {
     vi.mocked(deleteRole).mockResolvedValue(undefined)
     await deleteRole('1')
     expect(deleteRole).toHaveBeenCalledWith('1')
+  })
+
+  // ─── 权限树：编辑回填 / 保存 / 清空 / superadmin / 父子联动（M02-F02/F03） ───
+
+  async function mountWithDialog() {
+    const wrapper = mount(RoleList, { global: { stubs: minimalStubs } })
+    const vm = wrapper.vm as unknown as {
+      openEdit: (row: SysRole) => Promise<void>
+      handleSubmit: () => Promise<void>
+      handlePermissionCheck: () => void
+      permissionTreeRef: { getCheckedKeys: (leaf?: boolean) => string[] } | null
+    }
+    return { wrapper, vm }
+  }
+
+  it('编辑回填：openEdit 调用 getRoleMenus 并 setCheckedKeys 到真实 el-tree', async () => {
+    vi.mocked(getRoleMenus).mockResolvedValue(['11', '110'])
+    vi.mocked(getRole).mockResolvedValue({
+      id: '2',
+      name: '管理员',
+      code: 'admin',
+      sort: 2,
+      status: 1,
+      dataScope: 0,
+      builtIn: false,
+    })
+    const { vm } = await mountWithDialog()
+
+    await vm.openEdit({ id: '2', name: '管理员', code: 'admin', status: 1 } as SysRole)
+    await nextTick()
+    await nextTick()
+
+    expect(getRoleMenus).toHaveBeenCalledWith('2')
+    expect(getRoleMenus).toHaveBeenCalledTimes(1)
+    // 回填 setCheckedKeys(['11','110']) 后，父子联动（check-strictly=false）：
+    // - 父 11 勾选 → 其兄弟叶子 111 被级联补全（全选语义，父半选=未授权会被消除）
+    // - 根 1 因全部子节点勾选而全选（非半选）
+    const leaves = vm.permissionTreeRef?.getCheckedKeys(true) ?? []
+    expect(leaves.sort()).toEqual(['110', '111'])
+    const all = vm.permissionTreeRef?.getCheckedKeys(false) ?? []
+    expect(all.sort()).toEqual(['1', '11', '110', '111'])
+  })
+
+  it('保存：编辑普通角色调用 updateRoleMenus(id, 全选叶子 key)', async () => {
+    vi.mocked(updateRole).mockResolvedValue(undefined)
+    vi.mocked(updateRoleMenus).mockResolvedValue(undefined)
+    const { wrapper, vm } = await mountWithDialog()
+
+    // 直接调用保存（编辑态，无权限树变更时 permissionIds 为空数组）
+    const vmFull = wrapper.vm as unknown as { editingId: string | null; form: SysRole }
+    vmFull.editingId = '2'
+    vmFull.form.name = '管理员'
+    vmFull.form.code = 'admin'
+    await vm.handleSubmit()
+    await nextTick()
+
+    expect(updateRoleMenus).toHaveBeenCalledWith('2', [])
+    // superadmin 禁用验证反向：普通角色必调 updateRoleMenus
+    expect(updateRoleMenus).toHaveBeenCalledTimes(1)
+  })
+
+  it('superadmin 编辑：打开后权限树不可修改（isProtectedRole 禁用），保存不调用 updateRoleMenus', async () => {
+    vi.mocked(getRoleMenus).mockResolvedValue(['1'])
+    vi.mocked(getRole).mockResolvedValue({
+      id: '1',
+      name: '超级管理员',
+      code: 'superadmin',
+      sort: 1,
+      status: 1,
+      dataScope: 0,
+      builtIn: true,
+    })
+    const { wrapper, vm } = await mountWithDialog()
+
+    await vm.openEdit({ id: '1', name: '超级管理员', code: 'superadmin', builtIn: true } as SysRole)
+    await nextTick()
+
+    const vmFull = wrapper.vm as unknown as {
+      isProtectedRole: boolean
+      editingId: string | null
+      form: SysRole
+    }
+    expect(vmFull.isProtectedRole).toBe(true)
+    vmFull.editingId = '1'
+    vmFull.form.name = '超级管理员'
+    vmFull.form.code = 'superadmin'
+    await vm.handleSubmit()
+    await nextTick()
+
+    // 前端禁用不能代替后端拒绝：页面保存不调用 updateRoleMenus（无可执行入口）
+    expect(updateRoleMenus).not.toHaveBeenCalled()
+    expect(updateRole).toHaveBeenCalledTimes(1)
+  })
+
+  it('创建：createRole 后调用 updateRoleMenus(新 id, 权限)', async () => {
+    vi.mocked(createRole).mockResolvedValue('42')
+    vi.mocked(updateRoleMenus).mockResolvedValue(undefined)
+    const { wrapper, vm } = await mountWithDialog()
+
+    const vmFull = wrapper.vm as unknown as { editingId: string | null; form: SysRole }
+    vmFull.editingId = null
+    vmFull.form.name = '测试角色'
+    vmFull.form.code = 'test'
+    await vm.handleSubmit()
+    await nextTick()
+
+    expect(createRole).toHaveBeenCalledTimes(1)
+    expect(updateRoleMenus).toHaveBeenCalledWith('42', [])
+  })
+
+  it('父子联动：勾选父节点后 getCheckedKeys(true) 只返回叶子；保存→重开→回填一致（半选不丢权）', async () => {
+    vi.mocked(updateRoleMenus).mockResolvedValue(undefined)
+    vi.mocked(getRoleMenus).mockResolvedValue(['110', '111'])
+    vi.mocked(getRole).mockResolvedValue({
+      id: '2',
+      name: '管理员',
+      code: 'admin',
+      sort: 2,
+      status: 1,
+      dataScope: 0,
+      builtIn: false,
+    })
+    const { vm } = await mountWithDialog()
+
+    // 第一次编辑：回填后手动勾选 110，保存
+    await vm.openEdit({ id: '2', name: '管理员', code: 'admin', status: 1 } as SysRole)
+    await nextTick()
+    await nextTick()
+    vm.handlePermissionCheck() // 模拟 @check：权限树保持当前勾选（110/111 全选）
+    const saved = vm.permissionTreeRef?.getCheckedKeys(true) ?? []
+    expect(saved.sort()).toEqual(['110', '111'])
+    // 父节点不被单独保存：getCheckedKeys(true) 只取叶子，不会出现「勾了父没存子」的半选丢权
+    expect(saved).not.toContain('11')
+    expect(saved).not.toContain('1')
+    await vm.handleSubmit()
+    await nextTick()
+    expect(updateRoleMenus).toHaveBeenCalledWith('2', ['110', '111'])
+
+    // 第二次打开：getRoleMenus 返回保存的叶子集（mock 已持久化语义），回填必须一致
+    vi.mocked(getRoleMenus).mockClear()
+    vi.mocked(getRoleMenus).mockResolvedValue(['110', '111'])
+    await vm.openEdit({ id: '2', name: '管理员', code: 'admin', status: 1 } as SysRole)
+    await nextTick()
+    await nextTick()
+    const rechecked = vm.permissionTreeRef?.getCheckedKeys(true) ?? []
+    // 保存→重开→回填一致：全选叶子无半选，不会静默丢失权限
+    expect(rechecked.sort()).toEqual(['110', '111'])
+    expect(getRoleMenus).toHaveBeenCalledTimes(1)
   })
 })

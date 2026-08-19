@@ -30,7 +30,12 @@ import {
   MOCK_DICT_DATA,
   MOCK_DICT_TYPES,
   MOCK_SESSION_DATA,
+  MOCK_CURRENT_SESSION,
+  switchMockSession,
   MOCK_MENU_TREE,
+  type MockMenuNode,
+  type MockSessionData,
+  MOCK_ROLE_MENU_BINDINGS,
   DEMO_FORM_KEY,
   MOCK_DEMO_FORM_DEFINITION,
   MOCK_DEMO_SUBMISSIONS,
@@ -45,6 +50,7 @@ import {
   MOCK_ROLES_LIST,
   MOCK_DEPTS_LIST,
   MOCK_POSTS_LIST,
+  MOCK_USER_GROUPS_LIST,
   MOCK_STORAGE_FILES,
   MOCK_JOB_INFOS,
   MOCK_JOB_LOGS,
@@ -73,6 +79,74 @@ function nextModelId(): number {
   return MOCK_AGENT_MODELS.reduce((max, m) => Math.max(max, m.id), 0) + 1
 }
 
+// ─── 会话/菜单过滤辅助（对齐真实后端 SysMenuServiceImpl 语义） ──
+
+/** 当前会话（非超管）的全部角色 id。 */
+function currentRoleIds(): number[] {
+  const roles = MOCK_CURRENT_SESSION.roles
+  return MOCK_ROLES_LIST.filter((r) => roles.includes(r.code)).map((r) => Number(r.id))
+}
+
+/** 当前会话（非超管）可用的菜单 id 集合（跨角色绑定并集、数字归一）。 */
+function currentMenuIds(): Set<number> {
+  const ids = new Set<number>()
+  for (const roleId of currentRoleIds()) {
+    const bindings = MOCK_ROLE_MENU_BINDINGS[String(roleId)]
+    if (bindings) for (const id of bindings) ids.add(id)
+  }
+  return ids
+}
+
+/**
+ * 按真实后端 buildTree 语义过滤菜单树：
+ * 仅在「节点 id ∈ 可用集合」时才挂载（父不在集合 → 该子树整体丢弃，孤儿子节点不挂载）；
+ * 同层按 sort 升序（与后端 Comparator 一致）。节点浅拷贝，不改动共享夹具
+ * （跨会话复用不污染：admin 全量树永远来自原始 MOCK_MENU_TREE）。
+ */
+function buildMockMenuTree(): MockMenuNode[] {
+  const tree = MOCK_MENU_TREE as MockMenuNode[]
+  if (MOCK_CURRENT_SESSION.superAdmin) return tree
+  const allowed = currentMenuIds()
+  if (allowed.size === 0) return []
+
+  const pick = (nodes: MockMenuNode[]): MockMenuNode[] => {
+    const picked: MockMenuNode[] = []
+    for (const node of nodes) {
+      if (!allowed.has(Number(node.id))) continue
+      const clone: MockMenuNode = { ...node }
+      if (node.children?.length) {
+        clone.children = pick(node.children)
+      }
+      picked.push(clone)
+    }
+    picked.sort((a, b) => a.sort - b.sort)
+    return picked
+  }
+  return pick(tree)
+}
+
+/**
+ * 当前会话（非超管）的按钮行 permission 装配（对齐 UserDetailsProviderImpl.loadByUserId：
+ * 经 sys_role_menu 取按钮行 → permission 字段）。仅收集，不判断角色 status（与真实后端
+ * 对称：菜单/权限侧不过滤角色 status，step3b A11 实证；mock 夹具角色均启用，无差异面）。
+ * 超管不用本函数（/auth/me 对超管直接返回全量权限，与后端旁路一致）。
+ */
+function buildMockPermissions(): string[] {
+  const perms = new Set<string>()
+  if (MOCK_CURRENT_SESSION.superAdmin) return [...perms]
+  const allowed = currentMenuIds()
+  const collect = (nodes: MockMenuNode[]): void => {
+    for (const node of nodes) {
+      if (allowed.has(Number(node.id)) && node.menuType === 2 && node.permission) {
+        perms.add(node.permission)
+      }
+      if (node.children?.length) collect(node.children)
+    }
+  }
+  collect(MOCK_MENU_TREE as MockMenuNode[])
+  return [...perms]
+}
+
 // ─── 注册条目类型 ────────────────────────────────────────
 
 export interface MockRegistration {
@@ -85,12 +159,16 @@ export interface MockRegistration {
 
 export const mockRegistrations: MockRegistration[] = [
   // ── 登录/会话（双 token 契约，对齐 F1 的 TokenResponseDTO） ──
+  // 登录按 username 切换当前会话：superadmin → 超管（旁路）、admin → 普通管理员（非超管，
+  // 权限按角色绑定装配）、user → 普通用户（非超管，空绑定）；其他用户名回退超管。
+  // mock 不校验密码（既有行为），仅用于演示/测试非超管菜单过滤语义（方向 §2.2）。
   {
     method: 'POST',
     pattern: '/api/auth/login',
     handler: (_params, _query, body) => {
       const payload = body as { username?: string; password?: string } | undefined
       const username = payload?.username ?? 'admin'
+      switchMockSession(username)
       return {
         code: 0,
         message: 'ok',
@@ -129,26 +207,39 @@ export const mockRegistrations: MockRegistration[] = [
 
   // ── 当前用户会话 ──────────────────────────────────────────
   // GET /api/system/auth/me → SessionDTO
+  // 真实后端：AuthMeController 按当前登录用户装配会话（超管 → 全量 permissions；
+  // 非超管 → permissions 由角色绑定按钮行装配，见 UserDetailsProviderImpl.loadByUserId）。
+  // mock 对齐：superadmin（超管旁路）→ MOCK_SESSION_DATA（固定全量权限）；
+  // admin（普通管理员）/ user（非超管）→ 会话快照，permissions 取该用户角色绑定中的
+  // 按钮行 permission（与 /auth/menus 的过滤同源，保证按钮显隐与菜单可见性一致）。
   {
     method: 'GET',
     pattern: '/api/system/auth/me',
-    handler: () => ({
-      code: 0,
-      message: 'ok',
-      data: MOCK_SESSION_DATA,
-    }),
+    handler: () => {
+      if (MOCK_CURRENT_SESSION.superAdmin) {
+        return { code: 0, message: 'ok', data: MOCK_SESSION_DATA }
+      }
+      const session: MockSessionData = {
+        ...MOCK_CURRENT_SESSION,
+        permissions: buildMockPermissions(),
+      }
+      return { code: 0, message: 'ok', data: session }
+    },
   },
 
   // ── 当前用户菜单 ─────────────────────────────────────────
   // GET /api/system/auth/menus → MenuNode[]
+  // 真实后端（step3b 请求级实证）：超管 → 全量树；非超管 → 按用户角色绑定
+  // （sys_user_role → sys_role_menu）过滤，getMenuTree 仅在父节点存在于绑定集合时
+  // 才挂载子节点 —— 孤儿子节点（父不在集合）不会被挂载，无绑定 → 空树。
+  // 过滤后同层按 sort 升序（与后端 Comparator 一致）。
   {
     method: 'GET',
     pattern: '/api/system/auth/menus',
-    handler: () => ({
-      code: 0,
-      message: 'ok',
-      data: MOCK_MENU_TREE,
-    }),
+    handler: () => {
+      const tree = buildMockMenuTree()
+      return { code: 0, message: 'ok', data: tree }
+    },
   },
 
   // ── 字典 ──────────────────────────────────────────────────
@@ -1015,6 +1106,184 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
+  // ── 用户组管理 CRUD（D112：P28/I36） ────────────────────────
+  {
+    method: 'POST',
+    pattern: '/api/system/user-group/page',
+    handler: (_params, query, body) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      let list = [...MOCK_USER_GROUPS_LIST]
+      if (body && typeof body === 'object') {
+        const f = body as Record<string, unknown>
+        if (f.groupCode) list = list.filter((g) => g.groupCode.includes(String(f.groupCode)))
+        if (f.groupName) list = list.filter((g) => g.groupName.includes(String(f.groupName)))
+        if (f.status !== undefined && f.status !== null && f.status !== '')
+          list = list.filter((g) => g.status === Number(f.status))
+      }
+      const total = list.length
+      const start = (pageNum - 1) * pageSize
+      const records = list.slice(start, start + pageSize)
+      return { code: 0, message: 'ok', data: { records, total, pageNum, pageSize } }
+    },
+  },
+  {
+    method: 'GET',
+    pattern: '/api/system/user-group/:id',
+    handler: (params) => {
+      const id = String((params as Record<string, string>).id)
+      const group = MOCK_USER_GROUPS_LIST.find((g) => g.id === id)
+      if (!group) return { code: 404, message: '用户组不存在', data: null }
+      return { code: 0, message: 'ok', data: { ...group, memberIds: [...group.memberIds] } }
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/system/user-group',
+    handler: (_params, _query, body) => {
+      const data = (body ?? {}) as Record<string, unknown>
+      if (!data.groupCode || !data.groupName)
+        return { code: 400, message: '业务标识与组名称不能为空', data: null }
+      const existing = MOCK_USER_GROUPS_LIST.find(
+        (g) => g.groupCode === String(data.groupCode) && g.status !== undefined,
+      )
+      if (existing) return { code: 400, message: '用户组业务标识已存在', data: null }
+      const nextId = String(Math.max(0, ...MOCK_USER_GROUPS_LIST.map((g) => Number(g.id))) + 1)
+      const group = {
+        id: nextId,
+        groupCode: String(data.groupCode),
+        groupName: String(data.groupName),
+        status: data.status === undefined ? 0 : Number(data.status),
+        remark: data.remark == null ? null : String(data.remark),
+        memberIds: Array.isArray(data.memberIds) ? data.memberIds.map(String) : [],
+        createTime: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        updateTime: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      }
+      MOCK_USER_GROUPS_LIST.push(group)
+      return { code: 0, message: 'ok', data: nextId }
+    },
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/system/user-group',
+    handler: (_params, _query, body) => {
+      const data = (body ?? {}) as Record<string, unknown>
+      const idx = MOCK_USER_GROUPS_LIST.findIndex((g) => g.id === String(data.id))
+      if (idx < 0) return { code: 404, message: '用户组不存在', data: null }
+      const existing = MOCK_USER_GROUPS_LIST[idx]
+      MOCK_USER_GROUPS_LIST[idx] = {
+        ...existing,
+        groupName: data.groupName != null ? String(data.groupName) : existing.groupName,
+        status: data.status === undefined ? existing.status : Number(data.status),
+        remark: data.remark == null ? existing.remark : String(data.remark),
+        // 业务标识不可变：忽略请求携带的 groupCode 变更
+        groupCode: existing.groupCode,
+        updateTime: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      }
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/system/user-group/:id',
+    handler: (params) => {
+      const id = String((params as Record<string, string>).id)
+      const idx = MOCK_USER_GROUPS_LIST.findIndex((g) => g.id === id)
+      if (idx < 0) return { code: 404, message: '用户组不存在', data: null }
+      MOCK_USER_GROUPS_LIST.splice(idx, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/system/user-group/:id/disable',
+    handler: (params) => {
+      const group = MOCK_USER_GROUPS_LIST.find(
+        (g) => g.id === String((params as Record<string, string>).id),
+      )
+      if (!group) return { code: 404, message: '用户组不存在', data: null }
+      group.status = 1
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/system/user-group/:id/enable',
+    handler: (params) => {
+      const group = MOCK_USER_GROUPS_LIST.find(
+        (g) => g.id === String((params as Record<string, string>).id),
+      )
+      if (!group) return { code: 404, message: '用户组不存在', data: null }
+      group.status = 0
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+  {
+    method: 'GET',
+    pattern: '/api/system/user-group/:id/members',
+    handler: (params) => {
+      const group = MOCK_USER_GROUPS_LIST.find(
+        (g) => g.id === String((params as Record<string, string>).id),
+      )
+      if (!group) return { code: 404, message: '用户组不存在', data: null }
+      return { code: 0, message: 'ok', data: [...group.memberIds] }
+    },
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/system/user-group/:id/members',
+    handler: (params, _query, body) => {
+      const group = MOCK_USER_GROUPS_LIST.find(
+        (g) => g.id === String((params as Record<string, string>).id),
+      )
+      if (!group) return { code: 404, message: '用户组不存在', data: null }
+      group.memberIds = Array.isArray(body) ? body.map(String) : []
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/system/user-group/:id/members',
+    handler: (params, _query, body) => {
+      const group = MOCK_USER_GROUPS_LIST.find(
+        (g) => g.id === String((params as Record<string, string>).id),
+      )
+      if (!group) return { code: 404, message: '用户组不存在', data: null }
+      const add = Array.isArray(body) ? body.map(String) : []
+      group.memberIds = [...new Set([...group.memberIds, ...add])]
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/system/user-group/:id/members',
+    handler: (params, _query, body) => {
+      const group = MOCK_USER_GROUPS_LIST.find(
+        (g) => g.id === String((params as Record<string, string>).id),
+      )
+      if (!group) return { code: 404, message: '用户组不存在', data: null }
+      const remove = new Set(Array.isArray(body) ? body.map(String) : [])
+      group.memberIds = group.memberIds.filter((id) => !remove.has(id))
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+  {
+    method: 'GET',
+    pattern: '/api/system/user-group/candidates',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 20)
+      const keyword = query.keyword ? String(query.keyword) : ''
+      let list = MOCK_USERS_LIST.filter((u) => u.status === 0)
+      if (keyword)
+        list = list.filter((u) => u.username.includes(keyword) || u.realName.includes(keyword))
+      const total = list.length
+      const start = (pageNum - 1) * pageSize
+      const records = list.slice(start, start + pageSize)
+      return { code: 0, message: 'ok', data: { records, total, pageNum, pageSize } }
+    },
+  },
+
   // ── 角色管理 CRUD ──────────────────────────────────────────
   {
     method: 'POST',
@@ -1097,6 +1366,46 @@ export const mockRegistrations: MockRegistration[] = [
       const idx = MOCK_ROLES_LIST.findIndex((r) => r.id === id)
       if (idx === -1) return { code: 0, message: 'ok', data: null }
       MOCK_ROLES_LIST.splice(idx, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // ── 角色菜单/按钮权限绑定（M02-F02/F03，契约对齐 step1 §5） ──
+  // GET /api/system/role/:id/menus → R<number[]>
+  // 真实后端：SysRoleServiceImpl.listMenuIds 仅按 role_id 查 sys_role_menu，
+  // 不校验角色是否存在、不过滤 menu_type（目录/页面/按钮全返回）。
+  // 未知角色 → data=[]（code=0），与真实 API 一致（无绑定的空角色同样返回 []）。
+  {
+    method: 'GET',
+    pattern: '/api/system/role/:id/menus',
+    handler: (params) => {
+      const id = String((params as Record<string, string>).id)
+      const bindings = MOCK_ROLE_MENU_BINDINGS[id]
+      return { code: 0, message: 'ok', data: bindings ? [...bindings] : [] }
+    },
+  },
+
+  // PUT /api/system/role/:id/menus → R<null>
+  // 真实后端：updateMenuIds = 先删后插；body=number[]，null/[]=清空；
+  // 应用层 filter(nonNull).distinct() 去重（重复提交幂等）；未知角色静默成功（写孤儿关系）。
+  // 受保护角色：built_in=true && code='superadmin' → 业务错误（HTTP 200 + body code=400，
+  // 「内置超管角色不可修改或删除」），绑定不被修改（方向 §5 风险 4 / §6 验收 4）。
+  {
+    method: 'PUT',
+    pattern: '/api/system/role/:id/menus',
+    handler: (params, _query, body) => {
+      const id = String((params as Record<string, string>).id)
+      const role = MOCK_ROLES_LIST.find((r) => r.id === id)
+      // superadmin 保护判定与后端一致：code 判定（真实后端不校验角色存在，
+      // 仅当角色存在且 builtIn+code=superadmin 才拒绝）
+      if (role?.builtIn === true && role.code === 'superadmin') {
+        return { code: 400, message: '内置超管角色不可修改或删除', data: null }
+      }
+      // 先删后插（null / [] / 非数组均按清空处理）；应用层 filter+distinct 去重（幂等）
+      const requested = Array.isArray(body)
+        ? body.filter((n): n is number => n !== null && n !== undefined).map(Number)
+        : []
+      MOCK_ROLE_MENU_BINDINGS[id] = [...new Set(requested)]
       return { code: 0, message: 'ok', data: null }
     },
   },

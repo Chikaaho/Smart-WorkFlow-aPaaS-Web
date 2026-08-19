@@ -7,18 +7,59 @@
 
 import type { AgentModelConfig } from '@/contracts/agent'
 
-/** 用户种子（登录/会话放行用） */
+/** 用户种子（登录/会话放行用）。身份语义与 MOCK_SESSION_DATA* 一一对应。 */
 export const MOCK_USERS = [
+  { username: 'superadmin', displayName: '超级管理员', password: 'admin123' },
   { username: 'admin', displayName: '管理员', password: 'admin123' },
   { username: 'user', displayName: '普通用户', password: 'user123' },
 ]
 
-/** mock GET /system/auth/me 响应。 */
-export const MOCK_SESSION_DATA = {
+/** mock GET /system/auth/me 响应的会话形状（对齐后端 SessionDTO）。 */
+export interface MockSessionData {
+  user: {
+    id: string
+    username: string
+    displayName: string
+    deptId: string
+    tenantId: string
+    avatar: string | null
+  }
+  permissions: string[]
+  roles: string[]
+  superAdmin: boolean
+}
+
+/**
+ * 按会话角色码集合求该会话各角色的「按钮行 permission 并集」（来自 MOCK_ROLE_MENU_BINDINGS）。
+ * 对齐真实后端 UserDetailsProviderImpl 的权限装配：非超管经 sys_role_menu 取按钮行 permission。
+ */
+function collectSessionPermissions(roles: string[]): string[] {
+  const roleIds = MOCK_ROLES_LIST.filter((r) => roles.includes(r.code)).map((r) => Number(r.id))
+  const bindings = roleIds.flatMap((id) => MOCK_ROLE_MENU_BINDINGS[String(id)] ?? [])
+  const idSet = new Set(bindings)
+  const perms = new Set<string>()
+  const walk = (nodes: MockMenuNode[]): void => {
+    for (const node of nodes) {
+      if (idSet.has(Number(node.id)) && node.menuType === 2 && node.permission) {
+        perms.add(node.permission)
+      }
+      if (node.children?.length) walk(node.children)
+    }
+  }
+  walk(MOCK_MENU_TREE as MockMenuNode[])
+  return [...perms]
+}
+
+/**
+ * mock GET /system/auth/me 响应（超管会话，username=superadmin）。
+ * 身份语义对齐真实后端双角色契约：superadmin（code 旁路，roles=['superadmin']、superAdmin=true），
+ * 与普通 admin（roles=['admin']、superAdmin=false，permissions 由 admin 角色绑定装配）严格区分。
+ */
+export const MOCK_SESSION_DATA: MockSessionData = {
   user: {
     id: '1',
-    username: 'admin',
-    displayName: '管理员',
+    username: 'superadmin',
+    displayName: '超级管理员',
     deptId: '101',
     tenantId: '1',
     avatar: null,
@@ -33,6 +74,8 @@ export const MOCK_SESSION_DATA = {
     'system:role:list',
     'system:dept:list',
     'system:post:list',
+    'system:userGroup:list',
+    'system:userGroup:manage',
     'storage:view',
     'job:view',
     'job:list',
@@ -42,12 +85,97 @@ export const MOCK_SESSION_DATA = {
     'agent:model:manage',
     'agent:model:test',
   ],
-  roles: ['admin'],
+  roles: ['superadmin'],
   superAdmin: true,
 }
 
+/**
+ * 普通管理员会话（非超管，username=admin / password=admin123）。
+ * 对齐后端 V31 seed：admin 角色（id=2，built_in=false）显式绑定全量菜单+按钮；
+ * superAdmin=false，权限与菜单完全由 MOCK_ROLE_MENU_BINDINGS['2'] 装配
+ * （与真实后端 UserDetailsProviderImpl 非超管装配一致，无任何 code 旁路）。
+ */
+export const MOCK_SESSION_DATA_ADMIN: MockSessionData = {
+  user: {
+    id: '1',
+    username: 'admin',
+    displayName: '管理员',
+    deptId: '101',
+    tenantId: '1',
+    avatar: null,
+  },
+  // 权限在文件底部依赖声明完备后补齐（collectSessionPermissions 依赖 MOCK_ROLES_LIST /
+  // MOCK_ROLE_MENU_BINDINGS，此处处于 TDZ 之前不可调用）
+  permissions: [],
+  roles: ['admin'],
+  superAdmin: false,
+}
+
+/**
+ * 普通用户会话（非超管）：用户名 user / 密码 user123（MOCK_USERS 中已存在的固定用户）。
+ *
+ * 供「当前用户」切会话演示与测试：登录 user 后，/auth/me 与 /auth/menus 走非超管语义
+ * （菜单/按钮按 MOCK_ROLE_MENU_BINDINGS 过滤，与真实后端 SysMenuServiceImpl.getMenuTree
+ * 非超管分支一致）。user 的 roleIds = ['3']（普通用户角色，空绑定），
+ * 演示/测试「无绑定 → 空树」。
+ *
+ * 说明：mock 层固定三个会话（superadmin 超管 / admin 普通管理员 / user 普通用户），
+ * 身份语义与真实后端双角色契约一致（见 MOCK_SESSION_DATA / MOCK_SESSION_DATA_ADMIN）。
+ * 无前端登录页以外的运行时「切换用户」入口（方向范围内不需要）；
+ * 测试通过直接调 switchMockSession 驱动。
+ */
+export const MOCK_SESSION_DATA_USER: MockSessionData = {
+  user: {
+    id: '2',
+    username: 'user',
+    displayName: '普通用户',
+    deptId: '101',
+    tenantId: '1',
+    avatar: null,
+  },
+  permissions: [],
+  roles: ['user'],
+  superAdmin: false,
+}
+
+/**
+ * 当前 mock 会话（可变状态，handlers.ts 原地替换）。
+ * 与 MOCK_ROLE_MENU_BINDINGS 同模式：种子声明 + handler/测试原地 mutate。
+ * 登录 handler 按 username 切会话：superadmin → MOCK_SESSION_DATA（超管旁路）、
+ * admin → MOCK_SESSION_DATA_ADMIN（普通管理员，非超管）、user → MOCK_SESSION_DATA_USER；
+ * 其他用户名回退超管（登录 handler 不校验密码，仅按 username 演示会话）。
+ */
+export let MOCK_CURRENT_SESSION: MockSessionData = MOCK_SESSION_DATA
+
+/** 切换当前 mock 会话（按登录用户名选择会话快照）。 */
+export function switchMockSession(username: string): void {
+  if (username === 'admin') {
+    MOCK_CURRENT_SESSION = MOCK_SESSION_DATA_ADMIN
+  } else if (username === 'user') {
+    MOCK_CURRENT_SESSION = MOCK_SESSION_DATA_USER
+  } else {
+    // 默认 / superadmin / 其他 → 超管会话
+    MOCK_CURRENT_SESSION = MOCK_SESSION_DATA
+  }
+}
+
 /** mock GET /system/auth/menus 菜单树，与交付体一致。 */
-export const MOCK_MENU_TREE = [
+export interface MockMenuNode {
+  id: string
+  parentId: string | null
+  name: string
+  title: string
+  path: string
+  component: string | null
+  icon?: string
+  sort: number
+  menuType: number
+  permission?: string
+  hidden?: boolean
+  children?: MockMenuNode[]
+}
+
+export const MOCK_MENU_TREE: MockMenuNode[] = [
   {
     id: '1',
     parentId: null,
@@ -86,6 +214,44 @@ export const MOCK_MENU_TREE = [
         menuType: 1,
         permission: 'system:user:list',
         hidden: false,
+        children: [
+          {
+            id: '110',
+            parentId: '11',
+            name: 'UserAdd',
+            title: '新增用户',
+            path: '',
+            component: null,
+            sort: 1,
+            menuType: 2,
+            permission: 'system:user:add',
+            hidden: true,
+          },
+          {
+            id: '111',
+            parentId: '11',
+            name: 'UserEdit',
+            title: '编辑用户',
+            path: '',
+            component: null,
+            sort: 2,
+            menuType: 2,
+            permission: 'system:user:edit',
+            hidden: true,
+          },
+          {
+            id: '112',
+            parentId: '11',
+            name: 'UserRemove',
+            title: '删除用户',
+            path: '',
+            component: null,
+            sort: 3,
+            menuType: 2,
+            permission: 'system:user:remove',
+            hidden: true,
+          },
+        ],
       },
       {
         id: '12',
@@ -99,6 +265,44 @@ export const MOCK_MENU_TREE = [
         menuType: 1,
         permission: 'system:role:list',
         hidden: false,
+        children: [
+          {
+            id: '120',
+            parentId: '12',
+            name: 'RoleAdd',
+            title: '新增角色',
+            path: '',
+            component: null,
+            sort: 1,
+            menuType: 2,
+            permission: 'system:role:add',
+            hidden: true,
+          },
+          {
+            id: '121',
+            parentId: '12',
+            name: 'RoleEdit',
+            title: '编辑角色',
+            path: '',
+            component: null,
+            sort: 2,
+            menuType: 2,
+            permission: 'system:role:edit',
+            hidden: true,
+          },
+          {
+            id: '122',
+            parentId: '12',
+            name: 'RoleRemove',
+            title: '删除角色',
+            path: '',
+            component: null,
+            sort: 3,
+            menuType: 2,
+            permission: 'system:role:remove',
+            hidden: true,
+          },
+        ],
       },
       {
         id: '13',
@@ -124,6 +328,19 @@ export const MOCK_MENU_TREE = [
         sort: 5,
         menuType: 1,
         permission: 'system:post:list',
+        hidden: false,
+      },
+      {
+        id: '18',
+        parentId: '1',
+        name: 'UserGroup',
+        title: '用户组管理',
+        path: 'system/user-group',
+        component: 'system/views/UserGroupList',
+        icon: 'UserFilled',
+        sort: 6,
+        menuType: 1,
+        permission: 'system:userGroup:list',
         hidden: false,
       },
     ],
@@ -298,7 +515,7 @@ export const MOCK_MENU_TREE = [
     permission: 'storage:view',
   },
   {
-    id: '10',
+    id: '20',
     parentId: null,
     name: 'job',
     title: '定时任务',
@@ -312,7 +529,7 @@ export const MOCK_MENU_TREE = [
     children: [
       {
         id: '100',
-        parentId: '10',
+        parentId: '20',
         name: 'job-list',
         title: '任务管理',
         path: 'job/list',
@@ -325,7 +542,7 @@ export const MOCK_MENU_TREE = [
       },
       {
         id: '101',
-        parentId: '10',
+        parentId: '20',
         name: 'job-log',
         title: '执行日志',
         path: 'job/log',
@@ -962,6 +1179,51 @@ export const MOCK_NOTIFY_MESSAGES: Array<{
 
 // ─── 系统管理 CRUD mock 数据（可变数组，handler 中原地 mutate） ───
 
+// ─── 用户组 Mock 种子（D112：P28/I36） ──────────────────────
+// 语义与真实接口一致：groupCode 租户内唯一、status 0=启用 1=停用、
+// memberIds 引用 MOCK_USERS_LIST 的 id；含停用用户（赵六 status=1）演示失效成员。
+export const MOCK_USER_GROUPS_LIST: Array<{
+  id: string
+  groupCode: string
+  groupName: string
+  status: number
+  remark: string | null
+  memberIds: string[]
+  createTime: string
+  updateTime: string
+}> = [
+  {
+    id: '1',
+    groupCode: 'G-TECH',
+    groupName: '技术委员会',
+    status: 0,
+    remark: '跨部门技术骨干归集',
+    memberIds: ['2', '3'],
+    createTime: '2026-08-18 10:00:00',
+    updateTime: '2026-08-18 10:00:00',
+  },
+  {
+    id: '2',
+    groupCode: 'G-HR',
+    groupName: '人事专项组',
+    status: 0,
+    remark: '人事流程协作',
+    memberIds: ['3', '4'],
+    createTime: '2026-08-18 11:00:00',
+    updateTime: '2026-08-18 11:00:00',
+  },
+  {
+    id: '3',
+    groupCode: 'G-OLD',
+    groupName: '历史归档组',
+    status: 1,
+    remark: '已停用，保留配置',
+    memberIds: ['5'], // 成员为停用用户（赵六 status=1）→ 失效成员展示
+    createTime: '2026-08-18 12:00:00',
+    updateTime: '2026-08-18 12:00:00',
+  },
+]
+
 export const MOCK_USERS_LIST = [
   {
     id: '1',
@@ -1020,7 +1282,8 @@ export const MOCK_USERS_LIST = [
     sex: 1,
     status: 0,
     deptId: '3',
-    roleIds: ['4'],
+    // MOCK_ROLES_LIST 重复 id 修正后 HR 专员为 id '5'；保持原绑定语义（HR 专员）
+    roleIds: ['5'],
     postIds: ['4'],
     isAdmin: false,
     avatar: null,
@@ -1052,7 +1315,9 @@ export const MOCK_ROLES_LIST = [
     code: 'superadmin',
     sort: 1,
     status: 1,
-    dataScope: 5,
+    // 后端 DataScope ordinal：ALL=0（V31 seed 中 superadmin/admin 均为 0）。
+    // 旧值 5 是越界陈旧值（会掩盖权限缺陷），已按后端契约修正为 0。
+    dataScope: 0,
     builtIn: true,
     description: '系统内置超级管理员角色',
     createTime: '2026-06-01 10:00:00',
@@ -1083,7 +1348,7 @@ export const MOCK_ROLES_LIST = [
     updateTime: '2026-06-01 10:00:00',
   },
   {
-    id: '3',
+    id: '4',
     name: '部门经理',
     code: 'manager',
     sort: 3,
@@ -1095,7 +1360,7 @@ export const MOCK_ROLES_LIST = [
     updateTime: '2026-07-01 14:00:00',
   },
   {
-    id: '4',
+    id: '5',
     name: 'HR 专员',
     code: 'hr',
     sort: 4,
@@ -1107,6 +1372,28 @@ export const MOCK_ROLES_LIST = [
     updateTime: '2026-07-10 10:00:00',
   },
 ]
+
+/**
+ * 角色菜单/按钮权限绑定夹具（按角色 id 存储，值=已绑定 menuId 数字数组）。
+ *
+ * 语义与 V31 真实 seed 对齐：
+ * - id=2 admin：显式绑全量（含目录/页面/按钮），页面回填可演示；
+ * - id=1 superadmin：不依赖绑定（真实后端超管按 code 旁路，sys_role_menu 无 superadmin 行）；
+ * - id=3 user：空绑定（真实 V31 未给 user 角色 seed 绑定）。
+ *
+ * GET/PUT /system/role/{id}/menus 的 mock handler 对该对象做真实内存更新，
+ * 保存后的状态可被后续 GET 与页面回填观察（方向 §5 风险 1 防护）。
+ */
+export const MOCK_ROLE_MENU_BINDINGS: Record<string, number[]> = {
+  // admin：全量菜单树叶子（目录 1、页面 11/12/13/14/18 + 按钮 110/111/112/120/121/122）
+  '2': [1, 11, 12, 13, 14, 18, 110, 111, 112, 120, 121, 122],
+  // superadmin：无绑定行（超管旁路，与真实 seed 一致）
+  // user：空绑定
+}
+
+// 依赖完备后补齐普通管理员会话的按钮权限（admin 角色绑定 → permission 并集）。
+// 需在 MOCK_ROLE_MENU_BINDINGS 声明之后执行，避免 TDZ。
+MOCK_SESSION_DATA_ADMIN.permissions = collectSessionPermissions(['admin'])
 
 export const MOCK_DEPTS_LIST = [
   {
