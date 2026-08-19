@@ -81,6 +81,12 @@ export default tseslint.config(
     },
   },
   {
+    languageOptions: {
+      // 标准运行时全局（Node 18+ / 浏览器 / vitest 均内置），避免 no-undef 误报。
+      globals: {
+        globalThis: 'readonly',
+      },
+    },
     settings: {
       'import/resolver': {
         typescript: true,

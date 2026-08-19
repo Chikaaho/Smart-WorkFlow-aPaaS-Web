@@ -87,6 +87,76 @@ export interface AgentModelConfigOption {
   enabled: boolean
 }
 
+/**
+ * 大模型接入配置完整契约（对齐后端 AgentModelConfigDTO，M07-Step1/Step5 字段全量）。
+ * 安全约束：只含 apiKeyMasked（后端脱敏串，未配置时为 null），
+ * 不含 apiKeyCipher（密文）也不含明文 Key——明文生命周期仅在当次提交请求内。
+ */
+export interface AgentModelConfig {
+  id: number
+  name: string
+  /** varchar 契约，前端不自创枚举（openai / ollama / other 由后端白名单校验） */
+  protocolType: 'openai' | 'ollama' | 'other' | string
+  baseUrl: string
+  modelName: string
+  /** 后端脱敏展示值（只显示后端返回的脱敏串，前端不回显/缓存明文） */
+  apiKeyMasked: string | null
+  temperature: number | null
+  maxTokens: number | null
+  topP: number | null
+  timeoutSeconds: number
+  retryCount: number
+  enabled: boolean
+  remark: string | null
+  /** 多Key轮询候选分组标识，null=独立配置不参与轮询 */
+  groupKey: string | null
+  /** 组内优先级，数值越小优先级越高 */
+  sort: number
+  /** 限流临时锁定至该时间点（系统运行态，只读，前端禁止写入） */
+  lockedUntil: string | null
+  /** 触发限流后的锁定冷却时长（秒） */
+  quotaCooldownSeconds: number
+  createTime: string
+  updateTime: string
+}
+
+/**
+ * 大模型接入配置新增/编辑请求（对齐后端 AgentModelSaveReqDTO）。
+ * apiKey 为明文，仅存在于当次提交：非空时后端加密落库；
+ * 为空/未传时 create 场景存 null、update 场景保留旧密钥。
+ */
+export interface AgentModelSaveReq {
+  name: string
+  protocolType: string
+  baseUrl: string
+  modelName: string
+  /** 明文仅存在于当次提交；空=保持旧密钥（编辑）/不配置（新增） */
+  apiKey?: string
+  temperature?: number | null
+  maxTokens?: number | null
+  topP?: number | null
+  timeoutSeconds?: number
+  retryCount?: number
+  enabled?: boolean
+  remark?: string
+  /** 多Key轮询候选分组标识，null=独立配置不参与轮询 */
+  groupKey?: string | null
+  /** 组内优先级，数值越小优先级越高（DB 默认 0） */
+  sort?: number
+  /** 触发限流后的锁定冷却时长（秒，DB 默认 60） */
+  quotaCooldownSeconds?: number
+}
+
+/** 连通性测试响应（对齐后端 AgentModelTestConnectionRespDTO）。 */
+export interface AgentModelTestConnectionResp {
+  /** 服务端可达（含 4xx 鉴权/路径问题）为 true，网络不可达为 false */
+  success: boolean
+  /** 结果说明（不含 API Key 明文） */
+  message: string
+  /** 探测耗时（毫秒） */
+  latencyMs: number
+}
+
 /** 工具下拉选项（internal/external 合并展示，value 必须是后端 name 精确值）。 */
 export interface AgentToolOption {
   /** 后端工具名（internal/external 两表 name 精确值，Step8 解释器按此精确匹配） */

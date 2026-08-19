@@ -24,7 +24,9 @@
  */
 
 import type { MockHandler, MockMethod } from './index'
+import type { AgentModelConfig, AgentModelSaveReq } from '@/contracts/agent'
 import {
+  MOCK_AGENT_MODELS,
   MOCK_DICT_DATA,
   MOCK_DICT_TYPES,
   MOCK_SESSION_DATA,
@@ -49,6 +51,27 @@ import {
   MOCK_INSTANCES,
   MOCK_INSTANCE_DETAILS,
 } from './seeds'
+
+// ─── 模型 handler 内部辅助（与真实后端语义对齐） ─────────────────
+
+/**
+ * 生成脱敏展示串（对齐后端 AesGcmCipher.mask：前 2 + **** + 后 2）。
+ * mock 内部同样不存明文：仅当次提交入参短暂存在，落库/响应只产出脱敏值。
+ */
+function maskApiKey(raw: string): string {
+  const key = raw.trim()
+  if (key.length <= 4) return '****'
+  return `${key.slice(0, 2)}****${key.slice(-2)}`
+}
+
+function findModel(id: number): AgentModelConfig | undefined {
+  return MOCK_AGENT_MODELS.find((m) => m.id === id)
+}
+
+/** 取 MOCK_AGENT_MODELS 中已出现的最大 id，用于创建时分配新 id。 */
+function nextModelId(): number {
+  return MOCK_AGENT_MODELS.reduce((max, m) => Math.max(max, m.id), 0) + 1
+}
 
 // ─── 注册条目类型 ────────────────────────────────────────
 
@@ -1647,6 +1670,214 @@ export const mockRegistrations: MockRegistration[] = [
           activeNodeIds: detail?.activeNodeIds ?? [],
           flowTrace: detail?.flowTrace ?? [],
         },
+      }
+    },
+  },
+
+  // ═══════════════════════════════════════════════════
+  // ── 大模型管理（M07-F01，契约对齐 AgentModelConfigDTO / AgentModelSaveReqDTO） ──
+  // ═══════════════════════════════════════════════════
+
+  // GET /api/agent/models?pageNum=&pageSize=&nameKeyword=
+  // 分页 + 名称关键字过滤（name 包含匹配），响应 BackendPageResult<AgentModelConfig>。
+  // 列表数据与详情同源：均只含 apiKeyMasked 脱敏值，无明文、无 apiKeyCipher。
+  {
+    method: 'GET',
+    pattern: '/api/agent/models',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      const keyword = String(query.nameKeyword ?? '').trim()
+      const filtered = keyword
+        ? MOCK_AGENT_MODELS.filter((m) => m.name.includes(keyword))
+        : MOCK_AGENT_MODELS
+      const total = filtered.length
+      const start = (pageNum - 1) * pageSize
+      const records = filtered.slice(start, start + pageSize)
+      return {
+        code: 0,
+        message: 'ok',
+        data: { records, total, pageNum, pageSize },
+      }
+    },
+  },
+
+  // GET /api/agent/models/:id — 详情（含 apiKeyMasked；不存在返回 404 业务码）
+  {
+    method: 'GET',
+    pattern: '/api/agent/models/:id',
+    handler: (params) => {
+      const model = findModel(Number((params as Record<string, string>).id))
+      if (!model) return { code: 404, message: '模型配置不存在', data: null }
+      return { code: 0, message: 'ok', data: { ...model } }
+    },
+  },
+
+  // POST /api/agent/models — 创建（apiKey 非空才生成脱敏值；空=未配置密钥），返回新 id
+  {
+    method: 'POST',
+    pattern: '/api/agent/models',
+    handler: (_params, _query, body) => {
+      const req = (body ?? {}) as Partial<AgentModelSaveReq>
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      const id = nextModelId()
+      const newModel: AgentModelConfig = {
+        id,
+        name: String(req.name ?? ''),
+        protocolType: String(req.protocolType ?? 'openai'),
+        baseUrl: String(req.baseUrl ?? ''),
+        modelName: String(req.modelName ?? ''),
+        // 明文仅存在于当次提交入参：只在本次计算脱敏展示值，不落存储
+        apiKeyMasked: req.apiKey && req.apiKey.trim() ? maskApiKey(req.apiKey) : null,
+        temperature:
+          req.temperature === undefined || req.temperature === null
+            ? null
+            : Number(req.temperature),
+        maxTokens:
+          req.maxTokens === undefined || req.maxTokens === null ? null : Number(req.maxTokens),
+        topP: req.topP === undefined || req.topP === null ? null : Number(req.topP),
+        timeoutSeconds:
+          req.timeoutSeconds === undefined || req.timeoutSeconds === null
+            ? 60
+            : Number(req.timeoutSeconds),
+        retryCount:
+          req.retryCount === undefined || req.retryCount === null ? 0 : Number(req.retryCount),
+        enabled: req.enabled ?? true,
+        remark: req.remark !== undefined && req.remark !== null ? String(req.remark) : null,
+        groupKey:
+          req.groupKey !== undefined && req.groupKey !== null && String(req.groupKey).trim() !== ''
+            ? String(req.groupKey)
+            : null,
+        sort: req.sort === undefined || req.sort === null ? 0 : Number(req.sort),
+        // 系统运行态字段（lockedUntil）不可写，新建恒为 null
+        lockedUntil: null,
+        quotaCooldownSeconds:
+          req.quotaCooldownSeconds === undefined || req.quotaCooldownSeconds === null
+            ? 60
+            : Number(req.quotaCooldownSeconds),
+        createTime: now,
+        updateTime: now,
+      }
+      MOCK_AGENT_MODELS.push(newModel)
+      return { code: 0, message: 'ok', data: id }
+    },
+  },
+
+  // PUT /api/agent/models/:id — 更新
+  // 语义对齐后端：apiKey 为空/未传 → 保留旧密钥（mock 内存中仅保留旧脱敏值）；
+  // apiKey 传新值 → 只生成新脱敏展示值（mock 内部不存明文）。
+  // 系统运行态字段 lockedUntil 不可写，更新保持原值。
+  {
+    method: 'PUT',
+    pattern: '/api/agent/models/:id',
+    handler: (params, _query, body) => {
+      const id = Number((params as Record<string, string>).id)
+      const model = findModel(id)
+      if (!model) return { code: 404, message: '模型配置不存在', data: null }
+      const req = (body ?? {}) as Partial<AgentModelSaveReq>
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      const apiKeyRaw = req.apiKey
+      const hasNewKey = apiKeyRaw !== undefined && apiKeyRaw !== null && apiKeyRaw.trim() !== ''
+      // 空 Key → 保持旧脱敏值；新 Key → 只生成新脱敏值，明文不落 mock 存储
+      const apiKeyMasked = hasNewKey ? maskApiKey(apiKeyRaw) : model.apiKeyMasked
+      const idx = MOCK_AGENT_MODELS.findIndex((m) => m.id === id)
+      if (idx === -1) return { code: 404, message: '模型配置不存在', data: null }
+      MOCK_AGENT_MODELS[idx] = {
+        ...model,
+        name: req.name !== undefined ? String(req.name) : model.name,
+        protocolType:
+          req.protocolType !== undefined ? String(req.protocolType) : model.protocolType,
+        baseUrl: req.baseUrl !== undefined ? String(req.baseUrl) : model.baseUrl,
+        modelName: req.modelName !== undefined ? String(req.modelName) : model.modelName,
+        apiKeyMasked,
+        temperature:
+          req.temperature === undefined
+            ? model.temperature
+            : req.temperature === null
+              ? null
+              : Number(req.temperature),
+        maxTokens:
+          req.maxTokens === undefined
+            ? model.maxTokens
+            : req.maxTokens === null
+              ? null
+              : Number(req.maxTokens),
+        topP: req.topP === undefined ? model.topP : req.topP === null ? null : Number(req.topP),
+        timeoutSeconds:
+          req.timeoutSeconds === undefined || req.timeoutSeconds === null
+            ? model.timeoutSeconds
+            : Number(req.timeoutSeconds),
+        retryCount:
+          req.retryCount === undefined || req.retryCount === null
+            ? model.retryCount
+            : Number(req.retryCount),
+        enabled: req.enabled !== undefined ? Boolean(req.enabled) : model.enabled,
+        remark:
+          req.remark === undefined ? model.remark : req.remark === null ? null : String(req.remark),
+        groupKey:
+          req.groupKey === undefined
+            ? model.groupKey
+            : req.groupKey === null || String(req.groupKey).trim() === ''
+              ? null
+              : String(req.groupKey),
+        sort: req.sort === undefined || req.sort === null ? model.sort : Number(req.sort),
+        // lockedUntil 为系统运行态（只读），更新不触碰
+        quotaCooldownSeconds:
+          req.quotaCooldownSeconds === undefined || req.quotaCooldownSeconds === null
+            ? model.quotaCooldownSeconds
+            : Number(req.quotaCooldownSeconds),
+        updateTime: now,
+      }
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // DELETE /api/agent/models/:id — 删除（幂等：不存在也返回 code 0）
+  {
+    method: 'DELETE',
+    pattern: '/api/agent/models/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_AGENT_MODELS.findIndex((m) => m.id === id)
+      if (idx !== -1) MOCK_AGENT_MODELS.splice(idx, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // POST /api/agent/models/:id/test-connection — 连通性测试
+  // 语义对齐后端 AgentModelTestConnectionRespDTO：{success,message,latencyMs}，
+  // 2xx-4xx 视为可达（success=true）；网络不可达/异常返回 success=false。
+  // 不可测情况（配置不存在 / 当前被锁定）以业务码 code≠0 表达，
+  // 前端不得把业务失败改判为网络失败。
+  {
+    method: 'POST',
+    pattern: '/api/agent/models/:id/test-connection',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const model = findModel(id)
+      if (!model) return { code: 404, message: '模型配置不存在，无法发起连通性测试', data: null }
+      if (model.lockedUntil && model.lockedUntil > new Date().toISOString()) {
+        return {
+          code: 429,
+          message: '该模型配置当前处于限流锁定状态，暂不可测试',
+          data: null,
+        }
+      }
+      const reachable = model.enabled || model.protocolType === 'ollama'
+      return {
+        code: 0,
+        message: 'ok',
+        data: reachable
+          ? {
+              success: true,
+              message: `连接成功（${model.protocolType} / ${model.modelName}）`,
+              latencyMs: 120 + (id % 5) * 30,
+            }
+          : {
+              success: false,
+              message: '连接失败：网络不可达或服务未响应',
+              latencyMs: 500 + (id % 5) * 100,
+            },
       }
     },
   },
