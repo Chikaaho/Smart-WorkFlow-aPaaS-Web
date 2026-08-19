@@ -298,7 +298,9 @@ describe('foundation/mock agent-models handler 一致性', () => {
   // ── 菜单 tree：大模型管理可达 ────────────────────────────
 
   it('MOCK_MENU_TREE 中「智能体」为目录且含「大模型管理」二级菜单（对齐 V26 形态）', () => {
-    const agent = (MOCK_MENU_TREE as Array<Record<string, unknown>>).find((n) => n.name === 'agent')
+    const agent = (MOCK_MENU_TREE as unknown as Array<Record<string, unknown>>).find(
+      (n) => n.name === 'agent',
+    )
     expect(agent).toBeDefined()
     expect(agent!.menuType).toBe(0)
     expect(agent!.component).toBeNull()
