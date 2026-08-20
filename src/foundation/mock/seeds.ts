@@ -2426,3 +2426,223 @@ export const MOCK_AGENT_MODELS: AgentModelConfig[] = [
     updateTime: '2026-07-16 15:00:00',
   },
 ]
+
+// ─── 图执行历史 Mock 种子（AgentGraphExecution） ──────────────
+export const MOCK_AGENT_GRAPH_EXECUTIONS: Array<{
+  id: number
+  graphDefId: number
+  graphKey: string
+  graphName: string
+  defVersion: number
+  status: string // 'SUCCESS' | 'FAILED' | 'RUNNING'
+  success: boolean
+  latencyMs: number
+  traceId: string
+  createTime: string
+  updateTime?: string
+  input: string
+  output: string
+  errorMessage?: string
+  errorCategory?: string
+  nodeDetails: Array<{
+    nodeSeq: number
+    branchId: string
+    nodeId: string
+    nodeType: string // 'START' | 'LLM' | 'END' | 'FORK' | 'JOIN' | 'LOOP' | 'CONDITION'
+    nodeName: string
+    status: string
+    success: boolean
+    nodeLatencyMs?: number
+    buildTime?: string
+    input?: string
+    output?: string
+    errorMessage?: string
+  }>
+}> = [
+  {
+    id: 1,
+    graphDefId: 1,
+    graphKey: 'CUSTOMER_ROUTING_V2',
+    graphName: '客服分流图 V2',
+    defVersion: 3,
+    status: 'SUCCESS',
+    success: true,
+    latencyMs: 2350,
+    traceId: 'trace-cust-001',
+    createTime: '2026-08-20 10:00:00',
+    updateTime: '2026-08-20 10:00:05',
+    input: JSON.stringify({ query: '我想查询订单状态' }),
+    output: JSON.stringify({ response: '您的订单 #12345 已发货...' }),
+    nodeDetails: [
+      {
+        nodeSeq: 1,
+        branchId: '0',
+        nodeId: 'start_1',
+        nodeType: 'START',
+        nodeName: '开始',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 5,
+      },
+      {
+        nodeSeq: 2,
+        branchId: '0',
+        nodeId: 'llm_1',
+        nodeType: 'LLM',
+        nodeName: '意图识别',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 800,
+        input: JSON.stringify({ query: '我想查询订单状态' }),
+        output: JSON.stringify({ intent: 'ORDER_QUERY' }),
+      },
+      {
+        nodeSeq: 3,
+        branchId: '0',
+        nodeId: 'check_1',
+        nodeType: 'CONDITION',
+        nodeName: '条件判断',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 10,
+      },
+      {
+        nodeSeq: 4,
+        branchId: '0',
+        nodeId: 'end_1',
+        nodeType: 'END',
+        nodeName: '结束',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 2,
+      },
+    ],
+  },
+  {
+    id: 2,
+    graphDefId: 1,
+    graphKey: 'CUSTOMER_ROUTING_V2',
+    graphName: '客服分流图 V2',
+    defVersion: 3,
+    status: 'FAILED',
+    success: false,
+    latencyMs: 5100,
+    traceId: 'trace-cust-002',
+    createTime: '2026-08-20 11:00:00',
+    updateTime: '2026-08-20 11:00:10',
+    input: JSON.stringify({ query: '帮我生成营销文案' }),
+    output: '',
+    errorMessage: '模型调用超时：LLM API 响应超过 5 秒',
+    errorCategory: 'MODEL_CALL_TIMEOUT',
+    nodeDetails: [
+      {
+        nodeSeq: 1,
+        branchId: '0',
+        nodeId: 'start_2',
+        nodeType: 'START',
+        nodeName: '开始',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 3,
+      },
+      {
+        nodeSeq: 2,
+        branchId: '0',
+        nodeId: 'llm_2',
+        nodeType: 'LLM',
+        nodeName: '文案生成',
+        status: 'FAILED',
+        success: false,
+        nodeLatencyMs: 5000,
+        errorMessage: 'Timeout after 5000ms',
+      },
+      {
+        nodeSeq: 3,
+        branchId: '0',
+        nodeId: 'end_2',
+        nodeType: 'END',
+        nodeName: '错误处理',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 10,
+      },
+    ],
+  },
+  {
+    id: 3,
+    graphDefId: 2,
+    graphKey: 'DATA_ANALYSIS_PIPE',
+    graphName: '数据分析管线',
+    defVersion: 1,
+    status: 'SUCCESS',
+    success: true,
+    latencyMs: 4200,
+    traceId: 'trace-data-001',
+    createTime: '2026-08-20 12:00:00',
+    updateTime: '2026-08-20 12:00:08',
+    input: JSON.stringify({ table: 'sales_q3', metrics: ['revenue', 'count'] }),
+    output: JSON.stringify({ results: { revenue: 125000, count: 342 } }),
+    nodeDetails: [
+      {
+        nodeSeq: 1,
+        branchId: '0',
+        nodeId: 'start_3',
+        nodeType: 'START',
+        nodeName: '开始',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 5,
+      },
+      {
+        nodeSeq: 2,
+        branchId: '0',
+        nodeId: 'fork_1',
+        nodeType: 'FORK',
+        nodeName: '扇出计算',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 2,
+      },
+      {
+        nodeSeq: 3,
+        branchId: 'branch-a',
+        nodeId: 'calc_rev',
+        nodeType: 'LLM',
+        nodeName: '收入计算',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 2100,
+      },
+      {
+        nodeSeq: 4,
+        branchId: 'branch-b',
+        nodeId: 'calc_cnt',
+        nodeType: 'LLM',
+        nodeName: '计数计算',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 1900,
+      },
+      {
+        nodeSeq: 5,
+        branchId: '0',
+        nodeId: 'join_1',
+        nodeType: 'JOIN',
+        nodeName: '汇合结果',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 15,
+      },
+      {
+        nodeSeq: 6,
+        branchId: '0',
+        nodeId: 'end_3',
+        nodeType: 'END',
+        nodeName: '结束',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 2,
+      },
+    ],
+  },
+]

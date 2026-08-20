@@ -27,6 +27,7 @@ import type { MockHandler, MockMethod } from './index'
 import type { AgentModelConfig, AgentModelSaveReq } from '@/contracts/agent'
 import {
   MOCK_AGENT_MODELS,
+  MOCK_AGENT_GRAPH_EXECUTIONS,
   MOCK_DICT_DATA,
   MOCK_DICT_TYPES,
   MOCK_SESSION_DATA,
@@ -2178,6 +2179,59 @@ export const mockRegistrations: MockRegistration[] = [
           latencyMs: 120 + (id % 5) * 30,
         },
       }
+    },
+  },
+
+  // ═══════════════════════════════════════════════════
+  // ── 图执行历史（AgentGraphExecution） ─────────────
+  // ═══════════════════════════════════════════════════
+
+  // GET /api/agent/graph-executions?pageNum=&pageSize=&graphDefId= — 分页列表
+  {
+    method: 'GET',
+    pattern: '/api/agent/graph-executions',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      let records = [...MOCK_AGENT_GRAPH_EXECUTIONS]
+      if (query.graphDefId) {
+        const gdid = Number(query.graphDefId)
+        records = records.filter((e) => e.graphDefId === gdid)
+      }
+      const total = records.length
+      const start = (pageNum - 1) * pageSize
+      const paginated = records.slice(start, start + pageSize)
+      return { code: 0, message: 'ok', data: { records: paginated, total, pageNum, pageSize } }
+    },
+  },
+
+  // GET /api/agent/graph-executions/:id — 详情（不存在 → 404）
+  {
+    method: 'GET',
+    pattern: '/api/agent/graph-executions/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const exec = MOCK_AGENT_GRAPH_EXECUTIONS.find((e) => e.id === id)
+      if (!exec) return { code: 404, message: '执行记录不存在或跨租户', data: null }
+      return {
+        code: 0,
+        message: 'ok',
+        data: { ...exec, nodeDetails: [...(exec.nodeDetails ?? [])] },
+      }
+    },
+  },
+
+  // GET /api/agent/graph-executions/:id/nodes — 节点轨迹（按 nodeSeq 升序）
+  {
+    method: 'GET',
+    pattern: '/api/agent/graph-executions/:id/nodes',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const exec = MOCK_AGENT_GRAPH_EXECUTIONS.find((e) => e.id === id)
+      if (!exec) return { code: 404, message: '执行记录不存在', data: null }
+      const nodes = exec.nodeDetails ?? []
+      const sorted = [...nodes].sort((a, b) => (a.nodeSeq ?? 0) - (b.nodeSeq ?? 0))
+      return { code: 0, message: 'ok', data: sorted }
     },
   },
 ]

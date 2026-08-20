@@ -78,6 +78,18 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/modules/workflow/views/ProcessInstanceList.vue'),
         meta: { title: '流程监控' },
       },
+      {
+        path: 'agent/executions/list',
+        name: 'agent-execution-list',
+        component: () => import('@/modules/agent/views/ExecutionList.vue'),
+        meta: { title: '执行历史' },
+      },
+      {
+        path: 'agent/executions/detail/:executionId',
+        name: 'agent-execution-detail',
+        component: () => import('@/modules/agent/views/ExecutionDetail.vue'),
+        meta: { title: '执行详情', authority: ['agent:model:view'] },
+      },
     ],
   },
   {

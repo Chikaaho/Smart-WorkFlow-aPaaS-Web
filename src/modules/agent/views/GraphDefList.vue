@@ -147,6 +147,14 @@ async function handleDelete(row: AgentGraphDef) {
   }
 }
 
+/** 查看执行历史：跳转到执行列表页，带 graphDefId 过滤条件 */
+function handleViewExecutions(row: AgentGraphDef) {
+  void router.push({
+    name: 'agent-execution-list',
+    query: { graphDefId: row.id },
+  })
+}
+
 onMounted(() => {
   void loadList()
 })
@@ -195,7 +203,7 @@ onMounted(() => {
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" width="260" fixed="right">
         <template #default="{ row }">
           <el-button size="small" link type="primary" @click="handleEdit(row as AgentGraphDef)">
             编辑
@@ -217,6 +225,15 @@ onMounted(() => {
             @click="handleDelete(row as AgentGraphDef)"
           >
             删除
+          </el-button>
+          <!-- 执行历史入口：从图定义上下文进入运行记录 -->
+          <el-button
+            size="small"
+            link
+            type="info"
+            @click="handleViewExecutions(row as AgentGraphDef)"
+          >
+            执行历史
           </el-button>
         </template>
       </el-table-column>

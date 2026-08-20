@@ -67,7 +67,7 @@ export interface AgentGraphExecuteReq {
   input: string
 }
 
-/** 图执行响应（Step8：运行时失败以 success=false + errorMessage 表达，不上抛）。 */
+/** 图执行响应（Step8：运行时失败以 success=false + errorMessage 表达，不上抛）；Step12追加 executionId。 */
 export interface AgentGraphExecuteResp {
   success: boolean
   /** 最终输出文本（END 节点处的累积文本，成功时非空） */
@@ -76,6 +76,8 @@ export interface AgentGraphExecuteResp {
   errorMessage?: string
   /** 执行耗时（毫秒） */
   latencyMs: number
+  /** 执行历史记录 id（Step12，成功/失败均返回，可用于直达详情页） */
+  executionId?: number
 }
 
 /** 模型配置下拉选项（对齐 AgentModelConfigDTO 的只读展示字段）。 */
@@ -164,4 +166,108 @@ export interface AgentToolOption {
   description?: string
   /** 来源标注：internal / external */
   source: 'internal' | 'external'
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 图执行历史相关契约（对齐 AgentGraphExecutionDTO、AgentGraphExecutionDetailDTO、AgentGraphExecutionNodeDTO）
+// ═══════════════════════════════════════════════════════════════
+
+/** 图执行记录（列表/摘要信息，对应 AgentGraphExecutionDTO） */
+export interface AgentGraphExecution {
+  /** 执行 ID（服务端生成） */
+  id: number
+  /** 所属图定义 ID */
+  graphDefId: number
+  /** 图业务 key（冗余字段，便于前端展示） */
+  graphKey: string
+  /** 图名称（冗余字段，便于前端展示） */
+  graphName: string
+  /** 执行时图定义版本快照（后端直返字段） */
+  graphDefVersion: number
+  /** 所属图定义的版本号（列表展示补充字段，由 pageGraphExecutionsWithVersion 关联查询） */
+  defVersion: number
+  /** 输入内容（初始累积文本，列表端点暂不返回） */
+  input: string
+  /** 执行状态：RUNNING / SUCCESS / FAILED */
+  status: 'RUNNING' | 'SUCCESS' | 'FAILED' | string
+  /** 输出结果摘要（成功时为最终输出，失败时为错误摘要；长文本后端可能截断） */
+  outputSummary: string
+  /** 错误分类标识（失败时，如 MODEL_CALL_FAILED、STEP_TIMEOUT 等） */
+  errorCategory?: string
+  /** 失败原因摘要（不含明文 API Key，列表展示有用） */
+  errorMessage?: string
+  /** 是否成功（便捷字段，等价于 status='SUCCESS'） */
+  success: boolean
+  /** 执行耗时（毫秒） */
+  latencyMs: number
+  /** 创建时间 */
+  createTime: string
+}
+
+/** 图执行详情（完整信息，对应 AgentGraphExecutionDetailDTO） */
+export interface AgentGraphExecutionDetail {
+  /** 执行 ID（服务端生成） */
+  id: number
+  /** 所属图定义 ID */
+  graphDefId: number
+  /** 图业务 key */
+  graphKey: string
+  /** 图名称 */
+  graphName: string
+  /** 所属图定义的版本号（扩展字段） */
+  defVersion: number
+  /** 输入内容（初始累积文本，完整文本） */
+  input: string
+  /** 执行状态：RUNNING / SUCCESS / FAILED */
+  status: 'RUNNING' | 'SUCCESS' | 'FAILED' | string
+  /** 完整输出内容（END 节点处的累积文本或错误详情） */
+  output: string
+  /** 是否成功 */
+  success: boolean
+  /** 执行耗时（毫秒） */
+  latencyMs: number
+  /** 详细错误信息（失败时含具体步骤和原因，不含明文 API Key） */
+  errorMessage?: string
+  /** 错误分类标识（失败时） */
+  errorCategory?: string
+  /** 根节点追踪 ID（用于链路追踪） */
+  traceId?: string
+  /** 创建时间 */
+  createTime: string
+  /** 更新时间 */
+  updateTime?: string
+  /** 各节点执行详情列表（按 nodeSeq 排序） */
+  nodeDetails: AgentGraphExecutionNode[]
+}
+
+/** 图执行节点详情（对应 AgentGraphExecutionNodeDTO） */
+export interface AgentGraphExecutionNode {
+  /** 节点序列号（全局唯一，用于表示执行顺序） */
+  nodeSeq: number
+  /** 并行分支标识 ("0"/"0-1"/...)" */
+  branchId?: string
+  /** 节点 ID（设计器分配的节点唯一标识） */
+  nodeId: string
+  /** 节点类型（START/END/LLM/TOOL/CONDITION/…） */
+  nodeType: string
+  /** 节点名称（用户自定义） */
+  nodeName: string
+  /** 执行状态：PENDING / RUNNING / SUCCESS / FAILED */
+  status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | string
+  /** 输入变量值（该节点接收的输入） */
+  input?: string
+  /** 输出结果（该节点的输出文本） */
+  output?: string
+  /** 是否成功 */
+  success: boolean
+  /** 节点级耗时（毫秒） */
+  nodeLatencyMs: number
+  /** 开始时间 */
+  startTime?: string
+  /** 结束时间 */
+  endTime?: string
+  /** 详细错误信息（失败时） */
+  errorMessage?: string
+  /** 构建时间（用于确定父子关系，相同 buildTime 的节点属于同一时刻并行分支） */
+  buildTime: string
 }

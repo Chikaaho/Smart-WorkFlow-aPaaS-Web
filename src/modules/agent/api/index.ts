@@ -11,6 +11,9 @@ import type {
   AgentModelTestConnectionResp,
   AgentToolOption,
   ProcessGraph,
+  AgentGraphExecution,
+  AgentGraphExecutionDetail,
+  AgentGraphExecutionNode,
 } from '@/contracts/agent'
 
 // ─── 后端分页原始形状（对齐 AgentGraphDefController.pageDefs 的 PageResult） ───
@@ -208,3 +211,102 @@ export async function listToolOptions(): Promise<AgentToolOption[]> {
     })),
   ]
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 图执行历史（AgentGraphExecutionController）
+// ═══════════════════════════════════════════════════════════════
+
+/** GET /agent/graph-executions?pageNum=&pageSize=&graphDefId= → PageResult<AgentGraphExecutionDTO> */
+export async function pageGraphExecutions(params: {
+  pageNum: number
+  pageSize: number
+  graphDefId?: number
+}): Promise<PageResult<AgentGraphExecution>> {
+  const raw = await request<BackendPageResult<AgentGraphExecution>>({
+    method: 'GET',
+    url: '/agent/graph-executions',
+    params,
+  })
+  return adaptPage(raw)
+}
+
+/** GET /agent/graph-executions/{executionId} → AgentGraphExecutionDetailDTO (404 若不存在) */
+export async function getExecutionDetail(executionId: number): Promise<AgentGraphExecutionDetail> {
+  return request<AgentGraphExecutionDetail>({
+    method: 'GET',
+    url: `/agent/graph-executions/${executionId}`,
+  })
+}
+
+/** GET /agent/graph-executions/{executionId}/nodes? → List<AgentGraphExecutionNodeDTO> (按 nodeSeq 排序) */
+export async function listExecutionNodes(executionId: number): Promise<AgentGraphExecutionNode[]> {
+  return request<AgentGraphExecutionNode[]>({
+    method: 'GET',
+    url: `/agent/graph-executions/${executionId}/nodes`,
+  })
+}
+
+// ─── 扩展 API：为执行列表补充 defVersion 查询 ───
+
+interface GraphDefVersionInfo {
+  id: number
+  name: string
+  defVersion: number
+}
+
+/** GET /agent/graph-defs/{id} → { id, name, defVersion }（轻量级，不带 graph_json） */
+export async function getGraphDefVersionOnly(id: number): Promise<GraphDefVersionInfo> {
+  const raw = await request<GraphDefVersionInfo>({
+    method: 'GET',
+    url: `/agent/graph-defs/${id}`,
+  })
+  return raw
+}
+
+/** 扩展类型：带 defVersion 的执行记录 */
+type AgentGraphExecutionWithVersion = AgentGraphExecution & { defVersion: number }
+
+/** 分页查询图执行历史并自动关联 defVersion（内部使用，供列表页调用） */
+async function pageGraphExecutionsInternal(params: {
+  pageNum: number
+  pageSize: number
+  graphDefId?: number
+}): Promise<PageResult<AgentGraphExecutionWithVersion>> {
+  // 1. 先拉取执行列表
+  const result = await pageGraphExecutions(params)
+
+  // 2. 收集所有唯一的 graphDefId
+  const graphDefIds = Array.from(new Set(result.list.map((e) => e.graphDefId)))
+
+  // 3. 并发拉取每个图的最新版本号
+  const versionMap = new Map<number, number>()
+  if (graphDefIds.length > 0) {
+    const versions = await Promise.all(
+      graphDefIds.map(async (id) => {
+        try {
+          const info = await getGraphDefVersionOnly(id)
+          return { id, defVersion: info.defVersion }
+        } catch {
+          return { id, defVersion: 1 } // 兜底版本号
+        }
+      }),
+    )
+    versions.forEach(({ id, defVersion }) => versionMap.set(id, defVersion))
+  }
+
+  // 4. 合并版本号到每条记录
+  const enrichedList: AgentGraphExecutionWithVersion[] = result.list.map((item) => ({
+    ...item,
+    defVersion: versionMap.get(item.graphDefId) ?? 1,
+  }))
+
+  return {
+    list: enrichedList,
+    total: result.total,
+    pageNum: result.pageNum,
+    pageSize: result.pageSize,
+  }
+}
+
+/** 导出扩展版：与基础 API 保持一致的对外接口 */
+export { pageGraphExecutionsInternal as pageGraphExecutionsWithVersion }

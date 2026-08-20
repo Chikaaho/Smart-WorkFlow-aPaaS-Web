@@ -579,4 +579,138 @@ describe('GraphDesigner.vue', () => {
     expect(joinPanel.findAll('.el-input')).toHaveLength(0)
     wrapper.unmount()
   })
+
+  // ──────────────────────────────────────────────────────────────
+  // Step12：执行直达详情（补证 A）
+  // ──────────────────────────────────────────────────────────────
+  it('D140-A01: 执行成功含 executionId — 查看详情按钮出现在结果区域', async () => {
+    const wrapper = await mountLoaded()
+    vi.mocked(executeGraph).mockResolvedValueOnce({
+      success: true,
+      output: '您好，请问需要什么帮助？',
+      latencyMs: 1234,
+      executionId: 90001,
+    })
+
+    const vm = wrapper.vm as unknown as {
+      executeInput: string
+      handleExecute: () => Promise<void>
+    }
+    vm.executeInput = '你好'
+    await vm.handleExecute()
+
+    await nextTick()
+    const html = wrapper.html()
+    expect(html).toContain('执行成功')
+    expect(html).toContain('查看详情')
+    expect(html).toContain('耗时 1234ms')
+    wrapper.unmount()
+  })
+
+  it('D140-A02: 执行失败含 executionId — 查看详情按钮同样出现', async () => {
+    const wrapper = await mountLoaded()
+    vi.mocked(executeGraph).mockResolvedValueOnce({
+      success: false,
+      errorMessage: '模型调用超时',
+      latencyMs: 5000,
+      executionId: 90002,
+    })
+
+    const vm = wrapper.vm as unknown as {
+      executeInput: string
+      handleExecute: () => Promise<void>
+    }
+    vm.executeInput = '测试'
+    await vm.handleExecute()
+
+    await nextTick()
+    const html = wrapper.html()
+    expect(html).toContain('执行失败')
+    expect(html).toContain('查看详情')
+    wrapper.unmount()
+  })
+
+  it('D140-A03: 点击查看详情 — router.push 跳转到 /agent/executions/detail/:executionId', async () => {
+    const wrapper = await mountLoaded()
+    const testExecutionId = 90003
+    vi.mocked(executeGraph).mockResolvedValueOnce({
+      success: true,
+      output: 'done',
+      latencyMs: 500,
+      executionId: testExecutionId,
+    })
+
+    const vm = wrapper.vm as unknown as {
+      executeInput: string
+      handleExecute: () => Promise<void>
+      handleViewExecutionDetail: () => void
+    }
+    vm.executeInput = 'test'
+    await vm.handleExecute()
+    await nextTick()
+
+    push.mockClear()
+    vm.handleViewExecutionDetail()
+    await nextTick()
+
+    expect(push).toHaveBeenCalledWith(`/agent/executions/detail/${testExecutionId}`)
+    wrapper.unmount()
+  })
+
+  it('D140-A04: 执行成功但无 executionId — 点击查看详情不跳转，仅警告提示', async () => {
+    const wrapper = await mountLoaded()
+    vi.mocked(executeGraph).mockResolvedValueOnce({
+      success: true,
+      output: 'done',
+      latencyMs: 500,
+      // 不含 executionId
+    })
+
+    const vm = wrapper.vm as unknown as {
+      executeInput: string
+      handleExecute: () => Promise<void>
+      handleViewExecutionDetail: () => void
+    }
+    vm.executeInput = 'test'
+    await vm.handleExecute()
+    await nextTick()
+
+    push.mockClear()
+    vm.handleViewExecutionDetail()
+    await nextTick()
+
+    expect(push).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledWith('暂无可跳转的执行记录')
+    wrapper.unmount()
+  })
+
+  it('D140-A05: 执行失败且含 executionId — 查看详情按钮出现并可导航至详情页（失败与成功双链闭合）', async () => {
+    const wrapper = await mountLoaded()
+    vi.mocked(executeGraph).mockResolvedValueOnce({
+      success: false,
+      errorMessage: '模型调用超时',
+      latencyMs: 5000,
+      executionId: 90004,
+    })
+
+    const vm = wrapper.vm as unknown as {
+      executeInput: string
+      handleExecute: () => Promise<void>
+      handleViewExecutionDetail: () => void
+    }
+    vm.executeInput = '测试'
+    await vm.handleExecute()
+
+    await nextTick()
+    const html = wrapper.html()
+    expect(html).toContain('执行失败')
+    expect(html).toContain('查看详情')
+
+    push.mockClear()
+    vm.handleViewExecutionDetail()
+    await nextTick()
+
+    expect(push).toHaveBeenCalledWith('/agent/executions/detail/90004')
+    wrapper.unmount()
+  })
 })

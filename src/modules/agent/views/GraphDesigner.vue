@@ -348,6 +348,16 @@ async function handleExecute() {
   }
 }
 
+/** 从图设计器直达本次执行详情（Step12：利用响应中的 executionId） */
+function handleViewExecutionDetail() {
+  const eid = executeResult.value?.executionId
+  if (eid) {
+    void router.push(`/agent/executions/detail/${eid}`)
+  } else {
+    ElMessage.warning('暂无可跳转的执行记录')
+  }
+}
+
 onMounted(() => {
   void loadGraph()
   void loadOptions()
@@ -474,8 +484,14 @@ onBeforeUnmount(() => {
           <div>原因：{{ executeResult.errorMessage }}</div>
         </template>
         <div class="execute-meta">耗时 {{ executeResult.latencyMs }}ms</div>
+        <!-- Step12：利用响应中的 executionId 直达本次执行详情 -->
+        <div v-if="executeResult.executionId" class="execute-detail-link">
+          <el-button size="small" link type="primary" @click="handleViewExecutionDetail">
+            查看详情 →
+          </el-button>
+        </div>
       </el-alert>
-      <div class="execute-hint">执行结果仅本次会话可见、不落库，刷新页面即丢失。</div>
+      <div class="execute-hint">执行结果已持久化，可通过上方按钮直达本次执行详情。</div>
     </div>
   </div>
 </template>
@@ -604,6 +620,10 @@ onBeforeUnmount(() => {
 .execute-meta {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.execute-detail-link {
+  margin-top: 4px;
 }
 
 .execute-hint {
