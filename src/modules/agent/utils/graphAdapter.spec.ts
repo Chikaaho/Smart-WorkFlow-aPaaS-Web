@@ -4,6 +4,8 @@ import {
   NODE_CONFIG_KEY_INPUT_VAR,
   NODE_CONFIG_KEY_MAX_ITERATIONS,
   NODE_CONFIG_KEY_OUTPUT_VAR,
+  NODE_CONFIG_KEY_SYSTEM_PROMPT,
+  NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE,
   NODE_TYPE_FORK,
   NODE_TYPE_JOIN,
   NODE_TYPE_LABELS,
@@ -244,5 +246,46 @@ describe('graphAdapter 双向转换', () => {
     expect(roundTrip[0].config).toEqual({ agentModelConfigId: 7 })
     expect(Object.keys(roundTrip[0].config ?? {})).not.toContain(NODE_CONFIG_KEY_INPUT_VAR)
     expect(Object.keys(roundTrip[0].config ?? {})).not.toContain(NODE_CONFIG_KEY_OUTPUT_VAR)
+  })
+
+  it('LLM 节点 config 含 systemPrompt/userPromptTemplate：elements → data → elements 往返精确保留', () => {
+    const elements: GraphElement[] = [
+      {
+        id: 'llm-1',
+        kind: 'node',
+        type: 'LLM',
+        config: {
+          agentModelConfigId: 7,
+          systemPrompt: '你是客服助手',
+          userPromptTemplate: '请根据以下内容生成摘要：{{input}}',
+          inputVar: 'raw',
+          outputVar: 'summary',
+        },
+        style: { x: 0, y: 0 },
+      },
+    ]
+
+    const data = elementsToFlowGraphData(elements)
+    expect(data.nodes[0].data).toEqual({
+      agentModelConfigId: 7,
+      systemPrompt: '你是客服助手',
+      userPromptTemplate: '请根据以下内容生成摘要：{{input}}',
+      inputVar: 'raw',
+      outputVar: 'summary',
+    })
+
+    const roundTrip = flowGraphDataToElements(data)
+    expect(roundTrip[0].config).toEqual({
+      agentModelConfigId: 7,
+      systemPrompt: '你是客服助手',
+      userPromptTemplate: '请根据以下内容生成摘要：{{input}}',
+      inputVar: 'raw',
+      outputVar: 'summary',
+    })
+  })
+
+  it('LLM 节点 prompt 键常量与后端契约精确一致（systemPrompt/userPromptTemplate）', () => {
+    expect(NODE_CONFIG_KEY_SYSTEM_PROMPT).toBe('systemPrompt')
+    expect(NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE).toBe('userPromptTemplate')
   })
 })

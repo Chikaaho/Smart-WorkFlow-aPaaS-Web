@@ -33,6 +33,8 @@ export const NODE_CONFIG_KEY_TOOL_NAME = 'toolName'
 export const NODE_CONFIG_KEY_INPUT_VAR = 'inputVar'
 export const NODE_CONFIG_KEY_OUTPUT_VAR = 'outputVar'
 export const NODE_CONFIG_KEY_MAX_ITERATIONS = 'maxIterations'
+export const NODE_CONFIG_KEY_SYSTEM_PROMPT = 'systemPrompt'
+export const NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE = 'userPromptTemplate'
 export const EDGE_CONFIG_KEY_KEYWORD = 'keyword'
 
 /** 默认变量名（与后端 AgentGraphInterpreter.DEFAULT_VARIABLE_NAME 对齐） */

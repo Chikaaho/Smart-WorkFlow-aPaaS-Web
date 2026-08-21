@@ -28,6 +28,8 @@ import type { AgentModelConfig, AgentModelSaveReq } from '@/contracts/agent'
 import {
   MOCK_AGENT_MODELS,
   MOCK_AGENT_GRAPH_EXECUTIONS,
+  MOCK_GRAPH_DEFS,
+  type MockGraphDefEntry,
   MOCK_DICT_DATA,
   MOCK_DICT_TYPES,
   MOCK_SESSION_DATA,
@@ -154,6 +156,103 @@ export interface MockRegistration {
   method: MockMethod
   pattern: `/${string}`
   handler: MockHandler
+}
+
+// ─── 图执行 Mock 辅助（极简解释执行：仅支持 START→LLM→END 单链） ──
+
+interface ExecuteGraphResult {
+  success: boolean
+  output?: string
+  errorMessage?: string
+  latencyMs: number
+}
+
+/**
+ * 极简图执行器：只处理 START → LLM → END 单链（不实现 LOOP/FORK/JOIN/CONDITION）。
+ * 对 LLM 节点解释 systemPrompt / userPromptTemplate 语义：
+ *   - userPromptTemplate 空/缺失 → 默认回退：使用 inputVar（默认 "input"）值作为用户消息
+ *   - userPromptTemplate 存在 → 一次性插值 {{var}}，变量未定义 → 返回失败
+ *   - 使用函数式 replace 避免 $ 特殊字符被二次解释
+ * Mock 不调真实 LLM，直接返回插值后的文本作为输出。
+ */
+function executeGraphMock(graphDef: MockGraphDefEntry, input: string): ExecuteGraphResult {
+  const elements = graphDef.graphJson.elements
+  const nodes = elements.filter((e) => e.kind === 'node')
+  const edges = elements.filter((e) => e.kind === 'edge')
+
+  const startNode = nodes.find((n) => n.type === 'START')
+  if (!startNode) return { success: false, errorMessage: '无 START 节点', latencyMs: 5 }
+
+  let currentId: string | undefined = startNode.id
+  const variables: Record<string, string> = { input }
+  let finalOutput = input
+  let latencyMs = 0
+
+  while (currentId) {
+    const node = nodes.find((n) => n.id === currentId)
+    if (!node) {
+      return {
+        success: false,
+        errorMessage: `节点 ${currentId} 不存在`,
+        latencyMs: latencyMs + 5,
+      }
+    }
+
+    if (node.type === 'LLM') {
+      const cfg = node.config ?? {}
+      const userPromptTemplate =
+        typeof cfg.userPromptTemplate === 'string' ? cfg.userPromptTemplate : null
+
+      let userText: string
+      if (!userPromptTemplate || !userPromptTemplate.trim()) {
+        // 默认回退：使用 inputVar 值（默认 "input"）
+        const inputVar =
+          typeof cfg.inputVar === 'string' && cfg.inputVar.trim() ? cfg.inputVar : 'input'
+        userText = variables[inputVar] ?? ''
+      } else {
+        // 插值：变量未定义 → 立即失败
+        const placeholderRe = /\{\{([A-Za-z_][A-Za-z0-9_]*)}}/g
+        let failed = false
+        let errorMessage = ''
+        userText = userPromptTemplate.replace(placeholderRe, (_match, varName: string) => {
+          if (!(varName in variables)) {
+            failed = true
+            errorMessage = `引用了未定义的变量: ${varName}（节点 ${node.id}）`
+            return _match
+          }
+          return variables[varName]
+        })
+        if (failed) {
+          return { success: false, errorMessage, latencyMs: latencyMs + 5 }
+        }
+      }
+
+      finalOutput = userText
+      const outputVar =
+        typeof cfg.outputVar === 'string' && cfg.outputVar.trim() ? cfg.outputVar : 'input'
+      variables[outputVar] = finalOutput
+      latencyMs += 100
+    } else if (node.type === 'END') {
+      const cfg = node.config ?? {}
+      const inputVar =
+        typeof cfg.inputVar === 'string' && cfg.inputVar.trim() ? cfg.inputVar : 'input'
+      finalOutput = variables[inputVar] ?? ''
+      break
+    } else if (node.type === 'START') {
+      // 继续到下一节点
+    } else {
+      return {
+        success: false,
+        errorMessage: `Mock 不支持节点类型: ${node.type}`,
+        latencyMs: latencyMs + 5,
+      }
+    }
+
+    const nextEdge = edges.find((e) => e.source === currentId)
+    currentId = nextEdge?.target
+  }
+
+  return { success: true, output: finalOutput, latencyMs }
 }
 
 // ─── Handler 实现 ─────────────────────────────────────────
@@ -2232,6 +2331,76 @@ export const mockRegistrations: MockRegistration[] = [
       const nodes = exec.nodeDetails ?? []
       const sorted = [...nodes].sort((a, b) => (a.nodeSeq ?? 0) - (b.nodeSeq ?? 0))
       return { code: 0, message: 'ok', data: sorted }
+    },
+  },
+
+  // ═══════════════════════════════════════════════════
+  // ── 图定义 CRUD + 执行（M07-F02-02，演示 prompt 配置语义） ──
+  // ═══════════════════════════════════════════════════
+
+  // GET /api/agent/graph-defs/:id — 图详情（设计器回显：返回 ProcessGraph + 元数据）
+  // 找不到 → code=404。响应同时包含 id/name/defVersion（供图执行历史关联版本号使用）。
+  {
+    method: 'GET',
+    pattern: '/api/agent/graph-defs/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const def = MOCK_GRAPH_DEFS.find((d) => d.id === id)
+      if (!def) return { code: 404, message: '图定义不存在', data: null }
+      // 返回 ProcessGraph 结构 + 元数据（id/name/defVersion）
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          ...def.graphJson,
+          id: def.id,
+          defVersion: def.defVersion,
+          status: def.status,
+        },
+      }
+    },
+  },
+
+  // PUT /api/agent/graph-defs/:id/graph — 保存草稿（全量覆盖 elements）
+  // 内存中更新 MOCK_GRAPH_DEFS，不持久化。
+  {
+    method: 'PUT',
+    pattern: '/api/agent/graph-defs/:id/graph',
+    handler: (params, _query, body) => {
+      const id = Number((params as Record<string, string>).id)
+      const def = MOCK_GRAPH_DEFS.find((d) => d.id === id)
+      if (!def) return { code: 404, message: '图定义不存在', data: null }
+      const req = body as { elements?: unknown[] } | null
+      if (req?.elements) {
+        def.graphJson.elements = req.elements as typeof def.graphJson.elements
+      }
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // POST /api/agent/graph-defs/:id/execute — 执行已发布图
+  // 极简解释执行（START→LLM→END），演示 prompt 配置语义：
+  //   - 无 userPromptTemplate → 默认回退 input 穿透
+  //   - 有 userPromptTemplate → 一次性插值 {{var}}，变量未定义 → success=false
+  // 响应字段严格对齐 AgentGraphExecuteResp 契约（success/output/errorMessage/latencyMs/executionId）
+  {
+    method: 'POST',
+    pattern: '/api/agent/graph-defs/:id/execute',
+    handler: (params, _query, body) => {
+      const id = Number((params as Record<string, string>).id)
+      const def = MOCK_GRAPH_DEFS.find((d) => d.id === id)
+      if (!def) return { code: 404, message: '图定义不存在', data: null }
+      const req = body as { input?: string } | null
+      const input = req?.input ?? ''
+      const result = executeGraphMock(def, input)
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          ...result,
+          executionId: Date.now(),
+        },
+      }
     },
   },
 ]

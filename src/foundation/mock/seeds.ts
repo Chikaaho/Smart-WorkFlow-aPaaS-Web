@@ -2427,6 +2427,165 @@ export const MOCK_AGENT_MODELS: AgentModelConfig[] = [
   },
 ]
 
+// ─── 图定义 Mock 种子（MockGraphDefEntry，用于演示 prompt 配置） ──
+
+/**
+ * Mock 图定义（仅用于演示 prompt 配置，不做完整 CRUD）。
+ * 包含：简单 LLM 图（无 prompt）、带 systemPrompt 的 LLM 图、带 userPromptTemplate 的 LLM 图、
+ * 引用未定义变量的 LLM 图（用于演示失败语义）。
+ */
+export interface MockGraphDefEntry {
+  id: number
+  name: string
+  graphKey: string
+  description?: string
+  defVersion: number
+  status: 'DRAFT' | 'PUBLISHED'
+  graphJson: {
+    graphKey: string
+    name: string
+    version: number
+    canvas: Record<string, unknown>
+    elements: Array<{
+      id: string
+      kind: 'node' | 'edge'
+      type?: string
+      source?: string
+      target?: string
+      config?: Record<string, unknown>
+      style?: Record<string, unknown>
+    }>
+  }
+}
+
+export const MOCK_GRAPH_DEFS: MockGraphDefEntry[] = [
+  {
+    // 历史图：无 prompt 配置（验证默认回退：input 直接穿透）
+    id: 1001,
+    name: '简单意图识别',
+    graphKey: 'simple-intent',
+    defVersion: 1,
+    status: 'PUBLISHED',
+    graphJson: {
+      graphKey: 'simple-intent',
+      name: '简单意图识别',
+      version: 1,
+      canvas: {},
+      elements: [
+        { id: 'start_1', kind: 'node', type: 'START', style: { x: 0, y: 0 } },
+        {
+          id: 'llm_1',
+          kind: 'node',
+          type: 'LLM',
+          config: { agentModelConfigId: 1 }, // 无 systemPrompt / userPromptTemplate
+          style: { x: 200, y: 0 },
+        },
+        { id: 'end_1', kind: 'node', type: 'END', style: { x: 400, y: 0 } },
+        { id: 'e1', kind: 'edge', type: undefined, source: 'start_1', target: 'llm_1' },
+        { id: 'e2', kind: 'edge', type: undefined, source: 'llm_1', target: 'end_1' },
+      ],
+    },
+  },
+  {
+    // 带 systemPrompt 的图
+    id: 1002,
+    name: '角色设定示例',
+    graphKey: 'role-system-prompt',
+    defVersion: 1,
+    status: 'PUBLISHED',
+    graphJson: {
+      graphKey: 'role-system-prompt',
+      name: '角色设定示例',
+      version: 1,
+      canvas: {},
+      elements: [
+        { id: 'start_1', kind: 'node', type: 'START', style: { x: 0, y: 0 } },
+        {
+          id: 'llm_1',
+          kind: 'node',
+          type: 'LLM',
+          config: {
+            agentModelConfigId: 1,
+            systemPrompt: '你是一名专业的中文翻译助手。',
+          },
+          style: { x: 200, y: 0 },
+        },
+        { id: 'end_1', kind: 'node', type: 'END', style: { x: 400, y: 0 } },
+        { id: 'e1', kind: 'edge', type: undefined, source: 'start_1', target: 'llm_1' },
+        { id: 'e2', kind: 'edge', type: undefined, source: 'llm_1', target: 'end_1' },
+      ],
+    },
+  },
+  {
+    // 带 userPromptTemplate 的图（成功插值：所有变量 {{input}} + {{tone}} 均可解析）
+    id: 1003,
+    name: '多变量模板示例',
+    graphKey: 'multi-var-template',
+    defVersion: 1,
+    status: 'PUBLISHED',
+    graphJson: {
+      graphKey: 'multi-var-template',
+      name: '多变量模板示例',
+      version: 1,
+      canvas: {},
+      elements: [
+        { id: 'start_1', kind: 'node', type: 'START', style: { x: 0, y: 0 } },
+        {
+          id: 'llm_1',
+          kind: 'node',
+          type: 'LLM',
+          config: {
+            agentModelConfigId: 1,
+            systemPrompt: '你是一名文案生成专家。',
+            userPromptTemplate: '请根据以下关键词生成一段文案：{{input}}。语气：{{tone}}。',
+            outputVar: 'result',
+          },
+          style: { x: 200, y: 0 },
+        },
+        {
+          id: 'end_1',
+          kind: 'node',
+          type: 'END',
+          config: { inputVar: 'result' },
+          style: { x: 400, y: 0 },
+        },
+        { id: 'e1', kind: 'edge', type: undefined, source: 'start_1', target: 'llm_1' },
+        { id: 'e2', kind: 'edge', type: undefined, source: 'llm_1', target: 'end_1' },
+      ],
+    },
+  },
+  {
+    // 引用未定义变量的图（执行失败：{{undefinedVar}} 无法解析）
+    id: 1004,
+    name: '未定义变量示例',
+    graphKey: 'undefined-var',
+    defVersion: 1,
+    status: 'PUBLISHED',
+    graphJson: {
+      graphKey: 'undefined-var',
+      name: '未定义变量示例',
+      version: 1,
+      canvas: {},
+      elements: [
+        { id: 'start_1', kind: 'node', type: 'START', style: { x: 0, y: 0 } },
+        {
+          id: 'llm_1',
+          kind: 'node',
+          type: 'LLM',
+          config: {
+            agentModelConfigId: 1,
+            userPromptTemplate: '请翻译：{{undefinedVar}}',
+          },
+          style: { x: 200, y: 0 },
+        },
+        { id: 'end_1', kind: 'node', type: 'END', style: { x: 400, y: 0 } },
+        { id: 'e1', kind: 'edge', type: undefined, source: 'start_1', target: 'llm_1' },
+        { id: 'e2', kind: 'edge', type: undefined, source: 'llm_1', target: 'end_1' },
+      ],
+    },
+  },
+]
+
 // ─── 图执行历史 Mock 种子（AgentGraphExecution） ──────────────
 export const MOCK_AGENT_GRAPH_EXECUTIONS: Array<{
   id: number

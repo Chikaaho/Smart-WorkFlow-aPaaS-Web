@@ -50,6 +50,8 @@ import {
   NODE_CONFIG_KEY_INPUT_VAR,
   NODE_CONFIG_KEY_MAX_ITERATIONS,
   NODE_CONFIG_KEY_OUTPUT_VAR,
+  NODE_CONFIG_KEY_SYSTEM_PROMPT,
+  NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE,
 } from '@/modules/agent/utils/graphAdapter'
 import type { ProcessGraph } from '@/contracts/agent'
 import { registerNodePanelDescriptor } from './panels/node-panel-registry'
@@ -76,9 +78,8 @@ const stubs = {
   },
   'el-input': {
     template:
-      '<input class="el-input" :data-value="String(modelValue ?? \'\')" :data-placeholder="placeholder" @change="$emit(\'change\', $event.target.value)" />',
-    props: ['modelValue', 'placeholder', 'size'],
-    // 声明 emits 防止 @change 作为 attrs fallthrough 到根元素（父级收到原生事件而非 $emit 参数）
+      '<textarea v-if="type===\'textarea\'" class="el-input" :data-value="String(modelValue ?? \'\')" :data-placeholder="placeholder" :data-type="type" @change="$emit(\'change\', $event.target.value)"></textarea><input v-else class="el-input" :data-value="String(modelValue ?? \'\')" :data-placeholder="placeholder" @change="$emit(\'change\', $event.target.value)" />',
+    props: ['modelValue', 'placeholder', 'size', 'type'],
     emits: ['change'],
   },
   'el-empty': {
@@ -367,11 +368,11 @@ describe('GraphDesigner.vue', () => {
     expect(instance.destroy).toHaveBeenCalledTimes(1)
   })
 
-  it('变量名输入项：LLM/TOOL 属性面板各渲染两个输入框，回填 data 既有值，placeholder 提示默认变量', async () => {
+  it('变量名输入项：LLM 属性面板渲染 2 textarea + 2 变量输入框；TOOL 属性面板渲染 2 变量输入框，回填 data 既有值', async () => {
     const wrapper = await mountLoadedWith(mockVarGraph)
     const [, data, events] = lastMountCall()
 
-    // LLM：inputVar/outputVar 回填，placeholder 含默认变量提示
+    // LLM：2 prompt textarea + 2 var name input，共 4 个 .el-input
     events.onNodeClick?.(nodeById(data, 'llm-1'))
     await nextTick()
     const llmInputs = wrapper
@@ -380,12 +381,17 @@ describe('GraphDesigner.vue', () => {
       .map((i) => ({
         value: i.attributes('data-value'),
         placeholder: i.attributes('data-placeholder'),
+        type: i.attributes('data-type'),
       }))
-    expect(llmInputs).toHaveLength(2)
-    expect(llmInputs[0].value).toBe('raw')
-    expect(llmInputs[1].value).toBe('summary')
-    expect(llmInputs[0].placeholder).toBe('留空 = 默认变量 input')
-    expect(llmInputs[1].placeholder).toBe('留空 = 默认变量 input')
+    expect(llmInputs).toHaveLength(4)
+    // prompt textarea（data-type="textarea"）
+    expect(llmInputs[0].type).toBe('textarea')
+    expect(llmInputs[1].type).toBe('textarea')
+    // 变量名 input（inputVar/outputVar 回填）
+    expect(llmInputs[2].value).toBe('raw')
+    expect(llmInputs[3].value).toBe('summary')
+    expect(llmInputs[2].placeholder).toBe('留空 = 默认变量 input')
+    expect(llmInputs[3].placeholder).toBe('留空 = 默认变量 input')
 
     // TOOL：仅 inputVar 回填，outputVar 留空
     events.onNodeClick?.(nodeById(data, 'tool-1'))
@@ -404,12 +410,13 @@ describe('GraphDesigner.vue', () => {
     events.onNodeClick?.(nodeById(data, 'llm-1'))
     await nextTick()
 
+    // indices: 0=systemPrompt textarea, 1=userPromptTemplate textarea, 2=inputVar, 3=outputVar
     const inputs = wrapper.find('.property-panel').findAll('.el-input')
-    ;(inputs[0].element as HTMLInputElement).value = 'raw'
-    await inputs[0].trigger('change')
+    ;(inputs[2].element as HTMLInputElement).value = 'raw'
+    await inputs[2].trigger('change')
     await nextTick()
-    ;(inputs[1].element as HTMLInputElement).value = 'summary'
-    await inputs[1].trigger('change')
+    ;(inputs[3].element as HTMLInputElement).value = 'summary'
+    await inputs[3].trigger('change')
     await nextTick()
 
     expect(nodeById(data, 'llm-1').data).toEqual({
@@ -426,15 +433,16 @@ describe('GraphDesigner.vue', () => {
     events.onNodeClick?.(nodeById(data, 'llm-1'))
     await nextTick()
 
+    // indices: 0=systemPrompt textarea, 1=userPromptTemplate textarea, 2=inputVar, 3=outputVar
     const inputs = wrapper.find('.property-panel').findAll('.el-input')
-    ;(inputs[0].element as HTMLInputElement).value = 'raw'
-    await inputs[0].trigger('change')
+    ;(inputs[2].element as HTMLInputElement).value = 'raw'
+    await inputs[2].trigger('change')
     await nextTick()
     expect(nodeById(data, 'llm-1').data?.[NODE_CONFIG_KEY_INPUT_VAR]).toBe('raw')
 
     // 清空为空白串 → 键被移除
-    ;(inputs[0].element as HTMLInputElement).value = '   '
-    await inputs[0].trigger('change')
+    ;(inputs[2].element as HTMLInputElement).value = '   '
+    await inputs[2].trigger('change')
     await nextTick()
     expect(nodeById(data, 'llm-1').data?.[NODE_CONFIG_KEY_INPUT_VAR]).toBeUndefined()
     expect(Object.keys(nodeById(data, 'llm-1').data ?? {})).not.toContain(NODE_CONFIG_KEY_INPUT_VAR)
@@ -681,6 +689,113 @@ describe('GraphDesigner.vue', () => {
 
     expect(push).not.toHaveBeenCalled()
     expect(ElMessage.warning).toHaveBeenCalledWith('暂无可跳转的执行记录')
+    wrapper.unmount()
+  })
+
+  it('LLM 属性面板：systemPrompt / userPromptTemplate textarea 回填 data 既有值，placeholder 与 hint 文案正确', async () => {
+    const wrapper = await mountLoadedWith({
+      ...mockGraph,
+      elements: mockGraph.elements.map((el) =>
+        el.id === 'llm-1'
+          ? {
+              ...el,
+              config: {
+                ...el.config,
+                [NODE_CONFIG_KEY_SYSTEM_PROMPT]: '你是客服助手',
+                [NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE]: '请根据以下内容生成摘要：{{input}}',
+              },
+            }
+          : el,
+      ),
+    })
+    const [, data, events] = lastMountCall()
+    events.onNodeClick?.(nodeById(data, 'llm-1'))
+    await nextTick()
+
+    const inputs = wrapper.find('.property-panel').findAll('.el-input')
+    // 0=systemPrompt textarea, 1=userPromptTemplate textarea
+    expect(inputs[0].attributes('data-type')).toBe('textarea')
+    expect(inputs[0].attributes('data-value')).toBe('你是客服助手')
+    expect(inputs[0].attributes('data-placeholder')).toBe('留空则不注入系统消息')
+    expect(inputs[1].attributes('data-type')).toBe('textarea')
+    expect(inputs[1].attributes('data-value')).toBe('请根据以下内容生成摘要：{{input}}')
+    expect(inputs[1].attributes('data-placeholder')).toContain('请根据以下内容生成摘要')
+    // hint 文案：{{variableName}} 提示与未定义变量失败提示
+    const text = wrapper.find('.property-panel').text()
+    expect(text).toContain('定义模型在该节点的角色')
+    expect(text).toContain('{{variableName}}')
+    expect(text).toContain('引用未定义变量将导致执行失败')
+    wrapper.unmount()
+  })
+
+  it('LLM 属性面板：编辑 systemPrompt textarea → updateNodeData 落 data.systemPrompt（合并写不丢既有键）', async () => {
+    const wrapper = await mountLoaded()
+    const [, data, events] = lastMountCall()
+    events.onNodeClick?.(nodeById(data, 'llm-1'))
+    await nextTick()
+
+    const inputs = wrapper.find('.property-panel').findAll('.el-input')
+    ;(inputs[0].element as HTMLTextAreaElement).value = '你是客服助手'
+    await inputs[0].trigger('change')
+    await nextTick()
+
+    expect(nodeById(data, 'llm-1').data?.[NODE_CONFIG_KEY_SYSTEM_PROMPT]).toBe('你是客服助手')
+    // 既有 agentModelConfigId 不丢
+    expect(nodeById(data, 'llm-1').data?.agentModelConfigId).toBe(7)
+    wrapper.unmount()
+  })
+
+  it('LLM 属性面板：清空 systemPrompt textarea → data 键被删除（空白不落键）', async () => {
+    const wrapper = await mountLoadedWith({
+      ...mockGraph,
+      elements: mockGraph.elements.map((el) =>
+        el.id === 'llm-1'
+          ? { ...el, config: { ...el.config, [NODE_CONFIG_KEY_SYSTEM_PROMPT]: '原有值' } }
+          : el,
+      ),
+    })
+    const [, data, events] = lastMountCall()
+    events.onNodeClick?.(nodeById(data, 'llm-1'))
+    await nextTick()
+    expect(nodeById(data, 'llm-1').data?.[NODE_CONFIG_KEY_SYSTEM_PROMPT]).toBe('原有值')
+
+    const inputs = wrapper.find('.property-panel').findAll('.el-input')
+    ;(inputs[0].element as HTMLTextAreaElement).value = ''
+    await inputs[0].trigger('change')
+    await nextTick()
+
+    expect(nodeById(data, 'llm-1').data?.[NODE_CONFIG_KEY_SYSTEM_PROMPT]).toBeUndefined()
+    expect(Object.keys(nodeById(data, 'llm-1').data ?? {})).not.toContain(
+      NODE_CONFIG_KEY_SYSTEM_PROMPT,
+    )
+    wrapper.unmount()
+  })
+
+  it('LLM 属性面板：保存草稿后 systemPrompt/userPromptTemplate 往返 config 保留', async () => {
+    const wrapper = await mountLoaded()
+    const [, data, events] = lastMountCall()
+    events.onNodeClick?.(nodeById(data, 'llm-1'))
+    await nextTick()
+
+    const inputs = wrapper.find('.property-panel').findAll('.el-input')
+    ;(inputs[0].element as HTMLTextAreaElement).value = '你是客服助手'
+    await inputs[0].trigger('change')
+    await nextTick()
+    ;(inputs[1].element as HTMLTextAreaElement).value = '请根据以下内容生成摘要：{{input}}'
+    await inputs[1].trigger('change')
+    await nextTick()
+
+    vi.mocked(saveDraftGraph).mockResolvedValueOnce(undefined)
+    const vm = wrapper.vm as unknown as { handleSaveDraft: () => Promise<void> }
+    await vm.handleSaveDraft()
+
+    const [, graph] = vi.mocked(saveDraftGraph).mock.calls[0] as [number, ProcessGraph]
+    const llmEl = graph.elements.find((el) => el.id === 'llm-1')
+    expect(llmEl?.config).toMatchObject({
+      agentModelConfigId: 7,
+      [NODE_CONFIG_KEY_SYSTEM_PROMPT]: '你是客服助手',
+      [NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE]: '请根据以下内容生成摘要：{{input}}',
+    })
     wrapper.unmount()
   })
 

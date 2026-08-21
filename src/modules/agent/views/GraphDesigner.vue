@@ -185,11 +185,21 @@ function removeEdge(edgeId: string) {
   remountCanvas()
 }
 
-/** 属性面板数据回写：LLM/TOOL 节点业务配置（画布不渲染 data，无需重挂载） */
+/**
+ * 属性面板数据回写：LLM/TOOL 节点业务配置（画布不渲染 data，无需重挂载）。
+ * value 为 undefined 时删除键（config 不携带空值，与 handleVarNameChange 空白删键
+ * 语义对齐；空白不落键，避免歧义数据）。
+ */
 function updateNodeData(key: string, value: unknown) {
   const node = graphData.value.nodes.find((n) => n.id === selectedNodeId.value)
   if (!node) return
-  node.data = { ...(node.data ?? {}), [key]: value }
+  if (value === undefined) {
+    const next = { ...(node.data ?? {}) }
+    delete next[key]
+    node.data = next
+  } else {
+    node.data = { ...(node.data ?? {}), [key]: value }
+  }
 }
 
 /**
