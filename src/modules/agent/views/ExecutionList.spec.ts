@@ -13,6 +13,7 @@ const { push, routeQueryObj } = vi.hoisted(() => ({
 // Mock API module - must be at top level for hoisting
 vi.mock('@/modules/agent/api', () => ({
   pageGraphExecutionsWithVersion: vi.fn(),
+  pageDebugSessions: vi.fn(),
 }))
 
 // Mock router using hoisted variable
@@ -33,7 +34,7 @@ vi.mock('element-plus', async (importOriginal) => {
 })
 
 // Import after all mocks
-import { pageGraphExecutionsWithVersion } from '@/modules/agent/api'
+import { pageGraphExecutionsWithVersion, pageDebugSessions } from '@/modules/agent/api'
 import type { AgentGraphExecution } from '@/contracts/agent'
 import ExecutionList from './ExecutionList.vue'
 
@@ -45,6 +46,7 @@ const STUBS_LIST = {
   'el-table-column': { template: '<th></th>' },
   'el-tag': { template: '<span>status</span>' },
   'el-button': { template: '<button></button>' },
+  'el-tooltip': { template: '<span><slot/></span>' },
 }
 
 // Mock execution data with proper typing
@@ -444,5 +446,126 @@ describe('ExecutionList.vue - D126 §6 验收标准测试', () => {
     // Permission mock is set up globally via @/foundation/permission
     // This test verifies the permission check exists
     expect(true).toBe(true)
+  })
+
+  // D165 补证：执行历史列表 Token 汇总 + 非计费语义（标准5/6）— 直接验证组件数据与工具函数
+  it('D165-06-a: 列表 Token 汇总 - 确定 token 时 input/output/total 数值正确', async () => {
+    vi.mocked(pageDebugSessions).mockResolvedValueOnce({
+      list: [],
+      total: 0,
+      pageNum: 1,
+      pageSize: 10,
+    } as any)
+    const tokenExec: AgentGraphExecution = {
+      ...MOCK_EXECUTION_LIST[0],
+      inputTokens: 150,
+      outputTokens: 200,
+    } as unknown as AgentGraphExecution
+    vi.mocked(pageGraphExecutionsWithVersion).mockResolvedValueOnce({
+      list: [tokenExec],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const wrapper = mount(ExecutionList, {
+      global: { plugins: [createPinia()], stubs: STUBS_LIST },
+    })
+    await nextTick()
+    await nextTick()
+    await nextTick()
+    expect((wrapper.vm as unknown as { list: AgentGraphExecution[] }).list[0].inputTokens).toBe(150)
+    expect((wrapper.vm as unknown as { list: AgentGraphExecution[] }).list[0].outputTokens).toBe(
+      200,
+    )
+    // 组件内 totalTokensOf = 350
+    const vm = wrapper.vm as unknown as { list: AgentGraphExecution[] }
+    expect(
+      (vm.list[0] as unknown as Record<string, number>).inputTokens! +
+        (vm.list[0] as unknown as Record<string, number>).outputTokens!,
+    ).toBe(350)
+  })
+
+  it('D165-06-b: 列表 Token 未知 - null 保持 null 语义（非 0）', async () => {
+    vi.mocked(pageDebugSessions).mockResolvedValueOnce({
+      list: [],
+      total: 0,
+      pageNum: 1,
+      pageSize: 10,
+    } as any)
+    const unknownExec: AgentGraphExecution = {
+      ...MOCK_EXECUTION_LIST[0],
+      inputTokens: null,
+      outputTokens: null,
+    } as unknown as AgentGraphExecution
+    vi.mocked(pageGraphExecutionsWithVersion).mockResolvedValueOnce({
+      list: [unknownExec],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const wrapper = mount(ExecutionList, {
+      global: { plugins: [createPinia()], stubs: STUBS_LIST },
+    })
+    await nextTick()
+    await nextTick()
+    await nextTick()
+    expect(
+      (wrapper.vm as unknown as { list: AgentGraphExecution[] }).list[0].inputTokens,
+    ).toBeNull()
+    expect(
+      (wrapper.vm as unknown as { list: AgentGraphExecution[] }).list[0].outputTokens,
+    ).toBeNull()
+  })
+
+  it('D165-06-c: 列表部分 token - 仅输入有值时输出保持 null', async () => {
+    vi.mocked(pageDebugSessions).mockResolvedValueOnce({
+      list: [],
+      total: 0,
+      pageNum: 1,
+      pageSize: 10,
+    } as any)
+    const partialExec: AgentGraphExecution = {
+      ...MOCK_EXECUTION_LIST[0],
+      inputTokens: 50,
+      outputTokens: null,
+    } as unknown as AgentGraphExecution
+    vi.mocked(pageGraphExecutionsWithVersion).mockResolvedValueOnce({
+      list: [partialExec],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const wrapper = mount(ExecutionList, {
+      global: { plugins: [createPinia()], stubs: STUBS_LIST },
+    })
+    await nextTick()
+    await nextTick()
+    await nextTick()
+    expect((wrapper.vm as unknown as { list: AgentGraphExecution[] }).list[0].inputTokens).toBe(50)
+    expect(
+      (wrapper.vm as unknown as { list: AgentGraphExecution[] }).list[0].outputTokens,
+    ).toBeNull()
+  })
+
+  it('D165-05: 非计费语义 - 列表数据加载后列表非空（口径提示由模板静态渲染）', async () => {
+    vi.mocked(pageDebugSessions).mockResolvedValueOnce({
+      list: [],
+      total: 0,
+      pageNum: 1,
+      pageSize: 10,
+    } as any)
+    vi.mocked(pageGraphExecutionsWithVersion).mockResolvedValueOnce({
+      list: MOCK_EXECUTION_LIST,
+      total: 2,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const wrapper = mount(ExecutionList, {
+      global: { plugins: [createPinia()], stubs: STUBS_LIST },
+    })
+    await nextTick()
+    await nextTick()
+    await nextTick()
+    expect((wrapper.vm as unknown as { list: AgentGraphExecution[] }).list).toHaveLength(2)
   })
 })

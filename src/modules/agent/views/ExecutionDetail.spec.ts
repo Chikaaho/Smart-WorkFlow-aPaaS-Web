@@ -48,7 +48,7 @@ const STUBS_DETAIL = {
   'el-tag': { template: '<span></span>' },
   'el-skeleton': { template: '<div>loading</div>' },
   'el-alert': { template: '<div>alert</div>' },
-  'el-card': { template: '<div></div>' },
+  'el-card': { template: '<div><slot name="header"/><slot/></div>' },
   'el-empty': { template: '<div></div>' },
   NodeTrajectory: { template: '<div></div>' },
   SafeHtml: { template: '<div>html</div>' },
@@ -447,5 +447,60 @@ describe('ExecutionDetail.vue - D126 §6 验收标准测试', () => {
 
     const wrapper = await createWrapper()
     expect(wrapper.exists()).toBe(true)
+  })
+
+  // ──────────────────────────────────────────────────────────────
+  // M07-F04-02 标准6：执行详情 Token 使用统计展示
+  // ──────────────────────────────────────────────────────────────
+  it('D164-T01: 确定 token - 详情含 inputTokens/outputTokens 时展示 Token 使用统计与计算值', async () => {
+    const tokenDetail = {
+      ...MOCK_DETAIL_SUCCESS,
+      inputTokens: 150,
+      outputTokens: 200,
+    }
+    vi.mocked(getExecutionDetail).mockResolvedValueOnce(tokenDetail)
+
+    const wrapper = await createWrapper()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Token 使用统计')
+    expect(text).toContain('150')
+    expect(text).toContain('200')
+    // total = 150 + 200 = 350
+    expect(text).toContain('350')
+  })
+
+  it('D164-T02: 未知 token - inputTokens/outputTokens 为 null 时显示"未知"而非 0', async () => {
+    const unknownDetail = {
+      ...MOCK_DETAIL_SUCCESS,
+      inputTokens: null,
+      outputTokens: null,
+    }
+    vi.mocked(getExecutionDetail).mockResolvedValueOnce(unknownDetail)
+
+    const wrapper = await createWrapper()
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('未知')
+  })
+
+  it('D164-T03: 部分 token - 仅输入有值输出缺失时，输出侧显示"未知"', async () => {
+    const partialDetail = {
+      ...MOCK_DETAIL_SUCCESS,
+      inputTokens: 100,
+      outputTokens: null,
+    }
+    vi.mocked(getExecutionDetail).mockResolvedValueOnce(partialDetail)
+
+    const wrapper = await createWrapper()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('100')
+    expect(text).toContain('未知')
   })
 })

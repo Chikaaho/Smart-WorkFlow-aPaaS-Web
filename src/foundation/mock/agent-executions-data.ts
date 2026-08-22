@@ -20,6 +20,8 @@ export const MOCK_EXECUTION_LIST_DATA = [
     outputSummary: '分流到 A 组',
     success: true,
     latencyMs: 1500,
+    inputTokens: 150,
+    outputTokens: 200,
     createTime: '2026-08-20 10:00:00',
   },
   {
@@ -33,6 +35,8 @@ export const MOCK_EXECUTION_LIST_DATA = [
     outputSummary: '模型调用失败',
     success: false,
     latencyMs: 2300,
+    inputTokens: 100,
+    outputTokens: null,
     createTime: '2026-08-20 11:00:00',
   },
 ]
@@ -48,6 +52,8 @@ export const MOCK_DETAIL_SUCCESS_DATA = {
   status: 'SUCCESS' as const,
   success: true,
   latencyMs: 1500,
+  inputTokens: 150,
+  outputTokens: 200,
   traceId: 'trace_abc123',
   createTime: '2026-08-20 10:00:00',
   updateTime: '2026-08-20 10:00:01',
@@ -75,6 +81,8 @@ export const MOCK_DETAIL_SUCCESS_DATA = {
       buildTime: '2026-08-20T10:00:00.100Z',
       input: JSON.stringify({ query: '你好' }),
       output: JSON.stringify({ response: '您好！有什么可以帮助您的吗？' }),
+      inputTokens: 150,
+      outputTokens: 200,
     },
     {
       nodeSeq: 3,
@@ -101,6 +109,8 @@ export const MOCK_DETAIL_FAILED_DATA = {
   status: 'FAILED' as const,
   success: false,
   latencyMs: 2300,
+  inputTokens: 100,
+  outputTokens: null,
   errorMessage: '<p>模型调用失败：LLM API 返回错误</p>',
   errorCategory: 'MODEL_CALL_FAILED' as const,
   traceId: 'trace_xyz789',
@@ -129,6 +139,8 @@ export const MOCK_DETAIL_FAILED_DATA = {
       nodeLatencyMs: 2200,
       buildTime: '2026-08-20T11:00:00.100Z',
       errorMessage: 'LLM API call failed: timeout',
+      inputTokens: 100,
+      outputTokens: null,
     },
   ] as any[],
 }

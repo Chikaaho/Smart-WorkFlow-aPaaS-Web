@@ -93,6 +93,28 @@ function formatTimestamp(ts: string): string {
   }
 }
 
+// M07-F04-02: Token 格式化函数
+function formatTokenCount(count: number | null | undefined): string {
+  if (count === null || count === undefined) {
+    return '未知'
+  }
+  if (count === 0) {
+    return '0'
+  }
+  return count.toLocaleString()
+}
+
+// M07-F04-02: 总 Token 计算属性
+const totalTokens = computed(() => {
+  if (!detail.value) return null
+  const input = detail.value.inputTokens
+  const output = detail.value.outputTokens
+  if (input === null || input === undefined || output === null || output === undefined) {
+    return null
+  }
+  return input + output
+})
+
 // ─── 折叠状态 ───
 const showInputExpanded = ref(true)
 const showOutputExpanded = ref(true)
@@ -267,6 +289,39 @@ onMounted(() => {
         </div>
       </el-card>
 
+      <!-- M07-F04-02: Token 使用统计（D164 标准5：非账单/非完整成本口径说明） -->
+      <el-card shadow="never" class="detail-section token-section">
+        <template #header>
+          <div class="section-title">
+            Token 使用统计
+            <el-tooltip
+              content="供应商可观测 usage（输入/输出/总计），非账单、非完整失败尝试成本"
+              placement="top"
+            >
+              <span class="token-disclaimer-detail">可观测量</span>
+            </el-tooltip>
+          </div>
+        </template>
+        <div class="token-grid">
+          <div class="token-item">
+            <span class="token-label">输入 Token:</span>
+            <span class="token-value">{{ formatTokenCount(detail.inputTokens) }}</span>
+          </div>
+          <div class="token-item">
+            <span class="token-label">输出 Token:</span>
+            <span class="token-value">{{ formatTokenCount(detail.outputTokens) }}</span>
+          </div>
+          <div class="token-item">
+            <span class="token-label">总 Token:</span>
+            <span class="token-value">{{ formatTokenCount(totalTokens) }}</span>
+          </div>
+        </div>
+        <div class="token-footnote">
+          数据来自模型供应商响应中的
+          usage，仅为本次执行可观测到的用量，非账单依据；失败重试等未暴露的尝试不计入。
+        </div>
+      </el-card>
+
       <!-- 节点轨迹子视图 -->
       <el-card shadow="never" class="detail-section trajectory-section">
         <template #header>
@@ -428,5 +483,47 @@ onMounted(() => {
 
 .trajectory-body {
   padding: 8px 0;
+}
+
+/* M07-F04-02: Token 使用统计样式 */
+.token-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.token-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
+}
+
+.token-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.token-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+}
+
+.token-disclaimer-detail {
+  font-size: 11px;
+  color: #909399;
+  margin-left: 8px;
+  border-bottom: 1px dashed #c0c4cc;
+  cursor: help;
+}
+
+.token-footnote {
+  margin-top: 12px;
+  font-size: 11px;
+  color: #909399;
+  line-height: 1.5;
 }
 </style>

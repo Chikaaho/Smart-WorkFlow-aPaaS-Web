@@ -28,8 +28,13 @@ import type { AgentModelConfig, AgentModelSaveReq } from '@/contracts/agent'
 import {
   MOCK_AGENT_MODELS,
   MOCK_AGENT_GRAPH_EXECUTIONS,
+  MOCK_CONVERSATIONS,
+  MOCK_CONVERSATION_MESSAGES,
   MOCK_GRAPH_DEFS,
   type MockGraphDefEntry,
+  MOCK_DEBUG_SESSIONS,
+  MOCK_DEBUG_NODES,
+  type MockDebugSession,
   MOCK_DICT_DATA,
   MOCK_DICT_TYPES,
   MOCK_SESSION_DATA,
@@ -2285,14 +2290,21 @@ export const mockRegistrations: MockRegistration[] = [
   // ── 图执行历史（AgentGraphExecution） ─────────────
   // ═══════════════════════════════════════════════════
 
-  // GET /api/agent/graph-executions?pageNum=&pageSize=&graphDefId= — 分页列表
+  // GET /api/agent/graph-executions?pageNum=&pageSize=&graphDefId= — 分页列表（D164 标准8/9：401/403 + 逻辑删除过滤）
   {
     method: 'GET',
     pattern: '/api/agent/graph-executions',
     handler: (_params, query) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const legacyPerms = buildMockPermissions()
+      if (!MOCK_CURRENT_SESSION.superAdmin && !legacyPerms.includes('agent:model:view'))
+        return { code: 403, message: '无权限访问执行历史', data: null }
       const pageNum = Number(query.pageNum ?? 1)
       const pageSize = Number(query.pageSize ?? 10)
-      let records = [...MOCK_AGENT_GRAPH_EXECUTIONS]
+      // 逻辑删除过滤：mock 种子中 deleted=1 的记录对用户不可见（与后端 @TableLogic 一致）
+      let records = [...MOCK_AGENT_GRAPH_EXECUTIONS].filter(
+        (e) => (e as unknown as Record<string, unknown>).deleted !== 1,
+      )
       if (query.graphDefId) {
         const gdid = Number(query.graphDefId)
         records = records.filter((e) => e.graphDefId === gdid)
@@ -2304,14 +2316,19 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
-  // GET /api/agent/graph-executions/:id — 详情（不存在 → 404）
+  // GET /api/agent/graph-executions/:id — 详情（不存在/逻辑删除 → 404；401/403）
   {
     method: 'GET',
     pattern: '/api/agent/graph-executions/:id',
     handler: (params) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const legacyPerms2 = buildMockPermissions()
+      if (!MOCK_CURRENT_SESSION.superAdmin && !legacyPerms2.includes('agent:model:view'))
+        return { code: 403, message: '无权限访问执行历史', data: null }
       const id = Number((params as Record<string, string>).id)
       const exec = MOCK_AGENT_GRAPH_EXECUTIONS.find((e) => e.id === id)
-      if (!exec) return { code: 404, message: '执行记录不存在或跨租户', data: null }
+      if (!exec || (exec as unknown as Record<string, unknown>).deleted === 1)
+        return { code: 404, message: '执行记录不存在或跨租户', data: null }
       return {
         code: 0,
         message: 'ok',
@@ -2320,17 +2337,77 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
-  // GET /api/agent/graph-executions/:id/nodes — 节点轨迹（按 nodeSeq 升序）
+  // GET /api/agent/graph-executions/:id/nodes — 节点轨迹（按 nodeSeq 升序；401/403；逻辑删除 404）
   {
     method: 'GET',
     pattern: '/api/agent/graph-executions/:id/nodes',
     handler: (params) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const legacyPerms3 = buildMockPermissions()
+      if (!MOCK_CURRENT_SESSION.superAdmin && !legacyPerms3.includes('agent:model:view'))
+        return { code: 403, message: '无权限访问执行历史', data: null }
       const id = Number((params as Record<string, string>).id)
       const exec = MOCK_AGENT_GRAPH_EXECUTIONS.find((e) => e.id === id)
-      if (!exec) return { code: 404, message: '执行记录不存在', data: null }
+      if (!exec || (exec as unknown as Record<string, unknown>).deleted === 1)
+        return { code: 404, message: '执行记录不存在', data: null }
       const nodes = exec.nodeDetails ?? []
       const sorted = [...nodes].sort((a, b) => (a.nodeSeq ?? 0) - (b.nodeSeq ?? 0))
       return { code: 0, message: 'ok', data: sorted }
+    },
+  },
+
+  // ═══════════════════════════════════════════════════
+  // ── 会话历史（AgentConversation，M07-F04-02） ──────────
+  // ═══════════════════════════════════════════════════
+
+  // GET /api/agent/conversations?agentModelConfigId= — 会话列表（当前用户；D164 标准9：401/403 语义）
+  {
+    method: 'GET',
+    pattern: '/api/agent/conversations',
+    handler: (_params, query) => {
+      // 401: 未登录（mock 会话为空视为未认证），403: 无 agent 查看权限（与真实后端 Agent 权限一致）
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const perms: string[] =
+        ((MOCK_CURRENT_SESSION as unknown as Record<string, unknown>).permissions as string[]) ?? []
+      const isSuperAdmin = (MOCK_CURRENT_SESSION as unknown as Record<string, unknown>)
+        .superAdmin as boolean
+      if (
+        !isSuperAdmin &&
+        !perms.includes('agent:model:view') &&
+        !perms.includes('agent:conversation:view')
+      ) {
+        // 兼容既有权限码：agent:model:view（图执行历史沿用）与 agent:conversation:view（会话历史）
+        // 若均无则 403
+        const legacyPerms = buildMockPermissions()
+        if (!legacyPerms.includes('agent:model:view'))
+          return { code: 403, message: '无权限访问会话历史', data: null }
+      }
+      let records = [...MOCK_CONVERSATIONS]
+      if (query.agentModelConfigId) {
+        const cid = Number(query.agentModelConfigId)
+        records = records.filter((c) => c.agentModelConfigId === cid)
+      }
+      return { code: 0, message: 'ok', data: records }
+    },
+  },
+
+  // GET /api/agent/conversations/:id/messages — 会话消息（msg_order 升序；不存在 → 404；D164 标准9：401/403）
+  {
+    method: 'GET',
+    pattern: '/api/agent/conversations/:id/messages',
+    handler: (params) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const isSuperAdmin2 = (MOCK_CURRENT_SESSION as unknown as Record<string, unknown>)
+        .superAdmin as boolean
+      if (!isSuperAdmin2) {
+        const legacyPerms = buildMockPermissions()
+        if (!legacyPerms.includes('agent:model:view'))
+          return { code: 403, message: '无权限访问会话历史', data: null }
+      }
+      const id = Number((params as Record<string, string>).id)
+      const messages = MOCK_CONVERSATION_MESSAGES[id]
+      if (!messages) return { code: 404, message: '会话不存在', data: null }
+      return { code: 0, message: 'ok', data: [...messages] }
     },
   },
 
@@ -2401,6 +2478,461 @@ export const mockRegistrations: MockRegistration[] = [
           executionId: Date.now(),
         },
       }
+    },
+  },
+
+  // ═══════════════════════════════════════════════════
+  // ── 图单步调试（AgentGraphDebugSession，M07-F02-04） ──
+  // ═══════════════════════════════════════════════════
+
+  // ── 内部辅助：按 id 取会话（原地 mutate 对象以持久化状态变更） ──
+  // 需在 handler 外部保持引用一致性，故不在 seeds 中封装。
+
+  // POST /api/agent/graph-debug-sessions — 创建调试会话
+  // 入参 {graphDefId,input}; 要求已登录 + manage 权限；仅 PUBLISHED 可调试
+  {
+    method: 'POST',
+    pattern: '/api/agent/graph-debug-sessions',
+    handler: (_params, _query, body) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const canManage =
+        MOCK_CURRENT_SESSION.superAdmin ||
+        buildMockPermissions().includes('agent:model:manage') ||
+        buildMockPermissions().includes('agent:graph:manage')
+      // 兼容既有 manage 码：若无独立 debug manage 码则沿用 model manage
+      const legacyManage = buildMockPermissions().includes('agent:model:manage')
+      if (!MOCK_CURRENT_SESSION.superAdmin && !canManage && !legacyManage)
+        return { code: 403, message: '无权限创建调试会话', data: null }
+      const req = (body ?? {}) as { graphDefId?: number; input?: string }
+      const graphDefId = Number(req.graphDefId)
+      const input = String(req.input ?? '')
+      const def = MOCK_GRAPH_DEFS.find((d) => d.id === graphDefId)
+      if (!def) return { code: 404, message: '图定义不存在', data: null }
+      if (def.status !== 'PUBLISHED') return { code: 400, message: '仅已发布图可调试', data: null }
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000)
+        .toISOString()
+        .replace('T', ' ')
+        .slice(0, 19)
+      const nextId =
+        MOCK_DEBUG_SESSIONS.length > 0 ? Math.max(...MOCK_DEBUG_SESSIONS.map((s) => s.id)) + 1 : 1
+      const elements = def.graphJson.elements
+      const nodes = elements.filter((e) => e.kind === 'node')
+      // 首个可执行节点为 START 之后按 elements 中 nodes 出现顺序的第一个非 START 节点
+      const nodeOrder = nodes.map((n) => n.id)
+      const startIdx = nodeOrder.findIndex((nid) => {
+        const n = nodes.find((x) => x.id === nid)
+        return n?.type === 'START'
+      })
+      // nextNodeId 指向 START 之后的第一个节点；若仅有 START→END 则为 END
+      const nextNodeId =
+        startIdx >= 0 && startIdx + 1 < nodeOrder.length ? nodeOrder[startIdx + 1] : null
+      const session: MockDebugSession = {
+        id: nextId,
+        graphDefId,
+        graphDefVersion: def.defVersion,
+        status: 'PAUSED',
+        input,
+        breakpoints: [],
+        variables: { input },
+        traceCount: 0,
+        nextNodeId,
+        nextBranchId: nextNodeId ? '0' : null,
+        resultText: null,
+        errorCategory: null,
+        errorMessage: null,
+        latencyMs: null,
+        inputTokens: null,
+        outputTokens: null,
+        expiresAt,
+        createTime: now,
+        updateTime: now,
+        version: 0,
+      }
+      MOCK_DEBUG_SESSIONS.push(session)
+      MOCK_DEBUG_NODES[nextId] = []
+      return { code: 0, message: 'ok', data: { ...session } }
+    },
+  },
+
+  // GET /api/agent/graph-debug-sessions — 分页（401/403；过期自动标 EXPIRED）
+  {
+    method: 'GET',
+    pattern: '/api/agent/graph-debug-sessions',
+    handler: (_params, query) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const perms = buildMockPermissions()
+      if (
+        !MOCK_CURRENT_SESSION.superAdmin &&
+        !perms.includes('agent:model:view') &&
+        !perms.includes('agent:graph:view')
+      )
+        return { code: 403, message: '无权限访问调试会话', data: null }
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      // 过期检查：PAUSED 且 now > expiresAt → EXPIRED
+      const nowMs = Date.now()
+      for (const s of MOCK_DEBUG_SESSIONS) {
+        if (s.status === 'PAUSED' && nowMs > new Date(s.expiresAt).getTime()) {
+          s.status = 'EXPIRED'
+          s.nextNodeId = null
+          s.nextBranchId = null
+        }
+      }
+      let records = [...MOCK_DEBUG_SESSIONS]
+      if (query.graphDefId) {
+        const gdid = Number(query.graphDefId)
+        records = records.filter((s) => s.graphDefId === gdid)
+      }
+      const total = records.length
+      const start = (pageNum - 1) * pageSize
+      const page = records.slice(start, start + pageSize).map((s) => ({ ...s }))
+      return { code: 0, message: 'ok', data: { records: page, total, pageNum, pageSize } }
+    },
+  },
+
+  // GET /api/agent/graph-debug-sessions/:id — 详情（401/403/404；过期检查）
+  {
+    method: 'GET',
+    pattern: '/api/agent/graph-debug-sessions/:id',
+    handler: (params) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const perms = buildMockPermissions()
+      if (
+        !MOCK_CURRENT_SESSION.superAdmin &&
+        !perms.includes('agent:model:view') &&
+        !perms.includes('agent:graph:view')
+      )
+        return { code: 403, message: '无权限访问调试会话', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const sess = MOCK_DEBUG_SESSIONS.find((s) => s.id === id)
+      if (!sess) return { code: 404, message: '调试会话不存在', data: null }
+      if (sess.status === 'PAUSED' && Date.now() > new Date(sess.expiresAt).getTime()) {
+        sess.status = 'EXPIRED'
+        sess.nextNodeId = null
+        sess.nextBranchId = null
+      }
+      return { code: 0, message: 'ok', data: { ...sess } }
+    },
+  },
+
+  // GET /api/agent/graph-debug-sessions/:id/nodes — 节点轨迹（401/403/404；按 nodeSeq 升序）
+  {
+    method: 'GET',
+    pattern: '/api/agent/graph-debug-sessions/:id/nodes',
+    handler: (params) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const perms = buildMockPermissions()
+      if (
+        !MOCK_CURRENT_SESSION.superAdmin &&
+        !perms.includes('agent:model:view') &&
+        !perms.includes('agent:graph:view')
+      )
+        return { code: 403, message: '无权限访问调试会话', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const sess = MOCK_DEBUG_SESSIONS.find((s) => s.id === id)
+      if (!sess) return { code: 404, message: '调试会话不存在', data: null }
+      const nodes = MOCK_DEBUG_NODES[id] ?? []
+      const sorted = [...nodes].sort((a, b) => (a.nodeSeq ?? 0) - (b.nodeSeq ?? 0))
+      return { code: 0, message: 'ok', data: sorted }
+    },
+  },
+
+  // POST /api/agent/graph-debug-sessions/:id/step — 单步（401/403/404；非 PAUSED 400；并发冲突 409）
+  {
+    method: 'POST',
+    pattern: '/api/agent/graph-debug-sessions/:id/step',
+    handler: (params, query) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const perms = buildMockPermissions()
+      const canManage =
+        MOCK_CURRENT_SESSION.superAdmin ||
+        perms.includes('agent:model:manage') ||
+        perms.includes('agent:graph:manage') ||
+        perms.includes('agent:model:view')
+      if (!MOCK_CURRENT_SESSION.superAdmin && !canManage) {
+        // 写操作沿用 manage，无则退化为 view 也放行（mock 演示）
+        const hasAny = perms.includes('agent:model:view') || perms.includes('agent:graph:view')
+        if (!hasAny) return { code: 403, message: '无权限执行调试会话', data: null }
+      }
+      const id = Number((params as Record<string, string>).id)
+      const sess = MOCK_DEBUG_SESSIONS.find((s) => s.id === id)
+      if (!sess) return { code: 404, message: '调试会话不存在', data: null }
+      if (sess.status !== 'PAUSED') return { code: 400, message: '会话已终结', data: null }
+      if (Date.now() > new Date(sess.expiresAt).getTime()) {
+        sess.status = 'EXPIRED'
+        sess.nextNodeId = null
+        sess.nextBranchId = null
+        return { code: 400, message: '会话已过期', data: null }
+      }
+      if (query.expectedVersion !== undefined && Number(query.expectedVersion) !== sess.version) {
+        return { code: 409, message: '并发冲突', data: null }
+      }
+      const def = MOCK_GRAPH_DEFS.find((d) => d.id === sess.graphDefId)
+      const elements = def ? def.graphJson.elements : []
+      const nodes = elements.filter((e) => e.kind === 'node')
+      const nodeOrder = nodes.map((n) => n.id)
+      // 计算当前 nextNodeId 在 nodeOrder 中的索引
+      const curIdx = sess.nextNodeId ? nodeOrder.indexOf(sess.nextNodeId) : -1
+      if (curIdx < 0) {
+        sess.status = 'COMPLETED'
+        sess.nextNodeId = null
+        sess.nextBranchId = null
+        sess.resultText = sess.variables.input ?? ''
+        return { code: 0, message: 'ok', data: { ...sess } }
+      }
+      const node = nodes.find((n) => n.id === sess.nextNodeId)
+      const nodeType = node?.type ?? 'UNKNOWN'
+      // 模拟变量演进：LLM 节点输出 result
+      if (nodeType === 'LLM') {
+        const out = `${sess.variables.input ?? ''} -> [${sess.nextNodeId} output]`
+        const outVar =
+          typeof node?.config?.outputVar === 'string' && String(node?.config?.outputVar).trim()
+            ? String(node?.config?.outputVar)
+            : 'result'
+        sess.variables[outVar] = out
+        sess.inputTokens = (sess.inputTokens ?? 0) + 10
+        sess.outputTokens = (sess.outputTokens ?? 0) + 20
+      } else if (nodeType === 'END') {
+        // 到达 END：完成
+        const cfg = (node?.config ?? {}) as Record<string, unknown>
+        const inVar =
+          typeof cfg.inputVar === 'string' && String(cfg.inputVar).trim()
+            ? String(cfg.inputVar)
+            : 'input'
+        sess.resultText = sess.variables[inVar] ?? sess.variables.input ?? ''
+      }
+      // 追加 trace
+      const arr = MOCK_DEBUG_NODES[id] ?? []
+      const nextSeq = arr.length + 1
+      arr.push({
+        id: Date.now() + nextSeq,
+        debugSessionId: id,
+        nodeSeq: nextSeq,
+        branchId: sess.nextBranchId ?? '0',
+        nodeId: sess.nextNodeId!,
+        nodeType,
+        nodeLatencyMs: nodeType === 'LLM' ? 80 : 5,
+        variableSnapshot: JSON.stringify({ ...sess.variables }),
+        inputTokens: nodeType === 'LLM' ? 10 : null,
+        outputTokens: nodeType === 'LLM' ? 20 : null,
+      })
+      MOCK_DEBUG_NODES[id] = arr
+      sess.traceCount = arr.length
+      sess.version += 1
+      sess.updateTime = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      // 推进 nextNodeId
+      const nextIdx = curIdx + 1
+      if (nextIdx < nodeOrder.length) {
+        const nextNode = nodes.find((n) => n.id === nodeOrder[nextIdx])
+        // 若下一节点为 END 且已执行完 LLM，标记完成（下一步 end 执行后 COMPLETED）
+        if (nodeType === 'END') {
+          sess.status = 'COMPLETED'
+          sess.nextNodeId = null
+          sess.nextBranchId = null
+          if (!sess.latencyMs) sess.latencyMs = 95
+        } else {
+          sess.nextNodeId = nodeOrder[nextIdx]
+          sess.nextBranchId = '0'
+          // 若新 next 为 END 且当前已推到边界外，下次 step 将收尾
+          if (nextNode?.type === 'END') {
+            // Mock: 已推入下一 END，分支保持（下次 step 收尾）
+            void nextNode
+          }
+        }
+      } else {
+        // 最后一个节点刚执行完
+        if (nodeType === 'END' || nodeType === 'LLM') {
+          if (sess.status === 'PAUSED') {
+            sess.status = 'COMPLETED'
+            sess.nextNodeId = null
+            sess.nextBranchId = null
+            if (!sess.latencyMs) sess.latencyMs = 95
+            if (!sess.resultText)
+              sess.resultText = sess.variables.result ?? sess.variables.input ?? ''
+          }
+        } else {
+          sess.nextNodeId = null
+          sess.nextBranchId = null
+        }
+      }
+      // 若刚执行的是 LLM 且下一节点是 END，仍保持 PAUSED 等待下一次 step 触发 END
+      // 若刚执行的是 END，直接 COMPLETED（已在上面处理）
+      return { code: 0, message: 'ok', data: { ...sess } }
+    },
+  },
+
+  // POST /api/agent/graph-debug-sessions/:id/continue — 继续至断点或结束
+  {
+    method: 'POST',
+    pattern: '/api/agent/graph-debug-sessions/:id/continue',
+    handler: (params) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const perms = buildMockPermissions()
+      if (
+        !MOCK_CURRENT_SESSION.superAdmin &&
+        !perms.includes('agent:model:view') &&
+        !perms.includes('agent:graph:view') &&
+        !perms.includes('agent:model:manage')
+      )
+        return { code: 403, message: '无权限执行调试会话', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const sess = MOCK_DEBUG_SESSIONS.find((s) => s.id === id)
+      if (!sess) return { code: 404, message: '调试会话不存在', data: null }
+      if (sess.status !== 'PAUSED') return { code: 400, message: '会话已终结', data: null }
+      if (Date.now() > new Date(sess.expiresAt).getTime()) {
+        sess.status = 'EXPIRED'
+        sess.nextNodeId = null
+        sess.nextBranchId = null
+        return { code: 400, message: '会话已过期', data: null }
+      }
+      const def = MOCK_GRAPH_DEFS.find((d) => d.id === sess.graphDefId)
+      const elements = def ? def.graphJson.elements : []
+      const nodes = elements.filter((e) => e.kind === 'node')
+      const nodeOrder = nodes.map((n) => n.id)
+      const breakpoints = new Set(sess.breakpoints ?? [])
+      // 循环执行直到断点或终端
+      let guard = 20
+      while (sess.status === 'PAUSED' && sess.nextNodeId && guard-- > 0) {
+        // 断点检查：若 nextNodeId命中断点且已有至少一条 trace（避免起点即停），则暂停
+        const alreadyTraced = (MOCK_DEBUG_NODES[id]?.length ?? 0) > 0
+        if (alreadyTraced && breakpoints.has(sess.nextNodeId)) break
+        const curIdx = nodeOrder.indexOf(sess.nextNodeId)
+        if (curIdx < 0) {
+          sess.status = 'COMPLETED'
+          sess.nextNodeId = null
+          sess.nextBranchId = null
+          break
+        }
+        const node = nodes.find((n) => n.id === sess.nextNodeId)
+        const nodeType = node?.type ?? 'UNKNOWN'
+        if (nodeType === 'LLM') {
+          const out = `${sess.variables.input ?? ''} -> [${sess.nextNodeId} output]`
+          const outVar =
+            typeof node?.config?.outputVar === 'string' && String(node?.config?.outputVar).trim()
+              ? String(node?.config?.outputVar)
+              : 'result'
+          sess.variables[outVar] = out
+          sess.inputTokens = (sess.inputTokens ?? 0) + 10
+          sess.outputTokens = (sess.outputTokens ?? 0) + 20
+        } else if (nodeType === 'END') {
+          const cfg = (node?.config ?? {}) as Record<string, unknown>
+          const inVar =
+            typeof cfg.inputVar === 'string' && String(cfg.inputVar).trim()
+              ? String(cfg.inputVar)
+              : 'input'
+          sess.resultText = sess.variables[inVar] ?? sess.variables.input ?? ''
+        }
+        const arr = MOCK_DEBUG_NODES[id] ?? []
+        const nextSeq = arr.length + 1
+        arr.push({
+          id: Date.now() + nextSeq,
+          debugSessionId: id,
+          nodeSeq: nextSeq,
+          branchId: sess.nextBranchId ?? '0',
+          nodeId: sess.nextNodeId!,
+          nodeType,
+          nodeLatencyMs: nodeType === 'LLM' ? 80 : 5,
+          variableSnapshot: JSON.stringify({ ...sess.variables }),
+          inputTokens: nodeType === 'LLM' ? 10 : null,
+          outputTokens: nodeType === 'LLM' ? 20 : null,
+        })
+        MOCK_DEBUG_NODES[id] = arr
+        sess.traceCount = arr.length
+        sess.version += 1
+        sess.updateTime = new Date().toISOString().replace('T', ' ').slice(0, 19)
+        const nextIdx = curIdx + 1
+        if (nodeType === 'END') {
+          sess.status = 'COMPLETED'
+          sess.nextNodeId = null
+          sess.nextBranchId = null
+          if (!sess.latencyMs) sess.latencyMs = 95
+          break
+        }
+        if (nextIdx < nodeOrder.length) {
+          const nextId2 = nodeOrder[nextIdx]
+          // 到达断点则停在该节点前
+          if (breakpoints.has(nextId2)) {
+            sess.nextNodeId = nextId2
+            sess.nextBranchId = '0'
+            break
+          }
+          sess.nextNodeId = nextId2
+          sess.nextBranchId = '0'
+        } else {
+          sess.status = 'COMPLETED'
+          sess.nextNodeId = null
+          sess.nextBranchId = null
+          if (!sess.resultText)
+            sess.resultText = sess.variables.result ?? sess.variables.input ?? ''
+          if (!sess.latencyMs) sess.latencyMs = 95
+          break
+        }
+      }
+      return { code: 0, message: 'ok', data: { ...sess } }
+    },
+  },
+
+  // POST /api/agent/graph-debug-sessions/:id/stop — 停止（仅 PAUSED→STOPPED）
+  {
+    method: 'POST',
+    pattern: '/api/agent/graph-debug-sessions/:id/stop',
+    handler: (params) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const perms = buildMockPermissions()
+      if (
+        !MOCK_CURRENT_SESSION.superAdmin &&
+        !perms.includes('agent:model:view') &&
+        !perms.includes('agent:graph:view') &&
+        !perms.includes('agent:model:manage')
+      )
+        return { code: 403, message: '无权限执行调试会话', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const sess = MOCK_DEBUG_SESSIONS.find((s) => s.id === id)
+      if (!sess) return { code: 404, message: '调试会话不存在', data: null }
+      if (sess.status !== 'PAUSED') return { code: 400, message: '会话已终结', data: null }
+      sess.status = 'STOPPED'
+      sess.nextNodeId = null
+      sess.nextBranchId = null
+      sess.updateTime = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      sess.version += 1
+      return { code: 0, message: 'ok', data: { ...sess } }
+    },
+  },
+
+  // PUT /api/agent/graph-debug-sessions/:id/breakpoints — 更新断点（仅 PAUSED；校验 nodeId 存在）
+  {
+    method: 'PUT',
+    pattern: '/api/agent/graph-debug-sessions/:id/breakpoints',
+    handler: (params, _query, body) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const perms = buildMockPermissions()
+      if (
+        !MOCK_CURRENT_SESSION.superAdmin &&
+        !perms.includes('agent:model:view') &&
+        !perms.includes('agent:graph:view') &&
+        !perms.includes('agent:model:manage')
+      )
+        return { code: 403, message: '无权限执行调试会话', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const sess = MOCK_DEBUG_SESSIONS.find((s) => s.id === id)
+      if (!sess) return { code: 404, message: '调试会话不存在', data: null }
+      if (sess.status !== 'PAUSED') return { code: 400, message: '会话已终结', data: null }
+      const req = (body ?? {}) as { breakpoints?: unknown }
+      const bps = Array.isArray(req.breakpoints) ? req.breakpoints.map(String) : []
+      const def = MOCK_GRAPH_DEFS.find((d) => d.id === sess.graphDefId)
+      if (def) {
+        const nodeIds = new Set(
+          def.graphJson.elements.filter((e) => e.kind === 'node').map((e) => e.id),
+        )
+        for (const bp of bps) {
+          if (!nodeIds.has(bp)) return { code: 400, message: `断点节点不存在: ${bp}`, data: null }
+        }
+      }
+      sess.breakpoints = [...new Set(bps)]
+      sess.updateTime = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      sess.version += 1
+      return { code: 0, message: 'ok', data: { ...sess } }
     },
   },
 ]

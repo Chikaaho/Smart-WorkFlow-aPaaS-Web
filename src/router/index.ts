@@ -90,6 +90,25 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/modules/agent/views/ExecutionDetail.vue'),
         meta: { title: '执行详情', authority: ['agent:model:view'] },
       },
+      // M07-F04-02: 会话历史路由
+      {
+        path: 'agent/conversations/list',
+        name: 'agent-conversation-list',
+        component: () => import('@/modules/agent/views/ConversationList.vue'),
+        meta: { title: '会话历史', authority: ['agent:model:view'] },
+      },
+      {
+        path: 'agent/conversations/detail/:sessionId',
+        name: 'agent-conversation-detail',
+        component: () => import('@/modules/agent/views/ConversationDetail.vue'),
+        meta: { title: '会话消息', authority: ['agent:model:view'] },
+      },
+      {
+        path: 'agent/debug/:sessionId',
+        name: 'agent-debug-session',
+        component: () => import('@/modules/agent/views/DebugSessionView.vue'),
+        meta: { title: '单步调试', authority: ['agent:model:view'] },
+      },
     ],
   },
   {

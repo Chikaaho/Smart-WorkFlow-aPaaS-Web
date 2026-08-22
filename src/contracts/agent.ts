@@ -200,6 +200,10 @@ export interface AgentGraphExecution {
   success: boolean
   /** 执行耗时（毫秒） */
   latencyMs: number
+  /** M07-F04-02: 本次图执行全部 LLM 节点输入 Token 汇总（未知时为 null） */
+  inputTokens?: number | null
+  /** M07-F04-02: 本次图执行全部 LLM 节点输出 Token 汇总（未知时为 null） */
+  outputTokens?: number | null
   /** 创建时间 */
   createTime: string
 }
@@ -232,6 +236,10 @@ export interface AgentGraphExecutionDetail {
   errorCategory?: string
   /** 根节点追踪 ID（用于链路追踪） */
   traceId?: string
+  /** M07-F04-02: 本次图执行全部 LLM 节点输入 Token 汇总（未知时为 null） */
+  inputTokens?: number | null
+  /** M07-F04-02: 本次图执行全部 LLM 节点输出 Token 汇总（未知时为 null） */
+  outputTokens?: number | null
   /** 创建时间 */
   createTime: string
   /** 更新时间 */
@@ -262,6 +270,10 @@ export interface AgentGraphExecutionNode {
   success: boolean
   /** 节点级耗时（毫秒） */
   nodeLatencyMs: number
+  /** M07-F04-02: 该节点 LLM 调用的输入 Token（非 LLM 节点或供应商未返回时为 null） */
+  inputTokens?: number | null
+  /** M07-F04-02: 该节点 LLM 调用的输出 Token（非 LLM 节点或供应商未返回时为 null） */
+  outputTokens?: number | null
   /** 开始时间 */
   startTime?: string
   /** 结束时间 */
@@ -270,4 +282,84 @@ export interface AgentGraphExecutionNode {
   errorMessage?: string
   /** 构建时间（用于确定父子关系，相同 buildTime 的节点属于同一时刻并行分支） */
   buildTime: string
+}
+
+// ═══════════════════════════════════════════════════════════════
+// M07-F04-02: 会话历史相关契约（对齐 AgentConversationDTO、AgentConversationMessageDTO）
+// ═══════════════════════════════════════════════════════════════
+
+/** 会话列表项（对应 AgentConversationDTO） */
+export interface AgentConversation {
+  /** 会话 id */
+  id: number
+  /** 大模型接入配置 id */
+  agentModelConfigId: number
+  /** 会话标题（自动生成留后续迭代，当前为 null） */
+  title?: string
+  /** 会话状态（ACTIVE） */
+  status: string
+  /** 创建时间 */
+  createTime: string
+}
+
+/** 会话消息项（对应 AgentConversationMessageDTO） */
+export interface AgentConversationMessage {
+  /** 消息 id */
+  id: number
+  /** 消息角色：USER / ASSISTANT */
+  role: 'USER' | 'ASSISTANT' | string
+  /** 消息内容 */
+  content: string
+  /** 会话内顺序号（0-based） */
+  msgOrder: number
+  /** M07-F04-02: 供应商返回的输入 Token 数（未知时为 null，不为 0） */
+  inputTokens?: number | null
+  /** M07-F04-02: 供应商返回的输出 Token 数（未知时为 null，不为 0） */
+  outputTokens?: number | null
+  /** 创建时间 */
+  createTime: string
+}
+
+// === Agent Graph Debug Session (M07-F02-04 step debugging) ===
+export interface AgentGraphDebugSession {
+  id: number
+  graphDefId: number
+  graphDefVersion: number
+  status: 'PAUSED' | 'COMPLETED' | 'FAILED' | 'STOPPED' | 'EXPIRED' | string
+  input: string
+  breakpoints: string[]
+  variables: Record<string, string>
+  traceCount: number
+  nextNodeId: string | null
+  nextBranchId: string | null
+  resultText?: string | null
+  errorCategory?: string | null
+  errorMessage?: string | null
+  latencyMs?: number | null
+  inputTokens?: number | null
+  outputTokens?: number | null
+  expiresAt: string
+  createTime: string
+  updateTime: string
+  version: number
+}
+
+export interface AgentGraphDebugNode {
+  id: number
+  debugSessionId: number
+  nodeSeq: number
+  branchId: string
+  nodeId: string
+  nodeType: string
+  nodeLatencyMs: number
+  variableSnapshot: string | null // JSON string Map<string,string>
+  inputTokens?: number | null
+  outputTokens?: number | null
+}
+export interface AgentGraphDebugCreateReq {
+  graphDefId: number
+  input: string
+}
+export interface AgentGraphBreakpointsReq {
+  breakpoints: string[]
 }

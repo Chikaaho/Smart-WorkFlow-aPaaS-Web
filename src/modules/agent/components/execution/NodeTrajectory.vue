@@ -50,6 +50,17 @@ function formatLatency(latencyMs: number): string {
   return seconds < 60 ? `${seconds.toFixed(2)}s` : `${(seconds / 60).toFixed(2)}m`
 }
 
+// M07-F04-02: Token 格式化函数
+function formatTokenCount(count: number | null | undefined): string {
+  if (count === null || count === undefined) {
+    return '未知'
+  }
+  if (count === 0) {
+    return '0'
+  }
+  return count.toLocaleString()
+}
+
 /**
  * 格式化时间字符串 (去掉毫秒部分，便于对比)
  * ISO8601 -> YYYY-MM-DD HH:mm:ss
@@ -173,6 +184,13 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
               {{ getStatusLabel(node.status) }}
             </el-tag>
             <span class="node-latency">{{ formatLatency(node.nodeLatencyMs) }}</span>
+            <!-- M07-F04-02: Token 使用信息（仅 LLM 节点显示；null=未知，明确展示而非隐藏） -->
+            <span v-if="node.nodeType === 'LLM'" class="node-token">
+              输入: {{ formatTokenCount(node.inputTokens) }}
+            </span>
+            <span v-if="node.nodeType === 'LLM'" class="node-token">
+              输出: {{ formatTokenCount(node.outputTokens) }}
+            </span>
           </div>
 
           <!-- 展开区域：变量快照 -->
@@ -326,6 +344,16 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
 .node-latency {
   font-size: 12px;
   color: #909399;
+}
+
+/* M07-F04-02: Token 样式 */
+.node-token {
+  font-size: 11px;
+  color: #67c23a;
+  background: #f0f9eb;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 4px;
 }
 
 .node-details {

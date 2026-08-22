@@ -409,6 +409,72 @@ describe('NodeTrajectory.vue — FORK/JOIN/LOOP/失败节点专项测试', () =>
     expect(wrapper.exists()).toBe(true)
     wrapper.unmount()
   })
+
+  // ──────────────────────────────────────────────────────────────
+  // M07-F04-02 标准6：节点级 Token 展示
+  // ──────────────────────────────────────────────────────────────
+  it('D164-N13: LLM 节点带确定 token 时展示输入/输出数值', () => {
+    const nodesWithTokens: AgentGraphExecutionNode[] = [
+      {
+        nodeSeq: 1,
+        nodeId: 'n1',
+        nodeType: 'LLM',
+        nodeName: 'AI 助手',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 100,
+        buildTime: '2026-08-20T10:00:00.000Z',
+        inputTokens: 10,
+        outputTokens: 20,
+      },
+    ]
+    const wrapper = mount(NodeTrajectory, { props: { nodes: nodesWithTokens } })
+    const text = wrapper.text()
+    expect(text).toContain('10')
+    expect(text).toContain('20')
+    wrapper.unmount()
+  })
+
+  it('D164-N14: LLM 节点 token 为 null 时显示"未知"而非 0', () => {
+    const nodesUnknownTokens: AgentGraphExecutionNode[] = [
+      {
+        nodeSeq: 1,
+        nodeId: 'n1',
+        nodeType: 'LLM',
+        nodeName: 'AI 助手',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 100,
+        buildTime: '2026-08-20T10:00:00.000Z',
+        inputTokens: null,
+        outputTokens: null,
+      },
+    ]
+    const wrapper = mount(NodeTrajectory, { props: { nodes: nodesUnknownTokens } })
+    const text = wrapper.text()
+    expect(text).toContain('未知')
+    wrapper.unmount()
+  })
+
+  it('D164-N15: 非 LLM 节点（START/END）不展示 token 信息', () => {
+    const nodesNoLlm: AgentGraphExecutionNode[] = [
+      {
+        nodeSeq: 1,
+        nodeId: 's1',
+        nodeType: 'START',
+        nodeName: '开始节点',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 10,
+        buildTime: '2026-08-20T10:00:00.000Z',
+      },
+    ]
+    const wrapper = mount(NodeTrajectory, { props: { nodes: nodesNoLlm } })
+    const text = wrapper.text()
+    expect(text).not.toContain('输入:')
+    expect(text).not.toContain('输出:')
+    wrapper.unmount()
+  })
 })
 
 // Helper to extract displayed text from items

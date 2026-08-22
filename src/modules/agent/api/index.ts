@@ -14,6 +14,11 @@ import type {
   AgentGraphExecution,
   AgentGraphExecutionDetail,
   AgentGraphExecutionNode,
+  AgentConversation,
+  AgentConversationMessage,
+  AgentGraphDebugSession,
+  AgentGraphDebugNode,
+  AgentGraphDebugCreateReq,
 } from '@/contracts/agent'
 
 // ─── 后端分页原始形状（对齐 AgentGraphDefController.pageDefs 的 PageResult） ───
@@ -310,3 +315,113 @@ async function pageGraphExecutionsInternal(params: {
 
 /** 导出扩展版：与基础 API 保持一致的对外接口 */
 export { pageGraphExecutionsInternal as pageGraphExecutionsWithVersion }
+
+// ═══════════════════════════════════════════════════════════════
+// M07-F04-02: 会话历史（AgentConversationController）
+// ═══════════════════════════════════════════════════════════════
+
+/** GET /agent/conversations?agentModelConfigId= → List<AgentConversationDTO> */
+export async function listConversations(agentModelConfigId?: number): Promise<AgentConversation[]> {
+  return request<AgentConversation[]>({
+    method: 'GET',
+    url: '/agent/conversations',
+    params: {
+      ...(agentModelConfigId && { agentModelConfigId }),
+    },
+  })
+}
+
+/** GET /agent/conversations/{sessionId}/messages → List<AgentConversationMessageDTO> */
+export async function listConversationMessages(
+  sessionId: number,
+): Promise<AgentConversationMessage[]> {
+  return request<AgentConversationMessage[]>({
+    method: 'GET',
+    url: `/agent/conversations/${sessionId}/messages`,
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════
+// M07-F02-04: 图单步调试（AgentGraphDebugSessionController）
+// ═══════════════════════════════════════════════════════════════
+
+/** POST /agent/graph-debug-sessions {graphDefId,input} → AgentGraphDebugSession */
+export async function createDebugSession(
+  req: AgentGraphDebugCreateReq,
+): Promise<AgentGraphDebugSession> {
+  return request<AgentGraphDebugSession>({
+    method: 'POST',
+    url: '/agent/graph-debug-sessions',
+    data: req,
+  })
+}
+
+/** GET /agent/graph-debug-sessions/{id} → AgentGraphDebugSession */
+export async function getDebugSession(sessionId: number): Promise<AgentGraphDebugSession> {
+  return request<AgentGraphDebugSession>({
+    method: 'GET',
+    url: `/agent/graph-debug-sessions/${sessionId}`,
+  })
+}
+
+/** POST /agent/graph-debug-sessions/{id}/step?expectedVersion= → AgentGraphDebugSession */
+export async function stepDebugSession(
+  sessionId: number,
+  expectedVersion?: number,
+): Promise<AgentGraphDebugSession> {
+  return request<AgentGraphDebugSession>({
+    method: 'POST',
+    url: `/agent/graph-debug-sessions/${sessionId}/step`,
+    params: expectedVersion !== undefined ? { expectedVersion } : undefined,
+  })
+}
+
+/** POST /agent/graph-debug-sessions/{id}/continue → AgentGraphDebugSession */
+export async function continueDebugSession(sessionId: number): Promise<AgentGraphDebugSession> {
+  return request<AgentGraphDebugSession>({
+    method: 'POST',
+    url: `/agent/graph-debug-sessions/${sessionId}/continue`,
+  })
+}
+
+/** POST /agent/graph-debug-sessions/{id}/stop → AgentGraphDebugSession */
+export async function stopDebugSession(sessionId: number): Promise<AgentGraphDebugSession> {
+  return request<AgentGraphDebugSession>({
+    method: 'POST',
+    url: `/agent/graph-debug-sessions/${sessionId}/stop`,
+  })
+}
+
+/** PUT /agent/graph-debug-sessions/{id}/breakpoints {breakpoints} → AgentGraphDebugSession */
+export async function updateDebugBreakpoints(
+  sessionId: number,
+  breakpoints: string[],
+): Promise<AgentGraphDebugSession> {
+  return request<AgentGraphDebugSession>({
+    method: 'PUT',
+    url: `/agent/graph-debug-sessions/${sessionId}/breakpoints`,
+    data: { breakpoints },
+  })
+}
+
+/** GET /agent/graph-debug-sessions/{id}/nodes → AgentGraphDebugNode[] */
+export async function listDebugNodes(sessionId: number): Promise<AgentGraphDebugNode[]> {
+  return request<AgentGraphDebugNode[]>({
+    method: 'GET',
+    url: `/agent/graph-debug-sessions/${sessionId}/nodes`,
+  })
+}
+
+/** GET /agent/graph-debug-sessions → PageResult<AgentGraphDebugSession> */
+export async function pageDebugSessions(params: {
+  pageNum: number
+  pageSize: number
+  graphDefId?: number
+}): Promise<PageResult<AgentGraphDebugSession>> {
+  const raw = await request<BackendPageResult<AgentGraphDebugSession>>({
+    method: 'GET',
+    url: '/agent/graph-debug-sessions',
+    params,
+  })
+  return adaptPage(raw)
+}

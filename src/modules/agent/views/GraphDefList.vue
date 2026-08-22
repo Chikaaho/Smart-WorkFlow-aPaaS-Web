@@ -16,7 +16,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { StandardListTemplate } from '@/components/page-layout'
-import { createGraphDef, deleteGraphDef, pageGraphDefs, publishGraphDef } from '@/modules/agent/api'
+import {
+  createDebugSession,
+  createGraphDef,
+  deleteGraphDef,
+  pageGraphDefs,
+  publishGraphDef,
+} from '@/modules/agent/api'
 import type { AgentGraphDef } from '@/contracts/agent'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
@@ -147,6 +153,26 @@ async function handleDelete(row: AgentGraphDef) {
   }
 }
 
+/** 调试：输入文本 → 创建调试会话 → 跳转调试页（仅 PUBLISHED） */
+async function handleDebug(row: AgentGraphDef) {
+  try {
+    const { value: input } = await ElMessageBox.prompt('请输入调试输入', '单步调试', {
+      confirmButtonText: '开始调试',
+      cancelButtonText: '取消',
+      inputPattern: /\S/,
+      inputErrorMessage: '输入不能为空',
+    })
+    if (input === undefined || input === null) return
+    const session = await createDebugSession({ graphDefId: row.id, input: String(input) })
+    ElMessage.success('调试会话已创建')
+    await router.push(`/agent/debug/${session.id}`)
+  } catch (err) {
+    if (err && err !== 'cancel') {
+      ElMessage.error((err as ApiError).msg ?? '创建调试会话失败')
+    }
+  }
+}
+
 /** 查看执行历史：跳转到执行列表页，带 graphDefId 过滤条件 */
 function handleViewExecutions(row: AgentGraphDef) {
   void router.push({
@@ -203,7 +229,7 @@ onMounted(() => {
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="260" fixed="right">
+      <el-table-column label="操作" width="320" fixed="right">
         <template #default="{ row }">
           <el-button size="small" link type="primary" @click="handleEdit(row as AgentGraphDef)">
             编辑
@@ -225,6 +251,15 @@ onMounted(() => {
             @click="handleDelete(row as AgentGraphDef)"
           >
             删除
+          </el-button>
+          <el-button
+            v-if="(row as AgentGraphDef).status === 'PUBLISHED'"
+            size="small"
+            link
+            type="warning"
+            @click="handleDebug(row as AgentGraphDef)"
+          >
+            调试
           </el-button>
           <!-- 执行历史入口：从图定义上下文进入运行记录 -->
           <el-button

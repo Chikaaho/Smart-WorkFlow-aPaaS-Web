@@ -2805,3 +2805,279 @@ export const MOCK_AGENT_GRAPH_EXECUTIONS: Array<{
     ],
   },
 ]
+
+// ═══════════════════════════════════════════════════════════════════
+// M07-F04-02：Agent 会话历史 Mock 数据（对齐 AgentConversationDTO /
+// AgentConversationMessageDTO 契约；覆盖确定/未知/部分 usage 三种语义）
+// ═══════════════════════════════════════════════════════════════════
+
+export interface MockConversation {
+  id: number
+  agentModelConfigId: number
+  title?: string
+  status: string
+  createTime: string
+}
+
+export interface MockConversationMessage {
+  id: number
+  role: string
+  content: string
+  msgOrder: number
+  inputTokens: number | null
+  outputTokens: number | null
+  createTime: string
+}
+
+export const MOCK_CONVERSATIONS: MockConversation[] = [
+  {
+    id: 1,
+    agentModelConfigId: 10,
+    title: '客服咨询会话',
+    status: 'ACTIVE',
+    createTime: '2026-08-22 09:00:00',
+  },
+  {
+    id: 2,
+    agentModelConfigId: 11,
+    title: '未知用量会话',
+    status: 'ACTIVE',
+    createTime: '2026-08-22 08:30:00',
+  },
+  {
+    id: 3,
+    agentModelConfigId: 12,
+    title: '部分用量会话',
+    status: 'ACTIVE',
+    createTime: '2026-08-22 08:00:00',
+  },
+]
+
+export const MOCK_CONVERSATION_MESSAGES: Record<number, MockConversationMessage[]> = {
+  1: [
+    {
+      id: 101,
+      role: 'USER',
+      content: '第一轮：如何退款？',
+      msgOrder: 0,
+      inputTokens: null,
+      outputTokens: null,
+      createTime: '2026-08-22 09:00:01',
+    },
+    {
+      id: 102,
+      role: 'ASSISTANT',
+      content: '第一轮回复：请提供订单号。',
+      msgOrder: 1,
+      inputTokens: 10,
+      outputTokens: 20,
+      createTime: '2026-08-22 09:00:02',
+    },
+    {
+      id: 103,
+      role: 'USER',
+      content: '第二轮：订单号 12345。',
+      msgOrder: 2,
+      inputTokens: null,
+      outputTokens: null,
+      createTime: '2026-08-22 09:00:05',
+    },
+    {
+      id: 104,
+      role: 'ASSISTANT',
+      content: '第二轮回复：已为您发起退款。',
+      msgOrder: 3,
+      inputTokens: 30,
+      outputTokens: 40,
+      createTime: '2026-08-22 09:00:06',
+    },
+  ],
+  2: [
+    {
+      id: 201,
+      role: 'USER',
+      content: '未知用量会话提问',
+      msgOrder: 0,
+      inputTokens: null,
+      outputTokens: null,
+      createTime: '2026-08-22 08:30:01',
+    },
+    {
+      id: 202,
+      role: 'ASSISTANT',
+      content: '供应商未返回 usage 的回复',
+      msgOrder: 1,
+      inputTokens: null,
+      outputTokens: null,
+      createTime: '2026-08-22 08:30:02',
+    },
+  ],
+  3: [
+    {
+      id: 301,
+      role: 'USER',
+      content: '部分用量会话提问',
+      msgOrder: 0,
+      inputTokens: null,
+      outputTokens: null,
+      createTime: '2026-08-22 08:00:01',
+    },
+    {
+      id: 302,
+      role: 'ASSISTANT',
+      content: '仅返回输入 token 的回复',
+      msgOrder: 1,
+      inputTokens: 50,
+      outputTokens: null,
+      createTime: '2026-08-22 08:00:02',
+    },
+  ],
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// M07-F02-04：图单步调试 Mock 数据（AgentGraphDebugSession / AgentGraphDebugNode）
+// ═══════════════════════════════════════════════════════════════════
+
+export interface MockDebugSession {
+  id: number
+  graphDefId: number
+  graphDefVersion: number
+  status: 'PAUSED' | 'COMPLETED' | 'FAILED' | 'STOPPED' | 'EXPIRED' | string
+  input: string
+  breakpoints: string[]
+  variables: Record<string, string>
+  traceCount: number
+  nextNodeId: string | null
+  nextBranchId: string | null
+  resultText?: string | null
+  errorCategory?: string | null
+  errorMessage?: string | null
+  latencyMs?: number | null
+  inputTokens?: number | null
+  outputTokens?: number | null
+  expiresAt: string
+  createTime: string
+  updateTime: string
+  version: number
+}
+
+export interface MockDebugNode {
+  id: number
+  debugSessionId: number
+  nodeSeq: number
+  branchId: string
+  nodeId: string
+  nodeType: string
+  nodeLatencyMs: number
+  variableSnapshot: string | null
+  inputTokens?: number | null
+  outputTokens?: number | null
+}
+
+export const MOCK_DEBUG_SESSIONS: MockDebugSession[] = [
+  {
+    id: 1,
+    graphDefId: 1001,
+    graphDefVersion: 1,
+    status: 'PAUSED',
+    input: 'hello debug',
+    breakpoints: ['llm_1'],
+    variables: { input: 'hello debug' },
+    traceCount: 1,
+    nextNodeId: 'llm_1',
+    nextBranchId: '0',
+    resultText: null,
+    errorCategory: null,
+    errorMessage: null,
+    latencyMs: null,
+    inputTokens: null,
+    outputTokens: null,
+    expiresAt: '2030-08-22 10:30:00',
+    createTime: '2026-08-22 09:00:00',
+    updateTime: '2026-08-22 09:00:05',
+    version: 1,
+  },
+  {
+    id: 2,
+    graphDefId: 1002,
+    graphDefVersion: 1,
+    status: 'COMPLETED',
+    input: 'completed input',
+    breakpoints: [],
+    variables: { input: 'completed input', result: 'completed input -> [llm_1 output]' },
+    traceCount: 3,
+    nextNodeId: null,
+    nextBranchId: null,
+    resultText: 'completed input -> [llm_1 output]',
+    errorCategory: null,
+    errorMessage: null,
+    latencyMs: 95,
+    inputTokens: 10,
+    outputTokens: 20,
+    expiresAt: '2030-08-22 11:00:00',
+    createTime: '2026-08-22 08:00:00',
+    updateTime: '2026-08-22 08:00:10',
+    version: 3,
+  },
+]
+
+export const MOCK_DEBUG_NODES: Record<number, MockDebugNode[]> = {
+  1: [
+    {
+      id: 101,
+      debugSessionId: 1,
+      nodeSeq: 1,
+      branchId: '0',
+      nodeId: 'start_1',
+      nodeType: 'START',
+      nodeLatencyMs: 5,
+      variableSnapshot: JSON.stringify({ input: 'hello debug' }),
+      inputTokens: null,
+      outputTokens: null,
+    },
+  ],
+  2: [
+    {
+      id: 201,
+      debugSessionId: 2,
+      nodeSeq: 1,
+      branchId: '0',
+      nodeId: 'start_1',
+      nodeType: 'START',
+      nodeLatencyMs: 5,
+      variableSnapshot: JSON.stringify({ input: 'completed input' }),
+      inputTokens: null,
+      outputTokens: null,
+    },
+    {
+      id: 202,
+      debugSessionId: 2,
+      nodeSeq: 2,
+      branchId: '0',
+      nodeId: 'llm_1',
+      nodeType: 'LLM',
+      nodeLatencyMs: 80,
+      variableSnapshot: JSON.stringify({
+        input: 'completed input',
+        result: 'completed input -> [llm_1 output]',
+      }),
+      inputTokens: 10,
+      outputTokens: 20,
+    },
+    {
+      id: 203,
+      debugSessionId: 2,
+      nodeSeq: 3,
+      branchId: '0',
+      nodeId: 'end_1',
+      nodeType: 'END',
+      nodeLatencyMs: 10,
+      variableSnapshot: JSON.stringify({
+        input: 'completed input',
+        result: 'completed input -> [llm_1 output]',
+      }),
+      inputTokens: null,
+      outputTokens: null,
+    },
+  ],
+}
