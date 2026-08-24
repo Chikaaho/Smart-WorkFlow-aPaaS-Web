@@ -86,7 +86,13 @@ export async function dispatchMock<T>(
 
   if (!match) return undefined
 
-  return match.handler(match.params, params, body) as ApiResponse<T> | Promise<ApiResponse<T>>
+  // 将 params 值转为字符串（模拟真实 HTTP 查询参数行为）
+  const stringParams: Record<string, string> = {}
+  for (const [k, v] of Object.entries(params)) {
+    stringParams[k] = String(v)
+  }
+
+  return match.handler(match.params, stringParams, body) as ApiResponse<T> | Promise<ApiResponse<T>>
 }
 
 // ─── URL 匹配 ────────────────────────────────────────────

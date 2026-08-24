@@ -84,6 +84,8 @@ export const MOCK_SESSION_DATA: MockSessionData = {
     'agent:model:view',
     'agent:model:manage',
     'agent:model:test',
+    'agent:tool:view',
+    'agent:tool:manage',
   ],
   roles: ['superadmin'],
   superAdmin: true,
@@ -151,6 +153,9 @@ export let MOCK_CURRENT_SESSION: MockSessionData = MOCK_SESSION_DATA
 export function switchMockSession(username: string): void {
   if (username === 'admin') {
     MOCK_CURRENT_SESSION = MOCK_SESSION_DATA_ADMIN
+    // admin 权限实时按角色绑定重算（bindings 可能被测试/菜单管理 mutate，
+    // 固定快照会导致权限与菜单脱节——对齐真实后端每次认证实时装配）。
+    MOCK_SESSION_DATA_ADMIN.permissions = collectSessionPermissions(['admin'])
   } else if (username === 'user') {
     MOCK_CURRENT_SESSION = MOCK_SESSION_DATA_USER
   } else {
@@ -463,6 +468,33 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
         menuType: 1,
         permission: 'agent:model:view',
         hidden: false,
+      },
+      {
+        id: '17',
+        parentId: '5',
+        name: 'AgentToolList',
+        title: '工具管理',
+        path: 'agent/tool',
+        component: 'agent/views/ToolList',
+        icon: 'SetUp',
+        sort: 30,
+        menuType: 1,
+        permission: 'agent:tool:view',
+        hidden: false,
+        children: [
+          {
+            id: '170',
+            parentId: '17',
+            name: 'ToolManage',
+            title: '工具管理',
+            path: '',
+            component: null,
+            sort: 1,
+            menuType: 2,
+            permission: 'agent:tool:manage',
+            hidden: true,
+          },
+        ],
       },
     ],
   },
@@ -1385,8 +1417,12 @@ export const MOCK_ROLES_LIST = [
  * 保存后的状态可被后续 GET 与页面回填观察（方向 §5 风险 1 防护）。
  */
 export const MOCK_ROLE_MENU_BINDINGS: Record<string, number[]> = {
-  // admin：全量菜单树叶子（目录 1、页面 11/12/13/14/18 + 按钮 110/111/112/120/121/122）
-  '2': [1, 11, 12, 13, 14, 18, 110, 111, 112, 120, 121, 122],
+  // admin：全量菜单树（目录 1/2/3/5 + 页面 11/12/13/14/15/16/17/18 + 按钮 110/111/112/120/121/122/170）
+  // 目录 id 必须一并绑定：buildMockMenuTree 按「父不在集合 → 子树整体丢弃」过滤（对齐真实后端），
+  // 缺 agent 目录(5) 会导致智能体整棵子树不可见。
+  // P48/V37：工具管理页 17 + 按钮 170（agent:tool:view / agent:tool:manage），
+  // 对齐真实后端 V37 seed（页面 id=212、按钮 id=213）与 admin 角色菜单绑定契约。
+  '2': [1, 2, 3, 5, 11, 12, 13, 14, 15, 16, 17, 18, 110, 111, 112, 120, 121, 122, 170],
   // superadmin：无绑定行（超管旁路，与真实 seed 一致）
   // user：空绑定
 }
@@ -2992,7 +3028,7 @@ export const MOCK_DEBUG_SESSIONS: MockDebugSession[] = [
     latencyMs: null,
     inputTokens: null,
     outputTokens: null,
-    expiresAt: '2030-08-22 10:30:00',
+    expiresAt: '2030-08-22T10:30:00.000Z',
     createTime: '2026-08-22 09:00:00',
     updateTime: '2026-08-22 09:00:05',
     version: 1,
@@ -3014,7 +3050,7 @@ export const MOCK_DEBUG_SESSIONS: MockDebugSession[] = [
     latencyMs: 95,
     inputTokens: 10,
     outputTokens: 20,
-    expiresAt: '2030-08-22 11:00:00',
+    expiresAt: '2030-08-22T11:00:00.000Z',
     createTime: '2026-08-22 08:00:00',
     updateTime: '2026-08-22 08:00:10',
     version: 3,
@@ -3081,3 +3117,127 @@ export const MOCK_DEBUG_NODES: Record<number, MockDebugNode[]> = {
     },
   ],
 }
+
+// ─── M07-F03-02: 工具管理 Mock 种子 ──────────────────────
+
+export interface MockToolInternalEntry {
+  id: number
+  name: string
+  description: string
+  inputSchema: string | null
+  beanName: string
+  methodName: string
+  enabled: boolean
+  remark: string | null
+  createTime: string
+  updateTime: string
+}
+
+export interface MockToolExternalEntry {
+  id: number
+  name: string
+  description: string
+  inputSchema: string | null
+  url: string
+  httpMethod: string
+  timeoutSeconds: number
+  enabled: boolean
+  remark: string | null
+  createTime: string
+  updateTime: string
+}
+
+export const MOCK_INTERNAL_TOOLS: MockToolInternalEntry[] = [
+  {
+    id: 1,
+    name: 'get_weather',
+    description: '获取指定城市的天气信息',
+    inputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        city: { type: 'string', description: '城市名称' },
+      },
+      required: ['city'],
+    }),
+    beanName: 'weatherToolBean',
+    methodName: 'execute',
+    enabled: true,
+    remark: '示例内部工具：天气查询',
+    createTime: '2026-07-10 10:00:00',
+    updateTime: '2026-07-10 10:00:00',
+  },
+  {
+    id: 2,
+    name: 'search_knowledge',
+    description: '在知识库中搜索相关文档',
+    inputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '搜索关键词' },
+        top_k: { type: 'number', description: '返回结果数量', default: 5 },
+      },
+      required: ['query'],
+    }),
+    beanName: 'knowledgeSearchBean',
+    methodName: 'execute',
+    enabled: true,
+    remark: '知识库检索工具',
+    createTime: '2026-07-11 09:00:00',
+    updateTime: '2026-07-11 09:00:00',
+  },
+  {
+    id: 3,
+    name: 'calculate',
+    description: '执行数学表达式计算',
+    inputSchema: null,
+    beanName: 'calculatorBean',
+    methodName: 'execute',
+    enabled: false,
+    remark: '停用中的工具',
+    createTime: '2026-07-12 14:00:00',
+    updateTime: '2026-07-13 11:30:00',
+  },
+]
+
+export const MOCK_EXTERNAL_TOOLS: MockToolExternalEntry[] = [
+  {
+    id: 1,
+    name: 'web_search',
+    description: '通过外部搜索引擎搜索互联网信息',
+    inputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '搜索查询' },
+      },
+      required: ['query'],
+    }),
+    url: 'https://api.search-service.com/v1/search',
+    httpMethod: 'POST',
+    timeoutSeconds: 30,
+    enabled: true,
+    remark: '外部搜索引擎工具',
+    createTime: '2026-07-10 10:00:00',
+    updateTime: '2026-07-10 10:00:00',
+  },
+  {
+    id: 2,
+    name: 'send_email',
+    description: '通过外部邮件服务发送邮件',
+    inputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        to: { type: 'string', description: '收件人邮箱' },
+        subject: { type: 'string', description: '邮件主题' },
+        body: { type: 'string', description: '邮件正文' },
+      },
+      required: ['to', 'subject', 'body'],
+    }),
+    url: 'https://api.email-service.com/v1/send',
+    httpMethod: 'POST',
+    timeoutSeconds: 60,
+    enabled: true,
+    remark: '外部邮件服务工具',
+    createTime: '2026-07-11 09:00:00',
+    updateTime: '2026-07-11 09:00:00',
+  },
+]

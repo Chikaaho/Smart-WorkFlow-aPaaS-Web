@@ -64,6 +64,10 @@ import {
   MOCK_JOB_LOGS,
   MOCK_INSTANCES,
   MOCK_INSTANCE_DETAILS,
+  MOCK_INTERNAL_TOOLS,
+  MOCK_EXTERNAL_TOOLS,
+  type MockToolInternalEntry,
+  type MockToolExternalEntry,
 } from './seeds'
 
 // ─── 模型 handler 内部辅助（与真实后端语义对齐） ─────────────────
@@ -2510,10 +2514,7 @@ export const mockRegistrations: MockRegistration[] = [
       if (!def) return { code: 404, message: '图定义不存在', data: null }
       if (def.status !== 'PUBLISHED') return { code: 400, message: '仅已发布图可调试', data: null }
       const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000)
-        .toISOString()
-        .replace('T', ' ')
-        .slice(0, 19)
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
       const nextId =
         MOCK_DEBUG_SESSIONS.length > 0 ? Math.max(...MOCK_DEBUG_SESSIONS.map((s) => s.id)) + 1 : 1
       const elements = def.graphJson.elements
@@ -2933,6 +2934,385 @@ export const mockRegistrations: MockRegistration[] = [
       sess.updateTime = new Date().toISOString().replace('T', ' ').slice(0, 19)
       sess.version += 1
       return { code: 0, message: 'ok', data: { ...sess } }
+    },
+  },
+
+  // ═══════════════════════════════════════════════════
+  // ── M07-F03-02: 工具管理 CRUD（AgentToolConfigController） ──
+  // ═══════════════════════════════════════════════════
+
+  // ─── 内部工具 ───
+
+  // GET /api/agent/tool/internal?pageNum=&pageSize=&nameKeyword=&enabled=
+  {
+    method: 'GET',
+    pattern: '/api/agent/tool/internal',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      const keyword = String(query.nameKeyword ?? '').trim()
+      const enabledRaw = query.enabled
+      let list = [...MOCK_INTERNAL_TOOLS]
+      if (keyword)
+        list = list.filter((t) => t.name.includes(keyword) || t.description.includes(keyword))
+      if (enabledRaw !== undefined && enabledRaw !== '' && enabledRaw !== null) {
+        list = list.filter((t) => t.enabled === (enabledRaw === 'true'))
+      }
+      const total = list.length
+      const start = (pageNum - 1) * pageSize
+      const records = list.slice(start, start + pageSize)
+      return { code: 0, message: 'ok', data: { records, total, pageNum, pageSize } }
+    },
+  },
+
+  // GET /api/agent/tool/internal/:id
+  {
+    method: 'GET',
+    pattern: '/api/agent/tool/internal/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const tool = MOCK_INTERNAL_TOOLS.find((t) => t.id === id)
+      if (!tool) return { code: 404, message: '内部工具不存在', data: null }
+      return { code: 0, message: 'ok', data: { ...tool } }
+    },
+  },
+
+  // POST /api/agent/tool/internal
+  {
+    method: 'POST',
+    pattern: '/api/agent/tool/internal',
+    handler: (_params, _query, body) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      if (!MOCK_CURRENT_SESSION.superAdmin && !buildMockPermissions().includes('agent:tool:manage'))
+        return { code: 403, message: '无权限创建内部工具', data: null }
+      const req = (body ?? {}) as Record<string, unknown>
+      if (!req.name || !String(req.name).trim())
+        return { code: 400, message: '工具名不能为空', data: null }
+      if (MOCK_INTERNAL_TOOLS.some((t) => t.name === String(req.name))) {
+        return { code: 400, message: '工具名已存在', data: null }
+      }
+      if (!req.beanName || !String(req.beanName).trim())
+        return { code: 400, message: 'Bean 名称不能为空', data: null }
+      if (!req.methodName || !String(req.methodName).trim())
+        return { code: 400, message: '方法名不能为空', data: null }
+      if (req.inputSchema != null && String(req.inputSchema).trim()) {
+        try {
+          JSON.parse(String(req.inputSchema))
+        } catch {
+          return { code: 400, message: '入参 Schema 不是合法的 JSON', data: null }
+        }
+      }
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      const id =
+        MOCK_INTERNAL_TOOLS.length > 0 ? Math.max(...MOCK_INTERNAL_TOOLS.map((t) => t.id)) + 1 : 1
+      const tool: MockToolInternalEntry = {
+        id,
+        name: String(req.name),
+        description: String(req.description ?? ''),
+        inputSchema: req.inputSchema != null ? String(req.inputSchema) : null,
+        beanName: String(req.beanName ?? ''),
+        methodName: String(req.methodName ?? ''),
+        enabled: req.enabled !== undefined ? Boolean(req.enabled) : true,
+        remark: req.remark != null ? String(req.remark) : null,
+        createTime: now,
+        updateTime: now,
+      }
+      MOCK_INTERNAL_TOOLS.push(tool)
+      return { code: 0, message: 'ok', data: id }
+    },
+  },
+
+  // PUT /api/agent/tool/internal/:id
+  {
+    method: 'PUT',
+    pattern: '/api/agent/tool/internal/:id',
+    handler: (params, _query, body) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      if (!MOCK_CURRENT_SESSION.superAdmin && !buildMockPermissions().includes('agent:tool:manage'))
+        return { code: 403, message: '无权限编辑内部工具', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_INTERNAL_TOOLS.findIndex((t) => t.id === id)
+      if (idx === -1) return { code: 404, message: '内部工具不存在', data: null }
+      const req = (body ?? {}) as Record<string, unknown>
+      if (req.name && String(req.name) !== MOCK_INTERNAL_TOOLS[idx].name) {
+        if (MOCK_INTERNAL_TOOLS.some((t) => t.name === String(req.name))) {
+          return { code: 400, message: '工具名已存在', data: null }
+        }
+      }
+      if (req.beanName !== undefined && !String(req.beanName).trim())
+        return { code: 400, message: 'Bean 名称不能为空', data: null }
+      if (req.methodName !== undefined && !String(req.methodName).trim())
+        return { code: 400, message: '方法名不能为空', data: null }
+      if (
+        req.inputSchema !== undefined &&
+        req.inputSchema != null &&
+        String(req.inputSchema).trim()
+      ) {
+        try {
+          JSON.parse(String(req.inputSchema))
+        } catch {
+          return { code: 400, message: '入参 Schema 不是合法的 JSON', data: null }
+        }
+      }
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      const existing = MOCK_INTERNAL_TOOLS[idx]
+      MOCK_INTERNAL_TOOLS[idx] = {
+        ...existing,
+        name: req.name !== undefined ? String(req.name) : existing.name,
+        description: req.description !== undefined ? String(req.description) : existing.description,
+        inputSchema:
+          req.inputSchema !== undefined
+            ? req.inputSchema != null
+              ? String(req.inputSchema)
+              : null
+            : existing.inputSchema,
+        beanName: req.beanName !== undefined ? String(req.beanName) : existing.beanName,
+        methodName: req.methodName !== undefined ? String(req.methodName) : existing.methodName,
+        enabled: req.enabled !== undefined ? Boolean(req.enabled) : existing.enabled,
+        remark:
+          req.remark !== undefined
+            ? req.remark != null
+              ? String(req.remark)
+              : null
+            : existing.remark,
+        updateTime: now,
+      }
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // DELETE /api/agent/tool/internal/:id
+  {
+    method: 'DELETE',
+    pattern: '/api/agent/tool/internal/:id',
+    handler: (params) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      if (!MOCK_CURRENT_SESSION.superAdmin && !buildMockPermissions().includes('agent:tool:manage'))
+        return { code: 403, message: '无权限删除内部工具', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_INTERNAL_TOOLS.findIndex((t) => t.id === id)
+      if (idx === -1) return { code: 404, message: '内部工具不存在', data: null }
+      MOCK_INTERNAL_TOOLS.splice(idx, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // PUT /api/agent/tool/internal/:id/toggle?enabled=
+  {
+    method: 'PUT',
+    pattern: '/api/agent/tool/internal/:id/toggle',
+    handler: (params, query) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      if (!MOCK_CURRENT_SESSION.superAdmin && !buildMockPermissions().includes('agent:tool:manage'))
+        return { code: 403, message: '无权限启停内部工具', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const tool = MOCK_INTERNAL_TOOLS.find((t) => t.id === id)
+      if (!tool) return { code: 404, message: '内部工具不存在', data: null }
+      tool.enabled = query.enabled === 'true'
+      tool.updateTime = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // ─── 外部 HTTP 工具 ───
+
+  // GET /api/agent/tool/external?pageNum=&pageSize=&nameKeyword=&enabled=
+  {
+    method: 'GET',
+    pattern: '/api/agent/tool/external',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      const keyword = String(query.nameKeyword ?? '').trim()
+      const enabledRaw = query.enabled
+      let list = [...MOCK_EXTERNAL_TOOLS]
+      if (keyword)
+        list = list.filter((t) => t.name.includes(keyword) || t.description.includes(keyword))
+      if (enabledRaw !== undefined && enabledRaw !== '' && enabledRaw !== null) {
+        list = list.filter((t) => t.enabled === (enabledRaw === 'true'))
+      }
+      const total = list.length
+      const start = (pageNum - 1) * pageSize
+      const records = list.slice(start, start + pageSize)
+      return { code: 0, message: 'ok', data: { records, total, pageNum, pageSize } }
+    },
+  },
+
+  // GET /api/agent/tool/external/:id
+  {
+    method: 'GET',
+    pattern: '/api/agent/tool/external/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const tool = MOCK_EXTERNAL_TOOLS.find((t) => t.id === id)
+      if (!tool) return { code: 404, message: '外部工具不存在', data: null }
+      return { code: 0, message: 'ok', data: { ...tool } }
+    },
+  },
+
+  // POST /api/agent/tool/external
+  {
+    method: 'POST',
+    pattern: '/api/agent/tool/external',
+    handler: (_params, _query, body) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      if (!MOCK_CURRENT_SESSION.superAdmin && !buildMockPermissions().includes('agent:tool:manage'))
+        return { code: 403, message: '无权限创建外部工具', data: null }
+      const req = (body ?? {}) as Record<string, unknown>
+      if (!req.name || !String(req.name).trim())
+        return { code: 400, message: '工具名不能为空', data: null }
+      if (MOCK_EXTERNAL_TOOLS.some((t) => t.name === String(req.name))) {
+        return { code: 400, message: '工具名已存在', data: null }
+      }
+      if (!req.url || !String(req.url).trim())
+        return { code: 400, message: 'URL不能为空', data: null }
+      try {
+        const u = new URL(String(req.url))
+        if (u.protocol !== 'http:' && u.protocol !== 'https:')
+          return { code: 400, message: 'URL 必须为 http(s):// 开头', data: null }
+      } catch {
+        return { code: 400, message: 'URL 格式不正确', data: null }
+      }
+      const method = String(req.httpMethod ?? 'POST')
+      if (!['GET', 'POST', 'PUT'].includes(method))
+        return { code: 400, message: 'HTTP 方法必须为 GET/POST/PUT', data: null }
+      const timeout = Number(req.timeoutSeconds ?? 30)
+      if (!Number.isFinite(timeout) || timeout < 1)
+        return { code: 400, message: '超时时间需为正整数（秒）', data: null }
+      if (req.inputSchema != null && String(req.inputSchema).trim()) {
+        try {
+          JSON.parse(String(req.inputSchema))
+        } catch {
+          return { code: 400, message: '入参 Schema 不是合法的 JSON', data: null }
+        }
+      }
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      const id =
+        MOCK_EXTERNAL_TOOLS.length > 0 ? Math.max(...MOCK_EXTERNAL_TOOLS.map((t) => t.id)) + 1 : 1
+      const tool: MockToolExternalEntry = {
+        id,
+        name: String(req.name),
+        description: String(req.description ?? ''),
+        inputSchema: req.inputSchema != null ? String(req.inputSchema) : null,
+        url: String(req.url),
+        httpMethod: method,
+        timeoutSeconds: Number(req.timeoutSeconds ?? 30),
+        enabled: req.enabled !== undefined ? Boolean(req.enabled) : true,
+        remark: req.remark != null ? String(req.remark) : null,
+        createTime: now,
+        updateTime: now,
+      }
+      MOCK_EXTERNAL_TOOLS.push(tool)
+      return { code: 0, message: 'ok', data: id }
+    },
+  },
+
+  // PUT /api/agent/tool/external/:id
+  {
+    method: 'PUT',
+    pattern: '/api/agent/tool/external/:id',
+    handler: (params, _query, body) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      if (!MOCK_CURRENT_SESSION.superAdmin && !buildMockPermissions().includes('agent:tool:manage'))
+        return { code: 403, message: '无权限编辑外部工具', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_EXTERNAL_TOOLS.findIndex((t) => t.id === id)
+      if (idx === -1) return { code: 404, message: '外部工具不存在', data: null }
+      const req = (body ?? {}) as Record<string, unknown>
+      if (req.name && String(req.name) !== MOCK_EXTERNAL_TOOLS[idx].name) {
+        if (MOCK_EXTERNAL_TOOLS.some((t) => t.name === String(req.name))) {
+          return { code: 400, message: '工具名已存在', data: null }
+        }
+      }
+      if (req.url !== undefined && req.url != null && String(req.url).trim()) {
+        try {
+          const u = new URL(String(req.url))
+          if (u.protocol !== 'http:' && u.protocol !== 'https:')
+            return { code: 400, message: 'URL 必须为 http(s):// 开头', data: null }
+        } catch {
+          return { code: 400, message: 'URL 格式不正确', data: null }
+        }
+      }
+      if (req.httpMethod !== undefined) {
+        const m = String(req.httpMethod)
+        if (!['GET', 'POST', 'PUT'].includes(m))
+          return { code: 400, message: 'HTTP 方法必须为 GET/POST/PUT', data: null }
+      }
+      if (req.timeoutSeconds !== undefined) {
+        const t = Number(req.timeoutSeconds)
+        if (!Number.isFinite(t) || t < 1)
+          return { code: 400, message: '超时时间需为正整数（秒）', data: null }
+      }
+      if (
+        req.inputSchema !== undefined &&
+        req.inputSchema != null &&
+        String(req.inputSchema).trim()
+      ) {
+        try {
+          JSON.parse(String(req.inputSchema))
+        } catch {
+          return { code: 400, message: '入参 Schema 不是合法的 JSON', data: null }
+        }
+      }
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      const existing = MOCK_EXTERNAL_TOOLS[idx]
+      MOCK_EXTERNAL_TOOLS[idx] = {
+        ...existing,
+        name: req.name !== undefined ? String(req.name) : existing.name,
+        description: req.description !== undefined ? String(req.description) : existing.description,
+        inputSchema:
+          req.inputSchema !== undefined
+            ? req.inputSchema != null
+              ? String(req.inputSchema)
+              : null
+            : existing.inputSchema,
+        url: req.url !== undefined ? String(req.url) : existing.url,
+        httpMethod: req.httpMethod !== undefined ? String(req.httpMethod) : existing.httpMethod,
+        timeoutSeconds:
+          req.timeoutSeconds !== undefined ? Number(req.timeoutSeconds) : existing.timeoutSeconds,
+        enabled: req.enabled !== undefined ? Boolean(req.enabled) : existing.enabled,
+        remark:
+          req.remark !== undefined
+            ? req.remark != null
+              ? String(req.remark)
+              : null
+            : existing.remark,
+        updateTime: now,
+      }
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // DELETE /api/agent/tool/external/:id
+  {
+    method: 'DELETE',
+    pattern: '/api/agent/tool/external/:id',
+    handler: (params) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      if (!MOCK_CURRENT_SESSION.superAdmin && !buildMockPermissions().includes('agent:tool:manage'))
+        return { code: 403, message: '无权限删除外部工具', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_EXTERNAL_TOOLS.findIndex((t) => t.id === id)
+      if (idx === -1) return { code: 404, message: '外部工具不存在', data: null }
+      MOCK_EXTERNAL_TOOLS.splice(idx, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // PUT /api/agent/tool/external/:id/toggle?enabled=
+  {
+    method: 'PUT',
+    pattern: '/api/agent/tool/external/:id/toggle',
+    handler: (params, query) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      if (!MOCK_CURRENT_SESSION.superAdmin && !buildMockPermissions().includes('agent:tool:manage'))
+        return { code: 403, message: '无权限启停外部工具', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const tool = MOCK_EXTERNAL_TOOLS.find((t) => t.id === id)
+      if (!tool) return { code: 404, message: '外部工具不存在', data: null }
+      tool.enabled = query.enabled === 'true'
+      tool.updateTime = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      return { code: 0, message: 'ok', data: null }
     },
   },
 ]

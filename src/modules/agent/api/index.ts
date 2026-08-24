@@ -10,6 +10,10 @@ import type {
   AgentModelSaveReq,
   AgentModelTestConnectionResp,
   AgentToolOption,
+  AgentToolInternalConfig,
+  AgentToolInternalSaveReq,
+  AgentToolExternalConfig,
+  AgentToolExternalSaveReq,
   ProcessGraph,
   AgentGraphExecution,
   AgentGraphExecutionDetail,
@@ -189,18 +193,18 @@ export async function listModelOptions(): Promise<AgentModelConfigOption[]> {
     }))
 }
 
-/** GET /agent/tool/internal + /agent/tool/external → 工具选项（合并，value=toolName 精确值） */
+/** GET /agent/tool/internal + /agent/tool/external → 工具选项（合并，value=toolName 精确值，仅启用工具） */
 export async function listToolOptions(): Promise<AgentToolOption[]> {
   const [internalRaw, externalRaw] = await Promise.all([
     request<BackendPageResult<{ name: string; description?: string }>>({
       method: 'GET',
       url: '/agent/tool/internal',
-      params: { pageNum: 1, pageSize: 1000 },
+      params: { pageNum: 1, pageSize: 1000, enabled: true },
     }),
     request<BackendPageResult<{ name: string; description?: string }>>({
       method: 'GET',
       url: '/agent/tool/external',
-      params: { pageNum: 1, pageSize: 1000 },
+      params: { pageNum: 1, pageSize: 1000, enabled: true },
     }),
   ])
   return [
@@ -215,6 +219,136 @@ export async function listToolOptions(): Promise<AgentToolOption[]> {
       source: 'external' as const,
     })),
   ]
+}
+
+// ═══════════════════════════════════════════════════════════════
+// M07-F03-02: 工具管理 CRUD（AgentToolConfigController，权限：查询 view / 写 manage）
+// ═══════════════════════════════════════════════════════════════
+
+// ─── 内部工具 ───
+
+/** GET /agent/tool/internal?pageNum=&pageSize=&nameKeyword=&enabled= → PageResult<AgentToolInternalConfig> */
+export async function pageInternalTools(
+  page: PageQuery,
+  nameKeyword?: string,
+  enabled?: boolean | null,
+): Promise<PageResult<AgentToolInternalConfig>> {
+  const raw = await request<BackendPageResult<AgentToolInternalConfig>>({
+    method: 'GET',
+    url: '/agent/tool/internal',
+    params: {
+      ...page,
+      ...(nameKeyword && nameKeyword.trim() ? { nameKeyword: nameKeyword.trim() } : {}),
+      ...(enabled !== null && enabled !== undefined ? { enabled } : {}),
+    },
+  })
+  return adaptPage(raw)
+}
+
+/** GET /agent/tool/internal/{id} → AgentToolInternalConfig */
+export async function getInternalTool(id: number): Promise<AgentToolInternalConfig> {
+  return request<AgentToolInternalConfig>({
+    method: 'GET',
+    url: `/agent/tool/internal/${id}`,
+  })
+}
+
+/** POST /agent/tool/internal → 创建，返回新 id */
+export async function createInternalTool(req: AgentToolInternalSaveReq): Promise<number> {
+  return request<number>({
+    method: 'POST',
+    url: '/agent/tool/internal',
+    data: req,
+  })
+}
+
+/** PUT /agent/tool/internal/{id} → 编辑 */
+export async function updateInternalTool(id: number, req: AgentToolInternalSaveReq): Promise<void> {
+  return request<void>({
+    method: 'PUT',
+    url: `/agent/tool/internal/${id}`,
+    data: req,
+  })
+}
+
+/** DELETE /agent/tool/internal/{id} → 删除（逻辑删除，幂等） */
+export async function deleteInternalTool(id: number): Promise<void> {
+  return request<void>({
+    method: 'DELETE',
+    url: `/agent/tool/internal/${id}`,
+  })
+}
+
+/** PUT /agent/tool/internal/{id}/toggle?enabled= → 启用/禁用 */
+export async function toggleInternalTool(id: number, enabled: boolean): Promise<void> {
+  return request<void>({
+    method: 'PUT',
+    url: `/agent/tool/internal/${id}/toggle`,
+    params: { enabled },
+  })
+}
+
+// ─── 外部 HTTP 工具 ───
+
+/** GET /agent/tool/external?pageNum=&pageSize=&nameKeyword=&enabled= → PageResult<AgentToolExternalConfig> */
+export async function pageExternalTools(
+  page: PageQuery,
+  nameKeyword?: string,
+  enabled?: boolean | null,
+): Promise<PageResult<AgentToolExternalConfig>> {
+  const raw = await request<BackendPageResult<AgentToolExternalConfig>>({
+    method: 'GET',
+    url: '/agent/tool/external',
+    params: {
+      ...page,
+      ...(nameKeyword && nameKeyword.trim() ? { nameKeyword: nameKeyword.trim() } : {}),
+      ...(enabled !== null && enabled !== undefined ? { enabled } : {}),
+    },
+  })
+  return adaptPage(raw)
+}
+
+/** GET /agent/tool/external/{id} → AgentToolExternalConfig */
+export async function getExternalTool(id: number): Promise<AgentToolExternalConfig> {
+  return request<AgentToolExternalConfig>({
+    method: 'GET',
+    url: `/agent/tool/external/${id}`,
+  })
+}
+
+/** POST /agent/tool/external → 创建，返回新 id */
+export async function createExternalTool(req: AgentToolExternalSaveReq): Promise<number> {
+  return request<number>({
+    method: 'POST',
+    url: '/agent/tool/external',
+    data: req,
+  })
+}
+
+/** PUT /agent/tool/external/{id} → 编辑 */
+export async function updateExternalTool(id: number, req: AgentToolExternalSaveReq): Promise<void> {
+  return request<void>({
+    method: 'PUT',
+    url: `/agent/tool/external/${id}`,
+    data: req,
+  })
+}
+
+/** DELETE /agent/tool/external/{id} → 删除（逻辑删除，幂等） */
+export async function deleteExternalTool(id: number): Promise<void> {
+  return request<void>({
+    method: 'DELETE',
+    url: `/agent/tool/external/${id}`,
+  })
+}
+
+/** PUT /agent/tool/external/{id}/toggle?enabled= → 启用/禁用 */
+export async function toggleExternalTool(id: number, enabled: boolean): Promise<void> {
+  return request<void>({
+    method: 'PUT',
+    url: `/agent/tool/external/${id}/toggle`,
+    params: { enabled },
+  })
 }
 
 // ═══════════════════════════════════════════════════════════════

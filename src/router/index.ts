@@ -19,7 +19,7 @@ export function resolveDefaultRedirect(): string {
 
 // 只保留常量路由：登录、错误页、根布局。7 个业务模块的路由由 router/guard.ts
 // 在会话确立后经 loadMenu() 占位载荷动态 addRoute，不在此静态聚合（决策文档 v2 §4）。
-const routes: RouteRecordRaw[] = [
+export const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: ROOT_LAYOUT_NAME,
@@ -108,6 +108,12 @@ const routes: RouteRecordRaw[] = [
         name: 'agent-debug-session',
         component: () => import('@/modules/agent/views/DebugSessionView.vue'),
         meta: { title: '单步调试', authority: ['agent:model:view'] },
+      },
+      {
+        path: 'agent/tool',
+        name: 'agent-tool-list',
+        component: () => import('@/modules/agent/views/ToolList.vue'),
+        meta: { title: '工具管理', authority: ['agent:tool:view'] },
       },
     ],
   },

@@ -169,6 +169,77 @@ export interface AgentToolOption {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// M07-F03-02: 工具管理相关契约（对齐 AgentToolInternalConfigDTO / AgentToolExternalConfigDTO）
+// ═══════════════════════════════════════════════════════════════
+
+/** 内部工具白名单配置（对齐后端 AgentToolInternalConfigDTO）。 */
+export interface AgentToolInternalConfig {
+  id: number
+  /** 工具名（英文下划线），传给 LLM */
+  name: string
+  /** 工具描述，传给 LLM */
+  description: string
+  /** JSON Schema 字符串，描述入参结构（可为 null） */
+  inputSchema: string | null
+  /** Spring bean 名称（白名单值） */
+  beanName: string
+  /** 方法名（白名单值，约定签名 String execute(String params)） */
+  methodName: string
+  /** 启用状态 */
+  enabled: boolean
+  /** 备注 */
+  remark: string | null
+  createTime: string
+  updateTime: string
+}
+
+/** 内部工具新增/编辑请求（对齐后端 AgentToolInternalConfigDTO，共用）。 */
+export interface AgentToolInternalSaveReq {
+  name: string
+  description: string
+  inputSchema?: string | null
+  beanName: string
+  methodName: string
+  enabled?: boolean
+  remark?: string | null
+}
+
+/** 外部 HTTP 工具白名单配置（对齐后端 AgentToolExternalConfigDTO）。 */
+export interface AgentToolExternalConfig {
+  id: number
+  /** 工具名（英文下划线），传给 LLM */
+  name: string
+  /** 工具描述，传给 LLM */
+  description: string
+  /** JSON Schema 字符串，描述入参结构（可为 null） */
+  inputSchema: string | null
+  /** 白名单 URL（完整 URL，含路径） */
+  url: string
+  /** HTTP 方法：GET/POST/PUT（默认 POST） */
+  httpMethod: string
+  /** 请求超时（秒），默认 30 */
+  timeoutSeconds: number
+  /** 启用状态 */
+  enabled: boolean
+  /** 备注 */
+  remark: string | null
+  createTime: string
+  updateTime: string
+}
+
+/** 外部 HTTP 工具新增/编辑请求（对齐后端 AgentToolExternalConfigDTO，共用）。 */
+export interface AgentToolExternalSaveReq {
+  name: string
+  description: string
+  inputSchema?: string | null
+  url: string
+  httpMethod: string
+  timeoutSeconds?: number
+  enabled?: boolean
+  remark?: string | null
+}
+
+// ═══════════════════════════════════════════════════════════════
 // 图执行历史相关契约（对齐 AgentGraphExecutionDTO、AgentGraphExecutionDetailDTO、AgentGraphExecutionNodeDTO）
 // ═══════════════════════════════════════════════════════════════
 
