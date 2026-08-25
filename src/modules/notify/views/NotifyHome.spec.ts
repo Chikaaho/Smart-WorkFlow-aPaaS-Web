@@ -2,9 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
+const mockDeleteMessage = vi.fn()
+const mockElMessageBox = vi.fn()
+
 vi.mock('@/modules/notify/api', () => ({
   queryNotifyMessages: vi.fn(),
   markAsRead: vi.fn(),
+  deleteMessage: (...args: unknown[]) => mockDeleteMessage(...args),
 }))
 
 vi.mock('vue-router', () => ({
@@ -20,6 +24,9 @@ vi.mock('element-plus', async (importOriginal) => {
       success: vi.fn(),
       error: vi.fn(),
       warning: vi.fn(),
+    },
+    ElMessageBox: {
+      confirm: (...args: unknown[]) => mockElMessageBox(...args),
     },
   }
 })
@@ -40,6 +47,17 @@ const stubs = {
   'el-table': { template: '<div><slot/></div>' },
   'el-table-column': { template: '<div/>' },
   'el-button': { template: '<button><slot/></button>' },
+  'el-select': {
+    template: '<div/>',
+    props: ['modelValue'],
+    emits: ['update:modelValue', 'change'],
+  },
+  'el-option': { template: '<div/>' },
+  'el-input': {
+    template: '<div/>',
+    props: ['modelValue', 'placeholder', 'clearable'],
+    emits: ['update:modelValue', 'keyup', 'clear'],
+  },
 }
 
 const mockMessage: NotifyMessage = {
@@ -133,5 +151,59 @@ describe('NotifyHome.vue', () => {
     await nextTick()
     expect((wrapper.vm as unknown as { list: NotifyMessage[] }).list).toHaveLength(0)
     expect((wrapper.vm as unknown as { isEmpty: boolean }).isEmpty).toBe(true)
+  })
+
+  it('calls deleteMessage after confirm and removes from list', async () => {
+    vi.mocked(queryNotifyMessages).mockResolvedValueOnce([mockMessage])
+    mockDeleteMessage.mockResolvedValueOnce(undefined)
+    mockElMessageBox.mockResolvedValueOnce(undefined) // 用户确认
+
+    const wrapper = mount(NotifyHome, { global: { stubs } })
+    await nextTick()
+
+    await (
+      wrapper.vm as unknown as { handleDelete: (r: NotifyMessage) => Promise<void> }
+    ).handleDelete(mockMessage)
+    await nextTick()
+
+    expect(mockDeleteMessage).toHaveBeenCalledWith(1)
+    expect(ElMessage.success).toHaveBeenCalledWith('删除成功')
+    const list = (wrapper.vm as unknown as { list: NotifyMessage[] }).list
+    expect(list).toHaveLength(0)
+  })
+
+  it('does not delete when user cancels confirm', async () => {
+    vi.mocked(queryNotifyMessages).mockResolvedValueOnce([mockMessage])
+    mockElMessageBox.mockRejectedValueOnce(new Error('cancel')) // 用户取消
+
+    const wrapper = mount(NotifyHome, { global: { stubs } })
+    await nextTick()
+
+    await (
+      wrapper.vm as unknown as { handleDelete: (r: NotifyMessage) => Promise<void> }
+    ).handleDelete(mockMessage)
+    await nextTick()
+
+    expect(mockDeleteMessage).not.toHaveBeenCalled()
+    const list = (wrapper.vm as unknown as { list: NotifyMessage[] }).list
+    expect(list).toHaveLength(1)
+  })
+
+  it('shows error when deleteMessage fails', async () => {
+    vi.mocked(queryNotifyMessages).mockResolvedValueOnce([mockMessage])
+    mockDeleteMessage.mockRejectedValueOnce(new ApiError(2003, '删除失败'))
+    mockElMessageBox.mockResolvedValueOnce(undefined)
+
+    const wrapper = mount(NotifyHome, { global: { stubs } })
+    await nextTick()
+
+    await (
+      wrapper.vm as unknown as { handleDelete: (r: NotifyMessage) => Promise<void> }
+    ).handleDelete(mockMessage)
+    await nextTick()
+
+    expect(ElMessage.error).toHaveBeenCalledWith('删除失败')
+    const list = (wrapper.vm as unknown as { list: NotifyMessage[] }).list
+    expect(list).toHaveLength(1) // 列表未变
   })
 })

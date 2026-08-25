@@ -1028,15 +1028,28 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
-  // ── 通知消息：当前用户通知列表 ──────────────────────────
+  // ── 通知消息：当前用户通知列表（支持 read/keyword 过滤） ──
   {
     method: 'GET',
     pattern: '/api/notify/messages',
-    handler: () => ({
-      code: 0,
-      message: 'ok',
-      data: MOCK_NOTIFY_MESSAGES,
-    }),
+    handler: (_params, query) => {
+      let result = [...MOCK_NOTIFY_MESSAGES]
+      // 过滤已读状态
+      const readParam = (query as Record<string, string>)?.read
+      if (readParam !== undefined && readParam !== '') {
+        const readFilter = readParam === 'true'
+        result = result.filter((m) => m.read === readFilter)
+      }
+      // 过滤关键词（匹配标题或内容）
+      const keyword = (query as Record<string, string>)?.keyword
+      if (keyword) {
+        const kw = keyword.toLowerCase()
+        result = result.filter(
+          (m) => m.title.toLowerCase().includes(kw) || m.content.toLowerCase().includes(kw),
+        )
+      }
+      return { code: 0, message: 'ok', data: result }
+    },
   },
 
   // ── 通知消息：标记已读 ──────────────────────────────────
@@ -1049,6 +1062,20 @@ export const mockRegistrations: MockRegistration[] = [
       )
       if (msg) {
         msg.read = true
+      }
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // ── 通知消息：删除通知 ──────────────────────────────────
+  {
+    method: 'DELETE',
+    pattern: '/api/notify/messages/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_NOTIFY_MESSAGES.findIndex((m) => m.id === id)
+      if (idx !== -1) {
+        MOCK_NOTIFY_MESSAGES.splice(idx, 1)
       }
       return { code: 0, message: 'ok', data: null }
     },

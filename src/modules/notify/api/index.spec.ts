@@ -16,7 +16,7 @@ describe('modules/notify/api', () => {
     vi.restoreAllMocks()
   })
 
-  it('queryNotifyMessages sends GET /notify/messages', async () => {
+  it('queryNotifyMessages sends GET /notify/messages without params', async () => {
     const messages = [
       {
         id: 1,
@@ -35,8 +35,38 @@ describe('modules/notify/api', () => {
     ]
     mockRequest.mockResolvedValueOnce(messages)
     const result = await notifyApi.queryNotifyMessages()
-    expect(mockRequest).toHaveBeenCalledWith({ method: 'GET', url: '/notify/messages' })
+    expect(mockRequest).toHaveBeenCalledWith({ method: 'GET', url: '/notify/messages', params: {} })
     expect(result).toEqual(messages)
+  })
+
+  it('queryNotifyMessages sends read=false filter', async () => {
+    mockRequest.mockResolvedValueOnce([])
+    await notifyApi.queryNotifyMessages({ read: false })
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/notify/messages',
+      params: { read: 'false' },
+    })
+  })
+
+  it('queryNotifyMessages sends keyword filter', async () => {
+    mockRequest.mockResolvedValueOnce([])
+    await notifyApi.queryNotifyMessages({ keyword: '审批' })
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/notify/messages',
+      params: { keyword: '审批' },
+    })
+  })
+
+  it('queryNotifyMessages sends combined filters', async () => {
+    mockRequest.mockResolvedValueOnce([])
+    await notifyApi.queryNotifyMessages({ read: true, keyword: '请假' })
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/notify/messages',
+      params: { read: 'true', keyword: '请假' },
+    })
   })
 
   it('markAsRead sends POST /notify/messages/:id/read', async () => {
@@ -45,6 +75,15 @@ describe('modules/notify/api', () => {
     expect(mockRequest).toHaveBeenCalledWith({
       method: 'POST',
       url: '/notify/messages/5/read',
+    })
+  })
+
+  it('deleteMessage sends DELETE /notify/messages/:id', async () => {
+    mockRequest.mockResolvedValueOnce(undefined)
+    await notifyApi.deleteMessage(3)
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'DELETE',
+      url: '/notify/messages/3',
     })
   })
 })

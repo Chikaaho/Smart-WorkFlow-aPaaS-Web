@@ -2,13 +2,14 @@
 /**
  * NotifyHome — 通知消息列表页（页型 B）。
  *
- * 展示当前用户的通知消息，支持标记已读操作。
+ * 展示当前用户的通知消息，支持标记已读、删除和查询过滤。
  * 后端返回平铺数组（不分页），前端直接渲染。
  */
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { StandardListTemplate } from '@/components/page-layout'
-import { queryNotifyMessages, markAsRead } from '@/modules/notify/api'
+import { queryNotifyMessages, markAsRead, deleteMessage } from '@/modules/notify/api'
+import type { NotifyQueryParams } from '@/modules/notify/api'
 import { ApiError } from '@/foundation/request'
 import type { NotifyMessage } from '@/contracts/notify'
 
@@ -19,12 +20,18 @@ const total = ref(0)
 const loading = ref(false)
 const errorMsg = ref('')
 const readingId = ref<number | null>(null) // 当前正在标记已读的 ID（loading 态）
+const deletingId = ref<number | null>(null) // 当前正在删除的 ID（loading 态）
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
 
 // 后端返回平铺数组（不分页），传 pageSize=9999 使分页组件只显示「共 N 条」
 const pageNum = ref(1)
 const pageSize = ref(9999)
+
+// ─── 查询过滤 ───
+
+const filterRead = ref<boolean | ''>('') // '' = 全部，true = 已读，false = 未读
+const filterKeyword = ref('')
 
 /** bizType → { label, type } 映射 */
 const BIZ_TYPE_MAP: Record<
@@ -46,7 +53,14 @@ async function loadList() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const messages = await queryNotifyMessages()
+    const params: NotifyQueryParams = {}
+    if (filterRead.value !== '') {
+      params.read = filterRead.value as boolean
+    }
+    if (filterKeyword.value.trim()) {
+      params.keyword = filterKeyword.value.trim()
+    }
+    const messages = await queryNotifyMessages(Object.keys(params).length > 0 ? params : undefined)
     list.value = messages
     total.value = messages.length
   } catch (err) {
@@ -60,6 +74,14 @@ async function loadList() {
   } finally {
     loading.value = false
   }
+}
+
+function handleFilterChange() {
+  void loadList()
+}
+
+function handleKeywordSearch() {
+  void loadList()
 }
 
 function markRow(r: unknown) {
@@ -82,6 +104,40 @@ async function handleMarkRead(row: NotifyMessage) {
     }
   } finally {
     readingId.value = null
+  }
+}
+
+function deleteRow(r: unknown) {
+  void handleDelete(r as NotifyMessage)
+}
+
+async function handleDelete(row: NotifyMessage) {
+  if (deletingId.value !== null) return // 防重复点击
+
+  try {
+    await ElMessageBox.confirm('确定要删除该通知吗？删除后不可恢复。', '删除确认', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return // 用户取消
+  }
+
+  deletingId.value = row.id
+  try {
+    await deleteMessage(row.id)
+    list.value = list.value.filter((item) => item.id !== row.id)
+    total.value = list.value.length
+    ElMessage.success('删除成功')
+  } catch (err) {
+    if (err instanceof ApiError) {
+      ElMessage.error(err.msg)
+    } else {
+      ElMessage.error('删除失败')
+    }
+  } finally {
+    deletingId.value = null
   }
 }
 
@@ -111,6 +167,29 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
 
+    <!-- 过滤栏 -->
+    <div class="filter-bar">
+      <el-select
+        v-model="filterRead"
+        placeholder="已读状态"
+        clearable
+        style="width: 140px"
+        @change="handleFilterChange"
+      >
+        <el-option label="全部" value="" />
+        <el-option label="未读" :value="false" />
+        <el-option label="已读" :value="true" />
+      </el-select>
+      <el-input
+        v-model="filterKeyword"
+        placeholder="搜索标题或内容"
+        clearable
+        style="width: 220px; margin-left: 12px"
+        @keyup.enter="handleKeywordSearch"
+        @clear="handleKeywordSearch"
+      />
+    </div>
+
     <!-- 表格 -->
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
       <el-table-column label="" width="40">
@@ -132,7 +211,7 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column prop="createTime" label="时间" width="180" />
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="!row.read"
@@ -140,12 +219,22 @@ onMounted(loadList)
             text
             type="primary"
             :loading="readingId === row.id"
-            :disabled="readingId !== null"
+            :disabled="readingId !== null || deletingId !== null"
             @click="markRow(row)"
           >
             标记已读
           </el-button>
           <span v-else class="read-label">已读</span>
+          <el-button
+            size="small"
+            text
+            type="danger"
+            :loading="deletingId === row.id"
+            :disabled="readingId !== null || deletingId !== null"
+            @click="deleteRow(row)"
+          >
+            删除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -171,6 +260,11 @@ onMounted(loadList)
 .read-label {
   color: #c0c4cc;
   font-size: 14px;
+}
+.filter-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
 }
 :deep(.list-pagination) {
   display: none;
