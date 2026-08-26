@@ -4,7 +4,7 @@ export interface NotifyMessage {
   recipientId: number
   title: string
   content: string
-  bizType: 'WF_TODO' | 'WF_APPROVED'
+  bizType: 'WF_TODO' | 'WF_APPROVED' | 'SYSTEM'
   bizId: string | null
   read: boolean
   createTime: string
@@ -12,4 +12,40 @@ export interface NotifyMessage {
   createBy: number | null
   updateBy: number | null
   tenantId: number
+}
+
+// ─── 消息模板 DTO（对齐后端 NotifyTemplate，P36/M05-F02-01） ───
+export interface NotifyTemplate {
+  id: number
+  templateCode: string
+  name: string
+  titleTemplate: string
+  contentTemplate: string
+  enabled: boolean
+  remark: string | null
+  createTime?: string
+  updateTime?: string
+}
+
+/** 新建/编辑请求（编辑时 templateCode 不可变更） */
+export interface NotifyTemplateSaveReq {
+  templateCode: string
+  name: string
+  titleTemplate: string
+  contentTemplate: string
+  enabled: boolean
+  remark?: string
+}
+
+/** 预览请求：模板内容 + 变量值 */
+export interface TemplatePreviewReq {
+  titleTemplate: string
+  contentTemplate: string
+  variables: Record<string, string>
+}
+
+/** 预览结果：渲染后标题与正文 */
+export interface TemplatePreviewResult {
+  title: string
+  content: string
 }

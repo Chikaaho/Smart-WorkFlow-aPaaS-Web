@@ -70,6 +70,8 @@ export const MOCK_SESSION_DATA: MockSessionData = {
     'form:form:view',
     'workflow:view',
     'notify:view',
+    'notify:template:view',
+    'notify:template:manage',
     'system:user:list',
     'system:role:list',
     'system:dept:list',
@@ -417,16 +419,61 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
     ],
   },
   {
+    // 「通知」已按 V38 生产形态矫正为目录（menu_type=0, component=NULL），
+    // 二级菜单：收件箱（原 NotifyHome）+ 消息模板（P36/M05-F02-01，对齐 V26/V37 目录形态）。
     id: '4',
     parentId: null,
     name: 'notify',
     title: '通知',
     path: 'notify',
-    component: 'notify/views/NotifyHome',
+    component: null,
     icon: 'Bell',
     sort: 4,
-    menuType: 1,
+    menuType: 0,
     permission: 'notify:view',
+    hidden: false,
+    children: [
+      {
+        id: '41',
+        parentId: '4',
+        name: 'NotifyInbox',
+        title: '收件箱',
+        path: 'notify/inbox',
+        component: 'notify/views/NotifyHome',
+        icon: 'Bell',
+        sort: 10,
+        menuType: 1,
+        permission: 'notify:view',
+        hidden: false,
+      },
+      {
+        id: '42',
+        parentId: '4',
+        name: 'NotifyTemplateList',
+        title: '消息模板',
+        path: 'notify/template',
+        component: 'notify/views/NotifyTemplateList',
+        icon: 'Tickets',
+        sort: 20,
+        menuType: 1,
+        permission: 'notify:template:view',
+        hidden: false,
+        children: [
+          {
+            id: '420',
+            parentId: '42',
+            name: 'NotifyTemplateManage',
+            title: '模板管理',
+            path: '',
+            component: null,
+            sort: 1,
+            menuType: 2,
+            permission: 'notify:template:manage',
+            hidden: true,
+          },
+        ],
+      },
+    ],
   },
   {
     // 「智能体」已按 V26 生产形态矫正为目录（menu_type=0, component=NULL），
@@ -1086,7 +1133,7 @@ export const MOCK_NOTIFY_MESSAGES: Array<{
   recipientId: number
   title: string
   content: string
-  bizType: 'WF_TODO' | 'WF_APPROVED'
+  bizType: 'WF_TODO' | 'WF_APPROVED' | 'SYSTEM'
   bizId: string | null
   read: boolean
   createTime: string
@@ -1206,6 +1253,54 @@ export const MOCK_NOTIFY_MESSAGES: Array<{
     updateTime: '2026-07-10T08:30:00',
     updateBy: null,
     tenantId: 1,
+  },
+]
+
+// ─── 消息模板 Mock 种子（P36 / M05-F02-01，可变数组，handler 原地 mutate） ──
+// 语义与真实接口一致：templateCode 租户内唯一、${var} 占位符、enabled 启停。
+export const MOCK_NOTIFY_TEMPLATES: Array<{
+  id: number
+  templateCode: string
+  name: string
+  titleTemplate: string
+  contentTemplate: string
+  enabled: boolean
+  remark: string | null
+  createTime: string
+  updateTime: string
+}> = [
+  {
+    id: 1,
+    templateCode: 'WF_TODO_NOTICE',
+    name: '待办提醒模板',
+    titleTemplate: '${userName} 的待办提醒',
+    contentTemplate: '您好 ${userName}，您有一条新的待办任务「${taskName}」需要处理。',
+    enabled: true,
+    remark: '流程待办通用通知',
+    createTime: '2026-08-25T10:00:00',
+    updateTime: '2026-08-25T10:00:00',
+  },
+  {
+    id: 2,
+    templateCode: 'WF_APPROVED_NOTICE',
+    name: '审批通过模板',
+    titleTemplate: '您的申请已通过',
+    contentTemplate: '您好 ${userName}，您于 ${submitTime} 提交的申请已审批通过。',
+    enabled: true,
+    remark: null,
+    createTime: '2026-08-25T10:05:00',
+    updateTime: '2026-08-25T10:05:00',
+  },
+  {
+    id: 3,
+    templateCode: 'DISABLED_SAMPLE',
+    name: '停用示例模板',
+    titleTemplate: '示例 ${n}',
+    contentTemplate: '该模板处于停用状态，编号 ${n}。',
+    enabled: false,
+    remark: '演示停用态不可预览/发送',
+    createTime: '2026-08-25T10:10:00',
+    updateTime: '2026-08-25T10:10:00',
   },
 ]
 

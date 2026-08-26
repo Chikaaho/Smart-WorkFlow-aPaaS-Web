@@ -107,7 +107,7 @@ describe('K1-v2 生产菜单 → router.push → authGuard → ToolList 挂载�
   )
 
   it(
-    'user（撤权普通用户）：菜单无工具项；直达 /agent/tool 仍渲染工具页',
+    'user（撤权普通用户）：菜单无工具项；直达 /agent/tool 被守卫拒绝到 /403',
     async () => {
       switchMockSession('user')
       expect(MOCK_CURRENT_SESSION.user.username).toBe('user')
@@ -119,19 +119,19 @@ describe('K1-v2 生产菜单 → router.push → authGuard → ToolList 挂载�
       const flat = flattenMenu(menu as never)
       expect(flat.some((n) => n.path === 'agent/tool')).toBe(false)
 
-      // 2. 直达路由：mock 语义下渲染工具页（真实 403 拒绝由后端集成测试承载）
+      // 2. 直达路由：P36 R1 守卫按 meta.authority 拒绝 → /403（服务端 403 另由后端集成测试承载）
       const { router, wrapper } = setupRouterAndMount()
       await router.push(ROUTE_TOOL)
       await router.isReady()
       await flushPromises()
       await new Promise((r) => setTimeout(r, 100))
-      expect(router.currentRoute.value.path).toBe(ROUTE_TOOL)
+      expect(router.currentRoute.value.path).toBe('/403')
       wrapper.unmount()
 
       console.log('\n=== K1-v2 身份2: user 撤权链（mock 语义） ===')
       console.log('身份: user（普通用户，无任何权限）')
       console.log('菜单: 无 agent/tool 项')
-      console.log('直达路由 /agent/tool: 渲染工具页（真实 403 由后端集成测试证明）')
+      console.log('直达路由 /agent/tool: 守卫拒绝 → /403（服务端 403 由后端集成测试证明）')
       console.log('=== 验证通过 ===\n')
     },
     TEST_TIMEOUT,

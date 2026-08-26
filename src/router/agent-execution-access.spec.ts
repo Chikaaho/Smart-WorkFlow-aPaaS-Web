@@ -118,7 +118,10 @@ describe('authGuard navigation behavior on execution routes', () => {
     vi.mocked(router.addRoute).mockClear()
 
     // Default mocks: loadSession/loadMenu succeed, buildRoutesFromMenu returns a stub child route
-    vi.mocked(loadSession).mockResolvedValue(placeholderSession)
+    vi.mocked(loadSession).mockResolvedValue({
+      ...placeholderSession,
+      permissions: new Set(['agent:model:view']),
+    })
     vi.mocked(loadMenu).mockResolvedValue([])
     vi.mocked(buildRoutesFromMenu).mockReturnValue([
       { path: 'agent/executions/list', name: 'agent-execution-list', component: Placeholder },
@@ -167,6 +170,7 @@ describe('authGuard navigation behavior on execution routes', () => {
     )
 
     expect(next).toHaveBeenCalledTimes(1)
+    // detail 路由无 authority 声明，守卫按 next() 放行
     expect(next).toHaveBeenCalledWith()
     expect(router.addRoute).not.toHaveBeenCalled()
   })
@@ -433,6 +437,12 @@ describe('D169 标准6：真实 router 导航到页（有权直达/刷新，组�
               component: ConversationDetail,
               meta: { title: '会话消息', authority: ['agent:model:view'] },
             },
+            {
+              path: '403',
+              name: 'forbidden',
+              component: { template: '<div />' },
+              meta: { public: true, errorCode: 403, title: '无权限访问' },
+            },
           ],
         },
       ],
@@ -447,6 +457,12 @@ describe('D169 标准6：真实 router 导航到页（有权直达/刷新，组�
     vi.mocked(getAccessToken).mockReset()
     vi.mocked(refresh).mockReset()
     vi.mocked(logout).mockReset().mockResolvedValue(undefined)
+    // 重置守卫模块级状态（dynamicRoutesBuilt 等）：同文件前一 describe 结束时可能残留
+    // 已构建态，导致本组首访跳过 buildDynamicRoutes、user store 无会话数据。
+    clearDynamicRoutes({
+      removeRoute: vi.fn(),
+      hasRoute: () => false,
+    } as unknown as Router)
     // 有权身份：session 权限含 agent:model:view（meta.authority 对应）
     vi.mocked(loadSession)
       .mockReset()

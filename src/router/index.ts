@@ -115,6 +115,14 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/modules/agent/views/ToolList.vue'),
         meta: { title: '工具管理', authority: ['agent:tool:view'] },
       },
+      {
+        // 消息模板管理页（P36/M05-F02-01）：菜单树经 V38 seed（notify/templates），
+        // 静态路由保证直达 URL 可进，authority 对齐 notify:template:view。
+        path: 'notify/template',
+        name: 'notify-template-list',
+        component: () => import('@/modules/notify/views/NotifyTemplateList.vue'),
+        meta: { title: '消息模板', authority: ['notify:template:view'] },
+      },
     ],
   },
   {

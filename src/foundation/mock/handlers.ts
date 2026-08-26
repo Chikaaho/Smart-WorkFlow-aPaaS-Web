@@ -54,6 +54,7 @@ import {
   MOCK_PROCESSED_TASKS,
   MOCK_PROCESS_DEFS,
   MOCK_NOTIFY_MESSAGES,
+  MOCK_NOTIFY_TEMPLATES,
   MOCK_USERS_LIST,
   MOCK_ROLES_LIST,
   MOCK_DEPTS_LIST,
@@ -89,6 +90,45 @@ function findModel(id: number): AgentModelConfig | undefined {
 /** 取 MOCK_AGENT_MODELS 中已出现的最大 id，用于创建时分配新 id。 */
 function nextModelId(): number {
   return MOCK_AGENT_MODELS.reduce((max, m) => Math.max(max, m.id), 0) + 1
+}
+
+// ─── 消息模板渲染辅助（P36：与后端 TemplateRenderService 同语义） ──
+
+/** 合法变量名：字母或下划线开头，仅字母/数字/下划线 */
+const MOCK_TEMPLATE_VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
+const MOCK_TEMPLATE_PLACEHOLDER = /\$\{([^}]*)\}/g
+
+/**
+ * ${var} 简单替换；变量值按字面文本处理。
+ * 缺失变量抛 Error('缺少变量: ...')——与后端 PARAM_ERROR 消息一致。
+ */
+function renderMockTemplate(template: string, variables: Record<string, string>): string {
+  if (!template.includes('${')) return template
+  const missing: string[] = []
+  const result = template.replace(MOCK_TEMPLATE_PLACEHOLDER, (raw, name: string) => {
+    if (!name || !MOCK_TEMPLATE_VAR.test(name)) {
+      throw new Error(`非法占位符: \${${name}}`)
+    }
+    const value = variables?.[name]
+    if (value === undefined || value === null) {
+      missing.push(name)
+      return raw
+    }
+    return value
+  })
+  if (missing.length > 0) {
+    throw new Error(`缺少变量: ${missing.join(', ')}`)
+  }
+  return result
+}
+
+/** 提取第一个非法占位符的变量名（合法返回 null），用于新建/编辑校验。 */
+function extractInvalidPlaceholder(template: string): string | null {
+  for (const match of template.matchAll(MOCK_TEMPLATE_PLACEHOLDER)) {
+    const name = match[1]
+    if (!name || !MOCK_TEMPLATE_VAR.test(name)) return name
+  }
+  return null
 }
 
 // ─── 会话/菜单过滤辅助（对齐真实后端 SysMenuServiceImpl 语义） ──
@@ -1078,6 +1118,245 @@ export const mockRegistrations: MockRegistration[] = [
         MOCK_NOTIFY_MESSAGES.splice(idx, 1)
       }
       return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // ══ 消息模板（P36 / M05-F02-01）═════════════════════════
+  // 渲染语义与真实后端一致：仅 ${var} 简单替换；缺变量/非法占位符/停用
+  // 返回与后端相同的错误语义（code=400/404 + 明确消息），不静默降级。
+
+  // ── 分页列表（keyword 匹配代码/名称，enabled 过滤） ──
+  {
+    method: 'GET',
+    pattern: '/api/notify/templates',
+    handler: (_params, query) => {
+      const q = query as Record<string, string>
+      const pageNum = Number(q.pageNum ?? 1)
+      const pageSize = Number(q.pageSize ?? 10)
+      let result = [...MOCK_NOTIFY_TEMPLATES]
+      const keyword = q.keyword
+      if (keyword) {
+        const kw = keyword.toLowerCase()
+        result = result.filter(
+          (t) => t.templateCode.toLowerCase().includes(kw) || t.name.toLowerCase().includes(kw),
+        )
+      }
+      if (q.enabled !== undefined && q.enabled !== '') {
+        const enabledFilter = q.enabled === 'true'
+        result = result.filter((t) => t.enabled === enabledFilter)
+      }
+      result.sort((a, b) => b.id - a.id)
+      const total = result.length
+      const start = (pageNum - 1) * pageSize
+      return {
+        code: 0,
+        message: 'ok',
+        data: { records: result.slice(start, start + pageSize), total, pageNum, pageSize },
+      }
+    },
+  },
+
+  // ── 详情 ──
+  {
+    method: 'GET',
+    pattern: '/api/notify/templates/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const t = MOCK_NOTIFY_TEMPLATES.find((x) => x.id === id)
+      if (!t) return { code: 404, message: '消息模板不存在', data: null }
+      return { code: 0, message: 'ok', data: t }
+    },
+  },
+
+  // ── 新建（代码唯一校验 + 占位符合法性，与后端同规则） ──
+  {
+    method: 'POST',
+    pattern: '/api/notify/templates',
+    handler: (_params, _query, body) => {
+      const b = (body ?? {}) as Record<string, unknown>
+      const code = String(b.templateCode ?? '')
+      const name = String(b.name ?? '')
+      const titleTemplate = String(b.titleTemplate ?? '')
+      const contentTemplate = String(b.contentTemplate ?? '')
+      if (!code || !name || !titleTemplate || !contentTemplate) {
+        return { code: 400, message: '模板代码/名称/标题模板/正文模板不能为空', data: null }
+      }
+      if (!/^[A-Za-z][A-Za-z0-9_]{1,98}$/.test(code)) {
+        return {
+          code: 400,
+          message: '模板代码须为字母开头、仅字母/数字/下划线、长度2-99',
+          data: null,
+        }
+      }
+      for (const tpl of [titleTemplate, contentTemplate]) {
+        const bad = extractInvalidPlaceholder(tpl)
+        if (bad) return { code: 400, message: `非法占位符: \${${bad}}`, data: null }
+      }
+      if (MOCK_NOTIFY_TEMPLATES.some((t) => t.templateCode === code)) {
+        return { code: 400, message: `模板代码已存在: ${code}`, data: null }
+      }
+      const now = new Date().toISOString()
+      const nextId = Math.max(...MOCK_NOTIFY_TEMPLATES.map((t) => t.id)) + 1
+      MOCK_NOTIFY_TEMPLATES.push({
+        id: nextId,
+        templateCode: code,
+        name,
+        titleTemplate,
+        contentTemplate,
+        enabled: b.enabled !== false,
+        remark: typeof b.remark === 'string' ? b.remark : null,
+        createTime: now,
+        updateTime: now,
+      })
+      return { code: 0, message: 'ok', data: nextId }
+    },
+  },
+
+  // ── 编辑（templateCode 不可变更） ──
+  {
+    method: 'PUT',
+    pattern: '/api/notify/templates/:id',
+    handler: (params, _query, body) => {
+      const id = Number((params as Record<string, string>).id)
+      const t = MOCK_NOTIFY_TEMPLATES.find((x) => x.id === id)
+      if (!t) return { code: 404, message: '消息模板不存在', data: null }
+      const b = (body ?? {}) as Record<string, unknown>
+      const code = String(b.templateCode ?? t.templateCode)
+      if (code !== t.templateCode) {
+        return { code: 400, message: `模板代码不可变更: ${t.templateCode}`, data: null }
+      }
+      const name = String(b.name ?? '')
+      const titleTemplate = String(b.titleTemplate ?? '')
+      const contentTemplate = String(b.contentTemplate ?? '')
+      if (!name || !titleTemplate || !contentTemplate) {
+        return { code: 400, message: '名称/标题模板/正文模板不能为空', data: null }
+      }
+      for (const tpl of [titleTemplate, contentTemplate]) {
+        const bad = extractInvalidPlaceholder(tpl)
+        if (bad) return { code: 400, message: `非法占位符: \${${bad}}`, data: null }
+      }
+      t.name = name
+      t.titleTemplate = titleTemplate
+      t.contentTemplate = contentTemplate
+      t.enabled =
+        b.enabled !== false && b.enabled !== undefined ? Boolean(b.enabled) : Boolean(b.enabled)
+      if (typeof b.remark === 'string') t.remark = b.remark
+      t.updateTime = new Date().toISOString()
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // ── 删除（幂等） ──
+  {
+    method: 'DELETE',
+    pattern: '/api/notify/templates/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_NOTIFY_TEMPLATES.findIndex((t) => t.id === id)
+      if (idx !== -1) MOCK_NOTIFY_TEMPLATES.splice(idx, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // ── 启停 ──
+  {
+    method: 'PUT',
+    pattern: '/api/notify/templates/:id/toggle',
+    handler: (params, query) => {
+      const id = Number((params as Record<string, string>).id)
+      const t = MOCK_NOTIFY_TEMPLATES.find((x) => x.id === id)
+      if (!t) return { code: 404, message: '消息模板不存在', data: null }
+      const enabled = (query as Record<string, string>).enabled === 'true'
+      t.enabled = enabled
+      t.updateTime = new Date().toISOString()
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // ── 预览（与发送同一渲染函数：renderMockTemplate） ──
+  {
+    method: 'POST',
+    pattern: '/api/notify/templates/preview',
+    handler: (_params, _query, body) => {
+      const b = (body ?? {}) as Record<string, unknown>
+      const titleTemplate = String(b.titleTemplate ?? '')
+      const contentTemplate = String(b.contentTemplate ?? '')
+      if (!titleTemplate.trim() || !contentTemplate.trim()) {
+        return { code: 400, message: '标题/正文模板不能为空', data: null }
+      }
+      const variables = (b.variables ?? {}) as Record<string, string>
+      try {
+        const title = renderMockTemplate(titleTemplate, variables)
+        const content = renderMockTemplate(contentTemplate, variables)
+        return { code: 0, message: 'ok', data: { title, content } }
+      } catch (e) {
+        return { code: 400, message: e instanceof Error ? e.message : '渲染失败', data: null }
+      }
+    },
+  },
+
+  // ── 按模板代码预览（先 requireEnabledByCode 可用性检查再渲染，方向 §8 标准 2） ──
+  // 停用/删除/不存在 → 404「模板不存在或未启用」，与发送链路同源；
+  // 纯内容预览场景仍走 POST /preview（编辑页草稿渲染，不做可用性检查）
+  {
+    method: 'POST',
+    pattern: '/api/notify/templates/:code/preview',
+    handler: (params, _query, body) => {
+      const code = String((params as Record<string, string>).code ?? '')
+      const t = MOCK_NOTIFY_TEMPLATES.find((x) => x.templateCode === code)
+      if (!t || !t.enabled) {
+        return { code: 404, message: `模板不存在或未启用: ${code}`, data: null }
+      }
+      const b = (body ?? {}) as Record<string, unknown>
+      const variables = (b.variables ?? {}) as Record<string, string>
+      try {
+        const title = renderMockTemplate(t.titleTemplate, variables)
+        const content = renderMockTemplate(t.contentTemplate, variables)
+        return { code: 0, message: 'ok', data: { title, content } }
+      } catch (e) {
+        return { code: 400, message: e instanceof Error ? e.message : '渲染失败', data: null }
+      }
+    },
+  },
+
+  // ── 发送（落库进收件箱；失败原子性：先渲染成功才 push） ──
+  {
+    method: 'POST',
+    pattern: '/api/notify/templates/send',
+    handler: (_params, _query, body) => {
+      const b = (body ?? {}) as Record<string, unknown>
+      const templateCode = String(b.templateCode ?? '')
+      const recipientId = Number(b.recipientId)
+      if (!recipientId) return { code: 400, message: '接收人不能为空', data: null }
+      const t = MOCK_NOTIFY_TEMPLATES.find((x) => x.templateCode === templateCode)
+      if (!t || !t.enabled) {
+        return { code: 404, message: `模板不存在或未启用: ${templateCode}`, data: null }
+      }
+      const variables = (b.variables ?? {}) as Record<string, string>
+      let title: string
+      let content: string
+      try {
+        title = renderMockTemplate(t.titleTemplate, variables)
+        content = renderMockTemplate(t.contentTemplate, variables)
+      } catch (e) {
+        return { code: 400, message: e instanceof Error ? e.message : '渲染失败', data: null }
+      }
+      // 落库（渲染结果即最终内容）
+      MOCK_NOTIFY_MESSAGES.push({
+        id: Date.now(),
+        recipientId,
+        title,
+        content,
+        bizType: 'SYSTEM',
+        bizId: t.templateCode,
+        read: false,
+        createTime: new Date().toISOString(),
+        createBy: null,
+        updateTime: new Date().toISOString(),
+        updateBy: null,
+        tenantId: 1,
+      })
+      return { code: 0, message: 'ok', data: Date.now() }
     },
   },
 
