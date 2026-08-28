@@ -82,6 +82,29 @@ export async function queryProcessedTasks(page: PageQuery): Promise<PageResult<P
 // 流程定义
 // ═══════════════════════════════════════
 
+/** 创建流程定义请求 */
+export interface CreateProcessDefRequest {
+  name: string
+  formKey: string
+}
+
+/** 创建流程定义响应 */
+export interface CreateProcessDefResponse {
+  defId: number
+  graph: unknown // ProcessGraph
+}
+
+/** POST /workflow/defs → CreateProcessDefResponse */
+export async function createProcessDef(
+  data: CreateProcessDefRequest,
+): Promise<CreateProcessDefResponse> {
+  return request<CreateProcessDefResponse>({
+    method: 'POST',
+    url: '/workflow/defs',
+    data,
+  })
+}
+
 /** GET /workflow/defs → PageResult<ProcessDef> */
 export async function pageProcessDefs(page: PageQuery): Promise<PageResult<ProcessDef>> {
   const raw = await request<BackendPageResult<ProcessDef>>({
@@ -101,6 +124,31 @@ export async function getProcessDefGraph(id: number): Promise<string> {
   return request<string>({
     method: 'GET',
     url: `/workflow/defs/${id}/bpmn-xml`,
+  })
+}
+
+/** DELETE /workflow/defs/{id} → void */
+export async function deleteProcessDef(id: number): Promise<void> {
+  return request<void>({
+    method: 'DELETE',
+    url: `/workflow/defs/${id}`,
+  })
+}
+
+/** POST /workflow/defs/{id}/publish → ProcessDef */
+export async function publishProcessDef(id: number): Promise<ProcessDef> {
+  return request<ProcessDef>({
+    method: 'POST',
+    url: `/workflow/defs/${id}/publish`,
+  })
+}
+
+/** PUT /workflow/defs/{id}/graph → void */
+export async function saveProcessDefGraph(id: number, graph: unknown): Promise<void> {
+  return request<void>({
+    method: 'PUT',
+    url: `/workflow/defs/${id}/graph`,
+    data: graph,
   })
 }
 

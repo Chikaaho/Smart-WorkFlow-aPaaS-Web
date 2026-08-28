@@ -113,6 +113,23 @@ function formatVariables(vars: Record<string, unknown>): [string, string][] {
   return Object.entries(vars).map(([k, v]) => [k, String(v)])
 }
 
+// ─── 审批结果映射 ───
+const APPROVAL_RESULT_MAP: Record<string, { label: string; type: 'success' | 'danger' | 'info' }> =
+  {
+    APPROVED: { label: '通过', type: 'success' },
+    REJECTED: { label: '驳回', type: 'danger' },
+  }
+
+function getApprovalResultLabel(result: string | null): string {
+  if (!result) return '进行中'
+  return APPROVAL_RESULT_MAP[result]?.label ?? result
+}
+
+function getApprovalResultType(result: string | null): 'success' | 'danger' | 'info' {
+  if (!result) return 'info'
+  return APPROVAL_RESULT_MAP[result]?.type ?? 'info'
+}
+
 onMounted(loadDetail)
 </script>
 
@@ -183,6 +200,13 @@ onMounted(loadDetail)
         </el-table-column>
         <el-table-column prop="taskName" label="任务名称" min-width="120" />
         <el-table-column prop="assignee" label="审批人" min-width="100" />
+        <el-table-column label="审批结果" min-width="100">
+          <template #default="{ row }">
+            <el-tag :type="getApprovalResultType(row.approvalResult)" size="small">
+              {{ getApprovalResultLabel(row.approvalResult) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="createTime" label="创建时间" min-width="170" />
         <el-table-column label="完成时间" min-width="170">
           <template #default="{ row }">

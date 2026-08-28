@@ -72,6 +72,7 @@ export const MOCK_SESSION_DATA: MockSessionData = {
     'notify:view',
     'notify:template:view',
     'notify:template:manage',
+    'notify:batch:send',
     'system:user:list',
     'system:role:list',
     'system:dept:list',
@@ -142,6 +143,21 @@ export const MOCK_SESSION_DATA_USER: MockSessionData = {
   superAdmin: false,
 }
 
+/** 未认证身份：批量发送 handler 必须返回 401，不能落入权限判断后的 403。 */
+export const MOCK_SESSION_DATA_UNAUTHENTICATED: MockSessionData = {
+  user: {
+    id: '',
+    username: '',
+    displayName: '',
+    deptId: '',
+    tenantId: '',
+    avatar: null,
+  },
+  permissions: [],
+  roles: [],
+  superAdmin: false,
+}
+
 /**
  * 当前 mock 会话（可变状态，handlers.ts 原地替换）。
  * 与 MOCK_ROLE_MENU_BINDINGS 同模式：种子声明 + handler/测试原地 mutate。
@@ -153,7 +169,9 @@ export let MOCK_CURRENT_SESSION: MockSessionData = MOCK_SESSION_DATA
 
 /** 切换当前 mock 会话（按登录用户名选择会话快照）。 */
 export function switchMockSession(username: string): void {
-  if (username === 'admin') {
+  if (username === 'unauthenticated') {
+    MOCK_CURRENT_SESSION = MOCK_SESSION_DATA_UNAUTHENTICATED
+  } else if (username === 'admin') {
     MOCK_CURRENT_SESSION = MOCK_SESSION_DATA_ADMIN
     // admin 权限实时按角色绑定重算（bindings 可能被测试/菜单管理 mutate，
     // 固定快照会导致权限与菜单脱节——对齐真实后端每次认证实时装配）。
@@ -469,6 +487,33 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
             sort: 1,
             menuType: 2,
             permission: 'notify:template:manage',
+            hidden: true,
+          },
+        ],
+      },
+      {
+        id: '43',
+        parentId: '4',
+        name: 'NotifyBatchSend',
+        title: '发送通知',
+        path: 'notify/batch-send',
+        component: 'notify/views/NotifyBatchSend',
+        icon: 'Promotion',
+        sort: 30,
+        menuType: 1,
+        permission: 'notify:batch:send',
+        hidden: false,
+        children: [
+          {
+            id: '430',
+            parentId: '43',
+            name: 'NotifyBatchSendAction',
+            title: '执行批量发送',
+            path: '',
+            component: null,
+            sort: 1,
+            menuType: 2,
+            permission: 'notify:batch:send',
             hidden: true,
           },
         ],
@@ -1517,7 +1562,7 @@ export const MOCK_ROLE_MENU_BINDINGS: Record<string, number[]> = {
   // 缺 agent 目录(5) 会导致智能体整棵子树不可见。
   // P48/V37：工具管理页 17 + 按钮 170（agent:tool:view / agent:tool:manage），
   // 对齐真实后端 V37 seed（页面 id=212、按钮 id=213）与 admin 角色菜单绑定契约。
-  '2': [1, 2, 3, 5, 11, 12, 13, 14, 15, 16, 17, 18, 110, 111, 112, 120, 121, 122, 170],
+  '2': [1, 2, 3, 5, 11, 12, 13, 14, 15, 16, 17, 18, 43, 430, 110, 111, 112, 120, 121, 122, 170],
   // superadmin：无绑定行（超管旁路，与真实 seed 一致）
   // user：空绑定
 }

@@ -5,6 +5,8 @@ import type {
   NotifyTemplateSaveReq,
   TemplatePreviewReq,
   TemplatePreviewResult,
+  NotifyBatchSendReq,
+  NotifyBatchSendResp,
 } from '@/contracts/notify'
 
 // ═══════════════════════════════════════
@@ -120,5 +122,27 @@ export async function sendByTemplate(
     method: 'POST',
     url: '/notify/templates/send',
     data: { templateCode, recipientId, variables },
+  })
+}
+
+// ═══════════════════════════════════════
+// 批量发送
+// ═══════════════════════════════════════
+
+/** POST /notify/messages/batch-send → 批量发送站内通知，返回去重后接收人数 */
+export async function batchSendNotify(req: NotifyBatchSendReq): Promise<NotifyBatchSendResp> {
+  return request<NotifyBatchSendResp>({
+    method: 'POST',
+    url: '/notify/messages/batch-send',
+    data: req,
+  })
+}
+
+/** POST /notify/messages/resolve-count → 解析批量发送接收人数（不实际发送） */
+export async function resolveCountNotify(req: NotifyBatchSendReq): Promise<NotifyBatchSendResp> {
+  return request<NotifyBatchSendResp>({
+    method: 'POST',
+    url: '/notify/messages/resolve-count',
+    data: req,
   })
 }

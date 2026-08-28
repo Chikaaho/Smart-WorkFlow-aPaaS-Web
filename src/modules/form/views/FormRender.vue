@@ -18,6 +18,7 @@
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import type { SubTableRowAction, SubTableRowActionType } from '@/modules/form/api/form'
 import {
   getFormDefinition,
@@ -291,6 +292,18 @@ async function handleSubmit() {
   try {
     const id = await submitForm(formKey, { ...formData }, schema.value?.fields)
     successMsg.value = `提交成功，记录 ID：${id}`
+
+    // 显示流程发起提示
+    ElMessage.success({
+      message: '表单提交成功，流程已发起',
+      duration: 3000,
+    })
+
+    // 延迟跳转到待办列表，让用户看到成功提示
+    // eslint-disable-next-line no-undef
+    window.setTimeout(() => {
+      router.push({ name: 'TodoList' })
+    }, 1500)
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = businessError(err.code, err.msg)

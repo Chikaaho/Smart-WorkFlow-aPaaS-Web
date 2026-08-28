@@ -31,6 +31,7 @@ export interface ApprovalHistoryItem {
   assignee: string
   createTime: string
   endTime: string | null // 可能为 null
+  approvalResult: 'APPROVED' | 'REJECTED' | null // 审批结果：APPROVED=通过, REJECTED=驳回, null=进行中
 }
 
 // ─── 已办任务 DTO（对齐后端 ProcessedTaskRespDTO） ───
@@ -55,6 +56,18 @@ export interface ProcessDef {
   status: 'DRAFT' | 'PUBLISHED'
   createTime: string
   updateTime: string
+}
+
+// ─── 创建流程定义请求 DTO（对齐后端 CreateProcessDefRequest） ───
+export interface CreateProcessDefReq {
+  name: string
+  formKey: string
+}
+
+// ─── 创建流程定义响应 DTO（对齐后端 CreateProcessDefResponse） ───
+export interface CreateProcessDefResp {
+  defId: number
+  graph: unknown // ProcessGraph，设计器回显用
 }
 
 // ─── 流程实例列表项 DTO（对齐后端 InstanceListItemDTO） ───

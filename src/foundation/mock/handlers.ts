@@ -365,6 +365,9 @@ export const mockRegistrations: MockRegistration[] = [
     method: 'GET',
     pattern: '/api/system/auth/me',
     handler: () => {
+      if (!MOCK_CURRENT_SESSION.user.id) {
+        return { code: 401, message: '未认证', data: null }
+      }
       if (MOCK_CURRENT_SESSION.superAdmin) {
         return { code: 0, message: 'ok', data: MOCK_SESSION_DATA }
       }
@@ -911,6 +914,22 @@ export const mockRegistrations: MockRegistration[] = [
       if (!task) {
         return { code: 404, message: '任务不存在', data: null }
       }
+
+      // 根据 processInstanceId 获取对应的审批历史（从 MOCK_INSTANCE_DETAILS 的 flowTrace 提取 userTask）
+      const instanceDetail = MOCK_INSTANCE_DETAILS[task.processInstanceId]
+      const approvalHistory = instanceDetail
+        ? instanceDetail.flowTrace
+            .filter((node) => node.activityType === 'userTask' && node.endTime != null)
+            .map((node) => ({
+              taskId: node.taskId ?? '',
+              taskName: node.activityName ?? '',
+              assignee: node.assignee ?? '',
+              createTime: node.startTime ?? '',
+              endTime: node.endTime,
+              approvalResult: 'APPROVED' as const, // 已完成的节点默认为通过
+            }))
+        : []
+
       return {
         code: 0,
         message: 'ok',
@@ -926,7 +945,7 @@ export const mockRegistrations: MockRegistration[] = [
           initiatorId: 1,
           createTime: task.createTime,
           processVariables: { formKey: task.formKey },
-          approvalHistory: [],
+          approvalHistory,
         },
       }
     },
@@ -976,6 +995,41 @@ export const mockRegistrations: MockRegistration[] = [
         code: 0,
         message: 'ok',
         data: { records, total, pageNum, pageSize },
+      }
+    },
+  },
+
+  // ── 流程定义：创建 ──
+  // POST /api/workflow/defs → R<CreateProcessDefResponse>
+  {
+    method: 'POST',
+    pattern: '/api/workflow/defs',
+    handler: (_params, _query, body) => {
+      const req = body as { name?: string; formKey?: string }
+      if (!req.name || !req.formKey) {
+        return { code: 400, message: '流程名称和表单标识不能为空', data: null }
+      }
+      const newId = Math.max(...MOCK_PROCESS_DEFS.map((d) => d.id), 0) + 1
+      const processKey = `bpm_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
+      const newDef = {
+        id: newId,
+        processKey,
+        name: req.name,
+        formKey: req.formKey,
+        defVersion: 1,
+        status: 'DRAFT' as const,
+        createTime: now,
+        updateTime: now,
+      }
+      MOCK_PROCESS_DEFS.unshift(newDef)
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          defId: newId,
+          graph: { processKey, name: req.name, formKey: req.formKey, elements: [] },
+        },
       }
     },
   },
@@ -1065,6 +1119,66 @@ export const mockRegistrations: MockRegistration[] = [
   </bpmndi:BPMNDiagram>
 </definitions>`
       return { code: 0, message: 'ok', data: bpmnXml }
+    },
+  },
+
+  // ── 流程定义：删除（仅 DRAFT 状态可删除） ──
+  // DELETE /api/workflow/defs/:id → R<Void>
+  // 非 DRAFT 状态返回 code=2105 (PROCESS_DEF_NOT_DELETABLE)
+  {
+    method: 'DELETE',
+    pattern: '/api/workflow/defs/:id',
+    handler: (params) => {
+      const defId = Number((params as Record<string, string>).id)
+      const idx = MOCK_PROCESS_DEFS.findIndex((d) => d.id === defId)
+      if (idx === -1) {
+        return { code: 404, message: '流程定义不存在', data: null }
+      }
+      if (MOCK_PROCESS_DEFS[idx].status !== 'DRAFT') {
+        return { code: 2105, message: '只有草稿状态的流程定义可以删除', data: null }
+      }
+      MOCK_PROCESS_DEFS.splice(idx, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // ── 流程定义：发布（DRAFT → PUBLISHED） ──
+  // POST /api/workflow/defs/:id/publish → R<ProcessDef>
+  // 仅 DRAFT 状态可发布；已发布返回 code=2104
+  {
+    method: 'POST',
+    pattern: '/api/workflow/defs/:id/publish',
+    handler: (params) => {
+      const defId = Number((params as Record<string, string>).id)
+      const def = MOCK_PROCESS_DEFS.find((d) => d.id === defId)
+      if (!def) {
+        return { code: 404, message: '流程定义不存在', data: null }
+      }
+      if (def.status !== 'DRAFT') {
+        return { code: 2104, message: '流程定义已发布，无法重复发布', data: null }
+      }
+      def.status = 'PUBLISHED'
+      def.updateTime = new Date().toISOString().slice(0, 19).replace('T', ' ')
+      return { code: 0, message: 'ok', data: def }
+    },
+  },
+
+  // ── 流程定义：保存草稿图 ──
+  // PUT /api/workflow/defs/:id/graph → R<Void>
+  {
+    method: 'PUT',
+    pattern: '/api/workflow/defs/:id/graph',
+    handler: (params) => {
+      const defId = Number((params as Record<string, string>).id)
+      const def = MOCK_PROCESS_DEFS.find((d) => d.id === defId)
+      if (!def) {
+        return { code: 404, message: '流程定义不存在', data: null }
+      }
+      if (def.status !== 'DRAFT') {
+        return { code: 2104, message: '已发布的流程定义无法修改', data: null }
+      }
+      def.updateTime = new Date().toISOString().slice(0, 19).replace('T', ' ')
+      return { code: 0, message: 'ok', data: null }
     },
   },
 
@@ -1357,6 +1471,197 @@ export const mockRegistrations: MockRegistration[] = [
         tenantId: 1,
       })
       return { code: 0, message: 'ok', data: Date.now() }
+    },
+  },
+
+  // ── 解析批量发送接收人数（对齐后端 POST /api/notify/messages/resolve-count） ──
+  // 权限：与 batch-send 一致（notify:batch:send）。
+  {
+    method: 'POST',
+    pattern: '/api/notify/messages/resolve-count',
+    handler: (_params, _query, body) => {
+      const b = (body ?? {}) as Record<string, unknown>
+
+      if (!MOCK_CURRENT_SESSION.user.id) {
+        return { code: 401, message: '未认证', data: null }
+      }
+
+      // 权限检查
+      if (!MOCK_CURRENT_SESSION.superAdmin) {
+        const perms = buildMockPermissions()
+        if (!perms.includes('notify:batch:send')) {
+          return { code: 403, message: '无权限', data: null }
+        }
+      }
+
+      // 解析接收对象（与 batch-send 相同逻辑，不做递归展开）
+      const recipientUserIds = Array.isArray(b.recipientUserIds)
+        ? b.recipientUserIds.map(Number)
+        : []
+      const recipientDeptIds = Array.isArray(b.recipientDeptIds)
+        ? b.recipientDeptIds.map(Number)
+        : []
+      const recipientRoleCodes = Array.isArray(b.recipientRoleCodes)
+        ? b.recipientRoleCodes.map(String)
+        : []
+
+      const hitByUser = new Set<string>()
+      for (const uid of recipientUserIds) {
+        hitByUser.add(String(uid))
+      }
+
+      const deptIdSet = new Set(recipientDeptIds.map(String))
+      for (const user of MOCK_USERS_LIST) {
+        if (deptIdSet.has(user.deptId) && user.status === 0) {
+          hitByUser.add(String(user.id))
+        }
+      }
+
+      for (const roleCode of recipientRoleCodes) {
+        const role = MOCK_ROLES_LIST.find((r) => r.code === roleCode)
+        if (!role) continue
+        for (const user of MOCK_USERS_LIST) {
+          if (user.roleIds.includes(role.id) && user.status === 0) {
+            hitByUser.add(String(user.id))
+          }
+        }
+      }
+
+      return {
+        code: 0,
+        data: { recipientCount: hitByUser.size },
+        message: 'success',
+      }
+    },
+  },
+
+  // ── 批量发送（对齐后端 POST /api/notify/messages/batch-send） ──
+  // 权限：需 notify:batch:send（独立发送权限，不复用模板管理权限）。
+  // 接收人解析：userId/deptId/roleCode 三种维度交叉去重。
+  // 空接收人 / 超500人 / 直接内容与模板互斥 / 模板不存在或停用 → 业务拒绝。
+  {
+    method: 'POST',
+    pattern: '/api/notify/messages/batch-send',
+    handler: (_params, _query, body) => {
+      const b = (body ?? {}) as Record<string, unknown>
+
+      if (!MOCK_CURRENT_SESSION.user.id) {
+        return { code: 401, message: '未认证', data: null }
+      }
+
+      // 权限检查：当前会话需有 notify:batch:send
+      if (!MOCK_CURRENT_SESSION.superAdmin) {
+        const perms = buildMockPermissions()
+        if (!perms.includes('notify:batch:send')) {
+          return { code: 403, message: '无权限执行批量发送', data: null }
+        }
+      }
+
+      // 内容模式互斥校验
+      const hasDirect = Boolean(b.title && b.content)
+      const hasTemplate = Boolean(b.templateCode)
+      if (hasDirect === hasTemplate) {
+        return {
+          code: 400,
+          message: '必须选择直接内容模式或模板模式，且只能选一种',
+          data: null,
+        }
+      }
+
+      // 解析接收对象（三种维度交叉去重）
+      const recipientUserIds = Array.isArray(b.recipientUserIds)
+        ? b.recipientUserIds.map(Number)
+        : []
+      const recipientDeptIds = Array.isArray(b.recipientDeptIds)
+        ? b.recipientDeptIds.map(Number)
+        : []
+      const recipientRoleCodes = Array.isArray(b.recipientRoleCodes)
+        ? b.recipientRoleCodes.map(String)
+        : []
+
+      if (
+        recipientUserIds.length === 0 &&
+        recipientDeptIds.length === 0 &&
+        recipientRoleCodes.length === 0
+      ) {
+        return { code: 400, message: '接收人不能为空', data: null }
+      }
+
+      // 按 userId 直接命中
+      const hitByUser = new Set<string>()
+      for (const uid of recipientUserIds) {
+        hitByUser.add(String(uid))
+      }
+
+      // 按 deptId 命中：只匹配直接提交的部门 ID，不做递归展开
+      // （语义锁定：单个 deptId 只代表该部门本身；前端需显式提交子部门 IDs）
+      const deptIdSet = new Set(recipientDeptIds.map(String))
+      for (const user of MOCK_USERS_LIST) {
+        if (deptIdSet.has(user.deptId) && user.status === 0) {
+          hitByUser.add(String(user.id))
+        }
+      }
+
+      // 按 roleCode 命中：先查角色 id，再查用户
+      for (const roleCode of recipientRoleCodes) {
+        const role = MOCK_ROLES_LIST.find((r) => r.code === roleCode)
+        if (!role) continue
+        for (const user of MOCK_USERS_LIST) {
+          if (user.roleIds.includes(role.id) && user.status === 0) {
+            hitByUser.add(String(user.id))
+          }
+        }
+      }
+
+      if (hitByUser.size === 0) {
+        return { code: 400, message: '接收人为空（无匹配的有效用户）', data: null }
+      }
+
+      // 超 500 人拒绝
+      if (hitByUser.size > 500) {
+        return { code: 400, message: '接收人数超过上限（500人）', data: null }
+      }
+
+      // 模板模式：渲染
+      let title: string
+      let content: string
+      if (hasTemplate) {
+        const templateCode = String(b.templateCode ?? '')
+        const t = MOCK_NOTIFY_TEMPLATES.find((x) => x.templateCode === templateCode)
+        if (!t || !t.enabled) {
+          return { code: 404, message: `模板不存在或未启用: ${templateCode}`, data: null }
+        }
+        const variables = (b.variables ?? {}) as Record<string, string>
+        try {
+          title = renderMockTemplate(t.titleTemplate, variables)
+          content = renderMockTemplate(t.contentTemplate, variables)
+        } catch (e) {
+          return { code: 400, message: e instanceof Error ? e.message : '渲染失败', data: null }
+        }
+      } else {
+        title = String(b.title ?? '')
+        content = String(b.content ?? '')
+      }
+
+      // 落库：为每个去重后的接收人写一条通知
+      for (const uid of hitByUser) {
+        MOCK_NOTIFY_MESSAGES.push({
+          id: Date.now() + Math.random(),
+          recipientId: Number(uid),
+          title,
+          content,
+          bizType: 'SYSTEM',
+          bizId: null,
+          read: false,
+          createTime: new Date().toISOString(),
+          createBy: null,
+          updateTime: new Date().toISOString(),
+          updateBy: null,
+          tenantId: 1,
+        })
+      }
+
+      return { code: 0, message: 'ok', data: { recipientCount: hitByUser.size } }
     },
   },
 

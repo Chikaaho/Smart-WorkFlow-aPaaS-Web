@@ -49,3 +49,21 @@ export interface TemplatePreviewResult {
   title: string
   content: string
 }
+
+// ─── 批量发送（对齐后端 NotifyBatchSendReq / NotifyBatchSendResp） ───
+
+/** 批量发送请求（direct 模式与 template 模式互斥）。 */
+export interface NotifyBatchSendReq {
+  recipientUserIds?: number[]
+  recipientDeptIds?: number[]
+  recipientRoleCodes?: string[]
+  title?: string
+  content?: string
+  templateCode?: string
+  variables?: Record<string, string>
+}
+
+/** 批量发送响应（返回去重后的实际接收人数量）。 */
+export interface NotifyBatchSendResp {
+  recipientCount: number
+}

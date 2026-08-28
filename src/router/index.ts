@@ -123,6 +123,13 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/modules/notify/views/NotifyTemplateList.vue'),
         meta: { title: '消息模板', authority: ['notify:template:view'] },
       },
+      {
+        // 批量发送通知页：独立发送权限 notify:batch:send。
+        path: 'notify/batch-send',
+        name: 'notify-batch-send',
+        component: () => import('@/modules/notify/views/NotifyBatchSend.vue'),
+        meta: { title: '发送通知', authority: ['notify:batch:send'] },
+      },
     ],
   },
   {

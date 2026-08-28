@@ -67,6 +67,7 @@ const mockDetail: TaskDetail = {
       assignee: '1',
       createTime: '2026-07-17T09:00:00',
       endTime: '2026-07-17T09:30:00',
+      approvalResult: 'APPROVED',
     },
   ],
 }

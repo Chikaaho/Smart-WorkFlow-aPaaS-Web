@@ -8,12 +8,21 @@
  */
 import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue'
 import { StandardListTemplate } from '@/components/page-layout'
-import { pageProcessDefs, getProcessDefGraph } from '@/modules/workflow/api'
+import {
+  pageProcessDefs,
+  getProcessDefGraph,
+  publishProcessDef,
+  deleteProcessDef,
+} from '@/modules/workflow/api'
 import type { ProcessDef } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 import { mountBpmnViewer } from '@/adapters/bpmn'
 import type { BpmnViewerInstance } from '@/adapters/bpmn'
+import { ElMessageBox, ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
+import CreateProcessDefDialog from './CreateProcessDefDialog.vue'
+import EditProcessDefDialog from './EditProcessDefDialog.vue'
 
 // ─── 状态映射（与 FormDefStatus 完全对称） ───
 
@@ -51,6 +60,19 @@ const viewerError = ref('')
 const currentDefName = ref('')
 const bpmnContainerRef = ref<Element | null>(null)
 let viewerInstance: BpmnViewerInstance | null = null
+
+// ─── 发布流程定义 ───
+const publishingId = ref<number | null>(null)
+
+// ─── 删除流程定义 ───
+const deletingId = ref<number | null>(null)
+
+// ─── 创建流程定义 ───
+const createDialogVisible = ref(false)
+
+// ─── 编辑流程定义 ───
+const editDialogVisible = ref(false)
+const editingDef = ref<ProcessDef | null>(null)
 
 async function loadList() {
   loading.value = true
@@ -143,6 +165,85 @@ function closeViewer() {
   viewerLoading.value = false
 }
 
+// ─── 发布流程定义 ───
+
+/** 发布流程定义（带确认对话框） */
+async function handlePublish(row: ProcessDef) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要发布流程定义「${row.name}」吗？发布后将无法修改。`,
+      '发布确认',
+      {
+        confirmButtonText: '确定发布',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    // 用户取消
+    return
+  }
+
+  publishingId.value = row.id
+  try {
+    await publishProcessDef(row.id)
+    ElMessage.success('发布成功')
+    await loadList()
+  } catch (err) {
+    if (err instanceof ApiError) {
+      ElMessage.error(err.msg)
+    } else {
+      ElMessage.error('发布失败')
+    }
+  } finally {
+    publishingId.value = null
+  }
+}
+
+/** 删除流程定义（带确认对话框，仅 DRAFT 状态可删除） */
+async function handleDelete(row: ProcessDef) {
+  if (row.status !== 'DRAFT') {
+    ElMessage.warning('只有草稿状态的流程定义可以删除')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除流程定义「${row.name}」吗？此操作不可恢复。`,
+      '删除确认',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    // 用户取消
+    return
+  }
+
+  deletingId.value = row.id
+  try {
+    await deleteProcessDef(row.id)
+    ElMessage.success('删除成功')
+    await loadList()
+  } catch (err) {
+    if (err instanceof ApiError) {
+      ElMessage.error(err.msg)
+    } else {
+      ElMessage.error('删除失败')
+    }
+  } finally {
+    deletingId.value = null
+  }
+}
+
+/** 编辑流程定义 */
+function handleEdit(row: ProcessDef) {
+  editingDef.value = row
+  editDialogVisible.value = true
+}
+
 // 组件卸载时防御性清理
 onBeforeUnmount(() => {
   if (viewerInstance) {
@@ -164,9 +265,20 @@ onMounted(loadList)
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <!-- 空态操作（无操作按钮） -->
+    <!-- 工具栏操作按钮 -->
+    <template #toolbar-actions>
+      <el-button type="primary" @click="createDialogVisible = true">
+        <el-icon><Plus /></el-icon>
+        创建流程定义
+      </el-button>
+    </template>
+
+    <!-- 空态操作 -->
     <template #empty-action>
-      <span />
+      <el-button type="primary" @click="createDialogVisible = true">
+        <el-icon><Plus /></el-icon>
+        创建流程定义
+      </el-button>
     </template>
 
     <!-- 错误提示 -->
@@ -193,7 +305,7 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column label="操作" width="260" fixed="right">
         <template #default="{ row }">
           <el-button
             size="small"
@@ -203,6 +315,35 @@ onMounted(loadList)
             @click="openViewer(row as ProcessDef)"
           >
             查看流程图
+          </el-button>
+          <el-button
+            size="small"
+            link
+            type="warning"
+            :disabled="(row as ProcessDef).status !== 'DRAFT'"
+            @click="handleEdit(row as ProcessDef)"
+          >
+            编辑
+          </el-button>
+          <el-button
+            size="small"
+            link
+            type="success"
+            :disabled="(row as ProcessDef).status !== 'DRAFT'"
+            :loading="publishingId === (row as ProcessDef).id"
+            @click="handlePublish(row as ProcessDef)"
+          >
+            发布
+          </el-button>
+          <el-button
+            size="small"
+            link
+            type="danger"
+            :disabled="(row as ProcessDef).status !== 'DRAFT'"
+            :loading="deletingId === (row as ProcessDef).id"
+            @click="handleDelete(row as ProcessDef)"
+          >
+            删除
           </el-button>
         </template>
       </el-table-column>
@@ -230,6 +371,16 @@ onMounted(loadList)
         <div ref="bpmnContainerRef" class="bpmn-container" />
       </div>
     </el-dialog>
+
+    <!-- 创建流程定义对话框 -->
+    <CreateProcessDefDialog v-model:visible="createDialogVisible" @saved="loadList" />
+
+    <!-- 编辑流程定义对话框 -->
+    <EditProcessDefDialog
+      v-model:visible="editDialogVisible"
+      :process-def="editingDef"
+      @saved="loadList"
+    />
   </StandardListTemplate>
 </template>
 

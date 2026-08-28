@@ -383,6 +383,13 @@ function isUserTask(activityType: string): boolean {
                   {{ row.assignee ?? '-' }}
                 </template>
               </el-table-column>
+              <el-table-column label="审批状态" min-width="100">
+                <template #default="{ row }">
+                  <el-tag :type="row.endTime ? 'success' : 'warning'" size="small">
+                    {{ row.endTime ? '已完成' : '进行中' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
               <el-table-column prop="startTime" label="开始时间" min-width="170" />
               <el-table-column label="完成时间" min-width="170">
                 <template #default="{ row }">
