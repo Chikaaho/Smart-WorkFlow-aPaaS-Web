@@ -46,7 +46,10 @@ export const routes: RouteRecordRaw[] = [
         path: 'form/form-data/:formKey',
         name: 'form-data',
         component: () => import('@/modules/form/views/FormData.vue'),
-        meta: { title: '表单数据' },
+        meta: {
+          title: '表单数据',
+          authority: ['form:data:template', 'form:data:import', 'form:data:export'],
+        },
       },
       {
         path: 'form/form-def-list',

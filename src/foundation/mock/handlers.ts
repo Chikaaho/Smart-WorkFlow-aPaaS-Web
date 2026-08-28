@@ -23,7 +23,29 @@
  * 共享种子数据位于同级 ./seeds。
  */
 
+import { buildMockXlsxBlob } from './mock-xlsx'
+import { getAccessToken } from '@/foundation/auth/token'
 import type { MockHandler, MockMethod } from './index'
+
+/** 模板/导出两行表头（显示名 + 稳定映射标识），与真实后端模板契约一致。 */
+const MOCK_IMPORT_EXPORT_HEADERS: string[][] = [
+  ['申请人', '部门', '请假类型', '请假日期', '天数', '紧急', '事由'],
+  ['applicant', 'department', 'leaveType', 'leaveDate', 'days', 'urgent', 'reason'],
+]
+
+/**
+ * P32 导入导出身份/权限闸（对齐真实后端 401/403/放行 口径）：
+ * 未登录（无 token 或未认证会话）→ 401；已登录缺对应权限 → 403；超管/持权 → 放行。
+ */
+function p32AccessGate(required: string): { code: number; message: string; data: null } | null {
+  if (!getAccessToken() || MOCK_CURRENT_SESSION.user.username === '') {
+    return { code: 401, message: '未认证', data: null }
+  }
+  if (!MOCK_CURRENT_SESSION.superAdmin && !MOCK_CURRENT_SESSION.permissions.includes(required)) {
+    return { code: 403, message: '无权限', data: null }
+  }
+  return null
+}
 import type { AgentModelConfig, AgentModelSaveReq } from '@/contracts/agent'
 import {
   MOCK_AGENT_MODELS,
@@ -638,6 +660,111 @@ export const mockRegistrations: MockRegistration[] = [
   },
 
   // ── 表单数据：查详情（编辑回显） ────────────────────────────
+  // ── 表单数据：下载模板 ─────────────────────────────────────
+  // GET /api/form/data/{formKey}/template
+  // 返: Blob（.xlsx 文件）
+  {
+    method: 'GET',
+    pattern: '/api/form/data/:formKey/template',
+    handler: () => {
+      const denied = p32AccessGate('form:data:template')
+      if (denied) return denied
+      // 与真实后端对齐：第一行字段显示名 + 第二行稳定映射标识的真实 .xlsx
+      const blob = buildMockXlsxBlob(MOCK_IMPORT_EXPORT_HEADERS)
+
+      return {
+        code: 0,
+        message: 'ok',
+        data: blob,
+      }
+    },
+  },
+
+  // ── 表单数据：导入 ─────────────────────────────────────────
+  // POST /api/form/data/{formKey}/import
+  // 请求: FormData（包含 file 字段）
+  // 返: ImportResult
+  {
+    method: 'POST',
+    pattern: '/api/form/data/:formKey/import',
+    handler: (_params, _query, _body) => {
+      const denied = p32AccessGate('form:data:import')
+      if (denied) return denied
+      // 与真实后端语义逐项对齐：
+      // 1) 非 .xlsx / 缺文件 → code=1499 格式拒绝（对齐"无法解析文件"）
+      // 2) 文件名含 'invalid' → 字段校验错 → 整批原子失败（successCount=0，零写入）
+      // 3) 其余 → 导入成功
+      const body = _body as FormData | undefined
+      const file = body?.get('file') as File | null | undefined
+      const filename = typeof file?.name === 'string' ? file.name : ''
+
+      if (!file || !filename.endsWith('.xlsx')) {
+        return {
+          code: 1499,
+          message: '导入失败: 无法解析文件：不是有效的 .xlsx 工作簿',
+          data: null,
+        }
+      }
+
+      if (filename.includes('invalid')) {
+        return {
+          code: 0,
+          message: 'ok',
+          data: {
+            totalRows: 1,
+            successCount: 0,
+            errorCount: 1,
+            successIds: [],
+            errors: [{ rowNum: 3, message: "必填字段 'applicant' 缺失" }],
+          },
+        }
+      }
+
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          totalRows: 2,
+          successCount: 2,
+          errorCount: 0,
+          successIds: ['mock-record-1', 'mock-record-2'],
+          errors: [],
+        },
+      }
+    },
+  },
+
+  // ── 表单数据：导出 ─────────────────────────────────────────
+  // POST /api/form/data/{formKey}/export
+  // 请求: QueryRequest（可选）
+  // 返: Blob（.xlsx 文件）
+  {
+    method: 'POST',
+    pattern: '/api/form/data/:formKey/export',
+    handler: (_params, _query, _body) => {
+      const denied = p32AccessGate('form:data:export')
+      if (denied) return denied
+      const body = _body as { filters?: unknown[] } | undefined
+
+      // 与真实后端对齐：返回真实 .xlsx；无匹配数据时仅含表头（空集导出语义）。
+      const rows: string[][] = [[...MOCK_IMPORT_EXPORT_HEADERS[0]]]
+      const hasUnmatchedFilter =
+        Array.isArray(body?.filters) && (body!.filters as unknown[]).length > 0
+      if (!hasUnmatchedFilter) {
+        for (const record of MOCK_FORM_DATA_RECORDS) {
+          rows.push(MOCK_IMPORT_EXPORT_HEADERS[1].map((key) => String(record[key] ?? '')))
+        }
+      }
+      const blob = buildMockXlsxBlob(rows)
+
+      return {
+        code: 0,
+        message: 'ok',
+        data: blob,
+      }
+    },
+  },
+
   // GET /api/form/data/{formKey}/{recordId}
   // 返: R<Map> 含 id / version / 审计列 / 业务字段 / 子表行（每行带 id）
   {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* global Event, HTMLInputElement, URL, document */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -9,12 +10,21 @@ import {
   getFormDefinition,
   queryFormData,
   deleteFormData,
+  downloadFormTemplate,
+  importFormData,
+  exportFormData,
   type QueryFilter,
 } from '@/modules/form/api/form'
+import { usePermission } from '@/foundation/permission'
 import { deriveColumns, deriveFilterFields } from '@/modules/form/utils/derive-list-config'
 import { getErrorMessage } from '@/foundation/request/error-code-map'
 import type { FormSchema } from '@/contracts/form-schema'
 import type { PageResult } from '@/contracts/common'
+
+const { hasPerm } = usePermission()
+const canTemplate = computed(() => hasPerm('form:data:template'))
+const canImport = computed(() => hasPerm('form:data:import'))
+const canExport = computed(() => hasPerm('form:data:export'))
 
 const route = useRoute()
 const router = useRouter()
@@ -41,6 +51,15 @@ const dateFieldName = ref('')
 const isEmpty = computed(
   () => !loading.value && !errorMsg.value && (result.value?.list.length ?? 0) === 0,
 )
+
+// ── 导入相关状态 ──
+const importLoading = ref(false)
+const importResult = ref<{
+  totalRows: number
+  successCount: number
+  errorCount: number
+  errors: Array<{ rowNum: number; message: string }>
+} | null>(null)
 
 // ── 加载 definition ──
 async function loadDefinition() {
@@ -182,6 +201,119 @@ function formatCellValue(
   }
 }
 
+// ── 模板下载 ──
+async function handleDownloadTemplate() {
+  try {
+    const blob = await downloadFormTemplate(formKey)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${formKey}_template.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    ElMessage.success('模板下载成功')
+  } catch (err: unknown) {
+    const errObj = err as { code?: number; message?: string }
+    const code = errObj.code ?? 0
+    const msg = getErrorMessage(code, errObj.message)
+    ElMessage.error(`模板下载失败：${msg}`)
+  }
+}
+
+// ── 导入 ──
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function handleImportClick() {
+  fileInputRef.value?.click()
+}
+
+async function handleFileChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  // 验证文件类型
+  if (!file.name.endsWith('.xlsx')) {
+    ElMessage.error('请选择 .xlsx 格式的文件')
+    return
+  }
+
+  importLoading.value = true
+  importResult.value = null
+
+  try {
+    const result = await importFormData(formKey, file)
+    importResult.value = result
+
+    if (result.errorCount === 0) {
+      ElMessage.success(`导入成功：${result.successCount} 条数据`)
+      await loadData()
+    } else {
+      ElMessage.warning(`导入完成：成功 ${result.successCount} 条，失败 ${result.errorCount} 条`)
+    }
+  } catch (err: unknown) {
+    const errObj = err as { code?: number; message?: string }
+    const code = errObj.code ?? 0
+    const msg = getErrorMessage(code, errObj.message)
+    ElMessage.error(`导入失败：${msg}`)
+  } finally {
+    importLoading.value = false
+    // 清空文件输入
+    if (fileInputRef.value) {
+      fileInputRef.value.value = ''
+    }
+  }
+}
+
+// ── 导出 ──
+const exportLoading = ref(false)
+
+async function handleExport() {
+  exportLoading.value = true
+
+  try {
+    // 构建查询条件
+    const filters: QueryFilter[] = []
+    for (const [field, value] of Object.entries(filterValues.value)) {
+      if (!value) continue
+      const f = filterFields.value.find((ff) => ff.field === field)
+      filters.push({ field, op: f?.op ?? 'EQ', value })
+    }
+    if (dateRange.value && dateRange.value[0]) {
+      filters.push({ field: dateFieldName.value, op: 'GE', value: dateRange.value[0] })
+    }
+    if (dateRange.value && dateRange.value[1]) {
+      filters.push({ field: dateFieldName.value, op: 'LE', value: dateRange.value[1] })
+    }
+
+    const query = {
+      pageNum: 1,
+      pageSize: 1000, // 限制最大导出行数
+      filters,
+    }
+
+    const blob = await exportFormData(formKey, query)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${formKey}_data.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    ElMessage.success('导出成功')
+  } catch (err: unknown) {
+    const errObj = err as { code?: number; message?: string }
+    const code = errObj.code ?? 0
+    const msg = getErrorMessage(code, errObj.message)
+    ElMessage.error(`导出失败：${msg}`)
+  } finally {
+    exportLoading.value = false
+  }
+}
+
 // ── 挂载 ──
 onMounted(async () => {
   await loadDefinition()
@@ -307,7 +439,18 @@ onMounted(async () => {
 
     <!-- toolbar 操作 -->
     <template #toolbar-actions>
-      <span />
+      <el-button v-if="canTemplate" @click="handleDownloadTemplate">下载模板</el-button>
+      <el-button v-if="canImport" :loading="importLoading" @click="handleImportClick"
+        >导入</el-button
+      >
+      <el-button v-if="canExport" :loading="exportLoading" @click="handleExport">导出</el-button>
+      <input
+        ref="fileInputRef"
+        type="file"
+        accept=".xlsx"
+        style="display: none"
+        @change="handleFileChange"
+      />
     </template>
   </StandardListTemplate>
 </template>

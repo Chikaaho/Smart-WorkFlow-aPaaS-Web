@@ -216,3 +216,64 @@ export async function listSubmissions(
     pageSize: raw.pageSize,
   }
 }
+
+/**
+ * 下载表单模板。
+ * GET /api/form/data/{formKey}/template
+ * 返回: Blob（.xlsx 文件）
+ */
+export async function downloadFormTemplate(formKey: string): Promise<Blob> {
+  const response = await request<Blob>({
+    method: 'GET',
+    url: `/form/data/${formKey}/template`,
+    responseType: 'blob',
+  })
+  return response
+}
+
+/**
+ * 导入表单数据。
+ * POST /api/form/data/{formKey}/import
+ * 请求: FormData（包含 file 字段）
+ * 返回: ImportResult
+ */
+export interface ImportResult {
+  totalRows: number
+  successCount: number
+  errorCount: number
+  successIds: string[]
+  errors: Array<{
+    rowNum: number
+    message: string
+  }>
+}
+
+export async function importFormData(formKey: string, file: File): Promise<ImportResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request<ImportResult>({
+    method: 'POST',
+    url: `/form/data/${formKey}/import`,
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+}
+
+/**
+ * 导出表单数据。
+ * POST /api/form/data/{formKey}/export
+ * 请求: QueryRequest（可选）
+ * 返回: Blob（.xlsx 文件）
+ */
+export async function exportFormData(formKey: string, query?: QueryRequest): Promise<Blob> {
+  const response = await request<Blob>({
+    method: 'POST',
+    url: `/form/data/${formKey}/export`,
+    data: query,
+    responseType: 'blob',
+  })
+  return response
+}

@@ -176,6 +176,12 @@ export function switchMockSession(username: string): void {
     // admin 权限实时按角色绑定重算（bindings 可能被测试/菜单管理 mutate，
     // 固定快照会导致权限与菜单脱节——对齐真实后端每次认证实时装配）。
     MOCK_SESSION_DATA_ADMIN.permissions = collectSessionPermissions(['admin'])
+    // P32 表单数据导入导出按钮权限（对齐后端 V43 菜单 230/231/232 种子）。
+    MOCK_SESSION_DATA_ADMIN.permissions.push(
+      'form:data:template',
+      'form:data:import',
+      'form:data:export',
+    )
   } else if (username === 'user') {
     MOCK_CURRENT_SESSION = MOCK_SESSION_DATA_USER
   } else {

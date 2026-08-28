@@ -113,6 +113,25 @@ export async function request<T>(config: Parameters<AxiosInstance['request']>[0]
   }
 
   const response = await client.request<ApiResponse<T>>(config)
+
+  // blob 响应（文件下载/导出）：成功时数据是 Blob 而非 R 结构。
+  // 后端业务错误对 blob 请求也返回 application/json 的 R 包，需解析并走统一 ApiError 管线。
+  if (config.responseType === 'blob') {
+    const blob = response.data as unknown as Blob
+    const contentType = blob.type
+    if (contentType.includes('application/json')) {
+      const text = await blob.text()
+      try {
+        const payload = JSON.parse(text) as ApiResponse<T>
+        throw new ApiError(payload.code, getErrorMessage(payload.code, payload.message))
+      } catch (e) {
+        if (e instanceof ApiError) throw e
+        throw new ApiError(500, getErrorMessage(500, '下载响应解析失败'))
+      }
+    }
+    return blob as T
+  }
+
   if (response.data.code !== 0) {
     throw new ApiError(
       response.data.code,
