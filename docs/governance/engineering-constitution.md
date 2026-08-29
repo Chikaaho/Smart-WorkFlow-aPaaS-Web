@@ -1,8 +1,7 @@
 # Smart-WorkFlow 前端工程宪法
 
 > 本文件定位：**前端工程的「怎么干」**——协作方式、执行纪律、设计系统规范、不可破的约束。
-> **「现状是什么」**（契约/seam/已建成进度/逐节细节）的唯一真源是
-> 《Smart-WorkFlow-前端架构与现状-知识库.md》，本文件不复述、不与其冲突，**不记进度**。
+> **「现状是什么」**不在本文件维护：跨端架构见工作区 `knowledge/architecture.md`，当前状态见 `knowledge/current-status.md`，正式功能 ID 见 `Smart-WorkFlow/功能清单.md`。本文件**不记进度**。
 > 后端工程由相邻的 `Smart-WorkFlow/` executor sublayer 独立治理；前端执行会话不得读取或操作该子层。功能 ID 见工作区正式功能清单。
 
 ---
@@ -32,21 +31,16 @@
 
 ## 1. 协作方式（新会话先读）
 
-### 1.1 任务分级
+### 1.1 任务处理强度
 
-| 分级                 | 适用场景                                                             | 红线                                                   |
-| -------------------- | -------------------------------------------------------------------- | ------------------------------------------------------ |
-| **常规处理（默认）** | 契约钉死后的机械实现、日常编码、文件读写、重构改名                   | 不做架构决策；遇到能力边界时升级处理强度并说明原因     |
-| **升级处理（兜底）** | 常规处理无法应对的多文件协同 / 接缝口径一致性 / 既有渲染路径复杂改动 | 仅在常规处理明确无法胜任时启用，**必须向用户说明原因** |
+任务处理强度和重复失败协议只引用根 `roles/executor.md` §5 与 §4.2；本工程宪法不另定义分级或会话行为。
 
 ### 1.2 工作节奏（不可乱序）
 
-0. **角色与授权优先**：仅引用根 `system.md` §0.2 与 `roles/executor.md` §3—§4；本工程宪法不另定义角色、授权、阻塞或终态。
-1. **规划决策先于实现**：目标/非目标/范围等开放决策必须由规划方向给出；执行层只在既定方向内决定实现细节，不向用户发起新的规划确认。
-2. **决策只列「定错即爆」的**（架构 / 安全 / 契约形状），审美和可逆小事不占决策位。
-3. **prompt 把所有「写错就坏」的点钉成硬规则**，不留实现方自由发挥空间；易错点显式点名（TDZ、循环依赖、租户注入绕过、async ThreadLocal 还原、存 id 显示 value 不混等）。
-4. **节点闭环制**：一个 node / ring 完全闭环（四连绿 + 必要时肉眼验收）才进下一个；进度按「已闭环节点」记。
-5. **交付要做成作者肉眼能验收的样子**；运行时不便时用只读静态自查（grep/cat + compile，不起服务）。
+1. 先锁定契约形状、安全边界和真实签名。
+2. prompt 明示 TDZ、循环依赖、租户注入、存 id/显示 value 等易错不变量。
+3. 一个工程节点四连全绿并按需完成肉眼验收后再进入下一个。
+4. 可见交付应可人工验收；运行时不便时使用静态检查与确定性校验，不以前台常驻服务充当 gate。
 
 ### 1.3 铁律
 
@@ -61,8 +55,10 @@
 
 ### 2.1 校验门（唯一合法的「完成」判据）
 
-```
-pnpm typecheck && pnpm lint && pnpm test && pnpm build
+执行前先按工作区 `knowledge/shared-constraints.md` §6 检查后端进程，保持前后端编译互斥。
+
+```bash
+NODE_OPTIONS="--max-old-space-size=2048" pnpm typecheck && NODE_OPTIONS="--max-old-space-size=2048" pnpm lint && NODE_OPTIONS="--max-old-space-size=2048" pnpm test && NODE_OPTIONS="--max-old-space-size=2048" pnpm build
 ```
 
 四连必须全绿，且都是**有确定退出码**的命令。
@@ -82,7 +78,7 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm build
 redirect 同源、mock 不污染 modules）不允许在没有等价替代时删除。
 **重构改名时同步改测试断言只换名、不弱化断言强度。**
 
-### 2.3 prompt 自带自查回执
+### 2.3 prompt 自带自查证据
 
 每个执行 prompt 末尾要求实现方交：改动文件清单、开关/用法、四连结果与测试计数、易错点为何不复发。
 
@@ -107,7 +103,7 @@ redirect 同源、mock 不污染 modules）不允许在没有等价替代时删�
 ## 4. 不可破的工程约束（沿用，改动需重新决策）
 
 - **token 仅内存**，全仓库无 localStorage/sessionStorage 写 token；刷新=重登录（refresh seam 未实现，非 bug）。
-- **superAdmin = 布尔**（对齐后端 `userId==1`），不用 `*:*:*` 通配串。
+- **superAdmin = 布尔**（后端按角色 code 集合包含 `superadmin` 判定），不用历史身份硬编码或 `*:*:*` 通配串。
 - **前端不发租户头**：多租户从登录态（token→userId→tenantId）后端注入。
 - **菜单单一数据源**：同一份 `loadMenu()` 同时喂 router 与侧边栏 store，**禁止给侧边栏单独拉菜单**（有回归测试钉死）。
 - **组件解析走 `import.meta.glob` 白名单**，禁止字符串拼路径 `import()`。
@@ -193,7 +189,7 @@ redirect 同源、mock 不污染 modules）不允许在没有等价替代时删�
 
 ---
 
-## 6. 两大页型规范（90% 页面就这两种，先钉模板再铺模块）
+## 6. 两大主要页型规范（先钉模板再铺模块）
 
 ### 6.1 页型 A — 表单填写/渲染页（最高频）
 
@@ -231,24 +227,24 @@ redirect 同源、mock 不污染 modules）不允许在没有等价替代时删�
 ## 7. 常用命令
 
 ```bash
-pnpm install                    # 安装依赖
-pnpm dev                        # 开发服务器（直连后端）
-pnpm dev:mock                   # 开发服务器（Mock 模式，MSW 拦截，零后端依赖）
-pnpm typecheck                  # vue-tsc 类型检查
-pnpm lint                       # ESLint + 架构边界规则
-pnpm lint --fix                 # 自动修复
-pnpm test                       # vitest run 全量单测
-pnpm test -- -t "UserList"      # 按名称过滤测试
-pnpm test src/modules/system/views/UserList.spec.ts  # 运行单个测试文件
-pnpm test -- --watch            # watch 模式
-pnpm build                      # vue-tsc + vite build 生产构建
-pnpm preview                    # 预览生产构建产物
-pnpm gen:api-types              # 从后端 Swagger 生成类型（需 SWAGGER_URL 环境变量）
-pnpm audit --registry https://registry.npmjs.org/  # 依赖安全审计
+NODE_OPTIONS="--max-old-space-size=2048" pnpm install                    # 安装依赖
+NODE_OPTIONS="--max-old-space-size=2048" pnpm dev                        # 开发服务器（直连后端）
+NODE_OPTIONS="--max-old-space-size=2048" pnpm dev:mock                   # Mock 模式
+NODE_OPTIONS="--max-old-space-size=2048" pnpm typecheck                  # vue-tsc 类型检查
+NODE_OPTIONS="--max-old-space-size=2048" pnpm lint                       # ESLint + 架构边界规则
+NODE_OPTIONS="--max-old-space-size=2048" pnpm lint --fix                 # 自动修复
+NODE_OPTIONS="--max-old-space-size=2048" pnpm test                       # vitest run 全量单测
+NODE_OPTIONS="--max-old-space-size=2048" pnpm test -- -t "UserList"      # 按名称过滤测试
+NODE_OPTIONS="--max-old-space-size=2048" pnpm test src/modules/system/views/UserList.spec.ts  # 单个测试文件
+NODE_OPTIONS="--max-old-space-size=2048" pnpm test -- --watch            # watch 模式
+NODE_OPTIONS="--max-old-space-size=2048" pnpm build                      # 生产构建
+NODE_OPTIONS="--max-old-space-size=2048" pnpm preview                    # 预览构建产物
+NODE_OPTIONS="--max-old-space-size=2048" pnpm gen:api-types              # 生成 API 类型
+NODE_OPTIONS="--max-old-space-size=2048" pnpm audit --registry https://registry.npmjs.org/  # 安全审计
 ```
 
 > **`pnpm dev`/`pnpm dev:mock` 不允许做阻塞式校验**——它没有确定退出码。
-> 校验门唯一合法判据是 `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 四连全绿。
+> 校验门是上述带 2G 环境变量的四连全绿。
 >
 > **编译命令必须限制最大内存（硬约束 🔒）**：所有 `pnpm`/`npm` 命令一律带 `NODE_OPTIONS="--max-old-space-size=2048"`，上限 2G，禁止无限制内存直接编译/构建。
 
@@ -398,38 +394,24 @@ describe('UserList', () => {
 
 ---
 
-## 13. AI 协作执行纪律
+## 13. 工程交付纪律
 
-### 13.1 沟通 vs 执行判定（硬约束）
+会话授权、角色终态与任务分级只引用根 `system.md` 和 `roles/executor.md`，本节不另定义。
 
-- **默认沟通模式**：作者消息中无「执行方案」「执行」「实现」「直接做」「开始写代码」等明确执行指令时，一律视为沟通——反复确认需求、澄清模糊点，直到信息充足度 ≥ 90%。
-- **执行模式**：仅当作者明确给出执行指令 + 需求已充分澄清时，才产出钉死约束的执行方案并执行。
-- **禁止猜测意图直接写代码**。
-
-### 13.2 任务分级（硬约束）
-
-- **默认常规处理**：所有日常编码、文件读写、机械实现一律直接完成。
-- **升级处理条件**：仅在常规处理明确无法应对时（多文件协同接缝口径一致性 / 既有渲染路径复杂改动 / 结构性易错重构）提升处理强度。
-- **升级必须告知**：切换时向用户说明「为什么常规处理不够用、升级要解决什么」。
-- **会话角色制**：本目录会话角色为执行（前端），不绑定任何具体模型；禁止以任何模型理由扩大或缩小权限边界（根目录 `system.md` §0.2）。
-
-### 13.3 校验门
-
-- 四连全绿 + 测试计数账（基线不漂移，增减须能精确对应到具体改动）。
-- 执行 prompt 自带自查回执：改动文件清单、开关/用法、四连结果与测试计数、易错点为何不复发。
+- 四连全绿并提供可复算测试计数；增减须能精确对应实际改动。
+- 工程证据包含改动文件、开关/用法、四连原始结果与易错点反向断言；回执格式只见根 `roles/executor.md` §8。
 
 ---
 
 ## 14. 详细看哪
 
-| 要什么                                              | 看哪                                                      |
-| --------------------------------------------------- | --------------------------------------------------------- |
-| 前端现状 / 契约 / seam 形状 / 已建成进度 / 逐节机制 | **《Smart-WorkFlow-前端架构与现状-知识库.md》（单一源）** |
-| 设计 token 原始稿 / 两页型像素级布局                | 《Smart-WorkFlow 页型规范》原型                           |
-| 跨项目共享架构（仅在任务授权需要时）                | 工作区 `knowledge/architecture.md`                        |
-| 功能 ID（Mxx-Fyy-zz）                               | `功能清单.md`                                             |
-| 怎么协作 / 执行纪律 / 设计系统规范                  | **本文件**                                                |
-| 进度 / 已封板的刀 / 下阶段                          | 交接摘要                                                  |
+| 要什么                             | 看哪                                 |
+| ---------------------------------- | ------------------------------------ |
+| 跨项目架构与前端分层               | 工作区 `knowledge/architecture.md`   |
+| 当前状态与唯一下一动作             | 工作区 `knowledge/current-status.md` |
+| 设计 token 与页型工程规范          | 本文件 §5—§6                         |
+| 功能 ID（Mxx-Fyy-zz）              | 工作区 `Smart-WorkFlow/功能清单.md`  |
+| 怎么协作 / 执行纪律 / 设计系统规范 | **本文件**                           |
 
 ---
 
