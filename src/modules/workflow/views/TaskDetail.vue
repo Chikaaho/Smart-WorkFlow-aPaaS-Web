@@ -5,12 +5,13 @@
  * 展示任务详情信息、流程变量、审批历史，提供通过/驳回操作。
  * 路由参数：taskId
  */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { queryTaskDetail, completeTask, rejectTask } from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
 import type { TaskDetail } from '@/contracts/bpm'
+import type { FormSchema } from '@/contracts/form-schema'
 
 const router = useRouter()
 const route = useRoute()
@@ -22,6 +23,47 @@ const detail = ref<TaskDetail | null>(null)
 const loading = ref(false)
 const errorMsg = ref('')
 const acting = ref<string | null>(null) // 'approve' | 'reject' | null
+/** 本次提交的表单记录数据（businessKey = 表单记录 ID，经 form 模块只读接口回查） */
+const formRecord = ref<Record<string, unknown> | null>(null)
+const formRecordLoading = ref(false)
+/** 表单定义（用于把内部字段名映射为业务字段标签） */
+const formSchema = ref<FormSchema | null>(null)
+
+/** 表单宽表的系统列：与业务数据无关，不在审批详情展示 */
+const SYSTEM_COLUMNS = new Set([
+  'id',
+  'create_by',
+  'create_time',
+  'update_by',
+  'update_time',
+  'del_flag',
+  'tenant_id',
+  'version',
+])
+
+/** 表单数据行：按 schema 字段顺序输出业务标签，系统列与未定义字段不展示 */
+const formFieldRows = computed(() => {
+  if (!formRecord.value) return []
+  const rows: { key: string; label: string; value: string }[] = []
+  const seen = new Set<string>()
+  if (formSchema.value) {
+    for (const field of formSchema.value.fields) {
+      if (SYSTEM_COLUMNS.has(field.name) || !(field.name in formRecord.value)) continue
+      seen.add(field.name)
+      const v = formRecord.value[field.name]
+      rows.push({
+        key: field.name,
+        label: field.label || field.name,
+        value: v == null || v === '' ? '-' : String(v),
+      })
+    }
+  }
+  for (const [k, v] of Object.entries(formRecord.value)) {
+    if (SYSTEM_COLUMNS.has(k) || seen.has(k)) continue
+    rows.push({ key: k, label: k, value: v == null || v === '' ? '-' : String(v) })
+  }
+  return rows
+})
 
 function formatTaskId(id: string): string {
   return id.length > 8 ? `...${id.slice(-8)}` : id
@@ -32,6 +74,7 @@ async function loadDetail() {
   errorMsg.value = ''
   try {
     detail.value = await queryTaskDetail(taskId)
+    void loadFormRecord()
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
@@ -40,6 +83,26 @@ async function loadDetail() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+/** 按 formKey + businessKey 回查本次提交的表单数据；失败不阻断审批主链 */
+async function loadFormRecord() {
+  const d = detail.value
+  if (!d?.formKey || !d.businessKey) return
+  formRecordLoading.value = true
+  try {
+    const { getFormData, getFormDefinition } = await import('@/modules/form/api/form')
+    formRecord.value = await getFormData(d.formKey, d.businessKey)
+    try {
+      formSchema.value = await getFormDefinition(d.formKey)
+    } catch {
+      formSchema.value = null
+    }
+  } catch {
+    formRecord.value = null
+  } finally {
+    formRecordLoading.value = false
   }
 }
 
@@ -167,10 +230,36 @@ onMounted(loadDetail)
         }}</el-descriptions-item>
         <el-descriptions-item label="表单标识">{{ detail.formKey }}</el-descriptions-item>
         <el-descriptions-item label="业务单号">{{ detail.businessKey }}</el-descriptions-item>
-        <el-descriptions-item label="当前审批人">{{ detail.assignee }}</el-descriptions-item>
-        <el-descriptions-item label="发起人 ID">{{ detail.initiatorId }}</el-descriptions-item>
+        <el-descriptions-item label="当前审批人">
+          {{ detail.assigneeName ?? detail.assignee }}
+        </el-descriptions-item>
+        <el-descriptions-item label="发起人">
+          {{ detail.initiatorName ?? detail.initiatorId }}
+        </el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detail.createTime }}</el-descriptions-item>
       </el-descriptions>
+    </el-card>
+
+    <!-- 本次提交的表单数据 -->
+    <el-card v-if="detail?.formKey && detail?.businessKey" class="detail-card">
+      <template #header><span>表单数据（本次提交）</span></template>
+      <div v-loading="formRecordLoading">
+        <el-alert
+          v-if="!formRecordLoading && !formRecord"
+          title="表单记录加载失败或已不存在"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
+        <el-descriptions v-else-if="formFieldRows.length > 0" :column="2" border>
+          <el-descriptions-item v-for="row in formFieldRows" :key="row.key" :label="row.label">
+            {{ row.value }}
+          </el-descriptions-item>
+        </el-descriptions>
+        <el-descriptions v-else-if="formRecord" :column="2" border>
+          <el-descriptions-item label="说明">该表单无可展示业务字段</el-descriptions-item>
+        </el-descriptions>
+      </div>
     </el-card>
 
     <!-- 流程变量 -->
@@ -199,7 +288,11 @@ onMounted(loadDetail)
           </template>
         </el-table-column>
         <el-table-column prop="taskName" label="任务名称" min-width="120" />
-        <el-table-column prop="assignee" label="审批人" min-width="100" />
+        <el-table-column label="审批人" min-width="120">
+          <template #default="{ row }">
+            {{ row.assigneeName ?? row.assignee ?? '-' }}
+          </template>
+        </el-table-column>
         <el-table-column label="审批结果" min-width="100">
           <template #default="{ row }">
             <el-tag :type="getApprovalResultType(row.approvalResult)" size="small">

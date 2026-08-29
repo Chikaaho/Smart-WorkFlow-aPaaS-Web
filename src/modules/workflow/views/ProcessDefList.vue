@@ -348,40 +348,41 @@ onMounted(loadList)
         </template>
       </el-table-column>
     </el-table>
-
-    <!-- 查看流程图对话框 -->
-    <el-dialog
-      v-model="viewerVisible"
-      :title="`流程图 - ${currentDefName}`"
-      :close-on-click-modal="false"
-      destroy-on-close
-      width="900px"
-      @opened="onDialogOpened"
-      @closed="closeViewer"
-    >
-      <div v-loading="viewerLoading" class="bpmn-wrapper">
-        <!-- 错误提示 -->
-        <el-result
-          v-if="viewerError"
-          icon="error"
-          :title="viewerError"
-          :sub-title="'请确认流程定义已发布且 BPMN XML 有效'"
-        />
-        <!-- BPMN 渲染容器 -->
-        <div ref="bpmnContainerRef" class="bpmn-container" />
-      </div>
-    </el-dialog>
-
-    <!-- 创建流程定义对话框 -->
-    <CreateProcessDefDialog v-model:visible="createDialogVisible" @saved="loadList" />
-
-    <!-- 编辑流程定义对话框 -->
-    <EditProcessDefDialog
-      v-model:visible="editDialogVisible"
-      :process-def="editingDef"
-      @saved="loadList"
-    />
   </StandardListTemplate>
+
+  <!-- 查看流程图对话框（置于列表模板之外：空态时 default slot 不渲染，
+       对话框放内部会导致空列表下"创建/编辑"按钮无响应） -->
+  <el-dialog
+    v-model="viewerVisible"
+    :title="`流程图 - ${currentDefName}`"
+    :close-on-click-modal="false"
+    destroy-on-close
+    width="900px"
+    @opened="onDialogOpened"
+    @closed="closeViewer"
+  >
+    <div v-loading="viewerLoading" class="bpmn-wrapper">
+      <!-- 错误提示 -->
+      <el-result
+        v-if="viewerError"
+        icon="error"
+        :title="viewerError"
+        :sub-title="'请确认流程定义已发布且 BPMN XML 有效'"
+      />
+      <!-- BPMN 渲染容器 -->
+      <div ref="bpmnContainerRef" class="bpmn-container" />
+    </div>
+  </el-dialog>
+
+  <!-- 创建流程定义对话框 -->
+  <CreateProcessDefDialog v-model:visible="createDialogVisible" @saved="loadList" />
+
+  <!-- 编辑流程定义对话框 -->
+  <EditProcessDefDialog
+    v-model:visible="editDialogVisible"
+    :process-def="editingDef"
+    @saved="loadList"
+  />
 </template>
 
 <style scoped>

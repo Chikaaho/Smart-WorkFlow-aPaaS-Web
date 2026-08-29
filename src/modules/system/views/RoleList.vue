@@ -234,7 +234,27 @@ async function openEdit(row: SysRole) {
   await loadPermissionTree()
   await nextTick()
   applyDeptCheckedKeys()
-  permissionTreeRef.value?.setCheckedKeys(permissionIds.value)
+  // 级联勾选模式下只回填叶子节点：父目录节点由树勾选状态自动推导（半选/全选），
+  // 直接 set 父节点会把未授权的兄弟子节点一并勾上，造成视觉过授权。
+  const parentIds = collectParentIds(permissionTree.value ?? [])
+  permissionTreeRef.value?.setCheckedKeys(
+    permissionIds.value.filter((id) => !parentIds.has(String(id))),
+  )
+}
+
+/** 收集树中所有含子节点的节点 id（用于区分目录/菜单与叶子按钮）。 */
+function collectParentIds(nodes: Array<{ id: unknown; children?: unknown[] }>): Set<string> {
+  const parents = new Set<string>()
+  const walk = (list: Array<{ id: unknown; children?: unknown[] }>) => {
+    for (const node of list) {
+      if (node.children && node.children.length > 0) {
+        parents.add(String(node.id))
+        walk(node.children as Array<{ id: unknown; children?: unknown[] }>)
+      }
+    }
+  }
+  walk(nodes)
+  return parents
 }
 
 function closeDialog() {
@@ -279,7 +299,11 @@ async function handleSubmit() {
 }
 
 function handlePermissionCheck() {
-  permissionIds.value = (permissionTreeRef.value?.getCheckedKeys(true) ?? []) as string[]
+  // 全选节点 + 半选父节点一并保存：目录节点是子菜单导航的必要载体，
+  // 只存叶子会导致父目录丢失，子菜单在菜单树组装时被丢弃（授权与导航不一致）。
+  const checked = (permissionTreeRef.value?.getCheckedKeys() ?? []) as string[]
+  const halfChecked = (permissionTreeRef.value?.getHalfCheckedKeys() ?? []) as string[]
+  permissionIds.value = [...new Set([...checked, ...halfChecked])]
 }
 
 const isProtectedRole = computed(() => form.builtIn === true && form.code === 'superadmin')

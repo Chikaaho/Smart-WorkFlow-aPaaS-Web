@@ -175,13 +175,9 @@ export function switchMockSession(username: string): void {
     MOCK_CURRENT_SESSION = MOCK_SESSION_DATA_ADMIN
     // admin 权限实时按角色绑定重算（bindings 可能被测试/菜单管理 mutate，
     // 固定快照会导致权限与菜单脱节——对齐真实后端每次认证实时装配）。
+    // P32 表单数据导入导出按钮权限由 MOCK_ROLE_MENU_BINDINGS['2'] 的
+    // V43 按钮 230/231/232 经同源装配自然获得，不再单独 push（避免与 /auth/me 重建路径漂移）。
     MOCK_SESSION_DATA_ADMIN.permissions = collectSessionPermissions(['admin'])
-    // P32 表单数据导入导出按钮权限（对齐后端 V43 菜单 230/231/232 种子）。
-    MOCK_SESSION_DATA_ADMIN.permissions.push(
-      'form:data:template',
-      'form:data:import',
-      'form:data:export',
-    )
   } else if (username === 'user') {
     MOCK_CURRENT_SESSION = MOCK_SESSION_DATA_USER
   } else {
@@ -387,6 +383,49 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
     sort: 2,
     menuType: 1,
     permission: 'form:design:view',
+    // P32/V43：表单数据导入导出按钮行（对齐真实后端 V43 seed 菜单 230/231/232，
+    // parent=表单设计目录；menuType=2 按钮行 permission 参与权限装配）。
+    children: [
+      {
+        id: '230',
+        parentId: '2',
+        name: 'FormDataTemplate',
+        title: '下载模板',
+        path: '',
+        component: null,
+        icon: '',
+        sort: 1,
+        menuType: 2,
+        permission: 'form:data:template',
+        hidden: false,
+      },
+      {
+        id: '231',
+        parentId: '2',
+        name: 'FormDataImport',
+        title: '数据导入',
+        path: '',
+        component: null,
+        icon: '',
+        sort: 2,
+        menuType: 2,
+        permission: 'form:data:import',
+        hidden: false,
+      },
+      {
+        id: '232',
+        parentId: '2',
+        name: 'FormDataExport',
+        title: '数据导出',
+        path: '',
+        component: null,
+        icon: '',
+        sort: 3,
+        menuType: 2,
+        permission: 'form:data:export',
+        hidden: false,
+      },
+    ],
   },
   {
     id: '3',
@@ -1568,7 +1607,12 @@ export const MOCK_ROLE_MENU_BINDINGS: Record<string, number[]> = {
   // 缺 agent 目录(5) 会导致智能体整棵子树不可见。
   // P48/V37：工具管理页 17 + 按钮 170（agent:tool:view / agent:tool:manage），
   // 对齐真实后端 V37 seed（页面 id=212、按钮 id=213）与 admin 角色菜单绑定契约。
-  '2': [1, 2, 3, 5, 11, 12, 13, 14, 15, 16, 17, 18, 43, 430, 110, 111, 112, 120, 121, 122, 170],
+  // P32/V43：表单数据导入导出按钮 230/231/232（form:data:template/import/export），
+  // 对齐真实后端 V43 seed 与 admin 角色菜单绑定契约（/auth/me 与菜单树同源装配）。
+  '2': [
+    1, 2, 3, 5, 11, 12, 13, 14, 15, 16, 17, 18, 43, 430, 110, 111, 112, 120, 121, 122, 170, 230,
+    231, 232,
+  ],
   // superadmin：无绑定行（超管旁路，与真实 seed 一致）
   // user：空绑定
 }

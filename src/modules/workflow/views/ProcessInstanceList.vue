@@ -288,12 +288,12 @@ function isUserTask(activityType: string): boolean {
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="发起人 ID" width="100">
+      <el-table-column label="发起人" min-width="130" show-overflow-tooltip>
         <template #default="{ row }">
-          {{ (row as ProcessInstance).initiatorId }}
+          {{ (row as ProcessInstance).initiatorName ?? (row as ProcessInstance).initiatorId }}
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" label="发起时间" width="180" />
+      <el-table-column prop="createTime" label="发起时间" min-width="180" show-overflow-tooltip />
       <el-table-column label="操作" width="100" fixed="right">
         <template #default="{ row }">
           <el-button size="small" link type="primary" @click="openDrawer(row as ProcessInstance)">
@@ -336,8 +336,8 @@ function isUserTask(activityType: string): boolean {
               }}</el-descriptions-item>
               <el-descriptions-item label="业务单号">{{ detail.businessKey }}</el-descriptions-item>
               <el-descriptions-item label="表单标识">{{ detail.formKey }}</el-descriptions-item>
-              <el-descriptions-item label="发起人 ID">{{
-                detail.initiatorId
+              <el-descriptions-item label="发起人">{{
+                detail.initiatorName ?? detail.initiatorId
               }}</el-descriptions-item>
               <el-descriptions-item label="状态">
                 <el-tag :type="getStatusType(detail.status)" size="small">
@@ -378,9 +378,9 @@ function isUserTask(activityType: string): boolean {
               stripe
             >
               <el-table-column prop="activityName" label="审批节点" min-width="140" />
-              <el-table-column prop="assignee" label="审批人" min-width="100">
+              <el-table-column label="审批人" min-width="120" show-overflow-tooltip>
                 <template #default="{ row }">
-                  {{ row.assignee ?? '-' }}
+                  {{ row.assigneeName ?? row.assignee ?? '-' }}
                 </template>
               </el-table-column>
               <el-table-column label="审批状态" min-width="100">
@@ -390,8 +390,13 @@ function isUserTask(activityType: string): boolean {
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="startTime" label="开始时间" min-width="170" />
-              <el-table-column label="完成时间" min-width="170">
+              <el-table-column
+                prop="startTime"
+                label="开始时间"
+                min-width="175"
+                show-overflow-tooltip
+              />
+              <el-table-column label="完成时间" min-width="175" show-overflow-tooltip>
                 <template #default="{ row }">
                   {{ row.endTime ?? '进行中...' }}
                 </template>

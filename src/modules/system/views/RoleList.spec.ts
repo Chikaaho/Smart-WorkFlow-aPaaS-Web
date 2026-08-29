@@ -187,7 +187,11 @@ describe('RoleList', () => {
       openEdit: (row: SysRole) => Promise<void>
       handleSubmit: () => Promise<void>
       handlePermissionCheck: () => void
-      permissionTreeRef: { getCheckedKeys: (leaf?: boolean) => string[] } | null
+      permissionIds: string[]
+      permissionTreeRef: {
+        getCheckedKeys: (leaf?: boolean) => string[]
+        getHalfCheckedKeys: () => string[]
+      } | null
     }
     return { wrapper, vm }
   }
@@ -211,13 +215,16 @@ describe('RoleList', () => {
 
     expect(getRoleMenus).toHaveBeenCalledWith('2')
     expect(getRoleMenus).toHaveBeenCalledTimes(1)
-    // 回填 setCheckedKeys(['11','110']) 后，父子联动（check-strictly=false）：
-    // - 父 11 勾选 → 其兄弟叶子 111 被级联补全（全选语义，父半选=未授权会被消除）
-    // - 根 1 因全部子节点勾选而全选（非半选）
+    // 修复后回填只 set 叶子（110 父=11 未 set，111 未授权）：父子联动（check-strictly=false）下
+    // - 父 11 因 110 勾选呈半选，111 保持未勾选（不出现过授权级联）
+    // - 根 1 同理半选
+    // 保存集 = 全选 + 半选（handlePermissionCheck 语义），'11'、'1' 由半选补齐不丢失
     const leaves = vm.permissionTreeRef?.getCheckedKeys(true) ?? []
-    expect(leaves.sort()).toEqual(['110', '111'])
+    expect(leaves.sort()).toEqual(['110'])
     const all = vm.permissionTreeRef?.getCheckedKeys(false) ?? []
-    expect(all.sort()).toEqual(['1', '11', '110', '111'])
+    expect(all.sort()).toEqual(['110'])
+    const half = vm.permissionTreeRef?.getHalfCheckedKeys() ?? []
+    expect(half.sort()).toEqual(['1', '11'])
   })
 
   it('保存：编辑普通角色调用 updateRoleMenus(id, 全选叶子 key)', async () => {
@@ -287,9 +294,9 @@ describe('RoleList', () => {
     expect(updateRoleMenus).toHaveBeenCalledWith('42', [])
   })
 
-  it('父子联动：勾选父节点后 getCheckedKeys(true) 只返回叶子；保存→重开→回填一致（半选不丢权）', async () => {
+  it('父子联动：保存集=全选+半选（目录不丢）；回填只 set 叶子；保存→重开→回填一致', async () => {
     vi.mocked(updateRoleMenus).mockResolvedValue(undefined)
-    vi.mocked(getRoleMenus).mockResolvedValue(['110', '111'])
+    vi.mocked(getRoleMenus).mockResolvedValue(['1', '11', '110', '111'])
     vi.mocked(getRole).mockResolvedValue({
       id: '2',
       name: '管理员',
@@ -301,28 +308,26 @@ describe('RoleList', () => {
     })
     const { vm } = await mountWithDialog()
 
-    // 第一次编辑：回填后手动勾选 110，保存
+    // 第一次编辑：回填（父 1/11 过滤，仅 set 叶子 110/111）→ handlePermissionCheck 收集 → 保存
     await vm.openEdit({ id: '2', name: '管理员', code: 'admin', status: 1 } as SysRole)
     await nextTick()
     await nextTick()
-    vm.handlePermissionCheck() // 模拟 @check：权限树保持当前勾选（110/111 全选）
-    const saved = vm.permissionTreeRef?.getCheckedKeys(true) ?? []
-    expect(saved.sort()).toEqual(['110', '111'])
-    // 父节点不被单独保存：getCheckedKeys(true) 只取叶子，不会出现「勾了父没存子」的半选丢权
-    expect(saved).not.toContain('11')
-    expect(saved).not.toContain('1')
+    vm.handlePermissionCheck() // 模拟 @check：全选 110/111 + 半选 11/1 一并进入保存集
+    const saved = vm.permissionIds ?? []
+    // 目录 1/11 由半选保留（A-01 修复点：只存叶子会让菜单树组装丢父节点）
+    expect(saved.sort()).toEqual(['1', '11', '110', '111'])
     await vm.handleSubmit()
     await nextTick()
-    expect(updateRoleMenus).toHaveBeenCalledWith('2', ['110', '111'])
+    expect(updateRoleMenus).toHaveBeenCalledWith('2', ['1', '11', '110', '111'])
 
-    // 第二次打开：getRoleMenus 返回保存的叶子集（mock 已持久化语义），回填必须一致
+    // 第二次打开：getRoleMenus 返回保存的全量集（mock 已持久化语义），回填一致
     vi.mocked(getRoleMenus).mockClear()
-    vi.mocked(getRoleMenus).mockResolvedValue(['110', '111'])
+    vi.mocked(getRoleMenus).mockResolvedValue(['1', '11', '110', '111'])
     await vm.openEdit({ id: '2', name: '管理员', code: 'admin', status: 1 } as SysRole)
     await nextTick()
     await nextTick()
     const rechecked = vm.permissionTreeRef?.getCheckedKeys(true) ?? []
-    // 保存→重开→回填一致：全选叶子无半选，不会静默丢失权限
+    // 回填过滤父节点后，叶子全选 → 全选/半选状态与首次一致，不出现过授权级联
     expect(rechecked.sort()).toEqual(['110', '111'])
     expect(getRoleMenus).toHaveBeenCalledTimes(1)
   })

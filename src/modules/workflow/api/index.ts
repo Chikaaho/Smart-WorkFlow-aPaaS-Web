@@ -152,6 +152,63 @@ export async function saveProcessDefGraph(id: number, graph: unknown): Promise<v
   })
 }
 
+/** GET /workflow/defs/{id} → ProcessGraph（流程图定义，含节点配置） */
+export async function getProcessDefDefinition(id: number): Promise<ProcessGraphPayload> {
+  return request<ProcessGraphPayload>({
+    method: 'GET',
+    url: `/workflow/defs/${id}`,
+  })
+}
+
+/** 审批人候选项（脱敏：id/username/realName） */
+export interface ApproverCandidate {
+  id: number
+  username: string
+  realName: string | null
+}
+
+/** GET /workflow/defs/approver-candidates?keyword= → 审批人候选列表 */
+export async function queryApproverCandidates(keyword = ''): Promise<ApproverCandidate[]> {
+  return request<ApproverCandidate[]>({
+    method: 'GET',
+    url: '/workflow/defs/approver-candidates',
+    params: { keyword },
+  })
+}
+
+/** 流程图校验错误 */
+export interface GraphValidationError {
+  errorCode: number
+  message: string
+  nodeKey?: string | null
+}
+
+/** POST /workflow/defs/{id}/validate → GraphValidationError[] */
+export async function validateProcessDefGraph(id: number): Promise<GraphValidationError[]> {
+  return request<GraphValidationError[]>({
+    method: 'POST',
+    url: `/workflow/defs/${id}/validate`,
+  })
+}
+
+/** 前端最小图 payload（与后端 ProcessGraph 对齐的子集） */
+export interface ProcessGraphPayload {
+  processKey: string
+  name: string
+  formKey: string
+  version?: number
+  elements?: Array<{
+    id: string
+    kind: string
+    type?: string
+    source?: string
+    target?: string
+    config?: Record<string, unknown>
+    style?: Record<string, unknown>
+  }>
+  canvas?: Record<string, unknown>
+}
+
 // ═══════════════════════════════════════
 // 流程实例监控
 // ═══════════════════════════════════════
@@ -161,6 +218,7 @@ export interface InstanceFilter {
   status?: string // RUNNING / APPROVED / REJECTED
   processDefKey?: string // 流程定义 key
   initiatorId?: number // 发起人 ID
+  businessKey?: string // 业务键（表单记录 ID）
 }
 
 /** GET /workflow/instances?pageNum=&pageSize=&status=&processDefKey=&initiatorId= → PageResult<ProcessInstance> */

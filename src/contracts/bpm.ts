@@ -18,7 +18,9 @@ export interface TaskDetail {
   formKey: string
   businessKey: string
   assignee: string
+  assigneeName?: string | null // 审批人展示名（可读身份回显）
   initiatorId: number // 后端 Long → JSON number
+  initiatorName?: string | null // 发起人展示名（可读身份回显）
   createTime: string // LocalDateTime → ISO-8601 string
   processVariables: Record<string, unknown> // Map<String, Object>
   approvalHistory: ApprovalHistoryItem[]
@@ -29,6 +31,7 @@ export interface ApprovalHistoryItem {
   taskId: string
   taskName: string
   assignee: string
+  assigneeName?: string | null // 审批人展示名（可读身份回显）
   createTime: string
   endTime: string | null // 可能为 null
   approvalResult: 'APPROVED' | 'REJECTED' | null // 审批结果：APPROVED=通过, REJECTED=驳回, null=进行中
@@ -79,6 +82,7 @@ export interface ProcessInstance {
   businessKey: string // 业务键（= 表单 recordId）
   formKey: string // 表单业务标识
   initiatorId: number // 发起人用户 ID（后端 Long → JSON number）
+  initiatorName?: string | null // 发起人展示名（可读身份回显）
   status: 'RUNNING' | 'APPROVED' | 'REJECTED' // 实例状态
   createTime: string // 发起时间（LocalDateTime → ISO-8601 string）
 }
@@ -91,6 +95,7 @@ export interface ActivityNode {
   startTime: string | null // 开始时间（未开始节点可能为 null）
   endTime: string | null // 结束时间（进行中节点为 null）
   assignee: string | null // 处理人（仅 userTask 有值）
+  assigneeName?: string | null // 处理人展示名（可读身份回显）
   taskId: string | null // Flowable task ID（仅 userTask 有值）
 }
 

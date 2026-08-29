@@ -293,17 +293,26 @@ async function handleSubmit() {
     const id = await submitForm(formKey, { ...formData }, schema.value?.fields)
     successMsg.value = `提交成功，记录 ID：${id}`
 
-    // 显示流程发起提示
-    ElMessage.success({
-      message: '表单提交成功，流程已发起',
-      duration: 3000,
-    })
-
-    // 延迟跳转到待办列表，让用户看到成功提示
-    // eslint-disable-next-line no-undef
-    window.setTimeout(() => {
-      router.push({ name: 'TodoList' })
-    }, 1500)
+    // 按业务键（记录 ID）查询流程实例，只有实例真实创建才提示"流程已发起"。
+    // 实例由表单提交事件在事务提交后异步创建，短暂轮询等待其可见（最多约 5s）。
+    const started = await waitForInstanceByBusinessKey(id)
+    if (started) {
+      ElMessage.success({
+        message: '提交成功，流程已发起',
+        duration: 3000,
+      })
+      // 跳转到发起人可查看实例状态与流转记录的真实页面
+      // eslint-disable-next-line no-undef
+      window.setTimeout(() => {
+        router.push('/workflow/instances')
+      }, 1500)
+    } else {
+      // 未绑定流程/发起失败：如实提示仅保存数据，不声称流程已发起
+      ElMessage.info({
+        message: '提交成功（该表单未关联已发布流程，仅保存数据）',
+        duration: 4000,
+      })
+    }
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = businessError(err.code, err.msg)
@@ -313,6 +322,23 @@ async function handleSubmit() {
   } finally {
     submitting.value = false
   }
+}
+
+/** 按记录 ID 轮询查询流程实例是否真实创建（AFTER_COMMIT 异步创建存在短暂延迟） */
+async function waitForInstanceByBusinessKey(recordId: string): Promise<boolean> {
+  const { queryInstances } = await import('@/modules/workflow/api')
+  const maxAttempts = 10
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const page = await queryInstances({ pageNum: 1, pageSize: 1 }, { businessKey: recordId })
+      if (page.list.length > 0) return true
+    } catch {
+      // 查询失败不判定为未发起，继续重试直至超限
+    }
+    // eslint-disable-next-line no-undef
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  return false
 }
 
 // ── 挂载 ──
