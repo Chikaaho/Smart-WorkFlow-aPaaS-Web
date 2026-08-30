@@ -1,0 +1,7 @@
+dist
+node_modules
+coverage
+src/contracts/api-types
+src/types/auto-imports.d.ts
+src/types/components.d.ts
+pnpm-lock.yaml

@@ -1,0 +1,95 @@
+/**
+ * 品牌色单一数据源（决策文档 · 外壳刀 §1）。
+ * 将来换色只改 --sw-color-primary 这一行，其余各档由 color-mix 运行时派生，
+ * 与 Element Plus 自身派生算法一致（light-i = i×10% 白色混入，dark-2 = 20% 黑色）。
+ * color-mix 现代浏览器（2023+）均支持；若某目标浏览器不支持，退路是用硬编码色值覆盖。
+ */
+:root {
+  --sw-color-primary: #7e306b; /* 唯一品牌色源 */
+
+  --el-color-primary: var(--sw-color-primary);
+  --el-color-primary-light-3: color-mix(in srgb, var(--sw-color-primary) 70%, white);
+  --el-color-primary-light-5: color-mix(in srgb, var(--sw-color-primary) 50%, white);
+  --el-color-primary-light-7: color-mix(in srgb, var(--sw-color-primary) 30%, white);
+  --el-color-primary-light-8: color-mix(in srgb, var(--sw-color-primary) 20%, white);
+  --el-color-primary-light-9: color-mix(in srgb, var(--sw-color-primary) 10%, white);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--sw-color-primary) 80%, black);
+
+  /* ═══════════════════════════════════════════════════════
+   * 设计系统 Token 全量（页型规范 §5）
+   * 单一源：所有 --sw-* 值来自《页型规范》原型，禁止逐页硬编码。
+   * 中性/语义色与 EP 默认一致（不重绑 --el-*），供业务页直接引用。
+   * 暗色模式将来通过 [data-theme='dark'] 覆盖。
+   * ═══════════════════════════════════════════════════════ */
+
+  /* ── 中性色 ── */
+  --sw-text-primary: #303133;
+  --sw-text-regular: #606266;
+  --sw-text-secondary: #909399;
+  --sw-text-placeholder: #a8abb2;
+  --sw-border-base: #dcdfe6;
+  --sw-border-light: #e4e7ed;
+  --sw-border-lighter: #ebeef5;
+  --sw-fill-base: #f5f7fa;
+
+  /* ── 语义色（色值 + 浅底） ── */
+  --sw-success: #67c23a;
+  --sw-success-bg: #f0f9eb;
+  --sw-warning: #e6a23c;
+  --sw-warning-bg: #fdf6ec;
+  --sw-danger: #f56c6c;
+  --sw-danger-bg: #fef0f0;
+  --sw-info: #909399;
+  --sw-info-bg: #f4f4f5;
+
+  /* ── 字号阶梯（size + weight 成对） ── */
+  --sw-font-h1: 20px;
+  --sw-font-weight-h1: 600;
+  --sw-font-h2: 16px;
+  --sw-font-weight-h2: 600;
+  --sw-font-emphasis: 14px;
+  --sw-font-weight-emphasis: 500;
+  --sw-font-body: 14px;
+  --sw-font-weight-body: 400;
+  --sw-font-secondary: 13px;
+  --sw-font-weight-secondary: 400;
+  --sw-font-caption: 12px;
+  --sw-font-weight-caption: 400;
+
+  /* ── 圆角 ── */
+  --sw-radius-sm: 2px;
+  --sw-radius-base: 4px;
+  --sw-radius-card: 6px;
+  --sw-radius-lg: 8px;
+
+  /* ── 间距（4 的倍数） ── */
+  --sw-space-4: 4px;
+  --sw-space-8: 8px;
+  --sw-space-12: 12px;
+  --sw-space-16: 16px;
+  --sw-space-20: 20px;
+  --sw-space-24: 24px;
+  --sw-space-32: 32px;
+
+  /* ── 阴影 ── */
+  --sw-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 8px rgba(0, 0, 0, 0.04);
+  --sw-shadow-popper: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --sw-shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.12);
+
+  /* ── 控件密度 ── */
+  --sw-control-height-lg: 40px;
+  --sw-control-height: 32px;
+  --sw-control-height-sm: 28px;
+  --sw-form-row-gap: 22px;
+  --sw-table-row-height: 50px;
+  --sw-table-row-height-compact: 40px;
+  --sw-cell-padding-x: 16px;
+  --sw-card-padding: 24px;
+  --sw-section-gap: 20px;
+
+  /* ── 布局（收敛自 BasicLayout 现有硬编码） ── */
+  --sw-layout-aside-width: 220px;
+  --sw-layout-aside-width-collapsed: 64px;
+  --sw-layout-header-height: 56px;
+  --sw-layout-header-padding-x: 16px;
+}

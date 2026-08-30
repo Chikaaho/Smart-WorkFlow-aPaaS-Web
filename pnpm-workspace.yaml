@@ -1,0 +1,5 @@
+allowBuilds:
+  core-js-pure: true
+  simple-git-hooks: true
+  unrs-resolver: true
+  vue-demi: true
