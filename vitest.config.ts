@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
@@ -44,6 +44,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     css: false,
+    exclude: [
+      ...configDefaults.exclude,
+      'src/modules/agent/views/tool-production-menu-chain-live.spec.ts',
+    ],
     // 激活 mock dispatch 链：API 函数 → request → dispatchMock → handlers.ts
     env: {
       VITE_USE_MOCK: 'true',

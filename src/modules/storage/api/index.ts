@@ -93,9 +93,11 @@ export async function deleteFile(storageKey: string): Promise<void> {
  */
 export async function downloadFile(storageKey: string): Promise<{ blob: Blob; fileName: string }> {
   const token = getAccessToken()
-  const response = await fetch(`/api/storage/files/${encodeURIComponent(storageKey)}/download`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
+  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/+$/, '')
+  const response = await fetch(
+    `${apiBaseUrl}/storage/files/${encodeURIComponent(storageKey)}/download`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+  )
   if (!response.ok) {
     throw new Error(`下载失败: HTTP ${response.status}`)
   }

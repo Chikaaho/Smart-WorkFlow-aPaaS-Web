@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig, type Plugin, type PluginOption } from 'vite'
+import { defineConfig, loadEnv, type Plugin, type PluginOption } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
@@ -33,27 +33,32 @@ function cspMetaPlugin(): Plugin {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [vue(), ...elementPlusAutoImport(), cspMetaPlugin()],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
-  },
-  server: {
-    proxy: {
-      '/api': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8080',
-        changeOrigin: true,
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+
+  return {
+    base: env.VITE_APP_BASE_URL || '/',
+    plugins: [vue(), ...elementPlusAutoImport(), cspMetaPlugin()],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
-    headers: {
-      'Content-Security-Policy': CSP_POLICY,
+    server: {
+      proxy: {
+        '/api': {
+          target: env.VITE_PROXY_TARGET || 'http://localhost:8080',
+          changeOrigin: true,
+        },
+      },
+      headers: {
+        'Content-Security-Policy': CSP_POLICY,
+      },
     },
-  },
-  preview: {
-    headers: {
-      'Content-Security-Policy': CSP_POLICY,
+    preview: {
+      headers: {
+        'Content-Security-Policy': CSP_POLICY,
+      },
     },
-  },
+  }
 })
