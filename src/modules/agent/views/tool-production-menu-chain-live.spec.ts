@@ -61,10 +61,11 @@ vi.mock('@/foundation/request', async (importOriginal) => {
  * （VITE_USE_MOCK=false），request 层直连真实后端 http://localhost:8080/api——
  * 生产菜单响应来自真实后端（非 Mock seed / dispatchMock / 手工构造）。
  *
- * 前置：真实后端已启动（dev profile + SW_CIPHER_KEY），且已存在：
+ * 前置：真实后端已启动（dev profile + SW_CIPHER_KEY + Redis）。tooluser/user123 等测试
+ * 身份由本文件 beforeAll 经真实后端 API 幂等建立（ensureTooluserFixture：角色2=admin
+ * 绑定 V37 菜单 212/213 + 创建/重置 tooluser），不依赖人工预建账号或历史数据库：
  *   - superadmin 身份：admin/admin123（V4 seed，超管旁路，生产菜单含工具管理）
- *   - 普通用户身份：tooluser/user123（绑定角色2=admin + V37 菜单 212/213，
- *     经真实 PUT /system/role/2/menus 绑定，生产菜单含工具管理）
+ *   - 普通用户身份：tooluser/user123（beforeAll 建立，superAdmin=false，生产菜单含工具管理）
  *
  * 逐段输出：身份 → 生产菜单响应工具项 → router.push → authGuard 结果 →
  * ToolList 挂载 → 列表请求/页面结果。
@@ -93,6 +94,67 @@ async function fetchProductionMenu(token: string) {
   const data = await res.json()
   if (data.code !== 0) throw new Error(`菜单失败: ${data.msg}`)
   return data.data
+}
+
+// ── 版本化测试前置（B1 修复）：fixture 全部经真实后端 API 幂等建立， ──
+// ── 干净 H2 库 + 当前 checkout 即可独立运行，不依赖人工预先建号。    ──
+
+const TOOLUSER_FIXTURE = {
+  username: 'tooluser',
+  password: 'user123',
+  realName: '工具用户',
+} as const
+const FIXTURE_ROLE_ID = 2
+/** V37 seed 的工具管理菜单：212=页面（agent/tool），213=按钮（agent:tool:manage） */
+const FIXTURE_TOOL_MENU_IDS = [212, 213]
+
+function authHeaders(token: string): Record<string, string> {
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+}
+
+async function ensureTooluserFixture(): Promise<void> {
+  const adminToken = await login('admin', 'admin123')
+
+  // 1. 角色2 菜单 → [212, 213]（PUT 为全量替换：角色2 在本 fixture 中锁定为工具菜单状态）
+  const menusRes = await fetch(`${API}/system/role/${FIXTURE_ROLE_ID}/menus`, {
+    method: 'PUT',
+    headers: authHeaders(adminToken),
+    body: JSON.stringify(FIXTURE_TOOL_MENU_IDS),
+  })
+  const menus = await menusRes.json()
+  if (menus.code !== 0) throw new Error(`绑定角色菜单失败: ${menus.msg}`)
+
+  // 2. tooluser 不存在则创建，存在则重置为 fixture 密码并绑回角色2（幂等）
+  const pageRes = await fetch(`${API}/system/user/page?pageNum=1&pageSize=100`, {
+    method: 'POST',
+    headers: authHeaders(adminToken),
+    body: JSON.stringify({}),
+  })
+  const page = await pageRes.json()
+  if (page.code !== 0) throw new Error(`查询用户失败: ${page.msg}`)
+  const records = (page.data?.records ?? []) as Array<{ id: number | string; username: string }>
+  const existing = records.find((u) => u.username === TOOLUSER_FIXTURE.username)
+  const form = {
+    username: TOOLUSER_FIXTURE.username,
+    realName: TOOLUSER_FIXTURE.realName,
+    plainPassword: TOOLUSER_FIXTURE.password,
+    status: 0,
+    deptId: 1,
+    roleIds: [FIXTURE_ROLE_ID],
+    postIds: [],
+  }
+  const saveRes = await fetch(`${API}/system/user`, {
+    method: existing == null ? 'POST' : 'PUT',
+    headers: authHeaders(adminToken),
+    body: JSON.stringify(existing == null ? form : { ...form, id: existing.id }),
+  })
+  const saved = await saveRes.json()
+  if (saved.code !== 0) {
+    throw new Error(`${existing == null ? '创建' : '重置'} tooluser 失败: ${saved.msg}`)
+  }
+
+  // 3. 前置自证：fixture 账号可真实登录，后续用例不再有账号前置
+  await login(TOOLUSER_FIXTURE.username, TOOLUSER_FIXTURE.password)
 }
 
 interface MenuNodeLike {
@@ -136,9 +198,11 @@ describe('K1-live 生产菜单真实响应链（真实后端）', () => {
   // 真实 HTTP 请求链，全量并行下放宽超时（默认 5s 不够）；每个 it 用第三参数 30s
   const TEST_TIMEOUT = 30_000
 
-  beforeAll(() => {
+  beforeAll(async () => {
     setActivePinia(createPinia())
-  })
+    // 版本化前置：幂等建立 tooluser/角色菜单绑定（真实 API，见文件顶部说明）
+    await ensureTooluserFixture()
+  }, 30_000)
 
   it(
     'superadmin：生产菜单含工具项 → push → authGuard 放行 → ToolList 挂载 → 列表请求成功',
