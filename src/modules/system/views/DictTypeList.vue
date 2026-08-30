@@ -109,14 +109,14 @@ const formError = ref('')
 const form = reactive<SysDictType>({
   name: '',
   code: '',
-  status: 1,
+  status: 0,
   description: '',
 })
 
 function resetForm() {
   form.name = ''
   form.code = ''
-  form.status = 1
+  form.status = 0
   form.description = ''
   editingId.value = null
   formError.value = ''
@@ -256,8 +256,8 @@ onMounted(loadList)
         @keyup.enter="handleQuery"
       />
       <el-select v-model="filter.status" placeholder="状态" clearable style="width: 120px">
-        <el-option label="正常" :value="1" />
-        <el-option label="停用" :value="0" />
+        <el-option label="正常" :value="0" />
+        <el-option label="停用" :value="1" />
       </el-select>
     </template>
     <template #filter-actions>
@@ -280,7 +280,7 @@ onMounted(loadList)
       <el-table-column prop="status" label="状态" width="80">
         <template #default="{ row }">
           <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
-            {{ row.status === 1 ? '正常' : '停用' }}
+            {{ row.status === 0 ? '正常' : '停用' }}
           </el-tag>
         </template>
       </el-table-column>
@@ -340,8 +340,8 @@ onMounted(loadList)
           <div class="form-field">
             <label class="form-field__label">状态</label>
             <el-select v-model="form.status" style="width: 100%">
-              <el-option label="正常" :value="1" />
-              <el-option label="停用" :value="0" />
+              <el-option label="正常" :value="0" />
+              <el-option label="停用" :value="1" />
             </el-select>
           </div>
         </FormGrid>
