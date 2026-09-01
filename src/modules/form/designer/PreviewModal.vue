@@ -13,7 +13,7 @@ import { computed } from 'vue'
 import type { FormSchema } from '@/contracts/form-schema'
 import FormPreview from '@/adapters/form-designer/FormPreview.vue'
 
-const props = defineProps<{ schema: FormSchema }>()
+const props = withDefaults(defineProps<{ schema: FormSchema; badge?: string }>(), { badge: '' })
 const visible = defineModel<boolean>('visible', { required: true })
 
 const hasFields = computed(() => props.schema.fields.length > 0)
@@ -27,6 +27,10 @@ const hasFields = computed(() => props.schema.fields.length > 0)
     class="preview-modal"
     append-to-body
   >
+    <!-- 历史版本等特殊预览的明确标识（只读语义由数据侧保证：零回写路径） -->
+    <div v-if="badge" class="preview-modal__badge-bar">
+      <el-tag type="warning" size="large">{{ badge }}</el-tag>
+    </div>
     <div class="preview-modal__stage">
       <div v-if="hasFields" class="preview-modal__form">
         <p class="preview-modal__hint">带 <span class="preview-modal__star">*</span> 为必填项</p>
@@ -39,6 +43,12 @@ const hasFields = computed(() => props.schema.fields.length > 0)
 </template>
 
 <style scoped>
+.preview-modal__badge-bar {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: var(--sw-space-8) var(--sw-space-24) 0;
+}
+
 .preview-modal__stage {
   min-height: 60vh;
   background: var(--sw-fill-base);

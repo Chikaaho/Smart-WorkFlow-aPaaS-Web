@@ -79,11 +79,13 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
 // ─── 操作 ───
 
 function goCreate() {
-  void router.push({ name: 'form-designer' })
+  // P52：用 path 而非 name —— 菜单动态路由与工作台静态路由不同名，
+  // path 直达带 :id 的工作台路由，避免同名替换导致的参数丢失。
+  void router.push('/form/designer')
 }
 
 function goEdit(row: FormDefListItem) {
-  void router.push({ name: 'form-designer', params: { id: row.id } })
+  void router.push(`/form/designer/${row.id}`)
 }
 
 // el-table row slot 的 DefaultRow 类型不兼容，桥接函数

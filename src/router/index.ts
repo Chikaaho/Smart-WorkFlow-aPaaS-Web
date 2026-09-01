@@ -31,8 +31,12 @@ export const routes: RouteRecordRaw[] = [
     // 直达 URL 可进,受 authGuard 保护,无需纳入后端菜单树。
     children: [
       {
-        path: 'form/form-designer/:id?',
-        name: 'form-designer',
+        // P52：表单设计器工作台。路径与菜单种子（form/designer）同段，但带 :id 段且
+        // 独立命名 —— 菜单动态路由（name=form-designer，path=form/designer）addRoute
+        // 会按名替换同名的静态路由，历史上这正是 :id 深链失效的根因；工作台路由
+        // 必须独立命名，避免被动态路由顶掉。
+        path: 'form/designer/:id?',
+        name: 'form-designer-workbench',
         component: () => import('@/modules/form/views/FormDesigner.vue'),
         meta: { title: '表单设计器' },
       },

@@ -1,17 +1,21 @@
 <script setup lang="ts">
 /**
- * 表单设计器（第四刀：草稿保存 + 发布接线）。
+ * 表单设计器工作台（P52）。
  *
- * 三栏：控件库（左）→ 画布（中）→ 配置面板（右），底部保存草稿 / 发布。
+ * 顶部工作台：表单身份（formKey/状态/版本）+ 保存状态五态 + 「表单设计 / 关联流程」
+ * 工作区切换 + 保存 / 发布 / 历史版本。下方按工作区切换三栏设计器或关联流程面板。
  *
- * 生命周期：
- *   - 新建：路由无 id 参数 → 空白画布，保存时先建草稿再存 definition。
- *   - 编辑：路由有 id 参数 → 加载已存 definition 回显画布，保存时直接更新 definition。
- *   - 已发布：status==PUBLISHED → 编辑区/保存/发布全部灰化。
+ * 关键契约（方向 §3）：
+ *   - 表单身份由路由 :id（稳定业务标识）确定，F5 / 深链 / 重进可恢复，含工作区
+ *     （query.tab）；表单不存在/已删除/无权 → 明确拒绝态，不回退其他表单。
+ *   - 保存状态：未修改/未保存/保存中/保存成功/保存失败；失败不清除未保存标记。
+ *   - 发布只针对最近一次成功保存的草稿：存在未保存修改时先走保存/放弃/取消保护，
+ *     保存失败不得继续发布。
+ *   - 切工作区、路由离开、关闭页签共用同一套脏状态保护。
+ *   - 历史版本只读预览；历史内容零回写路径。
  */
-
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormSchema, TableSubField } from '@/contracts/form-schema'
 import FieldPalette from '../designer/FieldPalette.vue'
@@ -19,20 +23,34 @@ import DesignerCanvas from '../designer/DesignerCanvas.vue'
 import FieldConfigPanel from '../designer/FieldConfigPanel.vue'
 import SubFieldDesigner from '../designer/SubFieldDesigner.vue'
 import PreviewModal from '../designer/PreviewModal.vue'
+import HistoryVersionsDialog from '../designer/HistoryVersionsDialog.vue'
+import RelatedProcessesPanel from '../designer/RelatedProcessesPanel.vue'
 import { saveDraftDefinition, publishDefinition as publishDef } from '../designer/draft-actions'
+import {
+  resolveSaveState,
+  isDefinitionDirty,
+  parseWorkbenchTab,
+  LEAVE_GUARD_MESSAGE,
+  type WorkbenchSavePhase,
+  type WorkbenchTab,
+} from '../designer/workbench'
 import { applyFieldPatch, type FieldPatch } from '../designer/field-config'
 import { itemsToDefinition, definitionToItems } from '../designer/definition-convert'
-import { getFormDefinitionById } from '../api/form-def'
-import type { FormDefStatus } from '../api/form-def'
+import { getFormDefinitionById, getFormDefById, type FormDefStatus } from '../api/form-def'
+import type { ProcessDef } from '@/contracts/bpm'
 import type { DesignerItem } from '../designer/types'
 
 const route = useRoute()
 const router = useRouter()
 
-/* ── 表单定义标识 ── */
+/* ── 表单身份（稳定标识） ── */
 const formId = ref<string | null>(null)
 const formKey = ref<string>('')
 const status = ref<FormDefStatus>('DRAFT')
+const formVersion = ref<number | null>(null)
+/** 身份加载失败（不存在/已删除/无权）：明确拒绝态，不回退其他表单。 */
+const rejected = ref(false)
+const rejectReason = ref('')
 
 /* ── 设计态 ── */
 const title = ref('未命名表单')
@@ -41,8 +59,45 @@ const selectedId = ref<string | null>(null)
 const previewVisible = ref(false)
 const loading = ref(false)
 
+/* ── 保存状态与脏标记 ── */
+const baselineJson = ref<string>('')
+const savePhase = ref<WorkbenchSavePhase>('idle')
+/** 加载/保存请求序号：迟到响应不得覆盖当前表单状态。 */
+let loadSeq = 0
+
+const currentJson = computed(() => JSON.stringify(buildDefinition()))
+const isDirty = computed(() => isDefinitionDirty(baselineJson.value, currentJson.value))
+const saveState = computed(() => resolveSaveState(isDirty.value, savePhase.value))
+
+const SAVE_STATE_TYPE: Record<string, 'info' | 'warning' | 'primary' | 'success' | 'danger'> = {
+  未修改: 'info',
+  未保存: 'warning',
+  保存中: 'primary',
+  保存成功: 'success',
+  保存失败: 'danger',
+}
+
 /* ── 已发布标记（驱动灰化） ── */
 const isPublished = computed(() => status.value === 'PUBLISHED')
+
+/* ── 工作区（表单设计 / 关联流程），路由 query 可恢复 ── */
+const activeTab = ref<WorkbenchTab>(parseWorkbenchTab(route.query.tab))
+
+watch(activeTab, (tab) => {
+  const current = parseWorkbenchTab(route.query.tab)
+  if (current !== tab) {
+    router.replace({ query: { ...route.query, tab: tab === 'design' ? undefined : tab } })
+  }
+})
+
+// 外部导航（浏览器前进/后退）同步工作区
+watch(
+  () => route.query.tab,
+  (raw) => {
+    const tab = parseWorkbenchTab(raw)
+    if (tab !== activeTab.value) activeTab.value = tab
+  },
+)
 
 const existingNames = computed(() => items.value.map((it) => it.field.name))
 const selectedItem = computed(() => items.value.find((it) => it.id === selectedId.value) ?? null)
@@ -58,19 +113,16 @@ function patchSelectedField(patch: FieldPatch) {
 
 /* ── 子表盖层编辑（独立状态，与主画布隔离） ── */
 const editingTableId = ref<string | null>(null)
-/** 正在盖层里编辑的子表字段（仅 TABLE 才有；非 TABLE / 未编辑为 null）。 */
 const editingTableField = computed(() => {
   const item = items.value.find((it) => it.id === editingTableId.value)
   return item && item.field.type === 'TABLE' ? item.field : null
 })
 
-/** 点主画布子表占位的「编辑」入口 → 打开盖层（已发布则拒绝进入，不可改子字段）。 */
 function openTableEditor(id: string) {
   if (isPublished.value) return
   editingTableId.value = id
 }
 
-/** 盖层返回 → 把子字段写回该子表字段的 subFields，关盖层。 */
 function closeTableEditor(subFields: TableSubField[]) {
   const item = items.value.find((it) => it.id === editingTableId.value)
   if (item && item.field.type === 'TABLE') {
@@ -79,70 +131,151 @@ function closeTableEditor(subFields: TableSubField[]) {
   editingTableId.value = null
 }
 
-/** 从画布导出表单定义（纯数据，无 UI id）。 */
 function buildDefinition(): FormSchema {
   return itemsToDefinition(items.value, title.value)
 }
 
-/** 全屏预览的数据源。 */
 const previewSchema = computed<FormSchema>(() => buildDefinition())
 
-/* ── 回显已存设计 ── */
+/* ── 回显已存设计（身份 + 定义，带迟到响应防护） ── */
 
-async function loadDefinition(id: string) {
+async function loadForm(id: string) {
+  const seq = ++loadSeq
   loading.value = true
   try {
-    const schema = await getFormDefinitionById(id)
-    title.value = schema.title
+    // 身份与定义并行取；任一失败即进入拒绝态
+    const [defDto, schema] = await Promise.all([getFormDefById(id), getFormDefinitionById(id)])
+    if (seq !== loadSeq) return // 迟到响应：已有更新的加载接管
+    formKey.value = defDto.formKey
+    status.value = defDto.status
+    formVersion.value = defDto.formVersion ?? null
+    if (defDto.name) title.value = defDto.name
+    title.value = schema.title || title.value
     items.value = definitionToItems(schema)
-    // 重置 UI id 序列号，避免与已存 id 冲突
-    // definitionToItems 内部已用 nextDesignerItemId 生成新 id，无需额外处理。
-  } catch {
-    ElMessage.error('加载表单定义失败')
-    // 加载失败回退到列表页（若入口无列表页则留在设计器空白态）
+    rejected.value = false
+    await nextTick()
+    baselineJson.value = JSON.stringify(buildDefinition())
+    savePhase.value = 'idle'
+  } catch (err) {
+    if (seq !== loadSeq) return
+    rejected.value = true
+    rejectReason.value = err instanceof Error && err.message ? err.message : '表单不存在或无权访问'
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
 onMounted(() => {
+  globalThis.addEventListener('beforeunload', handleBeforeUnload)
   const idParam = route.params.id as string | undefined
   if (idParam) {
     formId.value = idParam
-    // formKey 在 loadDefinition 后会从 title 推断；真正的 formKey 在 FormDefDTO 中，
-    // 但当前 GET definition 不返回 formKey，故此处用路由 id 作为临时标识。
-    // 后续若需 formKey 用于保存（新建时），会从用户输入或后端返回中获取。
-    loadDefinition(idParam)
+    loadForm(idParam)
+  } else {
+    // 新建态：空白画布，基线为空设计
+    baselineJson.value = JSON.stringify(buildDefinition())
   }
-  // 新建态：空白画布，保持默认值。
+})
+
+onBeforeUnmount(() => {
+  globalThis.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+/* ── 脏状态离开保护（保存 / 放弃 / 取消，统一语义） ── */
+
+/**
+ * @returns 'proceed' 可继续；'abort' 用户取消或保存失败（不得继续后续动作）。
+ */
+async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
+  if (!isDirty.value) return 'proceed'
+  let action: 'save' | 'discard' | 'cancel'
+  try {
+    await ElMessageBox.confirm(LEAVE_GUARD_MESSAGE, '未保存的修改', {
+      distinguishCancelAndClose: true,
+      confirmButtonText: '保存并继续',
+      cancelButtonText: '放弃修改并继续',
+      type: 'warning',
+    })
+    action = 'save'
+  } catch (reason) {
+    action = reason === 'cancel' ? 'discard' : 'cancel'
+  }
+
+  if (action === 'cancel') return 'abort'
+  if (action === 'discard') {
+    // 放弃修改：以当前基线为准，丢弃未保存内容
+    items.value = definitionToItems(JSON.parse(baselineJson.value) as FormSchema)
+    baselineJson.value = currentJson.value
+    return 'proceed'
+  }
+  // 保存并继续：保存失败不得继续
+  const saved = await doSave()
+  return saved ? 'proceed' : 'abort'
+}
+
+/** 切工作区：脏状态先过保护，取消则回弹原工作区。 */
+async function onTabChange(tab: WorkbenchTab) {
+  if (tab === activeTab.value) return
+  const previous = activeTab.value
+  activeTab.value = tab
+  const verdict = await guardUnsavedChanges()
+  if (verdict === 'abort') {
+    activeTab.value = previous
+  }
+}
+
+function handleBeforeUnload(e: { preventDefault: () => void; returnValue: string }) {
+  if (isDirty.value) {
+    e.preventDefault()
+    // beforeunload 需设置 returnValue 才会触发浏览器离开确认
+    e.returnValue = ''
+  }
+}
+
+onBeforeRouteLeave(async () => {
+  return (await guardUnsavedChanges()) === 'proceed'
 })
 
 /* ── 保存草稿 ── */
 
-async function saveDraft() {
-  if (isPublished.value) return
+/** @returns 保存是否成功。 */
+async function doSave(): Promise<boolean> {
+  if (isPublished.value) return false
+  if (savePhase.value === 'saving') return false // 保存中防重复提交
 
   const definition = buildDefinition()
-  // 新建态用 title 作为 formKey（简化：formKey 可后续用 slug 函数规范化）
-  // 编辑态已有 formId，直接存。
   const key = formKey.value || generateFormKey(title.value)
+  const seq = loadSeq
 
+  savePhase.value = 'saving'
   try {
     const result = await saveDraftDefinition(definition, formId.value, key)
-    // 新建态：保存成功后拿到 id，切到编辑态路由
+    if (seq !== loadSeq) return true
     if (!formId.value && result.id) {
       formId.value = result.id
       formKey.value = key
       status.value = result.status
-      // 替换路由，不带刷新
-      router.replace({ name: 'form-designer', params: { id: result.id } })
+      router.replace({ path: `/form/designer/${result.id}`, query: route.query })
     }
+    formVersion.value = formVersion.value ?? 1
+    baselineJson.value = JSON.stringify(definition)
+    savePhase.value = 'saved'
+    globalThis.setTimeout(() => {
+      if (savePhase.value === 'saved') savePhase.value = 'idle'
+    }, 2000)
+    return true
   } catch {
-    // 错误已在 draft-actions 中处理（ElMessage.error）
+    // 失败：保留未保存标记与内容，不得显示成功
+    savePhase.value = 'error'
+    return false
   }
 }
 
-/* ── 发布 ── */
+async function saveDraft() {
+  await doSave()
+}
+
+/* ── 发布（只针对最近一次成功保存的当前草稿） ── */
 
 async function publish() {
   if (isPublished.value) return
@@ -150,6 +283,9 @@ async function publish() {
     ElMessage.warning('请先保存草稿再发布')
     return
   }
+  // 有未保存修改：先走统一保护；保存失败/用户取消不得继续发布
+  const verdict = await guardUnsavedChanges()
+  if (verdict === 'abort') return
 
   // 客户端预校验（减往返 UX）
   const preCheckError = preValidateBeforePublish(items.value)
@@ -158,7 +294,6 @@ async function publish() {
     return
   }
 
-  // 二次确认
   try {
     await ElMessageBox.confirm('发布后表名/字段名冻结，不可修改。确认发布？', '发布确认', {
       confirmButtonText: '确认发布',
@@ -171,20 +306,35 @@ async function publish() {
 
   const definition = buildDefinition()
   try {
-    const result = await publishDef(definition, formId.value)
-    status.value = result.status
+    await publishDef(definition, formId.value)
+    status.value = 'PUBLISHED'
+    formVersion.value = (formVersion.value ?? 1) + 1
+    // 以服务端权威身份回读（版本/状态在刷新后仍一致）
+    loadForm(formId.value)
   } catch {
     // 错误已在 draft-actions 中处理
   }
 }
 
+/* ── 历史版本（只读） ── */
+const historyVisible = ref(false)
+
+/* ── 关联流程 ── */
+
+function enterProcess(def: ProcessDef) {
+  // 进入现有流程管理/编辑入口（workflow 流程定义列表），带回跳上下文
+  router.push({
+    path: '/workflow/defs',
+    query: { from: 'form-workbench', formId: formId.value ?? '', formKey: formKey.value },
+  })
+  void def
+}
+
 /* ── 辅助函数 ── */
 
-/** 生成 formKey（简化：取标题的拼音/英文 slug 或直接用时间戳后缀）。 */
 function generateFormKey(name: string): string {
   const trimmed = name.trim()
   if (!trimmed) return 'form_' + Date.now()
-  // 简单 slug：去除非字母数字，转小写，取前 30 字符
   const slug = trimmed
     .replace(/[^a-zA-Z0-9_一-龥]/g, '_')
     .replace(/_+/g, '_')
@@ -194,85 +344,127 @@ function generateFormKey(name: string): string {
   return slug || 'form_' + Date.now()
 }
 
-/**
- * 发布前客户端预校验（可选，减往返）。
- *
- * 仅做轻量检查：列名合法性、DICT 有无 dictType、REFERENCE 有无 targetFormId、
- * TABLE 有无子列。这些是常见遗漏，提前拦可省一次后端往返。
- * 真校验仍以后端 publish 为准——此处检查通过不意味发布一定成功。
- */
 function preValidateBeforePublish(list: DesignerItem[]): string | null {
   for (const item of list) {
     const field = item.field
-
-    // 列名合法性（仅允许字母/数字/下划线，不能以数字开头）
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(field.name)) {
       return `字段名 "${field.name}" 不合法（仅允许字母/数字/下划线，且不能以数字开头）`
     }
-
-    // DICT 未绑定字典类型
     if (field.type === 'DICT' && !field.dictType) {
       return `字典字段 "${field.name}" 未绑定字典类型`
     }
-
-    // REFERENCE 未指定目标表单
     if (field.type === 'REFERENCE' && !field.targetFormId) {
       return `引用字段 "${field.name}" 未指定目标表单`
     }
-
-    // TABLE 无子列
     if (field.type === 'TABLE' && field.subFields.length === 0) {
       return `子表格字段 "${field.name}" 未定义子列`
     }
   }
   return null
 }
+
+function backToList() {
+  router.push({ name: 'form-def-list' })
+}
 </script>
 
 <template>
   <div class="designer">
-    <header class="designer__header">
-      <el-input
-        v-model="title"
-        class="designer__title"
-        placeholder="表单名称"
-        :disabled="isPublished"
-      />
+    <!-- ═══ 顶部工作台 ═══ -->
+    <header class="designer__workbench">
+      <div class="designer__identity">
+        <el-input
+          v-model="title"
+          class="designer__title"
+          placeholder="表单名称"
+          :disabled="isPublished"
+        />
+        <el-tag v-if="formKey" size="small" type="info" class="designer__formkey">
+          {{ formKey }}
+        </el-tag>
+        <el-tag size="small" :type="isPublished ? 'success' : 'info'">
+          {{ isPublished ? '已发布' : '草稿' }}
+        </el-tag>
+        <el-tag v-if="isPublished && formVersion" size="small" type="success">
+          V{{ formVersion }}
+        </el-tag>
+      </div>
+
+      <el-radio-group
+        class="designer__tabs"
+        :model-value="activeTab"
+        @update:model-value="onTabChange($event as WorkbenchTab)"
+      >
+        <el-radio-button value="design">表单设计</el-radio-button>
+        <el-radio-button value="processes">关联流程</el-radio-button>
+      </el-radio-group>
+
       <div class="designer__actions">
+        <el-tag :type="SAVE_STATE_TYPE[saveState]" size="small" class="designer__save-state">
+          {{ saveState }}
+        </el-tag>
         <el-button @click="previewVisible = true">预览</el-button>
-        <el-button :disabled="isPublished" @click="saveDraft">保存草稿</el-button>
-        <el-button type="primary" :disabled="isPublished" @click="publish">发布</el-button>
+        <el-button :disabled="isPublished || saveState === '保存中'" @click="saveDraft">
+          保存
+        </el-button>
+        <el-button
+          type="primary"
+          :disabled="isPublished || saveState === '保存中'"
+          :title="isPublished ? '表单已发布，不可重复发布' : undefined"
+          @click="publish"
+        >
+          发布
+        </el-button>
+        <el-button :disabled="!formId" @click="historyVisible = true">历史版本</el-button>
       </div>
     </header>
 
-    <div v-if="loading" class="designer__loading">
-      <span>加载中...</span>
+    <!-- 拒绝态：表单不存在/已删除/无权，不回退到其他表单 -->
+    <div v-if="rejected" class="designer__rejected">
+      <p class="designer__rejected-title">无法打开该表单</p>
+      <p class="designer__rejected-reason">{{ rejectReason }}</p>
+      <el-button type="primary" @click="backToList">返回表单列表</el-button>
     </div>
 
-    <div v-else class="designer__body">
-      <FieldPalette :existing-names="existingNames" :disabled="isPublished" />
-      <DesignerCanvas
-        v-model:items="items"
-        v-model:selected-id="selectedId"
-        :readonly="isPublished"
-        @edit-table="openTableEditor"
-      />
-      <FieldConfigPanel
-        :field="selectedItem"
-        :other-names="otherNames"
-        :readonly="isPublished"
-        @update="patchSelectedField"
-      />
-    </div>
+    <template v-else>
+      <div v-if="loading" class="designer__loading">
+        <span>加载中...</span>
+      </div>
 
-    <!-- 已发布状态提示条 -->
-    <div v-if="isPublished" class="designer__published-bar">
-      此表单已发布，表名和字段已冻结，不可编辑。
-    </div>
+      <!-- ═══ 工作区：表单设计 ═══ -->
+      <div v-else-if="activeTab === 'design'" class="designer__body">
+        <FieldPalette :existing-names="existingNames" :disabled="isPublished" />
+        <DesignerCanvas
+          v-model:items="items"
+          v-model:selected-id="selectedId"
+          :readonly="isPublished"
+          @edit-table="openTableEditor"
+        />
+        <FieldConfigPanel
+          :field="selectedItem"
+          :other-names="otherNames"
+          :readonly="isPublished"
+          @update="patchSelectedField"
+        />
+      </div>
+
+      <!-- ═══ 工作区：关联流程 ═══ -->
+      <RelatedProcessesPanel
+        v-else
+        :form-id="formId ?? ''"
+        :form-key="formKey"
+        @enter-process="enterProcess"
+      />
+
+      <!-- 已发布状态提示条 -->
+      <div v-if="isPublished && activeTab === 'design'" class="designer__published-bar">
+        此表单已发布，表名和字段已冻结，不可编辑。
+      </div>
+    </template>
 
     <!-- 子表盖层子画布：盖在主画布之上，独立状态编辑该子表的内部字段 -->
     <SubFieldDesigner
-      v-if="editingTableField"
+      v-if="editingTableField && activeTab === 'design'"
       :table-label="editingTableField.label || editingTableField.name"
       :sub-fields="editingTableField.subFields"
       :readonly="isPublished"
@@ -280,6 +472,13 @@ function preValidateBeforePublish(list: DesignerItem[]): string | null {
     />
 
     <PreviewModal v-model:visible="previewVisible" :schema="previewSchema" />
+
+    <HistoryVersionsDialog
+      v-if="formId"
+      v-model:visible="historyVisible"
+      :form-id="formId"
+      :form-key="formKey"
+    />
   </div>
 </template>
 
@@ -292,7 +491,7 @@ function preValidateBeforePublish(list: DesignerItem[]): string | null {
   position: relative;
 }
 
-.designer__header {
+.designer__workbench {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -301,13 +500,51 @@ function preValidateBeforePublish(list: DesignerItem[]): string | null {
   border-bottom: 1px solid var(--sw-border-light);
 }
 
+.designer__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--sw-space-8);
+  min-width: 0;
+}
+
 .designer__title {
-  max-width: 320px;
+  max-width: 260px;
+}
+
+.designer__formkey {
+  font-family: monospace;
 }
 
 .designer__actions {
   display: flex;
+  align-items: center;
   gap: var(--sw-space-8);
+}
+
+.designer__save-state {
+  margin-right: var(--sw-space-4);
+}
+
+.designer__rejected {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sw-space-12);
+}
+
+.designer__rejected-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--sw-text-primary, #303133);
+}
+
+.designer__rejected-reason {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sw-text-secondary, #909399);
 }
 
 .designer__loading {

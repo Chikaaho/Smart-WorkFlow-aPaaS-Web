@@ -105,12 +105,21 @@ export async function createProcessDef(
   })
 }
 
-/** GET /workflow/defs → PageResult<ProcessDef> */
-export async function pageProcessDefs(page: PageQuery): Promise<PageResult<ProcessDef>> {
+/**
+ * GET /workflow/defs → PageResult<ProcessDef>
+ * @param formKey 可选，按绑定表单 formKey 精确过滤（表单工作台"关联流程"区使用）。
+ *                过滤由后端按持久化的 form_key 列执行，前端不做本地筛选。
+ */
+export async function pageProcessDefs(
+  page: PageQuery,
+  formKey?: string,
+): Promise<PageResult<ProcessDef>> {
+  const params: Record<string, unknown> = { ...page }
+  if (formKey) params.formKey = formKey
   const raw = await request<BackendPageResult<ProcessDef>>({
     method: 'GET',
     url: '/workflow/defs',
-    params: page,
+    params,
   })
   return adaptPage(raw)
 }

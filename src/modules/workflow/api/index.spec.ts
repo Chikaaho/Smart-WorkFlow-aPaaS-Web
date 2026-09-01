@@ -144,4 +144,28 @@ describe('modules/workflow/api', () => {
     expect(result.list).toHaveLength(1)
     expect(result.total).toBe(1)
   })
+
+  it('pageProcessDefs forwards formKey filter param when provided (P52)', async () => {
+    mockRequest.mockResolvedValueOnce({ records: [], total: 0, pageNum: 1, pageSize: 10 })
+
+    await workflowApi.pageProcessDefs({ pageNum: 1, pageSize: 10 }, 'leave-request')
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/workflow/defs',
+      params: { pageNum: 1, pageSize: 10, formKey: 'leave-request' },
+    })
+  })
+
+  it('pageProcessDefs omits formKey param when not provided', async () => {
+    mockRequest.mockResolvedValueOnce({ records: [], total: 0, pageNum: 1, pageSize: 10 })
+
+    await workflowApi.pageProcessDefs({ pageNum: 1, pageSize: 10 }, undefined)
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/workflow/defs',
+      params: { pageNum: 1, pageSize: 10 },
+    })
+  })
 })

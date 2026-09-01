@@ -999,6 +999,7 @@ export const MOCK_FORM_DEF_STORE: Map<
     name: string
     status: 'DRAFT' | 'PUBLISHED'
     definition: string
+    formVersion: number
   }
 > = new Map()
 
@@ -1013,6 +1014,7 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
   name: string
   status: 'DRAFT' | 'PUBLISHED'
   definition: string
+  formVersion: number
 }> = [
   {
     id: 'seed-def-001',
@@ -1020,6 +1022,7 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
     name: '请假申请单',
     status: 'PUBLISHED',
     definition: JSON.stringify(MOCK_DEMO_FORM_DEFINITION),
+    formVersion: 2,
   },
   {
     id: 'seed-def-002',
@@ -1027,6 +1030,7 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
     name: '费用报销单',
     status: 'DRAFT',
     definition: JSON.stringify({ title: '费用报销单', fields: [] }),
+    formVersion: 1,
   },
   {
     id: 'seed-def-003',
@@ -1034,6 +1038,7 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
     name: '采购订单',
     status: 'PUBLISHED',
     definition: JSON.stringify({ title: '采购订单', fields: [] }),
+    formVersion: 1,
   },
   {
     id: 'seed-def-004',
@@ -1041,6 +1046,7 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
     name: '差旅报销',
     status: 'DRAFT',
     definition: JSON.stringify({ title: '差旅报销', fields: [] }),
+    formVersion: 1,
   },
   {
     id: 'seed-def-005',
@@ -1048,6 +1054,48 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
     name: '合同审批',
     status: 'PUBLISHED',
     definition: JSON.stringify({ title: '合同审批', fields: [] }),
+    formVersion: 3,
+  },
+]
+
+// ─── 表单历史版本快照种子（P52 工作台·历史版本） ──────────────
+// 临时数据：publish handler 发布成功时追加一版；快照查询 handler 只读消费。
+// 形状对齐后端 sw_form_snapshot（form_id + form_version + definition）。
+export const MOCK_FORM_SNAPSHOTS: Array<{
+  formId: string
+  formVersion: number
+  definition: string
+  createTime: string
+}> = [
+  {
+    formId: 'seed-def-001',
+    formVersion: 1,
+    definition: JSON.stringify({ title: '请假申请单', fields: [] }),
+    createTime: '2026-06-01 09:00:00',
+  },
+  {
+    formId: 'seed-def-001',
+    formVersion: 2,
+    definition: JSON.stringify(MOCK_DEMO_FORM_DEFINITION),
+    createTime: '2026-06-30 10:00:00',
+  },
+  {
+    formId: 'seed-def-005',
+    formVersion: 1,
+    definition: JSON.stringify({ title: '合同审批', fields: [] }),
+    createTime: '2026-05-11 14:00:00',
+  },
+  {
+    formId: 'seed-def-005',
+    formVersion: 2,
+    definition: JSON.stringify({ title: '合同审批 V2', fields: [] }),
+    createTime: '2026-06-02 11:30:00',
+  },
+  {
+    formId: 'seed-def-005',
+    formVersion: 3,
+    definition: JSON.stringify({ title: '合同审批', fields: [] }),
+    createTime: '2026-07-01 16:20:00',
   },
 ]
 

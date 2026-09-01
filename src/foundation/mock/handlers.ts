@@ -72,6 +72,7 @@ import {
   MOCK_FORM_DATA_RECORDS,
   MOCK_GENERIC_FORM_RECORDS,
   MOCK_FORM_DEF_STORE,
+  MOCK_FORM_SNAPSHOTS,
   MOCK_TODO_TASKS,
   MOCK_PROCESSED_TASKS,
   MOCK_PROCESS_DEFS,
@@ -916,6 +917,7 @@ export const mockRegistrations: MockRegistration[] = [
         name,
         status: 'DRAFT',
         definition: JSON.stringify({ title: name, fields: [] }),
+        formVersion: 1,
       })
 
       return {
@@ -1031,6 +1033,15 @@ export const mockRegistrations: MockRegistration[] = [
       }
 
       existing.status = 'PUBLISHED'
+      // P52：发布成功即冻结一版快照（对齐后端 publish Step 6 语义）
+      const snapshotVersion = (existing.formVersion ?? 1) + 1
+      existing.formVersion = snapshotVersion
+      MOCK_FORM_SNAPSHOTS.push({
+        formId: existing.id,
+        formVersion: snapshotVersion,
+        definition: existing.definition,
+        createTime: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      })
       return {
         code: 0,
         message: 'ok',
@@ -1039,6 +1050,7 @@ export const mockRegistrations: MockRegistration[] = [
           formKey: existing.formKey,
           name: existing.name,
           status: 'PUBLISHED',
+          formVersion: snapshotVersion,
         },
       }
     },
@@ -1088,6 +1100,81 @@ export const mockRegistrations: MockRegistration[] = [
         code: 0,
         message: 'ok',
         data: { records, total, pageNum, pageSize },
+      }
+    },
+  },
+
+  // ── 表单定义：按 ID 取身份 DTO（P52 工作台） ────────────────
+  // GET /api/form/def/:id → R<FormDefDTO>
+  // 注意：必须注册在 /page 与 /by-key 字面量 handler 之后——mock 匹配按注册
+  // 顺序首中即止，:param 模式会吞掉同段数的字面量路径。
+  // 不存在/已删除 → 1000（对齐后端 FORM_NOT_FOUND）
+  {
+    method: 'GET',
+    pattern: '/api/form/def/:id',
+    handler: (params) => {
+      const id = (params as Record<string, string>).id
+      const existing = MOCK_FORM_DEF_STORE.get(id)
+      if (!existing) {
+        return { code: 1000, message: '表单不存在', data: null }
+      }
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          id: existing.id,
+          formKey: existing.formKey,
+          name: existing.name,
+          status: existing.status,
+          formVersion: existing.formVersion,
+        },
+      }
+    },
+  },
+
+  // ── 表单定义：历史版本快照列表（P52 工作台） ────────────────
+  // GET /api/form/def/:id/snapshots → R<FormSnapshotDTO[]>
+  // 版本号倒序；行内不含 definition。表单不存在 → 1000。
+  {
+    method: 'GET',
+    pattern: '/api/form/def/:id/snapshots',
+    handler: (params) => {
+      const id = (params as Record<string, string>).id
+      if (!MOCK_FORM_DEF_STORE.has(id)) {
+        return { code: 1000, message: '表单不存在', data: null }
+      }
+      const rows = MOCK_FORM_SNAPSHOTS.filter((s) => s.formId === id)
+        .sort((a, b) => b.formVersion - a.formVersion)
+        .map((s) => ({ formVersion: s.formVersion, createTime: s.createTime }))
+      return { code: 0, message: 'ok', data: rows }
+    },
+  },
+
+  // ── 表单定义：指定版本快照详情（P52 工作台·只读预览） ───────
+  // GET /api/form/def/:id/snapshots/:version → R<FormSnapshotDetailDTO>
+  // 版本不存在 → 1301（对齐后端 SNAPSHOT_NOT_FOUND）
+  {
+    method: 'GET',
+    pattern: '/api/form/def/:id/snapshots/:version',
+    handler: (params) => {
+      const { id, version } = params as Record<string, string>
+      if (!MOCK_FORM_DEF_STORE.has(id)) {
+        return { code: 1000, message: '表单不存在', data: null }
+      }
+      const row = MOCK_FORM_SNAPSHOTS.find(
+        (s) => s.formId === id && s.formVersion === Number(version),
+      )
+      if (!row) {
+        return { code: 1301, message: '表单版本快照不存在', data: null }
+      }
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          formVersion: row.formVersion,
+          createTime: row.createTime,
+          definition: row.definition,
+        },
       }
     },
   },
@@ -1237,15 +1324,20 @@ export const mockRegistrations: MockRegistration[] = [
   },
 
   // ── 流程定义：分页列表 ─────────────────────────────────
+  // formKey 查询参数可选：按持久化 form_key 精确过滤（P52 表单工作台"关联流程"）。
   {
     method: 'GET',
     pattern: '/api/workflow/defs',
     handler: (_params, query) => {
       const pageNum = Number(query.pageNum ?? 1)
       const pageSize = Number(query.pageSize ?? 10)
-      const total = MOCK_PROCESS_DEFS.length
+      const formKey = String(query.formKey ?? '').trim()
+      const filtered = formKey
+        ? MOCK_PROCESS_DEFS.filter((d) => d.formKey === formKey)
+        : MOCK_PROCESS_DEFS
+      const total = filtered.length
       const start = (pageNum - 1) * pageSize
-      const records = MOCK_PROCESS_DEFS.slice(start, start + pageSize)
+      const records = filtered.slice(start, start + pageSize)
       return {
         code: 0,
         message: 'ok',

@@ -4,7 +4,7 @@ import type { FormSchema } from '@/contracts/form-schema'
 import type { PageQuery, PageResult } from '@/contracts/common'
 
 /**
- * 表单定义 API 模块（设计器草稿保存 / 发布接线 / 列表查询）。
+ * 表单定义 API 模块（设计器草稿保存 / 发布接线 / 列表查询 / 历史版本快照）。
  *
  * 全部走 foundation/request，禁直引 axios。
  */
@@ -24,6 +24,8 @@ export interface FormDefDTO {
   formKey: string
   name?: string
   status: FormDefStatus
+  /** 当前发布版本号（P52 工作台展示用；发布成功后服务端递增）。 */
+  formVersion?: number
 }
 
 /**
@@ -64,6 +66,17 @@ function adaptPage<T>(raw: BackendPageResult<T>): PageResult<T> {
 
 /** 存 definition 请求体。 */
 export interface FormConfigSaveReq {
+  definition: string
+}
+
+/** 表单历史版本快照（列表行，不含 definition）。 */
+export interface FormSnapshotDTO {
+  formVersion: number
+  createTime: string
+}
+
+/** 表单历史版本快照详情（只读预览用，含完整 definition）。 */
+export interface FormSnapshotDetailDTO extends FormSnapshotDTO {
   definition: string
 }
 
@@ -139,4 +152,45 @@ export async function pageFormDefs(
     params,
   })
   return adaptPage(raw)
+}
+
+/**
+ * 根据 ID 获取表单定义 DTO（含 formKey/name/status/formVersion）。
+ * GET /api/form/def/{id}
+ * 工作台用：表单身份的唯一权威来源（稳定业务标识 formKey 由此取得）。
+ * 表单不存在/已删除/无权 → 后端 code 1000。
+ */
+export async function getFormDefById(id: string): Promise<FormDefDTO> {
+  return request<FormDefDTO>({
+    method: 'GET',
+    url: `/form/def/${id}`,
+  })
+}
+
+/**
+ * 查询表单历史版本快照列表（版本号倒序，只读）。
+ * GET /api/form/def/{id}/snapshots
+ * 只返版本元数据，不含 definition；从未发布过 → 空数组。
+ */
+export async function listFormSnapshots(id: string): Promise<FormSnapshotDTO[]> {
+  return request<FormSnapshotDTO[]>({
+    method: 'GET',
+    url: `/form/def/${id}/snapshots`,
+  })
+}
+
+/**
+ * 读取指定版本的快照详情（只读预览）。
+ * GET /api/form/def/{id}/snapshots/{formVersion}
+ * 返该版本完整 definition；版本不存在 → code 1301。
+ * 只读契约：不提供任何回写路径，历史内容不得覆盖当前草稿。
+ */
+export async function getFormSnapshotDefinition(
+  id: string,
+  formVersion: number,
+): Promise<FormSnapshotDetailDTO> {
+  return request<FormSnapshotDetailDTO>({
+    method: 'GET',
+    url: `/form/def/${id}/snapshots/${formVersion}`,
+  })
 }

@@ -10,7 +10,7 @@ vi.mock('@/modules/workflow/api', () => ({
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
-  useRoute: () => ({ params: {} }),
+  useRoute: () => ({ params: {}, query: {} }),
 }))
 
 // Mock bpmn adapter（vi.hoisted 确保变量在 hoist 时已初始化）

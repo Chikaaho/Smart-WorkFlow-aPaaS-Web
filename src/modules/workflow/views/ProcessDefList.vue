@@ -7,6 +7,7 @@
  * 不提供创建/编辑/删除/发布操作（非本功能范围）。
  */
 import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { StandardListTemplate } from '@/components/page-layout'
 import {
   pageProcessDefs,
@@ -69,6 +70,22 @@ const deletingId = ref<number | null>(null)
 
 // ─── 创建流程定义 ───
 const createDialogVisible = ref(false)
+
+// ─── 表单工作台回跳上下文（P52） ───
+// 从表单工作台「关联流程」区进入时带 from=form-workbench&formId=...，
+// 顶部显示返回入口，返回后恢复原表单与「关联流程」工作区。
+const route = useRoute()
+const router = useRouter()
+const returnFormId = computed(() =>
+  route.query.from === 'form-workbench' && typeof route.query.formId === 'string'
+    ? route.query.formId
+    : '',
+)
+
+function backToWorkbench() {
+  if (!returnFormId.value) return
+  router.push({ path: `/form/designer/${returnFormId.value}`, query: { tab: 'processes' } })
+}
 
 // ─── 编辑流程定义 ───
 const editDialogVisible = ref(false)
@@ -267,6 +284,7 @@ onMounted(loadList)
   >
     <!-- 工具栏操作按钮 -->
     <template #toolbar-actions>
+      <el-button v-if="returnFormId" @click="backToWorkbench">返回表单工作台</el-button>
       <el-button type="primary" @click="createDialogVisible = true">
         <el-icon><Plus /></el-icon>
         创建流程定义

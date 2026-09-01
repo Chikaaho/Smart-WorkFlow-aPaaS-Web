@@ -190,4 +190,49 @@ describe('modules/form/api/form-def', () => {
     expect(calls[1][0].url).toBe('/form/def/uuid-1/config')
     expect(calls[2][0].url).toBe('/form/def/uuid-1/publish')
   })
+
+  /* ---- P52 工作台：身份 / 历史版本快照 ---- */
+
+  it('getFormDefById sends GET /form/def/{id} and returns identity DTO', async () => {
+    const dto = { id: 'uuid-1', formKey: 'my-form', name: 'F', status: 'PUBLISHED' as const }
+    mockRequest.mockResolvedValueOnce(dto)
+
+    const result = await formDefApi.getFormDefById('uuid-1')
+
+    expect(mockRequest).toHaveBeenCalledWith({ method: 'GET', url: '/form/def/uuid-1' })
+    expect(result).toEqual(dto)
+  })
+
+  it('listFormSnapshots sends GET /form/def/{id}/snapshots (read-only list)', async () => {
+    const rows = [
+      { formVersion: 2, createTime: '2026-06-30 10:00:00' },
+      { formVersion: 1, createTime: '2026-06-01 09:00:00' },
+    ]
+    mockRequest.mockResolvedValueOnce(rows)
+
+    const result = await formDefApi.listFormSnapshots('uuid-1')
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/form/def/uuid-1/snapshots',
+    })
+    expect(result).toEqual(rows)
+  })
+
+  it('getFormSnapshotDefinition sends GET /form/def/{id}/snapshots/{version}', async () => {
+    const detail = {
+      formVersion: 2,
+      createTime: '2026-06-30 10:00:00',
+      definition: '{"title":"F","fields":[]}',
+    }
+    mockRequest.mockResolvedValueOnce(detail)
+
+    const result = await formDefApi.getFormSnapshotDefinition('uuid-1', 2)
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/form/def/uuid-1/snapshots/2',
+    })
+    expect(result.definition).toBe('{"title":"F","fields":[]}')
+  })
 })
