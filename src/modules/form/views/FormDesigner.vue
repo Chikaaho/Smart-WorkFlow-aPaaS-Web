@@ -35,6 +35,7 @@ import {
   type WorkbenchTab,
 } from '../designer/workbench'
 import { applyFieldPatch, type FieldPatch } from '../designer/field-config'
+import { ApiError } from '@/foundation/request'
 import { itemsToDefinition, definitionToItems } from '../designer/definition-convert'
 import { getFormDefinitionById, getFormDefById, type FormDefStatus } from '../api/form-def'
 import type { ProcessDef } from '@/contracts/bpm'
@@ -159,10 +160,27 @@ async function loadForm(id: string) {
   } catch (err) {
     if (seq !== loadSeq) return
     rejected.value = true
-    rejectReason.value = err instanceof Error && err.message ? err.message : '表单不存在或无权访问'
+    // 优先用 ApiError 携带的后端中文 message（如"表单不存在"），
+    // 避免"业务错误(1300)"这类不可读兜底
+    rejectReason.value = err instanceof ApiError && err.msg ? err.msg : '表单不存在或无权访问'
   } finally {
     if (seq === loadSeq) loading.value = false
   }
+}
+
+function resetWorkbench() {
+  formId.value = null
+  formKey.value = ''
+  status.value = 'DRAFT'
+  formVersion.value = null
+  rejected.value = false
+  rejectReason.value = ''
+  title.value = '未命名表单'
+  items.value = []
+  selectedId.value = null
+  editingTableId.value = null
+  baselineJson.value = JSON.stringify(buildDefinition())
+  savePhase.value = 'idle'
 }
 
 onMounted(() => {
@@ -176,6 +194,23 @@ onMounted(() => {
     baselineJson.value = JSON.stringify(buildDefinition())
   }
 })
+
+// 同组件路由参数变化（如拒绝态/表单A → 表单B）时组件被复用、onMounted 不再触发，
+// 必须显式响应 :id 变更并重新加载，否则页面停留在上一个表单/拒绝态
+watch(
+  () => route.params.id,
+  (next) => {
+    const idParam = typeof next === 'string' ? next : undefined
+    const current = formId.value ?? undefined
+    if ((idParam ?? null) === (current ?? null)) return
+    if (!idParam) {
+      resetWorkbench()
+      return
+    }
+    formId.value = idParam
+    loadForm(idParam)
+  },
+)
 
 onBeforeUnmount(() => {
   globalThis.removeEventListener('beforeunload', handleBeforeUnload)
