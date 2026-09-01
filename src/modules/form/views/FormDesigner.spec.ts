@@ -53,6 +53,7 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: 'uuid-1' }, query: {} }),
   useRouter: () => ({ replace: mockRouterReplace, push: mockRouterPush }),
   onBeforeRouteLeave: vi.fn(),
+  onBeforeRouteUpdate: vi.fn(),
 }))
 
 import FormDesigner from './FormDesigner.vue'

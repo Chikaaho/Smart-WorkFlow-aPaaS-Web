@@ -15,7 +15,7 @@
  *   - 历史版本只读预览；历史内容零回写路径。
  */
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormSchema, TableSubField } from '@/contracts/form-schema'
 import FieldPalette from '../designer/FieldPalette.vue'
@@ -163,6 +163,12 @@ async function loadForm(id: string) {
     // 优先用 ApiError 携带的后端中文 message（如"表单不存在"），
     // 避免"业务错误(1300)"这类不可读兜底
     rejectReason.value = err instanceof ApiError && err.msg ? err.msg : '表单不存在或无权访问'
+    ;(globalThis as unknown as { __loadErr?: unknown }).__loadErr = {
+      name: (err as { name?: string }).name,
+      code: (err as { code?: unknown }).code,
+      msg: (err as { msg?: string }).msg,
+      message: (err as Error).message,
+    }
   } finally {
     if (seq === loadSeq) loading.value = false
   }
@@ -238,8 +244,10 @@ async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
 
   if (action === 'cancel') return 'abort'
   if (action === 'discard') {
-    // 放弃修改：以当前基线为准，丢弃未保存内容
-    items.value = definitionToItems(JSON.parse(baselineJson.value) as FormSchema)
+    // 放弃修改：以当前基线为准，丢弃未保存内容（含表单标题——title 不在 items 内，需一并还原）
+    const baseline = JSON.parse(baselineJson.value) as FormSchema
+    items.value = definitionToItems(baseline)
+    if (baseline.title) title.value = baseline.title
     baselineJson.value = currentJson.value
     return 'proceed'
   }
@@ -251,11 +259,13 @@ async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
 /** 切工作区：脏状态先过保护，取消则回弹原工作区。 */
 async function onTabChange(tab: WorkbenchTab) {
   if (tab === activeTab.value) return
-  const previous = activeTab.value
-  activeTab.value = tab
+  // 先守卫后提交：abort 时不动 activeTab 也不写 URL，避免 query watcher
+  // 在回弹后按旧 URL 又把工作区翻回去（取消分支竞态）
   const verdict = await guardUnsavedChanges()
-  if (verdict === 'abort') {
-    activeTab.value = previous
+  if (verdict === 'abort') return
+  activeTab.value = tab
+  if (parseWorkbenchTab(route.query.tab) !== tab) {
+    router.replace({ query: { ...route.query, tab: tab === 'design' ? undefined : tab } })
   }
 }
 
@@ -267,14 +277,36 @@ function handleBeforeUnload(e: { preventDefault: () => void; returnValue: string
   }
 }
 
-onBeforeRouteLeave(async () => {
-  return (await guardUnsavedChanges()) === 'proceed'
-})
+// 路由脏状态保护：工作台内参数跳转（/form/designer/A → B）与跳离工作台
+// 分别触发 beforeRouteUpdate / beforeRouteLeave（同一次导航可能先后触发两个钩子），
+// 以「to|from」为键去重，保证一次导航至多弹一次守卫。
+const lastRouteGuard: { key: string; promise: Promise<boolean> | null } = { key: '', promise: null }
+async function routeDirtyGuard(to: { fullPath: string }, from: { fullPath: string }) {
+  const key = `${to.fullPath}|${from.fullPath}`
+  // 同一次导航的 leave/update 钩子共享同一次询问
+  if (lastRouteGuard.key === key && lastRouteGuard.promise) return lastRouteGuard.promise
+  lastRouteGuard.key = key
+  const promise = (async () => (await guardUnsavedChanges()) === 'proceed')()
+  lastRouteGuard.promise = promise
+  // 导航结束后清除缓存：后续同类导航需重新询问
+  void promise.finally(() => {
+    globalThis.setTimeout(() => {
+      if (lastRouteGuard.key === key) {
+        lastRouteGuard.key = ''
+        lastRouteGuard.promise = null
+      }
+    }, 0)
+  })
+  return promise
+}
+onBeforeRouteLeave(routeDirtyGuard)
+onBeforeRouteUpdate(routeDirtyGuard)
 
 /* ── 保存草稿 ── */
 
 /** @returns 保存是否成功。 */
 async function doSave(): Promise<boolean> {
+  if (rejected.value) return false
   if (isPublished.value) return false
   if (savePhase.value === 'saving') return false // 保存中防重复提交
 
@@ -313,6 +345,7 @@ async function saveDraft() {
 /* ── 发布（只针对最近一次成功保存的当前草稿） ── */
 
 async function publish() {
+  if (rejected.value) return
   if (isPublished.value) return
   if (!formId.value) {
     ElMessage.warning('请先保存草稿再发布')
