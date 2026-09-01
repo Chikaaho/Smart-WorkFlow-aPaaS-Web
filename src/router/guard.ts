@@ -1,5 +1,5 @@
 import type { Router, RouteLocationNormalized, NavigationGuardNext } from 'vue-router'
-import { getAccessToken } from '@/foundation/auth/token'
+import { getAccessToken, clearToken } from '@/foundation/auth/token'
 import { refresh, logout } from '@/foundation/auth'
 import { loadSession } from '@/foundation/session'
 import { loadMenu, buildRoutesFromMenu, findFirstLeafPath } from '@/foundation/menu'
@@ -137,7 +137,10 @@ export async function authGuard(
       // 成功后 access 回到内存，继续加载 session + menu 构建动态路由。
       await refresh()
     } catch {
-      // refresh 失败（无 cookie / 已过期 / 已撤销）→ 重定向登录页
+      // refresh 失败（无 cookie / 无效 / 过期 / 撤销 / 重放）→ 清理全部认证残留
+      // （access 内存态、用户会话、权限菜单、动态路由）再回登录页，不留半登录态。
+      clearDynamicRoutes(router)
+      clearToken()
       next(loginRedirectTarget(to))
       return
     }

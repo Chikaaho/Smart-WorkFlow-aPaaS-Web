@@ -14,7 +14,7 @@ const { loadMenuMock, loadSessionMock } = vi.hoisted(() => ({
   loadSessionMock: vi.fn(),
 }))
 
-vi.mock('@/foundation/auth/token', () => ({ getAccessToken: vi.fn() }))
+vi.mock('@/foundation/auth/token', () => ({ getAccessToken: vi.fn(), clearToken: vi.fn() }))
 vi.mock('@/foundation/auth', () => ({ refresh: vi.fn(), logout: vi.fn() }))
 vi.mock('@/foundation/session', () => ({
   loadSession: loadSessionMock,

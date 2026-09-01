@@ -19,7 +19,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory, type RouteRecordRaw, type Router } from 'vue-router'
 
 // ── 守卫依赖 mock（与 guard.spec.ts 同款隔离；buildRoutesFromMenu 不 mock —— 用真实实现） ──
-vi.mock('@/foundation/auth/token', () => ({ getAccessToken: vi.fn() }))
+vi.mock('@/foundation/auth/token', () => ({ getAccessToken: vi.fn(), clearToken: vi.fn() }))
 vi.mock('@/foundation/auth', () => ({ refresh: vi.fn(), logout: vi.fn() }))
 vi.mock('@/foundation/session', () => ({ loadSession: vi.fn() }))
 // 注意：'@/foundation/menu' 不整体 mock——loadMenu 用 vi.mock 部分替换会失去真实实现，

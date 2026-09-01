@@ -12,6 +12,7 @@
  */
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { dispatchMock } from './index'
+import { MOCK_LOGIN_CHALLENGES } from './handlers'
 import { setAccessToken } from '@/foundation/auth/token'
 import { buildMockXlsxBlob } from './mock-xlsx'
 import { MOCK_FORM_DATA_RECORDS } from './seeds'
@@ -136,7 +137,26 @@ describe('P32 R7 Mock/真实语义对照：导出', () => {
 // ══════ S3：Mock 三身份权限一致（401/403/成功） ══════
 
 async function mockLogin(username: string): Promise<string> {
-  const result = await dispatchMock('POST', '/auth/login', '/api', {}, { username, password: 'x' })
+  const challenge = await dispatchMock<{ captchaId: string }>(
+    'GET',
+    '/auth/challenge',
+    '/api',
+    {},
+    {},
+  )
+  const result = await dispatchMock(
+    'POST',
+    '/auth/login',
+    '/api',
+    {},
+    {
+      username,
+      password: 'x',
+      captcha: MOCK_LOGIN_CHALLENGES.get(challenge!.data!.captchaId)!,
+      captchaId: challenge!.data!.captchaId,
+      timestamp: String(Date.now()),
+    },
+  )
   const token = (result!.data as { accessToken: string }).accessToken
   setAccessToken(token)
   return token

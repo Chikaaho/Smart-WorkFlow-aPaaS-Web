@@ -8,7 +8,7 @@ import {
   type MockMenuNode,
 } from './seeds'
 import { dispatchMock } from './index'
-import { mockRegistrations } from './handlers'
+import { mockRegistrations, MOCK_LOGIN_CHALLENGES } from './handlers'
 
 /**
  * Mock 会话/菜单过滤语义专项（M02-F02/F03，对齐真实后端 AuthMeController /
@@ -37,6 +37,26 @@ async function mock<T>(
   body?: unknown,
 ) {
   return dispatchMock<T>(method, url, '/api', query, body)
+}
+
+/** P45：先签发挑战，再携带验证码/UUID/时间戳登录（对齐真实登录契约） */
+async function mockLogin(username: string, password: string) {
+  const challenge = await mock<{ captchaImage: string; captchaId: string }>(
+    'GET',
+    '/auth/challenge',
+  )
+  return mock(
+    'POST',
+    '/auth/login',
+    {},
+    {
+      username,
+      password,
+      captcha: MOCK_LOGIN_CHALLENGES.get(challenge!.data!.captchaId)!,
+      captchaId: challenge!.data!.captchaId,
+      timestamp: String(Date.now()),
+    },
+  )
 }
 
 /** 收集过滤树中所有节点的 id（DFS 先序，含子孙）。 */
@@ -69,7 +89,7 @@ describe('foundation/mock 会话与 /auth/menus 角色过滤', () => {
   // ── 会话切换 ────────────────────────────────────────────────
 
   it('登录 admin 后 /auth/me 返回普通管理员会话（superAdmin=false，权限由 admin 绑定装配，与超管严格区分）', async () => {
-    await mock('POST', '/auth/login', {}, { username: 'admin', password: 'admin123' })
+    await mockLogin('admin', 'admin123')
     const r = await mock<typeof MOCK_SESSION_DATA>('GET', '/system/auth/me')
     expect(r!.code).toBe(0)
     expect(r!.data.superAdmin).toBe(false)
@@ -79,7 +99,7 @@ describe('foundation/mock 会话与 /auth/menus 角色过滤', () => {
   })
 
   it('登录 superadmin 后 /auth/me 返回超管会话（superAdmin=true，角色码=superadmin，固定全量 permissions）', async () => {
-    await mock('POST', '/auth/login', {}, { username: 'superadmin', password: 'admin123' })
+    await mockLogin('superadmin', 'admin123')
     const r = await mock<typeof MOCK_SESSION_DATA>('GET', '/system/auth/me')
     expect(r!.code).toBe(0)
     expect(r!.data.superAdmin).toBe(true)
@@ -120,7 +140,7 @@ describe('foundation/mock 会话与 /auth/menus 角色过滤', () => {
 
   it('登录 user 后 /auth/me 返回普通用户会话（superAdmin=false，空绑定 → 空 permissions）', async () => {
     MOCK_ROLE_MENU_BINDINGS['3'] = []
-    await mock('POST', '/auth/login', {}, { username: 'user', password: 'user123' })
+    await mockLogin('user', 'user123')
     const r = await mock<typeof MOCK_SESSION_DATA>('GET', '/system/auth/me')
     expect(r!.code).toBe(0)
     expect(r!.data.superAdmin).toBe(false)

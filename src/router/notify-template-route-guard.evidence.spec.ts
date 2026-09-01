@@ -26,7 +26,10 @@ import type { MenuNode } from '@/contracts/menu'
 // ── 守卫依赖 mock（loadMenu 按 identity() 工厂逐用例切换菜单树；buildRoutesFromMenu 用真实实现） ──
 const { loadMenuMock } = vi.hoisted(() => ({ loadMenuMock: vi.fn() }))
 
-vi.mock('@/foundation/auth/token', () => ({ getAccessToken: vi.fn(() => 'valid-token') }))
+vi.mock('@/foundation/auth/token', () => ({
+  getAccessToken: vi.fn(() => 'valid-token'),
+  clearToken: vi.fn(),
+}))
 vi.mock('@/foundation/auth', () => ({
   refresh: vi.fn(),
   logout: vi.fn().mockResolvedValue(undefined),
