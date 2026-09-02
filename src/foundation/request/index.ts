@@ -112,7 +112,21 @@ export async function request<T>(config: Parameters<AxiosInstance['request']>[0]
     // fallthrough: 无匹配 handler → 走真实 axios
   }
 
-  const response = await client.request<ApiResponse<T>>(config)
+  const response = await client.request<ApiResponse<T>>(config).catch((error: AxiosError) => {
+    // 非 2xx（如 403/404 过滤器直出 R 结构）在 axios validateStatus 就已 reject，
+    // 统一归一为 ApiError，让上层按业务码呈现明确拒绝态而不是裸 AxiosError
+    const status = error.response?.status
+    const payload = error.response?.data as Partial<ApiResponse<unknown>> | undefined
+    const bodyCode = payload && typeof payload.code === 'number' ? payload.code : undefined
+    if (bodyCode !== undefined && bodyCode !== 0) {
+      const msg = (payload as { msg?: string } | undefined)?.msg ?? payload?.message
+      throw new ApiError(bodyCode, getErrorMessage(bodyCode, msg))
+    }
+    if (status === 403) {
+      throw new ApiError(403, getErrorMessage(403, '无权限'))
+    }
+    throw error
+  })
 
   // blob 响应（文件下载/导出）：成功时数据是 Blob 而非 R 结构。
   // 后端业务错误对 blob 请求也返回 application/json 的 R 包，需解析并走统一 ApiError 管线。

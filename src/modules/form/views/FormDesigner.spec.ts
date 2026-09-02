@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ApiError } from '@/foundation/request'
 import { mount, flushPromises } from '@vue/test-utils'
 
 /**
@@ -107,6 +108,19 @@ describe('FormDesigner 工作台（P52）', () => {
     expect(wrapper.text()).toContain('无法打开该表单')
     expect(wrapper.text()).toContain('表单不存在')
     expect(wrapper.find('.stub-canvas').exists()).toBe(false)
+  })
+
+  it('S1 读取 403 → 无权限拒绝态，工作台头部与操作区零渲染', async () => {
+    mockGetFormDefById.mockRejectedValueOnce(new ApiError(403, '没有操作权限'))
+    const wrapper = await mountDesigner()
+
+    expect(wrapper.text()).toContain('无权访问该表单')
+    expect(wrapper.text()).toContain('没有操作权限')
+    // 头部（身份输入/tabs/保存/发布/历史）与画布、关联流程区全部不渲染
+    expect(wrapper.find('.designer__workbench').exists()).toBe(false)
+    expect(wrapper.find('.stub-canvas').exists()).toBe(false)
+    expect(wrapper.find('.stub-processes').exists()).toBe(false)
+    expect(wrapper.findAll('button').some((b) => b.text() === '发布')).toBe(false)
   })
 
   it('保存成功 → 调用保存动作并显示「保存成功」', async () => {

@@ -52,6 +52,7 @@ const formVersion = ref<number | null>(null)
 /** 身份加载失败（不存在/已删除/无权）：明确拒绝态，不回退其他表单。 */
 const rejected = ref(false)
 const rejectReason = ref('')
+const rejectTitle = ref('无法打开该表单')
 
 /* ── 设计态 ── */
 const title = ref('未命名表单')
@@ -161,8 +162,13 @@ async function loadForm(id: string) {
     if (seq !== loadSeq) return
     rejected.value = true
     // 优先用 ApiError 携带的后端中文 message（如"表单不存在"），
-    // 避免"业务错误(1300)"这类不可读兜底
-    rejectReason.value = err instanceof ApiError && err.msg ? err.msg : '表单不存在或无权访问'
+    // 避免"业务错误(1300)"这类不可读兜底；403 明确为无权限拒绝态
+    if (err instanceof ApiError && err.code === 403) {
+      rejectTitle.value = '无权访问该表单'
+      rejectReason.value = err.msg || '您缺少表单查看权限，无法读取该表单'
+    } else {
+      rejectReason.value = err instanceof ApiError && err.msg ? err.msg : '表单不存在或无权访问'
+    }
     ;(globalThis as unknown as { __loadErr?: unknown }).__loadErr = {
       name: (err as { name?: string }).name,
       code: (err as { code?: unknown }).code,
@@ -181,6 +187,7 @@ function resetWorkbench() {
   formVersion.value = null
   rejected.value = false
   rejectReason.value = ''
+  rejectTitle.value = '无法打开该表单'
   title.value = '未命名表单'
   items.value = []
   selectedId.value = null
@@ -438,8 +445,8 @@ function backToList() {
 
 <template>
   <div class="designer">
-    <!-- ═══ 顶部工作台 ═══ -->
-    <header class="designer__workbench">
+    <!-- ═══ 顶部工作台（拒绝态下整体不渲染，操作区零暴露） ═══ -->
+    <header v-if="!rejected" class="designer__workbench">
       <div class="designer__identity">
         <el-input
           v-model="title"
@@ -489,7 +496,7 @@ function backToList() {
 
     <!-- 拒绝态：表单不存在/已删除/无权，不回退到其他表单 -->
     <div v-if="rejected" class="designer__rejected">
-      <p class="designer__rejected-title">无法打开该表单</p>
+      <p class="designer__rejected-title">{{ rejectTitle }}</p>
       <p class="designer__rejected-reason">{{ rejectReason }}</p>
       <el-button type="primary" @click="backToList">返回表单列表</el-button>
     </div>
