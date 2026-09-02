@@ -12,6 +12,7 @@ import { computed } from 'vue'
 import { getFieldTypeDescriptor } from './field-types'
 import type { DesignerItem } from './types'
 import type { FieldPatch } from './field-config'
+import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 
 const props = withDefaults(
   defineProps<{
@@ -29,6 +30,17 @@ const emit = defineEmits<{ update: [patch: FieldPatch] }>()
 const descriptor = computed(() =>
   props.field ? getFieldTypeDescriptor(props.field.field.type) : undefined,
 )
+
+const colSpan = computed(() =>
+  props.field ? normalizeFormFieldColSpan(props.field.field.colSpan, props.field.field.type) : 12,
+)
+
+function updateColSpan(value: number | null | undefined) {
+  if (!props.field) return
+  emit('update', {
+    colSpan: normalizeFormFieldColSpan(value, props.field.field.type),
+  })
+}
 </script>
 
 <template>
@@ -41,6 +53,23 @@ const descriptor = computed(() =>
       <div class="config__meta">
         <span class="config__type">{{ descriptor?.label ?? field.field.type }}</span>
         <span class="config__name">{{ field.field.name }}</span>
+      </div>
+
+      <div v-if="!readonly" class="config__layout">
+        <div class="config__layout-label">
+          <span>列宽</span>
+          <span class="config__layout-value">{{ colSpan }} / 24 列</span>
+        </div>
+        <el-input-number
+          :model-value="colSpan"
+          :min="1"
+          :max="24"
+          :step="1"
+          controls-position="right"
+          class="config__layout-control"
+          @update:model-value="updateColSpan"
+        />
+        <p class="config__layout-hint">调整后会按从左到右、从上到下自动紧凑排布。</p>
       </div>
 
       <!-- 已发布：只读，不渲染可编辑配置面板 -->
@@ -89,6 +118,39 @@ const descriptor = computed(() =>
   align-items: center;
   gap: var(--sw-space-8);
   margin-bottom: var(--sw-space-16);
+}
+
+.config__layout {
+  margin-bottom: var(--sw-space-16);
+  padding: var(--sw-space-12);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-fill-base);
+}
+
+.config__layout-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--sw-space-8);
+  font-size: var(--sw-font-emphasis);
+  font-weight: var(--sw-font-weight-emphasis);
+  color: var(--sw-text-regular);
+}
+
+.config__layout-value,
+.config__layout-hint {
+  font-size: var(--sw-font-caption);
+  font-weight: 400;
+  color: var(--sw-text-secondary);
+}
+
+.config__layout-control {
+  width: 100%;
+}
+
+.config__layout-hint {
+  margin: var(--sw-space-8) 0 0;
+  line-height: 1.5;
 }
 
 .config__type {

@@ -18,6 +18,7 @@ import { getFieldTypeDescriptor } from './field-types'
 import type { DesignerItem } from './types'
 import type { FormSchema } from '@/contracts/form-schema'
 import FormPreview from '@/adapters/form-designer/FormPreview.vue'
+import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 
 const items = defineModel<DesignerItem[]>('items', { required: true })
 const selectedId = defineModel<string | null>('selectedId', { required: true })
@@ -89,6 +90,9 @@ function remove(id: string) {
       v-model="items"
       :group="{ name: group, pull: true, put: true }"
       :animation="150"
+      :force-fallback="true"
+      :fallback-on-body="true"
+      :fallback-tolerance="4"
       item-key="id"
       handle=".field-shell__handle"
       class="canvas__list"
@@ -99,6 +103,10 @@ function remove(id: string) {
         :key="item.id"
         class="field-shell"
         :class="{ 'field-shell--active': item.id === selectedId }"
+        :style="{ gridColumn: `span ${getFormFieldColSpan(item.field)}` }"
+        :data-col-span="getFormFieldColSpan(item.field)"
+        :data-field-type="item.field.type"
+        :data-field-name="item.field.name"
         @click="select(item.id)"
       >
         <div class="field-shell__bar">
@@ -155,9 +163,10 @@ function remove(id: string) {
 }
 
 .canvas__list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sw-space-12);
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  grid-auto-flow: row;
+  row-gap: var(--sw-space-12);
   min-height: 120px;
   max-width: 920px;
   margin: 0 auto;
@@ -171,6 +180,7 @@ function remove(id: string) {
   border-radius: var(--sw-radius-card);
   box-shadow: var(--sw-shadow-card);
   cursor: pointer;
+  min-width: 0;
   transition: border-color 0.15s;
 }
 
@@ -239,6 +249,20 @@ function remove(id: string) {
   border: 1px dashed var(--sw-border-base);
   border-radius: var(--sw-radius-base);
   background: var(--sw-fill-base);
+}
+
+.field-shell__control {
+  min-width: 0;
+}
+
+.field-shell.sortable-ghost {
+  opacity: 0.45;
+  border: 1px dashed var(--sw-color-primary);
+  background: var(--sw-color-primary-light-9, var(--sw-fill-base));
+}
+
+.field-shell.sortable-chosen {
+  border-color: var(--sw-color-primary);
 }
 
 .field-shell__table-info {

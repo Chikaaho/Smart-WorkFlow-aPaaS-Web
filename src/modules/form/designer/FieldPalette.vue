@@ -2,7 +2,7 @@
 /**
  * 控件库（设计器左栏）。
  *
- * 渲染字段类型注册表（FIELD_TYPE_REGISTRY），每条 = 一个可拖拽的控件。
+ * 渲染字段类型注册表（FIELD_TYPE_REGISTRY），每条 = 一个可拖拽/可点击添加的控件。
  * 拖入画布时经 :clone 把「描述符」转成「画布项」（DesignerItem），完成默认字段装配
  * 与列名生成。**这里禁止写死 8 类**——加类型只动注册表。
  *
@@ -53,6 +53,11 @@ const palette = computed<readonly FieldTypeDescriptor[]>(() =>
     : FIELD_TYPE_REGISTRY,
 )
 
+const emit = defineEmits<{
+  /** 键盘/点击添加时，把与拖入相同的默认画布项交给宿主。 */
+  add: [item: DesignerItem]
+}>()
+
 /** 图标白名单（本地解析，注册表只存字符串键，不直引图标组件）。 */
 const ICON_MAP: Record<string, Component> = {
   EditPen,
@@ -70,12 +75,22 @@ const ICON_MAP: Record<string, Component> = {
  * SortableJS 在 pull:'clone' 时调用，返回值即插入画布 v-model 的对象。
  */
 function cloneToItem(descriptor: FieldTypeDescriptor): DesignerItem {
+  return createItem(descriptor)
+}
+
+function createItem(descriptor: FieldTypeDescriptor): DesignerItem {
   const name = generateColumnName(
     descriptor.label,
     props.existingNames,
     props.existingNames.length + 1,
   )
   return { id: nextDesignerItemId(), field: descriptor.createDefault(name) }
+}
+
+/** 保留拖拽入口，同时提供可访问的点击添加入口，二者使用同一默认装配逻辑。 */
+function addFromPalette(descriptor: FieldTypeDescriptor) {
+  if (props.disabled) return
+  emit('add', createItem(descriptor))
 }
 </script>
 
@@ -88,16 +103,26 @@ function cloneToItem(descriptor: FieldTypeDescriptor): DesignerItem {
       :sort="false"
       :clone="cloneToItem"
       :animation="150"
+      :force-fallback="true"
+      :fallback-on-body="true"
+      :fallback-tolerance="4"
       item-key="type"
       class="palette__list"
       :disabled="disabled"
     >
-      <div v-for="d in palette" :key="d.type" class="palette__item">
+      <button
+        v-for="d in palette"
+        :key="d.type"
+        type="button"
+        class="palette__item"
+        :data-field-type="d.type"
+        @click="addFromPalette(d)"
+      >
         <el-icon v-if="ICON_MAP[d.icon]" class="palette__icon">
           <component :is="ICON_MAP[d.icon]" />
         </el-icon>
         <span class="palette__label">{{ d.label }}</span>
-      </div>
+      </button>
     </VueDraggable>
   </aside>
 </template>

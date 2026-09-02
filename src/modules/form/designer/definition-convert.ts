@@ -1,6 +1,7 @@
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
 import type { DesignerItem } from './types'
 import { nextDesignerItemId } from './types'
+import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 
 /**
  * DesignerItem[] → FormSchema 单向导出（items → definition）。
@@ -11,7 +12,10 @@ import { nextDesignerItemId } from './types'
 export function itemsToDefinition(items: DesignerItem[], title: string): FormSchema {
   return {
     title: title.trim() || '未命名表单',
-    fields: items.map((it) => it.field),
+    fields: items.map((it) => {
+      const colSpan = normalizeFormFieldColSpan(it.field.colSpan, it.field.type)
+      return it.field.colSpan === colSpan ? it.field : { ...it.field, colSpan }
+    }),
   }
 }
 

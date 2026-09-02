@@ -30,6 +30,7 @@ import {
 import { ApiError } from '@/foundation/request'
 import DynamicField from '@/components/DynamicField.vue'
 import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-display'
+import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
 
 /* ── 路由参数 ── */
@@ -48,6 +49,8 @@ const submitting = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 const formData = reactive<Record<string, unknown>>({})
+/** 客户端提交校验提示：与字段同处网格单元，提示出现时自然撑高当前行。 */
+const validationErrors = reactive<Record<string, string>>({})
 /** REFERENCE 字段显示名映射：{ fieldName: displayName } */
 const referenceLabels = reactive<Record<string, string>>({})
 /** 乐观锁版本号（编辑回显时从 GET 详情获取，保存时 PUT 回传） */
@@ -244,12 +247,43 @@ function buildUpdatePayload(): {
   }
 }
 
+function isEmptyRequiredValue(value: unknown): boolean {
+  if (value === null || value === undefined) return true
+  if (typeof value === 'string') return value.trim() === ''
+  if (Array.isArray(value)) return value.length === 0
+  return false
+}
+
+/**
+ * 提交前先在真实填写页展示字段内联校验。
+ * 这不是后端校验的替代：后端仍会对同一必填规则复核；前端只负责把错误绑定到
+ * 对应网格单元，使错误提示参与 CSS Grid 的自然行高计算。
+ */
+function validateRequiredFields(): boolean {
+  for (const key of Object.keys(validationErrors)) delete validationErrors[key]
+  if (!schema.value) return true
+
+  for (const field of schema.value.fields) {
+    if (field.required && isEmptyRequiredValue(formData[field.name])) {
+      validationErrors[field.name] = '此字段为必填项'
+    }
+  }
+
+  return Object.keys(validationErrors).length === 0
+}
+
 /* ── 提交 / 保存 ── */
 
 async function handleSubmit() {
   submitting.value = true
   errorMsg.value = ''
   successMsg.value = ''
+
+  if (!validateRequiredFields()) {
+    errorMsg.value = '请完善必填项后再提交'
+    submitting.value = false
+    return
+  }
 
   // 编辑保存：走 PUT 更新端点
   if (recordId) {
@@ -377,7 +411,15 @@ onMounted(loadSchema)
         <!-- 字段渲染区 -->
         <div class="form-render-page__card">
           <div class="form-render-page__group">
-            <div v-for="field in schema.fields" :key="field.name" class="form-render-page__field">
+            <div
+              v-for="field in schema.fields"
+              :key="field.name"
+              class="form-render-page__field"
+              :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
+              :data-col-span="getFormFieldColSpan(field)"
+              :data-grid-field-type="field.type"
+              :data-grid-field-name="field.name"
+            >
               <DynamicField
                 :field="field"
                 :model-value="formData[field.name]"
@@ -385,6 +427,14 @@ onMounted(loadSchema)
                 :reference-label="referenceLabels[field.name] ?? ''"
                 @update:model-value="formData[field.name] = $event"
               />
+              <p
+                v-if="validationErrors[field.name]"
+                class="form-render-page__field-error"
+                role="alert"
+                :data-validation-error-for="field.name"
+              >
+                {{ validationErrors[field.name] }}
+              </p>
             </div>
           </div>
         </div>
@@ -434,15 +484,21 @@ onMounted(loadSchema)
 
 .form-render-page__group {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 22px 28px;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  grid-auto-flow: row;
+  row-gap: var(--sw-form-row-gap);
 }
 
 .form-render-page__field {
-  /* 多行文本/子表格跨整行 */
-  :deep(.dynamic-field__table),
-  :deep(.dynamic-field) > .el-textarea {
-    grid-column: 1 / -1;
-  }
+  min-width: 0;
+  padding-inline: var(--sw-space-8);
+  box-sizing: border-box;
+}
+
+.form-render-page__field-error {
+  margin: var(--sw-space-4) 0 0;
+  color: var(--sw-danger);
+  font-size: var(--sw-font-caption);
+  line-height: 1.5;
 }
 </style>

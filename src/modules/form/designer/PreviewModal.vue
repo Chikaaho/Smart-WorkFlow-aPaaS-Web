@@ -10,13 +10,18 @@
  * 本组件落在 modules/ 内，只调 adapters 暴露的 FormPreview，绝不直引 @form-create/*。
  */
 import { computed } from 'vue'
-import type { FormSchema } from '@/contracts/form-schema'
+import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
+import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 import FormPreview from '@/adapters/form-designer/FormPreview.vue'
 
 const props = withDefaults(defineProps<{ schema: FormSchema; badge?: string }>(), { badge: '' })
 const visible = defineModel<boolean>('visible', { required: true })
 
 const hasFields = computed(() => props.schema.fields.length > 0)
+
+function schemaForField(field: FormSchemaField): FormSchema {
+  return { title: props.schema.title, fields: [field] }
+}
 </script>
 
 <template>
@@ -34,8 +39,18 @@ const hasFields = computed(() => props.schema.fields.length > 0)
     <div class="preview-modal__stage">
       <div v-if="hasFields" class="preview-modal__form">
         <p class="preview-modal__hint">带 <span class="preview-modal__star">*</span> 为必填项</p>
-        <!-- 填写态：可交互真表单（仅 fill 入口用，子 app 隔离） -->
-        <FormPreview :schema="schema" mode="fill" />
+        <!-- 每个字段独立进入防腐层，外层网格统一解释 colSpan；字段顺序仍来自同一 schema。 -->
+        <div class="preview-modal__grid">
+          <div
+            v-for="field in schema.fields"
+            :key="field.name"
+            class="preview-modal__field"
+            :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
+            :data-col-span="getFormFieldColSpan(field)"
+          >
+            <FormPreview :schema="schemaForField(field)" mode="fill" />
+          </div>
+        </div>
       </div>
       <p v-else class="preview-modal__empty">尚无字段，先在设计器拖入字段再预览</p>
     </div>
@@ -68,6 +83,19 @@ const hasFields = computed(() => props.schema.fields.length > 0)
   margin: 0 0 var(--sw-space-16);
   font-size: var(--sw-font-secondary);
   color: var(--sw-text-secondary);
+}
+
+.preview-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  grid-auto-flow: row;
+  row-gap: var(--sw-form-row-gap);
+}
+
+.preview-modal__field {
+  min-width: 0;
+  padding-inline: var(--sw-space-8);
+  box-sizing: border-box;
 }
 
 .preview-modal__star {

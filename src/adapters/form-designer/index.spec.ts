@@ -19,6 +19,7 @@ describe('adapters/form-designer/parseDefinition', () => {
       type: 'TEXT',
       label: 'User Name',
       required: true,
+      colSpan: 12,
     })
   })
 
@@ -144,6 +145,20 @@ describe('adapters/form-designer/parseDefinition', () => {
     })
     const schema = parseDefinition(raw)
     expect(schema.fields[0].required).toBe(false)
+  })
+
+  it('preserves valid colSpan and normalizes invalid or missing layout values', () => {
+    const raw = JSON.stringify({
+      title: '布局',
+      fields: [
+        { name: 'one', type: 'TEXT', colSpan: 1 },
+        { name: 'full', type: 'RICH_TEXT', colSpan: 24 },
+        { name: 'fallback', type: 'TEXT', colSpan: 0 },
+        { name: 'legacy', type: 'TEXT' },
+      ],
+    })
+    const schema = parseDefinition(raw)
+    expect(schema.fields.map((field) => field.colSpan)).toEqual([1, 24, 12, 12])
   })
 })
 

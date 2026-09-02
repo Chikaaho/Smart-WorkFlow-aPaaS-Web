@@ -160,7 +160,7 @@ describe('normalizeSubmitData', () => {
   it('passes DATE values through as strings', () => {
     const fields = [{ name: 'd', type: 'DATE' as const }]
     expect(normalizeSubmitData({ d: '2026-07-01' }, fields)).toEqual({ d: '2026-07-01' })
-    expect(normalizeSubmitData({ d: '' }, fields)).toEqual({ d: '' })
+    expect(normalizeSubmitData({ d: '' }, fields)).toEqual({ d: null })
   })
 
   it('passes TEXT / NUMBER / DICT / REFERENCE values unchanged', () => {

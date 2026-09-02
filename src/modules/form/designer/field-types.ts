@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import type { FieldType, FormSchemaField } from '@/contracts/form-schema'
+import { defaultFormFieldColSpan } from '@/contracts/form-layout'
 import TextConfig from './config/TextConfig.vue'
 import RichTextConfig from './config/RichTextConfig.vue'
 import NumberConfig from './config/NumberConfig.vue'
@@ -42,7 +43,7 @@ export interface FieldTypeDescriptor {
 
 /** 字段默认 label：以中文类型名作初值，作者可在配置面板（第二刀）改。 */
 function baseField(type: FieldType, name: string, label: string) {
-  return { name, type, label, required: false }
+  return { name, type, label, required: false, colSpan: defaultFormFieldColSpan(type) }
 }
 
 export const FIELD_TYPE_REGISTRY: readonly FieldTypeDescriptor[] = [

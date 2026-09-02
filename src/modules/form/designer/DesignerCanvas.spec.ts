@@ -74,6 +74,21 @@ describe('DesignerCanvas (WYSIWYG)', () => {
     expect(first[0]).toMatchObject({ name: 'username', type: 'TEXT', label: '用户名' })
   })
 
+  it('assigns each shell its legal 24-column span and keeps source order', () => {
+    const wrapper = mountCanvas([
+      item('di_1', 'one', { colSpan: 1 }),
+      item('di_2', 'full', { type: 'RICH_TEXT', colSpan: 24 }),
+      item('di_3', 'fallback'),
+    ])
+    const shells = wrapper.findAll('.field-shell')
+    expect(shells.map((shell) => shell.attributes('data-col-span'))).toEqual(['1', '24', '12'])
+    expect(shells.map((shell) => shell.attributes('style'))).toEqual([
+      'grid-column: span 1;',
+      'grid-column: span 24;',
+      'grid-column: span 12;',
+    ])
+  })
+
   it('selects field on shell click', async () => {
     const wrapper = mountCanvas([item('di_1', 'a'), item('di_2', 'b')])
     await wrapper.findAll('.field-shell')[1].trigger('click')

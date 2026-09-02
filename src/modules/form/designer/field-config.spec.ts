@@ -5,13 +5,20 @@ import type { DictField, TextField } from '@/contracts/form-schema'
 describe('field-config', () => {
   it('applyFieldPatch merges contract keys in place (single source, same object ref)', () => {
     const field: TextField = { name: 'col_a', type: 'TEXT', label: '旧标签', required: false }
-    applyFieldPatch(field, { label: '新标签', name: 'col_b', required: true, length: 50 })
+    applyFieldPatch(field, {
+      label: '新标签',
+      name: 'col_b',
+      required: true,
+      length: 50,
+      colSpan: 1,
+    })
     expect(field).toEqual({
       name: 'col_b',
       type: 'TEXT',
       label: '新标签',
       required: true,
       length: 50,
+      colSpan: 1,
     })
   })
 
@@ -36,12 +43,22 @@ describe('field-config', () => {
       name: 'y',
       required: true,
       length: 1,
+      colSpan: 24,
       dictType: 'z',
       renderAs: 'select',
       targetFormId: 'my-form-key',
     }
     expect(Object.keys(patch).sort()).toEqual(
-      ['dictType', 'label', 'length', 'name', 'renderAs', 'required', 'targetFormId'].sort(),
+      [
+        'colSpan',
+        'dictType',
+        'label',
+        'length',
+        'name',
+        'renderAs',
+        'required',
+        'targetFormId',
+      ].sort(),
     )
   })
 

@@ -94,7 +94,7 @@ export async function createFormDef(req: FormCreateReq): Promise<FormDefDTO> {
 }
 
 /**
- * 保存表单定义（可反复调，不校验、不动状态）。
+ * 保存表单定义（可反复调，校验布局契约但不动状态）。
  * POST /api/form/def/{id}/config
  * 入参 FormConfigSaveReq（definition = FormSchema JSON 字符串）。
  */

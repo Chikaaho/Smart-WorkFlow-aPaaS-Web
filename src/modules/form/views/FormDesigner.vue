@@ -107,6 +107,13 @@ const otherNames = computed(() =>
   items.value.filter((it) => it.id !== selectedId.value).map((it) => it.field.name),
 )
 
+/** 控件库点击添加与拖入使用同一 DesignerItem 形态，点击后立即选中新字段。 */
+function addPaletteItem(item: DesignerItem) {
+  if (isPublished.value) return
+  items.value.push(item)
+  selectedId.value = item.id
+}
+
 /** 配置面板回写：就地把补丁合并进选中字段。 */
 function patchSelectedField(patch: FieldPatch) {
   const item = items.value.find((it) => it.id === selectedId.value)
@@ -508,7 +515,11 @@ function backToList() {
 
       <!-- ═══ 工作区：表单设计 ═══ -->
       <div v-else-if="activeTab === 'design'" class="designer__body">
-        <FieldPalette :existing-names="existingNames" :disabled="isPublished" />
+        <FieldPalette
+          :existing-names="existingNames"
+          :disabled="isPublished"
+          @add="addPaletteItem"
+        />
         <DesignerCanvas
           v-model:items="items"
           v-model:selected-id="selectedId"

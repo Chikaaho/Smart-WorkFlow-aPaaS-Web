@@ -1,4 +1,5 @@
 import type { FormSchema, FormSchemaField, FieldType, TableSubField } from '@/contracts/form-schema'
+import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 
 /**
  * form-designer 防腐层。
@@ -30,6 +31,7 @@ interface RawSubFieldDef {
 
 interface RawFieldDef extends RawSubFieldDef {
   subFields?: RawSubFieldDef[]
+  colSpan?: unknown
 }
 
 interface RawDefinition {
@@ -50,6 +52,7 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     ...(raw.label !== undefined ? { label: raw.label } : {}),
     required: raw.required ?? false,
     ...(raw.length !== undefined ? { length: raw.length } : {}),
+    colSpan: normalizeFormFieldColSpan(raw.colSpan, raw.type),
   }
 
   const type = raw.type as FieldType

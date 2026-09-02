@@ -43,6 +43,8 @@ interface BaseField {
   label?: string
   required?: boolean
   length?: number
+  /** 24 列网格中的横向占用列数，合法值为 1—24。 */
+  colSpan?: number
 }
 
 export interface TextField extends BaseField {

@@ -20,7 +20,7 @@ vi.mock('@/modules/form/utils/resolve-reference-display', () => ({
   resolveReferenceDisplay: vi.fn().mockResolvedValue('ref-display'),
 }))
 
-import { getFormDefinition, getFormData } from '@/modules/form/api/form'
+import { getFormDefinition, getFormData, submitForm } from '@/modules/form/api/form'
 import FormRender from './FormRender.vue'
 
 /* ── 通用 stubs ── */
@@ -44,6 +44,7 @@ describe('FormRender', () => {
   beforeEach(() => {
     vi.mocked(getFormDefinition).mockReset()
     vi.mocked(getFormData).mockReset()
+    vi.mocked(submitForm).mockReset()
     mockQuery = {}
   })
 
@@ -185,5 +186,29 @@ describe('FormRender', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('提交')
+  })
+
+  it('shows required validation inline and keeps the next grid row below the error', async () => {
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '必填校验',
+      fields: [
+        { name: 'required_name', type: 'TEXT', required: true },
+        { name: 'next_field', type: 'TEXT', required: false },
+      ],
+    })
+
+    const wrapper = mount(FormRender, {
+      global: { stubs: baseStubs },
+    })
+
+    await flushPromises()
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-validation-error-for="required_name"]').text()).toBe(
+      '此字段为必填项',
+    )
+    expect(wrapper.text()).toContain('请完善必填项后再提交')
+    expect(submitForm).not.toHaveBeenCalled()
   })
 })
