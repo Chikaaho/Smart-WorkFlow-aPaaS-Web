@@ -8,6 +8,10 @@ import type {
   ProcessInstance,
   InstanceDetail,
 } from '@/contracts/bpm'
+import type { BpmNodeCapability } from '@/contracts/bpm-node'
+import { parseBpmNodeCapabilities } from '@/modules/workflow/utils/node-capabilities'
+
+export const PROCESS_NODE_CAPABILITIES_URL = '/workflow/defs/node-capabilities'
 
 // ─── 后端分页原始形状 ───
 interface BackendPageResult<T> {
@@ -183,6 +187,20 @@ export async function queryApproverCandidates(keyword = ''): Promise<ApproverCan
     url: '/workflow/defs/approver-candidates',
     params: { keyword },
   })
+}
+
+/**
+ * GET /workflow/defs/node-capabilities → BpmNodeCapability[]
+ *
+ * request 负责 ApiResponse/ApiError 归一；此处只负责稳定契约解析，
+ * 未知响应不会退回静态节点目录。
+ */
+export async function getProcessNodeCapabilities(): Promise<BpmNodeCapability[]> {
+  const raw = await request<unknown>({
+    method: 'GET',
+    url: PROCESS_NODE_CAPABILITIES_URL,
+  })
+  return parseBpmNodeCapabilities(raw)
 }
 
 /** 流程图校验错误 */

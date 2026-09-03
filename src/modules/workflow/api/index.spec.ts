@@ -168,4 +168,27 @@ describe('modules/workflow/api', () => {
       params: { pageNum: 1, pageSize: 10 },
     })
   })
+
+  it('getProcessNodeCapabilities fetches and strictly parses the registry contract', async () => {
+    mockRequest.mockResolvedValueOnce([
+      {
+        type: 'START',
+        displayName: '开始',
+        description: '流程入口节点',
+        category: 'EVENT',
+        version: 'p57-v1',
+        topology: { minIncoming: 0, maxIncoming: 0, minOutgoing: 1, maxOutgoing: 1 },
+        configFields: [],
+        supports: { design: true, save: true, publish: true, run: true },
+      },
+    ])
+
+    const result = await workflowApi.getProcessNodeCapabilities()
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'GET',
+      url: workflowApi.PROCESS_NODE_CAPABILITIES_URL,
+    })
+    expect(result[0]?.type).toBe('START')
+  })
 })

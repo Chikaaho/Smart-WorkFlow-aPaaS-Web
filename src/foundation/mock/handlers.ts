@@ -26,6 +26,7 @@
 import { buildMockXlsxBlob } from './mock-xlsx'
 import { getAccessToken } from '@/foundation/auth/token'
 import type { MockHandler, MockMethod } from './index'
+import { MOCK_WORKFLOW_NODE_CAPABILITIES } from './workflow-node-capabilities'
 
 /** 模板/导出两行表头（显示名 + 稳定映射标识），与真实后端模板契约一致。 */
 const MOCK_IMPORT_EXPORT_HEADERS: string[][] = [
@@ -42,6 +43,20 @@ function p32AccessGate(required: string): { code: number; message: string; data:
     return { code: 401, message: '未认证', data: null }
   }
   if (!MOCK_CURRENT_SESSION.superAdmin && !MOCK_CURRENT_SESSION.permissions.includes(required)) {
+    return { code: 403, message: '无权限', data: null }
+  }
+  return null
+}
+
+/** P57 节点能力清单沿用当前 workflow 设计入口权限；未认证与无权语义与真实接口一致。 */
+function workflowNodeCapabilityAccessGate(): { code: number; message: string; data: null } | null {
+  if (!getAccessToken() || MOCK_CURRENT_SESSION.user.username === '') {
+    return { code: 401, message: '未认证', data: null }
+  }
+  if (
+    !MOCK_CURRENT_SESSION.superAdmin &&
+    !MOCK_CURRENT_SESSION.permissions.includes('workflow:def:view')
+  ) {
     return { code: 403, message: '无权限', data: null }
   }
   return null
@@ -1320,6 +1335,19 @@ export const mockRegistrations: MockRegistration[] = [
           graph: { processKey, name: req.name, formKey: req.formKey, elements: [] },
         },
       }
+    },
+  },
+
+  // ── 流程定义：节点能力清单 ─────────────────────────────
+  // GET /api/workflow/defs/node-capabilities → R<BpmNodeCapability[]>
+  // 只返回后端统一注册结果中完整可用的节点，不把 P58 预留类型伪造成可设计能力。
+  {
+    method: 'GET',
+    pattern: '/api/workflow/defs/node-capabilities',
+    handler: () => {
+      const denied = workflowNodeCapabilityAccessGate()
+      if (denied) return denied
+      return { code: 0, message: 'ok', data: MOCK_WORKFLOW_NODE_CAPABILITIES }
     },
   },
 
