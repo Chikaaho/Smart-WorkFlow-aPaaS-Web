@@ -1,8 +1,8 @@
-# Smart-WorkFlow-Web
+# Smart-WorkFlow-aPaaS-Web
 
-Smart-WorkFlow-Web 是 Smart-WorkFlow 的 Vue 单页应用，为低代码表单、流程审批、组织权限、通知、存储、任务、IoT 与 AI Agent 提供统一的浏览器端交互入口。
+Smart-WorkFlow-aPaaS-Web 是 CH-aPaaS 的 Vue 单页应用，为低代码表单、流程审批、组织权限、通知、存储、任务、IoT 与 AI Agent 提供统一的浏览器端交互入口。
 
-配套入口：[Smart-WorkFlow-Server](../Smart-WorkFlow-Server/README.md) · [项目知识中心](../README.md)
+配套入口：[Smart-WorkFlow-sPaaS-server](../Smart-WorkFlow-Server/README.md) · [项目知识中心](../README.md)
 
 ## 核心能力
 
@@ -46,7 +46,7 @@ src/
 
 - Node.js
 - pnpm
-- 真实 API 模式需要可访问的 Smart-WorkFlow-Server
+- 真实 API 模式需要可访问的 Smart-WorkFlow-sPaaS-server
 
 环境配置入口：
 
