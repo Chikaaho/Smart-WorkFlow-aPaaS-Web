@@ -1,3 +1,5 @@
+import type { ApprovalOpinionConfig } from './bpm-node'
+
 // ─── 待办任务 DTO（对齐后端 TodoTaskRespDTO） ───
 export interface TodoTask {
   taskId: string
@@ -12,6 +14,7 @@ export interface TodoTask {
 export interface TaskDetail {
   taskId: string
   taskName: string
+  nodeKey?: string | null
   processInstanceId: string
   processDefinitionKey: string
   processName: string | null // 流程定义被删除时为 null
@@ -23,6 +26,7 @@ export interface TaskDetail {
   initiatorName?: string | null // 发起人展示名（可读身份回显）
   createTime: string // LocalDateTime → ISO-8601 string
   processVariables: Record<string, unknown> // Map<String, Object>
+  opinionForm?: ApprovalOpinionConfig | null // 当前人工节点的低代码审批意见配置
   approvalHistory: ApprovalHistoryItem[]
 }
 
@@ -30,10 +34,15 @@ export interface TaskDetail {
 export interface ApprovalHistoryItem {
   taskId: string
   taskName: string
+  nodeKey?: string | null
   assignee: string
   assigneeName?: string | null // 审批人展示名（可读身份回显）
   createTime: string
   endTime: string | null // 可能为 null
+  action?: 'APPROVE' | 'RETURN' | 'REJECT' | null
+  opinionData?: Record<string, unknown> | null
+  opinionFormId?: string | null
+  opinionFormVersion?: string | null
   approvalResult: 'APPROVED' | 'REJECTED' | null // 审批结果：APPROVED=通过, REJECTED=驳回, null=进行中
 }
 

@@ -177,6 +177,22 @@ describe('TaskDetail.vue', () => {
     expect(mockPush).toHaveBeenCalledWith({ name: 'TodoList' })
   })
 
+  it('keeps the successful approval result when navigation rejects', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
+    vi.mocked(completeTask).mockResolvedValueOnce(undefined)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+    mockPush.mockRejectedValueOnce(new Error('navigation race'))
+
+    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    await nextTick()
+    await nextTick()
+
+    await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
+
+    expect(ElMessage.success).toHaveBeenCalledWith('审批通过')
+    expect(ElMessage.error).not.toHaveBeenCalled()
+  })
+
   it('navigates back to TodoList on back button click', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
     const wrapper = mount(TaskDetailView, { global: { stubs } })

@@ -35,6 +35,14 @@ export function setRefreshHandler(handler: RefreshHandler): void {
   refreshHandler = handler
 }
 
+/** 为真实浏览器请求生成可由服务端 ACCESS 日志回读的非秘密关联标识。 */
+function createRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `web-${crypto.randomUUID()}`
+  }
+  return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 /** 后端业务层错误(HTTP 200 + code≠0),上层按 code 映射可读提示。 */
 export class ApiError extends Error {
   readonly code: number
@@ -53,6 +61,15 @@ client.interceptors.request.use(async (config) => {
   const isAuthEndpoint = AUTH_ENDPOINTS_EXCLUDED_FROM_401_HANDLING.some((path) =>
     url.includes(path),
   )
+
+  if (!config.headers.get('X-Request-Id')) {
+    config.headers.set('X-Request-Id', createRequestId())
+  }
+  if (import.meta.env.DEV) {
+    console.info(
+      `[requestId] request ${config.headers.get('X-Request-Id')} ${config.method?.toUpperCase() ?? 'GET'} ${config.url ?? ''}`,
+    )
+  }
 
   // 到期前刷新：只在非 auth 端点、有 token、即将到期时触发
   if (!isAuthEndpoint && getAccessToken() && isTokenNearExpiry()) {
@@ -74,7 +91,14 @@ client.interceptors.request.use(async (config) => {
 })
 
 client.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (import.meta.env.DEV) {
+      console.info(
+        `[requestId] response ${response.config.headers.get('X-Request-Id')} ${response.status}`,
+      )
+    }
+    return response
+  },
   (error: AxiosError) => {
     const url = error.config?.url ?? ''
     const isAuthEndpoint = AUTH_ENDPOINTS_EXCLUDED_FROM_401_HANDLING.some((path) =>
@@ -84,6 +108,11 @@ client.interceptors.response.use(
       unauthorizedHandler?.(window.location.pathname + window.location.search)
     } else if (!isAuthEndpoint) {
       // TODO(skeleton): 5xx / 网络层基础设施异常分级处理，对齐后端「过滤层异常分级」原则
+    }
+    if (import.meta.env.DEV && error.config) {
+      console.info(
+        `[requestId] response ${error.config.headers?.get('X-Request-Id') ?? 'missing'} ${error.response?.status ?? 'NETWORK_ERROR'}`,
+      )
     }
     return Promise.reject(error)
   },

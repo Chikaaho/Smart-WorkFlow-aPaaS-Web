@@ -8,7 +8,13 @@ import type {
 /** 现有流程主链的稳定类型，非节点目录；用于保留 P57 既有兼容入口。 */
 export const REQUIRED_WORKFLOW_NODE_TYPES = ['START', 'END', 'APPROVAL'] as const
 
-export type WorkflowMiddleNodeType = 'APPROVAL' | 'P57_VERIFY'
+export type WorkflowMiddleNodeType =
+  | 'APPROVAL'
+  | 'CONSENSUS'
+  | 'CONDITION'
+  | 'COPY'
+  | 'NOTIFICATION'
+  | 'P57_VERIFY'
 
 export class NodeCapabilityContractError extends Error {
   constructor(message: string) {
@@ -166,7 +172,11 @@ export function findNodeCapability(
  * 不能因为隔离 profile 暴露了 P57_VERIFY，就静默替换既有 APPROVAL 主链。
  */
 export function resolveWorkflowMiddleNodeType(existingType?: string): WorkflowMiddleNodeType {
-  return existingType === 'P57_VERIFY' ? 'P57_VERIFY' : 'APPROVAL'
+  return ['APPROVAL', 'CONSENSUS', 'CONDITION', 'COPY', 'NOTIFICATION', 'P57_VERIFY'].includes(
+    existingType ?? '',
+  )
+    ? (existingType as WorkflowMiddleNodeType)
+    : 'APPROVAL'
 }
 
 /** 设计器只允许完整打通设计、保存、发布、运行链的能力进入正常消费态。 */

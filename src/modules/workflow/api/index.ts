@@ -8,7 +8,7 @@ import type {
   ProcessInstance,
   InstanceDetail,
 } from '@/contracts/bpm'
-import type { BpmNodeCapability } from '@/contracts/bpm-node'
+import type { BpmNodeCapability, ApprovalActionRequest } from '@/contracts/bpm-node'
 import { parseBpmNodeCapabilities } from '@/modules/workflow/utils/node-capabilities'
 
 export const PROCESS_NODE_CAPABILITIES_URL = '/workflow/defs/node-capabilities'
@@ -53,18 +53,35 @@ export async function queryTaskDetail(taskId: string): Promise<TaskDetail> {
 }
 
 /** POST /workflow/tasks/{taskId}/complete → void */
-export async function completeTask(taskId: string): Promise<void> {
+export async function completeTask(
+  taskId: string,
+  data?: Partial<ApprovalActionRequest>,
+): Promise<void> {
   return request<void>({
     method: 'POST',
     url: `/workflow/tasks/${taskId}/complete`,
+    ...(data ? { data } : {}),
   })
 }
 
 /** POST /workflow/tasks/{taskId}/reject → void */
-export async function rejectTask(taskId: string): Promise<void> {
+export async function rejectTask(
+  taskId: string,
+  data?: Partial<ApprovalActionRequest>,
+): Promise<void> {
   return request<void>({
     method: 'POST',
     url: `/workflow/tasks/${taskId}/reject`,
+    ...(data ? { data } : {}),
+  })
+}
+
+/** POST /workflow/tasks/{taskId}/return → void */
+export async function returnTask(taskId: string, data: ApprovalActionRequest): Promise<void> {
+  return request<void>({
+    method: 'POST',
+    url: `/workflow/tasks/${taskId}/return`,
+    data,
   })
 }
 

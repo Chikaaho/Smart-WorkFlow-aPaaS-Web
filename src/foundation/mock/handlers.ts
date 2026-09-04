@@ -48,7 +48,7 @@ function p32AccessGate(required: string): { code: number; message: string; data:
   return null
 }
 
-/** P57 节点能力清单沿用当前 workflow 设计入口权限；未认证与无权语义与真实接口一致。 */
+/** P58 节点能力清单沿用当前 workflow 设计入口权限；未认证与无权语义与真实接口一致。 */
 function workflowNodeCapabilityAccessGate(): { code: number; message: string; data: null } | null {
   if (!getAccessToken() || MOCK_CURRENT_SESSION.user.username === '') {
     return { code: 401, message: '未认证', data: null }

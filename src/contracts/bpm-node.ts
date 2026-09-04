@@ -7,6 +7,40 @@
 
 export type BpmNodeCategory = 'EVENT' | 'TASK' | 'GATEWAY' | 'OTHER'
 
+export type ParticipantStrategy = 'FIXED_USER' | 'ROLE' | 'EXPRESSION' | 'ADAPTER'
+
+export interface ParticipantConfig {
+  strategy: ParticipantStrategy
+  value?: string | number | Array<string | number>
+  adapterId?: string
+}
+
+export interface ApprovalOpinionConfig {
+  formId?: string
+  version?: string
+  fields?: Array<{
+    key: string
+    label: string
+    type: 'TEXT' | 'TEXTAREA' | 'NUMBER' | 'RADIO' | 'CHECKBOX' | 'SELECT' | 'DATETIME' | 'NOTE'
+    required?: boolean
+    options?: string[]
+    min?: number
+    max?: number
+    maxLength?: number
+    visibleWhen?: string
+    initialExpression?: string
+  }>
+}
+
+export interface ApprovalActionRequest {
+  action: 'APPROVE' | 'RETURN' | 'REJECT'
+  returnTargetNodeId?: string
+  opinionFormId?: string
+  opinionFormVersion?: string
+  comment?: string
+  opinionData?: Record<string, unknown>
+}
+
 export interface BpmNodeTopology {
   minIncoming: number
   maxIncoming: number | null

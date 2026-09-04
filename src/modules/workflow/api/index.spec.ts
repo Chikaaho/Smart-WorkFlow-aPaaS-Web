@@ -176,7 +176,7 @@ describe('modules/workflow/api', () => {
         displayName: '开始',
         description: '流程入口节点',
         category: 'EVENT',
-        version: 'p57-v1',
+        version: '1',
         topology: { minIncoming: 0, maxIncoming: 0, minOutgoing: 1, maxOutgoing: 1 },
         configFields: [],
         supports: { design: true, save: true, publish: true, run: true },

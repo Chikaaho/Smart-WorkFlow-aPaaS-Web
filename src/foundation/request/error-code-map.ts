@@ -56,6 +56,7 @@ export const ERROR_CODE_MAP: Record<number, string> = {
   2105: '流程已发布，不能修改',
   /* ── 鉴权（对齐后端 CommonErrorCode / RestAccessDeniedHandler） ── */
   403: '无权限执行该操作',
+  2313: '流程实例已失败，不可继续审批',
 }
 
 /**

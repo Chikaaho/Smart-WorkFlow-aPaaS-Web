@@ -18,6 +18,10 @@ describe('workflow node capability contract', () => {
       'START',
       'END',
       'APPROVAL',
+      'CONSENSUS',
+      'CONDITION',
+      'COPY',
+      'NOTIFICATION',
     ])
   })
 
@@ -66,11 +70,11 @@ describe('workflow node capability contract', () => {
     const unknownNode = {
       ...validGraph,
       elements: validGraph.elements.map((element) =>
-        element.id === 'approval' ? { ...element, type: 'CONDITION' } : element,
+        element.id === 'approval' ? { ...element, type: 'UNKNOWN' } : element,
       ),
     }
     expect(validateProcessGraphCapabilities(unknownNode, capabilities)).toContain(
-      '节点 approval 使用了能力清单未知类型：CONDITION',
+      '节点 approval 使用了能力清单未知类型：UNKNOWN',
     )
   })
 

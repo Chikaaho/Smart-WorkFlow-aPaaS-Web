@@ -10,11 +10,21 @@ import { router } from './router'
 import { i18n } from './locales'
 import { permissionDirective } from './foundation/permission'
 
-const app = createApp(App)
+async function bootstrap(): Promise<void> {
+  // 仅开发构建按显式环境变量动态载入，生产构建不生成该入口或 debug 模块。
+  if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_AUTH_ENABLED === 'true') {
+    const { initializeDevDebugAuth } = await import('./foundation/auth/dev-debug')
+    initializeDevDebugAuth()
+  }
 
-app.use(pinia)
-app.use(router)
-app.use(i18n)
-app.directive('perm', permissionDirective)
+  const app = createApp(App)
 
-app.mount('#app')
+  app.use(pinia)
+  app.use(router)
+  app.use(i18n)
+  app.directive('perm', permissionDirective)
+
+  app.mount('#app')
+}
+
+void bootstrap()

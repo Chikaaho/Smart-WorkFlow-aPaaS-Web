@@ -1,11 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockRequest } = vi.hoisted(() => ({ mockRequest: vi.fn() }))
+const { mockRequest, mockRequestInterceptor } = vi.hoisted(() => ({
+  mockRequest: vi.fn(),
+  mockRequestInterceptor: vi.fn(),
+}))
 
 vi.mock('axios', () => {
   const client = {
     request: mockRequest,
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
+    interceptors: {
+      request: {
+        use: vi.fn((handler: unknown) =>
+          mockRequestInterceptor.mockImplementation(handler as never),
+        ),
+      },
+      response: { use: vi.fn() },
+    },
     defaults: { baseURL: '/api' },
   }
   const axiosInstance = Object.assign(
@@ -46,5 +56,16 @@ describe('request 非 2xx 归一（S1 读取权限拒绝态前置）', () => {
     const err = await request({ method: 'GET', url: '/s1-test/unmatched' }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ApiError)
     expect((err as ApiError).code).toBe(1300)
+  })
+
+  it('真实请求在进入 axios 前注入非秘密 X-Request-Id', async () => {
+    const config = {
+      method: 'get',
+      url: '/workflow/tasks/todo',
+      headers: new Headers(),
+    }
+    const intercepted = await mockRequestInterceptor(config)
+
+    expect(intercepted.headers.get('X-Request-Id')).toMatch(/^web-/)
   })
 })
