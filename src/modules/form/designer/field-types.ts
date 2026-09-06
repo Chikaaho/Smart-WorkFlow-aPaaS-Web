@@ -8,6 +8,7 @@ import DateConfig from './config/DateConfig.vue'
 import BoolConfig from './config/BoolConfig.vue'
 import DictConfig from './config/DictConfig.vue'
 import ReferenceConfig from './config/ReferenceConfig.vue'
+import OaFieldConfig from './config/OaFieldConfig.vue'
 
 /**
  * 字段类型注册表（设计器扩展插槽 · 单一数据源）。
@@ -107,6 +108,36 @@ export const FIELD_TYPE_REGISTRY: readonly FieldTypeDescriptor[] = [
     createDefault: (name) =>
       ({ ...baseField('TABLE', name, '子表格'), subFields: [] }) as FormSchemaField,
     configComponent: null,
+  },
+  // ══════ v0.0.2 OA（P2 表单子集） ══════
+  {
+    type: 'MULTISELECT',
+    label: '多选',
+    icon: 'Finished',
+    createDefault: (name) =>
+      ({ ...baseField('MULTISELECT', name, '多选'), options: [] }) as FormSchemaField,
+    configComponent: OaFieldConfig,
+  },
+  {
+    type: 'ATTACHMENT',
+    label: '附件',
+    icon: 'Paperclip',
+    createDefault: (name) => ({ ...baseField('ATTACHMENT', name, '附件') }) as FormSchemaField,
+    configComponent: OaFieldConfig,
+  },
+  {
+    type: 'IMAGE',
+    label: '图片',
+    icon: 'Picture',
+    createDefault: (name) => ({ ...baseField('IMAGE', name, '图片') }) as FormSchemaField,
+    configComponent: OaFieldConfig,
+  },
+  {
+    type: 'LABEL',
+    label: '说明文字',
+    icon: 'InfoFilled',
+    createDefault: (name) => ({ ...baseField('LABEL', name, '说明文字') }) as FormSchemaField,
+    configComponent: OaFieldConfig,
   },
 ]
 

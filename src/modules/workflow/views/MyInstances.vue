@@ -6,8 +6,10 @@
  * 实例信息、当前进度与流转记录（审批历史）。
  */
 import { ref, computed, onMounted, reactive } from 'vue'
+import { ElMessage } from 'element-plus'
 import { StandardListTemplate } from '@/components/page-layout'
 import { myInstances, myInstanceDetail } from '@/modules/workflow/api'
+import { urgeMyInstance } from '@/modules/workflow/api/oa'
 import type { ProcessInstance, MyInstanceDetail } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
@@ -133,6 +135,31 @@ function resultTagType(result: string | null): 'success' | 'danger' | 'info' {
   return APPROVAL_RESULT_MAP[result]?.type ?? 'info'
 }
 
+// ─── 催办（v0.0.2：发起人对运行中实例催办当前待办人；10 分钟冷却） ───
+const urgingId = ref<number | null>(null)
+
+function urgeRow(r: unknown) {
+  void urge(r as ProcessInstance)
+}
+
+async function urge(row: ProcessInstance) {
+  urgingId.value = row.id
+  try {
+    const resp = await urgeMyInstance(row.id)
+    if (resp.result === 'ACCEPTED') {
+      ElMessage.success(resp.detail || '已通知当前待办人')
+    } else if (resp.result === 'COOLDOWN') {
+      ElMessage.warning(resp.detail || '冷却中，暂不能再次催办')
+    } else {
+      ElMessage.info(resp.detail || '当前不能催办')
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '催办失败')
+  } finally {
+    urgingId.value = null
+  }
+}
+
 // el-table row slot 的 DefaultRow 类型不兼容，桥接函数（对齐 TodoList 写法）
 function openDetailRow(r: unknown) {
   void openDetail(r as ProcessInstance)
@@ -210,9 +237,20 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column prop="createTime" label="发起时间" min-width="170" />
-      <el-table-column label="操作" width="90" fixed="right">
+      <el-table-column label="操作" width="140" fixed="right">
         <template #default="{ row }">
           <el-button size="small" type="primary" link @click="openDetailRow(row)">详情</el-button>
+          <el-button
+            v-if="row.status === 'RUNNING'"
+            v-perm="'workflow:urge'"
+            size="small"
+            type="warning"
+            link
+            :disabled="urgingId === row.id"
+            @click="urgeRow(row)"
+          >
+            催办
+          </el-button>
         </template>
       </el-table-column>
     </el-table>

@@ -1,4 +1,4 @@
-import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
+import type { FormSchema, FormSchemaField, VisibilityRule } from '@/contracts/form-schema'
 import type { DesignerItem } from './types'
 import { nextDesignerItemId } from './types'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
@@ -9,13 +9,18 @@ import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
  * 红线：只取 field（纯 FormSchemaField），丢弃 DesignerItem.id —— 导出的 JSON 与
  * 后端契约同形，不带任何 UI-only 键。
  */
-export function itemsToDefinition(items: DesignerItem[], title: string): FormSchema {
+export function itemsToDefinition(
+  items: DesignerItem[],
+  title: string,
+  rules?: VisibilityRule[],
+): FormSchema {
   return {
     title: title.trim() || '未命名表单',
     fields: items.map((it) => {
       const colSpan = normalizeFormFieldColSpan(it.field.colSpan, it.field.type)
       return it.field.colSpan === colSpan ? it.field : { ...it.field, colSpan }
     }),
+    ...(rules && rules.length ? { rules: { visibility: rules } } : {}),
   }
 }
 
@@ -37,6 +42,10 @@ export function definitionToItems(schema: FormSchema): DesignerItem[] {
     'DICT',
     'REFERENCE',
     'TABLE',
+    'MULTISELECT',
+    'ATTACHMENT',
+    'IMAGE',
+    'LABEL',
   ])
 
   return schema.fields.flatMap<DesignerItem>((field) => {

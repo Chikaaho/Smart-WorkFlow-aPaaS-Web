@@ -30,6 +30,7 @@ import {
 import { ApiError } from '@/foundation/request'
 import DynamicField from '@/components/DynamicField.vue'
 import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-display'
+import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
 import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
 
@@ -56,6 +57,14 @@ const formData = reactive<Record<string, unknown>>({})
 const validationErrors = reactive<Record<string, string>>({})
 /** REFERENCE 字段显示名映射：{ fieldName: displayName } */
 const referenceLabels = reactive<Record<string, string>>({})
+/** 显隐联动（v0.0.2）：随载荷实时复算应隐藏的字段；提交与服务端复算同口径。 */
+const hiddenFields = computed(() =>
+  schema.value ? hiddenFieldNames(parseVisibilityRules(schema.value), formData) : new Set<string>(),
+)
+/** 渲染列表：过滤隐藏字段（LABEL 说明文字照常渲染）。 */
+const visibleSchemaFields = computed(() =>
+  schema.value ? schema.value.fields.filter((f) => !hiddenFields.value.has(f.name)) : [],
+)
 /** 乐观锁版本号（编辑回显时从 GET 详情获取，保存时 PUT 回传） */
 const version = ref<number>(0)
 
@@ -81,8 +90,24 @@ async function getWorkflowApi() {
 /* ── 字段默认值初始化 ── */
 
 function initField(field: FormSchemaField) {
+  // 默认值（v0.0.2）：仅新建填报且无已有值时应用；草稿恢复/编辑回显不覆盖原值。
+  // LABEL 非输入字段，无值。
+  if (field.type === 'LABEL') {
+    return
+  }
+  if (field.defaultValue !== undefined && field.defaultValue !== null) {
+    formData[field.name] = Array.isArray(field.defaultValue)
+      ? [...field.defaultValue]
+      : field.defaultValue
+    return
+  }
   switch (field.type) {
     case 'TABLE':
+      formData[field.name] = []
+      break
+    case 'MULTISELECT':
+    case 'ATTACHMENT':
+    case 'IMAGE':
       formData[field.name] = []
       break
     case 'BOOL':
@@ -284,6 +309,7 @@ function validateRequiredFields(): boolean {
   if (!schema.value) return true
 
   for (const field of schema.value.fields) {
+    if (hiddenFields.value.has(field.name)) continue // 隐藏字段不参与本次必填校验
     if (field.required && isEmptyRequiredValue(formData[field.name])) {
       validationErrors[field.name] = '此字段为必填项'
     }
@@ -344,7 +370,13 @@ async function handleSubmit() {
 
   // 新建提交：走 POST 创建端点
   try {
-    const id = await submitForm(formKey, { ...formData }, schema.value?.fields)
+    const submitData: Record<string, unknown> = {}
+    for (const field of schema.value?.fields ?? []) {
+      if (!hiddenFields.value.has(field.name)) {
+        submitData[field.name] = formData[field.name]
+      }
+    }
+    const id = await submitForm(formKey, submitData, schema.value?.fields)
     successMsg.value = `提交成功，记录 ID：${id}`
 
     // 按业务键（记录 ID）查询流程实例，只有实例真实创建才提示"流程已发起"。
@@ -556,7 +588,7 @@ onMounted(loadSchema)
         <div class="form-render-page__card">
           <div class="form-render-page__group">
             <div
-              v-for="field in schema.fields"
+              v-for="field in visibleSchemaFields"
               :key="field.name"
               class="form-render-page__field"
               :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"

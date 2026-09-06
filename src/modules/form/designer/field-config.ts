@@ -20,6 +20,12 @@ export interface FieldPatch {
   renderAs?: 'select' | 'radio'
   /** REFERENCE 字段的目标表单 formKey（非 id）。红线：存 formKey，禁存 UUID。 */
   targetFormId?: string
+  /** 静态默认值（v0.0.2 契约已落 BaseField.defaultValue）。 */
+  defaultValue?: unknown
+  /** MULTISELECT 候选选项（v0.0.2 契约已落 MultiSelectField.options）。 */
+  options?: string[]
+  /** LABEL 说明正文（v0.0.2 契约已落 LabelField.text）。 */
+  text?: string
 }
 
 /**

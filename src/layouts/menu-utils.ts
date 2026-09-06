@@ -1,4 +1,5 @@
 import { MenuType, type MenuNode } from '@/contracts/menu'
+import { filterMenuByArea } from '@/foundation/area'
 
 /**
  * 侧边栏 / 面包屑的纯派生工具——只读菜单单一数据源（决策文档 · 外壳刀 §4/§5），不持有状态。
@@ -41,4 +42,12 @@ export function visibleMenu(nodes: MenuNode[]): MenuNode[] {
     .map((node) =>
       node.children?.length ? { ...node, children: visibleMenu(node.children) } : node,
     )
+}
+
+/**
+ * v0.0.2 P55 前后台分层：侧边栏只渲染当前区域（前台/后台）的菜单分支。
+ * 区域归属由 foundation/area 的页面归属清单判定；菜单数据仍来自单一数据源。
+ */
+export function visibleMenuForArea(nodes: MenuNode[], area: 'portal' | 'admin'): MenuNode[] {
+  return visibleMenu(filterMenuByArea(nodes, area))
 }

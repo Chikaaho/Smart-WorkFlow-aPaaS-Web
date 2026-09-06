@@ -20,6 +20,10 @@ import {
   List,
   Connection,
   Grid,
+  Finished,
+  Paperclip,
+  Picture,
+  InfoFilled,
 } from '@element-plus/icons-vue'
 import { FIELD_TYPE_REGISTRY, type FieldTypeDescriptor } from './field-types'
 import { generateColumnName } from './column-name'
@@ -68,6 +72,10 @@ const ICON_MAP: Record<string, Component> = {
   List,
   Connection,
   Grid,
+  Finished,
+  Paperclip,
+  Picture,
+  InfoFilled,
 }
 
 /**

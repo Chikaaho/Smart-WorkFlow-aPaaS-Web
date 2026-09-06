@@ -6,6 +6,11 @@
  * 按以下样板追加 handler，modules/* 与各 service 层零改动：
  *
  * ```ts
+ * function sampleGate(): { code: number; message: string; data: null } | null {
+ *   if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+ *   return null
+ * }
+ *
  * export const mockRegistrations: MockRegistration[] = [
  *   ...,
  *   {
@@ -27,6 +32,15 @@ import { buildMockXlsxBlob } from './mock-xlsx'
 import { getAccessToken } from '@/foundation/auth/token'
 import type { MockHandler, MockMethod } from './index'
 import { MOCK_WORKFLOW_NODE_CAPABILITIES } from './workflow-node-capabilities'
+import {
+  MOCK_CATEGORIES,
+  MOCK_CATALOG_ITEMS,
+  MOCK_MY_COPIES,
+  MOCK_URGE_LAST_ACCEPTED,
+  MOCK_WORKSPACE_LAYOUTS,
+  MOCK_NOTIFY_RECORDS,
+  MOCK_NOTIFY_ATTEMPTS,
+} from './seeds'
 
 /** 模板/导出两行表头（显示名 + 稳定映射标识），与真实后端模板契约一致。 */
 const MOCK_IMPORT_EXPORT_HEADERS: string[][] = [
@@ -370,6 +384,45 @@ function renderMockCaptchaSvg(code: string): string {
       .join('') +
     `</svg>`
   return 'data:image/svg+xml;base64,' + btoa(svg)
+}
+
+function mockSessionUid(): string {
+  return MOCK_CURRENT_SESSION.user?.id ?? ''
+}
+
+function mockCatalogPortalVisible(item: (typeof MOCK_CATALOG_ITEMS)[number]): boolean {
+  return item.portalVisible && item.status === 'PUBLISHED' && item.bindingActive
+}
+
+function mockCatalogManageGate(): { code: number; message: string; data: null } | null {
+  if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+  if (
+    !MOCK_CURRENT_SESSION.superAdmin &&
+    !buildMockPermissions().includes('workflow:catalog:manage')
+  )
+    return { code: 403, message: '无事项管理权限', data: null }
+  return null
+}
+
+function paginateMock<T>(list: T[], query: Record<string, string>) {
+  const pageNum = Math.max(1, Number(query.pageNum ?? '1'))
+  const pageSize = Math.max(1, Number(query.pageSize ?? '10'))
+  const start = (pageNum - 1) * pageSize
+  return {
+    records: list.slice(start, start + pageSize),
+    total: list.length,
+    pageNum,
+    pageSize,
+  }
+}
+
+function mockNotifyRecordGate(
+  permission: string,
+): { code: number; message: string; data: null } | null {
+  if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+  if (!MOCK_CURRENT_SESSION.superAdmin && !buildMockPermissions().includes(permission))
+    return { code: 403, message: '无通知记录权限', data: null }
+  return null
 }
 
 export const mockRegistrations: MockRegistration[] = [
@@ -4629,6 +4682,401 @@ export const mockRegistrations: MockRegistration[] = [
       tool.enabled = query.enabled === 'true'
       tool.updateTime = new Date().toISOString().replace('T', ' ').slice(0, 19)
       return { code: 0, message: 'ok', data: null }
+    },
+  },
+  /* ═══════════════ v0.0.2 OA：流程中心（P4） ═══════════════ */
+
+  // GET /api/workflow/catalog/items — 普通视角（不泄漏 portalVisible=false 事项）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/catalog/items',
+    handler: (_params, query) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const keyword = (query.keyword ?? '').toLowerCase()
+      const categoryId = query.categoryId
+      const items = MOCK_CATALOG_ITEMS.filter(mockCatalogPortalVisible)
+        .filter((it) =>
+          categoryId === undefined || categoryId === ''
+            ? true
+            : Number(categoryId) === 0
+              ? it.categoryId === null
+              : it.categoryId === Number(categoryId),
+        )
+        .filter((it) =>
+          keyword === ''
+            ? true
+            : it.name.toLowerCase().includes(keyword) || it.formKey.toLowerCase().includes(keyword),
+        )
+      return { code: 0, message: 'ok', data: paginateMock(items, query) }
+    },
+  },
+
+  // GET /api/workflow/catalog/category-counts — 仅统计可见事项
+  {
+    method: 'GET',
+    pattern: '/api/workflow/catalog/category-counts',
+    handler: () => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const counts: Record<string, number> = {}
+      for (const it of MOCK_CATALOG_ITEMS.filter(mockCatalogPortalVisible)) {
+        if (it.categoryId !== null)
+          counts[String(it.categoryId)] = (counts[String(it.categoryId)] ?? 0) + 1
+      }
+      return { code: 0, message: 'ok', data: counts }
+    },
+  },
+
+  // GET /api/workflow/catalog/items/:processKey — 事项详情（受限事项按不存在处理）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/catalog/items/:processKey',
+    handler: (params) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const key = (params as Record<string, string>).processKey
+      const item = MOCK_CATALOG_ITEMS.find((it) => it.itemKey === key)
+      if (!item || !mockCatalogPortalVisible(item))
+        return { code: 404, message: '事项不存在或不可见', data: null }
+      return { code: 0, message: 'ok', data: item }
+    },
+  },
+
+  // GET /api/workflow/categories — 分类列表（管理权限）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/categories',
+    handler: () => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const data = MOCK_CATEGORIES.map((c) => ({
+        ...c,
+        itemCount: MOCK_CATALOG_ITEMS.filter((it) => it.categoryId === c.id).length,
+      }))
+      return { code: 0, message: 'ok', data }
+    },
+  },
+
+  // POST /api/workflow/categories
+  {
+    method: 'POST',
+    pattern: '/api/workflow/categories',
+    handler: (_params, _query, body) => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const req = body as { name?: string; sortNo?: number }
+      if (!req?.name?.trim()) return { code: 400, message: '分类名称不能为空', data: null }
+      if (MOCK_CATEGORIES.some((c) => c.name === req.name!.trim()))
+        return { code: 400, message: '分类名称已存在', data: null }
+      const id = Math.max(0, ...MOCK_CATEGORIES.map((c) => c.id)) + 1
+      const created = { id, name: req.name!.trim(), sortNo: req.sortNo ?? 0 }
+      MOCK_CATEGORIES.push(created)
+      return { code: 0, message: 'ok', data: { ...created, itemCount: 0 } }
+    },
+  },
+
+  // PUT /api/workflow/categories/:id
+  {
+    method: 'PUT',
+    pattern: '/api/workflow/categories/:id',
+    handler: (params, _query, body) => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const id = Number((params as Record<string, string>).id)
+      const category = MOCK_CATEGORIES.find((c) => c.id === id)
+      if (!category) return { code: 404, message: '分类不存在', data: null }
+      const req = body as { name?: string; sortNo?: number }
+      if (req?.name) category.name = req.name.trim()
+      if (req?.sortNo !== undefined) category.sortNo = req.sortNo
+      return { code: 0, message: 'ok', data: category }
+    },
+  },
+
+  // DELETE /api/workflow/categories/:id — 有事项归属须先解除（幂等删除）
+  {
+    method: 'DELETE',
+    pattern: '/api/workflow/categories/:id',
+    handler: (params) => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const id = Number((params as Record<string, string>).id)
+      const index = MOCK_CATEGORIES.findIndex((c) => c.id === id)
+      if (index < 0) return { code: 0, message: 'ok', data: null }
+      const referenced = MOCK_CATALOG_ITEMS.filter((it) => it.categoryId === id).length
+      if (referenced > 0)
+        return {
+          code: 400,
+          message: `分类下仍有 ${referenced} 个事项，须先解除归属再删除`,
+          data: null,
+        }
+      MOCK_CATEGORIES.splice(index, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // GET /api/workflow/catalog/admin/items — 管理视角（含未发布/受限）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/catalog/admin/items',
+    handler: (_params, query) => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const keyword = (query.keyword ?? '').toLowerCase()
+      const items = MOCK_CATALOG_ITEMS.filter((it) =>
+        keyword === ''
+          ? true
+          : it.name.toLowerCase().includes(keyword) || it.formKey.toLowerCase().includes(keyword),
+      )
+      return { code: 0, message: 'ok', data: paginateMock(items, query) }
+    },
+  },
+
+  // PUT /api/workflow/catalog/admin/items/:processKey/category
+  {
+    method: 'PUT',
+    pattern: '/api/workflow/catalog/admin/items/:processKey/category',
+    handler: (params, _query, body) => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const key = (params as Record<string, string>).processKey
+      const item = MOCK_CATALOG_ITEMS.find((it) => it.itemKey === key)
+      if (!item) return { code: 404, message: '事项不存在', data: null }
+      const req = body as { categoryId: number | null }
+      if (req?.categoryId !== null && req?.categoryId !== undefined) {
+        if (!MOCK_CATEGORIES.some((c) => c.id === req.categoryId))
+          return { code: 404, message: '分类不存在', data: null }
+      }
+      item.categoryId = req?.categoryId ?? null
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  /* ═══════════════ v0.0.2 OA：抄送我的 / 催办（P4 个人办理） ═══════════════ */
+
+  // GET /api/workflow/my/copies — 仅本人（mock 会话用户）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/copies',
+    handler: (_params, query) => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      const keyword = (query.keyword ?? '').toLowerCase()
+      const copies = MOCK_MY_COPIES.filter((c) => c.recipientId === uid)
+        .filter((c) =>
+          keyword === ''
+            ? true
+            : c.formKey.toLowerCase().includes(keyword) ||
+              c.businessKey.toLowerCase().includes(keyword) ||
+              c.processDefKey.toLowerCase().includes(keyword),
+        )
+        .slice()
+        .sort((a, b) => (a.createTime < b.createTime ? 1 : -1))
+      return { code: 0, message: 'ok', data: paginateMock(copies, query) }
+    },
+  },
+
+  // GET /api/workflow/my/copies/:id — 详情（仅接收人）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/copies/:id',
+    handler: (params) => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const copy = MOCK_MY_COPIES.find((c) => c.id === id)
+      if (!copy) return { code: 404, message: '抄送记录不存在', data: null }
+      if (copy.recipientId !== uid)
+        return { code: 403, message: '仅接收人可查看该抄送', data: null }
+      const instance = MOCK_MY_COPIES.find((c) => c.processInstanceId === copy.processInstanceId)
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          copy,
+          instance: instance ?? null,
+          formData: { reason: '示例表单快照数据', days: 2 },
+          progress: [{ name: '审批中节点', assignee: '7' }],
+          history: [],
+        },
+      }
+    },
+  },
+
+  // POST /api/workflow/my/instances/:id/urge — 催办（10 分钟冷却；结束实例拒绝）
+  {
+    method: 'POST',
+    pattern: '/api/workflow/my/instances/:id/urge',
+    handler: (params) => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      const id = Number((params as Record<string, string>).id)
+      // mock：实例 1001 已结束（APPROVED），其余视为运行中且本人发起
+      const ended = id === 1001
+      if (ended)
+        return {
+          code: 0,
+          message: 'ok',
+          data: { result: 'REJECTED', detail: '实例已结束，不能催办', recordId: Date.now() },
+        }
+      const last = MOCK_URGE_LAST_ACCEPTED[String(id)]
+      if (last !== undefined && Date.now() - last < 10 * 60 * 1000) {
+        const remain = Math.ceil((10 * 60 * 1000 - (Date.now() - last)) / 1000)
+        return {
+          code: 0,
+          message: 'ok',
+          data: {
+            result: 'COOLDOWN',
+            detail: `冷却中，约 ${remain} 秒后可再次催办`,
+            recordId: Date.now(),
+          },
+        }
+      }
+      MOCK_URGE_LAST_ACCEPTED[String(id)] = Date.now()
+      return {
+        code: 0,
+        message: 'ok',
+        data: { result: 'ACCEPTED', detail: '已通知待办人: [7]', recordId: Date.now() },
+      }
+    },
+  },
+
+  /* ═══════════════ v0.0.2 OA：工作台布局（P54） ═══════════════ */
+
+  // GET /api/system/workspace/layout
+  {
+    method: 'GET',
+    pattern: '/api/system/workspace/layout',
+    handler: () => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      const stored = MOCK_WORKSPACE_LAYOUTS[uid]
+      if (!stored) {
+        return {
+          code: 0,
+          message: 'ok',
+          data: {
+            custom: false,
+            layout: {
+              components: [
+                { key: 'todo', visible: true, order: 1 },
+                { key: 'myInitiated', visible: true, order: 2 },
+                { key: 'cc', visible: true, order: 3 },
+                { key: 'favoriteItems', visible: true, order: 4 },
+              ],
+              favoriteItemKeys: [],
+            },
+          },
+        }
+      }
+      return { code: 0, message: 'ok', data: { custom: true, layout: stored.layout } }
+    },
+  },
+
+  // PUT /api/system/workspace/layout
+  {
+    method: 'PUT',
+    pattern: '/api/system/workspace/layout',
+    handler: (_params, _query, body) => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      const layout = body as { components?: Array<{ key?: string }> }
+      const allowed = ['todo', 'myInitiated', 'cc', 'favoriteItems']
+      if (!layout?.components?.length)
+        return { code: 400, message: '布局缺少 components', data: null }
+      for (const c of layout.components) {
+        if (!c.key || !allowed.includes(c.key))
+          return { code: 400, message: `未知组件: ${c.key}`, data: null }
+      }
+      MOCK_WORKSPACE_LAYOUTS[uid] = { layout }
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // DELETE /api/system/workspace/layout — 恢复默认
+  {
+    method: 'DELETE',
+    pattern: '/api/system/workspace/layout',
+    handler: () => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      delete MOCK_WORKSPACE_LAYOUTS[uid]
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  /* ═══════════════ v0.0.2 OA：通知发送记录（P3） ═══════════════ */
+
+  // GET /api/notify/records
+  {
+    method: 'GET',
+    pattern: '/api/notify/records',
+    handler: (_params, query) => {
+      const gate = mockNotifyRecordGate('notify:record:view')
+      if (gate) return gate
+      const status = query.deliveryStatus
+      const keyword = (query.keyword ?? '').toLowerCase()
+      const records = MOCK_NOTIFY_RECORDS.filter((r) =>
+        status ? r.deliveryStatus === status : true,
+      ).filter((r) =>
+        keyword === ''
+          ? true
+          : r.title.toLowerCase().includes(keyword) ||
+            r.content.toLowerCase().includes(keyword) ||
+            (r.bizId ?? '').toLowerCase().includes(keyword),
+      )
+      return { code: 0, message: 'ok', data: paginateMock(records, query) }
+    },
+  },
+
+  // GET /api/notify/records/:id — 详情 + 尝试流水
+  {
+    method: 'GET',
+    pattern: '/api/notify/records/:id',
+    handler: (params) => {
+      const gate = mockNotifyRecordGate('notify:record:view')
+      if (gate) return gate
+      const id = Number((params as Record<string, string>).id)
+      const message = MOCK_NOTIFY_RECORDS.find((r) => r.id === id)
+      if (!message) return { code: 404, message: '发送记录不存在', data: null }
+      return {
+        code: 0,
+        message: 'ok',
+        data: { message, attempts: MOCK_NOTIFY_ATTEMPTS.filter((a) => a.messageId === id) },
+      }
+    },
+  },
+
+  // POST /api/notify/records/:id/resend — 仅 FAILED 可重发；并发/重复受理返回冲突语义
+  {
+    method: 'POST',
+    pattern: '/api/notify/records/:id/resend',
+    handler: (params) => {
+      const gate = mockNotifyRecordGate('notify:record:resend')
+      if (gate) return gate
+      const id = Number((params as Record<string, string>).id)
+      const record = MOCK_NOTIFY_RECORDS.find((r) => r.id === id)
+      if (!record) return { code: 404, message: '发送记录不存在', data: null }
+      if (record.deliveryStatus !== 'FAILED')
+        return {
+          code: 400,
+          message: `记录当前状态为 ${record.deliveryStatus}，仅明确失败且无进行中重发的记录可重发`,
+          data: null,
+        }
+      // 受理即置 RESENDING（同步完成重发并落最新结果）
+      record.deliveryStatus = 'RESENDING'
+      const success = record.channel === 'IN_APP'
+      record.deliveryStatus = success ? 'SUCCESS' : 'FAILED'
+      record.failureReason = success ? null : '渠道仍不可用（mock）'
+      const attemptNo = MOCK_NOTIFY_ATTEMPTS.filter((a) => a.messageId === id).length + 1
+      MOCK_NOTIFY_ATTEMPTS.push({
+        id: Date.now(),
+        messageId: id,
+        attemptNo,
+        channel: record.channel,
+        status: record.deliveryStatus,
+        failureReason: record.failureReason,
+        externalMessageId: null,
+        createTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      })
+      return { code: 0, message: 'ok', data: record.deliveryStatus }
     },
   },
 ]

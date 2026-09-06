@@ -118,8 +118,10 @@ describe('authGuard navigation behavior on execution routes', () => {
     vi.mocked(router.addRoute).mockClear()
 
     // Default mocks: loadSession/loadMenu succeed, buildRoutesFromMenu returns a stub child route
+    // v0.0.2 P55：/agent/** 属后台区域，「有权直达」会话须为服务端认可的管理身份
     vi.mocked(loadSession).mockResolvedValue({
       ...placeholderSession,
+      superAdmin: true,
       permissions: new Set(['agent:model:view']),
     })
     vi.mocked(loadMenu).mockResolvedValue([])
@@ -468,6 +470,7 @@ describe('D169 标准6：真实 router 导航到页（有权直达/刷新，组�
       .mockReset()
       .mockResolvedValue({
         ...placeholderSession,
+        superAdmin: true,
         permissions: new Set(['agent:model:view']),
       })
     vi.mocked(loadMenu).mockReset().mockResolvedValue([])

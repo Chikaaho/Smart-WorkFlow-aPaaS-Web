@@ -114,7 +114,8 @@ describe('router/guard authGuard', () => {
 
   it('second pass after routes built: plain next(), no rebuild', async () => {
     vi.mocked(getAccessToken).mockReturnValue('token-123')
-    vi.mocked(loadSession).mockResolvedValue(placeholderSession)
+    // v0.0.2 P55：/system 属后台区域，会话须为服务端认可的管理身份方可直达
+    vi.mocked(loadSession).mockResolvedValue({ ...placeholderSession, superAdmin: true })
     vi.mocked(loadMenu).mockResolvedValue([])
     vi.mocked(buildRoutesFromMenu).mockReturnValue([
       { path: 'system', name: 'system', component: () => Promise.resolve({ default: {} }) },

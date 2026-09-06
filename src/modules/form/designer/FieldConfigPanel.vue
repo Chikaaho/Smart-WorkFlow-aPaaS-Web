@@ -12,6 +12,8 @@ import { computed } from 'vue'
 import { getFieldTypeDescriptor } from './field-types'
 import type { DesignerItem } from './types'
 import type { FieldPatch } from './field-config'
+import type { VisibilityRule } from '@/contracts/form-schema'
+import RulesEditor from './config/RulesEditor.vue'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 
 const props = withDefaults(
@@ -21,11 +23,18 @@ const props = withDefaults(
     otherNames: string[]
     /** 已发布表单：禁止编辑配置。 */
     readonly?: boolean
+    /** 选中字段当前的显隐规则（null=未配置）。 */
+    rule?: VisibilityRule | null
+    /** 同表单全部字段名（规则条件候选，含选中字段以外的字段）。 */
+    ruleFieldNames?: string[]
   }>(),
-  { readonly: false },
+  { readonly: false, rule: null, ruleFieldNames: () => [] },
 )
 
-const emit = defineEmits<{ update: [patch: FieldPatch] }>()
+const emit = defineEmits<{
+  update: [patch: FieldPatch]
+  'update-rule': [rule: VisibilityRule | null]
+}>()
 
 const descriptor = computed(() =>
   props.field ? getFieldTypeDescriptor(props.field.field.type) : undefined,
@@ -75,7 +84,7 @@ function updateColSpan(value: number | null | undefined) {
       <!-- 已发布：只读，不渲染可编辑配置面板 -->
       <p v-if="readonly" class="config__readonly-hint">已发布表单，配置只读</p>
 
-      <!-- 配置内容挂载位：6 类简单字段已填入面板；REF/TABLE 仍为 null → 占位。 -->
+      <!-- 配置内容挂载位：简单字段已填入面板；REF/TABLE 仍为 null → 占位。 -->
       <template v-else>
         <component
           :is="descriptor.configComponent"
@@ -87,6 +96,14 @@ function updateColSpan(value: number | null | undefined) {
         <p v-else class="config__placeholder">
           「{{ descriptor?.label ?? '该字段' }}」配置项待接入（后续刀）
         </p>
+
+        <!-- v0.0.2 P2：显隐联动规则（LABEL 非输入字段也可控显隐） -->
+        <RulesEditor
+          :target="field.field.name"
+          :field-names="ruleFieldNames"
+          :rule="rule"
+          @update-rule="(r) => emit('update-rule', r)"
+        />
       </template>
     </template>
   </aside>

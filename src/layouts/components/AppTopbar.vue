@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Fold, Expand, CaretBottom, UserFilled, SwitchButton } from '@element-plus/icons-vue'
+import {
+  Fold,
+  Expand,
+  CaretBottom,
+  UserFilled,
+  SwitchButton,
+  OfficeBuilding,
+  HomeFilled,
+} from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { useMenuStore } from '@/stores/menu'
 import { useUserStore } from '@/stores/user'
 import { useAuth } from '@/foundation/auth'
 import { clearDynamicRoutes } from '@/router/guard'
+import { canEnterAdminArea, firstAdminLeafPath, resolveArea } from '@/foundation/area'
 import { buildMenuTrail } from '../menu-utils'
 
-// 顶栏三件套（决策文档 · 外壳刀 §5）：折叠按钮 / 极简面包屑 / 用户下拉（退出走既有 logout seam）。
+// 顶栏（决策文档 · 外壳刀 §5）：折叠按钮 / 面包屑 / 前后台切换 / 用户下拉。
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
@@ -20,6 +29,24 @@ const { logout } = useAuth()
 const collapsed = computed(() => appStore.sidebarCollapsed)
 const breadcrumb = computed(() => buildMenuTrail(menuStore.menu, route.path))
 const displayName = computed(() => userStore.user?.displayName || '未登录')
+
+// v0.0.2 P55：前后台切换。进入后台仅对服务端认可的管理员可见；返回前台任何位置可用。
+const currentArea = computed(() => resolveArea(route.path))
+const adminCapable = computed(() => canEnterAdminArea())
+const showEnterAdmin = computed(() => currentArea.value === 'portal' && adminCapable.value)
+
+function onEnterAdmin(): void {
+  const target = firstAdminLeafPath()
+  if (target) {
+    void router.push(target)
+  } else {
+    void router.push('/form/form-def-list')
+  }
+}
+
+function onBackPortal(): void {
+  void router.push('/workspace')
+}
 
 async function onLogout(): Promise<void> {
   // 复用 logout() seam（清 token）+ 撤销动态路由/清会话，保证重新登录后用新数据重建。
@@ -53,6 +80,20 @@ function onCommand(command: string): void {
     </el-breadcrumb>
 
     <div class="app-topbar__spacer" />
+
+    <el-button v-if="showEnterAdmin" text class="app-topbar__area-switch" @click="onEnterAdmin">
+      <el-icon :size="16"><OfficeBuilding /></el-icon>
+      <span>进入后台</span>
+    </el-button>
+    <el-button
+      v-if="currentArea === 'admin'"
+      text
+      class="app-topbar__area-switch"
+      @click="onBackPortal"
+    >
+      <el-icon :size="16"><HomeFilled /></el-icon>
+      <span>返回前台</span>
+    </el-button>
 
     <el-dropdown trigger="click" @command="onCommand">
       <span class="app-topbar__user">

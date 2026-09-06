@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AttachmentControl: typeof import('./../components/dynamic-field-controls/AttachmentControl.vue')['default']
     BlankPage: typeof import('./../components/BlankPage.vue')['default']
     BoolControl: typeof import('./../components/dynamic-field-controls/BoolControl.vue')['default']
     DateControl: typeof import('./../components/dynamic-field-controls/DateControl.vue')['default']
@@ -68,11 +69,13 @@ declare module 'vue' {
     FormActions: typeof import('./../components/page-layout/FormActions.vue')['default']
     FormGrid: typeof import('./../components/page-layout/FormGrid.vue')['default']
     FormSection: typeof import('./../components/page-layout/FormSection.vue')['default']
+    LabelControl: typeof import('./../components/dynamic-field-controls/LabelControl.vue')['default']
     ListEmpty: typeof import('./../components/page-layout/ListEmpty.vue')['default']
     ListFilterBar: typeof import('./../components/page-layout/ListFilterBar.vue')['default']
     ListPagination: typeof import('./../components/page-layout/ListPagination.vue')['default']
     ListTable: typeof import('./../components/page-layout/ListTable.vue')['default']
     ListToolbar: typeof import('./../components/page-layout/ListToolbar.vue')['default']
+    MultiSelectControl: typeof import('./../components/dynamic-field-controls/MultiSelectControl.vue')['default']
     NumberControl: typeof import('./../components/dynamic-field-controls/NumberControl.vue')['default']
     PlaceholderControl: typeof import('./../components/dynamic-field-controls/PlaceholderControl.vue')['default']
     ReferenceControl: typeof import('./../components/dynamic-field-controls/ReferenceControl.vue')['default']

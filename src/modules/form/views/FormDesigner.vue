@@ -17,7 +17,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormSchema, TableSubField } from '@/contracts/form-schema'
+import type { FormSchema, TableSubField, VisibilityRule } from '@/contracts/form-schema'
 import FieldPalette from '../designer/FieldPalette.vue'
 import DesignerCanvas from '../designer/DesignerCanvas.vue'
 import FieldConfigPanel from '../designer/FieldConfigPanel.vue'
@@ -58,6 +58,8 @@ const rejectTitle = ref('无法打开该表单')
 const title = ref('未命名表单')
 const items = ref<DesignerItem[]>([])
 const selectedId = ref<string | null>(null)
+/** 显隐联动规则（v0.0.2 P2）：按 target 存储每字段至多一条。 */
+const visibilityRules = ref<VisibilityRule[]>([])
 const previewVisible = ref(false)
 const loading = ref(false)
 
@@ -120,6 +122,26 @@ function patchSelectedField(patch: FieldPatch) {
   if (item) applyFieldPatch(item.field, patch)
 }
 
+/** 选中字段显隐规则（null=未配置），供配置面板回显。 */
+const selectedRule = computed<VisibilityRule | null>(() => {
+  const name = selectedItem.value?.field.name
+  if (!name) return null
+  return visibilityRules.value.find((r) => r.target === name) ?? null
+})
+
+/** 规则条件候选字段名：除选中字段外的全部字段。 */
+const ruleFieldNames = computed<string[]>(() => {
+  const selected = selectedItem.value?.field.name
+  return items.value.map((it) => it.field.name).filter((n) => n !== selected)
+})
+
+function updateSelectedRule(rule: VisibilityRule | null) {
+  const name = selectedItem.value?.field.name
+  if (!name) return
+  const others = visibilityRules.value.filter((r) => r.target !== name && r.target !== rule?.target)
+  visibilityRules.value = rule ? [...others, rule] : others
+}
+
 /* ── 子表盖层编辑（独立状态，与主画布隔离） ── */
 const editingTableId = ref<string | null>(null)
 const editingTableField = computed(() => {
@@ -141,7 +163,7 @@ function closeTableEditor(subFields: TableSubField[]) {
 }
 
 function buildDefinition(): FormSchema {
-  return itemsToDefinition(items.value, title.value)
+  return itemsToDefinition(items.value, title.value, visibilityRules.value)
 }
 
 const previewSchema = computed<FormSchema>(() => buildDefinition())
@@ -161,6 +183,7 @@ async function loadForm(id: string) {
     if (defDto.name) title.value = defDto.name
     title.value = schema.title || title.value
     items.value = definitionToItems(schema)
+    visibilityRules.value = schema.rules?.visibility ? [...schema.rules.visibility] : []
     rejected.value = false
     await nextTick()
     baselineJson.value = JSON.stringify(buildDefinition())
@@ -530,7 +553,10 @@ function backToList() {
           :field="selectedItem"
           :other-names="otherNames"
           :readonly="isPublished"
+          :rule="selectedRule"
+          :rule-field-names="ruleFieldNames"
           @update="patchSelectedField"
+          @update-rule="updateSelectedRule"
         />
       </div>
 

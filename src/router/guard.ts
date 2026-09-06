@@ -2,7 +2,8 @@ import type { Router, RouteLocationNormalized, NavigationGuardNext } from 'vue-r
 import { getAccessToken, clearToken } from '@/foundation/auth/token'
 import { refresh, logout } from '@/foundation/auth'
 import { loadSession } from '@/foundation/session'
-import { loadMenu, buildRoutesFromMenu, findFirstLeafPath } from '@/foundation/menu'
+import { loadMenu, buildRoutesFromMenu } from '@/foundation/menu'
+import { canEnterAdminArea, resolveArea } from '@/foundation/area'
 import type { MenuNode } from '@/contracts/menu'
 import { useUserStore } from '@/stores/user'
 import { useMenuStore } from '@/stores/menu'
@@ -11,6 +12,8 @@ export const ROOT_LAYOUT_NAME = 'app-root'
 const NOT_FOUND_ROUTE_NAME = 'not-found-catchall'
 /** 无权限直达的落地页（公开路由，避免重定向循环）。 */
 const FORBIDDEN_PATH = '/403'
+/** v0.0.2 P54/P55：三类身份登录后的默认首页（前台工作台）。 */
+export const WORKSPACE_PATH = '/workspace'
 
 let dynamicRoutesBuilt = false
 let buildingPromise: Promise<void> | null = null
@@ -166,17 +169,21 @@ export async function authGuard(
     return
   }
 
-  // 根路径默认落地：菜单已装载，DFS 取首个可访问叶子；取不到兜底 /404。
-  // 不在路由定义层用 redirect 处理，因为 Vue Router 的 redirect 在 beforeEach 之前解析，
-  // 冷启动时菜单 store 为空必然回退 /404，导致用户看不到登录页。
+  // 根路径默认落地：三类身份统一进入前台工作台（v0.0.2 P54/P55）。
   if (to.path === '/') {
-    const firstLeaf = findFirstLeafPath(useMenuStore().menu)
-    next(firstLeaf ?? '/404')
+    next(WORKSPACE_PATH)
     return
   }
 
   // 路由权限校验（P36 R1）：meta.authority 声明的静态路由，非授权用户直达 → /403。
   if (!hasRouteAccess(to)) {
+    next(FORBIDDEN_PATH)
+    return
+  }
+
+  // v0.0.2 P55 后台准入：后台页面仅服务端认可的管理员/超管可进；
+  // 普通用户深链/管理请求一律拒绝（合法深链刷新保持当前位置，不受影响）。
+  if (resolveArea(to.path) === 'admin' && !canEnterAdminArea()) {
     next(FORBIDDEN_PATH)
     return
   }

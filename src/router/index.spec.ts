@@ -133,29 +133,23 @@ const noSystemMenu: MenuNode[] = [
 
 const emptyMenu: MenuNode[] = []
 
-describe('router/index resolveDefaultRedirect', () => {
+describe('router/index resolveDefaultRedirect（v0.0.2 P54/P55：三类身份统一落地工作台）', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     useMenuStore().clearMenu()
   })
 
-  // ── ① 超管登录落首叶 ──────────────────────────────────────
-
-  it('super admin: full mock menu → lands on system/dict (first leaf, sort=1)', () => {
+  it('super admin: full mock menu → lands on /workspace', () => {
     useMenuStore().setMenu(mockSystemMenu)
-    expect(resolveDefaultRedirect()).toBe('system/dict')
+    expect(resolveDefaultRedirect()).toBe('/workspace')
   })
 
-  // ── ② 无 system 菜单 → 落该过滤树的首叶 ──────────────────
-
-  it('filtered menu without system: lands on form/overview (first leaf of remaining tree)', () => {
+  it('filtered menu without system: still lands on /workspace', () => {
     useMenuStore().setMenu(noSystemMenu)
-    // form/overview sort=1 < form/form sort=2 → overview 为首叶
-    expect(resolveDefaultRedirect()).toBe('form/overview')
+    expect(resolveDefaultRedirect()).toBe('/workspace')
   })
 
-  it('filtered menu: respects sort order when picking first leaf', () => {
-    // swap sort: form/form sort=1, form/overview sort=2 → form wins
+  it('menu with swapped sort order: still lands on /workspace（首叶逻辑仅目录 redirect 消费）', () => {
     const menuWithSwappedSort: MenuNode[] = [
       {
         id: '2',
@@ -195,17 +189,15 @@ describe('router/index resolveDefaultRedirect', () => {
       },
     ]
     useMenuStore().setMenu(menuWithSwappedSort)
-    expect(resolveDefaultRedirect()).toBe('form/form')
+    expect(resolveDefaultRedirect()).toBe('/workspace')
   })
 
-  // ── ③ 空树兜底不 404 ─────────────────────────────────────
-
-  it('empty menu tree: falls back to /404', () => {
+  it('empty menu tree: lands on /workspace（工作台为常量路由，不落 404）', () => {
     useMenuStore().setMenu(emptyMenu)
-    expect(resolveDefaultRedirect()).toBe('/404')
+    expect(resolveDefaultRedirect()).toBe('/workspace')
   })
 
-  it('menu with only BUTTON nodes: falls back to /404', () => {
+  it('menu with only BUTTON nodes: lands on /workspace', () => {
     useMenuStore().setMenu([
       {
         id: 'b',
@@ -218,27 +210,26 @@ describe('router/index resolveDefaultRedirect', () => {
         menuType: MenuType.BUTTON,
       },
     ])
-    expect(resolveDefaultRedirect()).toBe('/404')
+    expect(resolveDefaultRedirect()).toBe('/workspace')
   })
 
-  it('menu with MENU node missing component: skipped, falls back to /404', () => {
+  it('menu with MENU node missing component: lands on /workspace', () => {
     useMenuStore().setMenu([
       {
         id: 'm',
         parentId: null,
         name: 'no-comp',
-        title: '无组件',
+        title: '无组件页',
         path: 'no-comp',
         component: null,
         sort: 1,
         menuType: MenuType.MENU,
       },
     ])
-    expect(resolveDefaultRedirect()).toBe('/404')
+    expect(resolveDefaultRedirect()).toBe('/workspace')
   })
 
-  it('menu store not yet populated (initial empty state): falls back to /404', () => {
-    // 守卫未装载时的初始状态 — useMenuStore().menu 为 []
-    expect(resolveDefaultRedirect()).toBe('/404')
+  it('menu store not yet populated (initial empty state): lands on /workspace', () => {
+    expect(resolveDefaultRedirect()).toBe('/workspace')
   })
 })
