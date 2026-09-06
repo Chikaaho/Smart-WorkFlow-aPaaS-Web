@@ -40,6 +40,9 @@ const router = useRouter()
 const formKey = String(route.params.formKey)
 const recordId = route.query.recordId ? String(route.query.recordId) : ''
 const mode = route.query.mode === 'edit' ? 'edit' : 'view'
+/** 草稿填报模式：route.query.mode === 'draft'（可选 draftId 打开已有草稿） */
+const isDraftMode = ref(route.query.mode === 'draft')
+const draftId = route.query.draftId ? String(route.query.draftId) : ''
 
 /* ── 状态 ── */
 
@@ -56,13 +59,24 @@ const referenceLabels = reactive<Record<string, string>>({})
 /** 乐观锁版本号（编辑回显时从 GET 详情获取，保存时 PUT 回传） */
 const version = ref<number>(0)
 
+// ── 草稿模式状态 ──
+const draftTitle = ref('') // 草稿标题（新建草稿时可填）
+const draftSaving = ref(false) // 保存/提交草稿进行中
+const draftRefreshVersion = ref(false) // 保存时是否重绑表单最新已发布版本（D3）
+
 // 查看只读模式：有 recordId 且 mode=view；无 recordId 时永远是新建（可编辑）
 const isViewMode = computed(() => !!recordId && mode === 'view')
 const pageTitle = computed(() => {
   if (!schema.value) return `表单 — ${formKey}`
+  if (isDraftMode.value) return `${schema.value.title}（草稿填报）`
   const modeLabel = isViewMode.value ? '（查看）' : recordId ? '（编辑）' : ''
   return `${schema.value.title}${modeLabel}`
 })
+
+/** 跨模块按需加载 workflow api（动态 import，规避 modules 互引的静态依赖） */
+async function getWorkflowApi() {
+  return import('@/modules/workflow/api')
+}
 
 /* ── 字段默认值初始化 ── */
 
@@ -99,7 +113,13 @@ async function loadSchema() {
     schema.value = await getFormDefinition(formKey)
     if (!schema.value) return
 
-    if (recordId) {
+    if (isDraftMode.value) {
+      if (draftId) {
+        await loadDraftPayload(schema.value)
+      } else {
+        for (const field of schema.value.fields) initField(field)
+      }
+    } else if (recordId) {
       await loadRecord(schema.value)
     } else {
       for (const field of schema.value.fields) initField(field)
@@ -375,6 +395,130 @@ async function waitForInstanceByBusinessKey(recordId: string): Promise<boolean> 
   return false
 }
 
+/* ── 草稿模式：反填 / 保存 / 提交 ── */
+
+/**
+ * 草稿模式：读已有草稿 payload 反填控件。
+ * 与 DynamicField 的 update:model-value 走同一条赋值路径（formData[name] = value）。
+ */
+async function loadDraftPayload(schema: FormSchema) {
+  const { getDraft } = await getWorkflowApi()
+  try {
+    const draft = await getDraft(draftId)
+    draftTitle.value = draft.title ?? ''
+    let values: Record<string, unknown> = {}
+    try {
+      const parsed: unknown = JSON.parse(draft.payload)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        values = parsed as Record<string, unknown>
+      }
+    } catch {
+      // payload 非法 JSON：按空草稿处理，控件保留默认值
+    }
+    for (const field of schema.fields) {
+      if (!(field.name in values)) {
+        initField(field)
+        continue
+      }
+      const val = values[field.name]
+      if (field.type === 'TABLE') {
+        formData[field.name] = Array.isArray(val) ? val : []
+      } else {
+        formData[field.name] = val !== null && val !== undefined ? val : ''
+      }
+    }
+  } catch (err) {
+    errorMsg.value = err instanceof ApiError ? `草稿加载失败：${err.msg}` : '草稿加载失败'
+  }
+}
+
+/** 控件值 → payload 对象：剥离子表行内部标记（_rowAction/_rowId） */
+function buildDraftPayloadObject(): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  if (!schema.value) return out
+  for (const field of schema.value.fields) {
+    const val = formData[field.name]
+    if (field.type === 'TABLE' && Array.isArray(val)) {
+      out[field.name] = (val as Record<string, unknown>[]).map(
+        ({ _rowAction: _ra, _rowId: _ri, ...clean }) => clean,
+      )
+    } else {
+      out[field.name] = val
+    }
+  }
+  return out
+}
+
+/** 保存草稿：有 draftId → updateDraft；否则 → createDraft */
+async function handleSaveDraft() {
+  if (!schema.value) return
+  draftSaving.value = true
+  try {
+    const payload = JSON.stringify(buildDraftPayloadObject())
+    const { createDraft, updateDraft } = await getWorkflowApi()
+    if (draftId) {
+      await updateDraft(draftId, {
+        title: draftTitle.value.trim() || null,
+        payload,
+        refreshFormVersion: draftRefreshVersion.value || undefined,
+      })
+      ElMessage.success('草稿已保存')
+    } else {
+      await createDraft({
+        title: draftTitle.value.trim() || null,
+        formKey,
+        payload,
+      })
+      ElMessage.success('草稿已创建')
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '保存草稿失败')
+  } finally {
+    draftSaving.value = false
+  }
+}
+
+/** 提交草稿：先保存控件值（updateDraft），再受理提交并轮询命令终态 */
+async function handleSubmitDraft() {
+  if (!schema.value) return
+  if (!validateRequiredFields()) {
+    errorMsg.value = '请完善必填项后再提交'
+    return
+  }
+  draftSaving.value = true
+  errorMsg.value = ''
+  try {
+    const { updateDraft, submitDraft, pollCommandStatus } = await getWorkflowApi()
+    await updateDraft(draftId, {
+      title: draftTitle.value.trim() || null,
+      payload: JSON.stringify(buildDraftPayloadObject()),
+      refreshFormVersion: draftRefreshVersion.value || undefined,
+    })
+    const accept = await submitDraft(draftId)
+    const finalStatus = await pollCommandStatus(accept.commandId)
+    if (finalStatus?.status === 'COMPLETED') {
+      ElMessage.success('提交成功')
+      // eslint-disable-next-line no-undef
+      window.setTimeout(() => {
+        void router.push('/workflow/my-drafts')
+      }, 1200)
+    } else if (finalStatus?.status === 'FAILED') {
+      errorMsg.value = finalStatus.failureReason ?? '提交失败'
+    } else {
+      // 超时未终态：如实提示，不伪装成功
+      ElMessage.warning('处理中，可稍后在结果中查看')
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '提交草稿失败')
+  } finally {
+    draftSaving.value = false
+  }
+}
+
+function backToDrafts() {
+  void router.push('/workflow/my-drafts')
+}
+
 // ── 挂载 ──
 onMounted(loadSchema)
 </script>
@@ -439,8 +583,33 @@ onMounted(loadSchema)
           </div>
         </div>
 
-        <!-- 操作按钮 -->
-        <template v-if="!isViewMode">
+        <!-- 操作按钮：草稿模式 -->
+        <template v-if="isDraftMode">
+          <div class="form-render-page__draft-bar">
+            <el-input
+              v-model="draftTitle"
+              placeholder="草稿标题（可选）"
+              maxlength="100"
+              class="form-render-page__draft-title"
+            />
+            <span class="form-render-page__draft-process-hint">
+              流程由系统按已发布表单绑定解析
+            </span>
+            <el-checkbox v-if="draftId" v-model="draftRefreshVersion">重绑最新版本</el-checkbox>
+            <el-button :loading="draftSaving" @click="handleSaveDraft">保存草稿</el-button>
+            <el-button
+              v-if="draftId"
+              type="primary"
+              :loading="draftSaving"
+              @click="handleSubmitDraft"
+            >
+              提交草稿
+            </el-button>
+            <el-button link @click="backToDrafts">返回我的草稿</el-button>
+          </div>
+        </template>
+        <!-- 操作按钮：表单数据模式（行为不变） -->
+        <template v-else-if="!isViewMode">
           <el-button type="primary" :loading="submitting" @click="handleSubmit">
             {{ recordId ? '保存' : '提交' }}
           </el-button>
@@ -500,5 +669,21 @@ onMounted(loadSchema)
   color: var(--sw-danger);
   font-size: var(--sw-font-caption);
   line-height: 1.5;
+}
+
+.form-render-page__draft-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sw-space-8);
+  flex-wrap: wrap;
+}
+
+.form-render-page__draft-title {
+  width: 220px;
+}
+
+.form-render-page__draft-process-hint {
+  color: var(--sw-color-text-secondary);
+  font-size: var(--sw-font-size-sm);
 }
 </style>

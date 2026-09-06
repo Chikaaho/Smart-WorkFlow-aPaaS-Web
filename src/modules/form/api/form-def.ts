@@ -26,6 +26,7 @@ export interface FormDefDTO {
   status: FormDefStatus
   /** 当前发布版本号（P52 工作台展示用；发布成功后服务端递增）。 */
   formVersion?: number
+  visibilityScope?: string | null
 }
 
 /**
@@ -41,6 +42,7 @@ export interface FormDefListItem {
   physicalTableName: string
   formVersion: number
   description: string
+  visibilityScope?: string | null
   createTime: string
   updateTime: string
 }
@@ -152,6 +154,15 @@ export async function pageFormDefs(
     params,
   })
   return adaptPage(raw)
+}
+
+/** PUT /api/form/def/{id}/visibility → void；空 userIds 表示当前租户内全部用户。 */
+export async function updateFormVisibility(id: string, userIds: number[]): Promise<void> {
+  return request<void>({
+    method: 'PUT',
+    url: `/form/def/${id}/visibility`,
+    data: { userIds },
+  })
 }
 
 /**

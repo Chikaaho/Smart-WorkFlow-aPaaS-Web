@@ -479,6 +479,45 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
         permission: 'workflow:view',
         hidden: false,
       },
+      {
+        id: '33',
+        parentId: '3',
+        name: 'my-instances',
+        title: '我发起的',
+        path: 'workflow/my-instances',
+        component: 'workflow/views/MyInstances',
+        icon: 'Document',
+        sort: 4,
+        menuType: 1,
+        permission: 'workflow:view',
+        hidden: false,
+      },
+      {
+        id: '34',
+        parentId: '3',
+        name: 'my-drafts',
+        title: '我的草稿',
+        path: 'workflow/my-drafts',
+        component: 'workflow/views/MyDrafts',
+        icon: 'EditPen',
+        sort: 5,
+        menuType: 1,
+        permission: 'workflow:view',
+        hidden: false,
+      },
+      {
+        id: '35',
+        parentId: '3',
+        name: 'my-processed',
+        title: '我的已办(新)',
+        path: 'workflow/my-processed',
+        component: 'workflow/views/MyProcessed',
+        icon: 'Finished',
+        sort: 6,
+        menuType: 1,
+        permission: 'workflow:view',
+        hidden: false,
+      },
     ],
   },
   {
@@ -1264,6 +1303,204 @@ export const MOCK_PROCESSED_TASKS: Array<{
     endTime: null,
   },
 ]
+
+// ─── 我的草稿 Mock 种子（OA 个人中心） ───────────────
+// ownerId 对齐 mock 会话用户 id（superadmin/admin=1，user=2）；
+// id=2 归用户 999 所有，专用于验证「非本人访问草稿 → 403」语义。
+export const MOCK_MY_DRAFTS: Array<{
+  id: number
+  ownerId: string
+  title: string | null
+  formKey: string
+  formVersion: string | null
+  processDefKey: string | null
+  payload: string
+  status: 'EDITING' | 'SUBMITTING' | 'SUBMITTED' | 'FAILED'
+  commandId: string | null
+  submitSeq: number
+  resultRecordId: string | null
+  lastError: string | null
+  createTime: string
+  updateTime: string
+}> = [
+  {
+    id: 1,
+    ownerId: '1',
+    title: '张三的请假申请',
+    formKey: 'leave-request',
+    formVersion: '3',
+    processDefKey: 'leave_approval',
+    payload: '{"applicant":"张三","leaveType":"annual","days":2}',
+    status: 'EDITING',
+    commandId: null,
+    submitSeq: 0,
+    resultRecordId: null,
+    lastError: null,
+    createTime: '2026-08-01T09:00:00',
+    updateTime: '2026-08-01T09:00:00',
+  },
+  {
+    id: 2,
+    ownerId: '999',
+    title: '他人草稿（403 语义验证）',
+    formKey: 'contract-approval',
+    formVersion: '1',
+    processDefKey: null,
+    payload: '{"contractNo":"CT-OTHER"}',
+    status: 'EDITING',
+    commandId: null,
+    submitSeq: 0,
+    resultRecordId: null,
+    lastError: null,
+    createTime: '2026-07-30T11:00:00',
+    updateTime: '2026-07-30T11:00:00',
+  },
+  {
+    id: 3,
+    ownerId: '1',
+    title: '历史失败的提交',
+    formKey: 'contract-approval',
+    formVersion: '1',
+    processDefKey: 'contract_approval',
+    payload: '{"contractNo":"CT-2026-088"}',
+    status: 'FAILED',
+    commandId: 'cmd-failed-001',
+    submitSeq: 1,
+    resultRecordId: null,
+    lastError: '表单数据校验失败：contractNo 与流程绑定的必填字段不匹配',
+    createTime: '2026-07-28T15:00:00',
+    updateTime: '2026-07-28T15:02:00',
+  },
+]
+
+let myDraftNextId = 100
+
+/** 创建草稿时分配新 id（handler 使用）。 */
+export function nextMyDraftId(): number {
+  return myDraftNextId++
+}
+
+// ─── 我的已办（新契约）Mock 种子 ─────────────────────
+export const MOCK_MY_PROCESSED: Array<{
+  taskId: string
+  taskName: string
+  processInstanceId: string
+  processName: string | null
+  formKey: string
+  businessKey: string
+  action: 'APPROVE' | 'REJECT' | 'RETURN' | null
+  handleTime: string
+  instanceStatus: 'RUNNING' | 'APPROVED' | 'REJECTED' | null
+  source: 'ACTION' | 'HISTORY_COMPAT'
+}> = [
+  {
+    taskId: 'my-processed-001',
+    taskName: '部门经理审批',
+    processInstanceId: 'proc-001',
+    processName: '请假审批流程',
+    formKey: 'leave-request',
+    businessKey: 'rec-leave-001',
+    action: 'APPROVE',
+    handleTime: '2026-07-20T10:15:00',
+    instanceStatus: 'RUNNING',
+    source: 'ACTION',
+  },
+  {
+    taskId: 'my-processed-002',
+    taskName: '提交申请',
+    processInstanceId: 'proc-002',
+    processName: '单节点审批流程',
+    formKey: 'it_application',
+    businessKey: 'rec-it-002',
+    action: 'APPROVE',
+    handleTime: '2026-07-15T15:30:00',
+    instanceStatus: 'APPROVED',
+    source: 'HISTORY_COMPAT',
+  },
+  {
+    taskId: 'my-processed-003',
+    taskName: '部门经理审批',
+    processInstanceId: 'proc-003',
+    processName: '合同审批流程',
+    formKey: 'contract-approval',
+    businessKey: 'rec-contract-003',
+    action: 'REJECT',
+    handleTime: '2026-07-18T16:00:00',
+    instanceStatus: 'REJECTED',
+    source: 'ACTION',
+  },
+  {
+    taskId: 'my-processed-004',
+    taskName: 'HR 审批',
+    processInstanceId: 'proc-004',
+    processName: '请假审批流程',
+    formKey: 'leave-request',
+    businessKey: 'rec-leave-004',
+    action: null,
+    handleTime: '2026-07-22T09:00:00',
+    instanceStatus: null,
+    source: 'HISTORY_COMPAT',
+  },
+]
+
+// ─── 异步命令 Mock 状态（OA 个人中心：受理 + 轮询） ──
+// submit/accept 受理时登记命令：前 pollToComplete 次 GET 查询返回 PROCESSING，
+// 之后转 COMPLETED（模拟异步落库）。种子包含一个终态 FAILED 命令验证失败展示。
+export interface MockWorkflowCommand {
+  commandId: string
+  commandType: string
+  channel: string
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  result: Record<string, unknown> | null
+  failureReason: string | null
+  retryCount: number
+  createTime: string
+  finishedAt: string | null
+  /** GET 查询计数：达到 pollToComplete 后转 COMPLETED（终态命令不再计数） */
+  pollCount: number
+  pollToComplete: number
+}
+
+export const MOCK_WORKFLOW_COMMANDS = new Map<string, MockWorkflowCommand>([
+  [
+    'cmd-failed-001',
+    {
+      commandId: 'cmd-failed-001',
+      commandType: 'DRAFT_SUBMIT',
+      channel: 'ASYNC',
+      status: 'FAILED',
+      result: null,
+      failureReason: '表单数据校验失败：contractNo 与流程绑定的必填字段不匹配',
+      retryCount: 0,
+      createTime: '2026-07-28T15:01:00',
+      finishedAt: '2026-07-28T15:02:00',
+      pollCount: 0,
+      pollToComplete: 0,
+    },
+  ],
+])
+
+let commandNextSeq = 0
+
+/** 受理时登记一条新命令（handler 使用）：2 次查询后转 COMPLETED。 */
+export function registerMockCommand(commandType: string): MockWorkflowCommand {
+  commandNextSeq += 1
+  const command: MockWorkflowCommand = {
+    commandId: `cmd-${Date.now()}-${commandNextSeq}`,
+    commandType,
+    channel: 'ASYNC',
+    status: 'PROCESSING',
+    result: null,
+    failureReason: null,
+    retryCount: 0,
+    createTime: new Date().toISOString().slice(0, 19),
+    finishedAt: null,
+    pollCount: 0,
+    pollToComplete: 2,
+  }
+  MOCK_WORKFLOW_COMMANDS.set(command.commandId, command)
+  return command
+}
 
 // ─── 通知消息 Mock 种子 ──────────────────────────────
 export const MOCK_NOTIFY_MESSAGES: Array<{

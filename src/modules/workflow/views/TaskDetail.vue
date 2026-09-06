@@ -8,7 +8,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { queryTaskDetail, completeTask, rejectTask, returnTask } from '@/modules/workflow/api'
+import {
+  queryTaskDetail,
+  acceptTaskAction,
+  pollCommandStatus,
+  type TaskActionSegment,
+} from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
 import type { ApprovalHistoryItem, TaskDetail } from '@/contracts/bpm'
 import type { ApprovalActionRequest, ApprovalOpinionConfig } from '@/contracts/bpm-node'
@@ -244,6 +249,35 @@ function ensureOpinionData(): boolean {
   return false
 }
 
+/**
+ * 异步命令通道公共链路：受理（ACCEPTED ≠ 成功）→ 轮询命令状态到终态。
+ * COMPLETED → 成功并导航；FAILED → 展示失败原因；超时 → 如实提示「处理中」。
+ */
+async function runAction(
+  actionSegment: TaskActionSegment,
+  payload: Partial<ApprovalActionRequest> | undefined,
+  successMsg: string,
+  failMsg: string,
+): Promise<void> {
+  try {
+    const accept = await acceptTaskAction(taskId, actionSegment, payload)
+    const finalStatus = await pollCommandStatus(accept.commandId)
+    if (finalStatus?.status === 'COMPLETED') {
+      ElMessage.success(successMsg)
+      await navigateAfterAction()
+    } else if (finalStatus?.status === 'FAILED') {
+      ElMessage.error(finalStatus.failureReason ?? failMsg)
+      acting.value = null
+    } else {
+      ElMessage.warning('处理中，可稍后在结果中查看')
+      acting.value = null
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : failMsg)
+    acting.value = null
+  }
+}
+
 async function handleApprove() {
   if (acting.value) return
   if (!ensureOpinionData()) return
@@ -262,20 +296,7 @@ async function handleApprove() {
   } finally {
     if (!confirmed) acting.value = null
   }
-  try {
-    const payload = actionPayload('APPROVE')
-    if (payload) await completeTask(taskId, payload)
-    else await completeTask(taskId)
-    ElMessage.success('审批通过')
-    await navigateAfterAction()
-  } catch (err) {
-    if (err instanceof ApiError) {
-      ElMessage.error(err.msg)
-    } else {
-      ElMessage.error('审批操作失败')
-    }
-    acting.value = null
-  }
+  await runAction('complete', actionPayload('APPROVE'), '审批通过', '审批操作失败')
 }
 
 async function handleReject() {
@@ -296,20 +317,7 @@ async function handleReject() {
   } finally {
     if (!confirmed) acting.value = null
   }
-  try {
-    const payload = actionPayload('REJECT')
-    if (payload) await rejectTask(taskId, payload)
-    else await rejectTask(taskId)
-    ElMessage.success('已驳回')
-    await navigateAfterAction()
-  } catch (err) {
-    if (err instanceof ApiError) {
-      ElMessage.error(err.msg)
-    } else {
-      ElMessage.error('驳回操作失败')
-    }
-    acting.value = null
-  }
+  await runAction('reject', actionPayload('REJECT'), '已驳回', '驳回操作失败')
 }
 
 async function handleReturn() {
@@ -329,18 +337,12 @@ async function handleReturn() {
     return
   }
   acting.value = 'return'
-  try {
-    await returnTask(taskId, {
-      action: 'RETURN',
-      returnTargetNodeId: target,
-      ...actionPayload('RETURN'),
-    })
-    ElMessage.success('已退回')
-    await navigateAfterAction()
-  } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '退回操作失败')
-    acting.value = null
-  }
+  await runAction(
+    'return',
+    { action: 'RETURN', returnTargetNodeId: target, ...actionPayload('RETURN') },
+    '已退回',
+    '退回操作失败',
+  )
 }
 
 function formatVariables(vars: Record<string, unknown>): [string, string][] {

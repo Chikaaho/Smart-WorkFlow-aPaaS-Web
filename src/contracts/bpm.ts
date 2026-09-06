@@ -108,6 +108,95 @@ export interface ActivityNode {
   taskId: string | null // Flowable task ID（仅 userTask 有值）
 }
 
+// ─── 我发起的·实例详情 DTO（对齐后端 MyInstanceDetailDTO） ───
+export interface MyInstanceProgressNode {
+  taskId: string
+  taskName: string
+  nodeKey: string | null
+  assignee: string | null // 审批人（用户 ID，可读展示名由前端以 assignee 为准/后端富化）
+}
+
+export interface MyInstanceDetail {
+  instance: ProcessInstance
+  processName: string | null
+  formKey: string
+  businessKey: string
+  status: ProcessInstance['status']
+  progress: MyInstanceProgressNode[]
+  history: ApprovalHistoryItem[]
+}
+
+// ─── 业务发起草稿 DTO（对齐后端 BpmDraft） ───
+export type BpmDraftStatus = 'EDITING' | 'SUBMITTING' | 'SUBMITTED' | 'FAILED'
+
+export interface BpmDraft {
+  id: number
+  title: string | null
+  formKey: string
+  formVersion: string | null
+  processDefKey: string | null
+  payload: string // JSON 字符串
+  status: BpmDraftStatus
+  commandId: string | null
+  submitSeq: number
+  resultRecordId: string | null
+  lastError: string | null
+  createTime: string
+  updateTime: string
+}
+
+/** POST /workflow/drafts 请求体 */
+export interface DraftCreateReq {
+  title?: string | null
+  formKey: string
+  payload: string
+}
+
+/** PUT /workflow/drafts/{id} 请求体 */
+export interface DraftUpdateReq {
+  title?: string | null
+  payload?: string
+  refreshFormVersion?: boolean
+}
+
+// ─── 异步命令通道 DTO ───
+/** POST /workflow/commands/tasks/{taskId}/{action} 受理响应 */
+export interface CommandAcceptResp {
+  commandId: string
+  commandKey: string
+  commandType: string
+  channel: string
+  status: 'ACCEPTED'
+  duplicated: boolean
+}
+
+/** GET /workflow/commands/{commandId} 状态回查 */
+export interface WorkflowCommandStatus {
+  commandId: string
+  commandType: string
+  channel: string
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  result: Record<string, unknown> | null
+  failureReason: string | null
+  retryCount: number
+  createTime: string
+  finishedAt: string | null
+}
+
+// ─── 我的已办（新契约）DTO ───
+export interface MyProcessedItem {
+  taskId: string
+  taskName: string
+  processInstanceId: string
+  processName: string | null
+  formKey: string
+  businessKey: string
+  action: 'APPROVE' | 'REJECT' | 'RETURN' | null
+  handleTime: string
+  instanceStatus: ProcessInstance['status'] | null
+  source: 'ACTION' | 'HISTORY_COMPAT'
+}
+
 // ─── 流程实例详情 DTO（对齐后端 InstanceDetailDTO） ───
 export interface InstanceDetail extends ProcessInstance {
   activeNodeIds: string[] // 当前活跃节点 activity ID 列表（流程图绿色高亮）。实例已结束时为空

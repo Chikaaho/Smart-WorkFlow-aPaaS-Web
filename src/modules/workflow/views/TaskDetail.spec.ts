@@ -10,8 +10,8 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/modules/workflow/api', () => ({
   queryTaskDetail: vi.fn(),
-  completeTask: vi.fn(),
-  rejectTask: vi.fn(),
+  acceptTaskAction: vi.fn(),
+  pollCommandStatus: vi.fn(),
 }))
 
 vi.mock('element-plus', async (importOriginal) => {
@@ -29,10 +29,31 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
-import { queryTaskDetail, completeTask, rejectTask } from '@/modules/workflow/api'
+import { queryTaskDetail, acceptTaskAction, pollCommandStatus } from '@/modules/workflow/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import type { TaskDetail } from '@/contracts/bpm'
+import type { TaskDetail, CommandAcceptResp, WorkflowCommandStatus } from '@/contracts/bpm'
+
+const acceptResp: CommandAcceptResp = {
+  commandId: 'cmd-1',
+  commandKey: 'k1',
+  commandType: 'TASK_COMPLETE',
+  channel: 'ASYNC',
+  status: 'ACCEPTED',
+  duplicated: false,
+}
+
+const completedStatus: WorkflowCommandStatus = {
+  commandId: 'cmd-1',
+  commandType: 'TASK_COMPLETE',
+  channel: 'ASYNC',
+  status: 'COMPLETED',
+  result: null,
+  failureReason: null,
+  retryCount: 0,
+  createTime: '2026-07-17T10:00:00',
+  finishedAt: '2026-07-17T10:00:01',
+}
 import TaskDetailView from './TaskDetail.vue'
 
 const stubs = {
@@ -143,9 +164,10 @@ describe('TaskDetail.vue', () => {
     expect(vm.detail!.approvalHistory).toHaveLength(0)
   })
 
-  it('calls completeTask on approve and navigates to TodoList', async () => {
+  it('accepts approve via command channel and navigates to TodoList', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
-    vi.mocked(completeTask).mockResolvedValueOnce(undefined)
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
     vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
 
     const wrapper = mount(TaskDetailView, { global: { stubs } })
@@ -155,14 +177,16 @@ describe('TaskDetail.vue', () => {
     await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
     await nextTick()
 
-    expect(completeTask).toHaveBeenCalledWith('task-001')
+    expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'complete', undefined)
+    expect(pollCommandStatus).toHaveBeenCalledWith('cmd-1')
     expect(ElMessage.success).toHaveBeenCalledWith('审批通过')
     expect(mockPush).toHaveBeenCalledWith({ name: 'TodoList' })
   })
 
-  it('calls rejectTask on reject and navigates to TodoList', async () => {
+  it('accepts reject via command channel and navigates to TodoList', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
-    vi.mocked(rejectTask).mockResolvedValueOnce(undefined)
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
     vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
 
     const wrapper = mount(TaskDetailView, { global: { stubs } })
@@ -172,14 +196,38 @@ describe('TaskDetail.vue', () => {
     await (wrapper.vm as unknown as { handleReject: () => Promise<void> }).handleReject()
     await nextTick()
 
-    expect(rejectTask).toHaveBeenCalledWith('task-001')
+    expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'reject', undefined)
+    expect(pollCommandStatus).toHaveBeenCalledWith('cmd-1')
     expect(ElMessage.success).toHaveBeenCalledWith('已驳回')
     expect(mockPush).toHaveBeenCalledWith({ name: 'TodoList' })
   })
 
+  it('shows failureReason and stays when command polling ends FAILED', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce({
+      ...completedStatus,
+      status: 'FAILED',
+      failureReason: '任务已被他人办理',
+    })
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+
+    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    await nextTick()
+    await nextTick()
+
+    await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
+    await nextTick()
+
+    expect(ElMessage.error).toHaveBeenCalledWith('任务已被他人办理')
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(mockPush).not.toHaveBeenCalled()
+  })
+
   it('keeps the successful approval result when navigation rejects', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
-    vi.mocked(completeTask).mockResolvedValueOnce(undefined)
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
     vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
     mockPush.mockRejectedValueOnce(new Error('navigation race'))
 

@@ -4,8 +4,8 @@ import { nextTick } from 'vue'
 
 vi.mock('@/modules/workflow/api', () => ({
   queryTodoTasks: vi.fn(),
-  completeTask: vi.fn(),
-  rejectTask: vi.fn(),
+  acceptTaskAction: vi.fn(),
+  pollCommandStatus: vi.fn(),
 }))
 
 const mockPush = vi.fn()
@@ -29,11 +29,32 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
-import { queryTodoTasks, completeTask, rejectTask } from '@/modules/workflow/api'
+import { queryTodoTasks, acceptTaskAction, pollCommandStatus } from '@/modules/workflow/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import type { TodoTask } from '@/contracts/bpm'
+import type { TodoTask, CommandAcceptResp, WorkflowCommandStatus } from '@/contracts/bpm'
 import TodoList from './TodoList.vue'
+
+const acceptResp: CommandAcceptResp = {
+  commandId: 'cmd-1',
+  commandKey: 'k1',
+  commandType: 'TASK_COMPLETE',
+  channel: 'ASYNC',
+  status: 'ACCEPTED',
+  duplicated: false,
+}
+
+const completedStatus: WorkflowCommandStatus = {
+  commandId: 'cmd-1',
+  commandType: 'TASK_COMPLETE',
+  channel: 'ASYNC',
+  status: 'COMPLETED',
+  result: null,
+  failureReason: null,
+  retryCount: 0,
+  createTime: '2026-07-17T10:00:00',
+  finishedAt: '2026-07-17T10:00:01',
+}
 
 const stubs = {
   StandardListTemplate: {
@@ -95,9 +116,10 @@ describe('TodoList.vue', () => {
     expect(wrapper.vm).toHaveProperty('errorMsg', '任务列表为空')
   })
 
-  it('calls completeTask and removes task on approve', async () => {
+  it('accepts via command channel, polls to COMPLETED and removes task on approve', async () => {
     vi.mocked(queryTodoTasks).mockResolvedValueOnce(mockPageResult)
-    vi.mocked(completeTask).mockResolvedValueOnce(undefined)
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
     vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
 
     const wrapper = mount(TodoList, { global: { stubs } })
@@ -108,12 +130,53 @@ describe('TodoList.vue', () => {
     ).handleApprove(mockTask)
     await nextTick()
 
-    expect(completeTask).toHaveBeenCalledWith('mock-task-001')
+    expect(acceptTaskAction).toHaveBeenCalledWith('mock-task-001', 'complete')
+    expect(pollCommandStatus).toHaveBeenCalledWith('cmd-1')
     expect(ElMessage.success).toHaveBeenCalledWith('审批通过')
     expect((wrapper.vm as unknown as { list: TodoTask[] }).list).toHaveLength(0)
   })
 
-  it('does not call completeTask when user cancels confirm', async () => {
+  it('shows failureReason when command polling ends FAILED', async () => {
+    vi.mocked(queryTodoTasks).mockResolvedValue(mockPageResult)
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce({
+      ...completedStatus,
+      status: 'FAILED',
+      failureReason: '流程定义已被停用',
+    })
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+
+    const wrapper = mount(TodoList, { global: { stubs } })
+    await nextTick()
+
+    await (
+      wrapper.vm as unknown as { handleApprove: (r: TodoTask) => Promise<void> }
+    ).handleApprove(mockTask)
+    await nextTick()
+
+    expect(ElMessage.error).toHaveBeenCalledWith('流程定义已被停用')
+    expect(ElMessage.success).not.toHaveBeenCalled()
+  })
+
+  it('warns honestly (no fake success) when polling times out without terminal state', async () => {
+    vi.mocked(queryTodoTasks).mockResolvedValue(mockPageResult)
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(null)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+
+    const wrapper = mount(TodoList, { global: { stubs } })
+    await nextTick()
+
+    await (
+      wrapper.vm as unknown as { handleApprove: (r: TodoTask) => Promise<void> }
+    ).handleApprove(mockTask)
+    await nextTick()
+
+    expect(ElMessage.warning).toHaveBeenCalledWith('处理中，可稍后在结果中查看')
+    expect(ElMessage.success).not.toHaveBeenCalled()
+  })
+
+  it('does not call acceptTaskAction when user cancels confirm', async () => {
     vi.mocked(queryTodoTasks).mockResolvedValueOnce(mockPageResult)
     vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
 
@@ -125,12 +188,13 @@ describe('TodoList.vue', () => {
     ).handleApprove(mockTask)
     await nextTick()
 
-    expect(completeTask).not.toHaveBeenCalled()
+    expect(acceptTaskAction).not.toHaveBeenCalled()
   })
 
-  it('calls rejectTask and removes task on reject', async () => {
-    vi.mocked(queryTodoTasks).mockResolvedValueOnce(mockPageResult)
-    vi.mocked(rejectTask).mockResolvedValueOnce(undefined)
+  it('rejects via command channel on reject', async () => {
+    vi.mocked(queryTodoTasks).mockResolvedValue(mockPageResult)
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
     vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
 
     const wrapper = mount(TodoList, { global: { stubs } })
@@ -141,12 +205,13 @@ describe('TodoList.vue', () => {
     )
     await nextTick()
 
-    expect(rejectTask).toHaveBeenCalledWith('mock-task-001')
+    expect(acceptTaskAction).toHaveBeenCalledWith('mock-task-001', 'reject')
+    expect(pollCommandStatus).toHaveBeenCalledWith('cmd-1')
     expect(ElMessage.success).toHaveBeenCalledWith('已驳回')
     expect((wrapper.vm as unknown as { list: TodoTask[] }).list).toHaveLength(0)
   })
 
-  it('does not call rejectTask when user cancels reject confirm', async () => {
+  it('does not call acceptTaskAction when user cancels reject confirm', async () => {
     vi.mocked(queryTodoTasks).mockResolvedValueOnce(mockPageResult)
     vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
 
@@ -158,7 +223,7 @@ describe('TodoList.vue', () => {
     )
     await nextTick()
 
-    expect(rejectTask).not.toHaveBeenCalled()
+    expect(acceptTaskAction).not.toHaveBeenCalled()
   })
 
   it('navigates to TaskDetail on row click', async () => {

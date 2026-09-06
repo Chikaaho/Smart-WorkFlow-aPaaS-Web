@@ -203,6 +203,18 @@ describe('modules/form/api/form-def', () => {
     expect(result).toEqual(dto)
   })
 
+  it('updateFormVisibility sends only the explicit user scope', async () => {
+    mockRequest.mockResolvedValueOnce(undefined)
+
+    await formDefApi.updateFormVisibility('uuid-1', [1002, 1001])
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'PUT',
+      url: '/form/def/uuid-1/visibility',
+      data: { userIds: [1002, 1001] },
+    })
+  })
+
   it('listFormSnapshots sends GET /form/def/{id}/snapshots (read-only list)', async () => {
     const rows = [
       { formVersion: 2, createTime: '2026-06-30 10:00:00' },

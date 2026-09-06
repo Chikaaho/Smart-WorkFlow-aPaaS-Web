@@ -176,9 +176,11 @@ export async function request<T>(config: Parameters<AxiosInstance['request']>[0]
   }
 
   if (response.data.code !== 0) {
+    // 后端 R 包错误文案字段为 msg（部分历史端点为 message），两者都透传给兜底映射
+    const body = response.data as unknown as { msg?: string }
     throw new ApiError(
       response.data.code,
-      getErrorMessage(response.data.code, response.data.message),
+      getErrorMessage(response.data.code, body.msg ?? response.data.message),
     )
   }
   return response.data.data

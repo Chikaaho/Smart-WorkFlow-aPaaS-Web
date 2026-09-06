@@ -103,6 +103,11 @@ import {
   MOCK_JOB_LOGS,
   MOCK_INSTANCES,
   MOCK_INSTANCE_DETAILS,
+  MOCK_MY_DRAFTS,
+  MOCK_MY_PROCESSED,
+  MOCK_WORKFLOW_COMMANDS,
+  nextMyDraftId,
+  registerMockCommand,
   MOCK_INTERNAL_TOOLS,
   MOCK_EXTERNAL_TOOLS,
   type MockToolInternalEntry,
@@ -537,6 +542,20 @@ export const mockRegistrations: MockRegistration[] = [
         pageSize: Number(query.pageSize ?? 1000),
       },
     }),
+  },
+
+  // ── 已发布表单定义候选 ────────────────────────────────────
+  // GET /api/form/def/published → [{formKey, name, formVersion}]（仅 PUBLISHED，登录即可）
+  // 「我的草稿」新建时选表单候选使用；PUBLISHED 判定来自 MOCK_FORM_DEF_STORE 实时状态。
+  {
+    method: 'GET',
+    pattern: '/api/form/def/published',
+    handler: () => {
+      const list = Array.from(MOCK_FORM_DEF_STORE.values())
+        .filter((d) => d.status === 'PUBLISHED')
+        .map((d) => ({ formKey: d.formKey, name: d.name, formVersion: d.formVersion }))
+      return { code: 0, message: 'ok', data: list }
+    },
   },
 
   // ── 表单定义元信息 ────────────────────────────────────────
@@ -3021,6 +3040,370 @@ export const mockRegistrations: MockRegistration[] = [
           activeNodeIds: detail?.activeNodeIds ?? [],
           flowTrace: detail?.flowTrace ?? [],
         },
+      }
+    },
+  },
+
+  // ═══════════════════════════════════════════════════
+  // ── OA 个人中心（我发起的 / 我的草稿 / 我的已办 / 异步命令通道） ──
+  // ═══════════════════════════════════════════════════
+
+  // GET /api/workflow/my/instances — 我发起的流程（按当前会话用户过滤）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/instances',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      const currentUserId = MOCK_CURRENT_SESSION.user.id
+      let list = MOCK_INSTANCES.filter((i) => String(i.initiatorId) === currentUserId)
+      if (query.status) {
+        list = list.filter((i) => i.status === query.status)
+      }
+      const keyword = String(query.keyword ?? '').trim()
+      if (keyword) {
+        list = list.filter(
+          (i) => (i.processName ?? '').includes(keyword) || i.businessKey.includes(keyword),
+        )
+      }
+      list.sort((a, b) => b.createTime.localeCompare(a.createTime))
+      const total = list.length
+      const start = (pageNum - 1) * pageSize
+      return {
+        code: 0,
+        message: 'ok',
+        data: { records: list.slice(start, start + pageSize), total, pageNum, pageSize },
+      }
+    },
+  },
+
+  // GET /api/workflow/my/instances/:id — 我发起的流程详情（进度 + 流转记录）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/instances/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const instance = MOCK_INSTANCES.find((i) => i.id === id)
+      if (!instance) {
+        return { code: 404, message: '流程实例不存在', data: null }
+      }
+      const trace = MOCK_INSTANCE_DETAILS[instance.processInstanceId]?.flowTrace ?? []
+      const progress = trace
+        .filter((n) => n.activityType === 'userTask' && n.endTime === null)
+        .map((n) => ({
+          taskId: n.taskId ?? '',
+          taskName: n.activityName ?? '',
+          nodeKey: n.activityId,
+          assignee: n.assignee,
+        }))
+      const history = trace
+        .filter((n) => n.activityType === 'userTask' && n.endTime !== null)
+        .map((n) => ({
+          taskId: n.taskId ?? '',
+          taskName: n.activityName ?? '',
+          nodeKey: n.activityId,
+          assignee: n.assignee ?? '',
+          assigneeName: null,
+          createTime: n.startTime ?? '',
+          endTime: n.endTime,
+          action: 'APPROVE' as const,
+          approvalResult: 'APPROVED' as const,
+        }))
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          instance,
+          processName: instance.processName,
+          formKey: instance.formKey,
+          businessKey: instance.businessKey,
+          status: instance.status,
+          progress,
+          history,
+        },
+      }
+    },
+  },
+
+  // GET /api/workflow/drafts — 我的草稿分页（按当前会话用户过滤）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/drafts',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      const currentUserId = MOCK_CURRENT_SESSION.user.id
+      const list = MOCK_MY_DRAFTS.filter((d) => d.ownerId === currentUserId).sort((a, b) =>
+        b.updateTime.localeCompare(a.updateTime),
+      )
+      const total = list.length
+      const start = (pageNum - 1) * pageSize
+      return {
+        code: 0,
+        message: 'ok',
+        data: { records: list.slice(start, start + pageSize), total, pageNum, pageSize },
+      }
+    },
+  },
+
+  // POST /api/workflow/drafts — 新建草稿
+  {
+    method: 'POST',
+    pattern: '/api/workflow/drafts',
+    handler: (_params, _query, body) => {
+      const req = (body ?? {}) as Record<string, unknown>
+      const formKey = String(req.formKey ?? '').trim()
+      if (!formKey) {
+        return { code: 400, message: '表单标识不能为空', data: null }
+      }
+      const payload = String(req.payload ?? '')
+      try {
+        const parsed: unknown = JSON.parse(payload)
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          return { code: 400, message: '表单数据须为 JSON 对象', data: null }
+        }
+      } catch {
+        return { code: 400, message: '表单数据不是合法的 JSON', data: null }
+      }
+      const now = new Date().toISOString().slice(0, 19)
+      const draft = {
+        id: nextMyDraftId(),
+        ownerId: MOCK_CURRENT_SESSION.user.id,
+        title: typeof req.title === 'string' && req.title.trim() ? req.title.trim() : null,
+        formKey,
+        formVersion: '1',
+        processDefKey:
+          typeof req.processDefKey === 'string' && req.processDefKey.trim()
+            ? req.processDefKey.trim()
+            : null,
+        payload,
+        status: 'EDITING' as const,
+        commandId: null,
+        submitSeq: 0,
+        resultRecordId: null,
+        lastError: null,
+        createTime: now,
+        updateTime: now,
+      }
+      MOCK_MY_DRAFTS.push(draft)
+      return { code: 0, message: 'ok', data: draft }
+    },
+  },
+
+  // GET /api/workflow/drafts/:id — 草稿详情（非本人 → 403）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/drafts/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const draft = MOCK_MY_DRAFTS.find((d) => d.id === id)
+      if (!draft) {
+        return { code: 404, message: '草稿不存在', data: null }
+      }
+      if (draft.ownerId !== MOCK_CURRENT_SESSION.user.id) {
+        return { code: 403, message: '只能访问本人的草稿', data: null }
+      }
+      return { code: 0, message: 'ok', data: draft }
+    },
+  },
+
+  // PUT /api/workflow/drafts/:id — 更新草稿（合并字段，非本人 → 403）
+  {
+    method: 'PUT',
+    pattern: '/api/workflow/drafts/:id',
+    handler: (params, _query, body) => {
+      const id = Number((params as Record<string, string>).id)
+      const draft = MOCK_MY_DRAFTS.find((d) => d.id === id)
+      if (!draft) {
+        return { code: 404, message: '草稿不存在', data: null }
+      }
+      if (draft.ownerId !== MOCK_CURRENT_SESSION.user.id) {
+        return { code: 403, message: '只能修改本人的草稿', data: null }
+      }
+      const req = (body ?? {}) as Record<string, unknown>
+      if (typeof req.title === 'string') {
+        draft.title = req.title.trim() ? req.title.trim() : null
+      }
+      if (typeof req.processDefKey === 'string') {
+        draft.processDefKey = req.processDefKey.trim() ? req.processDefKey.trim() : null
+      }
+      if (typeof req.payload === 'string') {
+        try {
+          const parsed: unknown = JSON.parse(req.payload)
+          if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+            return { code: 400, message: '表单数据须为 JSON 对象', data: null }
+          }
+        } catch {
+          return { code: 400, message: '表单数据不是合法的 JSON', data: null }
+        }
+        draft.payload = req.payload
+      }
+      draft.updateTime = new Date().toISOString().slice(0, 19)
+      return { code: 0, message: 'ok', data: draft }
+    },
+  },
+
+  // DELETE /api/workflow/drafts/:id — 删除草稿（幂等；非本人 → 403）
+  {
+    method: 'DELETE',
+    pattern: '/api/workflow/drafts/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_MY_DRAFTS.findIndex((d) => d.id === id)
+      if (idx === -1) {
+        return { code: 0, message: 'ok', data: null }
+      }
+      if (MOCK_MY_DRAFTS[idx].ownerId !== MOCK_CURRENT_SESSION.user.id) {
+        return { code: 403, message: '只能删除本人的草稿', data: null }
+      }
+      MOCK_MY_DRAFTS.splice(idx, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // POST /api/workflow/drafts/:id/submit — 提交草稿（受理 ≠ 成功）
+  // 未选流程 → 400「提交前必须选择流程」；非本人 → 403；payload 非法 → 400。
+  {
+    method: 'POST',
+    pattern: '/api/workflow/drafts/:id/submit',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const draft = MOCK_MY_DRAFTS.find((d) => d.id === id)
+      if (!draft) {
+        return { code: 404, message: '草稿不存在', data: null }
+      }
+      if (draft.ownerId !== MOCK_CURRENT_SESSION.user.id) {
+        return { code: 403, message: '只能提交本人的草稿', data: null }
+      }
+      if (!draft.processDefKey) {
+        return { code: 400, message: '提交前必须选择流程', data: null }
+      }
+      try {
+        JSON.parse(draft.payload)
+      } catch {
+        return { code: 400, message: '表单数据不是合法的 JSON', data: null }
+      }
+      const command = registerMockCommand('DRAFT_SUBMIT')
+      draft.status = 'SUBMITTING'
+      draft.commandId = command.commandId
+      draft.submitSeq += 1
+      draft.lastError = null
+      draft.updateTime = new Date().toISOString().slice(0, 19)
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          commandId: command.commandId,
+          commandKey: `draft-submit-${draft.id}-${draft.submitSeq}`,
+          commandType: command.commandType,
+          channel: command.channel,
+          status: 'ACCEPTED',
+          duplicated: false,
+        },
+      }
+    },
+  },
+
+  // GET /api/workflow/commands/:commandId — 命令状态回查
+  // 每次查询 pollCount+1，达到 pollToComplete 转 COMPLETED（同时落地关联草稿/任务）。
+  {
+    method: 'GET',
+    pattern: '/api/workflow/commands/:commandId',
+    handler: (params) => {
+      const commandId = (params as Record<string, string>).commandId
+      const command = MOCK_WORKFLOW_COMMANDS.get(commandId)
+      if (!command) {
+        return { code: 404, message: '命令不存在', data: null }
+      }
+      if (command.status === 'PROCESSING' || command.status === 'PENDING') {
+        command.pollCount += 1
+        if (command.pollCount >= command.pollToComplete) {
+          command.status = 'COMPLETED'
+          command.finishedAt = new Date().toISOString().slice(0, 19)
+          // 关联效果落地：草稿提交 → SUBMITTED + resultRecordId；任务动作 → 移除待办行
+          if (command.commandType === 'DRAFT_SUBMIT') {
+            const draft = MOCK_MY_DRAFTS.find((d) => d.commandId === command.commandId)
+            if (draft) {
+              draft.status = 'SUBMITTED'
+              draft.resultRecordId = 'mock-record-' + draft.id
+              draft.lastError = null
+              draft.updateTime = command.finishedAt
+            }
+            command.result = { recordId: draft?.resultRecordId ?? null }
+          } else if (command.result && typeof command.result.taskId === 'string') {
+            const idx = MOCK_TODO_TASKS.findIndex((t) => t.taskId === command.result?.taskId)
+            if (idx !== -1) MOCK_TODO_TASKS.splice(idx, 1)
+          }
+        }
+      }
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          commandId: command.commandId,
+          commandType: command.commandType,
+          channel: command.channel,
+          status: command.status,
+          result: command.result,
+          failureReason: command.failureReason,
+          retryCount: command.retryCount,
+          createTime: command.createTime,
+          finishedAt: command.finishedAt,
+        },
+      }
+    },
+  },
+
+  // POST /api/workflow/commands/tasks/:taskId/:action — 审批动作异步受理
+  // 受理 ≠ 成功；任务不存在 → 404；未知 action → 400。
+  {
+    method: 'POST',
+    pattern: '/api/workflow/commands/tasks/:taskId/:action',
+    handler: (params, _query, _body) => {
+      const { taskId, action } = params as Record<string, string>
+      if (!['complete', 'reject', 'return'].includes(action)) {
+        return { code: 400, message: `不支持的审批动作: ${action}`, data: null }
+      }
+      const task = MOCK_TODO_TASKS.find((t) => t.taskId === taskId)
+      if (!task) {
+        return { code: 404, message: '任务不存在', data: null }
+      }
+      const command = registerMockCommand(`TASK_${action.toUpperCase()}`)
+      command.result = { taskId, action }
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          commandId: command.commandId,
+          commandKey: `task-${action}-${taskId}`,
+          commandType: command.commandType,
+          channel: command.channel,
+          status: 'ACCEPTED',
+          duplicated: false,
+        },
+      }
+    },
+  },
+
+  // GET /api/workflow/my/processed — 我的已办（新契约，含来源标记）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/processed',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      let list = [...MOCK_MY_PROCESSED]
+      const source = String(query.source ?? '').trim()
+      if (source) {
+        list = list.filter((r) => r.source === source)
+      }
+      list.sort((a, b) => b.handleTime.localeCompare(a.handleTime))
+      const total = list.length
+      const start = (pageNum - 1) * pageSize
+      return {
+        code: 0,
+        message: 'ok',
+        data: { records: list.slice(start, start + pageSize), total, pageNum, pageSize },
       }
     },
   },
