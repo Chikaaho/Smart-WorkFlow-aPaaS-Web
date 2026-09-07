@@ -12,10 +12,14 @@ const ENABLED_TYPES: FieldType[] = [
   'DICT',
   'REFERENCE',
   'TABLE',
+  'MULTISELECT',
+  'ATTACHMENT',
+  'IMAGE',
+  'LABEL',
 ]
 
 describe('FIELD_TYPE_REGISTRY', () => {
-  it('covers exactly the 8 enabled field types, one descriptor each', () => {
+  it('covers exactly the 12 enabled field types, one descriptor each', () => {
     const types = FIELD_TYPE_REGISTRY.map((d) => d.type)
     expect(types).toHaveLength(ENABLED_TYPES.length)
     expect(new Set(types)).toEqual(new Set(ENABLED_TYPES))
@@ -66,6 +70,7 @@ describe('FIELD_TYPE_REGISTRY', () => {
 
   it('getFieldTypeDescriptor looks up by type / misses gracefully', () => {
     expect(getFieldTypeDescriptor('TEXT')?.type).toBe('TEXT')
-    expect(getFieldTypeDescriptor('IMAGE' as FieldType)).toBeUndefined()
+    // v0.0.2 起 IMAGE 已启用注册；占位类型 EMAIL 仍应 graceful miss
+    expect(getFieldTypeDescriptor('EMAIL' as FieldType)).toBeUndefined()
   })
 })

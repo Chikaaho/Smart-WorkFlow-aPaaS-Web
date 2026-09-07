@@ -82,7 +82,8 @@ export function normalizeSubmitData(
         result[field.name] = value ? 1 : 0
         break
       case 'DATE':
-        result[field.name] = String(value)
+        // 可选日期未填写时传 null，避免动态 TIMESTAMP 列收到空字符串而被数据库拒绝。
+        result[field.name] = String(value).trim() ? String(value) : null
         break
       case 'TABLE': {
         const rows = Array.isArray(value) ? (value as Record<string, unknown>[]) : []

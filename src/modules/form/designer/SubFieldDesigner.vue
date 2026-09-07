@@ -55,6 +55,13 @@ const otherNames = computed(() =>
   subItems.value.filter((it) => it.id !== subSelectedId.value).map((it) => it.field.name),
 )
 
+/** 子画布控件库点击添加：与主画布共享默认字段形态，但状态只写入子表上下文。 */
+function addPaletteItem(item: DesignerItem) {
+  if (props.readonly) return
+  subItems.value.push(item)
+  subSelectedId.value = item.id
+}
+
 /** 配置面板回写：就地把补丁合并进选中子字段（单一数据源，复用主画布同一条路径）。 */
 function patchSelected(patch: FieldPatch) {
   const item = subItems.value.find((it) => it.id === subSelectedId.value)
@@ -80,6 +87,7 @@ function back() {
         :allowed-types="ALLOWED_SUBFIELD_TYPES"
         group="designer-subfields"
         :disabled="readonly"
+        @add="addPaletteItem"
       />
       <DesignerCanvas
         v-model:items="subItems"

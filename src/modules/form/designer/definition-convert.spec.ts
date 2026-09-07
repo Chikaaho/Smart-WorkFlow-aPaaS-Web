@@ -23,12 +23,19 @@ describe('definition-convert / itemsToDefinition', () => {
     const schema = itemsToDefinition(items, 'Test')
     expect(schema.title).toBe('Test')
     expect(schema.fields).toHaveLength(2)
-    expect(schema.fields[0]).toEqual({ name: 'f1', type: 'TEXT', label: 'Field 1', required: true })
+    expect(schema.fields[0]).toEqual({
+      name: 'f1',
+      type: 'TEXT',
+      label: 'Field 1',
+      required: true,
+      colSpan: 12,
+    })
     expect(schema.fields[1]).toEqual({
       name: 'f2',
       type: 'NUMBER',
       label: 'Field 2',
       required: false,
+      colSpan: 12,
     })
   })
 
@@ -279,7 +286,10 @@ describe('definition-convert / definitionToItems', () => {
 
   it('roundtrip preserves all field data (items → definition → items)', () => {
     const originalItems: DesignerItem[] = [
-      { id: 'di_1', field: { name: 'text_field', type: 'TEXT', label: '文本', required: true } },
+      {
+        id: 'di_1',
+        field: { name: 'text_field', type: 'TEXT', label: '文本', required: true, colSpan: 12 },
+      },
       {
         id: 'di_2',
         field: {
@@ -289,11 +299,18 @@ describe('definition-convert / definitionToItems', () => {
           required: false,
           dictType: 'sex',
           renderAs: 'radio',
+          colSpan: 12,
         },
       },
       {
         id: 'di_3',
-        field: { name: 'ref_field', type: 'REFERENCE', label: '引用', targetFormId: 'other' },
+        field: {
+          name: 'ref_field',
+          type: 'REFERENCE',
+          label: '引用',
+          targetFormId: 'other',
+          colSpan: 12,
+        },
       },
       {
         id: 'di_4',
@@ -301,6 +318,7 @@ describe('definition-convert / definitionToItems', () => {
           name: 'tbl_field',
           type: 'TABLE',
           label: '子表',
+          colSpan: 24,
           subFields: [{ name: 'sub1', type: 'TEXT', label: '子列1', required: true }],
         },
       },

@@ -19,10 +19,14 @@ const ENABLED_TYPES: FieldType[] = [
   'DICT',
   'REFERENCE',
   'TABLE',
+  'MULTISELECT',
+  'ATTACHMENT',
+  'IMAGE',
+  'LABEL',
 ]
 
 describe('DYNAMIC_FIELD_REGISTRY', () => {
-  it('covers exactly the 8 enabled field types, one descriptor each', () => {
+  it('covers exactly the 12 enabled field types, one descriptor each', () => {
     const types = DYNAMIC_FIELD_REGISTRY.map((d) => d.type)
     expect(types).toHaveLength(ENABLED_TYPES.length)
     expect(new Set(types)).toEqual(new Set(ENABLED_TYPES))

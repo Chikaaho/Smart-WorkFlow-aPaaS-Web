@@ -1,20 +1,14 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { authGuard, clearDynamicRoutes, ROOT_LAYOUT_NAME } from './guard'
 import { setUnauthorizedHandler, setRefreshHandler } from '@/foundation/request'
-import { findFirstLeafPath } from '@/foundation/menu'
-import { useMenuStore } from '@/stores/menu'
 import { refresh } from '@/foundation/auth'
 
 /**
- * 解析登录后默认落地的第一个可访问叶子。
- * 从菜单 store（已由守卫装载）取整棵过滤后菜单树，DFS 找首个可落地 MENU 节点；
- * 取不到时兜底 /404，避免空菜单用户卡在空白根路由。
- * 复用的 findFirstLeafPath 与目录 redirect 逻辑同源（单一实现）。
+ * 登录后默认落地工作台（v0.0.2 P54/P55：三类身份统一进入工作台）。
+ * 工作台为常量路由，无需菜单授权；旧「菜单首叶」逻辑仅供目录 redirect 复用。
  */
 export function resolveDefaultRedirect(): string {
-  const menu = useMenuStore().menu
-  const firstLeaf = findFirstLeafPath(menu)
-  return firstLeaf ?? '/404'
+  return '/workspace'
 }
 
 // 只保留常量路由：登录、错误页、根布局。7 个业务模块的路由由 router/guard.ts
@@ -31,8 +25,42 @@ export const routes: RouteRecordRaw[] = [
     // 直达 URL 可进,受 authGuard 保护,无需纳入后端菜单树。
     children: [
       {
-        path: 'form/form-designer/:id?',
-        name: 'form-designer',
+        // v0.0.2 P54：工作台 = 三类身份登录后的默认首页（个性化组件承载）。
+        path: 'workspace',
+        name: 'workspace',
+        component: () => import('@/modules/workflow/views/WorkspaceHome.vue'),
+        meta: { title: '工作台' },
+      },
+      {
+        // v0.0.2 P4 流程中心（前台普通视角）：按分类/关键词浏览本人可发起事项。
+        // 独立命名（-static 后缀）：菜单动态路由同名 addRoute 会按名替换静态路由
+        // （历史深链失效根因），静态与动态路由名必须错开。
+        path: 'workflow/catalog/:processKey?',
+        name: 'process-catalog-static',
+        component: () => import('@/modules/workflow/views/ProcessCatalog.vue'),
+        meta: { title: '流程中心' },
+      },
+      {
+        // v0.0.2 P4 流程中心后台管理（分类/事项归属/发布状态）。
+        path: 'workflow/catalog-admin',
+        name: 'process-catalog-admin',
+        component: () => import('@/modules/workflow/views/ProcessCatalogAdmin.vue'),
+        meta: { title: '事项管理', authority: ['workflow:catalog:manage'] },
+      },
+      {
+        // v0.0.2 P4 个人办理：抄送我的（只读，不含审批操作权）。命名对齐 menu -static 规避同名替换。
+        path: 'workflow/my-cc',
+        name: 'my-cc-static',
+        component: () => import('@/modules/workflow/views/MyCc.vue'),
+        meta: { title: '抄送我的' },
+      },
+      {
+        // P52：表单设计器工作台。路径与菜单种子（form/designer）同段，但带 :id 段且
+        // 独立命名 —— 菜单动态路由（name=form-designer，path=form/designer）addRoute
+        // 会按名替换同名的静态路由，历史上这正是 :id 深链失效的根因；工作台路由
+        // 必须独立命名，避免被动态路由顶掉。
+        path: 'form/designer/:id?',
+        name: 'form-designer-workbench',
         component: () => import('@/modules/form/views/FormDesigner.vue'),
         meta: { title: '表单设计器' },
       },
@@ -132,6 +160,13 @@ export const routes: RouteRecordRaw[] = [
         name: 'notify-batch-send',
         component: () => import('@/modules/notify/views/NotifyBatchSend.vue'),
         meta: { title: '发送通知', authority: ['notify:batch:send'] },
+      },
+      {
+        // v0.0.2 P3：通知发送记录（有权管理者），发送记录查询/失败重发/关联日志。
+        path: 'notify/record',
+        name: 'notify-record-list',
+        component: () => import('@/modules/notify/views/NotifyRecordList.vue'),
+        meta: { title: '发送记录', authority: ['notify:record:view'] },
       },
     ],
   },

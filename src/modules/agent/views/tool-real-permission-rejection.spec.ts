@@ -9,45 +9,29 @@ import { describe, it, expect, beforeAll } from 'vitest'
  * 环境守卫：本 spec 依赖真实后端进程（localhost:8080）。运行时探测后端可达性——
  * 后端可用则真实执行请求链（0 skip）；后端不可用才跳过（标准8 证据由后端集成测试承载）。
  * 标准11 要求全量 0 skipped：验收时后端必须在运行。
+ *
+ * P45：登录走挑战+RSA 契约（challenge → RSA-OAEP 加密密码 → 五字段提交）。
+ * 验证码为像素级 PNG（P45 补充方向 §1，设计上不可机读），自动登录无法直接完成——
+ * 通过 K8_ADMIN_TOKEN 环境变量注入有效 access token（人工/浏览器登录后提供）；
+ * 未提供时该组跳过并在输出中说明原因（后端不可达同样跳过）。
  */
 
 const API_BASE = 'http://localhost:8080/api'
 
-// 测试用户凭据
-const ADMIN_USER = { username: 'admin', password: 'admin123' }
+/** 注入的有效 access token（绕过像素验证码的人工登录通道） */
+const INJECTED_TOKEN = process.env.K8_ADMIN_TOKEN ?? ''
 
-/** 后端是否可达（登录探活）——验收全量（标准11）须为 true，0 skip */
+/** 后端是否可达（挑战探活）——验收全量（标准11）须为 true，0 skip */
 async function backendAvailable(): Promise<boolean> {
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 2000)
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ADMIN_USER),
-      signal: ctrl.signal,
-    })
+    const res = await fetch(`${API_BASE}/auth/challenge`, { signal: ctrl.signal })
     clearTimeout(timer)
     return res.ok
   } catch {
     return false
   }
-}
-
-/**
- * 登录获取 token
- */
-async function login(user: { username: string; password: string }): Promise<string> {
-  const response = await fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(user),
-  })
-  const data = await response.json()
-  if (data.code !== 0) {
-    throw new Error(`登录失败: ${data.msg}`)
-  }
-  return data.data.accessToken
 }
 
 /**
@@ -78,14 +62,21 @@ async function getExternalTools(token: string): Promise<number> {
   return data.data.records.length
 }
 
-// 运行时探测后端可达性：可达 → 真实执行（0 skip）；不可达 → 整组 skip
-// （标准11 验收全量须后端在运行，0 failed 0 skipped）。
+// 运行时探测后端可达性：可达且已注入 token → 真实执行（0 skip）；否则整组 skip 并说明原因
 const live = await backendAvailable()
-describe.skipIf(!live)('K8: 真实后端权限拒绝消息（后端可达时运行）', () => {
+const skipReason = !live
+  ? '后端不可达'
+  : !INJECTED_TOKEN
+    ? '像素验证码不可机读且未注入 K8_ADMIN_TOKEN（人工登录后提供即可运行）'
+    : ''
+describe.skipIf(!live || !INJECTED_TOKEN)('K8: 真实后端权限拒绝消息（后端可达时运行）', () => {
   let adminToken: string
 
   beforeAll(async () => {
-    adminToken = await login(ADMIN_USER)
+    if (skipReason) {
+      console.log('[K8] skip 原因: ' + skipReason)
+    }
+    adminToken = INJECTED_TOKEN
   })
 
   it('场景1: 内部工具 - 未认证 → 401', async () => {

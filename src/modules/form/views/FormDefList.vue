@@ -9,8 +9,9 @@
  */
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { pageFormDefs } from '@/modules/form/api/form-def'
+import { pageFormDefs, updateFormVisibility } from '@/modules/form/api/form-def'
 import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/utils/form-def-status'
 import type { FormDefListItem } from '@/modules/form/api/form-def'
 import type { PageQuery } from '@/contracts/common'
@@ -79,16 +80,61 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
 // ─── 操作 ───
 
 function goCreate() {
-  void router.push({ name: 'form-designer' })
+  // P52：用 path 而非 name —— 菜单动态路由与工作台静态路由不同名，
+  // path 直达带 :id 的工作台路由，避免同名替换导致的参数丢失。
+  void router.push('/form/designer')
 }
 
 function goEdit(row: FormDefListItem) {
-  void router.push({ name: 'form-designer', params: { id: row.id } })
+  void router.push(`/form/designer/${row.id}`)
 }
 
 // el-table row slot 的 DefaultRow 类型不兼容，桥接函数
 function editRow(r: unknown) {
   goEdit(r as FormDefListItem)
+}
+
+const visibilityDialogVisible = ref(false)
+const visibilityForm = ref<FormDefListItem | null>(null)
+const visibilityUserIds = ref('')
+const visibilitySaving = ref(false)
+
+function openVisibility(row: FormDefListItem) {
+  visibilityForm.value = row
+  try {
+    const parsed = row.visibilityScope ? JSON.parse(row.visibilityScope) : null
+    const ids = Array.isArray(parsed?.userIds) ? parsed.userIds : []
+    visibilityUserIds.value = ids.join(',')
+  } catch {
+    visibilityUserIds.value = ''
+  }
+  visibilityDialogVisible.value = true
+}
+
+// el-table row slot 的 DefaultRow 类型不兼容，桥接函数
+function openVisibilityRow(r: unknown) {
+  openVisibility(r as FormDefListItem)
+}
+
+async function saveVisibility() {
+  if (!visibilityForm.value) return
+  const raw = visibilityUserIds.value.trim()
+  const userIds = raw ? raw.split(',').map((value) => Number(value.trim())) : []
+  if (userIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+    errorMsg.value = '用户 ID 必须是正整数，多个 ID 用英文逗号分隔'
+    return
+  }
+  visibilitySaving.value = true
+  try {
+    await updateFormVisibility(visibilityForm.value.id, userIds)
+    ElMessage.success('发起可见范围已保存')
+    visibilityDialogVisible.value = false
+    await loadList()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '保存发起可见范围失败')
+  } finally {
+    visibilitySaving.value = false
+  }
 }
 
 onMounted(loadList)
@@ -144,9 +190,12 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column label="操作" width="190" fixed="right">
         <template #default="{ row }">
           <el-button size="small" link type="primary" @click="editRow(row)">编辑</el-button>
+          <el-button size="small" link type="primary" @click="openVisibilityRow(row)">
+            发起范围
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -156,4 +205,32 @@ onMounted(loadList)
       <el-button type="primary" @click="goCreate">新建表单</el-button>
     </template>
   </StandardListTemplate>
+
+  <el-dialog v-model="visibilityDialogVisible" title="业务发起可见范围" width="520px">
+    <p v-if="visibilityForm" class="visibility-form__hint">
+      {{ visibilityForm.name }}（{{ visibilityForm.formKey }}）
+    </p>
+    <el-input
+      v-model="visibilityUserIds"
+      placeholder="留空表示当前租户全部用户，例如 1001,1002"
+      clearable
+    />
+    <p class="visibility-form__hint">
+      此设置只控制普通用户是否能发起，不授予管理、数据或审批权限。
+    </p>
+    <template #footer>
+      <el-button @click="visibilityDialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="visibilitySaving" @click="saveVisibility">
+        保存
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
+
+<style scoped>
+.visibility-form__hint {
+  color: var(--sw-color-text-secondary);
+  font-size: var(--sw-font-size-sm);
+  margin: 0 0 12px;
+}
+</style>

@@ -1,3 +1,5 @@
+import type { ApprovalOpinionConfig } from './bpm-node'
+
 // ─── 待办任务 DTO（对齐后端 TodoTaskRespDTO） ───
 export interface TodoTask {
   taskId: string
@@ -12,6 +14,7 @@ export interface TodoTask {
 export interface TaskDetail {
   taskId: string
   taskName: string
+  nodeKey?: string | null
   processInstanceId: string
   processDefinitionKey: string
   processName: string | null // 流程定义被删除时为 null
@@ -23,6 +26,7 @@ export interface TaskDetail {
   initiatorName?: string | null // 发起人展示名（可读身份回显）
   createTime: string // LocalDateTime → ISO-8601 string
   processVariables: Record<string, unknown> // Map<String, Object>
+  opinionForm?: ApprovalOpinionConfig | null // 当前人工节点的低代码审批意见配置
   approvalHistory: ApprovalHistoryItem[]
 }
 
@@ -30,10 +34,15 @@ export interface TaskDetail {
 export interface ApprovalHistoryItem {
   taskId: string
   taskName: string
+  nodeKey?: string | null
   assignee: string
   assigneeName?: string | null // 审批人展示名（可读身份回显）
   createTime: string
   endTime: string | null // 可能为 null
+  action?: 'APPROVE' | 'RETURN' | 'REJECT' | null
+  opinionData?: Record<string, unknown> | null
+  opinionFormId?: string | null
+  opinionFormVersion?: string | null
   approvalResult: 'APPROVED' | 'REJECTED' | null // 审批结果：APPROVED=通过, REJECTED=驳回, null=进行中
 }
 
@@ -97,6 +106,95 @@ export interface ActivityNode {
   assignee: string | null // 处理人（仅 userTask 有值）
   assigneeName?: string | null // 处理人展示名（可读身份回显）
   taskId: string | null // Flowable task ID（仅 userTask 有值）
+}
+
+// ─── 我发起的·实例详情 DTO（对齐后端 MyInstanceDetailDTO） ───
+export interface MyInstanceProgressNode {
+  taskId: string
+  taskName: string
+  nodeKey: string | null
+  assignee: string | null // 审批人（用户 ID，可读展示名由前端以 assignee 为准/后端富化）
+}
+
+export interface MyInstanceDetail {
+  instance: ProcessInstance
+  processName: string | null
+  formKey: string
+  businessKey: string
+  status: ProcessInstance['status']
+  progress: MyInstanceProgressNode[]
+  history: ApprovalHistoryItem[]
+}
+
+// ─── 业务发起草稿 DTO（对齐后端 BpmDraft） ───
+export type BpmDraftStatus = 'EDITING' | 'SUBMITTING' | 'SUBMITTED' | 'FAILED'
+
+export interface BpmDraft {
+  id: number
+  title: string | null
+  formKey: string
+  formVersion: string | null
+  processDefKey: string | null
+  payload: string // JSON 字符串
+  status: BpmDraftStatus
+  commandId: string | null
+  submitSeq: number
+  resultRecordId: string | null
+  lastError: string | null
+  createTime: string
+  updateTime: string
+}
+
+/** POST /workflow/drafts 请求体 */
+export interface DraftCreateReq {
+  title?: string | null
+  formKey: string
+  payload: string
+}
+
+/** PUT /workflow/drafts/{id} 请求体 */
+export interface DraftUpdateReq {
+  title?: string | null
+  payload?: string
+  refreshFormVersion?: boolean
+}
+
+// ─── 异步命令通道 DTO ───
+/** POST /workflow/commands/tasks/{taskId}/{action} 受理响应 */
+export interface CommandAcceptResp {
+  commandId: string
+  commandKey: string
+  commandType: string
+  channel: string
+  status: 'ACCEPTED'
+  duplicated: boolean
+}
+
+/** GET /workflow/commands/{commandId} 状态回查 */
+export interface WorkflowCommandStatus {
+  commandId: string
+  commandType: string
+  channel: string
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  result: Record<string, unknown> | null
+  failureReason: string | null
+  retryCount: number
+  createTime: string
+  finishedAt: string | null
+}
+
+// ─── 我的已办（新契约）DTO ───
+export interface MyProcessedItem {
+  taskId: string
+  taskName: string
+  processInstanceId: string
+  processName: string | null
+  formKey: string
+  businessKey: string
+  action: 'APPROVE' | 'REJECT' | 'RETURN' | null
+  handleTime: string
+  instanceStatus: ProcessInstance['status'] | null
+  source: 'ACTION' | 'HISTORY_COMPAT'
 }
 
 // ─── 流程实例详情 DTO（对齐后端 InstanceDetailDTO） ───

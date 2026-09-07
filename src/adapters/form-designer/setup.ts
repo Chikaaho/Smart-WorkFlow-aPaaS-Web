@@ -49,6 +49,7 @@ import {
 } from 'element-plus'
 
 import type { App } from 'vue'
+import AttachmentControl from '@/components/dynamic-field-controls/AttachmentControl.vue'
 
 const EP_COMPONENTS = [
   ElForm,
@@ -87,4 +88,8 @@ export function setupFcApp(app: App): void {
     formCreate.component(comp.name!, comp)
     app.component(comp.name!, comp)
   }
+
+  // v0.0.2 P2：附件/图片自定义控件（ATTACHMENT/IMAGE 规则 type='AttachmentPicker'）。
+  formCreate.component('AttachmentPicker', AttachmentControl)
+  app.component('AttachmentPicker', AttachmentControl)
 }

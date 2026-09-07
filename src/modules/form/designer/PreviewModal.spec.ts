@@ -5,7 +5,7 @@ import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
 
 /**
  * PreviewModal（全屏填写态预览）测试：
- *  ① 有字段 → 把**整份** schema 透传给 FormPreview，mode='fill'，数据同源不脱钩
+ *  ① 有字段 → 按字段顺序透传给 FormPreview，mode='fill'，并由外层 24 列网格排布
  *  ② REFERENCE/TABLE 照传（降级由 adapter 负责）
  *  ③ 空字段 → 出空态提示，不渲染 FormPreview
  *
@@ -40,18 +40,22 @@ function f(name: string, overrides: Partial<FormSchemaField> = {}): FormSchemaFi
 }
 
 describe('PreviewModal', () => {
-  it('passes the whole schema to FormPreview in fill mode', () => {
+  it('passes fields in source order to individual fill previews with their spans', () => {
     const schema: FormSchema = {
       title: '请假申请',
       fields: [f('reason', { type: 'TEXT' }), f('days', { type: 'NUMBER' })],
     }
     const wrapper = mountModal(schema)
-    const preview = wrapper.find('[data-testid="fc"]')
-    expect(preview.exists()).toBe(true)
-    expect(preview.attributes('data-mode')).toBe('fill')
-    const fields = JSON.parse(preview.attributes('data-fields')!) as FormSchemaField[]
-    expect(fields).toHaveLength(2)
+    const previews = wrapper.findAll('[data-testid="fc"]')
+    expect(previews).toHaveLength(2)
+    expect(previews.every((preview) => preview.attributes('data-mode') === 'fill')).toBe(true)
+    const fields = previews.map(
+      (preview) => (JSON.parse(preview.attributes('data-fields')!) as FormSchemaField[])[0],
+    )
     expect(fields.map((x) => x.name)).toEqual(['reason', 'days'])
+    expect(
+      wrapper.findAll('.preview-modal__field').map((field) => field.attributes('data-col-span')),
+    ).toEqual(['12', '12'])
   })
 
   it('passes REFERENCE and TABLE through (downgrade in adapter)', () => {
@@ -60,9 +64,11 @@ describe('PreviewModal', () => {
       fields: [f('ref', { type: 'REFERENCE' }), f('tbl', { type: 'TABLE', subFields: [] })],
     }
     const wrapper = mountModal(schema)
-    const fields = JSON.parse(
-      wrapper.find('[data-testid="fc"]').attributes('data-fields')!,
-    ) as FormSchemaField[]
+    const previews = wrapper.findAll('[data-testid="fc"]')
+    expect(previews).toHaveLength(2)
+    const fields = previews.map(
+      (preview) => (JSON.parse(preview.attributes('data-fields')!) as FormSchemaField[])[0],
+    )
     expect(fields.map((x) => x.type)).toEqual(['REFERENCE', 'TABLE'])
   })
 

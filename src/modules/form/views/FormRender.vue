@@ -30,6 +30,8 @@ import {
 import { ApiError } from '@/foundation/request'
 import DynamicField from '@/components/DynamicField.vue'
 import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-display'
+import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
+import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
 
 /* ── 路由参数 ── */
@@ -39,6 +41,9 @@ const router = useRouter()
 const formKey = String(route.params.formKey)
 const recordId = route.query.recordId ? String(route.query.recordId) : ''
 const mode = route.query.mode === 'edit' ? 'edit' : 'view'
+/** 草稿填报模式：route.query.mode === 'draft'（可选 draftId 打开已有草稿） */
+const isDraftMode = ref(route.query.mode === 'draft')
+const draftId = route.query.draftId ? String(route.query.draftId) : ''
 
 /* ── 状态 ── */
 
@@ -48,24 +53,61 @@ const submitting = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 const formData = reactive<Record<string, unknown>>({})
+/** 客户端提交校验提示：与字段同处网格单元，提示出现时自然撑高当前行。 */
+const validationErrors = reactive<Record<string, string>>({})
 /** REFERENCE 字段显示名映射：{ fieldName: displayName } */
 const referenceLabels = reactive<Record<string, string>>({})
+/** 显隐联动（v0.0.2）：随载荷实时复算应隐藏的字段；提交与服务端复算同口径。 */
+const hiddenFields = computed(() =>
+  schema.value ? hiddenFieldNames(parseVisibilityRules(schema.value), formData) : new Set<string>(),
+)
+/** 渲染列表：过滤隐藏字段（LABEL 说明文字照常渲染）。 */
+const visibleSchemaFields = computed(() =>
+  schema.value ? schema.value.fields.filter((f) => !hiddenFields.value.has(f.name)) : [],
+)
 /** 乐观锁版本号（编辑回显时从 GET 详情获取，保存时 PUT 回传） */
 const version = ref<number>(0)
+
+// ── 草稿模式状态 ──
+const draftTitle = ref('') // 草稿标题（新建草稿时可填）
+const draftSaving = ref(false) // 保存/提交草稿进行中
+const draftRefreshVersion = ref(false) // 保存时是否重绑表单最新已发布版本（D3）
 
 // 查看只读模式：有 recordId 且 mode=view；无 recordId 时永远是新建（可编辑）
 const isViewMode = computed(() => !!recordId && mode === 'view')
 const pageTitle = computed(() => {
   if (!schema.value) return `表单 — ${formKey}`
+  if (isDraftMode.value) return `${schema.value.title}（草稿填报）`
   const modeLabel = isViewMode.value ? '（查看）' : recordId ? '（编辑）' : ''
   return `${schema.value.title}${modeLabel}`
 })
 
+/** 跨模块按需加载 workflow api（动态 import，规避 modules 互引的静态依赖） */
+async function getWorkflowApi() {
+  return import('@/modules/workflow/api')
+}
+
 /* ── 字段默认值初始化 ── */
 
 function initField(field: FormSchemaField) {
+  // 默认值（v0.0.2）：仅新建填报且无已有值时应用；草稿恢复/编辑回显不覆盖原值。
+  // LABEL 非输入字段，无值。
+  if (field.type === 'LABEL') {
+    return
+  }
+  if (field.defaultValue !== undefined && field.defaultValue !== null) {
+    formData[field.name] = Array.isArray(field.defaultValue)
+      ? [...field.defaultValue]
+      : field.defaultValue
+    return
+  }
   switch (field.type) {
     case 'TABLE':
+      formData[field.name] = []
+      break
+    case 'MULTISELECT':
+    case 'ATTACHMENT':
+    case 'IMAGE':
       formData[field.name] = []
       break
     case 'BOOL':
@@ -96,7 +138,13 @@ async function loadSchema() {
     schema.value = await getFormDefinition(formKey)
     if (!schema.value) return
 
-    if (recordId) {
+    if (isDraftMode.value) {
+      if (draftId) {
+        await loadDraftPayload(schema.value)
+      } else {
+        for (const field of schema.value.fields) initField(field)
+      }
+    } else if (recordId) {
       await loadRecord(schema.value)
     } else {
       for (const field of schema.value.fields) initField(field)
@@ -244,12 +292,44 @@ function buildUpdatePayload(): {
   }
 }
 
+function isEmptyRequiredValue(value: unknown): boolean {
+  if (value === null || value === undefined) return true
+  if (typeof value === 'string') return value.trim() === ''
+  if (Array.isArray(value)) return value.length === 0
+  return false
+}
+
+/**
+ * 提交前先在真实填写页展示字段内联校验。
+ * 这不是后端校验的替代：后端仍会对同一必填规则复核；前端只负责把错误绑定到
+ * 对应网格单元，使错误提示参与 CSS Grid 的自然行高计算。
+ */
+function validateRequiredFields(): boolean {
+  for (const key of Object.keys(validationErrors)) delete validationErrors[key]
+  if (!schema.value) return true
+
+  for (const field of schema.value.fields) {
+    if (hiddenFields.value.has(field.name)) continue // 隐藏字段不参与本次必填校验
+    if (field.required && isEmptyRequiredValue(formData[field.name])) {
+      validationErrors[field.name] = '此字段为必填项'
+    }
+  }
+
+  return Object.keys(validationErrors).length === 0
+}
+
 /* ── 提交 / 保存 ── */
 
 async function handleSubmit() {
   submitting.value = true
   errorMsg.value = ''
   successMsg.value = ''
+
+  if (!validateRequiredFields()) {
+    errorMsg.value = '请完善必填项后再提交'
+    submitting.value = false
+    return
+  }
 
   // 编辑保存：走 PUT 更新端点
   if (recordId) {
@@ -290,7 +370,13 @@ async function handleSubmit() {
 
   // 新建提交：走 POST 创建端点
   try {
-    const id = await submitForm(formKey, { ...formData }, schema.value?.fields)
+    const submitData: Record<string, unknown> = {}
+    for (const field of schema.value?.fields ?? []) {
+      if (!hiddenFields.value.has(field.name)) {
+        submitData[field.name] = formData[field.name]
+      }
+    }
+    const id = await submitForm(formKey, submitData, schema.value?.fields)
     successMsg.value = `提交成功，记录 ID：${id}`
 
     // 按业务键（记录 ID）查询流程实例，只有实例真实创建才提示"流程已发起"。
@@ -341,6 +427,130 @@ async function waitForInstanceByBusinessKey(recordId: string): Promise<boolean> 
   return false
 }
 
+/* ── 草稿模式：反填 / 保存 / 提交 ── */
+
+/**
+ * 草稿模式：读已有草稿 payload 反填控件。
+ * 与 DynamicField 的 update:model-value 走同一条赋值路径（formData[name] = value）。
+ */
+async function loadDraftPayload(schema: FormSchema) {
+  const { getDraft } = await getWorkflowApi()
+  try {
+    const draft = await getDraft(draftId)
+    draftTitle.value = draft.title ?? ''
+    let values: Record<string, unknown> = {}
+    try {
+      const parsed: unknown = JSON.parse(draft.payload)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        values = parsed as Record<string, unknown>
+      }
+    } catch {
+      // payload 非法 JSON：按空草稿处理，控件保留默认值
+    }
+    for (const field of schema.fields) {
+      if (!(field.name in values)) {
+        initField(field)
+        continue
+      }
+      const val = values[field.name]
+      if (field.type === 'TABLE') {
+        formData[field.name] = Array.isArray(val) ? val : []
+      } else {
+        formData[field.name] = val !== null && val !== undefined ? val : ''
+      }
+    }
+  } catch (err) {
+    errorMsg.value = err instanceof ApiError ? `草稿加载失败：${err.msg}` : '草稿加载失败'
+  }
+}
+
+/** 控件值 → payload 对象：剥离子表行内部标记（_rowAction/_rowId） */
+function buildDraftPayloadObject(): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  if (!schema.value) return out
+  for (const field of schema.value.fields) {
+    const val = formData[field.name]
+    if (field.type === 'TABLE' && Array.isArray(val)) {
+      out[field.name] = (val as Record<string, unknown>[]).map(
+        ({ _rowAction: _ra, _rowId: _ri, ...clean }) => clean,
+      )
+    } else {
+      out[field.name] = val
+    }
+  }
+  return out
+}
+
+/** 保存草稿：有 draftId → updateDraft；否则 → createDraft */
+async function handleSaveDraft() {
+  if (!schema.value) return
+  draftSaving.value = true
+  try {
+    const payload = JSON.stringify(buildDraftPayloadObject())
+    const { createDraft, updateDraft } = await getWorkflowApi()
+    if (draftId) {
+      await updateDraft(draftId, {
+        title: draftTitle.value.trim() || null,
+        payload,
+        refreshFormVersion: draftRefreshVersion.value || undefined,
+      })
+      ElMessage.success('草稿已保存')
+    } else {
+      await createDraft({
+        title: draftTitle.value.trim() || null,
+        formKey,
+        payload,
+      })
+      ElMessage.success('草稿已创建')
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '保存草稿失败')
+  } finally {
+    draftSaving.value = false
+  }
+}
+
+/** 提交草稿：先保存控件值（updateDraft），再受理提交并轮询命令终态 */
+async function handleSubmitDraft() {
+  if (!schema.value) return
+  if (!validateRequiredFields()) {
+    errorMsg.value = '请完善必填项后再提交'
+    return
+  }
+  draftSaving.value = true
+  errorMsg.value = ''
+  try {
+    const { updateDraft, submitDraft, pollCommandStatus } = await getWorkflowApi()
+    await updateDraft(draftId, {
+      title: draftTitle.value.trim() || null,
+      payload: JSON.stringify(buildDraftPayloadObject()),
+      refreshFormVersion: draftRefreshVersion.value || undefined,
+    })
+    const accept = await submitDraft(draftId)
+    const finalStatus = await pollCommandStatus(accept.commandId)
+    if (finalStatus?.status === 'COMPLETED') {
+      ElMessage.success('提交成功')
+      // eslint-disable-next-line no-undef
+      window.setTimeout(() => {
+        void router.push('/workflow/my-drafts')
+      }, 1200)
+    } else if (finalStatus?.status === 'FAILED') {
+      errorMsg.value = finalStatus.failureReason ?? '提交失败'
+    } else {
+      // 超时未终态：如实提示，不伪装成功
+      ElMessage.warning('处理中，可稍后在结果中查看')
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '提交草稿失败')
+  } finally {
+    draftSaving.value = false
+  }
+}
+
+function backToDrafts() {
+  void router.push('/workflow/my-drafts')
+}
+
 // ── 挂载 ──
 onMounted(loadSchema)
 </script>
@@ -377,7 +587,15 @@ onMounted(loadSchema)
         <!-- 字段渲染区 -->
         <div class="form-render-page__card">
           <div class="form-render-page__group">
-            <div v-for="field in schema.fields" :key="field.name" class="form-render-page__field">
+            <div
+              v-for="field in visibleSchemaFields"
+              :key="field.name"
+              class="form-render-page__field"
+              :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
+              :data-col-span="getFormFieldColSpan(field)"
+              :data-grid-field-type="field.type"
+              :data-grid-field-name="field.name"
+            >
               <DynamicField
                 :field="field"
                 :model-value="formData[field.name]"
@@ -385,12 +603,45 @@ onMounted(loadSchema)
                 :reference-label="referenceLabels[field.name] ?? ''"
                 @update:model-value="formData[field.name] = $event"
               />
+              <p
+                v-if="validationErrors[field.name]"
+                class="form-render-page__field-error"
+                role="alert"
+                :data-validation-error-for="field.name"
+              >
+                {{ validationErrors[field.name] }}
+              </p>
             </div>
           </div>
         </div>
 
-        <!-- 操作按钮 -->
-        <template v-if="!isViewMode">
+        <!-- 操作按钮：草稿模式 -->
+        <template v-if="isDraftMode">
+          <div class="form-render-page__draft-bar">
+            <el-input
+              v-model="draftTitle"
+              placeholder="草稿标题（可选）"
+              maxlength="100"
+              class="form-render-page__draft-title"
+            />
+            <span class="form-render-page__draft-process-hint">
+              流程由系统按已发布表单绑定解析
+            </span>
+            <el-checkbox v-if="draftId" v-model="draftRefreshVersion">重绑最新版本</el-checkbox>
+            <el-button :loading="draftSaving" @click="handleSaveDraft">保存草稿</el-button>
+            <el-button
+              v-if="draftId"
+              type="primary"
+              :loading="draftSaving"
+              @click="handleSubmitDraft"
+            >
+              提交草稿
+            </el-button>
+            <el-button link @click="backToDrafts">返回我的草稿</el-button>
+          </div>
+        </template>
+        <!-- 操作按钮：表单数据模式（行为不变） -->
+        <template v-else-if="!isViewMode">
           <el-button type="primary" :loading="submitting" @click="handleSubmit">
             {{ recordId ? '保存' : '提交' }}
           </el-button>
@@ -434,15 +685,37 @@ onMounted(loadSchema)
 
 .form-render-page__group {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 22px 28px;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  grid-auto-flow: row;
+  row-gap: var(--sw-form-row-gap);
 }
 
 .form-render-page__field {
-  /* 多行文本/子表格跨整行 */
-  :deep(.dynamic-field__table),
-  :deep(.dynamic-field) > .el-textarea {
-    grid-column: 1 / -1;
-  }
+  min-width: 0;
+  padding-inline: var(--sw-space-8);
+  box-sizing: border-box;
+}
+
+.form-render-page__field-error {
+  margin: var(--sw-space-4) 0 0;
+  color: var(--sw-danger);
+  font-size: var(--sw-font-caption);
+  line-height: 1.5;
+}
+
+.form-render-page__draft-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sw-space-8);
+  flex-wrap: wrap;
+}
+
+.form-render-page__draft-title {
+  width: 220px;
+}
+
+.form-render-page__draft-process-hint {
+  color: var(--sw-color-text-secondary);
+  font-size: var(--sw-font-size-sm);
 }
 </style>

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import type { Router, RouteLocationNormalized } from 'vue-router'
 
-vi.mock('@/foundation/auth/token', () => ({ getAccessToken: vi.fn() }))
+vi.mock('@/foundation/auth/token', () => ({ getAccessToken: vi.fn(), clearToken: vi.fn() }))
 vi.mock('@/foundation/auth', () => ({ refresh: vi.fn(), logout: vi.fn() }))
 vi.mock('@/foundation/session', () => ({ loadSession: vi.fn() }))
 vi.mock('@/foundation/menu', () => ({ loadMenu: vi.fn(), buildRoutesFromMenu: vi.fn() }))
@@ -114,7 +114,8 @@ describe('router/guard authGuard', () => {
 
   it('second pass after routes built: plain next(), no rebuild', async () => {
     vi.mocked(getAccessToken).mockReturnValue('token-123')
-    vi.mocked(loadSession).mockResolvedValue(placeholderSession)
+    // v0.0.2 P55：/system 属后台区域，会话须为服务端认可的管理身份方可直达
+    vi.mocked(loadSession).mockResolvedValue({ ...placeholderSession, superAdmin: true })
     vi.mocked(loadMenu).mockResolvedValue([])
     vi.mocked(buildRoutesFromMenu).mockReturnValue([
       { path: 'system', name: 'system', component: () => Promise.resolve({ default: {} }) },

@@ -73,6 +73,12 @@ export const MOCK_SESSION_DATA: MockSessionData = {
     'notify:template:view',
     'notify:template:manage',
     'notify:batch:send',
+    'workflow:catalog:view',
+    'workflow:catalog:manage',
+    'workflow:cc:view',
+    'workflow:urge',
+    'notify:record:view',
+    'notify:record:resend',
     'system:user:list',
     'system:role:list',
     'system:dept:list',
@@ -479,6 +485,97 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
         permission: 'workflow:view',
         hidden: false,
       },
+      {
+        id: '33',
+        parentId: '3',
+        name: 'my-instances',
+        title: '我发起的',
+        path: 'workflow/my-instances',
+        component: 'workflow/views/MyInstances',
+        icon: 'Document',
+        sort: 4,
+        menuType: 1,
+        permission: 'workflow:view',
+        hidden: false,
+      },
+      {
+        id: '34',
+        parentId: '3',
+        name: 'my-drafts',
+        title: '我的草稿',
+        path: 'workflow/my-drafts',
+        component: 'workflow/views/MyDrafts',
+        icon: 'EditPen',
+        sort: 5,
+        menuType: 1,
+        permission: 'workflow:view',
+        hidden: false,
+      },
+      {
+        id: '35',
+        parentId: '3',
+        name: 'my-processed',
+        title: '我的已办(新)',
+        path: 'workflow/my-processed',
+        component: 'workflow/views/MyProcessed',
+        icon: 'Finished',
+        sort: 6,
+        menuType: 1,
+        permission: 'workflow:view',
+        hidden: false,
+      },
+      {
+        id: '36',
+        parentId: '3',
+        name: 'process-catalog',
+        title: '流程中心',
+        path: 'workflow/catalog',
+        component: 'workflow/views/ProcessCatalog',
+        icon: 'Files',
+        sort: 7,
+        menuType: 1,
+        permission: 'workflow:catalog:view',
+        hidden: false,
+      },
+      {
+        id: '360',
+        parentId: '36',
+        name: 'catalog-manage',
+        title: '分类/事项管理',
+        path: '',
+        component: null,
+        icon: '',
+        sort: 1,
+        menuType: 2,
+        permission: 'workflow:catalog:manage',
+        hidden: false,
+      },
+      {
+        id: '3601',
+        parentId: '33',
+        name: 'workflow-urge',
+        title: '催办',
+        path: '',
+        component: null,
+        icon: '',
+        sort: 1,
+        menuType: 2,
+        permission: 'workflow:urge',
+        hidden: false,
+      },
+      {
+        id: '37',
+        parentId: '3',
+        name: 'my-cc',
+        title: '抄送我的',
+        path: 'workflow/my-cc',
+        component: 'workflow/views/MyCc',
+        icon: 'Message',
+        sort: 8,
+        menuType: 1,
+        permission: 'workflow:cc:view',
+        hidden: false,
+      },
     ],
   },
   {
@@ -507,6 +604,32 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
         sort: 10,
         menuType: 1,
         permission: 'notify:view',
+        hidden: false,
+      },
+      {
+        id: '44',
+        parentId: '4',
+        name: 'NotifyRecordList',
+        title: '发送记录',
+        path: 'notify/record',
+        component: 'notify/views/NotifyRecordList',
+        icon: 'List',
+        sort: 15,
+        menuType: 1,
+        permission: 'notify:record:view',
+        hidden: false,
+      },
+      {
+        id: '440',
+        parentId: '44',
+        name: 'notify-record-resend',
+        title: '失败重发',
+        path: '',
+        component: null,
+        icon: '',
+        sort: 1,
+        menuType: 2,
+        permission: 'notify:record:resend',
         hidden: false,
       },
       {
@@ -999,6 +1122,7 @@ export const MOCK_FORM_DEF_STORE: Map<
     name: string
     status: 'DRAFT' | 'PUBLISHED'
     definition: string
+    formVersion: number
   }
 > = new Map()
 
@@ -1013,6 +1137,7 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
   name: string
   status: 'DRAFT' | 'PUBLISHED'
   definition: string
+  formVersion: number
 }> = [
   {
     id: 'seed-def-001',
@@ -1020,6 +1145,7 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
     name: '请假申请单',
     status: 'PUBLISHED',
     definition: JSON.stringify(MOCK_DEMO_FORM_DEFINITION),
+    formVersion: 2,
   },
   {
     id: 'seed-def-002',
@@ -1027,6 +1153,7 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
     name: '费用报销单',
     status: 'DRAFT',
     definition: JSON.stringify({ title: '费用报销单', fields: [] }),
+    formVersion: 1,
   },
   {
     id: 'seed-def-003',
@@ -1034,6 +1161,7 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
     name: '采购订单',
     status: 'PUBLISHED',
     definition: JSON.stringify({ title: '采购订单', fields: [] }),
+    formVersion: 1,
   },
   {
     id: 'seed-def-004',
@@ -1041,6 +1169,7 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
     name: '差旅报销',
     status: 'DRAFT',
     definition: JSON.stringify({ title: '差旅报销', fields: [] }),
+    formVersion: 1,
   },
   {
     id: 'seed-def-005',
@@ -1048,6 +1177,48 @@ export const MOCK_FORM_DEF_SEEDS: Array<{
     name: '合同审批',
     status: 'PUBLISHED',
     definition: JSON.stringify({ title: '合同审批', fields: [] }),
+    formVersion: 3,
+  },
+]
+
+// ─── 表单历史版本快照种子（P52 工作台·历史版本） ──────────────
+// 临时数据：publish handler 发布成功时追加一版；快照查询 handler 只读消费。
+// 形状对齐后端 sw_form_snapshot（form_id + form_version + definition）。
+export const MOCK_FORM_SNAPSHOTS: Array<{
+  formId: string
+  formVersion: number
+  definition: string
+  createTime: string
+}> = [
+  {
+    formId: 'seed-def-001',
+    formVersion: 1,
+    definition: JSON.stringify({ title: '请假申请单', fields: [] }),
+    createTime: '2026-06-01 09:00:00',
+  },
+  {
+    formId: 'seed-def-001',
+    formVersion: 2,
+    definition: JSON.stringify(MOCK_DEMO_FORM_DEFINITION),
+    createTime: '2026-06-30 10:00:00',
+  },
+  {
+    formId: 'seed-def-005',
+    formVersion: 1,
+    definition: JSON.stringify({ title: '合同审批', fields: [] }),
+    createTime: '2026-05-11 14:00:00',
+  },
+  {
+    formId: 'seed-def-005',
+    formVersion: 2,
+    definition: JSON.stringify({ title: '合同审批 V2', fields: [] }),
+    createTime: '2026-06-02 11:30:00',
+  },
+  {
+    formId: 'seed-def-005',
+    formVersion: 3,
+    definition: JSON.stringify({ title: '合同审批', fields: [] }),
+    createTime: '2026-07-01 16:20:00',
   },
 ]
 
@@ -1216,6 +1387,204 @@ export const MOCK_PROCESSED_TASKS: Array<{
     endTime: null,
   },
 ]
+
+// ─── 我的草稿 Mock 种子（OA 个人中心） ───────────────
+// ownerId 对齐 mock 会话用户 id（superadmin/admin=1，user=2）；
+// id=2 归用户 999 所有，专用于验证「非本人访问草稿 → 403」语义。
+export const MOCK_MY_DRAFTS: Array<{
+  id: number
+  ownerId: string
+  title: string | null
+  formKey: string
+  formVersion: string | null
+  processDefKey: string | null
+  payload: string
+  status: 'EDITING' | 'SUBMITTING' | 'SUBMITTED' | 'FAILED'
+  commandId: string | null
+  submitSeq: number
+  resultRecordId: string | null
+  lastError: string | null
+  createTime: string
+  updateTime: string
+}> = [
+  {
+    id: 1,
+    ownerId: '1',
+    title: '张三的请假申请',
+    formKey: 'leave-request',
+    formVersion: '3',
+    processDefKey: 'leave_approval',
+    payload: '{"applicant":"张三","leaveType":"annual","days":2}',
+    status: 'EDITING',
+    commandId: null,
+    submitSeq: 0,
+    resultRecordId: null,
+    lastError: null,
+    createTime: '2026-08-01T09:00:00',
+    updateTime: '2026-08-01T09:00:00',
+  },
+  {
+    id: 2,
+    ownerId: '999',
+    title: '他人草稿（403 语义验证）',
+    formKey: 'contract-approval',
+    formVersion: '1',
+    processDefKey: null,
+    payload: '{"contractNo":"CT-OTHER"}',
+    status: 'EDITING',
+    commandId: null,
+    submitSeq: 0,
+    resultRecordId: null,
+    lastError: null,
+    createTime: '2026-07-30T11:00:00',
+    updateTime: '2026-07-30T11:00:00',
+  },
+  {
+    id: 3,
+    ownerId: '1',
+    title: '历史失败的提交',
+    formKey: 'contract-approval',
+    formVersion: '1',
+    processDefKey: 'contract_approval',
+    payload: '{"contractNo":"CT-2026-088"}',
+    status: 'FAILED',
+    commandId: 'cmd-failed-001',
+    submitSeq: 1,
+    resultRecordId: null,
+    lastError: '表单数据校验失败：contractNo 与流程绑定的必填字段不匹配',
+    createTime: '2026-07-28T15:00:00',
+    updateTime: '2026-07-28T15:02:00',
+  },
+]
+
+let myDraftNextId = 100
+
+/** 创建草稿时分配新 id（handler 使用）。 */
+export function nextMyDraftId(): number {
+  return myDraftNextId++
+}
+
+// ─── 我的已办（新契约）Mock 种子 ─────────────────────
+export const MOCK_MY_PROCESSED: Array<{
+  taskId: string
+  taskName: string
+  processInstanceId: string
+  processName: string | null
+  formKey: string
+  businessKey: string
+  action: 'APPROVE' | 'REJECT' | 'RETURN' | null
+  handleTime: string
+  instanceStatus: 'RUNNING' | 'APPROVED' | 'REJECTED' | null
+  source: 'ACTION' | 'HISTORY_COMPAT'
+}> = [
+  {
+    taskId: 'my-processed-001',
+    taskName: '部门经理审批',
+    processInstanceId: 'proc-001',
+    processName: '请假审批流程',
+    formKey: 'leave-request',
+    businessKey: 'rec-leave-001',
+    action: 'APPROVE',
+    handleTime: '2026-07-20T10:15:00',
+    instanceStatus: 'RUNNING',
+    source: 'ACTION',
+  },
+  {
+    taskId: 'my-processed-002',
+    taskName: '提交申请',
+    processInstanceId: 'proc-002',
+    processName: '单节点审批流程',
+    formKey: 'it_application',
+    businessKey: 'rec-it-002',
+    action: 'APPROVE',
+    handleTime: '2026-07-15T15:30:00',
+    instanceStatus: 'APPROVED',
+    source: 'HISTORY_COMPAT',
+  },
+  {
+    taskId: 'my-processed-003',
+    taskName: '部门经理审批',
+    processInstanceId: 'proc-003',
+    processName: '合同审批流程',
+    formKey: 'contract-approval',
+    businessKey: 'rec-contract-003',
+    action: 'REJECT',
+    handleTime: '2026-07-18T16:00:00',
+    instanceStatus: 'REJECTED',
+    source: 'ACTION',
+  },
+  {
+    taskId: 'my-processed-004',
+    taskName: 'HR 审批',
+    processInstanceId: 'proc-004',
+    processName: '请假审批流程',
+    formKey: 'leave-request',
+    businessKey: 'rec-leave-004',
+    action: null,
+    handleTime: '2026-07-22T09:00:00',
+    instanceStatus: null,
+    source: 'HISTORY_COMPAT',
+  },
+]
+
+// ─── 异步命令 Mock 状态（OA 个人中心：受理 + 轮询） ──
+// submit/accept 受理时登记命令：前 pollToComplete 次 GET 查询返回 PROCESSING，
+// 之后转 COMPLETED（模拟异步落库）。种子包含一个终态 FAILED 命令验证失败展示。
+export interface MockWorkflowCommand {
+  commandId: string
+  commandType: string
+  channel: string
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  result: Record<string, unknown> | null
+  failureReason: string | null
+  retryCount: number
+  createTime: string
+  finishedAt: string | null
+  /** GET 查询计数：达到 pollToComplete 后转 COMPLETED（终态命令不再计数） */
+  pollCount: number
+  pollToComplete: number
+}
+
+export const MOCK_WORKFLOW_COMMANDS = new Map<string, MockWorkflowCommand>([
+  [
+    'cmd-failed-001',
+    {
+      commandId: 'cmd-failed-001',
+      commandType: 'DRAFT_SUBMIT',
+      channel: 'ASYNC',
+      status: 'FAILED',
+      result: null,
+      failureReason: '表单数据校验失败：contractNo 与流程绑定的必填字段不匹配',
+      retryCount: 0,
+      createTime: '2026-07-28T15:01:00',
+      finishedAt: '2026-07-28T15:02:00',
+      pollCount: 0,
+      pollToComplete: 0,
+    },
+  ],
+])
+
+let commandNextSeq = 0
+
+/** 受理时登记一条新命令（handler 使用）：2 次查询后转 COMPLETED。 */
+export function registerMockCommand(commandType: string): MockWorkflowCommand {
+  commandNextSeq += 1
+  const command: MockWorkflowCommand = {
+    commandId: `cmd-${Date.now()}-${commandNextSeq}`,
+    commandType,
+    channel: 'ASYNC',
+    status: 'PROCESSING',
+    result: null,
+    failureReason: null,
+    retryCount: 0,
+    createTime: new Date().toISOString().slice(0, 19),
+    finishedAt: null,
+    pollCount: 0,
+    pollToComplete: 2,
+  }
+  MOCK_WORKFLOW_COMMANDS.set(command.commandId, command)
+  return command
+}
 
 // ─── 通知消息 Mock 种子 ──────────────────────────────
 export const MOCK_NOTIFY_MESSAGES: Array<{
@@ -3429,5 +3798,208 @@ export const MOCK_EXTERNAL_TOOLS: MockToolExternalEntry[] = [
     remark: '外部邮件服务工具',
     createTime: '2026-07-11 09:00:00',
     updateTime: '2026-07-11 09:00:00',
+  },
+]
+
+/* ═══════════════ v0.0.2 OA：流程中心/抄送/催办/工作台/通知记录（临时 mock 数据） ═══════════════ */
+
+export interface MockCatalogCategory {
+  id: number
+  name: string
+  sortNo: number
+}
+
+export interface MockCatalogItem {
+  itemKey: string
+  name: string
+  formKey: string
+  categoryId: number | null
+  status: 'PUBLISHED' | 'DRAFT'
+  formPublished: boolean
+  bindingActive: boolean
+  /** portal 可见性（mock 简化：false = 受限事项，普通视角不可见；管理视角仍展示） */
+  portalVisible: boolean
+}
+
+export const MOCK_CATEGORIES: MockCatalogCategory[] = [
+  { id: 1, name: '行政办公', sortNo: 1 },
+  { id: 2, name: '人事财务', sortNo: 2 },
+]
+
+export const MOCK_CATALOG_ITEMS: MockCatalogItem[] = [
+  {
+    itemKey: 'bpm_leave01',
+    name: '请假申请',
+    formKey: 'leave_form',
+    categoryId: 1,
+    status: 'PUBLISHED',
+    formPublished: true,
+    bindingActive: true,
+    portalVisible: true,
+  },
+  {
+    itemKey: 'bpm_expense01',
+    name: '报销申请',
+    formKey: 'expense_form',
+    categoryId: 2,
+    status: 'PUBLISHED',
+    formPublished: true,
+    bindingActive: true,
+    portalVisible: true,
+  },
+  {
+    itemKey: 'bpm_supply01',
+    name: '办公用品领用',
+    formKey: 'supply_form',
+    categoryId: null,
+    status: 'PUBLISHED',
+    formPublished: true,
+    bindingActive: true,
+    portalVisible: true,
+  },
+  {
+    itemKey: 'bpm_secret01',
+    name: '涉密事项（受限）',
+    formKey: 'secret_form',
+    categoryId: 1,
+    status: 'PUBLISHED',
+    formPublished: true,
+    bindingActive: true,
+    portalVisible: false,
+  },
+  {
+    itemKey: 'bpm_draft01',
+    name: '未发布流程',
+    formKey: 'draft_form',
+    categoryId: 1,
+    status: 'DRAFT',
+    formPublished: true,
+    bindingActive: false,
+    portalVisible: false,
+  },
+]
+
+export interface MockCopyRecord {
+  id: number
+  processInstanceId: string
+  nodeKey: string
+  taskId: string
+  recipientId: string
+  deliveryStatus: string
+  createTime: string
+  formKey: string
+  processDefKey: string
+  businessKey: string
+  initiatorId: number
+  instanceStatus: string
+}
+
+export const MOCK_MY_COPIES: MockCopyRecord[] = [
+  {
+    id: 1,
+    processInstanceId: 'pi-1001',
+    nodeKey: 'node_copy',
+    taskId: 'task-9001',
+    recipientId: '1',
+    deliveryStatus: 'SUCCESS',
+    createTime: '2026-09-07 10:00:00',
+    formKey: 'leave_form',
+    processDefKey: 'bpm_leave01',
+    businessKey: 'rec-1001',
+    initiatorId: 1,
+    instanceStatus: 'APPROVED',
+  },
+  {
+    id: 2,
+    processInstanceId: 'pi-1002',
+    nodeKey: 'node_copy',
+    taskId: 'task-9002',
+    recipientId: '1',
+    deliveryStatus: 'SUCCESS',
+    createTime: '2026-09-07 11:30:00',
+    formKey: 'expense_form',
+    processDefKey: 'bpm_expense01',
+    businessKey: 'rec-1002',
+    initiatorId: 1,
+    instanceStatus: 'RUNNING',
+  },
+]
+
+/** 催办冷却：instanceKey → 最近一次 ACCEPTED 时间戳（ms）。 */
+export const MOCK_URGE_LAST_ACCEPTED: Record<string, number> = {}
+
+/** 工作台布局（按 userId 存储；缺省=默认布局）。 */
+export const MOCK_WORKSPACE_LAYOUTS: Record<string, { layout: unknown }> = {}
+
+export interface MockNotifyRecord {
+  id: number
+  recipientId: number
+  title: string
+  content: string
+  bizType: string
+  bizId: string | null
+  read: boolean
+  channel: string
+  deliveryStatus: string
+  externalMessageId: string | null
+  failureReason: string | null
+  idempotencyKey: string | null
+  createTime: string
+}
+
+export const MOCK_NOTIFY_RECORDS: MockNotifyRecord[] = [
+  {
+    id: 1,
+    recipientId: 1,
+    title: '催办提醒',
+    content: '您有待办任务被催办：实例 pi-1002',
+    bizType: 'WF_TODO',
+    bizId: 'pi-1002',
+    read: false,
+    channel: 'IN_APP',
+    deliveryStatus: 'SUCCESS',
+    externalMessageId: null,
+    failureReason: null,
+    idempotencyKey: null,
+    createTime: '2026-09-07 09:00:00',
+  },
+  {
+    id: 2,
+    recipientId: 1,
+    title: '短信下发',
+    content: '审批超时提醒',
+    bizType: 'SYSTEM',
+    bizId: 'pi-1003',
+    read: false,
+    channel: 'SMS',
+    deliveryStatus: 'FAILED',
+    externalMessageId: null,
+    failureReason: '未配置生产渠道适配器',
+    idempotencyKey: null,
+    createTime: '2026-09-07 09:30:00',
+  },
+]
+
+export interface MockNotifyAttempt {
+  id: number
+  messageId: number
+  attemptNo: number
+  channel: string
+  status: string
+  failureReason: string | null
+  externalMessageId: string | null
+  createTime: string
+}
+
+export const MOCK_NOTIFY_ATTEMPTS: MockNotifyAttempt[] = [
+  {
+    id: 1,
+    messageId: 2,
+    attemptNo: 1,
+    channel: 'SMS',
+    status: 'FAILED',
+    failureReason: '未配置生产渠道适配器',
+    externalMessageId: null,
+    createTime: '2026-09-07 09:30:00',
   },
 ]

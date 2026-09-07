@@ -26,6 +26,9 @@ import BoolControl from './dynamic-field-controls/BoolControl.vue'
 import DictControl from './dynamic-field-controls/DictControl.vue'
 import ReferenceControl from './dynamic-field-controls/ReferenceControl.vue'
 import TableControl from './dynamic-field-controls/TableControl.vue'
+import MultiSelectControl from './dynamic-field-controls/MultiSelectControl.vue'
+import AttachmentControl from './dynamic-field-controls/AttachmentControl.vue'
+import LabelControl from './dynamic-field-controls/LabelControl.vue'
 import PlaceholderControl from './dynamic-field-controls/PlaceholderControl.vue'
 
 /** 控件渲染入参：主渲染传 FormSchemaField，子表单元格传 TableSubField（宽度对齐）。 */
@@ -69,6 +72,11 @@ export const DYNAMIC_FIELD_REGISTRY: DynamicFieldDescriptor[] = [
   { type: 'DICT', component: DictControl, subFieldComponent: DictControl },
   { type: 'REFERENCE', component: ReferenceControl, subFieldComponent: null },
   { type: 'TABLE', component: TableControl, subFieldComponent: null },
+  // v0.0.2 OA（P2 表单子集）：说明文字为纯展示，子表内同为静态文本。
+  { type: 'MULTISELECT', component: MultiSelectControl, subFieldComponent: MultiSelectControl },
+  { type: 'ATTACHMENT', component: AttachmentControl, subFieldComponent: AttachmentControl },
+  { type: 'IMAGE', component: AttachmentControl, subFieldComponent: AttachmentControl },
+  { type: 'LABEL', component: LabelControl, subFieldComponent: LabelControl },
 ]
 
 /** 按 type 取描述符；取不到返回 undefined（主渲染链不渲染 = 消费方兜底）。 */

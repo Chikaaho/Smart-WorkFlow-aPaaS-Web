@@ -79,6 +79,18 @@ describe('SubFieldDesigner (盖层子画布)', () => {
     expect(emitted).toEqual([{ name: 'c1', type: 'TEXT', label: '列1' }])
   })
 
+  it('writes a palette-added item into the isolated sub-table context', async () => {
+    const wrapper = mountEditor([])
+    wrapper.findComponent(PaletteStub).vm.$emit('add', {
+      id: 'sub-item-1',
+      field: { name: 'c1', type: 'TEXT' },
+    })
+    await wrapper.find('.sub-designer__back').trigger('click')
+
+    const emitted = wrapper.emitted('close')?.at(-1)?.[0] as TableSubField[]
+    expect(emitted).toEqual([{ name: 'c1', type: 'TEXT' }])
+  })
+
   it('propagates readonly to palette / canvas / config', () => {
     mountEditor([{ name: 'c1', type: 'TEXT' }], true)
     expect(paletteProps.disabled).toBe(true)

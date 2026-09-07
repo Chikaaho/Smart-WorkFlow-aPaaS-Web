@@ -13,7 +13,22 @@ vi.mock('@/foundation/request', () => ({
   request: mockRequest,
 }))
 
-import { login, logout, refresh } from './index'
+import { login, logout, refresh, fetchChallenge } from './index'
+import type { LoginChallengeDTO } from './rsa'
+
+const CHALLENGE: LoginChallengeDTO = {
+  captchaImage: 'data:image/png;base64,MOCK',
+  captchaId: 'uuid-1',
+  publicKey: 'MOCK_SPKI',
+  keyVersion: 'v1',
+  expiresIn: 300,
+  serverTime: Date.now(),
+}
+
+// WebCrypto 加密是异步外部能力，测试中打桩（契约由 rsa.spec 覆盖）
+vi.mock('./rsa', () => ({
+  encryptPassword: vi.fn(async (_key: string, password: string) => 'encrypted:' + password),
+}))
 
 describe('auth operations', () => {
   beforeEach(() => {
@@ -21,23 +36,48 @@ describe('auth operations', () => {
     clearToken()
   })
 
+  describe('fetchChallenge', () => {
+    it('should call GET /auth/challenge and return challenge DTO', async () => {
+      mockRequest.mockResolvedValueOnce(CHALLENGE)
+      const challenge = await fetchChallenge()
+      expect(mockRequest).toHaveBeenCalledWith({ method: 'GET', url: '/auth/challenge' })
+      expect(challenge.captchaId).toBe('uuid-1')
+      expect(challenge.publicKey).toBe('MOCK_SPKI')
+    })
+  })
+
   describe('login', () => {
-    it('should call POST /auth/login and store token response', async () => {
+    it('should encrypt password and POST five-field login payload', async () => {
       mockRequest.mockResolvedValueOnce({ accessToken: 'jwt-token', expiresIn: 900 })
-      await login({ username: 'admin', password: 'admin123' })
-      expect(mockRequest).toHaveBeenCalledWith({
-        method: 'POST',
-        url: '/auth/login',
-        data: { username: 'admin', password: 'admin123' },
+      await login({
+        username: 'admin',
+        password: 'admin123',
+        captcha: 'ab3d',
+        challenge: CHALLENGE,
       })
+      expect(mockRequest).toHaveBeenCalledTimes(1)
+      const call = mockRequest.mock.calls[0][0] as {
+        method: string
+        url: string
+        data: Record<string, string>
+      }
+      expect(call.method).toBe('POST')
+      expect(call.url).toBe('/auth/login')
+      expect(call.data.username).toBe('admin')
+      expect(call.data.password).toBe('encrypted:admin123')
+      expect(call.data.captcha).toBe('ab3d')
+      expect(call.data.captchaId).toBe('uuid-1')
+      expect(call.data.timestamp).toMatch(/^\d+$/)
       expect(getAccessToken()).toBe('jwt-token')
       expect(getCurrentUsername()).toBe('admin')
       expect(getTokenExpiresAt()).toBeGreaterThan(Date.now())
     })
 
     it('should propagate login failure and not store token', async () => {
-      mockRequest.mockRejectedValueOnce(new Error('Network error'))
-      await expect(login({ username: 'admin', password: 'wrong' })).rejects.toThrow('Network error')
+      mockRequest.mockRejectedValueOnce(new Error('验证码错误'))
+      await expect(
+        login({ username: 'admin', password: 'admin123', captcha: 'zzzz', challenge: CHALLENGE }),
+      ).rejects.toThrow('验证码错误')
       expect(getAccessToken()).toBeNull()
       expect(getCurrentUsername()).toBeNull()
     })

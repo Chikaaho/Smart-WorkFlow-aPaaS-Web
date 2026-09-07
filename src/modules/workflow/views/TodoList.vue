@@ -9,7 +9,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { StandardListTemplate } from '@/components/page-layout'
-import { queryTodoTasks, completeTask, rejectTask } from '@/modules/workflow/api'
+import { queryTodoTasks, acceptTaskAction, pollCommandStatus } from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
 import type { TodoTask } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
@@ -77,6 +77,42 @@ function rejectRow(r: unknown) {
   void handleReject(r as TodoTask)
 }
 
+/**
+ * 异步命令通道公共链路：受理（ACCEPTED ≠ 成功）→ 轮询命令状态到终态。
+ * COMPLETED → 成功提示并从列表移除；FAILED → 展示失败原因并刷新；
+ * 超时未终态 → 如实提示「处理中」，不伪装成功。
+ */
+async function runTaskAction(
+  row: TodoTask,
+  action: 'complete' | 'reject',
+  successMsg: string,
+  failMsg: string,
+): Promise<void> {
+  try {
+    const accept = await acceptTaskAction(row.taskId, action)
+    const finalStatus = await pollCommandStatus(accept.commandId)
+    if (finalStatus?.status === 'COMPLETED') {
+      ElMessage.success(successMsg)
+      list.value = list.value.filter((t) => t.taskId !== row.taskId)
+      total.value = list.value.length
+    } else if (finalStatus?.status === 'FAILED') {
+      ElMessage.error(finalStatus.failureReason ?? failMsg)
+      await loadList()
+    } else {
+      ElMessage.warning('处理中，可稍后在结果中查看')
+      await loadList()
+    }
+  } catch (err) {
+    if (err instanceof ApiError) {
+      ElMessage.error(err.msg)
+    } else {
+      ElMessage.error(failMsg)
+    }
+    approvingId.value = null
+    rejectingId.value = null
+  }
+}
+
 async function handleApprove(row: TodoTask) {
   // 防重复点击：在显示确认框前锁定，阻止快速点击创建多个对话框
   if (approvingId.value || rejectingId.value) return
@@ -95,21 +131,8 @@ async function handleApprove(row: TodoTask) {
   } finally {
     if (!confirmed) approvingId.value = null
   }
-  try {
-    await completeTask(row.taskId)
-    ElMessage.success('审批通过')
-    // 从列表中移除已审批的任务
-    list.value = list.value.filter((t) => t.taskId !== row.taskId)
-    total.value = list.value.length
-  } catch (err) {
-    if (err instanceof ApiError) {
-      ElMessage.error(err.msg)
-    } else {
-      ElMessage.error('审批操作失败')
-    }
-  } finally {
-    approvingId.value = null
-  }
+  await runTaskAction(row, 'complete', '审批通过', '审批操作失败')
+  approvingId.value = null
 }
 
 async function handleReject(row: TodoTask) {
@@ -129,20 +152,8 @@ async function handleReject(row: TodoTask) {
   } finally {
     if (!confirmed) rejectingId.value = null
   }
-  try {
-    await rejectTask(row.taskId)
-    ElMessage.success('已驳回')
-    list.value = list.value.filter((t) => t.taskId !== row.taskId)
-    total.value = list.value.length
-  } catch (err) {
-    if (err instanceof ApiError) {
-      ElMessage.error(err.msg)
-    } else {
-      ElMessage.error('驳回操作失败')
-    }
-  } finally {
-    rejectingId.value = null
-  }
+  await runTaskAction(row, 'reject', '已驳回', '驳回操作失败')
+  rejectingId.value = null
 }
 
 function handleRowClick(row: TodoTask) {

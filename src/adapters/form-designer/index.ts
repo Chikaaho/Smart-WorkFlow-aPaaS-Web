@@ -1,4 +1,5 @@
 import type { FormSchema, FormSchemaField, FieldType, TableSubField } from '@/contracts/form-schema'
+import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 
 /**
  * form-designer 防腐层。
@@ -15,6 +16,10 @@ const KNOWN_FIELD_TYPES = new Set<string>([
   'DICT',
   'REFERENCE',
   'TABLE',
+  'MULTISELECT',
+  'ATTACHMENT',
+  'IMAGE',
+  'LABEL',
 ])
 
 interface RawSubFieldDef {
@@ -26,10 +31,14 @@ interface RawSubFieldDef {
   dictType?: string
   renderAs?: string
   targetFormId?: string
+  defaultValue?: unknown
+  options?: string[]
+  text?: string
 }
 
 interface RawFieldDef extends RawSubFieldDef {
   subFields?: RawSubFieldDef[]
+  colSpan?: unknown
 }
 
 interface RawDefinition {
@@ -50,6 +59,8 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     ...(raw.label !== undefined ? { label: raw.label } : {}),
     required: raw.required ?? false,
     ...(raw.length !== undefined ? { length: raw.length } : {}),
+    colSpan: normalizeFormFieldColSpan(raw.colSpan, raw.type),
+    ...(raw.defaultValue !== undefined ? { defaultValue: raw.defaultValue } : {}),
   }
 
   const type = raw.type as FieldType
@@ -68,6 +79,22 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
       ...base,
       type,
       ...(raw.targetFormId !== undefined ? { targetFormId: raw.targetFormId } : {}),
+    }
+  }
+
+  if (type === 'MULTISELECT') {
+    return {
+      ...base,
+      type,
+      ...(raw.options !== undefined ? { options: raw.options } : {}),
+    }
+  }
+
+  if (type === 'LABEL') {
+    return {
+      ...base,
+      type,
+      ...(raw.text !== undefined ? { text: raw.text } : {}),
     }
   }
 
@@ -221,6 +248,33 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
       // 统一按钮占位：禁用态输入框，视觉上与普通 TEXT 区分。不查目标数据、不发请求。
       rule.type = 'input'
       rule.props = { disabled: true, placeholder: '引用字段选择器' }
+      break
+    }
+
+    case 'MULTISELECT': {
+      // 多选：checkbox-group，选项来自字段定义 options（字符串列表）
+      const multiField = field as import('@/contracts/form-schema').MultiSelectField
+      rule.type = 'checkbox'
+      rule.value = []
+      rule.options = (multiField.options ?? []).map((opt) => ({ value: opt, label: opt }))
+      break
+    }
+
+    case 'ATTACHMENT':
+    case 'IMAGE': {
+      // 附件/图片：自定义控件经 form-create 注册（setup.ts），值为 [{storageKey,name}]
+      rule.type = 'AttachmentPicker'
+      rule.value = []
+      rule.props = { mode: field.type === 'IMAGE' ? 'image' : 'attachment' }
+      break
+    }
+
+    case 'LABEL': {
+      // 说明文字：纯展示（非输入），不产生业务载荷
+      const labelField = field as import('@/contracts/form-schema').LabelField
+      rule.type = 'elAlert'
+      rule.value = ''
+      rule.props = { title: labelField.text || label, type: 'info', closable: false }
       break
     }
 

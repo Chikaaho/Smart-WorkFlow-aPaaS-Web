@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { MOCK_LOGIN_CHALLENGES } from './handlers'
 
 /**
  * Mock 模块加载/注册回归测试。
@@ -28,6 +29,13 @@ describe('foundation/mock/index', () => {
     const mod = await import('@/foundation/mock/index')
 
     // 验证 login handler 存在（F1 契约：R<TokenResponseDTO>）
+    const challenge = await mod.dispatchMock<{ captchaId: string }>(
+      'GET',
+      '/auth/challenge',
+      '/api',
+      {},
+      {},
+    )
     const loginResult = await mod.dispatchMock(
       'POST',
       '/auth/login',
@@ -36,6 +44,9 @@ describe('foundation/mock/index', () => {
       {
         username: 'admin',
         password: 'admin123',
+        captcha: MOCK_LOGIN_CHALLENGES.get(challenge!.data!.captchaId)!,
+        captchaId: challenge!.data!.captchaId,
+        timestamp: String(Date.now()),
       },
     )
     expect(loginResult).toBeDefined()

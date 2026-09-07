@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
- * 通用配置行：标签 + 列名（带 UX 校验）+ 必填。
+ * 通用配置行：标签 + 列名（带 UX 校验）+ 必填 + 默认值（v0.0.2）。
  *
- * 6 类简单字段面板共用这一块，避免每类重写。改动经 @update 抛 FieldPatch 上交，
+ * 简单字段面板共用这一块，避免每类重写。改动经 @update 抛 FieldPatch 上交，
  * 由设计器宿主就地写回选中字段（单一数据源，面板不存第二份）。
  *
  * 列名校验复用 column-name.ts（合法字符 + 同表单内不重名），**前端只做 UX 提示，
  * 真把关在后端发布**。BOOL 等无「必填」语义的类型传 :show-required="false" 隐藏该行。
+ * 默认值按字段类型给输入形态（数组型=逗号分隔），仅新建填报无值时应用。
  */
 import { computed } from 'vue'
 import { isValidColumnName, isColumnNameUnique } from '../column-name'
@@ -20,8 +21,12 @@ const props = withDefaults(
     /** 同表单内**其它**字段的列名（不含本字段自身），用于重名校验。 */
     otherNames: string[]
     showRequired?: boolean
+    /** 字段类型（决定默认值输入形态）。 */
+    fieldType?: string
+    /** 现有默认值。 */
+    defaultValue?: unknown
   }>(),
-  { showRequired: true },
+  { showRequired: true, fieldType: 'TEXT', defaultValue: undefined },
 )
 
 const emit = defineEmits<{ update: [patch: FieldPatch] }>()
@@ -36,6 +41,46 @@ const nameError = computed(() => {
   }
   return ''
 })
+
+/** 默认值输入形态：数组型=逗号分隔文本；布尔=下拉；其余=文本。 */
+const defaultMode = computed<'array' | 'bool' | 'text'>(() => {
+  if (['MULTISELECT', 'ATTACHMENT', 'IMAGE'].includes(props.fieldType)) return 'array'
+  if (props.fieldType === 'BOOL') return 'bool'
+  return 'text'
+})
+
+const defaultText = computed(() => {
+  if (props.defaultValue === undefined || props.defaultValue === null) return ''
+  if (Array.isArray(props.defaultValue)) return props.defaultValue.join(', ')
+  if (typeof props.defaultValue === 'object') return JSON.stringify(props.defaultValue)
+  return String(props.defaultValue)
+})
+
+function onDefaultText(v: string) {
+  if (v === '') {
+    emit('update', { defaultValue: undefined })
+    return
+  }
+  if (defaultMode.value === 'array') {
+    emit('update', {
+      defaultValue: v
+        .split(/[,，]/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    })
+    return
+  }
+  if (props.fieldType === 'NUMBER') {
+    const num = Number(v)
+    emit('update', { defaultValue: Number.isNaN(num) ? undefined : num })
+    return
+  }
+  emit('update', { defaultValue: v })
+}
+
+function onDefaultBool(v: string | number | boolean) {
+  emit('update', { defaultValue: Boolean(v) })
+}
 </script>
 
 <template>
@@ -65,6 +110,27 @@ const nameError = computed(() => {
       @update:model-value="
         (v: string | number | boolean) => emit('update', { required: Boolean(v) })
       "
+    />
+  </div>
+
+  <div v-if="defaultMode === 'bool'" class="row row--inline">
+    <label class="row__label">默认值</label>
+    <el-select
+      :model-value="defaultValue === undefined ? '' : String(defaultValue)"
+      clearable
+      style="width: 120px"
+      @update:model-value="(v: string) => onDefaultBool(v === 'true')"
+    >
+      <el-option label="开" value="true" />
+      <el-option label="关" value="false" />
+    </el-select>
+  </div>
+  <div v-else class="row">
+    <label class="row__label">默认值</label>
+    <el-input
+      :model-value="defaultText"
+      :placeholder="defaultMode === 'array' ? '逗号分隔的默认选项' : '新建填报时的默认值'"
+      @update:model-value="onDefaultText"
     />
   </div>
 </template>

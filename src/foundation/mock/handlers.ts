@@ -6,6 +6,11 @@
  * 按以下样板追加 handler，modules/* 与各 service 层零改动：
  *
  * ```ts
+ * function sampleGate(): { code: number; message: string; data: null } | null {
+ *   if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+ *   return null
+ * }
+ *
  * export const mockRegistrations: MockRegistration[] = [
  *   ...,
  *   {
@@ -26,6 +31,16 @@
 import { buildMockXlsxBlob } from './mock-xlsx'
 import { getAccessToken } from '@/foundation/auth/token'
 import type { MockHandler, MockMethod } from './index'
+import { MOCK_WORKFLOW_NODE_CAPABILITIES } from './workflow-node-capabilities'
+import {
+  MOCK_CATEGORIES,
+  MOCK_CATALOG_ITEMS,
+  MOCK_MY_COPIES,
+  MOCK_URGE_LAST_ACCEPTED,
+  MOCK_WORKSPACE_LAYOUTS,
+  MOCK_NOTIFY_RECORDS,
+  MOCK_NOTIFY_ATTEMPTS,
+} from './seeds'
 
 /** 模板/导出两行表头（显示名 + 稳定映射标识），与真实后端模板契约一致。 */
 const MOCK_IMPORT_EXPORT_HEADERS: string[][] = [
@@ -42,6 +57,20 @@ function p32AccessGate(required: string): { code: number; message: string; data:
     return { code: 401, message: '未认证', data: null }
   }
   if (!MOCK_CURRENT_SESSION.superAdmin && !MOCK_CURRENT_SESSION.permissions.includes(required)) {
+    return { code: 403, message: '无权限', data: null }
+  }
+  return null
+}
+
+/** P58 节点能力清单沿用当前 workflow 设计入口权限；未认证与无权语义与真实接口一致。 */
+function workflowNodeCapabilityAccessGate(): { code: number; message: string; data: null } | null {
+  if (!getAccessToken() || MOCK_CURRENT_SESSION.user.username === '') {
+    return { code: 401, message: '未认证', data: null }
+  }
+  if (
+    !MOCK_CURRENT_SESSION.superAdmin &&
+    !MOCK_CURRENT_SESSION.permissions.includes('workflow:def:view')
+  ) {
     return { code: 403, message: '无权限', data: null }
   }
   return null
@@ -72,6 +101,7 @@ import {
   MOCK_FORM_DATA_RECORDS,
   MOCK_GENERIC_FORM_RECORDS,
   MOCK_FORM_DEF_STORE,
+  MOCK_FORM_SNAPSHOTS,
   MOCK_TODO_TASKS,
   MOCK_PROCESSED_TASKS,
   MOCK_PROCESS_DEFS,
@@ -87,6 +117,11 @@ import {
   MOCK_JOB_LOGS,
   MOCK_INSTANCES,
   MOCK_INSTANCE_DETAILS,
+  MOCK_MY_DRAFTS,
+  MOCK_MY_PROCESSED,
+  MOCK_WORKFLOW_COMMANDS,
+  nextMyDraftId,
+  registerMockCommand,
   MOCK_INTERNAL_TOOLS,
   MOCK_EXTERNAL_TOOLS,
   type MockToolInternalEntry,
@@ -324,21 +359,135 @@ function executeGraphMock(graphDef: MockGraphDefEntry, input: string): ExecuteGr
   }
 
   return { success: true, output: finalOutput, latencyMs }
-}
+} /** P45 mock 登录挑战状态：captchaId → 验证码内容（小写），登录成功/失败即消费。
+ * 导出仅供 spec 读取答案（mock 内无像素 OCR 手段）；生产载荷不含答案字段。 */
 
 // ─── Handler 实现 ─────────────────────────────────────────
 
+export const MOCK_LOGIN_CHALLENGES = new Map<string, string>()
+
+/** P45 mock 挑战公钥（真实生成的 RSA-2048 SPKI，仅用于让前端 WebCrypto 加密走通；私钥不出现在任何仓库） */
+const MOCK_LOGIN_PUBLIC_KEY =
+  'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs9hDIIU8ZPofX5s+TiQY5xoAhtgve/oB/3gDXUpQuhQcuGeppEQwdO5BOL/WihYt6DO3GlLgl38KC2YepgDNztnjiz6hTcQg3Pdlx64Ju2pHJFGeFiWUfCOhA2duyoms/oU2DL2LMa5SPLgnzPUSobNeZCHyLCdIVF2eVBVnuNK6xK5aqtTtqgAtpLI+PjiHPky0qLlKo5RUqpyGGy47ko0og9lBLuczLAHzmVRc7NwtHnMIoH9CBs1XAdfhdznfqHZ46cM/obXYHhoRCGOIFoilgpj6vSJT6fbj6aknVfzJJnSbcq5ulSVQOEJr5/tmUNV831zQZ6xralHJXOxN2QIDAQAB'
+
+/** mock 验证码 SVG 载荷：答案仅存在于图像渲染语义中，响应不含独立答案字段 */
+function renderMockCaptchaSvg(code: string): string {
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='40'>` +
+    `<rect width='100%' height='100%' fill='#f5f7fa'/>` +
+    code
+      .split('')
+      .map(
+        (ch, i) =>
+          `<text x='${14 + i * 26}' y='27' font-family='monospace' font-size='22' font-weight='bold' fill='#4a3f8f' transform='rotate(${((i * 17) % 40) - 20} ${14 + i * 26} 27)'>${ch}</text>`,
+      )
+      .join('') +
+    `</svg>`
+  return 'data:image/svg+xml;base64,' + btoa(svg)
+}
+
+function mockSessionUid(): string {
+  return MOCK_CURRENT_SESSION.user?.id ?? ''
+}
+
+function mockCatalogPortalVisible(item: (typeof MOCK_CATALOG_ITEMS)[number]): boolean {
+  return item.portalVisible && item.status === 'PUBLISHED' && item.bindingActive
+}
+
+function mockCatalogManageGate(): { code: number; message: string; data: null } | null {
+  if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+  if (
+    !MOCK_CURRENT_SESSION.superAdmin &&
+    !buildMockPermissions().includes('workflow:catalog:manage')
+  )
+    return { code: 403, message: '无事项管理权限', data: null }
+  return null
+}
+
+function paginateMock<T>(list: T[], query: Record<string, string>) {
+  const pageNum = Math.max(1, Number(query.pageNum ?? '1'))
+  const pageSize = Math.max(1, Number(query.pageSize ?? '10'))
+  const start = (pageNum - 1) * pageSize
+  return {
+    records: list.slice(start, start + pageSize),
+    total: list.length,
+    pageNum,
+    pageSize,
+  }
+}
+
+function mockNotifyRecordGate(
+  permission: string,
+): { code: number; message: string; data: null } | null {
+  if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+  if (!MOCK_CURRENT_SESSION.superAdmin && !buildMockPermissions().includes(permission))
+    return { code: 403, message: '无通知记录权限', data: null }
+  return null
+}
+
 export const mockRegistrations: MockRegistration[] = [
-  // ── 登录/会话（双 token 契约，对齐 F1 的 TokenResponseDTO） ──
+  // ── 登录挑战（P45：验证码图像 + 公钥 + 一次性消费，表达与真实后端相同的错误语义） ──
+  // 挑战权威状态在 mock 中为模块级 Map（仅 mock 内存演示用）；验证码内容不匹配 → 2101；
+  // 挑战已消费/未知 → 2101；timestamp 缺失/非法 → 2103；username='wrong' → 2104（演示密码错误分支）。
+  {
+    method: 'GET',
+    pattern: '/api/auth/challenge',
+    handler: () => {
+      const captchaId =
+        'mock-challenge-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
+      const captcha = Math.random()
+        .toString(36)
+        .replace(/[0189]/g, '')
+        .slice(0, 4)
+        .padEnd(4, 'a')
+      MOCK_LOGIN_CHALLENGES.set(captchaId, captcha.toLowerCase())
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          captchaImage: renderMockCaptchaSvg(captcha),
+          captchaId,
+          publicKey: MOCK_LOGIN_PUBLIC_KEY,
+          keyVersion: 'mock-v1',
+          expiresIn: 300,
+          serverTime: Date.now(),
+        },
+      }
+    },
+  },
+
+  // ── 登录/会话（双 token 契约 + P45 挑战语义，对齐 F1 的 TokenResponseDTO） ──
   // 登录按 username 切换当前会话：superadmin → 超管（旁路）、admin → 普通管理员（非超管，
   // 权限按角色绑定装配）、user → 普通用户（非超管，空绑定）；其他用户名回退超管。
-  // mock 不校验密码（既有行为），仅用于演示/测试非超管菜单过滤语义（方向 §2.2）。
+  // mock 校验挑战语义（验证码/一次性消费/时间戳），不校验真实密码（密码='wrong' → 2104）。
   {
     method: 'POST',
     pattern: '/api/auth/login',
     handler: (_params, _query, body) => {
-      const payload = body as { username?: string; password?: string } | undefined
-      const username = payload?.username ?? 'admin'
+      const payload = body as
+        | { username?: string; captcha?: string; captchaId?: string; timestamp?: string }
+        | undefined
+      // 1) 验证码记录与内容（UUID 缺失/未知挑战/内容不匹配 → 2101）
+      const expectedCaptcha = payload?.captchaId
+        ? MOCK_LOGIN_CHALLENGES.get(payload.captchaId)
+        : undefined
+      if (!payload?.captchaId || expectedCaptcha === undefined) {
+        return { code: 2101, message: '验证码错误', data: null }
+      }
+      if ((payload.captcha ?? '').trim().toLowerCase() !== expectedCaptcha) {
+        return { code: 2101, message: '验证码错误', data: null }
+      }
+      // 2) 一次性消费（删除成功才放行；重复/并发提交均 2101）
+      MOCK_LOGIN_CHALLENGES.delete(payload.captchaId)
+      // 3) 客户端机器时间（缺失/非法 → 2103）
+      if (!payload.timestamp || Number.isNaN(Number(payload.timestamp))) {
+        return { code: 2103, message: '机器时间异常', data: null }
+      }
+      // 4) 密码（mock 演示：username='wrong' → 2104；其余放行并按 username 切换会话）
+      const username = payload.username ?? 'admin'
+      if (username === 'wrong') {
+        return { code: 2104, message: '密码错误', data: null }
+      }
       switchMockSession(username)
       return {
         code: 0,
@@ -446,6 +595,20 @@ export const mockRegistrations: MockRegistration[] = [
         pageSize: Number(query.pageSize ?? 1000),
       },
     }),
+  },
+
+  // ── 已发布表单定义候选 ────────────────────────────────────
+  // GET /api/form/def/published → [{formKey, name, formVersion}]（仅 PUBLISHED，登录即可）
+  // 「我的草稿」新建时选表单候选使用；PUBLISHED 判定来自 MOCK_FORM_DEF_STORE 实时状态。
+  {
+    method: 'GET',
+    pattern: '/api/form/def/published',
+    handler: () => {
+      const list = Array.from(MOCK_FORM_DEF_STORE.values())
+        .filter((d) => d.status === 'PUBLISHED')
+        .map((d) => ({ formKey: d.formKey, name: d.name, formVersion: d.formVersion }))
+      return { code: 0, message: 'ok', data: list }
+    },
   },
 
   // ── 表单定义元信息 ────────────────────────────────────────
@@ -841,6 +1004,7 @@ export const mockRegistrations: MockRegistration[] = [
         name,
         status: 'DRAFT',
         definition: JSON.stringify({ title: name, fields: [] }),
+        formVersion: 1,
       })
 
       return {
@@ -956,6 +1120,15 @@ export const mockRegistrations: MockRegistration[] = [
       }
 
       existing.status = 'PUBLISHED'
+      // P52：发布成功即冻结一版快照（对齐后端 publish Step 6 语义）
+      const snapshotVersion = (existing.formVersion ?? 1) + 1
+      existing.formVersion = snapshotVersion
+      MOCK_FORM_SNAPSHOTS.push({
+        formId: existing.id,
+        formVersion: snapshotVersion,
+        definition: existing.definition,
+        createTime: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      })
       return {
         code: 0,
         message: 'ok',
@@ -964,6 +1137,7 @@ export const mockRegistrations: MockRegistration[] = [
           formKey: existing.formKey,
           name: existing.name,
           status: 'PUBLISHED',
+          formVersion: snapshotVersion,
         },
       }
     },
@@ -1013,6 +1187,81 @@ export const mockRegistrations: MockRegistration[] = [
         code: 0,
         message: 'ok',
         data: { records, total, pageNum, pageSize },
+      }
+    },
+  },
+
+  // ── 表单定义：按 ID 取身份 DTO（P52 工作台） ────────────────
+  // GET /api/form/def/:id → R<FormDefDTO>
+  // 注意：必须注册在 /page 与 /by-key 字面量 handler 之后——mock 匹配按注册
+  // 顺序首中即止，:param 模式会吞掉同段数的字面量路径。
+  // 不存在/已删除 → 1000（对齐后端 FORM_NOT_FOUND）
+  {
+    method: 'GET',
+    pattern: '/api/form/def/:id',
+    handler: (params) => {
+      const id = (params as Record<string, string>).id
+      const existing = MOCK_FORM_DEF_STORE.get(id)
+      if (!existing) {
+        return { code: 1000, message: '表单不存在', data: null }
+      }
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          id: existing.id,
+          formKey: existing.formKey,
+          name: existing.name,
+          status: existing.status,
+          formVersion: existing.formVersion,
+        },
+      }
+    },
+  },
+
+  // ── 表单定义：历史版本快照列表（P52 工作台） ────────────────
+  // GET /api/form/def/:id/snapshots → R<FormSnapshotDTO[]>
+  // 版本号倒序；行内不含 definition。表单不存在 → 1000。
+  {
+    method: 'GET',
+    pattern: '/api/form/def/:id/snapshots',
+    handler: (params) => {
+      const id = (params as Record<string, string>).id
+      if (!MOCK_FORM_DEF_STORE.has(id)) {
+        return { code: 1000, message: '表单不存在', data: null }
+      }
+      const rows = MOCK_FORM_SNAPSHOTS.filter((s) => s.formId === id)
+        .sort((a, b) => b.formVersion - a.formVersion)
+        .map((s) => ({ formVersion: s.formVersion, createTime: s.createTime }))
+      return { code: 0, message: 'ok', data: rows }
+    },
+  },
+
+  // ── 表单定义：指定版本快照详情（P52 工作台·只读预览） ───────
+  // GET /api/form/def/:id/snapshots/:version → R<FormSnapshotDetailDTO>
+  // 版本不存在 → 1301（对齐后端 SNAPSHOT_NOT_FOUND）
+  {
+    method: 'GET',
+    pattern: '/api/form/def/:id/snapshots/:version',
+    handler: (params) => {
+      const { id, version } = params as Record<string, string>
+      if (!MOCK_FORM_DEF_STORE.has(id)) {
+        return { code: 1000, message: '表单不存在', data: null }
+      }
+      const row = MOCK_FORM_SNAPSHOTS.find(
+        (s) => s.formId === id && s.formVersion === Number(version),
+      )
+      if (!row) {
+        return { code: 1301, message: '表单版本快照不存在', data: null }
+      }
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          formVersion: row.formVersion,
+          createTime: row.createTime,
+          definition: row.definition,
+        },
       }
     },
   },
@@ -1161,16 +1410,34 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
+  // ── 流程定义：节点能力清单 ─────────────────────────────
+  // GET /api/workflow/defs/node-capabilities → R<BpmNodeCapability[]>
+  // 只返回后端统一注册结果中完整可用的节点，不把 P58 预留类型伪造成可设计能力。
+  {
+    method: 'GET',
+    pattern: '/api/workflow/defs/node-capabilities',
+    handler: () => {
+      const denied = workflowNodeCapabilityAccessGate()
+      if (denied) return denied
+      return { code: 0, message: 'ok', data: MOCK_WORKFLOW_NODE_CAPABILITIES }
+    },
+  },
+
   // ── 流程定义：分页列表 ─────────────────────────────────
+  // formKey 查询参数可选：按持久化 form_key 精确过滤（P52 表单工作台"关联流程"）。
   {
     method: 'GET',
     pattern: '/api/workflow/defs',
     handler: (_params, query) => {
       const pageNum = Number(query.pageNum ?? 1)
       const pageSize = Number(query.pageSize ?? 10)
-      const total = MOCK_PROCESS_DEFS.length
+      const formKey = String(query.formKey ?? '').trim()
+      const filtered = formKey
+        ? MOCK_PROCESS_DEFS.filter((d) => d.formKey === formKey)
+        : MOCK_PROCESS_DEFS
+      const total = filtered.length
       const start = (pageNum - 1) * pageSize
-      const records = MOCK_PROCESS_DEFS.slice(start, start + pageSize)
+      const records = filtered.slice(start, start + pageSize)
       return {
         code: 0,
         message: 'ok',
@@ -2831,6 +3098,370 @@ export const mockRegistrations: MockRegistration[] = [
   },
 
   // ═══════════════════════════════════════════════════
+  // ── OA 个人中心（我发起的 / 我的草稿 / 我的已办 / 异步命令通道） ──
+  // ═══════════════════════════════════════════════════
+
+  // GET /api/workflow/my/instances — 我发起的流程（按当前会话用户过滤）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/instances',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      const currentUserId = MOCK_CURRENT_SESSION.user.id
+      let list = MOCK_INSTANCES.filter((i) => String(i.initiatorId) === currentUserId)
+      if (query.status) {
+        list = list.filter((i) => i.status === query.status)
+      }
+      const keyword = String(query.keyword ?? '').trim()
+      if (keyword) {
+        list = list.filter(
+          (i) => (i.processName ?? '').includes(keyword) || i.businessKey.includes(keyword),
+        )
+      }
+      list.sort((a, b) => b.createTime.localeCompare(a.createTime))
+      const total = list.length
+      const start = (pageNum - 1) * pageSize
+      return {
+        code: 0,
+        message: 'ok',
+        data: { records: list.slice(start, start + pageSize), total, pageNum, pageSize },
+      }
+    },
+  },
+
+  // GET /api/workflow/my/instances/:id — 我发起的流程详情（进度 + 流转记录）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/instances/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const instance = MOCK_INSTANCES.find((i) => i.id === id)
+      if (!instance) {
+        return { code: 404, message: '流程实例不存在', data: null }
+      }
+      const trace = MOCK_INSTANCE_DETAILS[instance.processInstanceId]?.flowTrace ?? []
+      const progress = trace
+        .filter((n) => n.activityType === 'userTask' && n.endTime === null)
+        .map((n) => ({
+          taskId: n.taskId ?? '',
+          taskName: n.activityName ?? '',
+          nodeKey: n.activityId,
+          assignee: n.assignee,
+        }))
+      const history = trace
+        .filter((n) => n.activityType === 'userTask' && n.endTime !== null)
+        .map((n) => ({
+          taskId: n.taskId ?? '',
+          taskName: n.activityName ?? '',
+          nodeKey: n.activityId,
+          assignee: n.assignee ?? '',
+          assigneeName: null,
+          createTime: n.startTime ?? '',
+          endTime: n.endTime,
+          action: 'APPROVE' as const,
+          approvalResult: 'APPROVED' as const,
+        }))
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          instance,
+          processName: instance.processName,
+          formKey: instance.formKey,
+          businessKey: instance.businessKey,
+          status: instance.status,
+          progress,
+          history,
+        },
+      }
+    },
+  },
+
+  // GET /api/workflow/drafts — 我的草稿分页（按当前会话用户过滤）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/drafts',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      const currentUserId = MOCK_CURRENT_SESSION.user.id
+      const list = MOCK_MY_DRAFTS.filter((d) => d.ownerId === currentUserId).sort((a, b) =>
+        b.updateTime.localeCompare(a.updateTime),
+      )
+      const total = list.length
+      const start = (pageNum - 1) * pageSize
+      return {
+        code: 0,
+        message: 'ok',
+        data: { records: list.slice(start, start + pageSize), total, pageNum, pageSize },
+      }
+    },
+  },
+
+  // POST /api/workflow/drafts — 新建草稿
+  {
+    method: 'POST',
+    pattern: '/api/workflow/drafts',
+    handler: (_params, _query, body) => {
+      const req = (body ?? {}) as Record<string, unknown>
+      const formKey = String(req.formKey ?? '').trim()
+      if (!formKey) {
+        return { code: 400, message: '表单标识不能为空', data: null }
+      }
+      const payload = String(req.payload ?? '')
+      try {
+        const parsed: unknown = JSON.parse(payload)
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          return { code: 400, message: '表单数据须为 JSON 对象', data: null }
+        }
+      } catch {
+        return { code: 400, message: '表单数据不是合法的 JSON', data: null }
+      }
+      const now = new Date().toISOString().slice(0, 19)
+      const draft = {
+        id: nextMyDraftId(),
+        ownerId: MOCK_CURRENT_SESSION.user.id,
+        title: typeof req.title === 'string' && req.title.trim() ? req.title.trim() : null,
+        formKey,
+        formVersion: '1',
+        processDefKey:
+          typeof req.processDefKey === 'string' && req.processDefKey.trim()
+            ? req.processDefKey.trim()
+            : null,
+        payload,
+        status: 'EDITING' as const,
+        commandId: null,
+        submitSeq: 0,
+        resultRecordId: null,
+        lastError: null,
+        createTime: now,
+        updateTime: now,
+      }
+      MOCK_MY_DRAFTS.push(draft)
+      return { code: 0, message: 'ok', data: draft }
+    },
+  },
+
+  // GET /api/workflow/drafts/:id — 草稿详情（非本人 → 403）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/drafts/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const draft = MOCK_MY_DRAFTS.find((d) => d.id === id)
+      if (!draft) {
+        return { code: 404, message: '草稿不存在', data: null }
+      }
+      if (draft.ownerId !== MOCK_CURRENT_SESSION.user.id) {
+        return { code: 403, message: '只能访问本人的草稿', data: null }
+      }
+      return { code: 0, message: 'ok', data: draft }
+    },
+  },
+
+  // PUT /api/workflow/drafts/:id — 更新草稿（合并字段，非本人 → 403）
+  {
+    method: 'PUT',
+    pattern: '/api/workflow/drafts/:id',
+    handler: (params, _query, body) => {
+      const id = Number((params as Record<string, string>).id)
+      const draft = MOCK_MY_DRAFTS.find((d) => d.id === id)
+      if (!draft) {
+        return { code: 404, message: '草稿不存在', data: null }
+      }
+      if (draft.ownerId !== MOCK_CURRENT_SESSION.user.id) {
+        return { code: 403, message: '只能修改本人的草稿', data: null }
+      }
+      const req = (body ?? {}) as Record<string, unknown>
+      if (typeof req.title === 'string') {
+        draft.title = req.title.trim() ? req.title.trim() : null
+      }
+      if (typeof req.processDefKey === 'string') {
+        draft.processDefKey = req.processDefKey.trim() ? req.processDefKey.trim() : null
+      }
+      if (typeof req.payload === 'string') {
+        try {
+          const parsed: unknown = JSON.parse(req.payload)
+          if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+            return { code: 400, message: '表单数据须为 JSON 对象', data: null }
+          }
+        } catch {
+          return { code: 400, message: '表单数据不是合法的 JSON', data: null }
+        }
+        draft.payload = req.payload
+      }
+      draft.updateTime = new Date().toISOString().slice(0, 19)
+      return { code: 0, message: 'ok', data: draft }
+    },
+  },
+
+  // DELETE /api/workflow/drafts/:id — 删除草稿（幂等；非本人 → 403）
+  {
+    method: 'DELETE',
+    pattern: '/api/workflow/drafts/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_MY_DRAFTS.findIndex((d) => d.id === id)
+      if (idx === -1) {
+        return { code: 0, message: 'ok', data: null }
+      }
+      if (MOCK_MY_DRAFTS[idx].ownerId !== MOCK_CURRENT_SESSION.user.id) {
+        return { code: 403, message: '只能删除本人的草稿', data: null }
+      }
+      MOCK_MY_DRAFTS.splice(idx, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // POST /api/workflow/drafts/:id/submit — 提交草稿（受理 ≠ 成功）
+  // 未选流程 → 400「提交前必须选择流程」；非本人 → 403；payload 非法 → 400。
+  {
+    method: 'POST',
+    pattern: '/api/workflow/drafts/:id/submit',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const draft = MOCK_MY_DRAFTS.find((d) => d.id === id)
+      if (!draft) {
+        return { code: 404, message: '草稿不存在', data: null }
+      }
+      if (draft.ownerId !== MOCK_CURRENT_SESSION.user.id) {
+        return { code: 403, message: '只能提交本人的草稿', data: null }
+      }
+      if (!draft.processDefKey) {
+        return { code: 400, message: '提交前必须选择流程', data: null }
+      }
+      try {
+        JSON.parse(draft.payload)
+      } catch {
+        return { code: 400, message: '表单数据不是合法的 JSON', data: null }
+      }
+      const command = registerMockCommand('DRAFT_SUBMIT')
+      draft.status = 'SUBMITTING'
+      draft.commandId = command.commandId
+      draft.submitSeq += 1
+      draft.lastError = null
+      draft.updateTime = new Date().toISOString().slice(0, 19)
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          commandId: command.commandId,
+          commandKey: `draft-submit-${draft.id}-${draft.submitSeq}`,
+          commandType: command.commandType,
+          channel: command.channel,
+          status: 'ACCEPTED',
+          duplicated: false,
+        },
+      }
+    },
+  },
+
+  // GET /api/workflow/commands/:commandId — 命令状态回查
+  // 每次查询 pollCount+1，达到 pollToComplete 转 COMPLETED（同时落地关联草稿/任务）。
+  {
+    method: 'GET',
+    pattern: '/api/workflow/commands/:commandId',
+    handler: (params) => {
+      const commandId = (params as Record<string, string>).commandId
+      const command = MOCK_WORKFLOW_COMMANDS.get(commandId)
+      if (!command) {
+        return { code: 404, message: '命令不存在', data: null }
+      }
+      if (command.status === 'PROCESSING' || command.status === 'PENDING') {
+        command.pollCount += 1
+        if (command.pollCount >= command.pollToComplete) {
+          command.status = 'COMPLETED'
+          command.finishedAt = new Date().toISOString().slice(0, 19)
+          // 关联效果落地：草稿提交 → SUBMITTED + resultRecordId；任务动作 → 移除待办行
+          if (command.commandType === 'DRAFT_SUBMIT') {
+            const draft = MOCK_MY_DRAFTS.find((d) => d.commandId === command.commandId)
+            if (draft) {
+              draft.status = 'SUBMITTED'
+              draft.resultRecordId = 'mock-record-' + draft.id
+              draft.lastError = null
+              draft.updateTime = command.finishedAt
+            }
+            command.result = { recordId: draft?.resultRecordId ?? null }
+          } else if (command.result && typeof command.result.taskId === 'string') {
+            const idx = MOCK_TODO_TASKS.findIndex((t) => t.taskId === command.result?.taskId)
+            if (idx !== -1) MOCK_TODO_TASKS.splice(idx, 1)
+          }
+        }
+      }
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          commandId: command.commandId,
+          commandType: command.commandType,
+          channel: command.channel,
+          status: command.status,
+          result: command.result,
+          failureReason: command.failureReason,
+          retryCount: command.retryCount,
+          createTime: command.createTime,
+          finishedAt: command.finishedAt,
+        },
+      }
+    },
+  },
+
+  // POST /api/workflow/commands/tasks/:taskId/:action — 审批动作异步受理
+  // 受理 ≠ 成功；任务不存在 → 404；未知 action → 400。
+  {
+    method: 'POST',
+    pattern: '/api/workflow/commands/tasks/:taskId/:action',
+    handler: (params, _query, _body) => {
+      const { taskId, action } = params as Record<string, string>
+      if (!['complete', 'reject', 'return'].includes(action)) {
+        return { code: 400, message: `不支持的审批动作: ${action}`, data: null }
+      }
+      const task = MOCK_TODO_TASKS.find((t) => t.taskId === taskId)
+      if (!task) {
+        return { code: 404, message: '任务不存在', data: null }
+      }
+      const command = registerMockCommand(`TASK_${action.toUpperCase()}`)
+      command.result = { taskId, action }
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          commandId: command.commandId,
+          commandKey: `task-${action}-${taskId}`,
+          commandType: command.commandType,
+          channel: command.channel,
+          status: 'ACCEPTED',
+          duplicated: false,
+        },
+      }
+    },
+  },
+
+  // GET /api/workflow/my/processed — 我的已办（新契约，含来源标记）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/processed',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      let list = [...MOCK_MY_PROCESSED]
+      const source = String(query.source ?? '').trim()
+      if (source) {
+        list = list.filter((r) => r.source === source)
+      }
+      list.sort((a, b) => b.handleTime.localeCompare(a.handleTime))
+      const total = list.length
+      const start = (pageNum - 1) * pageSize
+      return {
+        code: 0,
+        message: 'ok',
+        data: { records: list.slice(start, start + pageSize), total, pageNum, pageSize },
+      }
+    },
+  },
+
+  // ═══════════════════════════════════════════════════
   // ── 大模型管理（M07-F01，契约对齐 AgentModelConfigDTO / AgentModelSaveReqDTO） ──
   // ═══════════════════════════════════════════════════
 
@@ -4051,6 +4682,406 @@ export const mockRegistrations: MockRegistration[] = [
       tool.enabled = query.enabled === 'true'
       tool.updateTime = new Date().toISOString().replace('T', ' ').slice(0, 19)
       return { code: 0, message: 'ok', data: null }
+    },
+  },
+  /* ═══════════════ v0.0.2 OA：流程中心（P4） ═══════════════ */
+
+  // GET /api/workflow/catalog/items — 普通视角（不泄漏 portalVisible=false 事项）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/catalog/items',
+    handler: (_params, query) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const keyword = (query.keyword ?? '').toLowerCase()
+      const categoryId = query.categoryId
+      const items = MOCK_CATALOG_ITEMS.filter(mockCatalogPortalVisible)
+        .filter((it) =>
+          categoryId === undefined || categoryId === ''
+            ? true
+            : Number(categoryId) === 0
+              ? it.categoryId === null
+              : it.categoryId === Number(categoryId),
+        )
+        .filter((it) =>
+          keyword === ''
+            ? true
+            : it.name.toLowerCase().includes(keyword) || it.formKey.toLowerCase().includes(keyword),
+        )
+      return { code: 0, message: 'ok', data: paginateMock(items, query) }
+    },
+  },
+
+  // GET /api/workflow/catalog/category-counts — 仅统计可见事项
+  {
+    method: 'GET',
+    pattern: '/api/workflow/catalog/category-counts',
+    handler: () => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const counts: Record<string, number> = {}
+      for (const it of MOCK_CATALOG_ITEMS.filter(mockCatalogPortalVisible)) {
+        if (it.categoryId !== null)
+          counts[String(it.categoryId)] = (counts[String(it.categoryId)] ?? 0) + 1
+      }
+      return { code: 0, message: 'ok', data: counts }
+    },
+  },
+
+  // GET /api/workflow/catalog/items/:processKey — 事项详情（受限事项按不存在处理）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/catalog/items/:processKey',
+    handler: (params) => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      const key = (params as Record<string, string>).processKey
+      const item = MOCK_CATALOG_ITEMS.find((it) => it.itemKey === key)
+      if (!item || !mockCatalogPortalVisible(item))
+        return { code: 404, message: '事项不存在或不可见', data: null }
+      return { code: 0, message: 'ok', data: item }
+    },
+  },
+
+  // GET /api/workflow/categories — 分类列表（管理权限）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/categories',
+    handler: () => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const data = MOCK_CATEGORIES.map((c) => ({
+        ...c,
+        itemCount: MOCK_CATALOG_ITEMS.filter((it) => it.categoryId === c.id).length,
+      }))
+      return { code: 0, message: 'ok', data }
+    },
+  },
+
+  // POST /api/workflow/categories
+  {
+    method: 'POST',
+    pattern: '/api/workflow/categories',
+    handler: (_params, _query, body) => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const req = body as { name?: string; sortNo?: number }
+      if (!req?.name?.trim()) return { code: 400, message: '分类名称不能为空', data: null }
+      if (MOCK_CATEGORIES.some((c) => c.name === req.name!.trim()))
+        return { code: 400, message: '分类名称已存在', data: null }
+      const id = Math.max(0, ...MOCK_CATEGORIES.map((c) => c.id)) + 1
+      const created = { id, name: req.name!.trim(), sortNo: req.sortNo ?? 0 }
+      MOCK_CATEGORIES.push(created)
+      return { code: 0, message: 'ok', data: { ...created, itemCount: 0 } }
+    },
+  },
+
+  // PUT /api/workflow/categories/:id
+  {
+    method: 'PUT',
+    pattern: '/api/workflow/categories/:id',
+    handler: (params, _query, body) => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const id = Number((params as Record<string, string>).id)
+      const category = MOCK_CATEGORIES.find((c) => c.id === id)
+      if (!category) return { code: 404, message: '分类不存在', data: null }
+      const req = body as { name?: string; sortNo?: number }
+      if (req?.name) category.name = req.name.trim()
+      if (req?.sortNo !== undefined) category.sortNo = req.sortNo
+      return { code: 0, message: 'ok', data: category }
+    },
+  },
+
+  // DELETE /api/workflow/categories/:id — 有事项归属须先解除（幂等删除）
+  {
+    method: 'DELETE',
+    pattern: '/api/workflow/categories/:id',
+    handler: (params) => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const id = Number((params as Record<string, string>).id)
+      const index = MOCK_CATEGORIES.findIndex((c) => c.id === id)
+      if (index < 0) return { code: 0, message: 'ok', data: null }
+      const referenced = MOCK_CATALOG_ITEMS.filter((it) => it.categoryId === id).length
+      if (referenced > 0)
+        return {
+          code: 400,
+          message: `分类下仍有 ${referenced} 个事项，须先解除归属再删除`,
+          data: null,
+        }
+      MOCK_CATEGORIES.splice(index, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // GET /api/workflow/catalog/admin/items — 管理视角（含未发布/受限）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/catalog/admin/items',
+    handler: (_params, query) => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const keyword = (query.keyword ?? '').toLowerCase()
+      const items = MOCK_CATALOG_ITEMS.filter((it) =>
+        keyword === ''
+          ? true
+          : it.name.toLowerCase().includes(keyword) || it.formKey.toLowerCase().includes(keyword),
+      )
+      return { code: 0, message: 'ok', data: paginateMock(items, query) }
+    },
+  },
+
+  // PUT /api/workflow/catalog/admin/items/:processKey/category
+  {
+    method: 'PUT',
+    pattern: '/api/workflow/catalog/admin/items/:processKey/category',
+    handler: (params, _query, body) => {
+      const gate = mockCatalogManageGate()
+      if (gate) return gate
+      const key = (params as Record<string, string>).processKey
+      const item = MOCK_CATALOG_ITEMS.find((it) => it.itemKey === key)
+      if (!item) return { code: 404, message: '事项不存在', data: null }
+      const req = body as { categoryId: number | null }
+      if (req?.categoryId !== null && req?.categoryId !== undefined) {
+        if (!MOCK_CATEGORIES.some((c) => c.id === req.categoryId))
+          return { code: 404, message: '分类不存在', data: null }
+      }
+      item.categoryId = req?.categoryId ?? null
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  /* ═══════════════ v0.0.2 OA：抄送我的 / 催办（P4 个人办理） ═══════════════ */
+
+  // GET /api/workflow/my/copies — 仅本人（mock 会话用户）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/copies',
+    handler: (_params, query) => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      const processInstanceId = (query.processInstanceId ?? '').trim()
+      const keyword = (query.keyword ?? '').toLowerCase()
+      const copies = MOCK_MY_COPIES.filter((c) => c.recipientId === uid)
+        .filter((c) => processInstanceId === '' || c.processInstanceId === processInstanceId)
+        .filter((c) =>
+          keyword === ''
+            ? true
+            : c.formKey.toLowerCase().includes(keyword) ||
+              c.businessKey.toLowerCase().includes(keyword) ||
+              c.processDefKey.toLowerCase().includes(keyword),
+        )
+        .slice()
+        .sort((a, b) => {
+          if (a.createTime !== b.createTime) return a.createTime < b.createTime ? 1 : -1
+          return b.id - a.id
+        })
+      return { code: 0, message: 'ok', data: paginateMock(copies, query) }
+    },
+  },
+
+  // GET /api/workflow/my/copies/:id — 详情（仅接收人）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/copies/:id',
+    handler: (params) => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      const id = Number((params as Record<string, string>).id)
+      const copy = MOCK_MY_COPIES.find((c) => c.id === id)
+      if (!copy) return { code: 404, message: '抄送记录不存在', data: null }
+      if (copy.recipientId !== uid)
+        return { code: 403, message: '仅接收人可查看该抄送', data: null }
+      const instance = MOCK_MY_COPIES.find((c) => c.processInstanceId === copy.processInstanceId)
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          copy,
+          instance: instance ?? null,
+          formData: { reason: '示例表单快照数据', days: 2 },
+          progress: [{ name: '审批中节点', assignee: '7' }],
+          history: [],
+        },
+      }
+    },
+  },
+
+  // POST /api/workflow/my/instances/:id/urge — 催办（10 分钟冷却；结束实例拒绝）
+  {
+    method: 'POST',
+    pattern: '/api/workflow/my/instances/:id/urge',
+    handler: (params) => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      const id = Number((params as Record<string, string>).id)
+      // mock：实例 1001 已结束（APPROVED），其余视为运行中且本人发起
+      const ended = id === 1001
+      if (ended)
+        return {
+          code: 0,
+          message: 'ok',
+          data: { result: 'REJECTED', detail: '实例已结束，不能催办', recordId: Date.now() },
+        }
+      const last = MOCK_URGE_LAST_ACCEPTED[String(id)]
+      if (last !== undefined && Date.now() - last < 10 * 60 * 1000) {
+        const remain = Math.ceil((10 * 60 * 1000 - (Date.now() - last)) / 1000)
+        return {
+          code: 0,
+          message: 'ok',
+          data: {
+            result: 'COOLDOWN',
+            detail: `冷却中，约 ${remain} 秒后可再次催办`,
+            recordId: Date.now(),
+          },
+        }
+      }
+      MOCK_URGE_LAST_ACCEPTED[String(id)] = Date.now()
+      return {
+        code: 0,
+        message: 'ok',
+        data: { result: 'ACCEPTED', detail: '已通知待办人: [7]', recordId: Date.now() },
+      }
+    },
+  },
+
+  /* ═══════════════ v0.0.2 OA：工作台布局（P54） ═══════════════ */
+
+  // GET /api/system/workspace/layout
+  {
+    method: 'GET',
+    pattern: '/api/system/workspace/layout',
+    handler: () => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      const stored = MOCK_WORKSPACE_LAYOUTS[uid]
+      if (!stored) {
+        return {
+          code: 0,
+          message: 'ok',
+          data: {
+            custom: false,
+            layout: {
+              components: [
+                { key: 'todo', visible: true, order: 1 },
+                { key: 'myInitiated', visible: true, order: 2 },
+                { key: 'cc', visible: true, order: 3 },
+                { key: 'favoriteItems', visible: true, order: 4 },
+              ],
+              favoriteItemKeys: [],
+            },
+          },
+        }
+      }
+      return { code: 0, message: 'ok', data: { custom: true, layout: stored.layout } }
+    },
+  },
+
+  // PUT /api/system/workspace/layout
+  {
+    method: 'PUT',
+    pattern: '/api/system/workspace/layout',
+    handler: (_params, _query, body) => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      const layout = body as { components?: Array<{ key?: string }> }
+      const allowed = ['todo', 'myInitiated', 'cc', 'favoriteItems']
+      if (!layout?.components?.length)
+        return { code: 400, message: '布局缺少 components', data: null }
+      for (const c of layout.components) {
+        if (!c.key || !allowed.includes(c.key))
+          return { code: 400, message: `未知组件: ${c.key}`, data: null }
+      }
+      MOCK_WORKSPACE_LAYOUTS[uid] = { layout }
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // DELETE /api/system/workspace/layout — 恢复默认
+  {
+    method: 'DELETE',
+    pattern: '/api/system/workspace/layout',
+    handler: () => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      delete MOCK_WORKSPACE_LAYOUTS[uid]
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  /* ═══════════════ v0.0.2 OA：通知发送记录（P3） ═══════════════ */
+
+  // GET /api/notify/records
+  {
+    method: 'GET',
+    pattern: '/api/notify/records',
+    handler: (_params, query) => {
+      const gate = mockNotifyRecordGate('notify:record:view')
+      if (gate) return gate
+      const status = query.deliveryStatus
+      const keyword = (query.keyword ?? '').toLowerCase()
+      const records = MOCK_NOTIFY_RECORDS.filter((r) =>
+        status ? r.deliveryStatus === status : true,
+      ).filter((r) =>
+        keyword === ''
+          ? true
+          : r.title.toLowerCase().includes(keyword) ||
+            r.content.toLowerCase().includes(keyword) ||
+            (r.bizId ?? '').toLowerCase().includes(keyword),
+      )
+      return { code: 0, message: 'ok', data: paginateMock(records, query) }
+    },
+  },
+
+  // GET /api/notify/records/:id — 详情 + 尝试流水
+  {
+    method: 'GET',
+    pattern: '/api/notify/records/:id',
+    handler: (params) => {
+      const gate = mockNotifyRecordGate('notify:record:view')
+      if (gate) return gate
+      const id = Number((params as Record<string, string>).id)
+      const message = MOCK_NOTIFY_RECORDS.find((r) => r.id === id)
+      if (!message) return { code: 404, message: '发送记录不存在', data: null }
+      return {
+        code: 0,
+        message: 'ok',
+        data: { message, attempts: MOCK_NOTIFY_ATTEMPTS.filter((a) => a.messageId === id) },
+      }
+    },
+  },
+
+  // POST /api/notify/records/:id/resend — 仅 FAILED 可重发；并发/重复受理返回冲突语义
+  {
+    method: 'POST',
+    pattern: '/api/notify/records/:id/resend',
+    handler: (params) => {
+      const gate = mockNotifyRecordGate('notify:record:resend')
+      if (gate) return gate
+      const id = Number((params as Record<string, string>).id)
+      const record = MOCK_NOTIFY_RECORDS.find((r) => r.id === id)
+      if (!record) return { code: 404, message: '发送记录不存在', data: null }
+      if (record.deliveryStatus !== 'FAILED')
+        return {
+          code: 400,
+          message: `记录当前状态为 ${record.deliveryStatus}，仅明确失败且无进行中重发的记录可重发`,
+          data: null,
+        }
+      // 受理即置 RESENDING（同步完成重发并落最新结果）
+      record.deliveryStatus = 'RESENDING'
+      const success = record.channel === 'IN_APP'
+      record.deliveryStatus = success ? 'SUCCESS' : 'FAILED'
+      record.failureReason = success ? null : '渠道仍不可用（mock）'
+      const attemptNo = MOCK_NOTIFY_ATTEMPTS.filter((a) => a.messageId === id).length + 1
+      MOCK_NOTIFY_ATTEMPTS.push({
+        id: Date.now(),
+        messageId: id,
+        attemptNo,
+        channel: record.channel,
+        status: record.deliveryStatus,
+        failureReason: record.failureReason,
+        externalMessageId: null,
+        createTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      })
+      return { code: 0, message: 'ok', data: record.deliveryStatus }
     },
   },
 ]

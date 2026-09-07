@@ -35,6 +35,14 @@ export function setRefreshHandler(handler: RefreshHandler): void {
   refreshHandler = handler
 }
 
+/** 为真实浏览器请求生成可由服务端 ACCESS 日志回读的非秘密关联标识。 */
+function createRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `web-${crypto.randomUUID()}`
+  }
+  return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 /** 后端业务层错误(HTTP 200 + code≠0),上层按 code 映射可读提示。 */
 export class ApiError extends Error {
   readonly code: number
@@ -53,6 +61,15 @@ client.interceptors.request.use(async (config) => {
   const isAuthEndpoint = AUTH_ENDPOINTS_EXCLUDED_FROM_401_HANDLING.some((path) =>
     url.includes(path),
   )
+
+  if (!config.headers.get('X-Request-Id')) {
+    config.headers.set('X-Request-Id', createRequestId())
+  }
+  if (import.meta.env.DEV) {
+    console.info(
+      `[requestId] request ${config.headers.get('X-Request-Id')} ${config.method?.toUpperCase() ?? 'GET'} ${config.url ?? ''}`,
+    )
+  }
 
   // 到期前刷新：只在非 auth 端点、有 token、即将到期时触发
   if (!isAuthEndpoint && getAccessToken() && isTokenNearExpiry()) {
@@ -74,7 +91,14 @@ client.interceptors.request.use(async (config) => {
 })
 
 client.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (import.meta.env.DEV) {
+      console.info(
+        `[requestId] response ${response.config.headers.get('X-Request-Id')} ${response.status}`,
+      )
+    }
+    return response
+  },
   (error: AxiosError) => {
     const url = error.config?.url ?? ''
     const isAuthEndpoint = AUTH_ENDPOINTS_EXCLUDED_FROM_401_HANDLING.some((path) =>
@@ -84,6 +108,11 @@ client.interceptors.response.use(
       unauthorizedHandler?.(window.location.pathname + window.location.search)
     } else if (!isAuthEndpoint) {
       // TODO(skeleton): 5xx / 网络层基础设施异常分级处理，对齐后端「过滤层异常分级」原则
+    }
+    if (import.meta.env.DEV && error.config) {
+      console.info(
+        `[requestId] response ${error.config.headers?.get('X-Request-Id') ?? 'missing'} ${error.response?.status ?? 'NETWORK_ERROR'}`,
+      )
     }
     return Promise.reject(error)
   },
@@ -112,7 +141,21 @@ export async function request<T>(config: Parameters<AxiosInstance['request']>[0]
     // fallthrough: 无匹配 handler → 走真实 axios
   }
 
-  const response = await client.request<ApiResponse<T>>(config)
+  const response = await client.request<ApiResponse<T>>(config).catch((error: AxiosError) => {
+    // 非 2xx（如 403/404 过滤器直出 R 结构）在 axios validateStatus 就已 reject，
+    // 统一归一为 ApiError，让上层按业务码呈现明确拒绝态而不是裸 AxiosError
+    const status = error.response?.status
+    const payload = error.response?.data as Partial<ApiResponse<unknown>> | undefined
+    const bodyCode = payload && typeof payload.code === 'number' ? payload.code : undefined
+    if (bodyCode !== undefined && bodyCode !== 0) {
+      const msg = (payload as { msg?: string } | undefined)?.msg ?? payload?.message
+      throw new ApiError(bodyCode, getErrorMessage(bodyCode, msg))
+    }
+    if (status === 403) {
+      throw new ApiError(403, getErrorMessage(403, '无权限'))
+    }
+    throw error
+  })
 
   // blob 响应（文件下载/导出）：成功时数据是 Blob 而非 R 结构。
   // 后端业务错误对 blob 请求也返回 application/json 的 R 包，需解析并走统一 ApiError 管线。
@@ -133,9 +176,11 @@ export async function request<T>(config: Parameters<AxiosInstance['request']>[0]
   }
 
   if (response.data.code !== 0) {
+    // 后端 R 包错误文案字段为 msg（部分历史端点为 message），两者都透传给兜底映射
+    const body = response.data as unknown as { msg?: string }
     throw new ApiError(
       response.data.code,
-      getErrorMessage(response.data.code, response.data.message),
+      getErrorMessage(response.data.code, body.msg ?? response.data.message),
     )
   }
   return response.data.data
