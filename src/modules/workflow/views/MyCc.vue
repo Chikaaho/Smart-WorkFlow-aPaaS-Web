@@ -24,7 +24,12 @@ const pageSize = ref(10)
 const loading = ref(false)
 const errorMsg = ref('')
 
-const filter = reactive<{ keyword: string; timeRange: [string, string] | null }>({
+const filter = reactive<{
+  processInstanceId: string
+  keyword: string
+  timeRange: [string, string] | null
+}>({
+  processInstanceId: '',
   keyword: '',
   timeRange: null,
 })
@@ -37,6 +42,7 @@ async function loadList() {
   try {
     const pageQuery: PageQuery = { pageNum: pageNum.value, pageSize: pageSize.value }
     const result = await queryMyCopies(pageQuery, {
+      processInstanceId: filter.processInstanceId.trim() || undefined,
       keyword: filter.keyword.trim() || undefined,
       timeFrom: filter.timeRange?.[0],
       timeTo: filter.timeRange?.[1],
@@ -56,6 +62,7 @@ function handleSearch() {
 }
 
 function handleReset() {
+  filter.processInstanceId = ''
   filter.keyword = ''
   filter.timeRange = null
   pageNum.value = 1
@@ -134,6 +141,13 @@ onMounted(loadList)
         start-placeholder="开始时间"
         end-placeholder="结束时间"
         style="width: 340px"
+      />
+      <el-input
+        v-model="filter.processInstanceId"
+        placeholder="流程实例ID（精确）"
+        clearable
+        style="width: 260px"
+        @keyup.enter="handleSearch"
       />
       <el-input
         v-model="filter.keyword"

@@ -4858,8 +4858,10 @@ export const mockRegistrations: MockRegistration[] = [
     handler: (_params, query) => {
       const uid = mockSessionUid()
       if (!uid) return { code: 401, message: '未认证', data: null }
+      const processInstanceId = (query.processInstanceId ?? '').trim()
       const keyword = (query.keyword ?? '').toLowerCase()
       const copies = MOCK_MY_COPIES.filter((c) => c.recipientId === uid)
+        .filter((c) => processInstanceId === '' || c.processInstanceId === processInstanceId)
         .filter((c) =>
           keyword === ''
             ? true
@@ -4868,7 +4870,10 @@ export const mockRegistrations: MockRegistration[] = [
               c.processDefKey.toLowerCase().includes(keyword),
         )
         .slice()
-        .sort((a, b) => (a.createTime < b.createTime ? 1 : -1))
+        .sort((a, b) => {
+          if (a.createTime !== b.createTime) return a.createTime < b.createTime ? 1 : -1
+          return b.id - a.id
+        })
       return { code: 0, message: 'ok', data: paginateMock(copies, query) }
     },
   },

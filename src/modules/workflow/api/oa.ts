@@ -139,13 +139,19 @@ export interface MyCopyItem {
 /** GET /workflow/my/copies — 仅本人收到的抄送（同事件去重，稳定分页）。 */
 export async function queryMyCopies(
   page: PageQuery,
-  filters: { keyword?: string; timeFrom?: string; timeTo?: string } = {},
+  filters: {
+    processInstanceId?: string
+    keyword?: string
+    timeFrom?: string
+    timeTo?: string
+  } = {},
 ): Promise<PageResult<MyCopyItem>> {
   const raw = await request<BackendPageResult<MyCopyItem>>({
     method: 'GET',
     url: '/workflow/my/copies',
     params: {
       ...page,
+      processInstanceId: filters.processInstanceId,
       keyword: filters.keyword,
       timeFrom: filters.timeFrom,
       timeTo: filters.timeTo,
