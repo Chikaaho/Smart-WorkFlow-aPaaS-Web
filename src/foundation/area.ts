@@ -108,19 +108,22 @@ export function filterMenuByArea(nodes: MenuNode[], area: Area, prefix = ''): Me
 
 /** 后台首叶（进入后台按钮的落点）；无后台页面授权时返回 null。 */
 export function firstAdminLeafPath(): string | null {
-  const found = firstAdminLeaf(useMenuStore().menu, '')
+  const found = firstAdminLeaf(useMenuStore().menu)
   return found ? `/${found}` : null
 }
 
-function firstAdminLeaf(nodes: MenuNode[], prefix: string): string | null {
+/**
+ * 返回叶子节点的原始 path（与路由注册的相对路径一致，如 'dict'、'workflow/catalog'）。
+ * 不按目录前缀组合：动态路由按菜单原始 path 扁平注册，组合路径（如 '/system/dict'）
+ * 没有对应路由，会造成「进入后台」落地 404。
+ */
+function firstAdminLeaf(nodes: MenuNode[]): string | null {
   for (const node of nodes) {
-    if (node.menuType === MenuType.MENU && nodeArea(node, prefix) === 'admin') {
-      const composed = prefix ? `${prefix}/${node.path}` : node.path
-      return composed
+    if (node.menuType === MenuType.MENU && nodeArea(node, '') === 'admin') {
+      return node.path
     }
     if (node.children?.length) {
-      const composed = prefix ? `${prefix}/${node.path}` : node.path
-      const found = firstAdminLeaf(node.children, composed)
+      const found = firstAdminLeaf(node.children)
       if (found) return found
     }
   }
