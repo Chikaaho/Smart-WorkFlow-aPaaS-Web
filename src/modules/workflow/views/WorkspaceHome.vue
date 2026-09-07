@@ -156,6 +156,12 @@ function move(component: WorkspaceComponent, delta: -1 | 1) {
   dirty.value = true
 }
 
+/** 布局宽度调整：半宽（1）↔ 整行（2），随布局持久化。 */
+function toggleSpan(component: WorkspaceComponent) {
+  component.span = component.span === 2 ? 1 : 2
+  dirty.value = true
+}
+
 function toggleFavorite(key: string) {
   const index = favoriteKeys.value.indexOf(key)
   if (index >= 0) {
@@ -208,7 +214,12 @@ onMounted(loadLayout)
     </header>
 
     <div class="workspace__grid">
-      <section v-for="component in orderedVisible" :key="component.key" class="workspace-card">
+      <section
+        v-for="component in orderedVisible"
+        :key="component.key"
+        class="workspace-card"
+        :class="{ 'workspace-card--wide': component.span === 2 }"
+      >
         <h3 class="workspace-card__title">{{ COMPONENT_TITLES[component.key] }}</h3>
 
         <template v-if="component.key === 'todo'">
@@ -279,6 +290,9 @@ onMounted(loadLayout)
         >
           <el-switch v-model="component.visible" @change="toggleVisible(component)" />
           <span class="config-list__name">{{ COMPONENT_TITLES[component.key] }}</span>
+          <el-button size="small" @click="toggleSpan(component)">
+            {{ component.span === 2 ? '半宽' : '整行' }}
+          </el-button>
           <el-button size="small" :disabled="component.order <= 1" @click="move(component, -1)"
             >上移</el-button
           >
@@ -338,6 +352,9 @@ onMounted(loadLayout)
   border: 1px solid var(--el-border-color-light);
   border-radius: 6px;
   box-shadow: var(--sw-shadow-card, 0 1px 8px rgba(0, 0, 0, 0.04));
+}
+.workspace-card--wide {
+  grid-column: 1 / -1;
 }
 .workspace-card__title {
   margin: 0 0 10px;

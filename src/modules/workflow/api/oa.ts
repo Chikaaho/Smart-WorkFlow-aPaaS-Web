@@ -67,6 +67,11 @@ export async function listCategories(): Promise<CatalogCategory[]> {
   return request<CatalogCategory[]>({ method: 'GET', url: '/workflow/categories' })
 }
 
+/** GET /workflow/catalog/categories — 普通视角分类列表（登录即可用，仅名称/排序）。 */
+export async function listPortalCategories(): Promise<CatalogCategory[]> {
+  return request<CatalogCategory[]>({ method: 'GET', url: '/workflow/catalog/categories' })
+}
+
 /** POST /workflow/categories — 新建分类。 */
 export async function createCategory(req: CategorySaveReq): Promise<CatalogCategory> {
   return request<CatalogCategory>({ method: 'POST', url: '/workflow/categories', data: req })

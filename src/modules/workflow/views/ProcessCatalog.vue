@@ -10,7 +10,7 @@ import { useRouter } from 'vue-router'
 import {
   queryCatalogItems,
   queryCategoryCounts,
-  listCategories,
+  listPortalCategories,
   type CatalogItem,
   type CatalogCategory,
 } from '@/modules/workflow/api/oa'
@@ -54,7 +54,7 @@ async function loadCatalog() {
           categoryId: activeCategory.value === '' ? undefined : Number(activeCategory.value),
         },
       ),
-      listCategories(),
+      listPortalCategories(),
     ])
     items.value = page.list
     total.value = page.total

@@ -29,17 +29,18 @@ export interface CategorySaveReq {
   sortNo?: number
 }
 
-/** 分类聚合数量：categoryId → 可见事项数（未分类不在其中）。 */
+/** 分类聚合数量：categoryId → 可见事项数（未分类归入 key "0"）。 */
 export type CategoryCounts = Record<string, number>
 
 /** 工作台组件键（v0.0.2 首批四组件）。 */
 export type WorkspaceComponentKey = 'todo' | 'myInitiated' | 'cc' | 'favoriteItems'
 
-/** 工作台组件配置项。 */
+/** 工作台组件配置项。span 为布局宽度：1=半宽（默认），2=整行。 */
 export interface WorkspaceComponent {
   key: WorkspaceComponentKey
   visible: boolean
   order: number
+  span?: number
 }
 
 /** 工作台布局。 */
