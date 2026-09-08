@@ -63,7 +63,7 @@ async function onSubmit(): Promise<void> {
 <template>
   <div class="login-page">
     <form class="login-page__form" @submit.prevent="onSubmit">
-      <h1>Smart-WorkFlow</h1>
+      <h1>CH-aPaaS</h1>
       <label>
         用户名
         <input v-model="username" type="text" autocomplete="username" required />
