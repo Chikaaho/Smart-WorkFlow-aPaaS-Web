@@ -72,7 +72,7 @@ const MENU_TREE: MenuNode[] = [
             component: null,
             sort: 1,
             menuType: 2,
-            permission: 'system:user:add',
+            permission: 'system:user:create',
             hidden: true,
           },
           {
@@ -84,7 +84,7 @@ const MENU_TREE: MenuNode[] = [
             component: null,
             sort: 2,
             menuType: 2,
-            permission: 'system:user:edit',
+            permission: 'system:user:update',
             hidden: true,
           },
         ],

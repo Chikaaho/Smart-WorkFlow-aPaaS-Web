@@ -18,6 +18,7 @@ import {
   deleteRole,
   getRoleMenus,
   updateRoleMenus,
+  getRoleMembers,
 } from '@/modules/system/api/role'
 import { loadMenu } from '@/foundation/menu'
 import type { MenuNode } from '@/contracts/menu'
@@ -25,6 +26,9 @@ import { listDeptTree } from '@/modules/system/api/dept'
 import type { SysRole, RoleFilter } from '@/modules/system/types/role'
 import type { SysDept } from '@/modules/system/types/dept'
 import type { PageQuery } from '@/contracts/common'
+import { hasPerm } from '@/foundation/permission'
+import { updateUserRoles, pageUsers, getUserRoles } from '@/modules/system/api/user'
+import type { SysUser } from '@/modules/system/types/user'
 import {
   StandardListTemplate,
   StandardFormTemplate,
@@ -161,6 +165,105 @@ function handleDeptTreeCheck() {
 }
 
 // ─── 弹窗状态 ───
+
+// ─── 成员维护弹窗（I1：角色成员反向视图） ───
+
+const membersDialogVisible = ref(false)
+const membersRole = ref<SysRole | null>(null)
+const members = ref<SysUser[]>([])
+const membersTotal = ref(0)
+const membersPageNum = ref(1)
+const membersPageSize = ref(10)
+const membersLoading = ref(false)
+const membersError = ref('')
+const candidateUser = ref('')
+const candidateOptions = ref<SysUser[]>([])
+
+function openMembers(row: SysRole) {
+  membersRole.value = row
+  membersPageNum.value = 1
+  membersDialogVisible.value = true
+  void loadMembers()
+  void loadCandidates()
+}
+
+async function loadMembers() {
+  if (!membersRole.value?.id) return
+  membersLoading.value = true
+  membersError.value = ''
+  try {
+    const result = await getRoleMembers(membersRole.value.id, {
+      pageNum: membersPageNum.value,
+      pageSize: membersPageSize.value,
+    })
+    members.value = result.list
+    membersTotal.value = result.total
+  } catch (err) {
+    membersError.value = err instanceof ApiError ? err.msg : '加载角色成员失败'
+  } finally {
+    membersLoading.value = false
+  }
+}
+
+async function loadCandidates(keyword = '') {
+  try {
+    const result = await pageUsers({ pageNum: 1, pageSize: 50 }, { username: keyword, status: 0 })
+    candidateOptions.value = result.list
+  } catch {
+    candidateOptions.value = []
+  }
+}
+
+/** 添加成员：读取用户现有角色，追加本角色后整量写回 */
+async function addMember(user: SysUser) {
+  if (!membersRole.value?.id || !user.id) return
+  try {
+    const existing = await getUserRoles(user.id)
+    if (existing.includes(membersRole.value.id)) {
+      ElMessage.info('该用户已是本角色成员')
+      return
+    }
+    await updateUserRoles(user.id, [...existing, membersRole.value.id])
+    ElMessage.success('成员已添加')
+    candidateUser.value = ''
+    await loadMembers()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '添加成员失败')
+  }
+}
+
+/** 移除成员：读取用户现有角色，剔除本角色后整量写回 */
+async function removeMember(user: SysUser) {
+  if (!membersRole.value?.id || !user.id) return
+  try {
+    await ElMessageBox.confirm(`确定将该用户移出角色"${membersRole.value.name}"吗？`, '移除确认', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  try {
+    const existing = await getUserRoles(user.id)
+    await updateUserRoles(
+      user.id,
+      existing.filter((id) => id !== membersRole.value!.id),
+    )
+    ElMessage.success('成员已移除')
+    await loadMembers()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '移除成员失败')
+  }
+}
+
+// el-table row slot 的 DefaultRow 类型不与 SysRole/SysUser 兼容，通过包装函数桥接。
+function openMembersRow(r: unknown) {
+  openMembers(r as SysRole)
+}
+function removeMemberRow(r: unknown) {
+  removeMember(r as SysUser)
+}
 
 const dialogVisible = ref(false)
 const dialogTitle = computed(() => (editingId.value ? '编辑角色' : '新建角色'))
@@ -358,7 +461,9 @@ onMounted(loadList)
   >
     <!-- 工具栏：新建按钮 -->
     <template #toolbar-actions>
-      <el-button type="primary" @click="openCreate">新建角色</el-button>
+      <el-button v-perm="'system:role:create'" type="primary" @click="openCreate"
+        >新建角色</el-button
+      >
     </template>
 
     <!-- 筛选区 -->
@@ -414,8 +519,16 @@ onMounted(loadList)
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="220" fixed="right">
         <template #default="{ row }">
+          <el-button
+            v-if="hasPerm('system:role:list')"
+            size="small"
+            link
+            type="primary"
+            @click="openMembersRow(row)"
+            >成员</el-button
+          >
           <el-button
             size="small"
             link
@@ -438,7 +551,9 @@ onMounted(loadList)
 
     <!-- 空态操作 -->
     <template #empty-action>
-      <el-button type="primary" @click="openCreate">新建角色</el-button>
+      <el-button v-perm="'system:role:create'" type="primary" @click="openCreate"
+        >新建角色</el-button
+      >
     </template>
   </StandardListTemplate>
 
@@ -563,6 +678,61 @@ onMounted(loadList)
         >
       </template>
     </StandardFormTemplate>
+  </el-dialog>
+  <!-- 成员维护弹窗（I1） -->
+  <el-dialog
+    v-model="membersDialogVisible"
+    :title="`角色成员：${membersRole?.name ?? ''}`"
+    width="640px"
+  >
+    <el-alert
+      v-if="membersError"
+      :title="membersError"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    />
+    <div style="display: flex; gap: 8px; margin-bottom: 12px">
+      <el-select
+        v-model="candidateUser"
+        filterable
+        remote
+        clearable
+        placeholder="搜索用户名添加成员"
+        :remote-method="loadCandidates"
+        style="flex: 1"
+      >
+        <el-option
+          v-for="user in candidateOptions"
+          :key="user.id"
+          :label="user.realName ? `${user.realName}（${user.username}）` : user.username"
+          :value="user.id ?? ''"
+        />
+      </el-select>
+      <el-button
+        type="primary"
+        :disabled="!candidateUser"
+        @click="addMember(candidateOptions.find((u) => u.id === candidateUser)!)"
+        >添加</el-button
+      >
+    </div>
+    <el-table v-loading="membersLoading" :data="members" stripe size="small">
+      <el-table-column prop="username" label="用户名" min-width="120" />
+      <el-table-column prop="realName" label="姓名" min-width="100" />
+      <el-table-column label="操作" width="90">
+        <template #default="{ row }">
+          <el-button size="small" link type="danger" @click="removeMemberRow(row)">移除</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+    <el-pagination
+      v-model:current-page="membersPageNum"
+      v-model:page-size="membersPageSize"
+      layout="total, prev, pager, next"
+      :total="membersTotal"
+      @current-change="loadMembers"
+    />
   </el-dialog>
 </template>
 

@@ -7,7 +7,12 @@
  */
 import { request } from '@/foundation/request'
 import type { PageQuery, PageResult } from '@/contracts/common'
-import type { SysUser, UserFormRequest, UserFilter } from '@/modules/system/types/user'
+import type {
+  SysUser,
+  UserFormRequest,
+  UserFilter,
+  PostAssociation,
+} from '@/modules/system/types/user'
 
 // ─── 后端分页原始形状 ───
 
@@ -92,10 +97,33 @@ export async function updateUserRoles(id: string, roleIds: string[]): Promise<vo
   return request<void>({ method: 'PUT', url: `/system/user/${id}/roles`, data: roleIds })
 }
 
-export async function getUserPosts(id: string): Promise<string[]> {
-  return request<string[]>({ method: 'GET', url: `/system/user/${id}/posts` })
+/** 后端岗位任职原始形状（{postId, deptId} 数字对） */
+interface BackendPostAssignment {
+  postId: number | string
+  deptId?: number | string | null
 }
 
-export async function updateUserPosts(id: string, postIds: string[]): Promise<void> {
-  return request<void>({ method: 'PUT', url: `/system/user/${id}/posts`, data: postIds })
+function toPostAssociation(raw: BackendPostAssignment): PostAssociation {
+  return {
+    postId: String(raw.postId),
+    ...(raw.deptId === undefined || raw.deptId === null ? {} : { deptId: String(raw.deptId) }),
+  }
+}
+
+/** GET /system/user/{id}/posts → 岗位任职（含任职部门，I1 契约） */
+export async function getUserPosts(id: string): Promise<PostAssociation[]> {
+  const raw = await request<BackendPostAssignment[]>({
+    method: 'GET',
+    url: `/system/user/${id}/posts`,
+  })
+  return raw.map(toPostAssociation)
+}
+
+/** PUT /system/user/{id}/posts：整量替换任职；deptId 缺省后端回落用户主部门 */
+export async function updateUserPosts(id: string, posts: PostAssociation[]): Promise<void> {
+  const body = posts.map((item) => ({
+    postId: Number(item.postId),
+    ...(item.deptId === undefined ? {} : { deptId: Number(item.deptId) }),
+  }))
+  return request<void>({ method: 'PUT', url: `/system/user/${id}/posts`, data: body })
 }

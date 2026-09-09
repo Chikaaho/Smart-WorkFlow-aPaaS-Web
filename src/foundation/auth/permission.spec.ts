@@ -46,7 +46,7 @@ describe('hasPerm authorization chain（D143 等价自动化）', () => {
     mockSession.superAdmin = true
     // 即使 permissions 为空，superadmin 也应通过所有检查
     expect(hasPerm('agent:model:view')).toBe(true)
-    expect(hasPerm('system:user:add')).toBe(true)
+    expect(hasPerm('system:user:create')).toBe(true)
     expect(hasPerm('any:arbitrary:code')).toBe(true)
   })
 

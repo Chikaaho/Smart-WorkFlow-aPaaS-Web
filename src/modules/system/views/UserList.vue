@@ -7,7 +7,7 @@
  * 新建/编辑走 el-dialog 内嵌 StandardFormTemplate + 手写控件（高代码轨）。
  * 密码字段仅在新建模式显示（v-if="!editingId"）。
  */
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import {
@@ -27,8 +27,14 @@ import { pagePosts } from '@/modules/system/api/post'
 import type { SysRole } from '@/modules/system/types/role'
 import type { SysDept } from '@/modules/system/types/dept'
 import type { SysPost } from '@/modules/system/types/post'
-import type { SysUser, UserFormRequest, UserFilter } from '@/modules/system/types/user'
+import type {
+  SysUser,
+  UserFormRequest,
+  UserFilter,
+  PostAssociation,
+} from '@/modules/system/types/user'
 import type { PageQuery } from '@/contracts/common'
+import { hasPerm } from '@/foundation/permission'
 import {
   SYS_USER_STATUS,
   userStatusOptions,
@@ -110,8 +116,28 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
 const roleOptions = ref<SysRole[]>([])
 const roleIds = ref<string[]>([])
 const postOptions = ref<SysPost[]>([])
+/** 岗位任职勾选（postId 集合）+ 各岗位任职部门（缺省 = 用户主部门，I1） */
 const postIds = ref<string[]>([])
+const postDeptMap = reactive<Record<string, string>>({})
 const deptOptions = ref<SysDept[]>([])
+
+/** 勾选岗位时预填任职部门为当前表单主部门；取消勾选时清除映射 */
+watch(postIds, (ids) => {
+  const keys = ids.map(String)
+  keys.forEach((key) => {
+    if (!(key in postDeptMap)) postDeptMap[key] = form.deptId ?? ''
+  })
+  Object.keys(postDeptMap).forEach((key) => {
+    if (!keys.includes(key)) delete postDeptMap[key]
+  })
+})
+
+function toPostPayload(): PostAssociation[] {
+  return postIds.value.map((postId) => ({
+    postId,
+    ...(postDeptMap[postId] ? { deptId: postDeptMap[postId] } : {}),
+  }))
+}
 
 async function loadRoleOptions() {
   try {
@@ -165,6 +191,7 @@ function resetForm() {
   formError.value = ''
   roleIds.value = []
   postIds.value = []
+  Object.keys(postDeptMap).forEach((key) => delete postDeptMap[key])
 }
 
 function openCreate() {
@@ -186,7 +213,11 @@ async function openEdit(row: SysUser) {
     form.status = detail.status
     form.deptId = detail.deptId ?? ''
     roleIds.value = await getUserRoles(row.id!)
-    postIds.value = await getUserPosts(row.id!)
+    const associations = await getUserPosts(row.id!)
+    postIds.value = associations.map((item) => item.postId)
+    associations.forEach((item) => {
+      if (item.deptId) postDeptMap[item.postId] = item.deptId
+    })
     // 编辑模式不设置 plainPassword
   } catch {
     formError.value = '加载用户详情失败'
@@ -215,12 +246,12 @@ async function handleSubmit() {
       void _
       await updateUser({ ...updateData, id: editingId.value })
       await updateUserRoles(editingId.value, roleIds.value)
-      await updateUserPosts(editingId.value, postIds.value)
+      await updateUserPosts(editingId.value, toPostPayload())
       ElMessage.success('更新成功')
     } else {
       const id = await createUser({ ...form })
       await updateUserRoles(id, roleIds.value)
-      await updateUserPosts(id, postIds.value)
+      await updateUserPosts(id, toPostPayload())
       ElMessage.success('创建成功')
     }
     closeDialog()
@@ -282,7 +313,9 @@ onMounted(loadList)
   >
     <!-- 工具栏：新建按钮 -->
     <template #toolbar-actions>
-      <el-button type="primary" @click="openCreate">新建用户</el-button>
+      <el-button v-perm="'system:user:create'" type="primary" @click="openCreate"
+        >新建用户</el-button
+      >
     </template>
 
     <!-- 筛选区 -->
@@ -336,15 +369,31 @@ onMounted(loadList)
       </el-table-column>
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editRow(row)">编辑</el-button>
-          <el-button size="small" link type="danger" @click="deleteRow(row)">删除</el-button>
+          <el-button
+            v-if="hasPerm('system:user:update')"
+            size="small"
+            link
+            type="primary"
+            @click="editRow(row)"
+            >编辑</el-button
+          >
+          <el-button
+            v-if="hasPerm('system:user:delete')"
+            size="small"
+            link
+            type="danger"
+            @click="deleteRow(row)"
+            >删除</el-button
+          >
         </template>
       </el-table-column>
     </el-table>
 
     <!-- 空态操作 -->
     <template #empty-action>
-      <el-button type="primary" @click="openCreate">新建用户</el-button>
+      <el-button v-perm="'system:user:create'" type="primary" @click="openCreate"
+        >新建用户</el-button
+      >
     </template>
   </StandardListTemplate>
 
@@ -416,11 +465,26 @@ onMounted(loadList)
             </el-select>
           </div>
           <div class="form-field">
-            <label class="form-field__label">岗位</label>
+            <label class="form-field__label">岗位（任职部门）</label>
             <el-checkbox-group v-model="postIds">
-              <el-checkbox v-for="post in postOptions" :key="post.id" :value="post.id">{{
-                post.name
-              }}</el-checkbox>
+              <div v-for="post in postOptions" :key="post.id" class="post-row">
+                <el-checkbox :value="post.id">{{ post.name }}</el-checkbox>
+                <el-select
+                  v-if="postIds.includes(post.id!)"
+                  v-model="postDeptMap[post.id!]"
+                  placeholder="任职部门（默认主部门）"
+                  clearable
+                  size="small"
+                  style="width: 200px"
+                >
+                  <el-option
+                    v-for="dept in deptOptions"
+                    :key="dept.id"
+                    :label="dept.name"
+                    :value="dept.id ?? ''"
+                  />
+                </el-select>
+              </div>
             </el-checkbox-group>
           </div>
           <div class="form-field">

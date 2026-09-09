@@ -2089,7 +2089,8 @@ export const mockRegistrations: MockRegistration[] = [
           }
           list = list.filter((u) => children.has(u.deptId))
         }
-        if (f.postId) list = list.filter((u) => u.postIds?.includes(String(f.postId)))
+        if (f.postId)
+          list = list.filter((u) => (u.posts ?? []).some((p) => p.postId === String(f.postId)))
         if (f.roleId) list = list.filter((u) => u.roleIds?.includes(String(f.roleId)))
       }
       const total = list.length
@@ -2124,7 +2125,14 @@ export const mockRegistrations: MockRegistration[] = [
         status: Number(data.status ?? 0),
         deptId: String(data.deptId ?? ''),
         roleIds: Array.isArray(data.roleIds) ? data.roleIds.map(String) : [],
-        postIds: Array.isArray(data.postIds) ? data.postIds.map(String) : [],
+        posts: (Array.isArray(data.posts)
+          ? data.posts.map((item: { postId: unknown; deptId?: unknown }) => ({
+              postId: String(item.postId),
+              ...(item.deptId === undefined || item.deptId === null
+                ? {}
+                : { deptId: String(item.deptId) }),
+            }))
+          : []) as { postId: string; deptId?: string }[],
         isAdmin: false,
         avatar: null,
         createTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
@@ -2152,7 +2160,14 @@ export const mockRegistrations: MockRegistration[] = [
         status: data.status !== undefined ? Number(data.status) : existing.status,
         deptId: data.deptId !== undefined ? String(data.deptId) : existing.deptId,
         roleIds: Array.isArray(data.roleIds) ? data.roleIds.map(String) : existing.roleIds,
-        postIds: Array.isArray(data.postIds) ? data.postIds.map(String) : existing.postIds,
+        posts: (Array.isArray(data.posts)
+          ? data.posts.map((item: { postId: unknown; deptId?: unknown }) => ({
+              postId: String(item.postId),
+              ...(item.deptId === undefined || item.deptId === null
+                ? {}
+                : { deptId: String(item.deptId) }),
+            }))
+          : existing.posts) as typeof existing.posts,
         updateTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
       }
       return { code: 0, message: 'ok', data: null }
@@ -2202,8 +2217,13 @@ export const mockRegistrations: MockRegistration[] = [
       const user = MOCK_USERS_LIST.find(
         (u) => u.id === String((params as Record<string, string>).id),
       )
+      // I1 契约：岗位任职为 {postId, deptId?} 对象数组
+      const associations = (user?.posts ?? []).map((item) => ({
+        postId: item.postId,
+        ...(item.deptId ? { deptId: item.deptId } : {}),
+      })) as Array<{ postId: string; deptId?: string }>
       return user
-        ? { code: 0, message: 'ok', data: [...(user.postIds ?? [])] }
+        ? { code: 0, message: 'ok', data: associations }
         : { code: 404, message: '用户不存在', data: null }
     },
   },
@@ -2215,7 +2235,16 @@ export const mockRegistrations: MockRegistration[] = [
         (u) => u.id === String((params as Record<string, string>).id),
       )
       if (!user) return { code: 404, message: '用户不存在', data: null }
-      user.postIds = Array.isArray(body) ? body.map(String) : []
+      user.posts = (
+        Array.isArray(body)
+          ? body.map((item: { postId: unknown; deptId?: unknown }) => ({
+              postId: String(item.postId),
+              ...(item.deptId === undefined || item.deptId === null
+                ? {}
+                : { deptId: String(item.deptId) }),
+            }))
+          : []
+      ) as typeof user.posts
       return { code: 0, message: 'ok', data: null }
     },
   },
@@ -2524,6 +2553,30 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
+  // GET /api/system/role/:id/users → R<PageResult<SysUser>>（I1 角色成员反向视图）
+  // 真实后端：sys_user_role 绑定关系的分页视图；按 id 升序；role 无成员返回空页。
+  {
+    method: 'GET',
+    pattern: '/api/system/role/:id/users',
+    handler: (params, query) => {
+      const id = String((params as Record<string, string>).id)
+      const pageNum = Math.max(Number(query.pageNum ?? 1) || 1, 1)
+      const pageSize = Math.max(Number(query.pageSize ?? 10) || 10, 1)
+      const members = MOCK_USERS_LIST.filter((u) => (u.roleIds ?? []).includes(id))
+      const start = (pageNum - 1) * pageSize
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          records: members.slice(start, start + pageSize),
+          total: members.length,
+          pageNum,
+          pageSize,
+        },
+      }
+    },
+  },
+
   // ── 部门管理 CRUD ──────────────────────────────────────────
   {
     method: 'GET',
@@ -2590,10 +2643,13 @@ export const mockRegistrations: MockRegistration[] = [
         code: String(data.code ?? ''),
         sort: Number(data.sort ?? 0),
         status: Number(data.status ?? 0),
+        ...(data.leaderId === undefined || data.leaderId === null || data.leaderId === ''
+          ? {}
+          : { leaderId: String(data.leaderId) }),
         createTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
         updateTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
       }
-      MOCK_DEPTS_LIST.push(newDept as (typeof MOCK_DEPTS_LIST)[number])
+      MOCK_DEPTS_LIST.push(newDept as unknown as (typeof MOCK_DEPTS_LIST)[number])
       return { code: 0, message: 'ok', data: id }
     },
   },
@@ -2612,8 +2668,12 @@ export const mockRegistrations: MockRegistration[] = [
         code: String(data.code ?? existing.code),
         sort: data.sort !== undefined ? Number(data.sort) : existing.sort,
         status: data.status !== undefined ? Number(data.status) : existing.status,
+        leaderId:
+          data.leaderId === undefined || data.leaderId === null || data.leaderId === ''
+            ? undefined
+            : String(data.leaderId),
         updateTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      }
+      } as (typeof MOCK_DEPTS_LIST)[number]
       return { code: 0, message: 'ok', data: null }
     },
   },

@@ -114,8 +114,8 @@ describe('foundation/mock 会话与 /auth/menus 角色过滤', () => {
     expect(me!.data.superAdmin).toBe(false)
     // 权限集合 = admin 绑定（MOCK_ROLE_MENU_BINDINGS['2']）中的按钮行（menu_type=2）permission
     // （与真实后端契约一致：仅按钮行进入 permissions，页面/目录 permission 不入集合）
-    expect(me!.data.permissions).toContain('system:user:add')
-    expect(me!.data.permissions).toContain('system:role:edit')
+    expect(me!.data.permissions).toContain('system:user:create')
+    expect(me!.data.permissions).toContain('system:role:update')
     // 与超管会话完全区分：role 码集合不同，permissions 也不等于超管固定全量
     expect(me!.data.roles).not.toContain('superadmin')
     expect(MOCK_SESSION_DATA.roles).toEqual(['superadmin'])
@@ -206,7 +206,7 @@ describe('foundation/mock 会话与 /auth/menus 角色过滤', () => {
     // 权限装配与菜单挂载分离（真实后端对称：loadPermissions 不过滤父链）——
     // 「菜单不可见」与「按钮权限存在」各自有证据，不互相掩盖
     const me = await mock<typeof MOCK_SESSION_DATA>('GET', '/system/auth/me')
-    expect(me!.data.permissions).toEqual(['system:user:add'])
+    expect(me!.data.permissions).toEqual(['system:user:create'])
   })
 
   it('过滤后同层按 sort 升序（与后端 Comparator 一致）', async () => {
@@ -246,7 +246,7 @@ describe('foundation/mock 会话与 /auth/menus 角色过滤', () => {
     switchMockSession('user')
     MOCK_ROLE_MENU_BINDINGS['3'] = [1, 11, 110]
     const me = await mock<typeof MOCK_SESSION_DATA>('GET', '/system/auth/me')
-    expect(me!.data.permissions).toEqual(['system:user:add']) // 按钮 110 的 permission
+    expect(me!.data.permissions).toEqual(['system:user:create']) // 按钮 110 的 permission
     const menus = await mock<MockMenuNode[]>('GET', '/system/auth/menus')
     const ids = collectIds(menus!.data ?? [])
     expect(ids).toEqual(['1', '11', '110'])

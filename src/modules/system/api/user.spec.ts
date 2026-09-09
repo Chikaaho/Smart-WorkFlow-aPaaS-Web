@@ -136,11 +136,9 @@ describe('modules/system/api/user — 用户管理 7 个', () => {
   })
 
   it('岗位和角色关系端点：按用户读取并替换，支持清空数组', async () => {
-    mockRequest.mockResolvedValue(undefined)
+    mockRequest.mockResolvedValueOnce([])
     await getUserRoles('1')
     await updateUserRoles('1', [])
-    await getUserPosts('1')
-    await updateUserPosts('1', [])
     expect(mockRequest).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ method: 'GET', url: '/system/user/1/roles' }),
@@ -149,13 +147,27 @@ describe('modules/system/api/user — 用户管理 7 个', () => {
       2,
       expect.objectContaining({ method: 'PUT', url: '/system/user/1/roles', data: [] }),
     )
+  })
+
+  // I1 契约：岗位任职为 {postId, deptId} 对象数组，API 层做 number↔string 防腐
+  it('getUserPosts/updateUserPosts：岗位任职含任职部门，双向防腐转换', async () => {
+    mockRequest.mockResolvedValueOnce([
+      { postId: 1, deptId: 2 },
+      { postId: '3' },
+      { postId: 4, deptId: null },
+    ])
+    const posts = await getUserPosts('1')
+    expect(posts).toEqual([{ postId: '1', deptId: '2' }, { postId: '3' }, { postId: '4' }])
+
+    mockRequest.mockResolvedValueOnce(undefined)
+    await updateUserPosts('1', [{ postId: '1', deptId: '2' }, { postId: '2' }])
     expect(mockRequest).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({ method: 'GET', url: '/system/user/1/posts' }),
-    )
-    expect(mockRequest).toHaveBeenNthCalledWith(
-      4,
-      expect.objectContaining({ method: 'PUT', url: '/system/user/1/posts', data: [] }),
+      2,
+      expect.objectContaining({
+        method: 'PUT',
+        url: '/system/user/1/posts',
+        data: [{ postId: 1, deptId: 2 }, { postId: 2 }],
+      }),
     )
   })
 })

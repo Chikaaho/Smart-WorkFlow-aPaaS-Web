@@ -7,6 +7,7 @@
 import { request } from '@/foundation/request'
 import type { PageQuery, PageResult } from '@/contracts/common'
 import type { SysRole, RoleFilter } from '@/modules/system/types/role'
+import type { SysUser } from '@/modules/system/types/user'
 
 // ─── 后端分页原始形状 ───
 
@@ -86,4 +87,14 @@ export async function updateRoleMenus(id: string, menuIds: string[]): Promise<vo
     url: `/system/role/${id}/menus`,
     data: toNumberArray(menuIds),
   })
+}
+
+/** GET /system/role/{id}/users → 角色成员分页（成员维护反向视图，I1） */
+export async function getRoleMembers(id: string, page: PageQuery): Promise<PageResult<SysUser>> {
+  const raw = await request<BackendPageResult<SysUser>>({
+    method: 'GET',
+    url: `/system/role/${id}/users`,
+    params: page,
+  })
+  return adaptPage(raw)
 }

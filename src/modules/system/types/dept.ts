@@ -13,6 +13,10 @@ export interface SysDept {
   code: string
   sort?: number
   status?: number
+  /** 部门负责人用户 ID（I1；流程按部门负责人选人经组织权威解析） */
+  leaderId?: string
+  /** 前端回显用：负责人姓名（页面从用户候选解析注入，后端不返回） */
+  leaderName?: string
   /** 审计字段 */
   createTime?: string
   updateTime?: string
