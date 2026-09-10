@@ -6,6 +6,8 @@ import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
 export interface FormDefDTO {
   formKey: string
   formName: string
+  /** 表单 ID（I2：列表配置/生命周期端点按 id 寻址）。 */
+  id?: string
 }
 
 /** 后端分页响应原始形状:字段名为 records(区别于前端契约的 list)。 */

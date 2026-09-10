@@ -9,6 +9,8 @@ import BoolConfig from './config/BoolConfig.vue'
 import DictConfig from './config/DictConfig.vue'
 import ReferenceConfig from './config/ReferenceConfig.vue'
 import OaFieldConfig from './config/OaFieldConfig.vue'
+import FormulaConfig from './config/FormulaConfig.vue'
+import DatasourceConfig from './config/DatasourceConfig.vue'
 
 /**
  * 字段类型注册表（设计器扩展插槽 · 单一数据源）。
@@ -138,6 +140,49 @@ export const FIELD_TYPE_REGISTRY: readonly FieldTypeDescriptor[] = [
     icon: 'InfoFilled',
     createDefault: (name) => ({ ...baseField('LABEL', name, '说明文字') }) as FormSchemaField,
     configComponent: OaFieldConfig,
+  },
+  // ══════ I2 低代码表单收口 ══════
+  {
+    type: 'TIME',
+    label: '时间',
+    icon: 'Clock',
+    createDefault: (name) => ({ ...baseField('TIME', name, '时间') }) as FormSchemaField,
+    configComponent: OaFieldConfig,
+  },
+  {
+    type: 'USER',
+    label: '人员选择',
+    icon: 'User',
+    createDefault: (name) => ({ ...baseField('USER', name, '人员选择') }) as FormSchemaField,
+    configComponent: OaFieldConfig,
+  },
+  {
+    type: 'DEPT',
+    label: '部门选择',
+    icon: 'OfficeBuilding',
+    createDefault: (name) => ({ ...baseField('DEPT', name, '部门选择') }) as FormSchemaField,
+    configComponent: OaFieldConfig,
+  },
+  {
+    type: 'FORMULA',
+    label: '公式',
+    icon: 'Coin',
+    // FORMULA 必带 expression；正式值由服务端重算，客户端值不消费。
+    createDefault: (name) =>
+      ({ ...baseField('FORMULA', name, '公式'), expression: '' }) as FormSchemaField,
+    configComponent: FormulaConfig,
+  },
+  {
+    type: 'DATASOURCE',
+    label: '外部数据',
+    icon: 'Link',
+    // DATASOURCE 必带 dsBinding 稳定标识；SQL/密钥只存服务端契约注册表。
+    createDefault: (name) =>
+      ({
+        ...baseField('DATASOURCE', name, '外部数据'),
+        dsBinding: { queryKey: '', valueField: '', displayField: '' },
+      }) as FormSchemaField,
+    configComponent: DatasourceConfig,
   },
 ]
 

@@ -171,6 +171,15 @@ export const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    // I2 移动 Web 表单入口：同一表单契约、同一服务端校验与权限，
+    // 移动视口响应式重排（不删字段、不放宽校验）；不承担表单设计。
+    // 顶层独立路由：不进桌面 BasicLayout（侧边栏/顶栏），375px 视口下单列满宽。
+    path: '/m/form/:formKey',
+    name: 'mobile-form-render',
+    component: () => import('@/modules/form/views/MobileFormRender.vue'),
+    meta: { title: '移动填报' },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/views/LoginPage.vue'),

@@ -30,6 +30,11 @@ import MultiSelectControl from './dynamic-field-controls/MultiSelectControl.vue'
 import AttachmentControl from './dynamic-field-controls/AttachmentControl.vue'
 import LabelControl from './dynamic-field-controls/LabelControl.vue'
 import PlaceholderControl from './dynamic-field-controls/PlaceholderControl.vue'
+import TimeControl from './dynamic-field-controls/TimeControl.vue'
+import UserControl from './dynamic-field-controls/UserControl.vue'
+import DeptControl from './dynamic-field-controls/DeptControl.vue'
+import FormulaControl from './dynamic-field-controls/FormulaControl.vue'
+import DatasourceControl from './dynamic-field-controls/DatasourceControl.vue'
 
 /** 控件渲染入参：主渲染传 FormSchemaField，子表单元格传 TableSubField（宽度对齐）。 */
 export type DynamicFieldSchema = FormSchemaField | TableSubField
@@ -77,6 +82,12 @@ export const DYNAMIC_FIELD_REGISTRY: DynamicFieldDescriptor[] = [
   { type: 'ATTACHMENT', component: AttachmentControl, subFieldComponent: AttachmentControl },
   { type: 'IMAGE', component: AttachmentControl, subFieldComponent: AttachmentControl },
   { type: 'LABEL', component: LabelControl, subFieldComponent: LabelControl },
+  // I2 低代码表单收口
+  { type: 'TIME', component: TimeControl, subFieldComponent: TimeControl },
+  { type: 'USER', component: UserControl, subFieldComponent: UserControl },
+  { type: 'DEPT', component: DeptControl, subFieldComponent: DeptControl },
+  { type: 'FORMULA', component: FormulaControl, subFieldComponent: null },
+  { type: 'DATASOURCE', component: DatasourceControl, subFieldComponent: DatasourceControl },
 ]
 
 /** 按 type 取描述符；取不到返回 undefined（主渲染链不渲染 = 消费方兜底）。 */

@@ -26,6 +26,10 @@ export interface FieldPatch {
   options?: string[]
   /** LABEL 说明正文（v0.0.2 契约已落 LabelField.text）。 */
   text?: string
+  /** I2 FORMULA 表达式（服务端重算，客户端值不消费）。 */
+  expression?: string
+  /** I2 DATASOURCE 稳定绑定标识（SQL/密钥只存服务端契约注册表）。 */
+  dsBinding?: import('@/contracts/form-schema').DatasourceField['dsBinding']
 }
 
 /**

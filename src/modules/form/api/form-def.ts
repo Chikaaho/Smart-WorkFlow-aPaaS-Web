@@ -10,7 +10,7 @@ import type { PageQuery, PageResult } from '@/contracts/common'
  */
 
 /** 后端 sw_form_def 记录状态。 */
-export type FormDefStatus = 'DRAFT' | 'PUBLISHED'
+export type FormDefStatus = 'DRAFT' | 'PUBLISHED' | 'DISABLED'
 
 /** 建草稿请求体。 */
 export interface FormCreateReq {
