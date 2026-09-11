@@ -7,7 +7,14 @@
 
 export type BpmNodeCategory = 'EVENT' | 'TASK' | 'GATEWAY' | 'OTHER'
 
-export type ParticipantStrategy = 'FIXED_USER' | 'ROLE' | 'EXPRESSION' | 'ADAPTER'
+export type ParticipantStrategy =
+  | 'FIXED_USER'
+  | 'ROLE'
+  | 'DEPT_LEADER'
+  | 'POST'
+  | 'DEPT_POST'
+  | 'EXPRESSION'
+  | 'ADAPTER'
 
 export interface ParticipantConfig {
   strategy: ParticipantStrategy
@@ -32,13 +39,48 @@ export interface ApprovalOpinionConfig {
   }>
 }
 
+/** I3 统一动作契约（与后端 ApprovalAction 一枚举同语义）。 */
+export type ApprovalActionKind =
+  | 'APPROVE'
+  | 'RETURN'
+  | 'REJECT'
+  | 'DISAPPROVE'
+  | 'TRANSFER'
+  | 'DELEGATE'
+  | 'AUTHORIZE'
+  | 'ADD_SIGN'
+  | 'SUPPLEMENT_SIGN'
+  | 'WITHDRAW'
+  | 'COMMUNICATE'
+  | 'DISCARD'
+
 export interface ApprovalActionRequest {
-  action: 'APPROVE' | 'RETURN' | 'REJECT'
+  action: ApprovalActionKind
   returnTargetNodeId?: string
   opinionFormId?: string
   opinionFormVersion?: string
   comment?: string
   opinionData?: Record<string, unknown>
+  /** I3：转入人/受托人/代理受托人目标。 */
+  targetUserId?: number
+  /** I3：加签/补签参与人。 */
+  participants?: number[]
+  /** I3：SERIAL / PARALLEL。 */
+  mode?: 'SERIAL' | 'PARALLEL'
+  /** I3：代理规则 ID 与范围。 */
+  ruleId?: number
+  scopeType?: 'GLOBAL' | 'PROCESS' | 'NODE' | 'BUSINESS'
+  processDefKey?: string
+  nodeKey?: string
+  businessKey?: string
+  startAt?: string
+  endAt?: string
+  /** I3：撤回/废弃理由。 */
+  reason?: string
+  /** I3：沟通接收人。 */
+  receivers?: number[]
+  /** I3：沟通内容/回复。 */
+  message?: string
 }
 
 export interface BpmNodeTopology {

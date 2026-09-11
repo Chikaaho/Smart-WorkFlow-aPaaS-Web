@@ -43,6 +43,66 @@ import {
 } from './seeds'
 
 /** 模板/导出两行表头（显示名 + 稳定映射标识），与真实后端模板契约一致。 */
+/** I3：演示流程图（第一方渲染内核消费；坐标契约 contractVersion=2；与 activityId 对齐轨迹高亮） */
+function demoGraph(def: {
+  id: number
+  processKey: string
+  name: string
+  formKey: string
+  defVersion?: number
+}) {
+  return {
+    processKey: def.processKey,
+    name: def.name,
+    formKey: def.formKey,
+    version: def.defVersion ?? 1,
+    contractVersion: 2,
+    elements: [
+      { id: 'StartEvent_1', kind: 'node', type: 'START', x: 120, y: 240, config: { name: '开始' } },
+      {
+        id: 'Activity_submit',
+        kind: 'node',
+        type: 'APPROVAL',
+        x: 380,
+        y: 240,
+        config: { name: '提交申请' },
+      },
+      {
+        id: 'Activity_approve1',
+        kind: 'node',
+        type: 'APPROVAL',
+        x: 640,
+        y: 240,
+        config: { name: '部门经理审批' },
+      },
+      {
+        id: 'Activity_approve2',
+        kind: 'node',
+        type: 'APPROVAL',
+        x: 900,
+        y: 240,
+        config: { name: 'HR 审批' },
+      },
+      { id: 'EndEvent_1', kind: 'node', type: 'END', x: 1160, y: 240, config: { name: '结束' } },
+      { id: 'Flow_start2submit', kind: 'edge', source: 'StartEvent_1', target: 'Activity_submit' },
+      {
+        id: 'Flow_submit2approve1',
+        kind: 'edge',
+        source: 'Activity_submit',
+        target: 'Activity_approve1',
+      },
+      {
+        id: 'Flow_approve1_2approve2',
+        kind: 'edge',
+        source: 'Activity_approve1',
+        target: 'Activity_approve2',
+      },
+      { id: 'Flow_approve2_2end', kind: 'edge', source: 'Activity_approve2', target: 'EndEvent_1' },
+    ],
+    canvas: {},
+  }
+}
+
 const MOCK_IMPORT_EXPORT_HEADERS: string[][] = [
   ['申请人', '部门', '请假类型', '请假日期', '天数', '紧急', '事由'],
   ['applicant', 'department', 'leaveType', 'leaveDate', 'days', 'urgent', 'reason'],
@@ -1446,73 +1506,66 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
-  // ── 流程定义：获取 BPMN XML 流程图（增强版：含 userTask 节点，支持高亮演示） ──
-  // GET /api/workflow/defs/:id/bpmn-xml → R<String>
-  // DRAFT 状态返回 code=2104 (PROCESS_NOT_PUBLISHED)
+  // ── I3：按 id 读取已保存 ProcessGraph（自研渲染内核单一图契约） ──
   {
     method: 'GET',
-    pattern: '/api/workflow/defs/:id/bpmn-xml',
+    pattern: '/api/workflow/defs/:id/graph-json',
     handler: (params) => {
       const defId = Number((params as Record<string, string>).id)
       const def = MOCK_PROCESS_DEFS.find((d) => d.id === defId)
-      if (!def || def.status === 'DRAFT') {
-        return { code: 2104, message: '流程定义未发布，无法获取流程图', data: null }
+      if (!def) return { code: 2010, message: '流程定义不存在', data: null }
+      return { code: 0, message: 'ok', data: demoGraph(def) }
+    },
+  },
+
+  // ── I3：按 processKey 读取已保存 ProcessGraph（实例详情图查看共用） ──
+  {
+    method: 'GET',
+    pattern: '/api/workflow/defs/by-key/:processKey',
+    handler: (params) => {
+      const key = (params as Record<string, string>).processKey
+      const def = MOCK_PROCESS_DEFS.find((d) => d.processKey === key)
+      if (!def) return { code: 2010, message: '流程定义不存在', data: null }
+      return { code: 0, message: 'ok', data: demoGraph(def) }
+    },
+  },
+
+  // ── I3：独立校验端点（返回全部可判定错误及 nodeKey/edgeKey） ──
+  {
+    method: 'POST',
+    pattern: '/api/workflow/defs/:id/validate',
+    handler: () => ({ code: 0, message: 'ok', data: [] }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/workflow/defs/validate',
+    handler: () => ({ code: 0, message: 'ok', data: [] }),
+  },
+
+  // ── I3：发布版本行 ──
+  {
+    method: 'GET',
+    pattern: '/api/workflow/defs/:id/versions',
+    handler: (params) => {
+      const defId = Number((params as Record<string, string>).id)
+      return {
+        code: 0,
+        message: 'ok',
+        data: [
+          {
+            id: 1,
+            defId,
+            graphVersion: 1,
+            status: 'PUBLISHED',
+            name: '演示流程',
+            formKey: null,
+            formVersion: null,
+            publishedAt: '2026-09-01T10:00:00',
+            deploymentId: null,
+            processDefinitionId: null,
+          },
+        ],
       }
-      // 返回含 3 个 userTask 的模拟审批流程 BPMN XML（activityId 与 mock seeds 中 MOCK_INSTANCE_DETAILS 的 activityId 对齐）
-      const bpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-  targetNamespace="http://bpmn.io/schema/bpmn">
-  <process id="${def.processKey}" name="${def.name}" isExecutable="true">
-    <startEvent id="StartEvent_1" name="开始" />
-    <userTask id="Activity_submit" name="提交申请" />
-    <userTask id="Activity_approve1" name="部门经理审批" />
-    <userTask id="Activity_approve2" name="HR 审批" />
-    <endEvent id="EndEvent_1" name="结束" />
-    <sequenceFlow id="Flow_start2submit" sourceRef="StartEvent_1" targetRef="Activity_submit" />
-    <sequenceFlow id="Flow_submit2approve1" sourceRef="Activity_submit" targetRef="Activity_approve1" />
-    <sequenceFlow id="Flow_approve1_2approve2" sourceRef="Activity_approve1" targetRef="Activity_approve2" />
-    <sequenceFlow id="Flow_approve2_2end" sourceRef="Activity_approve2" targetRef="EndEvent_1" />
-  </process>
-  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
-    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="${def.processKey}">
-      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
-        <dc:Bounds x="180" y="120" width="36" height="36" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_submit_di" bpmnElement="Activity_submit">
-        <dc:Bounds x="260" y="95" width="100" height="80" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_approve1_di" bpmnElement="Activity_approve1">
-        <dc:Bounds x="420" y="95" width="100" height="80" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_approve2_di" bpmnElement="Activity_approve2">
-        <dc:Bounds x="580" y="95" width="100" height="80" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
-        <dc:Bounds x="740" y="120" width="36" height="36" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="flow1_di" bpmnElement="Flow_start2submit">
-        <di:waypoint x="216" y="138" />
-        <di:waypoint x="260" y="135" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="flow2_di" bpmnElement="Flow_submit2approve1">
-        <di:waypoint x="360" y="135" />
-        <di:waypoint x="420" y="135" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="flow3_di" bpmnElement="Flow_approve1_2approve2">
-        <di:waypoint x="520" y="135" />
-        <di:waypoint x="580" y="135" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="flow4_di" bpmnElement="Flow_approve2_2end">
-        <di:waypoint x="680" y="135" />
-        <di:waypoint x="740" y="138" />
-      </bpmndi:BPMNEdge>
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
-</definitions>`
-      return { code: 0, message: 'ok', data: bpmnXml }
     },
   },
 

@@ -21,7 +21,6 @@
     "@form-create/element-ui": "^3.3.1",
     "@vue-flow/core": "^1.48.2",
     "axios": "^1.18.1",
-    "bpmn-js": "^18.18.0",
     "dompurify": "^3.4.11",
     "element-plus": "^2.14.2",
     "expr-eval-fork": "^3.0.3",

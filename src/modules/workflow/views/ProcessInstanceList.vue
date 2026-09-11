@@ -1,24 +1,22 @@
 <script setup lang="ts">
-/* global HTMLElement */
 /**
  * ProcessInstanceList — 流程实例监控页（页型 B + el-drawer 详情抽屉）。
  *
  * 列表页：分页展示流程实例，支持按状态/流程定义/发起人过滤。
  * 详情抽屉：实例基本信息 + BPMN 流程图高亮（活跃节点/已完成节点）+ 流转时间线。
  */
-import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { StandardListTemplate } from '@/components/page-layout'
 import {
   queryInstances,
   getInstanceDetail,
-  pageProcessDefs,
-  getProcessDefGraph,
+  getProcessDefDefinitionByKey,
 } from '@/modules/workflow/api'
 import type { ProcessInstance, InstanceDetail } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
-import { mountBpmnViewer } from '@/adapters/bpmn'
-import type { BpmnViewerInstance } from '@/adapters/bpmn'
+import ProcessGraphView from './ProcessGraphView.vue'
+import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import type { InstanceFilter } from '@/modules/workflow/api'
 
 // ─── 状态映射 ───
@@ -30,6 +28,9 @@ const STATUS_MAP: Record<
   RUNNING: { label: '运行中', type: 'success' },
   APPROVED: { label: '已完成', type: 'info' },
   REJECTED: { label: '已驳回', type: 'danger' },
+  WITHDRAWN: { label: '已撤回', type: 'warning' },
+  DISCARDED: { label: '已废弃', type: 'info' },
+  FAILED: { label: '失败', type: 'danger' },
 }
 
 function getStatusLabel(status: string): string {
@@ -98,70 +99,55 @@ const drawerLoading = ref(false)
 const drawerError = ref('')
 const detail = ref<InstanceDetail | null>(null)
 
-// 流程定义 key → id 映射（用于获取 BPMN XML）
-const defKeyToIdMap = ref<Record<string, number>>({})
+/** 详情视图消费的图 + 轨迹（自研渲染内核） */
+const detailGraph = ref<ProcessGraphDocument | null>(null)
+const detailTrace = ref<{ activeNodeIds: string[]; completedNodeIds: string[] } | null>(null)
 
-// BPMN viewer
-const bpmnContainerRef = ref<HTMLElement | null>(null)
-let viewerInstance: BpmnViewerInstance | null = null
-
-/** 构建 processDefKey → defId 映射（页面初始化时加载一次） */
-async function loadProcessDefMap() {
-  try {
-    // 取全量流程定义（pageSize 设大一些，mock 只有 4 条）
-    const result = await pageProcessDefs({ pageNum: 1, pageSize: 100 })
-    const map: Record<string, number> = {}
-    for (const def of result.list) {
-      map[def.processKey] = def.id
-    }
-    defKeyToIdMap.value = map
-  } catch {
-    // 静默失败 — 映射为空时流程图区域显示"无法获取流程图"
+function toDetailGraph(
+  definition: Awaited<ReturnType<typeof getProcessDefDefinitionByKey>>,
+): ProcessGraphDocument {
+  return {
+    processKey: definition.processKey,
+    name: definition.name ?? '',
+    formKey: definition.formKey ?? '',
+    version: definition.version,
+    contractVersion: (definition as { contractVersion?: number }).contractVersion,
+    elements: (definition.elements ??
+      []) as import('@/contracts/process-graph').ProcessGraphElement[],
+    canvas: definition.canvas ?? {},
   }
 }
 
-/** 打开详情抽屉 */
+/** 打开详情抽屉（图数据直接取已保存 ProcessGraph，状态高亮来自真实轨迹） */
 async function openDrawer(row: ProcessInstance) {
   drawerVisible.value = true
   drawerLoading.value = true
   drawerError.value = ''
   detail.value = null
+  detailGraph.value = null
+  detailTrace.value = null
 
   try {
     detail.value = await getInstanceDetail(row.processInstanceId)
-    await nextTick()
 
-    // 加载 BPMN XML 并渲染
+    // 流程定义 key → 定义图（无需 defId：后端 /workflow/defs/{id} 与实例绑定按 key 匹配）
     const processDefKey = row.processDefKey
-    const defId = defKeyToIdMap.value[processDefKey]
-    if (!defId) {
+    let definition: Awaited<ReturnType<typeof getProcessDefDefinitionByKey>> | null = null
+    try {
+      definition = await getProcessDefDefinitionByKey(processDefKey)
+    } catch {
       drawerError.value = '未找到对应流程定义，无法展示流程图'
       return
     }
+    detailGraph.value = toDetailGraph(definition)
 
-    const xml = await getProcessDefGraph(defId)
-    if (!bpmnContainerRef.value) {
-      drawerError.value = '流程图容器未就绪'
-      return
-    }
-
-    // 销毁旧 viewer（如果存在）
-    if (viewerInstance) {
-      viewerInstance.destroy()
-      viewerInstance = null
-    }
-
-    viewerInstance = await mountBpmnViewer(bpmnContainerRef.value, xml)
-
-    // 高亮活跃节点（绿色）和已完成节点（灰色）
-    applyHighlights()
-
-    // 自适应画布
-    await nextTick()
-    try {
-      viewerInstance.fitViewport()
-    } catch {
-      // 抽屉动画可能尚未完成，忽略
+    // 状态高亮：活跃节点 + 已完成节点（真实任务/轨迹）
+    const completedNodeIds = detail.value.flowTrace
+      .filter((node) => node.endTime != null)
+      .map((node) => node.activityId)
+    detailTrace.value = {
+      activeNodeIds: detail.value.activeNodeIds ?? [],
+      completedNodeIds,
     }
   } catch (err) {
     if (err instanceof ApiError) {
@@ -174,55 +160,17 @@ async function openDrawer(row: ProcessInstance) {
   }
 }
 
-/** 在 BPMN 图上应用高亮标记 */
-function applyHighlights() {
-  if (!viewerInstance || !detail.value) return
-
-  // 获取已完成节点 activityId（flowTrace 中 endTime != null 的条目）
-  const completedNodeIds = detail.value.flowTrace
-    .filter((node) => node.endTime != null)
-    .map((node) => node.activityId)
-
-  // 绿色高亮：活跃节点
-  for (const id of detail.value.activeNodeIds) {
-    try {
-      viewerInstance.highlight(id, 'highlight-active')
-    } catch {
-      // 可能该 element ID 在 BPMN XML 中不存在——忽略
-    }
-  }
-
-  // 灰色高亮：已完成节点
-  for (const id of completedNodeIds) {
-    try {
-      viewerInstance.highlight(id, 'highlight-completed')
-    } catch {
-      // 同上
-    }
-  }
-}
-
-/** 关闭抽屉并清理 */
+/** 关闭抽屉 */
 function closeDrawer() {
-  if (viewerInstance) {
-    viewerInstance.destroy()
-    viewerInstance = null
-  }
   drawerVisible.value = false
   drawerError.value = ''
   drawerLoading.value = false
   detail.value = null
+  detailGraph.value = null
+  detailTrace.value = null
 }
 
-onBeforeUnmount(() => {
-  if (viewerInstance) {
-    viewerInstance.destroy()
-    viewerInstance = null
-  }
-})
-
 onMounted(() => {
-  void loadProcessDefMap()
   void loadList()
 })
 
@@ -260,6 +208,9 @@ function isUserTask(activityType: string): boolean {
         <el-option label="运行中" value="RUNNING" />
         <el-option label="已完成" value="APPROVED" />
         <el-option label="已驳回" value="REJECTED" />
+        <el-option label="已撤回" value="WITHDRAWN" />
+        <el-option label="已废弃" value="DISCARDED" />
+        <el-option label="失败" value="FAILED" />
       </el-select>
     </template>
 
@@ -357,9 +308,12 @@ function isUserTask(activityType: string): boolean {
                 <span class="legend-dot legend-completed" style="margin-left: 12px" /> 已完成节点
               </span>
             </template>
-            <div v-if="!drawerError" class="bpmn-wrapper">
-              <div ref="bpmnContainerRef" class="bpmn-container" />
-            </div>
+            <ProcessGraphView
+              v-if="!drawerError"
+              :graph="detailGraph"
+              :trace="detailTrace"
+              :height="400"
+            />
           </el-card>
 
           <!-- 流转时间线 -->
@@ -418,56 +372,5 @@ function isUserTask(activityType: string): boolean {
   margin-bottom: 16px;
 }
 
-/* BPMN 容器 */
-.bpmn-wrapper {
-  height: 400px;
-  position: relative;
-}
-.bpmn-container {
-  width: 100%;
-  height: 100%;
-}
-
-/* 隐藏 bpmn-js 右下角 Logo */
-:deep(.bjs-powered-by) {
-  display: none !important;
-}
-
 /* ─── 高亮标记 CSS ─── */
-
-/* 活跃节点：绿色填充 + 绿色边框 */
-:deep(.highlight-active:not(.djs-connection) .djs-visual > :nth-child(1)) {
-  fill: rgba(34, 197, 94, 0.15) !important; /* 浅绿填充 */
-  stroke: #22c55e !important; /* 绿色边框 */
-}
-/* 活跃节点的连线也变绿 */
-:deep(.highlight-active.djs-connection .djs-visual > :nth-child(1)) {
-  stroke: #22c55e !important;
-}
-
-/* 已完成节点：灰色填充 + 灰色边框 */
-:deep(.highlight-completed:not(.djs-connection) .djs-visual > :nth-child(1)) {
-  fill: rgba(148, 163, 184, 0.15) !important; /* 浅灰填充 */
-  stroke: #94a3b8 !important; /* 灰色边框 */
-}
-/* 已完成节点的连线也变灰 */
-:deep(.highlight-completed.djs-connection .djs-visual > :nth-child(1)) {
-  stroke: #94a3b8 !important;
-}
-
-/* ─── 图例 ─── */
-.legend-dot {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  vertical-align: middle;
-  margin-right: 4px;
-}
-.legend-active {
-  background: #22c55e;
-}
-.legend-completed {
-  background: #94a3b8;
-}
 </style>

@@ -98,7 +98,7 @@ export interface ProcessInstance {
 
 // ─── 活动节点 DTO（对齐后端 BpmActivityDTO） ───
 export interface ActivityNode {
-  activityId: string // BPMN 元素 ID（如 "Activity_001"，与 bpmn-js bpmnElement 对齐）
+  activityId: string // 流程元素 ID（如 "Activity_001"，与引擎 Activity 定义对齐）
   activityName: string // 节点名称（如 "经理审批"）
   activityType: string // 节点类型：userTask / startEvent / endEvent / exclusiveGateway 等
   startTime: string | null // 开始时间（未开始节点可能为 null）

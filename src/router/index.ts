@@ -92,6 +92,13 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '图设计器' },
       },
       {
+        // I3 第一方流程设计器：统一节点能力端点构建面板与配置，ProcessGraph 单一图契约。
+        path: 'workflow/defs/:defId/design',
+        name: 'workflow-def-designer',
+        component: () => import('@/modules/workflow/views/ProcessDesigner.vue'),
+        meta: { title: '流程设计器', authority: ['workflow:def:design'] },
+      },
+      {
         path: 'workflow/task/:taskId',
         name: 'TaskDetail',
         component: () => import('@/modules/workflow/views/TaskDetail.vue'),

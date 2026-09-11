@@ -29,7 +29,11 @@ const THIRD_PARTY_RESTRICTIONS = {
       name: 'form-create',
       message: '业务层禁止直引 form-create，请通过 adapters/form-designer 调用。',
     },
-    { name: 'bpmn-js', message: '业务层禁止直引 bpmn-js，请通过 adapters/bpmn 调用。' },
+    {
+      name: 'bpmn-js',
+      message:
+        'bpmn-js 已完整退出生产（I3 §4.2），禁止任何直引；渲染一律走 adapters/process-graph。',
+    },
   ],
   patterns: [
     {

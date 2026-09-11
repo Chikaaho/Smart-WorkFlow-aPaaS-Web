@@ -1,29 +1,28 @@
 <script setup lang="ts">
-/* global Element, HTMLElement */
 /**
  * ProcessDefList — 流程定义列表页（页型 B）。
  *
  * 只读分页列表，套 StandardListTemplate。
- * 不提供创建/编辑/删除/发布操作（非本功能范围）。
+ * I3：查看流程图走自研渲染内核（ProcessGraphView）；设计入口进入第一方设计器；
+ * 发布/删除沿用；查看流程图与设计由第一方渲染内核与设计器承担。
  */
-import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { StandardListTemplate } from '@/components/page-layout'
 import {
   pageProcessDefs,
-  getProcessDefGraph,
+  getProcessDefDefinition,
   publishProcessDef,
   deleteProcessDef,
 } from '@/modules/workflow/api'
 import type { ProcessDef } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
-import { mountBpmnViewer } from '@/adapters/bpmn'
-import type { BpmnViewerInstance } from '@/adapters/bpmn'
-import { ElMessageBox, ElMessage } from 'element-plus'
+import ProcessGraphView from './ProcessGraphView.vue'
+import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import CreateProcessDefDialog from './CreateProcessDefDialog.vue'
-import EditProcessDefDialog from './EditProcessDefDialog.vue'
 
 // ─── 状态映射（与 FormDefStatus 完全对称） ───
 
@@ -59,8 +58,7 @@ const viewerVisible = ref(false)
 const viewerLoading = ref(false)
 const viewerError = ref('')
 const currentDefName = ref('')
-const bpmnContainerRef = ref<Element | null>(null)
-let viewerInstance: BpmnViewerInstance | null = null
+const viewerGraph = ref<ProcessGraphDocument | null>(null)
 
 // ─── 发布流程定义 ───
 const publishingId = ref<number | null>(null)
@@ -72,8 +70,6 @@ const deletingId = ref<number | null>(null)
 const createDialogVisible = ref(false)
 
 // ─── 表单工作台回跳上下文（P52） ───
-// 从表单工作台「关联流程」区进入时带 from=form-workbench&formId=...，
-// 顶部显示返回入口，返回后恢复原表单与「关联流程」工作区。
 const route = useRoute()
 const router = useRouter()
 const returnFormId = computed(() =>
@@ -87,9 +83,13 @@ function backToWorkbench() {
   router.push({ path: `/form/designer/${returnFormId.value}`, query: { tab: 'processes' } })
 }
 
-// ─── 编辑流程定义 ───
-const editDialogVisible = ref(false)
+// ─── 设计器入口 ───
 const editingDef = ref<ProcessDef | null>(null)
+
+function openDesigner(row: ProcessDef) {
+  editingDef.value = row
+  void router.push(`/workflow/defs/${row.id}/design`)
+}
 
 async function loadList() {
   loading.value = true
@@ -128,29 +128,24 @@ function statusRow(r: unknown) {
 
 // ─── 查看流程图 ───
 
-/** 打开查看流程图对话框 */
+/** 打开查看流程图对话框（自研渲染内核直接消费已保存 ProcessGraph） */
 async function openViewer(row: ProcessDef) {
   currentDefName.value = row.name
   viewerVisible.value = true
   viewerLoading.value = true
   viewerError.value = ''
-
-  // 等待 DOM 更新后容器元素就位
-  await nextTick()
-
+  viewerGraph.value = null
   try {
-    const xml = await getProcessDefGraph(row.id)
-    if (!bpmnContainerRef.value) {
-      viewerError.value = '渲染容器未找到'
-      return
-    }
-    viewerInstance = await mountBpmnViewer(bpmnContainerRef.value as HTMLElement, xml)
-    // bpmn-js 渲染完成后自适应画布（try-fit：即使尺寸未就位也不影响外层错误态）
-    await nextTick()
-    try {
-      viewerInstance.fitViewport()
-    } catch {
-      // 对话框动画可能尚未完成 → 由 @opened 事件重试
+    const definition = await getProcessDefDefinition(row.id)
+    viewerGraph.value = {
+      processKey: definition.processKey,
+      name: definition.name ?? '',
+      formKey: definition.formKey ?? '',
+      version: definition.version,
+      contractVersion: (definition as { contractVersion?: number }).contractVersion,
+      elements: (definition.elements ??
+        []) as import('@/contracts/process-graph').ProcessGraphElement[],
+      canvas: definition.canvas ?? {},
     }
   } catch (e: unknown) {
     viewerError.value =
@@ -160,47 +155,18 @@ async function openViewer(row: ProcessDef) {
   }
 }
 
-/** 对话框打开动画完成后重试 fitViewport（容器在动画结束前可能尺寸为 0） */
-function onDialogOpened() {
-  if (viewerInstance) {
-    try {
-      viewerInstance.fitViewport()
-    } catch {
-      // 静默忽略：初始渲染位置已由 mountBpmnViewer 确定
-    }
-  }
-}
-
-/** 关闭对话框并清理 bpmn viewer 实例 */
+/** 关闭对话框 */
 function closeViewer() {
-  if (viewerInstance) {
-    viewerInstance.destroy()
-    viewerInstance = null
-  }
   viewerVisible.value = false
   viewerError.value = ''
   viewerLoading.value = false
+  viewerGraph.value = null
 }
 
 // ─── 发布流程定义 ───
 
 /** 发布流程定义（带确认对话框） */
 async function handlePublish(row: ProcessDef) {
-  try {
-    await ElMessageBox.confirm(
-      `确定要发布流程定义「${row.name}」吗？发布后将无法修改。`,
-      '发布确认',
-      {
-        confirmButtonText: '确定发布',
-        cancelButtonText: '取消',
-        type: 'warning',
-      },
-    )
-  } catch {
-    // 用户取消
-    return
-  }
-
   publishingId.value = row.id
   try {
     await publishProcessDef(row.id)
@@ -224,21 +190,6 @@ async function handleDelete(row: ProcessDef) {
     return
   }
 
-  try {
-    await ElMessageBox.confirm(
-      `确定要删除流程定义「${row.name}」吗？此操作不可恢复。`,
-      '删除确认',
-      {
-        confirmButtonText: '确定删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-      },
-    )
-  } catch {
-    // 用户取消
-    return
-  }
-
   deletingId.value = row.id
   try {
     await deleteProcessDef(row.id)
@@ -254,20 +205,6 @@ async function handleDelete(row: ProcessDef) {
     deletingId.value = null
   }
 }
-
-/** 编辑流程定义 */
-function handleEdit(row: ProcessDef) {
-  editingDef.value = row
-  editDialogVisible.value = true
-}
-
-// 组件卸载时防御性清理
-onBeforeUnmount(() => {
-  if (viewerInstance) {
-    viewerInstance.destroy()
-    viewerInstance = null
-  }
-})
 
 onMounted(loadList)
 </script>
@@ -323,31 +260,18 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="260" fixed="right">
+      <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
-          <el-button
-            size="small"
-            link
-            type="primary"
-            :disabled="(row as ProcessDef).status === 'DRAFT'"
-            @click="openViewer(row as ProcessDef)"
-          >
+          <el-button size="small" link type="primary" @click="openViewer(row as ProcessDef)">
             查看流程图
           </el-button>
-          <el-button
-            size="small"
-            link
-            type="warning"
-            :disabled="(row as ProcessDef).status !== 'DRAFT'"
-            @click="handleEdit(row as ProcessDef)"
-          >
-            编辑
+          <el-button size="small" link type="warning" @click="openDesigner(row as ProcessDef)">
+            设计
           </el-button>
           <el-button
             size="small"
             link
             type="success"
-            :disabled="(row as ProcessDef).status !== 'DRAFT'"
             :loading="publishingId === (row as ProcessDef).id"
             @click="handlePublish(row as ProcessDef)"
           >
@@ -358,7 +282,6 @@ onMounted(loadList)
             link
             type="danger"
             :disabled="(row as ProcessDef).status !== 'DRAFT'"
-            :loading="deletingId === (row as ProcessDef).id"
             @click="handleDelete(row as ProcessDef)"
           >
             删除
@@ -368,39 +291,28 @@ onMounted(loadList)
     </el-table>
   </StandardListTemplate>
 
-  <!-- 查看流程图对话框（置于列表模板之外：空态时 default slot 不渲染，
-       对话框放内部会导致空列表下"创建/编辑"按钮无响应） -->
+  <!-- 查看流程图对话框 -->
   <el-dialog
     v-model="viewerVisible"
     :title="`流程图 - ${currentDefName}`"
     :close-on-click-modal="false"
     destroy-on-close
     width="900px"
-    @opened="onDialogOpened"
     @closed="closeViewer"
   >
-    <div v-loading="viewerLoading" class="bpmn-wrapper">
-      <!-- 错误提示 -->
+    <div v-loading="viewerLoading" class="pg-wrapper">
       <el-result
         v-if="viewerError"
         icon="error"
         :title="viewerError"
-        :sub-title="'请确认流程定义已发布且 BPMN XML 有效'"
+        :sub-title="'请确认流程定义有可查看的图数据'"
       />
-      <!-- BPMN 渲染容器 -->
-      <div ref="bpmnContainerRef" class="bpmn-container" />
+      <ProcessGraphView v-else :graph="viewerGraph" :height="480" />
     </div>
   </el-dialog>
 
   <!-- 创建流程定义对话框 -->
   <CreateProcessDefDialog v-model:visible="createDialogVisible" @saved="loadList" />
-
-  <!-- 编辑流程定义对话框 -->
-  <EditProcessDefDialog
-    v-model:visible="editDialogVisible"
-    :process-def="editingDef"
-    @saved="loadList"
-  />
 </template>
 
 <style scoped>
@@ -411,18 +323,8 @@ onMounted(loadList)
   text-decoration: none;
 }
 
-/* BPMN 容器 —— 显式高度确保 bpmn-js 正确计算视口 */
-.bpmn-wrapper {
-  height: 500px;
+.pg-wrapper {
+  min-height: 480px;
   position: relative;
-}
-.bpmn-container {
-  width: 100%;
-  height: 100%;
-}
-
-/* 隐藏 bpmn-js 默认右下角可点击 Logo（水印 + window.open 行为） */
-:deep(.bjs-powered-by) {
-  display: none !important;
 }
 </style>
