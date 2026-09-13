@@ -97,6 +97,10 @@ async function onSubmit(): Promise<void> {
       <button type="submit" :disabled="submitting || !challenge">
         {{ submitting ? '登录中...' : '登录' }}
       </button>
+      <p class="login-page__sso-hint">
+        第三方账号登录：请先使用账号密码登录，在「个人中心 → 账号绑定」完成绑定后，
+        可经企业统一身份入口进入。
+      </p>
     </form>
   </div>
 </template>
@@ -152,5 +156,11 @@ img.login-page__captcha {
   color: #d33;
   font-size: 13px;
   margin: 0;
+}
+.login-page__sso-hint {
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 12px 0 0;
 }
 </style>

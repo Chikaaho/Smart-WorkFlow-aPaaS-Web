@@ -863,6 +863,28 @@ export const mockRegistrations: MockRegistration[] = [
     }),
   },
 
+  // ── I5 第三方 SSO（mock：绑定状态查询 / 绑定 / 解绑；授权发起与回调走真实 Provider，
+  //    mock 只覆盖页面契约形状，不伪造 Provider 行为） ──
+  {
+    method: 'GET',
+    pattern: '/api/auth/sso/bindings',
+    handler: () => ({
+      code: 0,
+      message: 'ok',
+      data: { bindings: [] as Array<{ provider: string; externalDigestPrefix: string }> },
+    }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/sso/unbind',
+    handler: () => ({ code: 0, message: 'ok', data: null }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/sso/bind',
+    handler: () => ({ code: 0, message: 'ok', data: null }),
+  },
+
   // ── 当前用户会话 ──────────────────────────────────────────
   // GET /api/system/auth/me → SessionDTO
   // 真实后端：AuthMeController 按当前登录用户装配会话（超管 → 全量 permissions；
@@ -5377,7 +5399,15 @@ export const mockRegistrations: MockRegistration[] = [
       const uid = mockSessionUid()
       if (!uid) return { code: 401, message: '未认证', data: null }
       const layout = body as { components?: Array<{ key?: string }> }
-      const allowed = ['todo', 'myProcessed', 'myInitiated', 'cc', 'favoriteItems', 'drafts', 'messages']
+      const allowed = [
+        'todo',
+        'myProcessed',
+        'myInitiated',
+        'cc',
+        'favoriteItems',
+        'drafts',
+        'messages',
+      ]
       if (!layout?.components?.length)
         return { code: 400, message: '布局缺少 components', data: null }
       for (const c of layout.components) {
