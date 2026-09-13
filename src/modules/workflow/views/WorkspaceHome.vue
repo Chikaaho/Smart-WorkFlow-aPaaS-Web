@@ -19,7 +19,7 @@ import {
   queryMyCopies,
   type CatalogItem,
 } from '@/modules/workflow/api/oa'
-import { queryTodoTasks, myInstances } from '@/modules/workflow/api'
+import { queryTodoTasks, myInstances, myDrafts, myProcessed } from '@/modules/workflow/api'
 import type { WorkspaceComponent, WorkspaceComponentKey } from '@/contracts/catalog'
 import { ApiError } from '@/foundation/request'
 
@@ -35,15 +35,20 @@ const dirty = ref(false)
 
 // ─── 组件数据 ───
 const todoList = ref<Array<Record<string, unknown>>>([])
+const processedList = ref<Array<Record<string, unknown>>>([])
 const initiatedList = ref<Array<Record<string, unknown>>>([])
 const ccList = ref<Array<Record<string, unknown>>>([])
+const draftsList = ref<Array<Record<string, unknown>>>([])
 const favoriteItems = ref<CatalogItem[]>([])
 
 const COMPONENT_TITLES: Record<WorkspaceComponentKey, string> = {
   todo: '我的待办',
+  myProcessed: '我的已办',
   myInitiated: '我发起的',
   cc: '抄送',
   favoriteItems: '常用事项',
+  drafts: '草稿',
+  messages: '消息',
 }
 
 const orderedVisible = computed(() =>
@@ -58,7 +63,7 @@ async function loadLayout() {
   try {
     const resp = await getWorkspaceLayout()
     custom.value = resp.custom
-    components.value = resp.layout.components
+    components.value = withNewComponents(resp.layout.components)
     favoriteKeys.value = resp.layout.favoriteItemKeys
     await Promise.all([loadComponentData(), loadFavorites()])
   } catch (err) {
@@ -66,6 +71,27 @@ async function loadLayout() {
   } finally {
     loading.value = false
   }
+}
+
+/** I4 §3.7：旧布局缺 drafts/messages/myProcessed 键时回落补默认，避免版本升级后组件丢失。 */
+function withNewComponents(list: WorkspaceComponent[]): WorkspaceComponent[] {
+  const keys = new Set(list.map((c) => c.key))
+  const merged = [...list]
+  const defaults: WorkspaceComponent[] = [
+    { key: 'drafts', visible: true, order: 5, span: 1 },
+    { key: 'messages', visible: true, order: 6, span: 1 },
+    { key: 'myProcessed', visible: true, order: 7, span: 1 },
+  ]
+  for (const d of defaults) {
+    if (!keys.has(d.key)) merged.push(d)
+  }
+  return merged
+}
+
+function openDraft(item: Record<string, unknown>) {
+  const formKey = String(item.formKey ?? '')
+  const draftId = String(item.id ?? '')
+  void router.push(`/form/form-render/${formKey}?draftId=${draftId}&mode=draft`)
 }
 
 async function loadComponentData() {
@@ -83,6 +109,17 @@ async function loadComponentData() {
         }),
     )
   }
+  if (visible('myProcessed')) {
+    tasks.push(
+      myProcessed({ pageNum: 1, pageSize: 5 })
+        .then((page) => {
+          processedList.value = page.list as unknown as Array<Record<string, unknown>>
+        })
+        .catch(() => {
+          processedList.value = []
+        }),
+    )
+  }
   if (visible('myInitiated')) {
     tasks.push(
       myInstances({ pageNum: 1, pageSize: 5 })
@@ -91,6 +128,17 @@ async function loadComponentData() {
         })
         .catch(() => {
           initiatedList.value = []
+        }),
+    )
+  }
+  if (visible('drafts')) {
+    tasks.push(
+      myDrafts({ pageNum: 1, pageSize: 5 })
+        .then((page) => {
+          draftsList.value = page.list as unknown as Array<Record<string, unknown>>
+        })
+        .catch(() => {
+          draftsList.value = []
         }),
     )
   }
@@ -239,6 +287,19 @@ onMounted(loadLayout)
           </ul>
         </template>
 
+        <template v-else-if="component.key === 'myProcessed'">
+          <p v-if="processedList.length === 0" class="workspace-card__empty">暂无已办任务</p>
+          <ul v-else class="workspace-card__list">
+            <li v-for="(item, index) in processedList" :key="index" class="workspace-card__row">
+              <span>{{ (item.taskName as string) ?? '-' }}</span>
+              <el-tag v-if="item.action" size="small" type="info">{{ item.action }}</el-tag>
+            </li>
+          </ul>
+          <el-button size="small" link type="primary" @click="router.push('/workflow/processed')"
+            >查看全部</el-button
+          >
+        </template>
+
         <template v-else-if="component.key === 'myInitiated'">
           <p v-if="initiatedList.length === 0" class="workspace-card__empty">暂无发起的流程</p>
           <ul v-else class="workspace-card__list">
@@ -259,6 +320,24 @@ onMounted(loadLayout)
           </ul>
         </template>
 
+        <template v-else-if="component.key === 'drafts'">
+          <p v-if="draftsList.length === 0" class="workspace-card__empty">暂无草稿</p>
+          <ul v-else class="workspace-card__list">
+            <li v-for="(item, index) in draftsList" :key="index" class="workspace-card__row">
+              <span>{{ (item.formKey as string) ?? '-' }}</span>
+              <el-button size="small" link type="primary" @click="openDraft(item)"
+                >继续编辑</el-button
+              >
+            </li>
+          </ul>
+        </template>
+
+        <template v-else-if="component.key === 'messages'">
+          <p class="workspace-card__empty">站内信与流程消息入口</p>
+          <el-button size="small" type="primary" @click="router.push('/notify/record')"
+            >打开消息</el-button
+          >
+        </template>
         <template v-else>
           <p v-if="favoriteItems.length === 0" class="workspace-card__empty">
             暂无常用事项，可在「配置」中从流程中心选择

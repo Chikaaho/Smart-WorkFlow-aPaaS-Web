@@ -117,6 +117,48 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '流程监控' },
       },
       {
+        // I4 §3.2 流程模板中心：复制后编辑并发布
+        path: 'workflow/templates',
+        name: 'TemplateCenter',
+        component: () => import('@/modules/workflow/views/TemplateCenter.vue'),
+        meta: { title: '流程模板中心' },
+      },
+      {
+        // I4 §3.3 实例监控与受控干预（服务端权限+数据范围）
+        path: 'workflow/monitor',
+        name: 'InstanceMonitor',
+        component: () => import('@/modules/workflow/views/InstanceMonitor.vue'),
+        meta: { title: '实例监控干预' },
+      },
+      {
+        // I4 §3.3 流程基础分析
+        path: 'workflow/analytics',
+        name: 'ProcessAnalytics',
+        component: () => import('@/modules/workflow/views/ProcessAnalytics.vue'),
+        meta: { title: '流程分析' },
+      },
+      {
+        // I4 §3.5 批量审批
+        path: 'workflow/batch-approval',
+        name: 'BatchApproval',
+        component: () => import('@/modules/workflow/views/BatchApproval.vue'),
+        meta: { title: '批量审批' },
+      },
+      {
+        // I4 §3.6 流程交接
+        path: 'workflow/handover',
+        name: 'TaskHandover',
+        component: () => import('@/modules/workflow/views/TaskHandover.vue'),
+        meta: { title: '流程交接' },
+      },
+      {
+        // I4 §3.7 统一工作台（待办/已办/发起/草稿/抄送/消息入口）
+        path: 'workflow/center',
+        name: 'WorkflowCenter',
+        component: () => import('@/modules/workflow/views/WorkflowCenter.vue'),
+        meta: { title: '工作台' },
+      },
+      {
         path: 'agent/executions/list',
         name: 'agent-execution-list',
         component: () => import('@/modules/agent/views/ExecutionList.vue'),
@@ -185,6 +227,13 @@ export const routes: RouteRecordRaw[] = [
     name: 'mobile-form-render',
     component: () => import('@/modules/form/views/MobileFormRender.vue'),
     meta: { title: '移动填报' },
+  },
+  {
+    // I4 §3.7 移动端工作台（响应式 H5）：发起入口/待办办理/草稿/结果查询
+    path: '/m/workflow',
+    name: 'mobile-workflow-center',
+    component: () => import('@/modules/workflow/views/MobileWorkspace.vue'),
+    meta: { title: '移动工作台' },
   },
   {
     path: '/login',

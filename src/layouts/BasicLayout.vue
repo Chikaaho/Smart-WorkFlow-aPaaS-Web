@@ -54,4 +54,13 @@ const collapsed = computed(() => appStore.sidebarCollapsed)
 .basic-layout__content {
   background: var(--el-bg-color-page);
 }
+/* R5：移动视口隐藏侧栏，页面主体无横向溢出（业务表格保留容器内局部横滚） */
+@media (max-width: 767px) {
+  .basic-layout__aside {
+    display: none;
+  }
+  .basic-layout__header {
+    padding: 0 12px;
+  }
+}
 </style>

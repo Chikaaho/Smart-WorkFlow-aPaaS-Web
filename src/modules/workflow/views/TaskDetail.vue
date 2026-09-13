@@ -42,6 +42,8 @@ const formRecord = ref<Record<string, unknown> | null>(null)
 const formRecordLoading = ref(false)
 /** 表单定义（用于把内部字段名映射为业务字段标签） */
 const formSchema = ref<FormSchema | null>(null)
+/** REFERENCE 字段显示名缓存（id→可读关联对象信息，授权单查解析，取不到回退 id）。 */
+const refDisplayMap = ref<Record<string, string>>({})
 
 /** 表单宽表的系统列：与业务数据无关，不在审批详情展示 */
 const SYSTEM_COLUMNS = new Set([
@@ -62,13 +64,19 @@ const formFieldRows = computed(() => {
   const seen = new Set<string>()
   if (formSchema.value) {
     for (const field of formSchema.value.fields) {
-      if (SYSTEM_COLUMNS.has(field.name) || !(field.name in formRecord.value)) continue
+      const recordKey = field.type === 'REFERENCE' ? 'ref_' + field.name + '_id' : field.name
+      if (SYSTEM_COLUMNS.has(field.name) || !(recordKey in formRecord.value)) continue
       seen.add(field.name)
-      const v = formRecord.value[field.name]
+      const v = formRecord.value[recordKey]
       rows.push({
         key: field.name,
         label: field.label || field.name,
-        value: v == null || v === '' ? '-' : String(v),
+        value:
+          v == null || v === ''
+            ? '-'
+            : field.type === 'REFERENCE'
+              ? (refDisplayMap.value[field.name] ?? String(v))
+              : String(v),
       })
     }
   }
@@ -102,6 +110,25 @@ async function loadDetail() {
 }
 
 /** 按 formKey + businessKey 回查本次提交的表单数据；失败不阻断审批主链 */
+async function resolveRefDisplays() {
+  refDisplayMap.value = {}
+  if (!formSchema.value || !formRecord.value) return
+  const { resolveReferenceDisplay } = await import('@/modules/form/utils/resolve-reference-display')
+  for (const field of formSchema.value.fields) {
+    if (field.type !== 'REFERENCE') continue
+    const refId = formRecord.value['ref_' + field.name + '_id']
+    if (refId == null || refId === '') continue
+    try {
+      refDisplayMap.value[field.name] = await resolveReferenceDisplay(
+        String(field.targetFormId ?? ''),
+        String(refId),
+      )
+    } catch {
+      refDisplayMap.value[field.name] = String(refId)
+    }
+  }
+}
+
 async function loadFormRecord() {
   const d = detail.value
   if (!d?.formKey || !d.businessKey) return
@@ -114,6 +141,7 @@ async function loadFormRecord() {
     } catch {
       formSchema.value = null
     }
+    await resolveRefDisplays()
   } catch {
     formRecord.value = null
   } finally {
