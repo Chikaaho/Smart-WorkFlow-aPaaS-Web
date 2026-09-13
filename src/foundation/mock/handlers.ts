@@ -5377,15 +5377,7 @@ export const mockRegistrations: MockRegistration[] = [
       const uid = mockSessionUid()
       if (!uid) return { code: 401, message: '未认证', data: null }
       const layout = body as { components?: Array<{ key?: string }> }
-      const allowed = [
-        'todo',
-        'myProcessed',
-        'myInitiated',
-        'cc',
-        'favoriteItems',
-        'drafts',
-        'messages',
-      ]
+      const allowed = ['todo', 'myProcessed', 'myInitiated', 'cc', 'favoriteItems', 'drafts', 'messages']
       if (!layout?.components?.length)
         return { code: 400, message: '布局缺少 components', data: null }
       for (const c of layout.components) {

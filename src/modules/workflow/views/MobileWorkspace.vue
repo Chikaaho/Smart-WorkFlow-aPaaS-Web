@@ -97,10 +97,7 @@ async function resolveRefDisplays() {
     const refId = formRecord.value['ref_' + field.name + '_id']
     if (refId == null || refId === '') continue
     try {
-      refDisplayMap.value[field.name] = await resolveReferenceDisplay(
-        String(field.targetFormId ?? ''),
-        String(refId),
-      )
+      refDisplayMap.value[field.name] = await resolveReferenceDisplay(String(field.targetFormId ?? ''), String(refId))
     } catch {
       refDisplayMap.value[field.name] = String(refId)
     }
@@ -122,7 +119,10 @@ async function openTask(row: Row) {
     initializeOpinionData()
     if (detail.value?.formKey && detail.value?.businessKey) {
       try {
-        formRecord.value = await getFormData(detail.value.formKey, detail.value.businessKey)
+        formRecord.value = await getFormData(
+          detail.value.formKey,
+          detail.value.businessKey,
+        )
         try {
           formSchema.value = await getFormDefinition(detail.value.formKey)
         } catch {
@@ -143,12 +143,7 @@ async function openTask(row: Row) {
 /** 表单数据行：按 schema 字段顺序输出业务标签（外键/业务值经只读接口授权回显）。 */
 const formFieldRows = computed(() => {
   if (!formRecord.value) return []
-  const out: {
-    key: string
-    label: string
-    value: string
-    attachments?: { storageKey: string; name: string }[]
-  }[] = []
+  const out: { key: string; label: string; value: string; attachments?: { storageKey: string; name: string }[] }[] = []
   const seen = new Set<string>()
   if (formSchema.value) {
     for (const field of formSchema.value.fields) {
@@ -169,16 +164,10 @@ const formFieldRows = computed(() => {
                   const seg = it.split('/').pop() ?? it
                   return { storageKey: it, name: seg }
                 }
-                if (
-                  it &&
-                  typeof it === 'object' &&
-                  typeof (it as { storageKey?: unknown }).storageKey === 'string'
-                ) {
+                if (it && typeof it === 'object' && typeof (it as { storageKey?: unknown }).storageKey === 'string') {
                   const key = it.storageKey as string
                   const name = (it as { name?: unknown }).name
-                  return typeof name === 'string' && name !== ''
-                    ? { storageKey: key, name }
-                    : { storageKey: key, name: key.split('/').pop() ?? key }
+                  return typeof name === 'string' && name !== '' ? { storageKey: key, name } : { storageKey: key, name: key.split('/').pop() ?? key }
                 }
                 return null
               })
@@ -188,17 +177,7 @@ const formFieldRows = computed(() => {
           attachments = undefined
         }
       }
-      out.push({
-        key: field.name,
-        label: field.label || field.name,
-        value:
-          v == null || v === ''
-            ? '-'
-            : field.type === 'REFERENCE'
-              ? (refDisplayMap.value[field.name] ?? String(v))
-              : String(v),
-        attachments,
-      })
+      out.push({ key: field.name, label: field.label || field.name, value: v == null || v === '' ? '-' : (field.type === 'REFERENCE' ? refDisplayMap.value[field.name] ?? String(v) : String(v)), attachments })
     }
   }
   for (const [k, v] of Object.entries(formRecord.value)) {
@@ -368,21 +347,11 @@ onMounted(() => void loadTab('todo'))
         <template v-if="detail">
           <section class="m-section">
             <h3 class="m-section-title">任务信息</h3>
-            <div class="m-kv">
-              <span>流程名称</span><b>{{ detail.processName || detail.processDefinitionKey }}</b>
-            </div>
-            <div class="m-kv">
-              <span>发起人</span><b>{{ detail.initiatorName || detail.initiatorId || '—' }}</b>
-            </div>
-            <div class="m-kv">
-              <span>当前办理人</span><b>{{ detail.assigneeName || detail.assignee || '—' }}</b>
-            </div>
-            <div class="m-kv">
-              <span>业务单号</span><b>{{ detail.businessKey || '—' }}</b>
-            </div>
-            <div class="m-kv">
-              <span>创建时间</span><b>{{ detail.createTime || '—' }}</b>
-            </div>
+            <div class="m-kv"><span>流程名称</span><b>{{ detail.processName || detail.processDefinitionKey }}</b></div>
+            <div class="m-kv"><span>发起人</span><b>{{ detail.initiatorName || detail.initiatorId || '—' }}</b></div>
+            <div class="m-kv"><span>当前办理人</span><b>{{ detail.assigneeName || detail.assignee || '—' }}</b></div>
+            <div class="m-kv"><span>业务单号</span><b>{{ detail.businessKey || '—' }}</b></div>
+            <div class="m-kv"><span>创建时间</span><b>{{ detail.createTime || '—' }}</b></div>
           </section>
 
           <section class="m-section">
@@ -397,8 +366,7 @@ onMounted(() => void loadTab('todo'))
                     class="m-att-link"
                     :href="attachmentDownloadUrl(att.storageKey, att.name)"
                     target="_blank"
-                    >{{ att.name }}</a
-                  >
+                  >{{ att.name }}</a>
                 </span>
                 <b v-else>{{ row.value }}</b>
               </div>
@@ -407,17 +375,14 @@ onMounted(() => void loadTab('todo'))
           </section>
 
           <section class="m-section">
-            <h3 class="m-section-title">
-              {{ hasOpinionForm ? '审批意见（正式意见表单）' : '审批意见' }}
-            </h3>
+            <h3 class="m-section-title">{{ hasOpinionForm ? '审批意见（正式意见表单）' : '审批意见' }}</h3>
             <div v-for="field in visibleOpinionFields" :key="field.key" class="m-opinion-field">
               <template v-if="field.type === 'NOTE'">
                 <span class="m-opinion-note">{{ field.label }}</span>
               </template>
               <template v-else>
                 <label :for="`op-${field.key}`" class="m-opinion-label">
-                  {{ field.label || field.key
-                  }}<span v-if="field.required" class="m-required"> *</span>
+                  {{ field.label || field.key }}<span v-if="field.required" class="m-required"> *</span>
                 </label>
                 <textarea
                   v-if="field.type === 'TEXTAREA'"
@@ -426,18 +391,14 @@ onMounted(() => void loadTab('todo'))
                   rows="3"
                   :maxlength="field.maxLength"
                   :value="(opinionFieldValue(field) as string) ?? ''"
-                  @input="
-                    setOpinionFieldValue(field.key, ($event.target as HTMLTextAreaElement).value)
-                  "
+                  @input="setOpinionFieldValue(field.key, ($event.target as HTMLTextAreaElement).value)"
                 />
                 <select
                   v-else-if="field.type === 'SELECT'"
                   :id="`op-${field.key}`"
                   class="m-input"
                   :value="String(opinionFieldValue(field) ?? '')"
-                  @change="
-                    setOpinionFieldValue(field.key, ($event.target as HTMLSelectElement).value)
-                  "
+                  @change="setOpinionFieldValue(field.key, ($event.target as HTMLSelectElement).value)"
                 >
                   <option value="">请选择</option>
                   <option v-for="option in field.options ?? []" :key="option" :value="option">
@@ -445,11 +406,7 @@ onMounted(() => void loadTab('todo'))
                   </option>
                 </select>
                 <div v-else-if="field.type === 'RADIO'" class="m-opinion-options">
-                  <label
-                    v-for="option in field.options ?? []"
-                    :key="option"
-                    class="m-opinion-option"
-                  >
+                  <label v-for="option in field.options ?? []" :key="option" class="m-opinion-option">
                     <input
                       type="radio"
                       :name="`op-${field.key}`"
@@ -470,10 +427,7 @@ onMounted(() => void loadTab('todo'))
                       type="checkbox"
                       :name="`op-${field.key}`"
                       :value="option"
-                      :checked="
-                        Array.isArray(opinionFieldValue(field)) &&
-                        (opinionFieldValue(field) as unknown[]).includes(option)
-                      "
+                      :checked="Array.isArray(opinionFieldValue(field)) && (opinionFieldValue(field) as unknown[]).includes(option)"
                       @change="
                         (e) => {
                           const current = Array.isArray(opinionFieldValue(field))

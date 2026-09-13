@@ -75,7 +75,7 @@ const formFieldRows = computed(() => {
           v == null || v === ''
             ? '-'
             : field.type === 'REFERENCE'
-              ? (refDisplayMap.value[field.name] ?? String(v))
+              ? refDisplayMap.value[field.name] ?? String(v)
               : String(v),
       })
     }
@@ -119,10 +119,7 @@ async function resolveRefDisplays() {
     const refId = formRecord.value['ref_' + field.name + '_id']
     if (refId == null || refId === '') continue
     try {
-      refDisplayMap.value[field.name] = await resolveReferenceDisplay(
-        String(field.targetFormId ?? ''),
-        String(refId),
-      )
+      refDisplayMap.value[field.name] = await resolveReferenceDisplay(String(field.targetFormId ?? ''), String(refId))
     } catch {
       refDisplayMap.value[field.name] = String(refId)
     }
