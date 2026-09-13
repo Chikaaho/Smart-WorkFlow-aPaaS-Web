@@ -3,6 +3,8 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/foundation/auth'
 import type { LoginChallengeDTO } from '@/foundation/auth'
+import { SSO_PROVIDERS, startSsoLoginAuthorize } from '@/foundation/auth/sso'
+import type { SsoProvider } from '@/foundation/auth/sso'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,6 +16,12 @@ const captcha = ref('')
 const challenge = ref<LoginChallengeDTO | null>(null)
 const submitting = ref(false)
 const errorMessage = ref('')
+
+// 第三方登录（登录前安全发起：显式租户，服务端校验后重定向到 Provider）
+const ssoProvider = ref<SsoProvider>('WECOM')
+const ssoTenantId = ref('')
+const ssoBusy = ref(false)
+const ssoError = ref('')
 
 function safeRedirect(raw: unknown): string {
   return typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/'
@@ -58,6 +66,26 @@ async function onSubmit(): Promise<void> {
     submitting.value = false
   }
 }
+
+async function onSsoLogin(): Promise<void> {
+  ssoError.value = ''
+  const tenant = Number(ssoTenantId.value)
+  if (!Number.isInteger(tenant) || tenant < 0) {
+    ssoError.value = '请输入有效的租户 ID'
+    return
+  }
+  ssoBusy.value = true
+  try {
+    const redirect = safeRedirect(route.query.redirect)
+    const start = await startSsoLoginAuthorize(ssoProvider.value, tenant, redirect)
+    // 服务端重定向到 Provider 授权页；state 由服务端签发，前端不持久化
+    globalThis.location.href = start.authorizeUrl
+  } catch (error) {
+    ssoError.value = error instanceof Error ? error.message : '第三方登录发起失败'
+  } finally {
+    ssoBusy.value = false
+  }
+}
 </script>
 
 <template>
@@ -97,10 +125,25 @@ async function onSubmit(): Promise<void> {
       <button type="submit" :disabled="submitting || !challenge">
         {{ submitting ? '登录中...' : '登录' }}
       </button>
-      <p class="login-page__sso-hint">
-        第三方账号登录：请先使用账号密码登录，在「个人中心 → 账号绑定」完成绑定后，
-        可经企业统一身份入口进入。
-      </p>
+      <div class="login-page__sso">
+        <p class="login-page__sso-title">第三方账号登录</p>
+        <div class="login-page__sso-row">
+          <select v-model="ssoProvider" aria-label="选择 Provider">
+            <option v-for="p in SSO_PROVIDERS" :key="p.key" :value="p.key">{{ p.label }}</option>
+          </select>
+          <input
+            v-model="ssoTenantId"
+            type="number"
+            min="0"
+            placeholder="租户 ID"
+            aria-label="租户 ID"
+          />
+          <button type="button" :disabled="ssoBusy" @click="onSsoLogin">
+            {{ ssoBusy ? '跳转中...' : '前往授权' }}
+          </button>
+        </div>
+        <p v-if="ssoError" class="login-page__error">{{ ssoError }}</p>
+      </div>
     </form>
   </div>
 </template>
@@ -156,6 +199,33 @@ img.login-page__captcha {
   color: #d33;
   font-size: 13px;
   margin: 0;
+}
+.login-page__sso {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+.login-page__sso-title {
+  font-size: 12px;
+  color: #909399;
+  margin: 0;
+}
+.login-page__sso-row {
+  display: flex;
+  gap: 6px;
+}
+.login-page__sso-row select,
+.login-page__sso-row input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 13px;
 }
 .login-page__sso-hint {
   color: #909399;

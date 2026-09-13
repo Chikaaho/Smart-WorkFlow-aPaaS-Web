@@ -38,6 +38,19 @@ export const SSO_PROVIDERS: ReadonlyArray<{ key: SsoProvider; label: string }> =
 
 // ========== API ==========
 
+/** 登录前安全授权发起（免认证；显式租户，服务端校验租户与 Provider 启用后签发 state） */
+export async function startSsoLoginAuthorize(
+  provider: SsoProvider,
+  tenantId: number,
+  redirect?: string,
+): Promise<SsoAuthorizeDTO> {
+  return request<SsoAuthorizeDTO>({
+    method: 'GET',
+    url: `/auth/sso/${provider}/authorize-login`,
+    params: { tenant: tenantId, ...(redirect ? { redirect } : {}) },
+  })
+}
+
 /** 服务端授权发起（需认证场景：个人中心绑定入口） */
 export async function startSsoAuthorize(
   provider: SsoProvider,
