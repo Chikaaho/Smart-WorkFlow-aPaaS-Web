@@ -167,6 +167,9 @@ import {
   MOCK_PROCESS_DEFS,
   MOCK_NOTIFY_MESSAGES,
   MOCK_NOTIFY_TEMPLATES,
+  MOCK_NOTIFY_RULES,
+  MOCK_NOTIFY_CHANNELS,
+  MOCK_NOTIFY_SUBSCRIPTIONS,
   MOCK_USERS_LIST,
   MOCK_ROLES_LIST,
   MOCK_DEPTS_LIST,
@@ -1925,6 +1928,172 @@ export const mockRegistrations: MockRegistration[] = [
         return { code: 2104, message: '已发布的流程定义无法修改', data: null }
       }
       def.updateTime = new Date().toISOString().slice(0, 19).replace('T', ' ')
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // ── I6 收件箱：服务端真分页 + 未读数 + 全部已读 + 受保护深链 ──
+  {
+    method: 'GET',
+    pattern: '/api/notify/inbox',
+    handler: (_params, query) => {
+      const q = query as Record<string, string>
+      let result = [...MOCK_NOTIFY_MESSAGES]
+      if (q.read !== undefined && q.read !== '') {
+        result = result.filter((m) => m.read === (q.read === 'true'))
+      }
+      if (q.keyword) {
+        const kw = q.keyword.toLowerCase()
+        result = result.filter(
+          (m) => m.title.toLowerCase().includes(kw) || m.content.toLowerCase().includes(kw),
+        )
+      }
+      const pageNum = Math.max(1, Number(q.pageNum ?? 1))
+      const pageSize = Math.max(1, Math.min(200, Number(q.pageSize ?? 10)))
+      const total = result.length
+      const records = result.slice((pageNum - 1) * pageSize, pageNum * pageSize)
+      return { code: 0, message: 'ok', data: { records, total, pageNum, pageSize } }
+    },
+  },
+  {
+    method: 'GET',
+    pattern: '/api/notify/inbox/unread-count',
+    handler: () => ({
+      code: 0,
+      message: 'ok',
+      data: MOCK_NOTIFY_MESSAGES.filter((m) => !m.read).length,
+    }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/notify/inbox/read-all',
+    handler: () => {
+      let affected = 0
+      MOCK_NOTIFY_MESSAGES.forEach((m) => {
+        if (!m.read) {
+          m.read = true
+          affected++
+        }
+      })
+      return { code: 0, message: 'ok', data: affected }
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/notify/inbox/:id/link',
+    handler: (params) => {
+      const msg = MOCK_NOTIFY_MESSAGES.find(
+        (m) => m.id === Number((params as Record<string, string>).id),
+      )
+      if (!msg) return { code: 404, message: '通知不存在', data: null }
+      return { code: 0, message: 'ok', data: { linkType: 'WF_TASK', linkId: String(msg.id) } }
+    },
+  },
+
+  // ── I6 通知规则（管理端） ──
+  {
+    method: 'GET',
+    pattern: '/api/notify/rules',
+    handler: (_params, query) => {
+      const q = query as Record<string, string>
+      const pageNum = Math.max(1, Number(q.pageNum ?? 1))
+      const pageSize = Math.max(1, Math.min(200, Number(q.pageSize ?? 20)))
+      const records = MOCK_NOTIFY_RULES.slice((pageNum - 1) * pageSize, pageNum * pageSize)
+      return {
+        code: 0,
+        message: 'ok',
+        data: { records, total: MOCK_NOTIFY_RULES.length, pageNum, pageSize },
+      }
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/notify/rules',
+    handler: (_params, body) => {
+      const req = body as Record<string, unknown>
+      const id = Math.max(0, ...MOCK_NOTIFY_RULES.map((r) => r.id)) + 1
+      const rule = { id, ...req } as unknown as (typeof MOCK_NOTIFY_RULES)[number]
+      MOCK_NOTIFY_RULES.push(rule)
+      return { code: 0, message: 'ok', data: id }
+    },
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/notify/rules/:id',
+    handler: (params, body) => {
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_NOTIFY_RULES.findIndex((r) => r.id === id)
+      if (idx === -1) return { code: 404, message: '规则不存在', data: null }
+      MOCK_NOTIFY_RULES[idx] = {
+        ...MOCK_NOTIFY_RULES[idx],
+        ...(body as object),
+      } as (typeof MOCK_NOTIFY_RULES)[number]
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/notify/rules/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_NOTIFY_RULES.findIndex((r) => r.id === id)
+      if (idx !== -1) MOCK_NOTIFY_RULES.splice(idx, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/notify/rules/:id/enabled/:enabled',
+    handler: (params) => {
+      const p = params as Record<string, string>
+      const rule = MOCK_NOTIFY_RULES.find((r) => r.id === Number(p.id))
+      if (!rule) return { code: 404, message: '规则不存在', data: null }
+      rule.enabled = p.enabled === 'true'
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // ── I6 渠道状态（管理端） ──
+  {
+    method: 'GET',
+    pattern: '/api/notify/channels',
+    handler: () => ({ code: 0, message: 'ok', data: MOCK_NOTIFY_CHANNELS }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/notify/channels/:channel',
+    handler: (params, body) => {
+      const channel = (params as Record<string, string>).channel
+      const row = MOCK_NOTIFY_CHANNELS.find((c) => c.channel === channel)
+      if (!row) return { code: 404, message: '渠道未登记', data: null }
+      const req = body as {
+        tenantEnabled?: boolean
+        senderDisplay?: string
+        configSummary?: string
+      }
+      if (req.tenantEnabled && !row.systemConfigured) {
+        return { code: 400, message: '生产渠道适配器未装配，禁止启用', data: null }
+      }
+      if (row) row.tenantEnabled = Boolean(req.tenantEnabled)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // ── I6 订阅偏好（用户端） ──
+  {
+    method: 'GET',
+    pattern: '/api/notify/subscriptions',
+    handler: () => ({ code: 0, message: 'ok', data: MOCK_NOTIFY_SUBSCRIPTIONS }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/notify/subscriptions',
+    handler: (_params, body) => {
+      const req = body as {
+        items?: Array<{ eventType: string; channel: string; enabled: boolean }>
+      }
+      if (!req?.items) return { code: 400, message: '订阅内容不能为空', data: null }
+      MOCK_NOTIFY_SUBSCRIPTIONS.splice(0, MOCK_NOTIFY_SUBSCRIPTIONS.length, ...req.items)
       return { code: 0, message: 'ok', data: null }
     },
   },

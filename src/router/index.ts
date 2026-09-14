@@ -211,6 +211,27 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '发送通知', authority: ['notify:batch:send'] },
       },
       {
+        // I6：通知规则管理页（动态菜单 V90 同源；静态路由保证直达 URL 可达）
+        path: 'notify/rule',
+        name: 'notify-rule-list',
+        component: () => import('@/modules/notify/views/NotifyRuleList.vue'),
+        meta: { title: '通知规则', authority: ['notify:rule:view'] },
+      },
+      {
+        // I6：渠道配置页
+        path: 'notify/channel',
+        name: 'notify-channel-list',
+        component: () => import('@/modules/notify/views/NotifyChannelList.vue'),
+        meta: { title: '渠道配置', authority: ['notify:channel:view'] },
+      },
+      {
+        // I6：订阅偏好页
+        path: 'notify/preference',
+        name: 'notify-preference',
+        component: () => import('@/modules/notify/views/NotifyPreference.vue'),
+        meta: { title: '订阅偏好', authority: ['notify:preference'] },
+      },
+      {
         // v0.0.2 P3：通知发送记录（有权管理者），发送记录查询/失败重发/关联日志。
         path: 'notify/record',
         name: 'notify-record-list',
@@ -234,6 +255,13 @@ export const routes: RouteRecordRaw[] = [
     name: 'mobile-workflow-center',
     component: () => import('@/modules/workflow/views/MobileWorkspace.vue'),
     meta: { title: '移动工作台' },
+  },
+  {
+    // I6 §3.7 移动 H5 收件箱：与 PC 收件箱同一消息/已读状态/对象权限
+    path: '/m/notify',
+    name: 'mobile-notify-inbox',
+    component: () => import('@/modules/notify/views/NotifyInboxMobile.vue'),
+    meta: { title: '移动收件箱' },
   },
   {
     path: '/login',

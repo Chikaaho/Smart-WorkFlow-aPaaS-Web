@@ -6,7 +6,9 @@ const mockDeleteMessage = vi.fn()
 const mockElMessageBox = vi.fn()
 
 vi.mock('@/modules/notify/api', () => ({
-  queryNotifyMessages: vi.fn(),
+  pageNotifyInbox: vi.fn(),
+  unreadNotifyCount: vi.fn(),
+  readAllNotify: vi.fn(),
   markAsRead: vi.fn(),
   deleteMessage: (...args: unknown[]) => mockDeleteMessage(...args),
 }))
@@ -31,7 +33,7 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
-import { queryNotifyMessages, markAsRead } from '@/modules/notify/api'
+import { pageNotifyInbox, markAsRead } from '@/modules/notify/api'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import type { NotifyMessage } from '@/contracts/notify'
@@ -80,17 +82,22 @@ describe('NotifyHome.vue', () => {
     vi.clearAllMocks()
   })
 
-  it('calls queryNotifyMessages on mount and renders list', async () => {
-    vi.mocked(queryNotifyMessages).mockResolvedValueOnce([mockMessage])
+  it('calls pageNotifyInbox on mount and renders list', async () => {
+    vi.mocked(pageNotifyInbox).mockResolvedValueOnce({
+      list: [mockMessage],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
     const wrapper = mount(NotifyHome, { global: { stubs } })
     await nextTick()
-    expect(queryNotifyMessages).toHaveBeenCalledOnce()
+    expect(pageNotifyInbox).toHaveBeenCalledOnce()
     expect((wrapper.vm as unknown as { list: NotifyMessage[] }).list).toHaveLength(1)
     expect((wrapper.vm as unknown as { total: number }).total).toBe(1)
   })
 
   it('shows error message when API fails with ApiError', async () => {
-    vi.mocked(queryNotifyMessages).mockRejectedValueOnce(new ApiError(2001, '获取通知列表失败'))
+    vi.mocked(pageNotifyInbox).mockRejectedValueOnce(new ApiError(2001, '获取通知列表失败'))
     const wrapper = mount(NotifyHome, { global: { stubs } })
     await nextTick()
     await nextTick()
@@ -99,7 +106,7 @@ describe('NotifyHome.vue', () => {
   })
 
   it('shows fallback error message when API fails with non-ApiError', async () => {
-    vi.mocked(queryNotifyMessages).mockRejectedValueOnce(new Error('Network error'))
+    vi.mocked(pageNotifyInbox).mockRejectedValueOnce(new Error('Network error'))
     const wrapper = mount(NotifyHome, { global: { stubs } })
     await nextTick()
     await nextTick()
@@ -109,7 +116,12 @@ describe('NotifyHome.vue', () => {
 
   it('calls markAsRead and sets read status', async () => {
     const unreadMessage = { ...mockMessage, read: false }
-    vi.mocked(queryNotifyMessages).mockResolvedValueOnce([unreadMessage])
+    vi.mocked(pageNotifyInbox).mockResolvedValueOnce({
+      list: [unreadMessage],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
     vi.mocked(markAsRead).mockResolvedValueOnce(undefined)
 
     const wrapper = mount(NotifyHome, { global: { stubs } })
@@ -130,7 +142,12 @@ describe('NotifyHome.vue', () => {
 
   it('shows error when markAsRead fails', async () => {
     const unreadMessage = { ...mockMessage, read: false }
-    vi.mocked(queryNotifyMessages).mockResolvedValueOnce([unreadMessage])
+    vi.mocked(pageNotifyInbox).mockResolvedValueOnce({
+      list: [unreadMessage],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
     vi.mocked(markAsRead).mockRejectedValueOnce(new ApiError(2002, '标记已读失败'))
 
     const wrapper = mount(NotifyHome, { global: { stubs } })
@@ -145,7 +162,12 @@ describe('NotifyHome.vue', () => {
   })
 
   it('shows empty state when no messages', async () => {
-    vi.mocked(queryNotifyMessages).mockResolvedValueOnce([])
+    vi.mocked(pageNotifyInbox).mockResolvedValueOnce({
+      list: [],
+      total: 0,
+      pageNum: 1,
+      pageSize: 10,
+    })
     const wrapper = mount(NotifyHome, { global: { stubs } })
     await nextTick()
     await nextTick()
@@ -154,7 +176,12 @@ describe('NotifyHome.vue', () => {
   })
 
   it('calls deleteMessage after confirm and removes from list', async () => {
-    vi.mocked(queryNotifyMessages).mockResolvedValueOnce([mockMessage])
+    vi.mocked(pageNotifyInbox).mockResolvedValueOnce({
+      list: [mockMessage],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
     mockDeleteMessage.mockResolvedValueOnce(undefined)
     mockElMessageBox.mockResolvedValueOnce(undefined) // 用户确认
 
@@ -173,7 +200,12 @@ describe('NotifyHome.vue', () => {
   })
 
   it('does not delete when user cancels confirm', async () => {
-    vi.mocked(queryNotifyMessages).mockResolvedValueOnce([mockMessage])
+    vi.mocked(pageNotifyInbox).mockResolvedValueOnce({
+      list: [mockMessage],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
     mockElMessageBox.mockRejectedValueOnce(new Error('cancel')) // 用户取消
 
     const wrapper = mount(NotifyHome, { global: { stubs } })
@@ -190,7 +222,12 @@ describe('NotifyHome.vue', () => {
   })
 
   it('shows error when deleteMessage fails', async () => {
-    vi.mocked(queryNotifyMessages).mockResolvedValueOnce([mockMessage])
+    vi.mocked(pageNotifyInbox).mockResolvedValueOnce({
+      list: [mockMessage],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
     mockDeleteMessage.mockRejectedValueOnce(new ApiError(2003, '删除失败'))
     mockElMessageBox.mockResolvedValueOnce(undefined)
 

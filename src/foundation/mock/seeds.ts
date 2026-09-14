@@ -1791,6 +1791,101 @@ export const MOCK_NOTIFY_MESSAGES: Array<{
   },
 ]
 
+export const MOCK_NOTIFY_RULES: Array<{
+  id: number
+  ruleCode: string
+  name: string
+  eventType: string
+  channelPriority: string
+  recipientRule: string
+  requiredFlag: boolean
+  failurePolicy: 'RETRY' | 'MANUAL'
+  enabled: boolean
+  remark: string | null
+}> = [
+  {
+    id: 1,
+    ruleCode: 'todo_created_default',
+    name: '待办创建默认规则',
+    eventType: 'TODO_CREATED',
+    channelPriority: 'IN_APP',
+    recipientRule: 'ASSIGNEE',
+    requiredFlag: true,
+    failurePolicy: 'RETRY',
+    enabled: true,
+    remark: null,
+  },
+  {
+    id: 2,
+    ruleCode: 'process_approved_default',
+    name: '审批通过默认规则',
+    eventType: 'PROCESS_APPROVED',
+    channelPriority: 'IN_APP',
+    recipientRule: 'INITIATOR',
+    requiredFlag: true,
+    failurePolicy: 'RETRY',
+    enabled: true,
+    remark: null,
+  },
+]
+
+export const MOCK_NOTIFY_CHANNELS: Array<{
+  channel: string
+  systemConfigured: boolean
+  tenantEnabled: boolean
+  senderDisplay: string | null
+  configSummary: string | null
+}> = [
+  {
+    channel: 'IN_APP',
+    systemConfigured: true,
+    tenantEnabled: true,
+    senderDisplay: null,
+    configSummary: '本地收件箱',
+  },
+  {
+    channel: 'SMS',
+    systemConfigured: false,
+    tenantEnabled: false,
+    senderDisplay: null,
+    configSummary: null,
+  },
+  {
+    channel: 'EMAIL',
+    systemConfigured: false,
+    tenantEnabled: false,
+    senderDisplay: null,
+    configSummary: null,
+  },
+  {
+    channel: 'FEISHU',
+    systemConfigured: false,
+    tenantEnabled: false,
+    senderDisplay: null,
+    configSummary: null,
+  },
+  {
+    channel: 'DINGTALK',
+    systemConfigured: false,
+    tenantEnabled: false,
+    senderDisplay: null,
+    configSummary: null,
+  },
+  {
+    channel: 'WECHAT_WORK',
+    systemConfigured: false,
+    tenantEnabled: false,
+    senderDisplay: null,
+    configSummary: null,
+  },
+]
+
+export const MOCK_NOTIFY_SUBSCRIPTIONS: Array<{
+  eventType: string
+  channel: string
+  enabled: boolean
+}> = []
+
 // ─── 消息模板 Mock 种子（P36 / M05-F02-01，可变数组，handler 原地 mutate） ──
 // 语义与真实接口一致：templateCode 租户内唯一、${var} 占位符、enabled 启停。
 export const MOCK_NOTIFY_TEMPLATES: Array<{

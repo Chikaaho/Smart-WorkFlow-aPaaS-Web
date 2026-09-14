@@ -18,12 +18,12 @@ function adaptPage<T>(raw: BackendPageResult<T>): PageResult<T> {
   }
 }
 
-/** 通知发送记录（v0.0.2 P3；有权管理者可见）。 */
+/** 通知发送记录摘要（I6 最小暴露：不含完整正文/联系方式/Provider 原始响应）。 */
 export interface NotifyRecord {
   id: number
   recipientId: number
   title: string
-  content: string
+  content?: string
   bizType: string
   bizId: string | null
   read: boolean
@@ -33,6 +33,13 @@ export interface NotifyRecord {
   failureReason: string | null
   idempotencyKey: string | null
   createTime: string
+  /* I6 扩展 */
+  attemptCount?: number
+  templateId?: number | null
+  templateVersion?: number | null
+  eventType?: string
+  recipientMask?: string
+  failureClass?: string | null
 }
 
 /** 单条投递尝试流水。 */
@@ -79,9 +86,14 @@ export async function queryNotifyRecords(
   return adaptPage(raw)
 }
 
-/** GET /notify/records/{id} — 单条记录 + 关联尝试流水。 */
+/** GET /notify/records/{id} — 单条记录（最小暴露摘要） + 尝试流水。 */
 export async function queryNotifyRecordDetail(id: number): Promise<NotifyRecordDetail> {
   return request<NotifyRecordDetail>({ method: 'GET', url: `/notify/records/${id}` })
+}
+
+/** GET /notify/records/{id}/detail — 必要详情（含正文与尝试流水；独立权限 notify:record:detail + 服务端审计）。 */
+export async function queryNotifyRecordFullDetail(id: number): Promise<NotifyRecordDetail> {
+  return request<NotifyRecordDetail>({ method: 'GET', url: `/notify/records/${id}/detail` })
 }
 
 /** POST /notify/records/{id}/resend — 失败重发（并发只受理一次）。返回最新状态。 */
