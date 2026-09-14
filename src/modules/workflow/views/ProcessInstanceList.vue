@@ -6,6 +6,7 @@
  * 详情抽屉：实例基本信息 + BPMN 流程图高亮（活跃节点/已完成节点）+ 流转时间线。
  */
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { StandardListTemplate } from '@/components/page-layout'
 import {
   queryInstances,
@@ -170,9 +171,31 @@ function closeDrawer() {
   detailTrace.value = null
 }
 
+const pcRoute = useRoute()
+const pcRouter2 = useRouter()
+// I6 G4a：收件箱深链（focus=processInstanceId）自动打开对应实例详情抽屉
+const focusInstanceId = computed(() => {
+  const v = pcRoute.query.focus
+  return typeof v === 'string' && v ? v : null
+})
+
 onMounted(() => {
   void loadList()
 })
+
+// I6 G4a：收件箱深链（focus=processInstanceId）自动打开对应实例详情抽屉
+void (async () => {
+  if (!focusInstanceId.value) return
+  try {
+    await openDrawer({ processInstanceId: focusInstanceId.value } as Parameters<
+      typeof openDrawer
+    >[0])
+  } catch {
+    /* 无权或不存在：抽屉内错误提示兜底 */
+  } finally {
+    void pcRouter2.replace({ query: { ...pcRoute.query, focus: undefined } })
+  }
+})()
 
 // ─── 时间线过滤：只展示 userTask 类型的条目（排除 startEvent/endEvent/sequenceFlow） ───
 

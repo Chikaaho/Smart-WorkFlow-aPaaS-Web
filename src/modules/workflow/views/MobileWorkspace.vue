@@ -6,7 +6,7 @@
  * 服务端当前身份），复杂意见表单在 H5 内原生完成，不以静态页或桌面跳转代替。
  */
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   queryTodoTasks,
@@ -15,6 +15,7 @@ import {
   acceptTaskAction,
   pollCommandStatus,
   queryTaskDetail,
+  getInstanceDetail,
 } from '@/modules/workflow/api'
 import type { PageQuery } from '@/contracts/common'
 import type { TaskDetail } from '@/contracts/bpm'
@@ -23,6 +24,12 @@ import { getFormData, getFormDefinition } from '@/modules/form/api/form'
 import type { FormSchema } from '@/contracts/form-schema'
 
 type MobileTab = 'todo' | 'initiated' | 'drafts'
+
+// I6 G4b：收件箱深链恢复（ref=processInstanceId → 实例详情，服务端对象权限 fail closed）
+const mRoute = useRoute()
+const refInstance = ref<Record<string, unknown> | null>(null)
+const refInstanceError = ref('')
+const refVisible = ref(false)
 
 const router = useRouter()
 const activeTab = ref<MobileTab>('todo')
@@ -324,6 +331,19 @@ function opinionInputType(field: OpinionField): string {
 }
 
 onMounted(() => void loadTab('todo'))
+
+// 深链恢复：服务端重新鉴权（无权/不存在 → fail closed 错误提示），不依赖前端缓存的登录态
+void (async () => {
+  const refId = mRoute.query.ref
+  if (typeof refId !== 'string' || !refId) return
+  try {
+    refInstance.value = await getInstanceDetail(refId)
+    refVisible.value = true
+  } catch (err) {
+    refInstanceError.value = err instanceof ApiError ? err.msg : '无权访问该业务对象'
+    refVisible.value = true
+  }
+})()
 </script>
 
 <template>
@@ -356,6 +376,45 @@ onMounted(() => void loadTab('todo'))
       </li>
       <li v-if="isEmpty" class="m-item m-empty">暂无数据</li>
     </ul>
+
+    <!-- I6 G4b：深链恢复的实例详情（只读，服务端对象权限已裁决） -->
+    <el-drawer v-model="refVisible" size="92%" direction="btt" class="m-detail">
+      <template #title>
+        <span class="m-detail-title">流程实例详情</span>
+      </template>
+      <div class="m-detail-body">
+        <el-alert
+          v-if="refInstanceError"
+          :title="refInstanceError"
+          type="error"
+          :closable="false"
+        />
+        <template v-if="refInstance">
+          <section class="m-section">
+            <h3 class="m-section-title">基本信息</h3>
+            <div class="m-kv">
+              <span>实例 ID</span><b>{{ refInstance.processInstanceId }}</b>
+            </div>
+            <div class="m-kv">
+              <span>状态</span><b>{{ refInstance.status }}</b>
+            </div>
+            <div class="m-kv">
+              <span>发起人</span><b>{{ refInstance.initiatorId }}</b>
+            </div>
+            <div class="m-kv">
+              <span>表单</span><b>{{ refInstance.formKey }}</b>
+            </div>
+          </section>
+          <section class="m-section">
+            <h3 class="m-section-title">流转记录</h3>
+            <div v-for="(t, i) in refInstance.flowTrace || []" :key="i" class="m-kv">
+              <span>{{ t.activityName || t.activityId || i }}</span>
+              <b>{{ t.assigneeName || t.assignee || '' }} {{ t.endTime || '' }}</b>
+            </div>
+          </section>
+        </template>
+      </div>
+    </el-drawer>
 
     <!-- 详情面板：任务/业务表单详情 + 正式意见表单 -->
     <el-drawer v-model="detailVisible" size="92%" direction="btt" class="m-detail">

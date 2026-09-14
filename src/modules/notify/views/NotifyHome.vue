@@ -15,9 +15,11 @@ import {
   readAllNotify,
   markAsRead,
   deleteMessage,
+  openNotifyLink,
 } from '@/modules/notify/api'
 import type { NotifyQueryParams } from '@/modules/notify/api'
 import { ApiError } from '@/foundation/request'
+import { useRouter } from 'vue-router'
 import type { NotifyMessage } from '@/contracts/notify'
 
 // ─── 列表状态 ───
@@ -180,6 +182,22 @@ async function handleDelete(row: NotifyMessage) {
   }
 }
 
+/** 受保护深链：服务端鉴权后按受控类型路由（不使用任意 URL），与移动端同一契约。 */
+const pcRouter = useRouter()
+async function openLink(row: NotifyMessage) {
+  try {
+    const target = await openNotifyLink(row.id)
+    if (target.linkType === 'WF_TASK' || target.linkType === 'WF_PROCESS') {
+      void pcRouter.push({ path: '/workflow/instances', query: { focus: target.linkId } })
+    } else {
+      ElMessage.info('该通知暂无页面跳转')
+    }
+  } catch (err) {
+    if (err instanceof ApiError) ElMessage.error(err.msg)
+    else ElMessage.error('无权访问该业务对象')
+  }
+}
+
 onMounted(loadList)
 </script>
 
@@ -279,6 +297,7 @@ onMounted(loadList)
             标记已读
           </el-button>
           <span v-else class="read-label">已读</span>
+          <el-button size="small" text type="primary" @click="openLink(row)"> 跳转 </el-button>
           <el-button
             size="small"
             text
