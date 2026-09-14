@@ -297,7 +297,9 @@ onMounted(loadList)
             标记已读
           </el-button>
           <span v-else class="read-label">已读</span>
-          <el-button size="small" text type="primary" @click="openLink(row)"> 跳转 </el-button>
+          <el-button size="small" text type="primary" @click="openLink(row as NotifyMessage)">
+            跳转
+          </el-button>
           <el-button
             size="small"
             text

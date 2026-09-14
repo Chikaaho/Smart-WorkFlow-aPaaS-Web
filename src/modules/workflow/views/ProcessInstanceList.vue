@@ -175,7 +175,7 @@ const pcRoute = useRoute()
 const pcRouter2 = useRouter()
 // I6 G4a：收件箱深链（focus=processInstanceId）自动打开对应实例详情抽屉
 const focusInstanceId = computed(() => {
-  const v = pcRoute.query.focus
+  const v = pcRoute?.query?.focus
   return typeof v === 'string' && v ? v : null
 })
 

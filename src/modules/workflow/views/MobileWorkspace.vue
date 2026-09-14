@@ -27,7 +27,7 @@ type MobileTab = 'todo' | 'initiated' | 'drafts'
 
 // I6 G4b：收件箱深链恢复（ref=processInstanceId → 实例详情，服务端对象权限 fail closed）
 const mRoute = useRoute()
-const refInstance = ref<Record<string, unknown> | null>(null)
+const refInstance = ref<import('@/contracts/bpm').InstanceDetail | null>(null)
 const refInstanceError = ref('')
 const refVisible = ref(false)
 
