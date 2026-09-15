@@ -184,6 +184,9 @@ watch(
       })
     }
   },
+  // ReferenceControl 以 v-if+v-model:visible 挂载本组件：打开即「挂载时 visible 已为 true」，
+  // 无 immediate 则首开永不触发加载（弹窗空列/空数据），必须立即执行一次。
+  { immediate: true },
 )
 
 /* ── 值显示 ── */

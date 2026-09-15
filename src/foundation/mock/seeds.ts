@@ -257,7 +257,7 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
             component: null,
             sort: 1,
             menuType: 2,
-            permission: 'system:user:add',
+            permission: 'system:user:create',
             hidden: true,
           },
           {
@@ -269,7 +269,7 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
             component: null,
             sort: 2,
             menuType: 2,
-            permission: 'system:user:edit',
+            permission: 'system:user:update',
             hidden: true,
           },
           {
@@ -281,7 +281,7 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
             component: null,
             sort: 3,
             menuType: 2,
-            permission: 'system:user:remove',
+            permission: 'system:user:delete',
             hidden: true,
           },
         ],
@@ -308,7 +308,7 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
             component: null,
             sort: 1,
             menuType: 2,
-            permission: 'system:role:add',
+            permission: 'system:role:create',
             hidden: true,
           },
           {
@@ -320,7 +320,7 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
             component: null,
             sort: 2,
             menuType: 2,
-            permission: 'system:role:edit',
+            permission: 'system:role:update',
             hidden: true,
           },
           {
@@ -332,7 +332,7 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
             component: null,
             sort: 3,
             menuType: 2,
-            permission: 'system:role:remove',
+            permission: 'system:role:delete',
             hidden: true,
           },
         ],
@@ -349,6 +349,44 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
         menuType: 1,
         permission: 'system:dept:list',
         hidden: false,
+        children: [
+          {
+            id: '130',
+            parentId: '13',
+            name: 'DeptCreate',
+            title: '新增部门',
+            path: '',
+            component: null,
+            sort: 1,
+            menuType: 2,
+            permission: 'system:dept:create',
+            hidden: true,
+          },
+          {
+            id: '131',
+            parentId: '13',
+            name: 'DeptUpdate',
+            title: '修改部门',
+            path: '',
+            component: null,
+            sort: 2,
+            menuType: 2,
+            permission: 'system:dept:update',
+            hidden: true,
+          },
+          {
+            id: '132',
+            parentId: '13',
+            name: 'DeptDelete',
+            title: '删除部门',
+            path: '',
+            component: null,
+            sort: 3,
+            menuType: 2,
+            permission: 'system:dept:delete',
+            hidden: true,
+          },
+        ],
       },
       {
         id: '14',
@@ -362,6 +400,44 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
         menuType: 1,
         permission: 'system:post:list',
         hidden: false,
+        children: [
+          {
+            id: '140',
+            parentId: '14',
+            name: 'PostCreate',
+            title: '新增岗位',
+            path: '',
+            component: null,
+            sort: 1,
+            menuType: 2,
+            permission: 'system:post:create',
+            hidden: true,
+          },
+          {
+            id: '141',
+            parentId: '14',
+            name: 'PostUpdate',
+            title: '修改岗位',
+            path: '',
+            component: null,
+            sort: 2,
+            menuType: 2,
+            permission: 'system:post:update',
+            hidden: true,
+          },
+          {
+            id: '142',
+            parentId: '14',
+            name: 'PostDelete',
+            title: '删除岗位',
+            path: '',
+            component: null,
+            sort: 3,
+            menuType: 2,
+            permission: 'system:post:delete',
+            hidden: true,
+          },
+        ],
       },
       {
         id: '18',
@@ -1715,6 +1791,101 @@ export const MOCK_NOTIFY_MESSAGES: Array<{
   },
 ]
 
+export const MOCK_NOTIFY_RULES: Array<{
+  id: number
+  ruleCode: string
+  name: string
+  eventType: string
+  channelPriority: string
+  recipientRule: string
+  requiredFlag: boolean
+  failurePolicy: 'RETRY' | 'MANUAL'
+  enabled: boolean
+  remark: string | null
+}> = [
+  {
+    id: 1,
+    ruleCode: 'todo_created_default',
+    name: '待办创建默认规则',
+    eventType: 'TODO_CREATED',
+    channelPriority: 'IN_APP',
+    recipientRule: 'ASSIGNEE',
+    requiredFlag: true,
+    failurePolicy: 'RETRY',
+    enabled: true,
+    remark: null,
+  },
+  {
+    id: 2,
+    ruleCode: 'process_approved_default',
+    name: '审批通过默认规则',
+    eventType: 'PROCESS_APPROVED',
+    channelPriority: 'IN_APP',
+    recipientRule: 'INITIATOR',
+    requiredFlag: true,
+    failurePolicy: 'RETRY',
+    enabled: true,
+    remark: null,
+  },
+]
+
+export const MOCK_NOTIFY_CHANNELS: Array<{
+  channel: string
+  systemConfigured: boolean
+  tenantEnabled: boolean
+  senderDisplay: string | null
+  configSummary: string | null
+}> = [
+  {
+    channel: 'IN_APP',
+    systemConfigured: true,
+    tenantEnabled: true,
+    senderDisplay: null,
+    configSummary: '本地收件箱',
+  },
+  {
+    channel: 'SMS',
+    systemConfigured: false,
+    tenantEnabled: false,
+    senderDisplay: null,
+    configSummary: null,
+  },
+  {
+    channel: 'EMAIL',
+    systemConfigured: false,
+    tenantEnabled: false,
+    senderDisplay: null,
+    configSummary: null,
+  },
+  {
+    channel: 'FEISHU',
+    systemConfigured: false,
+    tenantEnabled: false,
+    senderDisplay: null,
+    configSummary: null,
+  },
+  {
+    channel: 'DINGTALK',
+    systemConfigured: false,
+    tenantEnabled: false,
+    senderDisplay: null,
+    configSummary: null,
+  },
+  {
+    channel: 'WECHAT_WORK',
+    systemConfigured: false,
+    tenantEnabled: false,
+    senderDisplay: null,
+    configSummary: null,
+  },
+]
+
+export const MOCK_NOTIFY_SUBSCRIPTIONS: Array<{
+  eventType: string
+  channel: string
+  enabled: boolean
+}> = []
+
 // ─── 消息模板 Mock 种子（P36 / M05-F02-01，可变数组，handler 原地 mutate） ──
 // 语义与真实接口一致：templateCode 租户内唯一、${var} 占位符、enabled 启停。
 export const MOCK_NOTIFY_TEMPLATES: Array<{
@@ -1821,7 +1992,7 @@ export const MOCK_USERS_LIST = [
     status: 0,
     deptId: '1',
     roleIds: ['2'],
-    postIds: ['1'],
+    posts: [{ postId: '1', deptId: '1' }],
     isAdmin: true,
     avatar: null,
     createTime: '2026-06-01 10:00:00',
@@ -1837,7 +2008,7 @@ export const MOCK_USERS_LIST = [
     status: 0,
     deptId: '2',
     roleIds: ['3'],
-    postIds: ['3'],
+    posts: [{ postId: '3', deptId: '2' }],
     isAdmin: false,
     avatar: null,
     createTime: '2026-06-15 09:00:00',
@@ -1853,7 +2024,10 @@ export const MOCK_USERS_LIST = [
     status: 0,
     deptId: '2',
     roleIds: ['3'],
-    postIds: ['3', '4'],
+    posts: [
+      { postId: '3', deptId: '2' },
+      { postId: '4', deptId: '2' },
+    ],
     isAdmin: false,
     avatar: null,
     createTime: '2026-06-20 11:00:00',
@@ -1870,7 +2044,7 @@ export const MOCK_USERS_LIST = [
     deptId: '3',
     // MOCK_ROLES_LIST 重复 id 修正后 HR 专员为 id '5'；保持原绑定语义（HR 专员）
     roleIds: ['5'],
-    postIds: ['4'],
+    posts: [{ postId: '4', deptId: '3' }],
     isAdmin: false,
     avatar: null,
     createTime: '2026-07-01 08:00:00',
@@ -1886,7 +2060,7 @@ export const MOCK_USERS_LIST = [
     status: 1,
     deptId: '3',
     roleIds: [],
-    postIds: ['5'],
+    posts: [{ postId: '5', deptId: '3' }],
     isAdmin: false,
     avatar: null,
     createTime: '2026-07-05 13:00:00',

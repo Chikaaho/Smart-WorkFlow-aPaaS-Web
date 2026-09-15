@@ -46,13 +46,13 @@ describe('hasPerm authorization chain（D143 等价自动化）', () => {
     mockSession.superAdmin = true
     // 即使 permissions 为空，superadmin 也应通过所有检查
     expect(hasPerm('agent:model:view')).toBe(true)
-    expect(hasPerm('system:user:add')).toBe(true)
+    expect(hasPerm('system:user:create')).toBe(true)
     expect(hasPerm('any:arbitrary:code')).toBe(true)
   })
 
-  it('isPermVisible 空会话回退 — 未登录（placeholder 态）时恒真不拦截', () => {
-    // placeholder: 非超管 + 空权限 + 空角色
-    expect(isPermVisible('agent:model:view')).toBe(true)
+  it('isPermVisible fail closed — 空权限会话（真实无权限用户）默认隐藏受控入口（I5）', () => {
+    // placeholder fail-open 已移除：非超管 + 空权限 + 空角色 → 隐藏
+    expect(isPermVisible('agent:model:view')).toBe(false)
   })
 
   it('后端统一 — agent:model:view 覆盖列表/详情/节点三个只读端点前端显隐', () => {

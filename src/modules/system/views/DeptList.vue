@@ -18,6 +18,9 @@ import {
   deleteDept,
 } from '@/modules/system/api/dept'
 import type { SysDept, DeptQuery } from '@/modules/system/types/dept'
+import type { SysUser } from '@/modules/system/types/user'
+import { pageUsers } from '@/modules/system/api/user'
+import { hasPerm } from '@/foundation/permission'
 import {
   SYS_DEPT_STATUS,
   deptStatusOptions,
@@ -119,7 +122,29 @@ const form = reactive<SysDept>({
   parentId: '0',
   sort: 0,
   status: SYS_DEPT_STATUS.NORMAL,
+  leaderId: '',
 })
+
+/** 部门负责人候选（正常状态用户，I1）：页面加载一次供选择与姓名回显 */
+const leaderOptions = ref<SysUser[]>([])
+
+async function loadLeaderOptions() {
+  try {
+    const result = await pageUsers({ pageNum: 1, pageSize: 200 }, { status: 0 })
+    leaderOptions.value = result.list
+  } catch {
+    leaderOptions.value = []
+  }
+}
+
+function leaderName(leaderId?: string): string {
+  if (!leaderId) return ''
+  return (
+    leaderOptions.value.find((user) => user.id === leaderId)?.realName ||
+    leaderOptions.value.find((user) => user.id === leaderId)?.username ||
+    ''
+  )
+}
 
 function resetForm() {
   form.name = ''
@@ -127,6 +152,7 @@ function resetForm() {
   form.parentId = '0'
   form.sort = 0
   form.status = SYS_DEPT_STATUS.NORMAL
+  form.leaderId = ''
   editingId.value = null
   formError.value = ''
 }
@@ -134,6 +160,7 @@ function resetForm() {
 function openCreate(parentId?: string) {
   resetForm()
   form.parentId = parentId ?? '0'
+  void loadLeaderOptions()
   dialogVisible.value = true
 }
 
@@ -147,6 +174,7 @@ async function openEdit(row: SysDept) {
     form.parentId = detail.parentId ?? '0'
     form.sort = detail.sort ?? 0
     form.status = detail.status
+    form.leaderId = detail.leaderId ?? ''
   } catch {
     formError.value = '加载部门详情失败'
     return
@@ -247,7 +275,11 @@ function addChildRow(r: unknown) {
   openCreate((r as SysDept).id)
 }
 
-onMounted(loadTree)
+onMounted(() => {
+  void loadTree()
+  // 负责人列回显依赖候选用户表：挂载即加载，而非等到打开编辑对话框（I1 G1b）
+  void loadLeaderOptions()
+})
 </script>
 
 <template>
@@ -255,7 +287,9 @@ onMounted(loadTree)
     <!-- 工具栏（复用 ListToolbar） -->
     <ListToolbar title="部门管理" :total="treeData.length">
       <template #actions>
-        <el-button type="primary" @click="openCreate()">新建部门</el-button>
+        <el-button v-perm="'system:dept:create'" type="primary" @click="openCreate()"
+          >新建部门</el-button
+        >
       </template>
     </ListToolbar>
 
@@ -302,6 +336,11 @@ onMounted(loadTree)
       >
         <el-table-column prop="name" label="部门名称" min-width="200" />
         <el-table-column prop="code" label="部门编码" min-width="120" />
+        <el-table-column label="负责人" width="110">
+          <template #default="{ row }">
+            {{ row.leaderId ? row.leaderName || leaderName(row.leaderId) : '' }}
+          </template>
+        </el-table-column>
         <el-table-column prop="sort" label="排序" width="70" />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
@@ -312,11 +351,30 @@ onMounted(loadTree)
         </el-table-column>
         <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" link type="primary" @click="addChildRow(row)"
+            <el-button
+              v-if="hasPerm('system:dept:create')"
+              size="small"
+              link
+              type="primary"
+              @click="addChildRow(row)"
               >新建子部门</el-button
             >
-            <el-button size="small" link type="primary" @click="editRow(row)">编辑</el-button>
-            <el-button size="small" link type="danger" @click="deleteRow(row)">删除</el-button>
+            <el-button
+              v-if="hasPerm('system:dept:update')"
+              size="small"
+              link
+              type="primary"
+              @click="editRow(row)"
+              >编辑</el-button
+            >
+            <el-button
+              v-if="hasPerm('system:dept:delete')"
+              size="small"
+              link
+              type="danger"
+              @click="deleteRow(row)"
+              >删除</el-button
+            >
           </template>
         </el-table-column>
       </el-table>
@@ -392,6 +450,23 @@ onMounted(loadTree)
                 :key="opt.value"
                 :label="opt.label"
                 :value="opt.value"
+              />
+            </el-select>
+          </div>
+          <div class="form-field">
+            <label class="form-field__label">部门负责人</label>
+            <el-select
+              v-model="form.leaderId"
+              placeholder="选择负责人（供流程审批取值）"
+              clearable
+              filterable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="user in leaderOptions"
+                :key="user.id"
+                :label="user.realName ? `${user.realName}（${user.username}）` : user.username"
+                :value="user.id ?? ''"
               />
             </el-select>
           </div>

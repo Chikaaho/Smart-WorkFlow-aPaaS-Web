@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
-// Mock API 层
+// Mock API 层：I3 起查看流程图消费已保存 ProcessGraph（自研渲染内核），不再使用 BPMN XML
 vi.mock('@/modules/workflow/api', () => ({
   pageProcessDefs: vi.fn(),
-  getProcessDefGraph: vi.fn(),
+  getProcessDefDefinition: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -13,21 +13,7 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ params: {}, query: {} }),
 }))
 
-// Mock bpmn adapter（vi.hoisted 确保变量在 hoist 时已初始化）
-const { mockDestroy, mockFitViewport } = vi.hoisted(() => ({
-  mockDestroy: vi.fn(),
-  mockFitViewport: vi.fn(),
-}))
-vi.mock('@/adapters/bpmn', () => ({
-  mountBpmnViewer: vi.fn().mockResolvedValue({
-    destroy: mockDestroy,
-    fitViewport: mockFitViewport,
-    highlight: vi.fn(),
-    clearHighlight: vi.fn(),
-  }),
-}))
-
-import { pageProcessDefs, getProcessDefGraph } from '@/modules/workflow/api'
+import { pageProcessDefs, getProcessDefDefinition } from '@/modules/workflow/api'
 import ProcessDefList from '@/modules/workflow/views/ProcessDefList.vue'
 import type { ProcessDef } from '@/contracts/bpm'
 
@@ -60,6 +46,11 @@ const stubs = {
   'el-result': {
     template: '<div v-if="title" class="el-result">{{ title }} {{ subTitle }}</div>',
     props: ['icon', 'title', 'subTitle'],
+  },
+  // 自研渲染内核：行为纯函数化，测试只验证视图消费的是 ProcessGraph 而非 BPMN XML
+  ProcessGraphView: {
+    template: '<div class="pg-view-stub" />',
+    props: ['graph', 'trace', 'height'],
   },
 }
 
@@ -96,6 +87,22 @@ function mockPageResult(defs: ProcessDef[] = [PUBLISHED_DEF, DRAFT_DEF]) {
   })
 }
 
+function mockDefinition() {
+  vi.mocked(getProcessDefDefinition).mockResolvedValue({
+    processKey: 'leave',
+    name: '请假流程',
+    formKey: 'form_001',
+    version: 1,
+    contractVersion: 2,
+    elements: [
+      { id: 'node_start', kind: 'node' as const, type: 'START', x: 100, y: 300, config: {} },
+      { id: 'node_end', kind: 'node' as const, type: 'END', x: 700, y: 300, config: {} },
+      { id: 'edge_1', kind: 'edge' as const, source: 'node_start', target: 'node_end' },
+    ] as import('@/contracts/process-graph').ProcessGraphElement[],
+    canvas: {},
+  })
+}
+
 // VM 类型辅助
 interface Vm {
   viewerVisible: boolean
@@ -104,6 +111,7 @@ interface Vm {
   currentDefName: string
   openViewer: (row: ProcessDef) => Promise<void>
   closeViewer: () => void
+  viewerGraph: import('@/contracts/process-graph').ProcessGraphDocument | null
   list: ProcessDef[]
 }
 
@@ -113,6 +121,7 @@ describe('ProcessDefList.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockPageResult()
+    mockDefinition()
   })
 
   // ─── 1. onMounted 调用 pageProcessDefs ───
@@ -155,11 +164,9 @@ describe('ProcessDefList.vue', () => {
     expect(vm.viewerError).toBe('')
   })
 
-  // ─── 4. openViewer 调用 getProcessDefGraph ───
+  // ─── 4. openViewer 消费已保存 ProcessGraph ───
 
-  it('openViewer calls getProcessDefGraph with row id', async () => {
-    vi.mocked(getProcessDefGraph).mockResolvedValueOnce('<xml/>')
-
+  it('openViewer consumes saved ProcessGraph via getProcessDefDefinition', async () => {
     const wrapper = mount(ProcessDefList, { global: { stubs } })
     await nextTick()
     await nextTick()
@@ -167,52 +174,21 @@ describe('ProcessDefList.vue', () => {
     const vm = wrapper.vm as unknown as Vm
     await vm.openViewer(PUBLISHED_DEF)
     await nextTick()
+    await nextTick()
 
-    expect(getProcessDefGraph).toHaveBeenCalledWith(PUBLISHED_DEF.id)
+    expect(getProcessDefDefinition).toHaveBeenCalledWith(PUBLISHED_DEF.id)
+    expect(vm.viewerGraph).not.toBeNull()
+    expect(vm.viewerGraph?.contractVersion).toBe(2)
+    expect(vm.viewerGraph?.elements).toHaveLength(3)
+    // 渲染视图拿到的是图数据（而非 BPMN XML 字符串）
+    const rendered = wrapper.find('.pg-view-stub')
+    expect(rendered.exists()).toBe(true)
   })
 
-  // ─── 5. getProcessDefGraph 成功后 mountBpmnViewer 被调用 ───
+  // ─── 5. fetch error 路径 ───
 
-  it('calls mountBpmnViewer after API resolves', async () => {
-    vi.mocked(getProcessDefGraph).mockResolvedValueOnce('<xml>test</xml>')
-    const { mountBpmnViewer } = await import('@/adapters/bpmn')
-
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
-    await nextTick()
-    await nextTick()
-
-    const vm = wrapper.vm as unknown as Vm
-    await vm.openViewer(PUBLISHED_DEF)
-    // wait for getProcessDefGraph → mountBpmnViewer
-    await new Promise((r) => setTimeout(r, 0))
-    await nextTick()
-
-    expect(mountBpmnViewer).toHaveBeenCalledTimes(1)
-    expect(mountBpmnViewer).toHaveBeenCalledWith(expect.any(Element), '<xml>test</xml>')
-  })
-
-  // ─── 6. fitViewport 被调用 ───
-
-  it('calls fitViewport after mountBpmnViewer resolves', async () => {
-    vi.mocked(getProcessDefGraph).mockResolvedValueOnce('<xml/>')
-
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
-    await nextTick()
-    await nextTick()
-
-    const vm = wrapper.vm as unknown as Vm
-    await vm.openViewer(PUBLISHED_DEF)
-    await new Promise((r) => setTimeout(r, 0))
-    await nextTick()
-    await nextTick()
-
-    expect(mockFitViewport).toHaveBeenCalledTimes(1)
-  })
-
-  // ─── 7. API 错误时设置 viewerError ───
-
-  it('sets viewerError on API failure', async () => {
-    vi.mocked(getProcessDefGraph).mockRejectedValueOnce({ msg: '流程定义未发布' })
+  it('sets viewerError on definition load failure', async () => {
+    vi.mocked(getProcessDefDefinition).mockRejectedValueOnce({ msg: '流程定义不存在' })
 
     const wrapper = mount(ProcessDefList, { global: { stubs } })
     await nextTick()
@@ -223,13 +199,11 @@ describe('ProcessDefList.vue', () => {
     await new Promise((r) => setTimeout(r, 0))
     await nextTick()
 
-    expect(vm.viewerError).toBe('流程定义未发布')
+    expect(vm.viewerError).toBe('流程定义不存在')
   })
-
-  // ─── 8. 普通 Error 的 viewerError fallback ───
 
   it('sets viewerError from Error.message fallback', async () => {
-    vi.mocked(getProcessDefGraph).mockRejectedValueOnce(new Error('网络错误'))
+    vi.mocked(getProcessDefDefinition).mockRejectedValueOnce(new Error('网络错误'))
 
     const wrapper = mount(ProcessDefList, { global: { stubs } })
     await nextTick()
@@ -243,34 +217,30 @@ describe('ProcessDefList.vue', () => {
     expect(vm.viewerError).toBe('网络错误')
   })
 
-  // ─── 9. closeViewer 调用 destroy 并重置状态 ───
+  // ─── 6. closeViewer 重置状态 ───
 
-  it('closeViewer calls destroy and resets state', async () => {
-    vi.mocked(getProcessDefGraph).mockResolvedValueOnce('<xml/>')
-
+  it('closeViewer resets state', async () => {
     const wrapper = mount(ProcessDefList, { global: { stubs } })
     await nextTick()
     await nextTick()
 
     const vm = wrapper.vm as unknown as Vm
     await vm.openViewer(PUBLISHED_DEF)
-    await new Promise((r) => setTimeout(r, 0))
+    await nextTick()
     await nextTick()
 
     vm.closeViewer()
     await nextTick()
 
-    expect(mockDestroy).toHaveBeenCalledTimes(1)
     expect(vm.viewerVisible).toBe(false)
     expect(vm.viewerError).toBe('')
     expect(vm.viewerLoading).toBe(false)
+    expect(vm.viewerGraph).toBeNull()
   })
 
-  // ─── 10. viewerLoading 在 finally 中被置 false ───
+  // ─── 7. viewerLoading 在 finally 中被置 false ───
 
   it('viewerLoading is false after openViewer completes', async () => {
-    vi.mocked(getProcessDefGraph).mockResolvedValueOnce('<xml/>')
-
     const wrapper = mount(ProcessDefList, { global: { stubs } })
     await nextTick()
     await nextTick()

@@ -4,29 +4,15 @@ import { nextTick } from 'vue'
 import ProcessInstanceList from '../ProcessInstanceList.vue'
 import type { ProcessInstance } from '@/contracts/bpm'
 
-// ─── Mock BPMN viewer (must be before vi.mock calls due to hoisting) ───
-const mockViewerInstance = vi.hoisted(() => ({
-  destroy: vi.fn(),
-  fitViewport: vi.fn(),
-  highlight: vi.fn(),
-  clearHighlight: vi.fn(),
-}))
-
 // ─── Mock API ───
 const mockQueryInstances = vi.hoisted(() => vi.fn())
 const mockGetInstanceDetail = vi.hoisted(() => vi.fn())
-const mockPageProcessDefs = vi.hoisted(() => vi.fn())
-const mockGetProcessDefGraph = vi.hoisted(() => vi.fn())
+const mockGetProcessDefDefinitionByKey = vi.hoisted(() => vi.fn())
 
 vi.mock('@/modules/workflow/api', () => ({
   queryInstances: (...args: unknown[]) => mockQueryInstances(...args),
   getInstanceDetail: (...args: unknown[]) => mockGetInstanceDetail(...args),
-  pageProcessDefs: (...args: unknown[]) => mockPageProcessDefs(...args),
-  getProcessDefGraph: (...args: unknown[]) => mockGetProcessDefGraph(...args),
-}))
-
-vi.mock('@/adapters/bpmn', () => ({
-  mountBpmnViewer: vi.fn().mockResolvedValue(mockViewerInstance),
+  getProcessDefDefinitionByKey: (...args: unknown[]) => mockGetProcessDefDefinitionByKey(...args),
 }))
 
 // ─── Mock StandardListTemplate（浅 stub：只渲染 slot 内容，绕过其内部复杂子组件） ───
@@ -120,35 +106,33 @@ function createWrapper() {
 describe('ProcessInstanceList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // 默认 mock：列表 + 流程定义 map + BPMN XML 均成功
-    mockPageProcessDefs.mockResolvedValue({
-      list: [
+    // 默认 mock：图定义成功（I3 渲染内核消费 ProcessGraph，不再走 BPMN XML）
+    mockGetProcessDefDefinitionByKey.mockResolvedValue({
+      processKey: 'leave_approval',
+      name: '请假审批流程',
+      formKey: 'leave-request',
+      version: 1,
+      elements: [
         {
-          id: 1,
-          processKey: 'leave_approval',
-          name: '请假审批流程',
-          formKey: 'leave-request',
-          defVersion: 1,
-          status: 'PUBLISHED',
-          createTime: '',
-          updateTime: '',
+          id: 'Activity_submit',
+          kind: 'node',
+          type: 'APPROVAL',
+          x: 200,
+          y: 200,
+          config: { name: '提交申请' },
         },
         {
-          id: 2,
-          processKey: 'skeleton_approval',
-          name: '单节点审批流程',
-          formKey: 'it_application',
-          defVersion: 1,
-          status: 'PUBLISHED',
-          createTime: '',
-          updateTime: '',
+          id: 'Activity_approve1',
+          kind: 'node',
+          type: 'APPROVAL',
+          x: 400,
+          y: 200,
+          config: { name: '部门经理审批' },
         },
+        { id: 'flow_1', kind: 'edge', source: 'Activity_submit', target: 'Activity_approve1' },
       ],
-      total: 2,
-      pageNum: 1,
-      pageSize: 100,
+      canvas: {},
     })
-    mockGetProcessDefGraph.mockResolvedValue('<definitions />')
   })
 
   // ────────────────────────────────────────────
@@ -212,8 +196,6 @@ describe('ProcessInstanceList', () => {
 
     // 应调用详情 API
     expect(mockGetInstanceDetail).toHaveBeenCalledWith('proc-001')
-    // 应调用 getProcessDefGraph
-    expect(mockGetProcessDefGraph).toHaveBeenCalled()
   })
 
   it('实例不存在时 drawer 内显示错误', async () => {

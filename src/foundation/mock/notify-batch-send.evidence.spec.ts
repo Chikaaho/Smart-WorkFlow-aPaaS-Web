@@ -134,7 +134,7 @@ describe('S3/S5 批量发送实际 Mock 行为证据', () => {
       status: 0,
       deptId: '11',
       roleIds: ['4'],
-      postIds: [],
+      posts: [],
       isAdmin: false,
       avatar: null,
       createTime: '2026-08-27 09:00:00',

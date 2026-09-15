@@ -455,6 +455,16 @@ async function loadDraftPayload(schema: FormSchema) {
       const val = values[field.name]
       if (field.type === 'TABLE') {
         formData[field.name] = Array.isArray(val) ? val : []
+      } else if (field.type === 'REFERENCE') {
+        const refValue = val !== null && val !== undefined ? String(val) : ''
+        formData[field.name] = refValue
+        // 显示名解析与记录详情回显同源（resolveReferenceDisplay）：
+        // 草稿恢复不解析会把原始 id 当显示值，破坏「存 id / 显示 value」红线。
+        if (refValue && field.targetFormId) {
+          void resolveReferenceDisplay(field.targetFormId, refValue).then((display) => {
+            referenceLabels[field.name] = display
+          })
+        }
       } else {
         formData[field.name] = val !== null && val !== undefined ? val : ''
       }

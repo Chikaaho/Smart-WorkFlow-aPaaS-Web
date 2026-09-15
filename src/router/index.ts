@@ -92,6 +92,13 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '图设计器' },
       },
       {
+        // I3 第一方流程设计器：统一节点能力端点构建面板与配置，ProcessGraph 单一图契约。
+        path: 'workflow/defs/:defId/design',
+        name: 'workflow-def-designer',
+        component: () => import('@/modules/workflow/views/ProcessDesigner.vue'),
+        meta: { title: '流程设计器', authority: ['workflow:def:design'] },
+      },
+      {
         path: 'workflow/task/:taskId',
         name: 'TaskDetail',
         component: () => import('@/modules/workflow/views/TaskDetail.vue'),
@@ -108,6 +115,48 @@ export const routes: RouteRecordRaw[] = [
         name: 'ProcessInstanceList',
         component: () => import('@/modules/workflow/views/ProcessInstanceList.vue'),
         meta: { title: '流程监控' },
+      },
+      {
+        // I4 §3.2 流程模板中心：复制后编辑并发布
+        path: 'workflow/templates',
+        name: 'TemplateCenter',
+        component: () => import('@/modules/workflow/views/TemplateCenter.vue'),
+        meta: { title: '流程模板中心' },
+      },
+      {
+        // I4 §3.3 实例监控与受控干预（服务端权限+数据范围）
+        path: 'workflow/monitor',
+        name: 'InstanceMonitor',
+        component: () => import('@/modules/workflow/views/InstanceMonitor.vue'),
+        meta: { title: '实例监控干预' },
+      },
+      {
+        // I4 §3.3 流程基础分析
+        path: 'workflow/analytics',
+        name: 'ProcessAnalytics',
+        component: () => import('@/modules/workflow/views/ProcessAnalytics.vue'),
+        meta: { title: '流程分析' },
+      },
+      {
+        // I4 §3.5 批量审批
+        path: 'workflow/batch-approval',
+        name: 'BatchApproval',
+        component: () => import('@/modules/workflow/views/BatchApproval.vue'),
+        meta: { title: '批量审批' },
+      },
+      {
+        // I4 §3.6 流程交接
+        path: 'workflow/handover',
+        name: 'TaskHandover',
+        component: () => import('@/modules/workflow/views/TaskHandover.vue'),
+        meta: { title: '流程交接' },
+      },
+      {
+        // I4 §3.7 统一工作台（待办/已办/发起/草稿/抄送/消息入口）
+        path: 'workflow/center',
+        name: 'WorkflowCenter',
+        component: () => import('@/modules/workflow/views/WorkflowCenter.vue'),
+        meta: { title: '工作台' },
       },
       {
         path: 'agent/executions/list',
@@ -162,6 +211,27 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '发送通知', authority: ['notify:batch:send'] },
       },
       {
+        // I6：通知规则管理页（动态菜单 V90 同源；静态路由保证直达 URL 可达）
+        path: 'notify/rule',
+        name: 'notify-rule-list',
+        component: () => import('@/modules/notify/views/NotifyRuleList.vue'),
+        meta: { title: '通知规则', authority: ['notify:rule:view'] },
+      },
+      {
+        // I6：渠道配置页
+        path: 'notify/channel',
+        name: 'notify-channel-list',
+        component: () => import('@/modules/notify/views/NotifyChannelList.vue'),
+        meta: { title: '渠道配置', authority: ['notify:channel:view'] },
+      },
+      {
+        // I6：订阅偏好页
+        path: 'notify/preference',
+        name: 'notify-preference',
+        component: () => import('@/modules/notify/views/NotifyPreference.vue'),
+        meta: { title: '订阅偏好', authority: ['notify:preference'] },
+      },
+      {
         // v0.0.2 P3：通知发送记录（有权管理者），发送记录查询/失败重发/关联日志。
         path: 'notify/record',
         name: 'notify-record-list',
@@ -171,10 +241,54 @@ export const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    // I2 移动 Web 表单入口：同一表单契约、同一服务端校验与权限，
+    // 移动视口响应式重排（不删字段、不放宽校验）；不承担表单设计。
+    // 顶层独立路由：不进桌面 BasicLayout（侧边栏/顶栏），375px 视口下单列满宽。
+    path: '/m/form/:formKey',
+    name: 'mobile-form-render',
+    component: () => import('@/modules/form/views/MobileFormRender.vue'),
+    meta: { title: '移动填报' },
+  },
+  {
+    // I4 §3.7 移动端工作台（响应式 H5）：发起入口/待办办理/草稿/结果查询
+    path: '/m/workflow',
+    name: 'mobile-workflow-center',
+    component: () => import('@/modules/workflow/views/MobileWorkspace.vue'),
+    meta: { title: '移动工作台' },
+  },
+  {
+    // I6 §3.7 移动 H5 收件箱：与 PC 收件箱同一消息/已读状态/对象权限
+    path: '/m/notify',
+    name: 'mobile-notify-inbox',
+    component: () => import('@/modules/notify/views/NotifyInboxMobile.vue'),
+    meta: { title: '移动收件箱' },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/views/LoginPage.vue'),
     meta: { public: true },
+  },
+  {
+    // I5：SSO 回跳页（一次性 ticket 兑换会话），公开路由
+    path: '/sso/return',
+    name: 'sso-return',
+    component: () => import('@/views/SsoReturnPage.vue'),
+    meta: { public: true },
+  },
+  {
+    // I5：SSO 绑定确认页（一次性候选 ticket），公开路由
+    path: '/sso/bind',
+    name: 'sso-bind',
+    component: () => import('@/views/SsoBindPage.vue'),
+    meta: { public: true },
+  },
+  {
+    // I5：账号绑定管理（个人中心入口；已认证会话内使用）
+    path: '/account/bindings',
+    name: 'account-bindings',
+    component: () => import('@/modules/system/views/AccountBindings.vue'),
+    meta: { title: '账号绑定' },
   },
   {
     path: '/403',

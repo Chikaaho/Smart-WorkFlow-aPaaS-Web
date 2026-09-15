@@ -8,6 +8,7 @@ import DictSelect from '@/foundation/dict/DictSelect.vue'
 import DictTag from '@/foundation/dict/DictTag.vue'
 import {
   getFormDefinition,
+  getFormDef,
   queryFormData,
   deleteFormData,
   downloadFormTemplate,
@@ -17,6 +18,7 @@ import {
 } from '@/modules/form/api/form'
 import { usePermission } from '@/foundation/permission'
 import { deriveColumns, deriveFilterFields } from '@/modules/form/utils/derive-list-config'
+import { getListConfig } from '@/modules/form/api/i2-choices'
 import { getErrorMessage } from '@/foundation/request/error-code-map'
 import type { FormSchema } from '@/contracts/form-schema'
 import type { PageResult } from '@/contracts/common'
@@ -38,9 +40,38 @@ const result = ref<PageResult<Record<string, unknown>> | null>(null)
 const pageNum = ref(1)
 const pageSize = ref(10)
 
-// ── 列与筛选配置（从 definition 推导） ──
-const columns = computed(() => (schema.value ? deriveColumns(schema.value) : []))
-const filterFields = computed(() => (schema.value ? deriveFilterFields(schema.value) : []))
+// ── 列与筛选配置（I2：优先消费服务端持久化列表配置；未配置回退 definition 派生） ──
+const persistedListConfig = ref<Awaited<ReturnType<typeof getListConfig>>>(null)
+const columns = computed(() => {
+  if (schema.value && persistedListConfig.value?.columns?.length) {
+    return persistedListConfig.value.columns.map((c) => {
+      const def = schema.value?.fields.find((sf) => sf.name === c.name)
+      const type = def?.type ?? 'TEXT'
+      return {
+        prop: type === 'REFERENCE' ? `ref_${c.name}_id` : c.name,
+        label: c.label ?? def?.label ?? c.name,
+        type,
+        dictType: def?.type === 'DICT' ? def.dictType : undefined,
+      }
+    })
+  }
+  return schema.value ? deriveColumns(schema.value) : []
+})
+const filterFields = computed(() => {
+  if (schema.value && persistedListConfig.value?.filters?.length) {
+    return persistedListConfig.value.filters.map((f) => ({
+      field: f.name,
+      label: schema.value?.fields.find((sf) => sf.name === f.name)?.label ?? f.name,
+      type: schema.value?.fields.find((sf) => sf.name === f.name)?.type ?? ('TEXT' as const),
+      op: (f.op as 'EQ' | 'LIKE' | 'GE' | 'LE') ?? ('EQ' as const),
+      dictType:
+        schema.value?.fields.find((sf) => sf.name === f.name)?.type === 'DICT'
+          ? (schema.value.fields.find((sf) => sf.name === f.name) as { dictType?: string }).dictType
+          : undefined,
+    }))
+  }
+  return schema.value ? deriveFilterFields(schema.value) : []
+})
 
 // ── 筛选值状态 ──
 const filterValues = ref<Record<string, string>>({})
@@ -65,6 +96,13 @@ const importResult = ref<{
 async function loadDefinition() {
   try {
     schema.value = await getFormDefinition(formKey)
+    // I2：读取服务端持久化列表配置（刷新/重登/多用户按授权稳定生效）
+    try {
+      const def = await getFormDef(formKey)
+      if (def?.id) persistedListConfig.value = await getListConfig(def.id)
+    } catch {
+      persistedListConfig.value = null
+    }
     // 初始化筛选值
     for (const f of filterFields.value) {
       if (f.type === 'DATE') {

@@ -12,6 +12,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import { pageFormDefs, updateFormVisibility } from '@/modules/form/api/form-def'
+import { disableFormDef, enableFormDef } from '@/modules/form/api/i2-choices'
 import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/utils/form-def-status'
 import type { FormDefListItem } from '@/modules/form/api/form-def'
 import type { PageQuery } from '@/contracts/common'
@@ -98,6 +99,25 @@ const visibilityDialogVisible = ref(false)
 const visibilityForm = ref<FormDefListItem | null>(null)
 const visibilityUserIds = ref('')
 const visibilitySaving = ref(false)
+
+// I2 生命周期：停用/启用（PUBLISHED ↔ DISABLED），成功后刷新列表
+async function toggleLifecycleRow(r: unknown, action: 'disable' | 'enable') {
+  const row = r as FormDefListItem
+  try {
+    if (action === 'disable') {
+      await disableFormDef(row.id, '管理员停用')
+      ElMessage.success('表单已停用：禁止新的填报、提交与流程发起；历史记录可继续查看')
+    } else {
+      await enableFormDef(row.id, '管理员启用')
+      ElMessage.success('表单已启用')
+    }
+    await loadList()
+  } catch (err) {
+    ElMessage.error(
+      err instanceof ApiError ? err.msg : action === 'disable' ? '停用失败' : '启用失败',
+    )
+  }
+}
 
 function openVisibility(row: FormDefListItem) {
   visibilityForm.value = row
@@ -190,11 +210,30 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="190" fixed="right">
+      <el-table-column label="操作" width="250" fixed="right">
         <template #default="{ row }">
           <el-button size="small" link type="primary" @click="editRow(row)">编辑</el-button>
           <el-button size="small" link type="primary" @click="openVisibilityRow(row)">
             发起范围
+          </el-button>
+          <!-- I2 生命周期：停用/启用（服务端审计；前端按钮不替代服务端状态检查） -->
+          <el-button
+            v-if="row.status === 'PUBLISHED'"
+            size="small"
+            link
+            type="danger"
+            @click="toggleLifecycleRow(row, 'disable')"
+          >
+            停用
+          </el-button>
+          <el-button
+            v-if="row.status === 'DISABLED'"
+            size="small"
+            link
+            type="success"
+            @click="toggleLifecycleRow(row, 'enable')"
+          >
+            启用
           </el-button>
         </template>
       </el-table-column>

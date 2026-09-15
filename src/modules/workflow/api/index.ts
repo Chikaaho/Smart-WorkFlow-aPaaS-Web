@@ -175,18 +175,6 @@ export async function pageProcessDefs(
   return adaptPage(raw)
 }
 
-/**
- * 获取流程定义已部署的原始 BPMN XML 流程图
- * @param id 流程定义 ID
- * @returns BPMN XML 字符串
- */
-export async function getProcessDefGraph(id: number): Promise<string> {
-  return request<string>({
-    method: 'GET',
-    url: `/workflow/defs/${id}/bpmn-xml`,
-  })
-}
-
 /** DELETE /workflow/defs/{id} → void */
 export async function deleteProcessDef(id: number): Promise<void> {
   return request<void>({
@@ -196,7 +184,7 @@ export async function deleteProcessDef(id: number): Promise<void> {
 }
 
 /** POST /workflow/defs/{id}/publish → ProcessDef */
-export async function publishProcessDef(id: number): Promise<ProcessDef> {
+export async function publishProcessDef(id: number | string): Promise<ProcessDef> {
   return request<ProcessDef>({
     method: 'POST',
     url: `/workflow/defs/${id}/publish`,
@@ -204,7 +192,7 @@ export async function publishProcessDef(id: number): Promise<ProcessDef> {
 }
 
 /** PUT /workflow/defs/{id}/graph → void */
-export async function saveProcessDefGraph(id: number, graph: unknown): Promise<void> {
+export async function saveProcessDefGraph(id: number | string, graph: unknown): Promise<void> {
   return request<void>({
     method: 'PUT',
     url: `/workflow/defs/${id}/graph`,
@@ -213,7 +201,7 @@ export async function saveProcessDefGraph(id: number, graph: unknown): Promise<v
 }
 
 /** GET /workflow/defs/{id} → ProcessGraph（流程图定义，含节点配置） */
-export async function getProcessDefDefinition(id: number): Promise<ProcessGraphPayload> {
+export async function getProcessDefDefinition(id: number | string): Promise<ProcessGraphPayload> {
   return request<ProcessGraphPayload>({
     method: 'GET',
     url: `/workflow/defs/${id}`,
@@ -254,11 +242,17 @@ export async function getProcessNodeCapabilities(): Promise<BpmNodeCapability[]>
 export interface GraphValidationError {
   errorCode: number
   message: string
+  elementId?: string | null
+  /** I3：设计器直接定位画布节点。 */
   nodeKey?: string | null
+  /** I3：设计器直接定位画布连线。 */
+  edgeKey?: string | null
 }
 
 /** POST /workflow/defs/{id}/validate → GraphValidationError[] */
-export async function validateProcessDefGraph(id: number): Promise<GraphValidationError[]> {
+export async function validateProcessDefGraph(
+  id: number | string,
+): Promise<GraphValidationError[]> {
   return request<GraphValidationError[]>({
     method: 'POST',
     url: `/workflow/defs/${id}/validate`,
@@ -271,6 +265,8 @@ export interface ProcessGraphPayload {
   name: string
   formKey: string
   version?: number
+  /** I3 图契约版本：2 = 第一方显式坐标契约 */
+  contractVersion?: number
   elements?: Array<{
     id: string
     kind: string
@@ -279,6 +275,9 @@ export interface ProcessGraphPayload {
     target?: string
     config?: Record<string, unknown>
     style?: Record<string, unknown>
+    x?: number
+    y?: number
+    waypoints?: Array<{ x: number; y: number }>
   }>
   canvas?: Record<string, unknown>
 }
@@ -434,4 +433,170 @@ export async function myProcessed(
     params: { ...page, ...filter },
   })
   return adaptPage(raw)
+}
+
+// ═══════════════════════════════════════
+// I3 发布版本冻结 / 设计器 / 生命周期动作
+// ═══════════════════════════════════════
+
+/** 发布版本行（不含 graph_json），对齐后端 BpmProcessDefVersion。 */
+export interface ProcessDefVersionInfo {
+  id: number
+  defId: number
+  graphVersion: number
+  status: 'PUBLISHED' | 'SUSPENDED' | 'DISABLED'
+  name: string
+  formKey?: string | null
+  formVersion?: string | null
+  functionVersions?: string | null
+  publishedAt?: string | null
+  deploymentId?: string | null
+  processDefinitionId?: string | null
+}
+
+/** GET /workflow/defs/by-key/{processKey} → ProcessGraphPayload（按 key 读取当前草稿图） */
+export async function getProcessDefDefinitionByKey(
+  processKey: string,
+): Promise<ProcessGraphPayload> {
+  return request<ProcessGraphPayload>({
+    method: 'GET',
+    url: `/workflow/defs/by-key/${processKey}`,
+  })
+}
+
+/** GET /workflow/defs/{id}/versions → ProcessDefVersionInfo[] */
+export async function listDefVersions(defId: number | string): Promise<ProcessDefVersionInfo[]> {
+  return request<ProcessDefVersionInfo[]>({
+    method: 'GET',
+    url: `/workflow/defs/${defId}/versions`,
+  })
+}
+
+/** GET /workflow/defs/{id}/versions/{v}/graph → ProcessGraphPayload（冻结图） */
+export async function getDefVersionGraph(
+  defId: number,
+  version: number,
+): Promise<ProcessGraphPayload> {
+  return request<ProcessGraphPayload>({
+    method: 'GET',
+    url: `/workflow/defs/${defId}/versions/${version}/graph`,
+  })
+}
+
+/** POST /workflow/defs/{id}/versions/{v}/suspend */
+export async function suspendDefVersion(defId: number, version: number): Promise<void> {
+  return request<void>({
+    method: 'POST',
+    url: `/workflow/defs/${defId}/versions/${version}/suspend`,
+  })
+}
+
+/** POST /workflow/defs/{id}/versions/{v}/activate */
+export async function activateDefVersion(defId: number, version: number): Promise<void> {
+  return request<void>({
+    method: 'POST',
+    url: `/workflow/defs/${defId}/versions/${version}/activate`,
+  })
+}
+
+/** POST /workflow/defs/validate（无保存在线校验，返回全部可判定错误） */
+export async function validateGraphDirect(graph: unknown): Promise<GraphValidationError[]> {
+  return request<GraphValidationError[]>({
+    method: 'POST',
+    url: '/workflow/defs/validate',
+    data: graph,
+  })
+}
+
+/** I3 生命周期动作统一包装：POST body = ApprovalActionRequest（服务端归一 action）。 */
+export async function transferTask(
+  taskId: string,
+  data: Partial<ApprovalActionRequest>,
+): Promise<void> {
+  await request<void>({ method: 'POST', url: `/workflow/tasks/${taskId}/transfer`, data })
+}
+export async function delegateTask(
+  taskId: string,
+  data: Partial<ApprovalActionRequest>,
+): Promise<void> {
+  await request<void>({ method: 'POST', url: `/workflow/tasks/${taskId}/delegate`, data })
+}
+export async function communicateTask(
+  taskId: string,
+  data: Partial<ApprovalActionRequest>,
+): Promise<void> {
+  await request<void>({ method: 'POST', url: `/workflow/tasks/${taskId}/communicate`, data })
+}
+export async function addSignTask(
+  taskId: string,
+  data: Partial<ApprovalActionRequest>,
+): Promise<void> {
+  await request<void>({ method: 'POST', url: `/workflow/tasks/${taskId}/add-sign`, data })
+}
+export async function supplementSignInstance(
+  instanceId: string,
+  data: Partial<ApprovalActionRequest>,
+): Promise<void> {
+  await request<void>({
+    method: 'POST',
+    url: `/workflow/instances/${instanceId}/supplement-sign`,
+    data,
+  })
+}
+export async function withdrawInstance(
+  instanceId: string,
+  data: Partial<ApprovalActionRequest>,
+): Promise<void> {
+  await request<void>({
+    method: 'POST',
+    url: `/workflow/my/instances/${instanceId}/withdraw`,
+    data,
+  })
+}
+export async function discardInstance(instanceId: string): Promise<void> {
+  await request<void>({
+    method: 'POST',
+    url: `/workflow/instances/${instanceId}/discard`,
+    data: {},
+  })
+}
+export async function expressSign(
+  recordId: number,
+  data: Partial<ApprovalActionRequest>,
+): Promise<void> {
+  await request<void>({ method: 'POST', url: `/workflow/sign/${recordId}/express`, data })
+}
+export async function cancelSign(
+  recordId: number,
+  data: Partial<ApprovalActionRequest>,
+): Promise<void> {
+  await request<void>({ method: 'POST', url: `/workflow/sign/${recordId}/cancel`, data })
+}
+export async function replyCommunication(
+  communicationId: number,
+  data: Partial<ApprovalActionRequest>,
+): Promise<void> {
+  await request<void>({
+    method: 'POST',
+    url: `/workflow/communications/${communicationId}/reply`,
+    data,
+  })
+}
+export async function saveAuthorizeRule(data: Partial<ApprovalActionRequest>): Promise<number> {
+  return request<number>({ method: 'POST', url: '/workflow/authorize-rules', data })
+}
+export async function revokeAuthorizeRule(ruleId: number): Promise<void> {
+  await request<void>({ method: 'DELETE', url: `/workflow/authorize-rules/${ruleId}` })
+}
+export interface AuthorizeRule {
+  id: number
+  principalId: number
+  agentId: number
+  scopeType: string
+  startAt?: string
+  endAt?: string
+  status: string
+}
+export async function listAuthorizeRules(): Promise<AuthorizeRule[]> {
+  return request<AuthorizeRule[]>({ method: 'GET', url: '/workflow/authorize-rules' })
 }

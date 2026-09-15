@@ -59,6 +59,9 @@ function onCommand(command: string): void {
   if (command === 'logout') {
     void onLogout()
   }
+  if (command === 'account-bindings') {
+    void router.push('/account/bindings')
+  }
 }
 </script>
 
@@ -103,7 +106,12 @@ function onCommand(command: string): void {
       </span>
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item command="logout" :icon="SwitchButton">退出登录</el-dropdown-item>
+          <el-dropdown-item command="account-bindings" :icon="OfficeBuilding"
+            >账号绑定</el-dropdown-item
+          >
+          <el-dropdown-item command="logout" :icon="SwitchButton" divided
+            >退出登录</el-dropdown-item
+          >
         </el-dropdown-menu>
       </template>
     </el-dropdown>

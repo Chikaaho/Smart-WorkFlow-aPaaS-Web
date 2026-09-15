@@ -4,7 +4,7 @@ export interface NotifyMessage {
   recipientId: number
   title: string
   content: string
-  bizType: 'WF_TODO' | 'WF_APPROVED' | 'SYSTEM'
+  bizType: 'WF_TODO' | 'WF_APPROVED' | 'WF_REJECTED' | 'WF_RETURNED' | 'SYSTEM'
   bizId: string | null
   read: boolean
   createTime: string
@@ -12,6 +12,52 @@ export interface NotifyMessage {
   createBy: number | null
   updateBy: number | null
   tenantId: number
+  /* I6 扩展 */
+  channel?: string
+  deliveryStatus?: string
+  eventType?: string
+  occurrenceNo?: number
+  templateId?: number | null
+  templateVersion?: number | null
+  linkType?: string | null
+  linkId?: string | null
+}
+
+// ─── I6 通知规则 / 渠道状态 / 订阅偏好 ───
+export interface NotifyRule {
+  id: number
+  ruleCode: string
+  name: string
+  eventType: string
+  channelPriority: string
+  recipientRule: string
+  requiredFlag: boolean
+  failurePolicy: 'RETRY' | 'MANUAL'
+  enabled: boolean
+  remark: string | null
+}
+export interface NotifyRuleSaveReq {
+  ruleCode: string
+  name: string
+  eventType: string
+  channelPriority: string
+  recipientRule: string
+  requiredFlag: boolean
+  failurePolicy: 'RETRY' | 'MANUAL'
+  enabled: boolean
+  remark?: string
+}
+export interface NotifyChannelStatus {
+  channel: string
+  systemConfigured: boolean
+  tenantEnabled: boolean
+  senderDisplay: string | null
+  configSummary: string | null
+}
+export interface NotifySubscriptionItem {
+  eventType: string
+  channel: string
+  enabled: boolean
 }
 
 // ─── 消息模板 DTO（对齐后端 NotifyTemplate，P36/M05-F02-01） ───
@@ -35,6 +81,11 @@ export interface NotifyTemplateSaveReq {
   contentTemplate: string
   enabled: boolean
   remark?: string
+  /* I6 */
+  eventType?: string
+  channel?: string
+  variablesAllowed?: string
+  jumpRef?: string
 }
 
 /** 预览请求：模板内容 + 变量值 */

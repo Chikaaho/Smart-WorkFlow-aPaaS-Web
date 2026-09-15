@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
+import type { FormSchemaField } from '@/contracts/form-schema'
 import { parseDefinition, toFormCreateRule } from './index'
 
 describe('adapters/form-designer/parseDefinition', () => {
@@ -136,6 +137,10 @@ describe('adapters/form-designer/parseDefinition', () => {
     expect(() => parseDefinition(JSON.stringify({ foo: 'bar' }))).toThrow(
       '[form-designer] failed to parse definition JSON: unexpected shape',
     )
+  })
+
+  it('accepts backend definitions without an optional top-level title', () => {
+    expect(parseDefinition(JSON.stringify({ fields: [] }))).toEqual({ title: '', fields: [] })
   })
 
   it('required defaults to false when omitted', () => {
@@ -520,5 +525,59 @@ describe('adapters/form-designer/toFormCreateRule', () => {
       'input',
       'group',
     ])
+  })
+})
+
+describe('I2 低代码表单收口 · 防腐层', () => {
+  it('parseDefinition 映射 I2 新类型（TIME/USER/DEPT/FORMULA/DATASOURCE）与 fieldPermissions', () => {
+    const raw = JSON.stringify({
+      title: 'I2',
+      fields: [
+        { name: 't', type: 'TIME' },
+        { name: 'u', type: 'USER' },
+        { name: 'd', type: 'DEPT' },
+        { name: 'total', type: 'FORMULA', expression: 'ROUND(${price} * ${qty}, 2)' },
+        {
+          name: 'vendor',
+          type: 'DATASOURCE',
+          dsBinding: { queryKey: 'vendors', version: 1, valueField: 'id', displayField: 'name' },
+        },
+      ],
+      fieldPermissions: { total: { view: ['role:hr'], edit: ['role:hr'] } },
+    })
+    const schema = parseDefinition(raw)
+    expect(schema.fields.map((f) => f.type)).toEqual([
+      'TIME',
+      'USER',
+      'DEPT',
+      'FORMULA',
+      'DATASOURCE',
+    ])
+    expect(schema.fieldPermissions?.total?.view).toEqual(['role:hr'])
+    const ds = schema.fields[4] as Extract<FormSchemaField, { type: 'DATASOURCE' }>
+    expect(ds.dsBinding.queryKey).toBe('vendors')
+  })
+
+  it('toFormCreateRule 映射 I2 新类型控件与元数据标记', () => {
+    const rules = toFormCreateRule({
+      title: 'I2',
+      fields: [
+        { name: 't', type: 'TIME' },
+        { name: 'u', type: 'USER' },
+        { name: 'd', type: 'DEPT' },
+        { name: 'total', type: 'FORMULA', expression: '1 + 1' },
+        {
+          name: 'vendor',
+          type: 'DATASOURCE',
+          dsBinding: { queryKey: 'vendors', valueField: 'id', displayField: 'name' },
+        },
+      ],
+    } as unknown as Parameters<typeof toFormCreateRule>[0])
+    const typed = rules as Record<string, unknown>[]
+    expect(typed.map((r) => r.type)).toEqual(['timePicker', 'input', 'input', 'input', 'select'])
+    expect(typed[1].__selector__).toBe('user')
+    expect(typed[2].__selector__).toBe('dept')
+    expect(typed[3].__formula__).toBe(true)
+    expect((typed[4].__dsBinding__ as { queryKey: string }).queryKey).toBe('vendors')
   })
 })

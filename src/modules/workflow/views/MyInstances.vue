@@ -6,9 +6,9 @@
  * 实例信息、当前进度与流转记录（审批历史）。
  */
 import { ref, computed, onMounted, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { StandardListTemplate } from '@/components/page-layout'
-import { myInstances, myInstanceDetail } from '@/modules/workflow/api'
+import { myInstances, myInstanceDetail, withdrawInstance } from '@/modules/workflow/api'
 import { urgeMyInstance } from '@/modules/workflow/api/oa'
 import type { ProcessInstance, MyInstanceDetail } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
@@ -26,10 +26,45 @@ const filter = reactive<{ status: string; keyword: string }>({ status: '', keywo
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
 
-const STATUS_TAG: Record<string, { label: string; type: 'warning' | 'success' | 'danger' }> = {
+const STATUS_TAG: Record<
+  string,
+  { label: string; type: 'warning' | 'success' | 'danger' | 'info' }
+> = {
   RUNNING: { label: '进行中', type: 'warning' },
   APPROVED: { label: '已通过', type: 'success' },
   REJECTED: { label: '已驳回', type: 'danger' },
+  WITHDRAWN: { label: '已撤回', type: 'warning' },
+  DISCARDED: { label: '已废弃', type: 'info' },
+}
+
+/** I3 §4.7：发起人撤回（尚未越过不可撤回边界时可用；重复请求幂等）。 */
+const withdrawingId = ref<string | null>(null)
+
+function asInstance(row: unknown): ProcessInstance {
+  return row as ProcessInstance
+}
+
+async function withdrawRow(rowRaw: unknown) {
+  const row = asInstance(rowRaw)
+  try {
+    await ElMessageBox.confirm('确认撤回该申请？撤回将关闭当前任务并形成已撤回终态。', '撤回确认', {
+      confirmButtonText: '撤回',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  withdrawingId.value = row.processInstanceId
+  try {
+    await withdrawInstance(row.processInstanceId, { reason: '发起人撤回' })
+    ElMessage.success('已撤回')
+    await loadList()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '撤回失败')
+  } finally {
+    withdrawingId.value = null
+  }
 }
 
 function statusLabel(status: string): string {
@@ -237,7 +272,7 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column prop="createTime" label="发起时间" min-width="170" />
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column label="操作" width="190" fixed="right">
         <template #default="{ row }">
           <el-button size="small" type="primary" link @click="openDetailRow(row)">详情</el-button>
           <el-button
@@ -250,6 +285,17 @@ onMounted(loadList)
             @click="urgeRow(row)"
           >
             催办
+          </el-button>
+          <el-button
+            v-if="row.status === 'RUNNING'"
+            v-perm="'workflow:task:withdraw'"
+            size="small"
+            type="danger"
+            link
+            :disabled="withdrawingId === row.processInstanceId"
+            @click="withdrawRow(row)"
+          >
+            撤回
           </el-button>
         </template>
       </el-table-column>

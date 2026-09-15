@@ -21,7 +21,14 @@ export interface SysUser {
   createTime?: string
   updateTime?: string
   roleIds?: string[]
-  postIds?: string[]
+  posts?: PostAssociation[]
+}
+
+/** 用户岗位任职（镜像 UserController.PostAssignment）：岗位在部门内承担（I1） */
+export interface PostAssociation {
+  postId: string
+  /** 任职部门；缺省时后端回落用户主部门 */
+  deptId?: string
 }
 
 /** 用户创建/更新表单（镜像 UserFormRequest DTO） */
@@ -37,7 +44,8 @@ export interface UserFormRequest {
   /** 明文密码，仅创建时必填，更新时可选 */
   plainPassword?: string
   roleIds?: string[]
-  postIds?: string[]
+  /** 岗位任职（I1 起，替代 postIds 数字数组） */
+  posts?: PostAssociation[]
 }
 
 /** 用户分页筛选 */

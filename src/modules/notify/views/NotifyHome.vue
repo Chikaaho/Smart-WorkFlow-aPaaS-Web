@@ -8,15 +8,25 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { StandardListTemplate } from '@/components/page-layout'
-import { queryNotifyMessages, markAsRead, deleteMessage } from '@/modules/notify/api'
+// I6：服务端真分页收件箱 + 未读数 + 全部已读（同一消息与已读状态，多端共享）
+import {
+  pageNotifyInbox,
+  unreadNotifyCount,
+  readAllNotify,
+  markAsRead,
+  deleteMessage,
+  openNotifyLink,
+} from '@/modules/notify/api'
 import type { NotifyQueryParams } from '@/modules/notify/api'
 import { ApiError } from '@/foundation/request'
+import { useRouter } from 'vue-router'
 import type { NotifyMessage } from '@/contracts/notify'
 
 // ─── 列表状态 ───
 
 const list = ref<NotifyMessage[]>([])
 const total = ref(0)
+const unreadCount = ref(0)
 const loading = ref(false)
 const errorMsg = ref('')
 const readingId = ref<number | null>(null) // 当前正在标记已读的 ID（loading 态）
@@ -24,9 +34,9 @@ const deletingId = ref<number | null>(null) // 当前正在删除的 ID（loadin
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
 
-// 后端返回平铺数组（不分页），传 pageSize=9999 使分页组件只显示「共 N 条」
+// I6：服务端真分页（默认 10 条/页，稳定排序由服务端保证）
 const pageNum = ref(1)
-const pageSize = ref(9999)
+const pageSize = ref(10)
 
 // ─── 查询过滤 ───
 
@@ -60,9 +70,17 @@ async function loadList() {
     if (filterKeyword.value.trim()) {
       params.keyword = filterKeyword.value.trim()
     }
-    const messages = await queryNotifyMessages(Object.keys(params).length > 0 ? params : undefined)
-    list.value = messages
-    total.value = messages.length
+    const result = await pageNotifyInbox(
+      { pageNum: pageNum.value, pageSize: pageSize.value },
+      Object.keys(params).length > 0 ? params : {},
+    )
+    list.value = result.list
+    total.value = result.total
+    try {
+      unreadCount.value = await unreadNotifyCount()
+    } catch {
+      unreadCount.value = 0
+    }
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
@@ -76,7 +94,30 @@ async function loadList() {
   }
 }
 
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+  void loadList()
+}
+
+function handlePageSizeChange(p: number) {
+  pageSize.value = p
+  pageNum.value = 1
+  void loadList()
+}
+
+async function handleReadAll() {
+  try {
+    const affected = await readAllNotify()
+    ElMessage.success(affected > 0 ? `已全部标记为已读（${affected} 条）` : '没有未读通知')
+    await loadList()
+  } catch (err) {
+    if (err instanceof ApiError) ElMessage.error(err.msg)
+    else ElMessage.error('全部已读失败')
+  }
+}
+
 function handleFilterChange() {
+  pageNum.value = 1
   void loadList()
 }
 
@@ -141,6 +182,22 @@ async function handleDelete(row: NotifyMessage) {
   }
 }
 
+/** 受保护深链：服务端鉴权后按受控类型路由（不使用任意 URL），与移动端同一契约。 */
+const pcRouter = useRouter()
+async function openLink(row: NotifyMessage) {
+  try {
+    const target = await openNotifyLink(row.id)
+    if (target.linkType === 'WF_TASK' || target.linkType === 'WF_PROCESS') {
+      void pcRouter.push({ path: '/workflow/instances', query: { focus: target.linkId } })
+    } else {
+      ElMessage.info('该通知暂无页面跳转')
+    }
+  } catch (err) {
+    if (err instanceof ApiError) ElMessage.error(err.msg)
+    else ElMessage.error('无权访问该业务对象')
+  }
+}
+
 onMounted(loadList)
 </script>
 
@@ -151,6 +208,8 @@ onMounted(loadList)
     :page-num="pageNum"
     :page-size="pageSize"
     :empty="isEmpty"
+    @update:page-num="handlePageNumChange"
+    @update:page-size="handlePageSizeChange"
   >
     <!-- 空态（无需操作按钮） -->
     <template #empty-action>
@@ -197,7 +256,20 @@ onMounted(loadList)
           <span v-if="!row.read" class="unread-dot" />
         </template>
       </el-table-column>
-      <el-table-column prop="title" label="标题" min-width="200" />
+      <el-table-column prop="title" min-width="200">
+        <template #header>
+          <span>标题（未读 {{ unreadCount }}）</span>
+          <el-button
+            size="small"
+            text
+            type="primary"
+            style="margin-left: 8px"
+            @click="handleReadAll"
+          >
+            全部已读
+          </el-button>
+        </template>
+      </el-table-column>
       <el-table-column label="内容预览" min-width="300">
         <template #default="{ row }">
           <span class="content-preview">{{ row.content }}</span>
@@ -225,6 +297,9 @@ onMounted(loadList)
             标记已读
           </el-button>
           <span v-else class="read-label">已读</span>
+          <el-button size="small" text type="primary" @click="openLink(row as NotifyMessage)">
+            跳转
+          </el-button>
           <el-button
             size="small"
             text
@@ -265,8 +340,5 @@ onMounted(loadList)
   display: flex;
   align-items: center;
   margin-bottom: 12px;
-}
-:deep(.list-pagination) {
-  display: none;
 }
 </style>

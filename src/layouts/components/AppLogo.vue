@@ -1,13 +1,15 @@
 <script setup lang="ts">
-// 左上角 logo 占位（决策文档 · 外壳刀 §2）。折叠态只留方块 mark、隐藏文字。
-// TODO(skeleton): 替换为真实 logo 资源——换图只改本组件，不写死进其它位置。
+// 左上角品牌 logo：资源与文案只在本组件维护，不写死进其它位置。
+// 折叠态只留 mark 图、隐藏文字。
+import logoUrl from '@/assets/logo.png'
+
 defineProps<{ collapse: boolean }>()
 </script>
 
 <template>
   <div class="app-logo" :class="{ 'app-logo--collapse': collapse }">
-    <span class="app-logo__mark">SW</span>
-    <span v-show="!collapse" class="app-logo__text">Smart-WorkFlow</span>
+    <img class="app-logo__mark" :src="logoUrl" alt="CH-aPaaS" />
+    <span v-show="!collapse" class="app-logo__text">CH-aPaaS</span>
   </div>
 </template>
 
@@ -26,17 +28,9 @@ defineProps<{ collapse: boolean }>()
 }
 .app-logo__mark {
   flex: 0 0 auto;
-  width: 32px;
+  width: 30px;
   height: 32px;
-  border-radius: 8px;
-  background: var(--sw-color-primary);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  object-fit: contain;
 }
 .app-logo__text {
   font-size: 16px;

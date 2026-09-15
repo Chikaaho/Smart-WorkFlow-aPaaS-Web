@@ -117,7 +117,7 @@ S/M 在对话结果中提交改动文件与对应验证；L/XL 的正式回执�
 - **v-html 唯一出口** `sanitizeHtml`/`<SafeHtml>`；**open-redirect** 必做同源校验。
 - **DICT 字段走 `foundation/dict` 的 `useDict` 通道**，`__dictType__` 元数据由 `toFormCreateRule` 埋入，渲染层据此填选项；禁止字段层自行 fetch / 硬编码选项。
 - **form-designer 防腐层**：form-create 原生 schema 不得泄漏进 `modules/`（ESLint 导入边界强制）。
-- **暗态 gating**：权限集为空时 `v-perm` 放行展示（no-data=放行），非安全洞，后端权限装配上线后自然切回真实拦截。
+- **暗态 gating（I5 已收口为 fail closed）**：真实会话为空权限时 `v-perm` 默认隐藏受控入口（no-data=隐藏）；服务端仍是最终权威。
 - **REFERENCE「存 id 显示 value」不混（红线）**：REFERENCE 字段提交/入库带的是目标记录 **id**
   （对后端 `ref_{name}_id` 列），UI 显示的是**显示名**（value）。v-model 实际值=id，显示文案另走
   computed/display 字段；二者绝不可混，混了即脏数据进库。

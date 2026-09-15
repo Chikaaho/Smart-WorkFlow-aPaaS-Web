@@ -18,6 +18,7 @@ export interface StatusMapEntry {
 export const FORM_DEF_STATUS_MAP: Record<FormDefStatus, StatusMapEntry> = {
   DRAFT: { label: '草稿', type: 'info' },
   PUBLISHED: { label: '已发布', type: 'success' },
+  DISABLED: { label: '已停用', type: 'danger' },
 }
 
 /** 取中文 label（兜底回退 key）。 */

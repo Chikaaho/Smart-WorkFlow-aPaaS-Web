@@ -20,6 +20,11 @@ const KNOWN_FIELD_TYPES = new Set<string>([
   'ATTACHMENT',
   'IMAGE',
   'LABEL',
+  'TIME',
+  'USER',
+  'DEPT',
+  'FORMULA',
+  'DATASOURCE',
 ])
 
 interface RawSubFieldDef {
@@ -34,6 +39,13 @@ interface RawSubFieldDef {
   defaultValue?: unknown
   options?: string[]
   text?: string
+  expression?: string
+  dsBinding?: {
+    queryKey: string
+    version?: number
+    valueField: string
+    displayField: string
+  }
 }
 
 interface RawFieldDef extends RawSubFieldDef {
@@ -98,6 +110,22 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     }
   }
 
+  if (type === 'FORMULA') {
+    return {
+      ...base,
+      type,
+      expression: raw.expression ?? '',
+    }
+  }
+
+  if (type === 'DATASOURCE') {
+    return {
+      ...base,
+      type,
+      dsBinding: raw.dsBinding ?? { queryKey: '', valueField: '', displayField: '' },
+    }
+  }
+
   if (type === 'TABLE') {
     const subFields: TableSubField[] = (raw.subFields ?? [])
       .filter((sf) => KNOWN_FIELD_TYPES.has(sf.type))
@@ -128,7 +156,7 @@ export function parseDefinition(rawJson: string): FormSchema {
   }
 
   const raw = parsed as RawDefinition
-  if (typeof raw?.title !== 'string' || !Array.isArray(raw?.fields)) {
+  if (!Array.isArray(raw?.fields)) {
     throw new Error('[form-designer] failed to parse definition JSON: unexpected shape')
   }
 
@@ -138,10 +166,17 @@ export function parseDefinition(rawJson: string): FormSchema {
   })
 
   return {
-    title: raw.title,
+    title: typeof raw.title === 'string' ? raw.title : '',
     fields,
     ...(raw.schemaVersion !== undefined ? { schemaVersion: raw.schemaVersion } : {}),
     ...(raw.rules !== undefined ? { rules: raw.rules } : {}),
+    ...((raw as unknown as { fieldPermissions?: Record<string, unknown> }).fieldPermissions !==
+    undefined
+      ? {
+          fieldPermissions: (raw as unknown as { fieldPermissions: Record<string, unknown> })
+            .fieldPermissions as FormSchema['fieldPermissions'],
+        }
+      : {}),
   }
 }
 
@@ -275,6 +310,40 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
       rule.type = 'elAlert'
       rule.value = ''
       rule.props = { title: labelField.text || label, type: 'info', closable: false }
+      break
+    }
+
+    case 'TIME': {
+      rule.type = 'timePicker'
+      rule.props = { valueFormat: 'HH:mm:ss' }
+      break
+    }
+
+    case 'USER':
+    case 'DEPT': {
+      // 人员/部门选择：渲染层按 __selector__ 元数据挂真实选择器；
+      // 提交值为数字型对象 ID，存在性/租户由服务端 Facade 校验
+      rule.type = 'input'
+      rule.props = { disabled: true, placeholder: field.type === 'USER' ? '人员选择' : '部门选择' }
+      ;(rule as Record<string, unknown>).__selector__ = field.type === 'USER' ? 'user' : 'dept'
+      break
+    }
+
+    case 'FORMULA': {
+      // 公式：客户端值不消费；预览值为服务端计算结果（只读展示）
+      rule.type = 'input'
+      rule.props = { disabled: true, placeholder: '服务端计算' }
+      ;(rule as Record<string, unknown>).__formula__ = true
+      break
+    }
+
+    case 'DATASOURCE': {
+      // 受控外部数据源：渲染层按 __dsBinding__ 元数据经服务端查询入口加载选项
+      const dsField = field as import('@/contracts/form-schema').DatasourceField
+      rule.type = 'select'
+      rule.options = []
+      rule.props = { clearable: true }
+      ;(rule as Record<string, unknown>).__dsBinding__ = dsField.dsBinding
       break
     }
 

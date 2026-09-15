@@ -10,6 +10,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
+import { hasPerm } from '@/foundation/permission'
 import { pagePosts, getPost, createPost, updatePost, deletePost } from '@/modules/system/api/post'
 import type { SysPost, PostFilter } from '@/modules/system/types/post'
 import type { PageQuery } from '@/contracts/common'
@@ -221,7 +222,9 @@ onMounted(loadList)
   >
     <!-- 工具栏：新建按钮 -->
     <template #toolbar-actions>
-      <el-button type="primary" @click="openCreate">新建岗位</el-button>
+      <el-button v-perm="'system:post:create'" type="primary" @click="openCreate"
+        >新建岗位</el-button
+      >
     </template>
 
     <!-- 筛选区 -->
@@ -272,15 +275,31 @@ onMounted(loadList)
       </el-table-column>
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editRow(row)">编辑</el-button>
-          <el-button size="small" link type="danger" @click="deleteRow(row)">删除</el-button>
+          <el-button
+            v-if="hasPerm('system:post:update')"
+            size="small"
+            link
+            type="primary"
+            @click="editRow(row)"
+            >编辑</el-button
+          >
+          <el-button
+            v-if="hasPerm('system:post:delete')"
+            size="small"
+            link
+            type="danger"
+            @click="deleteRow(row)"
+            >删除</el-button
+          >
         </template>
       </el-table-column>
     </el-table>
 
     <!-- 空态操作 -->
     <template #empty-action>
-      <el-button type="primary" @click="openCreate">新建岗位</el-button>
+      <el-button v-if="hasPerm('system:post:create')" type="primary" @click="openCreate"
+        >新建岗位</el-button
+      >
     </template>
   </StandardListTemplate>
 

@@ -12,6 +12,11 @@ import {
   queryTaskDetail,
   acceptTaskAction,
   pollCommandStatus,
+  transferTask,
+  delegateTask,
+  communicateTask,
+  addSignTask,
+  supplementSignInstance,
   type TaskActionSegment,
 } from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
@@ -37,6 +42,8 @@ const formRecord = ref<Record<string, unknown> | null>(null)
 const formRecordLoading = ref(false)
 /** 表单定义（用于把内部字段名映射为业务字段标签） */
 const formSchema = ref<FormSchema | null>(null)
+/** REFERENCE 字段显示名缓存（id→可读关联对象信息，授权单查解析，取不到回退 id）。 */
+const refDisplayMap = ref<Record<string, string>>({})
 
 /** 表单宽表的系统列：与业务数据无关，不在审批详情展示 */
 const SYSTEM_COLUMNS = new Set([
@@ -57,13 +64,19 @@ const formFieldRows = computed(() => {
   const seen = new Set<string>()
   if (formSchema.value) {
     for (const field of formSchema.value.fields) {
-      if (SYSTEM_COLUMNS.has(field.name) || !(field.name in formRecord.value)) continue
+      const recordKey = field.type === 'REFERENCE' ? 'ref_' + field.name + '_id' : field.name
+      if (SYSTEM_COLUMNS.has(field.name) || !(recordKey in formRecord.value)) continue
       seen.add(field.name)
-      const v = formRecord.value[field.name]
+      const v = formRecord.value[recordKey]
       rows.push({
         key: field.name,
         label: field.label || field.name,
-        value: v == null || v === '' ? '-' : String(v),
+        value:
+          v == null || v === ''
+            ? '-'
+            : field.type === 'REFERENCE'
+              ? (refDisplayMap.value[field.name] ?? String(v))
+              : String(v),
       })
     }
   }
@@ -97,6 +110,25 @@ async function loadDetail() {
 }
 
 /** 按 formKey + businessKey 回查本次提交的表单数据；失败不阻断审批主链 */
+async function resolveRefDisplays() {
+  refDisplayMap.value = {}
+  if (!formSchema.value || !formRecord.value) return
+  const { resolveReferenceDisplay } = await import('@/modules/form/utils/resolve-reference-display')
+  for (const field of formSchema.value.fields) {
+    if (field.type !== 'REFERENCE') continue
+    const refId = formRecord.value['ref_' + field.name + '_id']
+    if (refId == null || refId === '') continue
+    try {
+      refDisplayMap.value[field.name] = await resolveReferenceDisplay(
+        String(field.targetFormId ?? ''),
+        String(refId),
+      )
+    } catch {
+      refDisplayMap.value[field.name] = String(refId)
+    }
+  }
+}
+
 async function loadFormRecord() {
   const d = detail.value
   if (!d?.formKey || !d.businessKey) return
@@ -109,6 +141,7 @@ async function loadFormRecord() {
     } catch {
       formSchema.value = null
     }
+    await resolveRefDisplays()
   } catch {
     formRecord.value = null
   } finally {
@@ -343,6 +376,104 @@ async function handleReturn() {
     '已退回',
     '退回操作失败',
   )
+}
+
+// ═════════ I3 生命周期动作（转办/委托/沟通/加签/补签） ═══════════════════
+
+const lifecycleDialogVisible = computed({
+  get: () => lifecycleDialog.value !== null,
+  set: (value: boolean) => {
+    if (!value) lifecycleDialog.value = null
+  },
+})
+
+const lifecycleDialog = ref<null | {
+  kind: 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN' | 'SUPPLEMENT_SIGN'
+  targetUserId?: string
+  message?: string
+  receivers?: string
+  participants?: string
+  mode?: 'SERIAL' | 'PARALLEL'
+}>(null)
+const lifecycleSubmitting = ref(false)
+
+const LIFECYCLE_META: Record<string, { title: string; confirm: string }> = {
+  TRANSFER: { title: '转办任务', confirm: '确认转办？转出人失去当前办理权' },
+  DELEGATE: { title: '委托任务', confirm: '确认委托？受托人完成后回到原责任人' },
+  COMMUNICATE: { title: '沟通征询', confirm: '确认发起沟通？接收人不获得审批权' },
+  ADD_SIGN: { title: '加签', confirm: '确认向所选人员追加签批？' },
+  SUPPLEMENT_SIGN: { title: '补签', confirm: '确认对原实例/原节点补充确认？补签不改写原终态' },
+}
+
+function openLifecycle(
+  kind: 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN' | 'SUPPLEMENT_SIGN',
+) {
+  if (acting.value) return
+  lifecycleDialog.value = { kind, mode: 'PARALLEL' }
+}
+
+async function submitLifecycle() {
+  const dialog = lifecycleDialog.value
+  if (!dialog || !detail.value) return
+  const meta = LIFECYCLE_META[dialog.kind]
+  let payload: Partial<ApprovalActionRequest>
+  if (dialog.kind === 'TRANSFER' || dialog.kind === 'DELEGATE') {
+    const target = String(dialog.targetUserId ?? '').trim()
+    if (!/^\d+$/.test(target) || /^0+$/.test(target)) {
+      ElMessage.warning('请填写有效的目标用户 ID')
+      return
+    }
+    payload = { targetUserId: target, reason: opinionComment.value || undefined }
+  } else if (dialog.kind === 'COMMUNICATE') {
+    const receivers = (dialog.receivers ?? '')
+      .split(',')
+      .map((item) => Number(item.trim()))
+      .filter((item) => Number.isInteger(item) && item > 0)
+    if (receivers.length === 0) {
+      ElMessage.warning('请填写至少一个沟通接收人用户 ID（逗号分隔）')
+      return
+    }
+    payload = { receivers, message: dialog.message ?? '' }
+  } else {
+    const raw = (dialog.participants ?? '')
+      .split(',')
+      .map((item) => Number(item.trim()))
+      .filter((item) => Number.isInteger(item) && item > 0)
+    if (raw.length === 0) {
+      ElMessage.warning('请填写至少一个参与人用户 ID（逗号分隔）')
+      return
+    }
+    if (dialog.kind === 'ADD_SIGN') {
+      payload = {
+        participants: raw,
+        mode: dialog.mode ?? 'PARALLEL',
+        comment: opinionComment.value || undefined,
+      }
+    } else {
+      payload = { participants: raw, nodeKey: detail.value.processDefinitionKey ?? undefined }
+    }
+  }
+  lifecycleSubmitting.value = true
+  try {
+    if (dialog.kind === 'TRANSFER') {
+      await transferTask(taskId, payload)
+    } else if (dialog.kind === 'DELEGATE') {
+      await delegateTask(taskId, payload)
+    } else if (dialog.kind === 'COMMUNICATE') {
+      await communicateTask(taskId, payload)
+    } else if (dialog.kind === 'ADD_SIGN') {
+      await addSignTask(taskId, payload)
+    } else {
+      await supplementSignInstance(detail.value.processInstanceId, payload)
+    }
+    ElMessage.success(meta.title + '已提交')
+    lifecycleDialog.value = null
+    await navigateAfterAction()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : meta.title + '操作失败')
+  } finally {
+    lifecycleSubmitting.value = false
+  }
 }
 
 function formatVariables(vars: Record<string, unknown>): [string, string][] {
@@ -609,7 +740,87 @@ onMounted(loadDetail)
       >
         驳回
       </el-button>
+      <el-divider direction="vertical" />
+      <el-button size="large" :disabled="acting !== null" @click="openLifecycle('TRANSFER')">
+        转办
+      </el-button>
+      <el-button size="large" :disabled="acting !== null" @click="openLifecycle('DELEGATE')">
+        委托
+      </el-button>
+      <el-button size="large" :disabled="acting !== null" @click="openLifecycle('COMMUNICATE')">
+        沟通
+      </el-button>
+      <el-button size="large" :disabled="acting !== null" @click="openLifecycle('ADD_SIGN')">
+        加签
+      </el-button>
+      <el-button size="large" :disabled="acting !== null" @click="openLifecycle('SUPPLEMENT_SIGN')">
+        补签
+      </el-button>
     </div>
+
+    <!-- I3 生命周期动作弹窗 -->
+    <el-dialog
+      v-model="lifecycleDialogVisible"
+      :title="lifecycleDialog ? LIFECYCLE_META[lifecycleDialog.kind].title : ''"
+      width="420px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-position="top" size="small">
+        <template
+          v-if="lifecycleDialog?.kind === 'TRANSFER' || lifecycleDialog?.kind === 'DELEGATE'"
+        >
+          <el-form-item label="目标用户 ID">
+            <el-input v-model="lifecycleDialog.targetUserId" placeholder="正整数用户 ID" />
+          </el-form-item>
+        </template>
+        <template v-if="lifecycleDialog?.kind === 'COMMUNICATE'">
+          <el-form-item label="接收人用户 ID（逗号分隔）">
+            <el-input v-model="lifecycleDialog.receivers" placeholder="如 1,2,3" />
+          </el-form-item>
+          <el-form-item label="征询内容">
+            <el-input v-model="lifecycleDialog.message" type="textarea" :rows="3" />
+          </el-form-item>
+        </template>
+        <template v-if="lifecycleDialog?.kind === 'ADD_SIGN'">
+          <el-form-item label="参与人用户 ID（逗号分隔）">
+            <el-input v-model="lifecycleDialog.participants" placeholder="如 2,3" />
+          </el-form-item>
+          <el-form-item label="顺序">
+            <el-radio-group v-model="lifecycleDialog.mode">
+              <el-radio value="PARALLEL">并行</el-radio>
+              <el-radio value="SERIAL">串行</el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </template>
+        <template v-if="lifecycleDialog?.kind === 'SUPPLEMENT_SIGN'">
+          <el-form-item label="补充确认人用户 ID（逗号分隔）">
+            <el-input v-model="lifecycleDialog.participants" placeholder="如 2,3" />
+          </el-form-item>
+          <el-form-item label="说明">
+            <el-input
+              v-model="lifecycleDialog.message"
+              placeholder="补签是否触发受控业务动作的说明（默认仅审计补充）"
+            />
+          </el-form-item>
+        </template>
+        <el-form-item
+          v-if="
+            lifecycleDialog?.kind === 'TRANSFER' ||
+            lifecycleDialog?.kind === 'DELEGATE' ||
+            lifecycleDialog?.kind === 'ADD_SIGN'
+          "
+          label="备注"
+        >
+          <el-input v-model="opinionComment" placeholder="可选" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="lifecycleDialog = null">取消</el-button>
+        <el-button type="primary" :loading="lifecycleSubmitting" @click="submitLifecycle">
+          确认
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

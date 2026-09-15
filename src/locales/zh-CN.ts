@@ -1,5 +1,5 @@
 export default {
   app: {
-    name: 'Smart-WorkFlow',
+    name: 'CH-aPaaS',
   },
 }
