@@ -12,9 +12,12 @@ interface BackendPageResult<T> {
 function adaptPage<T>(raw: BackendPageResult<T>): PageResult<T> {
   return {
     list: raw.records,
-    total: raw.total,
-    pageNum: raw.pageNum,
-    pageSize: raw.pageSize,
+    // PostgreSQL bigint pagination fields are serialized as strings by the API.
+    // Normalize them here so Element Plus receives the numeric contract required
+    // by the shared pagination component and renders the visible pager.
+    total: Number(raw.total),
+    pageNum: Number(raw.pageNum),
+    pageSize: Number(raw.pageSize),
   }
 }
 

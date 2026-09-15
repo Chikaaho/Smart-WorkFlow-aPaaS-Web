@@ -389,7 +389,7 @@ const lifecycleDialogVisible = computed({
 
 const lifecycleDialog = ref<null | {
   kind: 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN' | 'SUPPLEMENT_SIGN'
-  targetUserId?: number
+  targetUserId?: string
   message?: string
   receivers?: string
   participants?: string
@@ -418,8 +418,8 @@ async function submitLifecycle() {
   const meta = LIFECYCLE_META[dialog.kind]
   let payload: Partial<ApprovalActionRequest>
   if (dialog.kind === 'TRANSFER' || dialog.kind === 'DELEGATE') {
-    const target = Number(dialog.targetUserId)
-    if (!target || target <= 0) {
+    const target = String(dialog.targetUserId ?? '').trim()
+    if (!/^\d+$/.test(target) || /^0+$/.test(target)) {
       ElMessage.warning('请填写有效的目标用户 ID')
       return
     }
@@ -770,7 +770,7 @@ onMounted(loadDetail)
           v-if="lifecycleDialog?.kind === 'TRANSFER' || lifecycleDialog?.kind === 'DELEGATE'"
         >
           <el-form-item label="目标用户 ID">
-            <el-input v-model.number="lifecycleDialog.targetUserId" placeholder="正整数用户 ID" />
+            <el-input v-model="lifecycleDialog.targetUserId" placeholder="正整数用户 ID" />
           </el-form-item>
         </template>
         <template v-if="lifecycleDialog?.kind === 'COMMUNICATE'">

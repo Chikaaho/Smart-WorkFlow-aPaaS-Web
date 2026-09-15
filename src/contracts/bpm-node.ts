@@ -61,8 +61,8 @@ export interface ApprovalActionRequest {
   opinionFormVersion?: string
   comment?: string
   opinionData?: Record<string, unknown>
-  /** I3：转入人/受托人/代理受托人目标。 */
-  targetUserId?: number
+  /** I3：转入人/受托人/代理受托人目标；64 位用户 ID 以十进制字符串保持精度。 */
+  targetUserId?: number | string
   /** I3：加签/补签参与人。 */
   participants?: number[]
   /** I3：SERIAL / PARALLEL。 */

@@ -71,11 +71,19 @@ export async function pageNotifyTemplates(
   const queryParams: Record<string, string> = {}
   if (keyword) queryParams.keyword = keyword
   if (enabled !== undefined) queryParams.enabled = String(enabled)
-  return request<PageResult<NotifyTemplate>>({
+  const raw = await request<BackendTemplatePage>({
     method: 'GET',
     url: '/notify/templates',
     params: { pageNum: String(page.pageNum), pageSize: String(page.pageSize), ...queryParams },
   })
+  return { list: raw.records, total: raw.total, pageNum: raw.pageNum, pageSize: raw.pageSize }
+}
+
+interface BackendTemplatePage {
+  records: NotifyTemplate[]
+  total: number
+  pageNum: number
+  pageSize: number
 }
 
 /** GET /notify/templates/{id} → 详情 */
