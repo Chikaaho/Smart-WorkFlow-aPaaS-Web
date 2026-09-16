@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * WorkflowCenter — 统一工作台（I4 §3.7）。
  * 单页聚合：待办 / 已办 / 我发起的 / 草稿 / 抄送 / 消息入口；
@@ -39,12 +42,24 @@ const lists = ref<Record<'todo' | 'processed' | 'initiated' | 'drafts' | 'cc', R
 })
 
 const TAB_TITLES: Record<TabKey, string> = {
-  todo: '待办',
-  processed: '已办',
-  initiated: '我发起的',
-  drafts: '草稿',
-  cc: '抄送',
-  messages: '消息',
+  get todo() {
+    return t('workflow.todoTab')
+  },
+  get processed() {
+    return t('workflow.processedTab')
+  },
+  get initiated() {
+    return t('common.startedByMe')
+  },
+  get drafts() {
+    return t('common.statusDraft')
+  },
+  get cc() {
+    return t('workflow.cc')
+  },
+  get messages() {
+    return t('common.message')
+  },
 }
 
 const currentRows = computed(() =>
@@ -71,7 +86,7 @@ async function loadTab(tab: TabKey) {
       lists.value.cc = result.list as unknown as Row[]
     }
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? err.msg : '列表加载失败'
+    errorMsg.value = err instanceof ApiError ? err.msg : t('workflow.listLoadFailed')
   } finally {
     loading.value = false
   }
@@ -100,7 +115,7 @@ onMounted(() => void loadTab('todo'))
 
 <template>
   <div class="workflow-center">
-    <h2 class="page-title">工作台</h2>
+    <h2 class="page-title">{{ t('common.workspace') }}</h2>
     <el-tabs v-model="activeTab" @tab-change="handleTabChange">
       <el-tab-pane v-for="(title, key) in TAB_TITLES" :key="key" :label="title" :name="key">
         <template v-if="(key as TabKey) !== 'messages'">
@@ -111,21 +126,21 @@ onMounted(() => void loadTab('todo'))
             :closable="false"
           />
           <el-table v-loading="loading && activeTab === key" :data="currentRows" size="default">
-            <el-table-column label="标题/事项" min-width="200">
+            <el-table-column :label="t('workflow.titleOrItemColumn')" min-width="200">
               <template #default="{ row }">{{
                 row.name || row.title || row.processDefinitionKey || '—'
               }}</template>
             </el-table-column>
-            <el-table-column label="标识" min-width="180">
+            <el-table-column :label="t('common.identifier')" min-width="180">
               <template #default="{ row }">{{ rowId(row) }}</template>
             </el-table-column>
-            <el-table-column label="状态" width="110">
+            <el-table-column :label="t('common.status')" width="110">
               <template #default="{ row }">{{ row.status || '—' }}</template>
             </el-table-column>
-            <el-table-column label="时间" min-width="160">
+            <el-table-column :label="t('common.time')" min-width="160">
               <template #default="{ row }">{{ row.createTime || '—' }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="90">
+            <el-table-column :label="t('common.actions')" width="90">
               <template #default="{ row }">
                 <el-button
                   v-if="
@@ -136,18 +151,18 @@ onMounted(() => void loadTab('todo'))
                   type="primary"
                   @click="openRow(row)"
                 >
-                  打开
+                  {{ t('common.open') }}
                 </el-button>
               </template>
             </el-table-column>
-            <template #empty>暂无数据</template>
+            <template #empty>{{ t('common.emptyData') }}</template>
           </el-table>
         </template>
         <template v-else>
-          <el-empty description="站内信入口">
-            <el-button type="primary" @click="router.push('/notify/record')"
-              >打开消息记录</el-button
-            >
+          <el-empty :description="t('workflow.inboxEntry')">
+            <el-button type="primary" @click="router.push('/notify/record')">{{
+              t('workflow.openMessageRecords')
+            }}</el-button>
           </el-empty>
         </template>
       </el-tab-pane>

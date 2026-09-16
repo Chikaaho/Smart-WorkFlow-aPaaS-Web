@@ -1,0 +1,39 @@
+{
+  "_comment": "P61 R1 术语字典 批次13：三元分支与数组元素中只被替换了一侧的残余文案收口。",
+  "最小值": {
+    "key": "form.configSeamMin",
+    "en": "Minimum"
+  },
+  "最大值": {
+    "key": "form.configSeamMax",
+    "en": "Maximum"
+  },
+  "步长 / 精度": {
+    "key": "form.configSeamStep",
+    "en": "Step / precision"
+  },
+  "占位提示": {
+    "key": "form.placeholderHint",
+    "en": "Placeholder hint"
+  },
+  "留空保持不变": {
+    "key": "iot.passwordKeepPlaceholder",
+    "en": "Leave empty to keep the current value"
+  },
+  "编辑草稿（生成新版本）": {
+    "key": "iot.editScriptDraft",
+    "en": "Edit draft (creates a new version)"
+  },
+  "编辑 Topic": {
+    "key": "iot.editTopic",
+    "en": "Edit topic"
+  },
+  "编辑规则": {
+    "key": "notify.editRule",
+    "en": "Edit rule"
+  },
+  "编辑分类": {
+    "key": "workflow.editCategory",
+    "en": "Edit category"
+  }
+}

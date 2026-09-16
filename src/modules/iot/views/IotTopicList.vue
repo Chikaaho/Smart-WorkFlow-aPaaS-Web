@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * IotTopicList — Topic 配置管理（P21 A3）。
  *
@@ -6,6 +9,7 @@
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ApiError } from '@/foundation/request'
 import {
   listTopics,
   createTopic,
@@ -20,6 +24,8 @@ import {
 } from '../api'
 
 const loading = ref(false)
+/** 本次加载的失败原因；非空时页面显示错误态而不是空态。 */
+const loadError = ref('')
 const list = ref<IotTopic[]>([])
 const connections = ref<IotConnection[]>([])
 const products = ref<IotProduct[]>([])
@@ -37,14 +43,19 @@ const form = reactive({
   mappingJson: '',
 })
 
-const isEmpty = computed(() => !loading.value && list.value.length === 0)
+const isEmpty = computed(
+  () => !loading.value && !loadError.value && !loadError.value && list.value.length === 0,
+)
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     list.value = await listTopics()
     connections.value = await listConnections()
     products.value = await listProducts()
+  } catch (err) {
+    loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
@@ -84,10 +95,10 @@ async function save() {
   const body: Record<string, unknown> = { ...form }
   if (editingId.value) {
     await updateTopic(editingId.value, body)
-    ElMessage.success('已保存')
+    ElMessage.success(t('common.saved'))
   } else {
     await createTopic(body)
-    ElMessage.success('已创建')
+    ElMessage.success(t('common.created'))
   }
   dialogVisible.value = false
   void load()
@@ -95,14 +106,18 @@ async function save() {
 
 async function handleToggle(row: IotTopic) {
   await toggleTopic(row.id, row.enabled !== 1)
-  ElMessage.success('状态已更新')
+  ElMessage.success(t('common.statusUpdated'))
   void load()
 }
 
 async function handleDelete(row: IotTopic) {
-  await ElMessageBox.confirm(`删除 Topic「${row.topic}」？`, '删除', { type: 'warning' })
+  await ElMessageBox.confirm(
+    t('iot.deleteTopicConfirm', { topic: row.topic }),
+    t('common.delete'),
+    { type: 'warning' },
+  )
   await deleteTopic(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('common.deleted'))
   void load()
 }
 
@@ -112,44 +127,63 @@ onMounted(() => void load())
 <template>
   <div style="padding: 16px">
     <div style="display: flex; justify-content: space-between; margin-bottom: 12px">
-      <h3 style="margin: 0">Topic 配置</h3>
-      <el-button type="primary" @click="openCreate">新增 Topic</el-button>
+      <h3 style="margin: 0">{{ t('iot.topicConfig') }}</h3>
+      <el-button type="primary" @click="openCreate">{{ t('iot.newTopic') }}</el-button>
     </div>
+    <el-alert
+      v-if="loadError"
+      :title="loadError"
+      type="error"
+      show-icon
+      :closable="false"
+      class="load-error"
+    >
+      <template #default>
+        <el-button link type="primary" @click="load">{{ t('common.retry') }}</el-button>
+      </template>
+    </el-alert>
 
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="topic" label="主题" min-width="220" show-overflow-tooltip />
-      <el-table-column prop="direction" label="方向" width="80" />
+      <el-table-column
+        prop="topic"
+        :label="t('common.subject')"
+        min-width="220"
+        show-overflow-tooltip
+      />
+      <el-table-column prop="direction" :label="t('iot.direction')" width="80" />
       <el-table-column prop="qos" label="QoS" width="60" />
-      <el-table-column prop="payloadType" label="载荷类型" width="120" />
-      <el-table-column label="启停" width="80">
+      <el-table-column prop="payloadType" :label="t('iot.payloadType')" width="120" />
+      <el-table-column :label="t('common.toggle')" width="80">
         <template #default="{ row }">
           <el-tag :type="row.enabled === 1 ? 'success' : 'info'" size="small">{{
-            row.enabled === 1 ? '启用' : '停用'
+            row.enabled === 1 ? t('common.enable') : t('common.disable')
           }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column :label="t('common.actions')" width="160" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="openEdit(row as IotTopic)">编辑</el-button>
-          <el-button size="small" @click="handleToggle(row as IotTopic)">{{
-            row.enabled === 1 ? '停用' : '启用'
+          <el-button size="small" @click="openEdit(row as IotTopic)">{{
+            t('common.edit')
           }}</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row as IotTopic)"
-            >删除</el-button
-          >
+          <el-button size="small" @click="handleToggle(row as IotTopic)">{{
+            row.enabled === 1 ? t('common.disable') : t('common.enable')
+          }}</el-button>
+          <el-button size="small" type="danger" @click="handleDelete(row as IotTopic)">{{
+            t('common.delete')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="isEmpty" description="暂无 Topic 配置" />
+    <el-empty v-if="isEmpty" :description="t('iot.noTopics')" />
 
     <el-dialog
       v-model="dialogVisible"
-      :title="editingId ? '编辑 Topic' : '新增 Topic'"
+      :title="editingId ? t('iot.editTopic') : t('iot.newTopic')"
       width="560px"
     >
       <el-form label-width="90px">
-        <el-form-item label="连接" required>
-          <el-select v-model="form.connId" placeholder="选择 MQTT 连接">
+        <el-form-item :label="t('iot.connect')" required>
+          <el-select v-model="form.connId" :placeholder="t('iot.selectMqttConnection')">
             <el-option
               v-for="c in connections.filter((x) => x.connType === 'MQTT')"
               :key="c.id"
@@ -158,19 +192,23 @@ onMounted(() => void load())
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="产品">
-          <el-select v-model="form.productId" clearable placeholder="绑定产品（用于设备定位）">
+        <el-form-item :label="t('iot.product')">
+          <el-select
+            v-model="form.productId"
+            clearable
+            :placeholder="t('iot.bindProductPlaceholder')"
+          >
             <el-option v-for="p in products" :key="p.id" :label="p.name" :value="p.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="主题" required>
-          <el-input v-model="form.topic" placeholder="支持 {deviceKey} 模板变量与 +/# 通配" />
+        <el-form-item :label="t('common.subject')" required>
+          <el-input v-model="form.topic" :placeholder="t('iot.topicPlaceholder')" />
         </el-form-item>
-        <el-form-item label="方向">
+        <el-form-item :label="t('iot.direction')">
           <el-select v-model="form.direction">
-            <el-option label="上行 UP" value="UP" />
-            <el-option label="下行 DOWN" value="DOWN" />
-            <el-option label="双向 BOTH" value="BOTH" />
+            <el-option :label="t('iot.directionUp')" value="UP" />
+            <el-option :label="t('iot.directionDown')" value="DOWN" />
+            <el-option :label="t('iot.directionBoth')" value="BOTH" />
           </el-select>
         </el-form-item>
         <el-form-item label="QoS">
@@ -181,18 +219,18 @@ onMounted(() => void load())
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="载荷类型">
+        <el-form-item :label="t('iot.payloadType')">
           <el-select v-model="form.payloadType">
-            <el-option label="属性上报" value="PROPERTY" />
-            <el-option label="事件" value="EVENT" />
-            <el-option label="行为结果" value="ACTION_RESULT" />
-            <el-option label="原始" value="RAW" />
+            <el-option :label="t('iot.payloadProperty')" value="PROPERTY" />
+            <el-option :label="t('common.event')" value="EVENT" />
+            <el-option :label="t('iot.payloadActionResult')" value="ACTION_RESULT" />
+            <el-option :label="t('iot.payloadRaw')" value="RAW" />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </div>

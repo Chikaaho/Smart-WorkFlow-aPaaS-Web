@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { ElMessage } from 'element-plus'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 人员选择（USER）控件（I2）。
  * 值 = 数字型用户 ID（存 id，展示 realName/username）；候选经系统用户查询接口
@@ -23,6 +27,8 @@ onMounted(async () => {
   try {
     options.value = await loadUserChoices()
   } catch {
+    ElMessage.error(t('common.loadFailed'))
+    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     options.value = []
   }
   ensureSelectedLabel()
@@ -49,7 +55,7 @@ function onChange(value: unknown) {
     filterable
     clearable
     :disabled="readonly"
-    placeholder="选择人员"
+    :placeholder="t('component.selectUser')"
     @change="onChange"
   >
     <el-option v-for="o in options" :key="o.id" :label="o.label" :value="o.id" />

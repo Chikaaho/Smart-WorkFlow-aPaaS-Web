@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { request } from '@/foundation/request'
@@ -24,7 +27,7 @@ interface CandidateDTO {
 onMounted(async () => {
   ticket.value = typeof route.query.ticket === 'string' ? route.query.ticket : ''
   if (!ticket.value) {
-    errorMessage.value = '绑定票据缺失，请从登录入口重新发起'
+    errorMessage.value = t('view.ssoBindTicketMissing')
     return
   }
   try {
@@ -35,7 +38,7 @@ onMounted(async () => {
     })
     externalDigestPrefix.value = candidate.externalDigestPrefix
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '绑定候选已失效，请重新发起'
+    errorMessage.value = error instanceof Error ? error.message : t('view.ssoBindCandidateExpired')
   }
 })
 
@@ -54,7 +57,7 @@ async function onBind(): Promise<void> {
     })
     await router.push('/workspace')
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '绑定失败'
+    errorMessage.value = error instanceof Error ? error.message : t('view.ssoBindFailed')
   } finally {
     binding.value = false
   }
@@ -64,18 +67,18 @@ async function onBind(): Promise<void> {
 <template>
   <div class="sso-bind">
     <div class="card">
-      <p class="title">绑定第三方账号</p>
+      <p class="title">{{ t('view.bindThirdPartyAccount') }}</p>
       <template v-if="errorMessage">
         <p class="hint error">{{ errorMessage }}</p>
-        <router-link class="link" to="/login">返回登录</router-link>
+        <router-link class="link" to="/login">{{ t('view.backToLogin') }}</router-link>
       </template>
       <template v-else>
         <p class="hint">
-          将外部身份（标识摘要 <code>{{ externalDigestPrefix || '…' }}</code
-          >）绑定到当前本地账号。 同一外部身份仅可绑定一个账号。
+          {{ t('auth.ssoBindLead') }} <code>{{ externalDigestPrefix || '…' }}</code
+          >{{ t('auth.ssoBindTail') }}
         </p>
         <button class="btn" :disabled="binding" @click="onBind">
-          {{ binding ? '绑定中…' : '确认绑定' }}
+          {{ binding ? t('view.binding') : t('view.confirmBind') }}
         </button>
       </template>
     </div>

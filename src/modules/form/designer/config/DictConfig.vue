@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { ElMessage } from 'element-plus'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 字典选择（DICT）配置面板。
  * 契约键：label / name / required / dictType（绑定字典）/ renderAs（下拉 or 单选）。
@@ -24,6 +28,8 @@ onMounted(async () => {
   try {
     dictTypes.value = await listDictTypes()
   } catch {
+    ElMessage.error(t('common.loadFailed'))
+    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     // 非阻塞：字典类型清单取不到则留空，作者可稍后重开面板重试。
   }
 })
@@ -40,24 +46,24 @@ onMounted(async () => {
     />
 
     <div class="row">
-      <label class="row__label">绑定字典</label>
+      <label class="row__label">{{ t('form.bindDict') }}</label>
       <el-select
         :model-value="props.field.dictType"
-        placeholder="选择字典类型"
+        :placeholder="t('form.selectDictType')"
         class="row__control"
         @update:model-value="(v: string) => emit('update', { dictType: v })"
       >
         <el-option
           v-for="dt in dictTypes"
           :key="dt.code"
-          :label="`${dt.name}（${dt.code}）`"
+          :label="t('common.nameWithCode', { name: dt.name, code: dt.code })"
           :value="dt.code"
         />
       </el-select>
     </div>
 
     <div class="row">
-      <label class="row__label">显示方式</label>
+      <label class="row__label">{{ t('form.displayMode') }}</label>
       <el-radio-group
         :model-value="props.field.renderAs ?? 'select'"
         @update:model-value="
@@ -65,12 +71,12 @@ onMounted(async () => {
             emit('update', { renderAs: v === 'radio' ? 'radio' : 'select' })
         "
       >
-        <el-radio value="select">下拉</el-radio>
-        <el-radio value="radio">单选</el-radio>
+        <el-radio value="select">{{ t('form.renderSelect') }}</el-radio>
+        <el-radio value="radio">{{ t('form.renderRadio') }}</el-radio>
       </el-radio-group>
     </div>
 
-    <ConfigSeamNote :items="['默认值']" />
+    <ConfigSeamNote :items="[t('form.defaultValue')]" />
   </div>
 </template>
 

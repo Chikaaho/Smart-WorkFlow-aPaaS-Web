@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * IotRuleList — 事件规则管理（P21 A5）。
  *
@@ -7,6 +11,7 @@
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ApiError } from '@/foundation/request'
 import {
   listRules,
   createRule,
@@ -20,6 +25,8 @@ import {
 } from '../api'
 
 const loading = ref(false)
+/** 本次加载的失败原因；非空时页面显示错误态而不是空态。 */
+const loadError = ref('')
 const list = ref<IotEventRule[]>([])
 const devices = ref<IotDevice[]>([])
 
@@ -47,13 +54,18 @@ const triggerDetailJson = computed(() =>
   selectedTrigger.value ? JSON.stringify(selectedTrigger.value, null, 2) : '',
 )
 
-const isEmpty = computed(() => !loading.value && list.value.length === 0)
+const isEmpty = computed(
+  () => !loading.value && !loadError.value && !loadError.value && list.value.length === 0,
+)
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     list.value = await listRules()
     devices.value = await listEligibleDevices()
+  } catch (err) {
+    loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
@@ -83,20 +95,20 @@ function openCreate() {
 
 async function save() {
   await createRule({ ...form })
-  ElMessage.success('规则已创建（草稿）')
+  ElMessage.success(t('iot.ruleCreatedDraft'))
   dialogVisible.value = false
   void load()
 }
 
 async function handlePublish(row: IotEventRule) {
   await publishRule(row.id)
-  ElMessage.success('已发布')
+  ElMessage.success(t('common.statusPublished'))
   void load()
 }
 
 async function handleDisable(row: IotEventRule) {
   await disableRule(row.id)
-  ElMessage.success('已停用')
+  ElMessage.success(t('common.statusDisabled'))
   void load()
 }
 
@@ -121,69 +133,92 @@ onMounted(() => void load())
 <template>
   <div style="padding: 16px">
     <div style="display: flex; justify-content: space-between; margin-bottom: 12px">
-      <h3 style="margin: 0">事件规则</h3>
+      <h3 style="margin: 0">{{ t('iot.eventRules') }}</h3>
       <div>
         <span style="color: var(--el-text-color-secondary); font-size: 12px; margin-right: 8px">
-          流程联动仅可选择「已发布 + 允许 IoT 接入」的设备与流程模板
+          {{ t('iot.ruleEligibleNote') }}
         </span>
-        <el-button type="primary" @click="openCreate">新增规则</el-button>
+        <el-button type="primary" @click="openCreate">{{ t('common.newRule') }}</el-button>
       </div>
     </div>
+    <el-alert
+      v-if="loadError"
+      :title="loadError"
+      type="error"
+      show-icon
+      :closable="false"
+      class="load-error"
+    >
+      <template #default>
+        <el-button link type="primary" @click="load">{{ t('common.retry') }}</el-button>
+      </template>
+    </el-alert>
 
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="code" label="编码" min-width="110" />
-      <el-table-column prop="name" label="名称" min-width="130" />
-      <el-table-column label="设备" min-width="120">
+      <el-table-column prop="code" :label="t('common.code')" min-width="110" />
+      <el-table-column prop="name" :label="t('common.name')" min-width="130" />
+      <el-table-column :label="t('common.device')" min-width="120">
         <template #default="{ row }">{{ deviceName(row.deviceId) }}</template>
       </el-table-column>
-      <el-table-column prop="ruleType" label="类型" width="150" />
-      <el-table-column prop="conditionJson" label="条件" min-width="200" show-overflow-tooltip />
-      <el-table-column label="流程联动" width="90">
+      <el-table-column prop="ruleType" :label="t('common.type')" width="150" />
+      <el-table-column
+        prop="conditionJson"
+        :label="t('common.condition')"
+        min-width="200"
+        show-overflow-tooltip
+      />
+      <el-table-column :label="t('iot.processLinkage')" width="90">
         <template #default="{ row }">
           <el-tag :type="row.processEnabled === 1 ? 'success' : 'info'" size="small">
             {{ row.processEnabled === 1 ? row.processTemplateKey : '—' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="90">
+      <el-table-column :label="t('common.status')" width="90">
         <template #default="{ row }">
           <el-tag
             :type="
               row.status === 'PUBLISHED' ? 'success' : row.status === 'DISABLED' ? 'danger' : 'info'
             "
             size="small"
-            >{{ row.status }}</el-tag
+            >{{ enumLabel('IOT_RELEASE_STATE', row.status) }}</el-tag
           >
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column :label="t('common.actions')" width="180" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="row.status !== 'PUBLISHED'"
             size="small"
             type="success"
             @click="handlePublish(row as IotEventRule)"
-            >发布</el-button
+            >{{ t('common.publish') }}</el-button
           >
           <el-button
             v-if="row.status === 'PUBLISHED'"
             size="small"
             type="danger"
             @click="handleDisable(row as IotEventRule)"
-            >停用</el-button
+            >{{ t('common.disable') }}</el-button
           >
-          <el-button size="small" @click="openTriggers(row as IotEventRule)">触发记录</el-button>
+          <el-button size="small" @click="openTriggers(row as IotEventRule)">{{
+            t('iot.triggerRecords')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="isEmpty" description="暂无规则" />
+    <el-empty v-if="isEmpty" :description="t('iot.noRules')" />
 
-    <el-dialog v-model="dialogVisible" title="新增规则" width="640px">
+    <el-dialog v-model="dialogVisible" :title="t('common.newRule')" width="640px">
       <el-form label-width="100px">
-        <el-form-item label="编码" required><el-input v-model="form.code" /></el-form-item>
-        <el-form-item label="名称" required><el-input v-model="form.name" /></el-form-item>
-        <el-form-item label="设备" required>
-          <el-select v-model="form.deviceId" placeholder="仅显示可接入流程的已发布设备">
+        <el-form-item :label="t('common.code')" required
+          ><el-input v-model="form.code"
+        /></el-form-item>
+        <el-form-item :label="t('common.name')" required
+          ><el-input v-model="form.name"
+        /></el-form-item>
+        <el-form-item :label="t('common.device')" required>
+          <el-select v-model="form.deviceId" :placeholder="t('iot.eligibleDevicesPlaceholder')">
             <el-option
               v-for="d in devices"
               :key="d.id"
@@ -192,47 +227,47 @@ onMounted(() => void load())
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="规则类型">
+        <el-form-item :label="t('iot.ruleType')">
           <el-select v-model="form.ruleType">
-            <el-option label="阈值 THRESHOLD" value="THRESHOLD" />
-            <el-option label="属性变化 PROPERTY_CHANGED" value="PROPERTY_CHANGED" />
-            <el-option label="事件发生 EVENT_OCCUR" value="EVENT_OCCUR" />
-            <el-option label="上线 ONLINE" value="ONLINE" />
-            <el-option label="离线 OFFLINE" value="OFFLINE" />
+            <el-option :label="t('iot.ruleTypeThreshold')" value="THRESHOLD" />
+            <el-option :label="t('iot.ruleTypePropertyChanged')" value="PROPERTY_CHANGED" />
+            <el-option :label="t('iot.ruleTypeEventOccur')" value="EVENT_OCCUR" />
+            <el-option :label="t('iot.ruleTypeOnline')" value="ONLINE" />
+            <el-option :label="t('iot.ruleTypeOffline')" value="OFFLINE" />
           </el-select>
         </el-form-item>
-        <el-form-item label="条件 JSON" required>
+        <el-form-item :label="t('iot.conditionJson')" required>
           <el-input v-model="form.conditionJson" type="textarea" :rows="3" />
         </el-form-item>
-        <el-form-item label="防抖(ms)"
+        <el-form-item :label="t('iot.debounceMs')"
           ><el-input-number v-model="form.debounceMs" :min="0" :step="500"
         /></el-form-item>
-        <el-form-item label="冷却(ms)"
+        <el-form-item :label="t('iot.cooldownMs')"
           ><el-input-number v-model="form.cooldownMs" :min="0" :step="1000"
         /></el-form-item>
-        <el-form-item label="连续次数"
+        <el-form-item :label="t('iot.consecutiveCount')"
           ><el-input-number v-model="form.continuousCount" :min="1" :max="100"
         /></el-form-item>
-        <el-form-item label="流程联动">
+        <el-form-item :label="t('iot.processLinkage')">
           <el-switch v-model="form.processEnabled" :active-value="1" :inactive-value="0" />
         </el-form-item>
-        <el-form-item v-if="form.processEnabled === 1" label="流程模板" required>
+        <el-form-item v-if="form.processEnabled === 1" :label="t('iot.processTemplate')" required>
           <el-input
             v-model="form.processTemplateKey"
-            placeholder="已发布且允许 IoT 接入的流程模板 key"
+            :placeholder="t('iot.processTemplateKeyPlaceholder')"
           />
         </el-form-item>
-        <el-form-item v-if="form.processEnabled === 1" label="表单映射">
+        <el-form-item v-if="form.processEnabled === 1" :label="t('iot.formMapping')">
           <el-input v-model="form.formMappingJson" type="textarea" :rows="4" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="triggerVisible" title="规则触发与流程发起记录" width="760px">
+    <el-dialog v-model="triggerVisible" :title="t('iot.triggerRecordsTitle')" width="760px">
       <el-table
         v-loading="triggerLoading"
         :data="triggers"
@@ -242,11 +277,11 @@ onMounted(() => void load())
       >
         <el-table-column
           prop="idempotentKey"
-          label="幂等键"
+          :label="t('iot.idempotencyKey')"
           min-width="200"
           show-overflow-tooltip
         />
-        <el-table-column prop="status" label="状态" width="90">
+        <el-table-column prop="status" :label="t('common.status')" width="90">
           <template #default="{ row }">
             <el-tag
               :type="
@@ -258,16 +293,25 @@ onMounted(() => void load())
               "
               size="small"
             >
-              {{ row.status }}
+              {{ enumLabel('IOT_RELEASE_STATE', row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="processInstanceId" label="流程实例" min-width="140" />
-        <el-table-column prop="error" label="失败原因" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="triggerTime" label="触发时间" min-width="150" />
+        <el-table-column
+          prop="processInstanceId"
+          :label="t('common.processInstance')"
+          min-width="140"
+        />
+        <el-table-column
+          prop="error"
+          :label="t('common.failureReason')"
+          min-width="160"
+          show-overflow-tooltip
+        />
+        <el-table-column prop="triggerTime" :label="t('iot.triggeredAt')" min-width="150" />
       </el-table>
     </el-dialog>
-    <el-dialog v-model="triggerDetailVisible" title="触发记录详情" width="680px">
+    <el-dialog v-model="triggerDetailVisible" :title="t('iot.triggerRecordDetail')" width="680px">
       <pre
         style="
           max-height: 55vh;

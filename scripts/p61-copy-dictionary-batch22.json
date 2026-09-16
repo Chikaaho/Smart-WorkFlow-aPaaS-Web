@@ -1,0 +1,35 @@
+{
+  "_comment": "P61 二级批次22（R2c-N / R2c-I / R2c-A / R2b）：批量结果四项计数的缺失标签与同步契约说明。批量操作四个计数一律取服务端返回值，仅缺「处理中」这一枚通用标签；其余三项复用 common.total / common.resultSuccess / common.resultFailed，接收对象复用 notify.recipients，原因复用 common.reason —— 同文不另立键。",
+  "处理中": {
+    "key": "common.resultProcessing",
+    "en": "In progress"
+  },
+  "事件引用": {
+    "key": "common.eventReference",
+    "en": "Event reference"
+  },
+  "批量发送结果": {
+    "key": "notify.batchResultTitle",
+    "en": "Batch send result"
+  },
+  "站内信为同步投递，本次批次没有处理中的接收人。": {
+    "key": "notify.batchResultProcessingNote",
+    "en": "In-app delivery is synchronous, so this batch has no recipients in progress."
+  },
+  "前往收件箱": {
+    "key": "notify.batchResultGoInbox",
+    "en": "Go to inbox"
+  },
+  "导入为同步校验，本次没有仍在处理的行。": {
+    "key": "form.importProcessingNote",
+    "en": "Import validates synchronously, so no rows are still in progress."
+  },
+  "批量办理为同步逐项执行，本次没有处理中的事项。": {
+    "key": "workflow.batchProcessingNote",
+    "en": "Batch handling runs item by item synchronously, so no items are in progress."
+  },
+  "新建外部工具": {
+    "key": "agent.newExternalTool",
+    "en": "New external HTTP tool"
+  }
+}

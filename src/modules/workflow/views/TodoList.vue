@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * TodoList — 我的待办列表页（页型 B）。
  *
@@ -48,7 +51,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载待办任务失败'
+      errorMsg.value = t('workflow.todoTaskLoadFailed')
     }
   } finally {
     loading.value = false
@@ -99,7 +102,7 @@ async function runTaskAction(
       ElMessage.error(finalStatus.failureReason ?? failMsg)
       await loadList()
     } else {
-      ElMessage.warning('处理中，可稍后在结果中查看')
+      ElMessage.warning(t('common.processingCheckLater'))
       await loadList()
     }
   } catch (err) {
@@ -120,9 +123,13 @@ async function handleApprove(row: TodoTask) {
 
   let confirmed = false
   try {
-    await ElMessageBox.confirm('确认审批通过此任务？', '审批确认', {
-      confirmButtonText: '通过',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('workflow.confirmApprove'), t('workflow.approveConfirmTitle'), {
+      get confirmButtonText() {
+        return t('common.approve')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
       type: 'info',
     })
     confirmed = true
@@ -131,7 +138,12 @@ async function handleApprove(row: TodoTask) {
   } finally {
     if (!confirmed) approvingId.value = null
   }
-  await runTaskAction(row, 'complete', '审批通过', '审批操作失败')
+  await runTaskAction(
+    row,
+    'complete',
+    t('common.statusApproved'),
+    t('workflow.approveActionFailed'),
+  )
   approvingId.value = null
 }
 
@@ -141,9 +153,13 @@ async function handleReject(row: TodoTask) {
 
   let confirmed = false
   try {
-    await ElMessageBox.confirm('确认驳回此任务？', '驳回确认', {
-      confirmButtonText: '驳回',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('workflow.confirmReject'), t('workflow.rejectConfirmTitle'), {
+      get confirmButtonText() {
+        return t('common.reject')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
       type: 'warning',
     })
     confirmed = true
@@ -152,7 +168,7 @@ async function handleReject(row: TodoTask) {
   } finally {
     if (!confirmed) rejectingId.value = null
   }
-  await runTaskAction(row, 'reject', '已驳回', '驳回操作失败')
+  await runTaskAction(row, 'reject', t('common.statusRejected'), t('workflow.rejectActionFailed'))
   rejectingId.value = null
 }
 
@@ -165,7 +181,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="我的待办"
+    :title="t('workflow.myTodoTitle')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -175,7 +191,9 @@ onMounted(loadList)
   >
     <!-- 工具栏操作按钮 -->
     <template #toolbar-actions>
-      <el-button @click="router.push({ name: 'ProcessedList' })">已办任务</el-button>
+      <el-button @click="router.push({ name: 'ProcessedList' })">{{
+        t('workflow.processedTasks')
+      }}</el-button>
     </template>
 
     <!-- 空态（无需操作按钮） -->
@@ -202,16 +220,16 @@ onMounted(loadList)
       style="width: 100%"
       @row-click="handleRowClick"
     >
-      <el-table-column label="任务编号" min-width="140">
+      <el-table-column :label="t('common.taskNo')" min-width="140">
         <template #default="{ row }">
           <span :title="row.taskId">{{ formatTaskId(row.taskId) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="processName" label="流程名称" min-width="140" />
-      <el-table-column prop="formKey" label="表单标识" min-width="140" />
-      <el-table-column prop="businessKey" label="业务单号" min-width="120" />
-      <el-table-column prop="createTime" label="创建时间" min-width="170" />
-      <el-table-column label="操作" width="210" fixed="right">
+      <el-table-column prop="processName" :label="t('common.processName')" min-width="140" />
+      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="140" />
+      <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="120" />
+      <el-table-column prop="createTime" :label="t('common.createTime')" min-width="170" />
+      <el-table-column :label="t('common.actions')" width="210" fixed="right">
         <template #default="{ row }">
           <el-button
             size="small"
@@ -219,18 +237,16 @@ onMounted(loadList)
             :loading="approvingId === row.taskId"
             :disabled="approvingId !== null || rejectingId !== null"
             @click.stop="approveRow(row)"
+            >{{ t('common.approve') }}</el-button
           >
-            通过
-          </el-button>
           <el-button
             size="small"
             type="danger"
             :loading="rejectingId === row.taskId"
             :disabled="approvingId !== null || rejectingId !== null"
             @click.stop="rejectRow(row)"
+            >{{ t('common.reject') }}</el-button
           >
-            驳回
-          </el-button>
         </template>
       </el-table-column>
     </el-table>

@@ -108,7 +108,12 @@ function buildRoutesFromNodes(nodes: MenuNode[]): RouteRecordRaw[] {
           routes.push({
             path: node.path,
             redirect: firstLeaf,
-            meta: { title: node.title, icon: node.icon, permission: node.permission },
+            meta: {
+              title: node.title,
+              menuName: node.name,
+              icon: node.icon,
+              permission: node.permission,
+            },
           })
         }
         routes.push(...buildRoutesFromNodes(node.children))
@@ -128,7 +133,12 @@ function buildRoutesFromNodes(nodes: MenuNode[]): RouteRecordRaw[] {
       path: node.path,
       name: node.name,
       component: loader,
-      meta: { title: node.title, icon: node.icon, permission: node.permission },
+      meta: {
+        title: node.title,
+        menuName: node.name,
+        icon: node.icon,
+        permission: node.permission,
+      },
       ...(children ? { children } : {}),
     })
   }

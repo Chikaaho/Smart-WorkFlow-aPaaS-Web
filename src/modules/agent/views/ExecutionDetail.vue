@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ExecutionDetail — 图执行详情页
  *
@@ -55,9 +58,24 @@ const STATUS_MAP: Record<
   string,
   { label: string; type: 'success' | 'warning' | 'info' | 'danger' | '' }
 > = {
-  RUNNING: { label: '运行中', type: 'warning' },
-  SUCCESS: { label: '成功', type: 'success' },
-  FAILED: { label: '失败', type: 'danger' },
+  RUNNING: {
+    get label() {
+      return t('common.statusRunning')
+    },
+    type: 'warning',
+  },
+  SUCCESS: {
+    get label() {
+      return t('common.resultSuccess')
+    },
+    type: 'success',
+  },
+  FAILED: {
+    get label() {
+      return t('common.resultFailed')
+    },
+    type: 'danger',
+  },
 }
 
 function getStatusLabel(status: string): string {
@@ -96,7 +114,7 @@ function formatTimestamp(ts: string): string {
 // M07-F04-02: Token 格式化函数
 function formatTokenCount(count: number | null | undefined): string {
   if (count === null || count === undefined) {
-    return '未知'
+    return t('common.unknown')
   }
   if (count === 0) {
     return '0'
@@ -153,9 +171,9 @@ async function loadDetail() {
         router.replace('/404')
         return
       }
-      error.value = err.msg || '加载执行详情失败'
+      error.value = err.msg || t('agent.executionDetailLoadFailed')
     } else {
-      error.value = '加载执行详情失败'
+      error.value = t('agent.executionDetailLoadFailed')
     }
   } finally {
     loading.value = false
@@ -175,7 +193,7 @@ function goBack() {
 // ─── 挂载 ───
 onMounted(() => {
   if (!executionId.value || isNaN(executionId.value)) {
-    error.value = '无效的执行 ID'
+    error.value = t('agent.invalidExecutionId')
   } else {
     void loadDetail()
   }
@@ -196,13 +214,15 @@ onMounted(() => {
       <div class="page-header">
         <el-button @click="goBack">
           <el-icon><ArrowLeft /></el-icon>
-          返回列表
+          {{ t('common.backToList') }}
         </el-button>
         <div class="header-info">
           <span class="execution-id">#{{ executionId }}</span>
           <span class="graph-name">{{ detail.graphName }}</span>
           <span class="divider">·</span>
-          <span class="def-version">版本 v{{ detail.defVersion ?? '-' }}</span>
+          <span class="def-version">{{
+            t('agent.versionValueLabel', { version: detail.defVersion ?? '-' })
+          }}</span>
           <el-tag :type="(getStatusType(detail.status) || '') as any" size="small">
             {{ getStatusLabel(detail.status) }}
           </el-tag>
@@ -213,7 +233,7 @@ onMounted(() => {
       <!-- 主体内容区 -->
       <el-card shadow="never" class="detail-section">
         <template #header>
-          <div class="section-title">输入内容</div>
+          <div class="section-title">{{ t('agent.inputContent') }}</div>
         </template>
         <div class="content-body">
           <div v-if="showInputExpanded" class="input-display">
@@ -221,11 +241,11 @@ onMounted(() => {
             <pre>{{ detail.input }}</pre>
           </div>
           <div v-else class="content-preview">
-            {{ detail.input?.substring(0, 200) || '(空)' }}
+            {{ detail.input?.substring(0, 200) || t('common.blank') }}
           </div>
           <div class="content-actions">
             <el-button link type="primary" @click="toggleInputExpand">
-              {{ showInputExpanded ? '收起' : '展开' }}
+              {{ showInputExpanded ? t('common.collapse') : t('common.expand') }}
             </el-button>
           </div>
         </div>
@@ -233,7 +253,7 @@ onMounted(() => {
 
       <el-card shadow="never" class="detail-section">
         <template #header>
-          <div class="section-title">输出内容</div>
+          <div class="section-title">{{ t('agent.outputContent') }}</div>
         </template>
         <div class="content-body">
           <div v-if="showOutputExpanded" class="output-display">
@@ -241,11 +261,11 @@ onMounted(() => {
             <pre>{{ detail.output }}</pre>
           </div>
           <div v-else class="content-preview">
-            {{ detail.output?.substring(0, 200) || '(空)' }}
+            {{ detail.output?.substring(0, 200) || t('common.blank') }}
           </div>
           <div class="content-actions">
             <el-button link type="primary" @click="toggleOutputExpand">
-              {{ showOutputExpanded ? '收起' : '展开' }}
+              {{ showOutputExpanded ? t('common.collapse') : t('common.expand') }}
             </el-button>
           </div>
         </div>
@@ -258,7 +278,7 @@ onMounted(() => {
         class="detail-section error-section"
       >
         <template #header>
-          <div class="section-title error-title">错误信息</div>
+          <div class="section-title error-title">{{ t('agent.errorInfoSection') }}</div>
         </template>
         <div class="error-content">
           <!-- 使用 SafeHtml 组件进行安全的 HTML 渲染 -->
@@ -269,21 +289,21 @@ onMounted(() => {
       <!-- 时间信息 -->
       <el-card shadow="never" class="detail-section time-section">
         <template #header>
-          <div class="section-title">时间信息</div>
+          <div class="section-title">{{ t('agent.timingInfo') }}</div>
         </template>
         <div class="time-grid">
           <div class="time-item">
-            <span class="time-label">创建时间:</span>
+            <span class="time-label">{{ t('agent.createTimeLabel') }}</span>
             <span class="time-value">{{ formatTimestamp(detail.createTime) }}</span>
           </div>
           <div class="time-item">
-            <span class="time-label">更新时间:</span>
+            <span class="time-label">{{ t('agent.updateTimeLabel') }}</span>
             <span class="time-value">{{
               formatTimestamp(detail.updateTime ?? detail.createTime)
             }}</span>
           </div>
           <div v-if="detail.traceId" class="time-item full-width">
-            <span class="time-label">追踪 ID:</span>
+            <span class="time-label">{{ t('agent.traceIdLabel') }}</span>
             <span class="time-value monospace">{{ detail.traceId }}</span>
           </div>
         </div>
@@ -293,39 +313,33 @@ onMounted(() => {
       <el-card shadow="never" class="detail-section token-section">
         <template #header>
           <div class="section-title">
-            Token 使用统计
-            <el-tooltip
-              content="供应商可观测 usage（输入/输出/总计），非账单、非完整失败尝试成本"
-              placement="top"
-            >
-              <span class="token-disclaimer-detail">可观测量</span>
+            {{ t('agent.tokenUsageStats') }}
+            <el-tooltip :content="t('agent.usageObservabilityTooltip')" placement="top">
+              <span class="token-disclaimer-detail">{{ t('common.observability') }}</span>
             </el-tooltip>
           </div>
         </template>
         <div class="token-grid">
           <div class="token-item">
-            <span class="token-label">输入 Token:</span>
+            <span class="token-label">{{ t('agent.inputTokensLabel') }}</span>
             <span class="token-value">{{ formatTokenCount(detail.inputTokens) }}</span>
           </div>
           <div class="token-item">
-            <span class="token-label">输出 Token:</span>
+            <span class="token-label">{{ t('agent.outputTokensLabel') }}</span>
             <span class="token-value">{{ formatTokenCount(detail.outputTokens) }}</span>
           </div>
           <div class="token-item">
-            <span class="token-label">总 Token:</span>
+            <span class="token-label">{{ t('agent.totalTokensLabel') }}</span>
             <span class="token-value">{{ formatTokenCount(totalTokens) }}</span>
           </div>
         </div>
-        <div class="token-footnote">
-          数据来自模型供应商响应中的
-          usage，仅为本次执行可观测到的用量，非账单依据；失败重试等未暴露的尝试不计入。
-        </div>
+        <div class="token-footnote">{{ t('agent.tokenUsageExecNote') }}</div>
       </el-card>
 
       <!-- 节点轨迹子视图 -->
       <el-card shadow="never" class="detail-section trajectory-section">
         <template #header>
-          <div class="section-title">节点轨迹</div>
+          <div class="section-title">{{ t('agent.nodeTrajectory') }}</div>
         </template>
         <div class="trajectory-body">
           <NodeTrajectory :nodes="nodes" />
@@ -334,7 +348,7 @@ onMounted(() => {
     </template>
 
     <!-- 未找到状态 -->
-    <el-empty v-else description="暂无执行详情数据" />
+    <el-empty v-else :description="t('agent.noExecutionDetailData')" />
   </div>
 </template>
 

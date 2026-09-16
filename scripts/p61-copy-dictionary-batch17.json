@@ -1,0 +1,4 @@
+{
+  "_comment": "P61 R2a 补正：为既有别名补上「正主」条目。此前「已撤回」只有 alias 指向 common.statusWithdrawn，没有任何条目写入该键，页面因此渲染出键名。",
+  "已撤回": { "key": "common.statusWithdrawn", "en": "Withdrawn" }
+}

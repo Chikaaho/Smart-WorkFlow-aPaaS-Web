@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { i18n } from '@/locales'
 
 vi.mock('@/modules/notify/api', () => ({
   pageNotifyTemplates: vi.fn(),
@@ -121,13 +122,15 @@ describe('NotifyTemplateList.vue（P36 消息模板管理）', () => {
     stubPage()
     const adminWrapper = mountList({ superAdmin: true })
     await new Promise((r) => setTimeout(r, 0))
-    expect(adminWrapper.text()).toContain('新增模板')
+    // 断言目录文案而不是写死的说法：创建动作术语在 R2a 已统一为「新建」
+    const newTemplateText = i18n.global.t('notify.newTemplate')
+    expect(adminWrapper.text()).toContain(newTemplateText)
 
     stubPage()
     // 非 superAdmin 且无 notify:template:manage → canManage=false
     const plainWrapper = mountList({ superAdmin: false, permissions: ['notify:template:view'] })
     await new Promise((r) => setTimeout(r, 0))
-    expect(plainWrapper.text()).not.toContain('新增模板')
+    expect(plainWrapper.text()).not.toContain(newTemplateText)
   })
 
   it('启停切换：确认后调用 toggle 并刷新列表', async () => {

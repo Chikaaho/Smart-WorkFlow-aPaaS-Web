@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { ElMessage } from 'element-plus'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ProcessInstanceList — 流程实例监控页（页型 B + el-drawer 详情抽屉）。
  *
@@ -26,12 +30,42 @@ const STATUS_MAP: Record<
   string,
   { label: string; type: 'success' | 'warning' | 'danger' | 'info' }
 > = {
-  RUNNING: { label: '运行中', type: 'success' },
-  APPROVED: { label: '已完成', type: 'info' },
-  REJECTED: { label: '已驳回', type: 'danger' },
-  WITHDRAWN: { label: '已撤回', type: 'warning' },
-  DISCARDED: { label: '已废弃', type: 'info' },
-  FAILED: { label: '失败', type: 'danger' },
+  RUNNING: {
+    get label() {
+      return t('common.statusRunning')
+    },
+    type: 'success',
+  },
+  APPROVED: {
+    get label() {
+      return t('common.statusCompleted')
+    },
+    type: 'info',
+  },
+  REJECTED: {
+    get label() {
+      return t('common.statusRejected')
+    },
+    type: 'danger',
+  },
+  WITHDRAWN: {
+    get label() {
+      return t('common.statusWithdrawn')
+    },
+    type: 'warning',
+  },
+  DISCARDED: {
+    get label() {
+      return t('workflow.statusDiscarded')
+    },
+    type: 'info',
+  },
+  FAILED: {
+    get label() {
+      return t('common.resultFailed')
+    },
+    type: 'danger',
+  },
 }
 
 function getStatusLabel(status: string): string {
@@ -70,7 +104,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载流程实例列表失败'
+      errorMsg.value = t('workflow.instanceListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -137,7 +171,7 @@ async function openDrawer(row: ProcessInstance) {
     try {
       definition = await getProcessDefDefinitionByKey(processDefKey)
     } catch {
-      drawerError.value = '未找到对应流程定义，无法展示流程图'
+      drawerError.value = t('workflow.processDefNotFoundForDiagram')
       return
     }
     detailGraph.value = toDetailGraph(definition)
@@ -154,7 +188,7 @@ async function openDrawer(row: ProcessInstance) {
     if (err instanceof ApiError) {
       drawerError.value = err.msg
     } else {
-      drawerError.value = (err as Error)?.message || '加载实例详情失败'
+      drawerError.value = (err as Error)?.message || t('workflow.processInstanceDetailLoadFailed')
     }
   } finally {
     drawerLoading.value = false
@@ -191,6 +225,8 @@ void (async () => {
       typeof openDrawer
     >[0])
   } catch {
+    ElMessage.error(t('common.loadFailed'))
+    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     /* 无权或不存在：抽屉内错误提示兜底 */
   } finally {
     void pcRouter2.replace({ query: { ...pcRoute.query, focus: undefined } })
@@ -206,7 +242,7 @@ function isUserTask(activityType: string): boolean {
 
 <template>
   <StandardListTemplate
-    title="流程监控"
+    :title="t('workflow.monitor')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -223,17 +259,17 @@ function isUserTask(activityType: string): boolean {
     <template #filter>
       <el-select
         v-model="filterStatus"
-        placeholder="全部状态"
+        :placeholder="t('common.allStatuses')"
         clearable
         style="width: 180px"
         @change="handleFilterChange"
       >
-        <el-option label="运行中" value="RUNNING" />
-        <el-option label="已完成" value="APPROVED" />
-        <el-option label="已驳回" value="REJECTED" />
-        <el-option label="已撤回" value="WITHDRAWN" />
-        <el-option label="已废弃" value="DISCARDED" />
-        <el-option label="失败" value="FAILED" />
+        <el-option :label="t('common.statusRunning')" value="RUNNING" />
+        <el-option :label="t('common.statusCompleted')" value="APPROVED" />
+        <el-option :label="t('common.statusRejected')" value="REJECTED" />
+        <el-option :label="t('common.statusWithdrawn')" value="WITHDRAWN" />
+        <el-option :label="t('workflow.statusDiscarded')" value="DISCARDED" />
+        <el-option :label="t('common.resultFailed')" value="FAILED" />
       </el-select>
     </template>
 
@@ -249,29 +285,34 @@ function isUserTask(activityType: string): boolean {
 
     <!-- 表格 -->
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="processName" label="流程名称" min-width="160">
+      <el-table-column prop="processName" :label="t('common.processName')" min-width="160">
         <template #default="{ row }">
           {{ (row as ProcessInstance).processName ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="businessKey" label="业务单号" min-width="160" />
-      <el-table-column label="状态" width="100">
+      <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="160" />
+      <el-table-column :label="t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="getStatusType((row as ProcessInstance).status)" size="small">
             {{ getStatusLabel((row as ProcessInstance).status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="发起人" min-width="130" show-overflow-tooltip>
+      <el-table-column :label="t('common.initiator')" min-width="130" show-overflow-tooltip>
         <template #default="{ row }">
           {{ (row as ProcessInstance).initiatorName ?? (row as ProcessInstance).initiatorId }}
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" label="发起时间" min-width="180" show-overflow-tooltip />
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column
+        prop="createTime"
+        :label="t('common.startTimeShort')"
+        min-width="180"
+        show-overflow-tooltip
+      />
+      <el-table-column :label="t('common.actions')" width="100" fixed="right">
         <template #default="{ row }">
           <el-button size="small" link type="primary" @click="openDrawer(row as ProcessInstance)">
-            查看详情
+            {{ t('common.viewDetails') }}
           </el-button>
         </template>
       </el-table-column>
@@ -280,7 +321,7 @@ function isUserTask(activityType: string): boolean {
     <!-- 详情抽屉 -->
     <el-drawer
       v-model="drawerVisible"
-      title="流程实例详情"
+      :title="t('workflow.instanceDetailTitle')"
       :close-on-click-modal="false"
       destroy-on-close
       size="900px"
@@ -300,35 +341,44 @@ function isUserTask(activityType: string): boolean {
         <template v-if="detail">
           <!-- 基本信息 -->
           <el-card class="detail-section">
-            <template #header><span>基本信息</span></template>
+            <template #header
+              ><span>{{ t('common.basicInfo') }}</span></template
+            >
             <el-descriptions :column="2" border>
-              <el-descriptions-item label="流程名称">{{
+              <el-descriptions-item :label="t('common.processName')">{{
                 detail.processName ?? '-'
               }}</el-descriptions-item>
-              <el-descriptions-item label="实例 ID">{{
+              <el-descriptions-item :label="t('common.instanceId')">{{
                 detail.processInstanceId
               }}</el-descriptions-item>
-              <el-descriptions-item label="业务单号">{{ detail.businessKey }}</el-descriptions-item>
-              <el-descriptions-item label="表单标识">{{ detail.formKey }}</el-descriptions-item>
-              <el-descriptions-item label="发起人">{{
+              <el-descriptions-item :label="t('common.businessNo')">{{
+                detail.businessKey
+              }}</el-descriptions-item>
+              <el-descriptions-item :label="t('common.formKey')">{{
+                detail.formKey
+              }}</el-descriptions-item>
+              <el-descriptions-item :label="t('common.initiator')">{{
                 detail.initiatorName ?? detail.initiatorId
               }}</el-descriptions-item>
-              <el-descriptions-item label="状态">
+              <el-descriptions-item :label="t('common.status')">
                 <el-tag :type="getStatusType(detail.status)" size="small">
                   {{ getStatusLabel(detail.status) }}
                 </el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="发起时间">{{ detail.createTime }}</el-descriptions-item>
+              <el-descriptions-item :label="t('common.startTimeShort')">{{
+                detail.createTime
+              }}</el-descriptions-item>
             </el-descriptions>
           </el-card>
 
           <!-- 流程图高亮 -->
           <el-card class="detail-section">
             <template #header>
-              <span>流程图</span>
+              <span>{{ t('workflow.processDiagram') }}</span>
               <span style="margin-left: 12px; font-size: 12px; font-weight: normal; color: #909399">
-                <span class="legend-dot legend-active" /> 活跃节点
-                <span class="legend-dot legend-completed" style="margin-left: 12px" /> 已完成节点
+                <span class="legend-dot legend-active" /> {{ t('workflow.activeNode') }}
+                <span class="legend-dot legend-completed" style="margin-left: 12px" />
+                {{ t('workflow.completedNode') }}
               </span>
             </template>
             <ProcessGraphView
@@ -341,10 +391,12 @@ function isUserTask(activityType: string): boolean {
 
           <!-- 流转时间线 -->
           <el-card class="detail-section">
-            <template #header><span>流转记录</span></template>
+            <template #header
+              ><span>{{ t('common.flowHistory') }}</span></template
+            >
             <el-alert
               v-if="detail.flowTrace.filter((n) => isUserTask(n.activityType)).length === 0"
-              title="暂无审批记录"
+              :title="t('workflow.noApprovalRecords')"
               type="info"
               :closable="false"
               show-icon
@@ -354,28 +406,40 @@ function isUserTask(activityType: string): boolean {
               :data="detail.flowTrace.filter((n) => isUserTask(n.activityType))"
               stripe
             >
-              <el-table-column prop="activityName" label="审批节点" min-width="140" />
-              <el-table-column label="审批人" min-width="120" show-overflow-tooltip>
+              <el-table-column
+                prop="activityName"
+                :label="t('workflow.approvalNode')"
+                min-width="140"
+              />
+              <el-table-column
+                :label="t('workflow.approver')"
+                min-width="120"
+                show-overflow-tooltip
+              >
                 <template #default="{ row }">
                   {{ row.assigneeName ?? row.assignee ?? '-' }}
                 </template>
               </el-table-column>
-              <el-table-column label="审批状态" min-width="100">
+              <el-table-column :label="t('workflow.approvalStatus')" min-width="100">
                 <template #default="{ row }">
                   <el-tag :type="row.endTime ? 'success' : 'warning'" size="small">
-                    {{ row.endTime ? '已完成' : '进行中' }}
+                    {{ row.endTime ? t('common.statusCompleted') : t('common.statusInProgress') }}
                   </el-tag>
                 </template>
               </el-table-column>
               <el-table-column
                 prop="startTime"
-                label="开始时间"
+                :label="t('common.startTime')"
                 min-width="175"
                 show-overflow-tooltip
               />
-              <el-table-column label="完成时间" min-width="175" show-overflow-tooltip>
+              <el-table-column
+                :label="t('workflow.completedAt')"
+                min-width="175"
+                show-overflow-tooltip
+              >
                 <template #default="{ row }">
-                  {{ row.endTime ?? '进行中...' }}
+                  {{ row.endTime ?? t('common.inProgressEllipsis') }}
                 </template>
               </el-table-column>
             </el-table>

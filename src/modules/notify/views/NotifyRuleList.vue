@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * NotifyRuleList — 通知规则管理页（I6）。
  * 事件开关、接收人规则、渠道顺序与失败策略；启停即时生效且构造请求受服务端拒绝。
@@ -59,8 +62,8 @@ async function loadList() {
       errorMsg.value = err.msg
       ElMessage.error(err.msg)
     } else {
-      errorMsg.value = '加载通知规则失败'
-      ElMessage.error('加载通知规则失败')
+      errorMsg.value = t('notify.rulesLoadFailed')
+      ElMessage.error(t('notify.rulesLoadFailed'))
     }
   } finally {
     loading.value = false
@@ -113,12 +116,12 @@ async function submitForm() {
     } else {
       await createNotifyRule(form.value)
     }
-    ElMessage.success('保存成功')
+    ElMessage.success(t('common.saveSuccess'))
     dialogVisible.value = false
     await loadList()
   } catch (err) {
     if (err instanceof ApiError) ElMessage.error(err.msg)
-    else ElMessage.error('保存失败')
+    else ElMessage.error(t('common.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -141,30 +144,34 @@ function handleEdit(row: NotifyRule) {
 async function handleToggle(row: NotifyRule, enabled: boolean) {
   try {
     await toggleNotifyRule(row.id, enabled)
-    ElMessage.success('已更新')
+    ElMessage.success(t('common.updated'))
     await loadList()
   } catch (err) {
     if (err instanceof ApiError) ElMessage.error(err.msg)
-    else ElMessage.error('操作失败')
+    else ElMessage.error(t('common.operationFailed'))
     await loadList()
   }
 }
 
 async function handleDelete(row: NotifyRule) {
   try {
-    await ElMessageBox.confirm(`确定删除通知规则 ${row.ruleCode} 吗？`, '删除确认', {
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      t('notify.confirmDeleteRule', { ruleCode: row.ruleCode }),
+      t('common.deleteConfirmTitle'),
+      {
+        type: 'warning',
+      },
+    )
   } catch {
     return
   }
   try {
     await deleteNotifyRule(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     await loadList()
   } catch (err) {
     if (err instanceof ApiError) ElMessage.error(err.msg)
-    else ElMessage.error('删除失败')
+    else ElMessage.error(t('common.deleteFailed'))
   }
 }
 
@@ -173,14 +180,14 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="通知规则"
+    :title="t('notify.rules')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
     :empty="isEmpty"
   >
     <template #page-action>
-      <el-button type="primary" @click="handleCreate">新建规则</el-button>
+      <el-button type="primary" @click="handleCreate">{{ t('common.newRule') }}</el-button>
     </template>
     <el-alert
       v-if="errorMsg"
@@ -191,19 +198,19 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
-      <el-table-column prop="ruleCode" label="规则编码" width="180" />
-      <el-table-column prop="name" label="名称" min-width="150" />
-      <el-table-column prop="eventType" label="事件" min-width="160" />
-      <el-table-column prop="channelPriority" label="渠道顺序" min-width="140" />
-      <el-table-column prop="recipientRule" label="接收人规则" min-width="140" />
-      <el-table-column label="必须送达" width="100">
+      <el-table-column prop="ruleCode" :label="t('notify.ruleCode')" width="180" />
+      <el-table-column prop="name" :label="t('common.name')" min-width="150" />
+      <el-table-column prop="eventType" :label="t('common.event')" min-width="160" />
+      <el-table-column prop="channelPriority" :label="t('notify.channelOrder')" min-width="140" />
+      <el-table-column prop="recipientRule" :label="t('notify.recipientRule')" min-width="140" />
+      <el-table-column :label="t('notify.mustDeliver')" width="100">
         <template #default="{ row }">
           <el-tag :type="row.requiredFlag ? 'danger' : 'info'" size="small" disable-transitions>
-            {{ row.requiredFlag ? '必须' : '可选' }}
+            {{ row.requiredFlag ? t('notify.requiredTag') : t('notify.optionalTag') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="启用" width="90">
+      <el-table-column :label="t('common.enable')" width="90">
         <template #default="{ row }">
           <el-switch
             :model-value="row.enabled"
@@ -211,59 +218,72 @@ onMounted(loadList)
           />
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column :label="t('common.actions')" width="140" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" text type="primary" @click="handleEdit(row as NotifyRule)"
-            >编辑</el-button
-          >
-          <el-button size="small" text type="danger" @click="handleDelete(row as NotifyRule)"
-            >删除</el-button
-          >
+          <el-button size="small" text type="primary" @click="handleEdit(row as NotifyRule)">{{
+            t('common.edit')
+          }}</el-button>
+          <el-button size="small" text type="danger" @click="handleDelete(row as NotifyRule)">{{
+            t('common.delete')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑规则' : '新建规则'" width="560px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editing ? t('notify.editRule') : t('common.newRule')"
+      width="560px"
+    >
       <el-form label-width="100px">
-        <el-form-item label="规则编码" required>
-          <el-input v-model="form.ruleCode" :disabled="editing" placeholder="字母开头，2-99 位" />
+        <el-form-item :label="t('notify.ruleCode')" required>
+          <el-input
+            v-model="form.ruleCode"
+            :disabled="editing"
+            :placeholder="t('notify.ruleCodePlaceholder')"
+          />
         </el-form-item>
-        <el-form-item label="名称" required>
+        <el-form-item :label="t('common.name')" required>
           <el-input v-model="form.name" />
         </el-form-item>
-        <el-form-item label="事件" required>
+        <el-form-item :label="t('common.event')" required>
           <el-select v-model="form.eventType" filterable style="width: 100%">
             <el-option v-for="e in EVENT_OPTIONS" :key="e" :label="e" :value="e" />
           </el-select>
         </el-form-item>
-        <el-form-item label="渠道顺序" required>
-          <el-input v-model="form.channelPriority" placeholder="如 IN_APP,EMAIL" />
-        </el-form-item>
-        <el-form-item label="接收人规则" required>
+        <el-form-item :label="t('notify.channelOrder')" required>
           <el-input
-            v-model="form.recipientRule"
-            placeholder="如 ASSIGNEE / ROLE:admin / INITIATOR"
+            v-model="form.channelPriority"
+            :placeholder="t('notify.channelOrderPlaceholder')"
           />
         </el-form-item>
-        <el-form-item label="必须送达">
+        <el-form-item :label="t('notify.recipientRule')" required>
+          <el-input
+            v-model="form.recipientRule"
+            :placeholder="t('notify.recipientRulePlaceholder')"
+          />
+        </el-form-item>
+        <el-form-item :label="t('notify.mustDeliver')">
           <el-switch v-model="form.requiredFlag" />
         </el-form-item>
-        <el-form-item label="失败策略">
+        <el-form-item :label="t('notify.failurePolicy')">
           <el-select v-model="form.failurePolicy" style="width: 100%">
-            <el-option label="自动重试（RETRY）" value="RETRY" />
-            <el-option label="人工处理（MANUAL）" value="MANUAL" />
+            <el-option :label="t('notify.failurePolicyRetry')" value="RETRY" />
+            <el-option :label="t('notify.failurePolicyManual')" value="MANUAL" />
           </el-select>
         </el-form-item>
-        <el-form-item label="启用">
+        <el-form-item :label="t('common.enable')">
           <el-switch v-model="form.enabled" />
         </el-form-item>
-        <el-form-item label="备注">
+        <el-form-item :label="t('common.remark')">
           <el-input v-model="form.remark" type="textarea" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitForm">保存</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="submitForm">{{
+          t('common.save')
+        }}</el-button>
       </template>
     </el-dialog>
   </StandardListTemplate>

@@ -1,0 +1,751 @@
+{
+  "_comment": "P61 R1 术语字典 批次9：覆盖 agent 调试会话/执行历史/模型管理、workflow 模板中心/流程定义、notify 批量发送与模板、system 字典项/岗位/账号绑定、iot Topic 配置、form 设计器与组件等模块的用户可见文案",
+  "已停止": {
+    "key": "common.statusStopped",
+    "en": "Stopped"
+  },
+  "已过期": {
+    "key": "common.statusExpired",
+    "en": "Expired"
+  },
+  "加载调试会话失败": {
+    "key": "agent.debugSessionLoadFailed",
+    "en": "Could not load the debug session"
+  },
+  "版本冲突：会话已被其他操作更新，已自动刷新，请重试。": {
+    "key": "agent.debugVersionConflict",
+    "en": "Version conflict: the session was updated by another operation and has been refreshed. Please try again."
+  },
+  "单步执行失败": {
+    "key": "agent.debugStepFailed",
+    "en": "Step execution failed"
+  },
+  "继续执行失败": {
+    "key": "agent.debugContinueFailed",
+    "en": "Could not continue execution"
+  },
+  "停止失败": {
+    "key": "agent.debugStopFailed",
+    "en": "Could not stop the session"
+  },
+  "更新断点失败": {
+    "key": "agent.debugBreakpointUpdateFailed",
+    "en": "Could not update breakpoints"
+  },
+  "请输入节点 ID": {
+    "key": "agent.debugNodeIdRequired",
+    "en": "Enter a node ID"
+  },
+  "该断点已存在": {
+    "key": "agent.debugBreakpointExists",
+    "en": "This breakpoint already exists"
+  },
+  "添加断点失败": {
+    "key": "agent.debugBreakpointAddFailed",
+    "en": "Could not add the breakpoint"
+  },
+  "无效的调试会话 ID": {
+    "key": "agent.debugInvalidSessionId",
+    "en": "Invalid debug session ID"
+  },
+  "输入预览": {
+    "key": "agent.debugInputPreview",
+    "en": "Input preview"
+  },
+  "当前状态": {
+    "key": "agent.debugCurrentState",
+    "en": "Current state"
+  },
+  "下一节点:": {
+    "key": "agent.debugNextNode",
+    "en": "Next node:"
+  },
+  "分支:": {
+    "key": "agent.debugBranch",
+    "en": "Branch:"
+  },
+  "过期时间:": {
+    "key": "agent.debugExpiresAt",
+    "en": "Expires at:"
+  },
+  "变量:": {
+    "key": "agent.debugVariables",
+    "en": "Variables:"
+  },
+  "调试控制": {
+    "key": "agent.debugControls",
+    "en": "Debug controls"
+  },
+  "仅 PAUSED 状态可操作": {
+    "key": "agent.debugPausedOnly",
+    "en": "Available only when the status is PAUSED"
+  },
+  "断点": {
+    "key": "agent.debugBreakpoints",
+    "en": "Breakpoints"
+  },
+  "输入节点 ID 添加断点": {
+    "key": "agent.debugBreakpointPlaceholder",
+    "en": "Enter a node ID to add a breakpoint"
+  },
+  "错误信息": {
+    "key": "agent.errorInfoSection",
+    "en": "Error"
+  },
+  "无详细错误": {
+    "key": "agent.debugNoErrorDetail",
+    "en": "No error details"
+  },
+  "执行结果": {
+    "key": "agent.debugExecutionResult",
+    "en": "Execution result"
+  },
+  "耗时与 Token": {
+    "key": "agent.debugLatencyAndTokens",
+    "en": "Latency and tokens"
+  },
+  "输入 Token": {
+    "key": "agent.inputTokensColumn",
+    "en": "Input tokens"
+  },
+  "输出 Token": {
+    "key": "agent.outputTokensColumn",
+    "en": "Output tokens"
+  },
+  "总 Token": {
+    "key": "agent.totalTokensColumn",
+    "en": "Total tokens"
+  },
+  "节点轨迹": {
+    "key": "agent.nodeTrajectory",
+    "en": "Node trajectory"
+  },
+  "暂无调试会话数据": {
+    "key": "agent.debugSessionEmpty",
+    "en": "No debug session data"
+  },
+  "必须是非空字符串": {
+    "key": "workflow.mustBeNonEmptyString",
+    "en": "Must be a non-empty string"
+  },
+  "必须是布尔值": {
+    "key": "workflow.mustBeBoolean",
+    "en": "Must be a boolean"
+  },
+  "必须是非负整数": {
+    "key": "workflow.mustBeNonNegativeInteger",
+    "en": "Must be a non-negative integer"
+  },
+  "不能小于 minIncoming": {
+    "key": "workflow.maxIncomingBelowMin",
+    "en": "Cannot be less than minIncoming"
+  },
+  "不能小于 minOutgoing": {
+    "key": "workflow.maxOutgoingBelowMin",
+    "en": "Cannot be less than minOutgoing"
+  },
+  "必须是数组": {
+    "key": "workflow.mustBeArray",
+    "en": "Must be an array"
+  },
+  "必须是节点能力数组": {
+    "key": "workflow.mustBeCapabilityArray",
+    "en": "Must be an array of node capabilities"
+  },
+  "节点能力清单不能为空": {
+    "key": "workflow.capabilityListEmpty",
+    "en": "The node capability list cannot be empty"
+  },
+  "流程图缺少 elements 数组": {
+    "key": "workflow.graphMissingElements",
+    "en": "The process graph is missing the elements array"
+  },
+  "确认发送": {
+    "key": "notify.confirmSend",
+    "en": "Send"
+  },
+  "变量 JSON 格式不正确": {
+    "key": "notify.variablesInvalidJson",
+    "en": "The variables JSON is invalid"
+  },
+  "发送失败": {
+    "key": "notify.sendFailed",
+    "en": "Could not send. Please try again."
+  },
+  "发送通知": {
+    "key": "router.sendNotification",
+    "en": "Send Notification"
+  },
+  "选择接收对象和通知内容后发送": {
+    "key": "notify.batchSendSubtitle",
+    "en": "Select recipients and notification content, then send"
+  },
+  "接收对象": {
+    "key": "notify.recipients",
+    "en": "Recipients"
+  },
+  "按用户": {
+    "key": "notify.byUser",
+    "en": "By user"
+  },
+  "搜索用户名...": {
+    "key": "notify.searchUsernamePlaceholder",
+    "en": "Search username..."
+  },
+  "搜索中...": {
+    "key": "notify.searching",
+    "en": "Searching..."
+  },
+  "按部门": {
+    "key": "notify.byDept",
+    "en": "By department"
+  },
+  "按角色": {
+    "key": "notify.byRole",
+    "en": "By role"
+  },
+  "通知内容": {
+    "key": "notify.notificationContent",
+    "en": "Notification content"
+  },
+  "直接内容": {
+    "key": "notify.directContent",
+    "en": "Direct content"
+  },
+  "请输入通知标题": {
+    "key": "notify.notificationTitlePlaceholder",
+    "en": "Enter the notification title"
+  },
+  "正文": {
+    "key": "notify.bodyLabel",
+    "en": "Body"
+  },
+  "请输入通知正文": {
+    "key": "notify.notificationBodyPlaceholder",
+    "en": "Enter the notification body"
+  },
+  "使用模板": {
+    "key": "notify.useTemplate",
+    "en": "Use template"
+  },
+  "选择模板": {
+    "key": "notify.selectTemplateLabel",
+    "en": "Select template"
+  },
+  "请选择模板": {
+    "key": "notify.selectTemplatePlaceholder",
+    "en": "Select a template"
+  },
+  "变量（JSON 格式）": {
+    "key": "notify.variablesJsonLabel",
+    "en": "Variables (JSON)"
+  },
+  "（计算中…）": {
+    "key": "notify.countComputing",
+    "en": "(Calculating…)"
+  },
+  "已保存": {
+    "key": "common.saved",
+    "en": "Saved"
+  },
+  "已创建": {
+    "key": "common.created",
+    "en": "Created"
+  },
+  "状态已更新": {
+    "key": "common.statusUpdated",
+    "en": "Status updated"
+  },
+  "已删除": {
+    "key": "common.deleted",
+    "en": "Deleted"
+  },
+  "Topic 配置": {
+    "key": "iot.topicConfig",
+    "en": "Topic configuration"
+  },
+  "新增 Topic": {
+    "key": "iot.newTopic",
+    "en": "New topic"
+  },
+  "方向": {
+    "key": "iot.direction",
+    "en": "Direction"
+  },
+  "载荷类型": {
+    "key": "iot.payloadType",
+    "en": "Payload type"
+  },
+  "暂无 Topic 配置": {
+    "key": "iot.noTopics",
+    "en": "No topic configuration"
+  },
+  "连接": {
+    "key": "iot.connect",
+    "en": "Connect"
+  },
+  "选择 MQTT 连接": {
+    "key": "iot.selectMqttConnection",
+    "en": "Select an MQTT connection"
+  },
+  "产品": {
+    "key": "iot.product",
+    "en": "Product"
+  },
+  "绑定产品（用于设备定位）": {
+    "key": "iot.bindProductPlaceholder",
+    "en": "Bind a product (used for device location)"
+  },
+  "上行 UP": {
+    "key": "iot.directionUp",
+    "en": "Uplink UP"
+  },
+  "下行 DOWN": {
+    "key": "iot.directionDown",
+    "en": "Downlink DOWN"
+  },
+  "双向 BOTH": {
+    "key": "iot.directionBoth",
+    "en": "Bidirectional BOTH"
+  },
+  "属性上报": {
+    "key": "iot.payloadProperty",
+    "en": "Property report"
+  },
+  "行为结果": {
+    "key": "iot.payloadActionResult",
+    "en": "Action result"
+  },
+  "原始": {
+    "key": "iot.payloadRaw",
+    "en": "Raw"
+  },
+  "加载模板详情失败": {
+    "key": "notify.templateDetailLoadFailed",
+    "en": "Could not load the template details"
+  },
+  "模板代码不能为空": {
+    "key": "notify.templateCodeRequired",
+    "en": "Template code is required"
+  },
+  "模板代码须为字母开头、仅字母/数字/下划线、长度2-99": {
+    "key": "notify.templateCodeFormat",
+    "en": "Template code must start with a letter and contain only letters, digits and underscores, 2-99 characters"
+  },
+  "模板名称不能为空": {
+    "key": "notify.templateNameRequired",
+    "en": "Template name is required"
+  },
+  "标题模板不能为空": {
+    "key": "notify.titleTemplateRequired",
+    "en": "Title template is required"
+  },
+  "正文模板不能为空": {
+    "key": "notify.contentTemplateRequired",
+    "en": "Content template is required"
+  },
+  "模板代码": {
+    "key": "notify.templateCode",
+    "en": "Template code"
+  },
+  "如 WELCOME_MAIL": {
+    "key": "notify.templateCodePlaceholder",
+    "en": "For example, WELCOME_MAIL"
+  },
+  "创建后不可变更": {
+    "key": "notify.templateCodeImmutableEdit",
+    "en": "Cannot be changed after creation"
+  },
+  "创建后不可修改": {
+    "key": "notify.templateCodeImmutableNew",
+    "en": "Cannot be modified after creation"
+  },
+  "模板展示名": {
+    "key": "notify.templateDisplayNamePlaceholder",
+    "en": "Template display name"
+  },
+  "停用后不可预览与发送": {
+    "key": "notify.disableHint",
+    "en": "A disabled template cannot be previewed or sent"
+  },
+  "模板内容": {
+    "key": "notify.templateContent",
+    "en": "Template content"
+  },
+  "标题模板": {
+    "key": "notify.titleTemplate",
+    "en": "Title template"
+  },
+  "变量名以字母或下划线开头，仅含字母/数字/下划线": {
+    "key": "notify.variableNameFormat",
+    "en": "Variable names must start with a letter or underscore and contain only letters, digits and underscores"
+  },
+  "正文模板": {
+    "key": "notify.contentTemplate",
+    "en": "Content template"
+  },
+  "加载执行历史记录列表失败": {
+    "key": "agent.executionListLoadFailed",
+    "en": "Could not load the execution history"
+  },
+  "执行历史记录": {
+    "key": "agent.executionHistory",
+    "en": "Execution history"
+  },
+  "调试": {
+    "key": "agent.sourceDebug",
+    "en": "Debug"
+  },
+  "执行": {
+    "key": "agent.sourceExecution",
+    "en": "Execution"
+  },
+  "图名称": {
+    "key": "agent.graphName",
+    "en": "Graph name"
+  },
+  "耗时 (ms)": {
+    "key": "agent.durationMsColumn",
+    "en": "Duration (ms)"
+  },
+  "口径": {
+    "key": "agent.usageCaliber",
+    "en": "Basis"
+  },
+  "供应商可观测 usage，非账单、非完整失败尝试成本": {
+    "key": "agent.usageCaliberTooltip",
+    "en": "Usage observed from the provider; not a billing figure and not the cost of failed attempts."
+  },
+  "失败分类": {
+    "key": "agent.failureCategory",
+    "en": "Failure category"
+  },
+  "失败摘要": {
+    "key": "agent.failureSummary",
+    "en": "Failure summary"
+  },
+  "发生时间": {
+    "key": "agent.occurredAt",
+    "en": "Occurred at"
+  },
+  "加载大模型配置列表失败": {
+    "key": "agent.modelListLoadFailed",
+    "en": "Could not load the model configurations"
+  },
+  "连通性测试失败": {
+    "key": "agent.connectivityTestFailed",
+    "en": "Connectivity test failed"
+  },
+  "大模型管理": {
+    "key": "agent.modelManagement",
+    "en": "Model management"
+  },
+  "名称关键字": {
+    "key": "agent.nameKeywordPlaceholder",
+    "en": "Name keyword"
+  },
+  "协议类型": {
+    "key": "agent.protocolType",
+    "en": "Protocol"
+  },
+  "模型名称": {
+    "key": "agent.modelName",
+    "en": "Model name"
+  },
+  "API 地址": {
+    "key": "agent.apiUrl",
+    "en": "API URL"
+  },
+  "多 Key 分组": {
+    "key": "agent.multiKeyGroup",
+    "en": "Multi-key group"
+  },
+  "优先级": {
+    "key": "agent.priority",
+    "en": "Priority"
+  },
+  "锁定状态": {
+    "key": "agent.lockStatus",
+    "en": "Lock status"
+  },
+  "新建大模型配置": {
+    "key": "agent.newModelConfig",
+    "en": "New model configuration"
+  },
+  "连通性测试结果": {
+    "key": "agent.connectivityTestResult",
+    "en": "Connectivity test result"
+  },
+  "缺少字典编码参数": {
+    "key": "system.dictCodeParamMissing",
+    "en": "The dictionary code parameter is missing"
+  },
+  "加载字典项列表失败": {
+    "key": "system.dictDataListLoadFailed",
+    "en": "Could not load the dictionary items"
+  },
+  "编辑字典项": {
+    "key": "system.editDictItem",
+    "en": "Edit dictionary item"
+  },
+  "加载字典项详情失败": {
+    "key": "system.dictDataDetailLoadFailed",
+    "en": "Could not load the dictionary item details"
+  },
+  "字典标签不能为空": {
+    "key": "system.dictLabelRequired",
+    "en": "Dictionary label is required"
+  },
+  "字典键值不能为空": {
+    "key": "system.dictValueRequired",
+    "en": "Dictionary value is required"
+  },
+  "← 返回字典类型列表": {
+    "key": "system.backToDictTypeList",
+    "en": "← Back to dictionary type list"
+  },
+  "默认": {
+    "key": "system.defaultLabel",
+    "en": "Default"
+  },
+  "排序号": {
+    "key": "system.sortNoPlaceholder",
+    "en": "Sort order"
+  },
+  "是否默认": {
+    "key": "system.isDefaultLabel",
+    "en": "Is default"
+  },
+  "CSS 类名": {
+    "key": "system.cssClassName",
+    "en": "CSS class name"
+  },
+  "列表样式": {
+    "key": "system.listStyle",
+    "en": "List style"
+  },
+  "加载模板列表失败": {
+    "key": "workflow.templateListLoadFailed",
+    "en": "Could not load the templates"
+  },
+  "已复制为流程定义草稿，可继续编辑发布": {
+    "key": "workflow.templateCopiedToDraft",
+    "en": "Copied as a process definition draft; you can continue editing and publishing"
+  },
+  "复制失败": {
+    "key": "common.copyFailed",
+    "en": "Could not copy. Please try again."
+  },
+  "流程模板中心": {
+    "key": "router.processTemplateCenter",
+    "en": "Process Template Center"
+  },
+  "模板名称/描述": {
+    "key": "workflow.templateKeywordPlaceholder",
+    "en": "Template name / description"
+  },
+  "模板名称": {
+    "key": "workflow.templateName",
+    "en": "Template name"
+  },
+  "绑定表单": {
+    "key": "workflow.boundForm",
+    "en": "Bound form"
+  },
+  "范围": {
+    "key": "workflow.scope",
+    "en": "Scope"
+  },
+  "本部门": {
+    "key": "workflow.scopeDept",
+    "en": "This department"
+  },
+  "全局": {
+    "key": "workflow.scopeGlobal",
+    "en": "Global"
+  },
+  "暂无可见模板": {
+    "key": "workflow.noVisibleTemplates",
+    "en": "No visible templates"
+  },
+  "绑定状态加载失败": {
+    "key": "system.bindingLoadFailed",
+    "en": "Could not load the binding status"
+  },
+  "已解绑": {
+    "key": "system.unbound",
+    "en": "Unbound"
+  },
+  "解绑失败": {
+    "key": "system.unbindFailed",
+    "en": "Could not unbind. Please try again."
+  },
+  "授权发起失败": {
+    "key": "system.authorizeFailed",
+    "en": "Could not start authorization"
+  },
+  "已绑定": {
+    "key": "system.bound",
+    "en": "Bound"
+  },
+  "未绑定": {
+    "key": "system.notBound",
+    "en": "Not bound"
+  },
+  "解绑中…": {
+    "key": "system.unbinding",
+    "en": "Unbinding…"
+  },
+  "解绑": {
+    "key": "system.unbind",
+    "en": "Unbind"
+  },
+  "绑定": {
+    "key": "workflow.binding",
+    "en": "Binding"
+  },
+  "开始": {
+    "key": "agent.nodeStart",
+    "en": "Start"
+  },
+  "结束": {
+    "key": "agent.nodeEnd",
+    "en": "End"
+  },
+  "LLM 调用": {
+    "key": "agent.nodeLlm",
+    "en": "LLM call"
+  },
+  "工具调用": {
+    "key": "agent.nodeTool",
+    "en": "Tool call"
+  },
+  "条件分支": {
+    "key": "agent.nodeCondition",
+    "en": "Condition branch"
+  },
+  "循环": {
+    "key": "agent.nodeLoop",
+    "en": "Loop"
+  },
+  "并行分支": {
+    "key": "agent.nodeFork",
+    "en": "Parallel branch"
+  },
+  "汇合": {
+    "key": "agent.nodeJoin",
+    "en": "Join"
+  },
+  "加载岗位列表失败": {
+    "key": "system.postListLoadFailed",
+    "en": "Could not load the posts"
+  },
+  "编辑岗位": {
+    "key": "system.editPost",
+    "en": "Edit post"
+  },
+  "加载岗位详情失败": {
+    "key": "system.postDetailLoadFailed",
+    "en": "Could not load the post details"
+  },
+  "岗位编码不能为空": {
+    "key": "system.postCodeRequired",
+    "en": "Post code is required"
+  },
+  "岗位名称不能为空": {
+    "key": "system.postNameRequired",
+    "en": "Post name is required"
+  },
+  "岗位管理": {
+    "key": "system.postManagement",
+    "en": "Post management"
+  },
+  "工具": {
+    "key": "agent.toolLabel",
+    "en": "Tool"
+  },
+  "选择工具": {
+    "key": "agent.selectTool",
+    "en": "Select a tool"
+  },
+  "输入变量名": {
+    "key": "agent.inputVariableName",
+    "en": "Input variable name"
+  },
+  "输出变量名": {
+    "key": "agent.outputVariableName",
+    "en": "Output variable name"
+  },
+  "加载流程定义列表失败": {
+    "key": "workflow.processDefListLoadFailed",
+    "en": "Could not load the process definitions"
+  },
+  "流程图加载失败": {
+    "key": "workflow.processGraphLoadFailed",
+    "en": "Could not load the process diagram"
+  },
+  "只有草稿状态的流程定义可以删除": {
+    "key": "workflow.onlyDraftDeletable",
+    "en": "Only draft process definitions can be deleted"
+  },
+  "返回表单工作台": {
+    "key": "workflow.backToFormWorkbench",
+    "en": "Back to the form workbench"
+  },
+  "候选选项": {
+    "key": "form.multiselectOptions",
+    "en": "Candidate options"
+  },
+  "逗号分隔的选项，如：餐饮, 交通, 住宿": {
+    "key": "form.multiselectOptionsPlaceholder",
+    "en": "Comma-separated options, for example: Meals, Transport, Accommodation"
+  },
+  "说明正文": {
+    "key": "form.labelBody",
+    "en": "Description text"
+  },
+  "展示给填报人的说明文字": {
+    "key": "form.labelBodyPlaceholder",
+    "en": "Description text shown to the person filling in the form"
+  },
+  "未经过": {
+    "key": "workflow.edgeNotTaken",
+    "en": "Not taken"
+  },
+  "已取消": {
+    "key": "workflow.runtimeStateCancelled",
+    "en": "Cancelled"
+  },
+  "未运行": {
+    "key": "workflow.runtimeStateIdle",
+    "en": "Not started"
+  },
+  "拖拽排序": {
+    "key": "form.dragToSort",
+    "en": "Drag to sort"
+  },
+  "删除字段": {
+    "key": "form.deleteField",
+    "en": "Delete field"
+  },
+  "从左侧控件库拖入字段开始设计": {
+    "key": "form.canvasEmptyHint",
+    "en": "Drag fields from the control palette on the left to start designing"
+  },
+  "加载已办任务失败": {
+    "key": "workflow.processedTasksLoadFailed",
+    "en": "Could not load the completed tasks"
+  },
+  "待办任务": {
+    "key": "workflow.todoTasks",
+    "en": "Pending tasks"
+  },
+  "+ 添加行": {
+    "key": "component.addRow",
+    "en": "+ Add row"
+  },
+  "控件库": {
+    "key": "form.controlPalette",
+    "en": "Control palette"
+  }
+}

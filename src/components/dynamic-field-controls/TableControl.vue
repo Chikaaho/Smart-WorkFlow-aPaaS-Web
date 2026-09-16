@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 子表格（TABLE）控件：内嵌子表，可增删行。
  * 行操作（addRow/removeRow/updateCell）为本组件内部逻辑，行数据外部进（modelValue
@@ -67,7 +70,7 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
       <thead>
         <tr>
           <th v-for="sf in subFields" :key="sf.name">{{ sf.name }}</th>
-          <th v-if="!readonly">操作</th>
+          <th v-if="!readonly">{{ t('common.actions') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -84,13 +87,15 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
               />
             </td>
             <td v-if="!readonly">
-              <el-button size="small" type="danger" @click="removeRow(rowIdx)">删除</el-button>
+              <el-button size="small" type="danger" @click="removeRow(rowIdx)">{{
+                t('common.delete')
+              }}</el-button>
             </td>
           </tr>
         </template>
       </tbody>
     </table>
-    <el-button v-if="!readonly" size="small" @click="addRow">+ 添加行</el-button>
+    <el-button v-if="!readonly" size="small" @click="addRow">{{ t('component.addRow') }}</el-button>
   </div>
 </template>
 

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * NotifyChannelList — 渠道配置页（I6）。
  * 渠道启停（租户级）；启用前由服务端完成装配/配置完整性判定，缺失配置启用会被拒绝。
@@ -15,12 +18,24 @@ const loading = ref(false)
 const errorMsg = ref('')
 
 const CHANNEL_LABEL: Record<string, string> = {
-  IN_APP: '站内信',
-  SMS: '短信',
-  EMAIL: '邮件',
-  FEISHU: '飞书卡片',
-  DINGTALK: '钉钉通知',
-  WECHAT_WORK: '企业微信卡片',
+  get IN_APP() {
+    return t('notify.channelInApp')
+  },
+  get SMS() {
+    return t('notify.channelSms')
+  },
+  get EMAIL() {
+    return t('notify.channelEmail')
+  },
+  get FEISHU() {
+    return t('notify.channelFeishu')
+  },
+  get DINGTALK() {
+    return t('notify.channelDingtalk')
+  },
+  get WECHAT_WORK() {
+    return t('notify.channelWechatWork')
+  },
 }
 
 async function loadList() {
@@ -30,7 +45,7 @@ async function loadList() {
     list.value = await listNotifyChannels()
   } catch (err) {
     if (err instanceof ApiError) errorMsg.value = err.msg
-    else errorMsg.value = '加载渠道状态失败'
+    else errorMsg.value = t('notify.channelStatusLoadFailed')
     ElMessage.error(errorMsg.value)
   } finally {
     loading.value = false
@@ -47,11 +62,11 @@ async function handleToggle(row: NotifyChannelStatus, enabled: boolean) {
       senderDisplay: row.senderDisplay ?? undefined,
       configSummary: row.configSummary ?? undefined,
     })
-    ElMessage.success(enabled ? '渠道已启用' : '渠道已停用')
+    ElMessage.success(enabled ? t('notify.channelEnabled') : t('notify.channelDisabled'))
     await loadList()
   } catch (err) {
     if (err instanceof ApiError) ElMessage.error(err.msg)
-    else ElMessage.error('操作失败')
+    else ElMessage.error(t('common.operationFailed'))
     await loadList()
   } finally {
     savingChannel.value = null
@@ -63,7 +78,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="渠道配置"
+    :title="t('notify.channelConfig')"
     :total="list.length"
     :page-num="1"
     :page-size="50"
@@ -79,25 +94,25 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
-      <el-table-column label="渠道" width="160">
+      <el-table-column :label="t('common.channel')" width="160">
         <template #default="{ row }">
           {{ CHANNEL_LABEL[row.channel] ?? row.channel }}（{{ row.channel }}）
         </template>
       </el-table-column>
-      <el-table-column label="系统级装配" width="120">
+      <el-table-column :label="t('notify.systemConfigured')" width="120">
         <template #default="{ row }">
           <el-tag
             :type="row.systemConfigured ? 'success' : 'danger'"
             size="small"
             disable-transitions
           >
-            {{ row.systemConfigured ? '已装配' : '未装配' }}
+            {{ row.systemConfigured ? t('notify.configured') : t('notify.notConfigured') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="senderDisplay" label="发件标识" min-width="140" />
-      <el-table-column prop="configSummary" label="配置摘要" min-width="180" />
-      <el-table-column label="租户级启用" width="140">
+      <el-table-column prop="senderDisplay" :label="t('notify.senderDisplay')" min-width="140" />
+      <el-table-column prop="configSummary" :label="t('notify.configSummary')" min-width="180" />
+      <el-table-column :label="t('notify.tenantEnabled')" width="140">
         <template #default="{ row }">
           <el-switch
             v-if="row.channel !== 'IN_APP'"
@@ -107,7 +122,9 @@ onMounted(loadList)
               (v: unknown) => handleToggle(row as NotifyChannelStatus, v === true)
             "
           />
-          <el-tag v-else type="success" size="small" disable-transitions>恒启用</el-tag>
+          <el-tag v-else type="success" size="small" disable-transitions>{{
+            t('notify.alwaysEnabled')
+          }}</el-tag>
         </template>
       </el-table-column>
     </el-table>

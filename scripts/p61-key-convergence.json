@@ -1,0 +1,47 @@
+{
+  "_comment": "P61 R2a 同文异译收敛映射：<被收敛键> → <权威键>。收敛后被收敛键从目录中剔除，源码引用由 scripts/p61-converge-keys.mjs 改写；权威键已覆盖同一句文案，故不产生文案变化。",
+
+  "locale.label": "common.language",
+  "auth.username": "common.username",
+  "auth.password": "common.password",
+  "system.password": "common.password",
+  "common.refresh": "auth.refresh",
+
+  "errors.permissionDenied": "foundation.errPermissionDenied",
+  "errors.retry": "common.retry",
+
+  "page.forbidden": "router.forbidden",
+  "page.notFound": "router.pageNotFound",
+  "page.serverError": "router.serverError",
+  "page.oops": "view.errorTitle",
+  "page.noData": "common.emptyData",
+
+  "system.dictItemTitle": "system.dictItemManagement",
+  "form.formulaExpressionPlaceholder": "form.formulaPlaceholder",
+  "form.placeholderSeamItem": "form.placeholderHint",
+  "form.historyVersionBadge": "form.historyBadge",
+  "form.dataPageTitle": "form.dataDialogTitle",
+
+  "workflow.approved": "common.statusApproved",
+  "notify.newRule": "common.newRule",
+  "iot.newRule": "common.newRule",
+  "common.createAction": "common.create",
+  "workflow.processGraphEmptyHint": "workflow.confirmViewableGraph",
+  "workflow.processGraphDialogTitle": "workflow.graphDialogTitle",
+
+  "notify.titleTemplatePlaceholder": "notify.subjectPlaceholder",
+  "notify.contentTemplatePlaceholder": "notify.contentPlaceholder",
+  "notify.variablesJsonPlaceholder": "notify.templateVarsPlaceholder",
+
+  "iot.durationMs": "common.durationMs",
+  "agent.durationMsColumn": "common.durationMs",
+  "iot.topicTemplatePlaceholder": "iot.topicPlaceholder",
+  "iot.leaveBlankToKeepPassword": "iot.passwordKeepPlaceholder",
+  "iot.thingModelTitle": "iot.thingModelDialogTitle",
+
+  "agent.inputSchemaPlaceholderExternal": "agent.jsonSchemaPlaceholderQuery",
+  "agent.inputSchemaPlaceholderInternal": "agent.jsonSchemaPlaceholderCity",
+  "agent.rateLimitCoolingUntil": "agent.modelCoolingDown",
+  "agent.emptyPanelDescription": "agent.nodeNoEditableProps",
+  "agent.connectivityTestMessage": "agent.connectivityTestTitle"
+}

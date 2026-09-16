@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * NotifyRecordList — 通知发送记录（v0.0.2 P3，有权管理者）。
  *
@@ -59,7 +63,7 @@ async function loadList() {
     list.value = result.list
     total.value = result.total
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? err.msg : '加载发送记录失败'
+    errorMsg.value = err instanceof ApiError ? err.msg : t('notify.recordListLoadFailed')
   } finally {
     loading.value = false
   }
@@ -103,7 +107,7 @@ async function openDetail(row: NotifyRecord) {
   try {
     detail.value = await queryNotifyRecordDetail(row.id)
   } catch (err) {
-    detailError.value = err instanceof ApiError ? err.msg : '加载记录详情失败'
+    detailError.value = err instanceof ApiError ? err.msg : t('notify.recordDetailLoadFailed')
   } finally {
     detailLoading.value = false
   }
@@ -117,16 +121,14 @@ async function resend(row: NotifyRecord) {
   try {
     const status = await resendNotifyRecord(row.id)
     if (status === 'SUCCESS') {
-      ElMessage.success('重发成功')
+      ElMessage.success(t('notify.resendSucceeded'))
     } else {
-      ElMessage.warning(`重发结果：${status}`)
+      ElMessage.warning(t('notify.resendResult', { status }))
     }
     detailVisible.value = false
     await loadList()
   } catch (err) {
-    ElMessage.error(
-      err instanceof ApiError ? err.msg : '重发失败（仅明确失败且无进行中重发的记录可重发）',
-    )
+    ElMessage.error(err instanceof ApiError ? err.msg : t('notify.resendFailed'))
   } finally {
     resendingId.value = null
   }
@@ -146,7 +148,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="通知发送记录"
+    :title="t('notify.recordListTitle')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -157,35 +159,35 @@ onMounted(loadList)
     <template #filter>
       <el-select
         v-model="filter.deliveryStatus"
-        placeholder="状态"
+        :placeholder="t('common.status')"
         clearable
         style="width: 140px"
         @change="handleSearch"
       >
-        <el-option label="成功" value="SUCCESS" />
-        <el-option label="失败" value="FAILED" />
-        <el-option label="重发中" value="RESENDING" />
-        <el-option label="超时" value="TIMEOUT" />
+        <el-option :label="t('common.resultSuccess')" value="SUCCESS" />
+        <el-option :label="t('common.resultFailed')" value="FAILED" />
+        <el-option :label="t('notify.statusResending')" value="RESENDING" />
+        <el-option :label="t('notify.statusTimeout')" value="TIMEOUT" />
       </el-select>
       <el-date-picker
         v-model="filter.timeRange"
         type="datetimerange"
-        range-separator="至"
-        start-placeholder="开始时间"
-        end-placeholder="结束时间"
+        :range-separator="t('common.to')"
+        :start-placeholder="t('common.startTime')"
+        :end-placeholder="t('common.endTime')"
         style="width: 340px"
       />
       <el-input
         v-model="filter.keyword"
-        placeholder="标题/内容/业务ID"
+        :placeholder="t('notify.recordSearchPlaceholder')"
         clearable
         style="width: 200px"
         @keyup.enter="handleSearch"
       />
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleSearch">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleSearch">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
     <template #empty-action>
       <span />
@@ -201,28 +203,35 @@ onMounted(loadList)
     />
 
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
-      <el-table-column prop="id" label="记录ID" width="90" />
-      <el-table-column prop="recipientId" label="接收人" width="100" />
-      <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="bizType" label="业务类型" width="110" />
-      <el-table-column prop="channel" label="渠道" width="100" />
-      <el-table-column label="状态" width="100">
+      <el-table-column prop="id" :label="t('notify.recordId')" width="90" />
+      <el-table-column prop="recipientId" :label="t('notify.recipient')" width="100" />
+      <el-table-column
+        prop="title"
+        :label="t('common.title')"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column prop="bizType" :label="t('notify.bizType')" width="110" />
+      <el-table-column prop="channel" :label="t('common.channel')" width="100" />
+      <el-table-column :label="t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="STATUS_TAG[row.deliveryStatus] ?? 'info'" size="small">
-            {{ row.deliveryStatus }}
+            {{ enumLabel('NOTIFY_DELIVERY', row.deliveryStatus) }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column
         prop="failureReason"
-        label="失败原因"
+        :label="t('common.failureReason')"
         min-width="160"
         show-overflow-tooltip
       />
-      <el-table-column prop="createTime" label="时间" min-width="170" />
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column prop="createTime" :label="t('common.time')" min-width="170" />
+      <el-table-column :label="t('common.actions')" width="150" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" type="primary" link @click="openDetailRow(row)">日志</el-button>
+          <el-button size="small" type="primary" link @click="openDetailRow(row)">{{
+            t('notify.logButton')
+          }}</el-button>
           <el-button
             size="small"
             type="warning"
@@ -230,56 +239,62 @@ onMounted(loadList)
             :disabled="row.deliveryStatus !== 'FAILED' || resendingId === row.id"
             @click="resendRow(row)"
           >
-            重发
+            {{ t('notify.resend') }}
           </el-button>
         </template>
       </el-table-column>
     </el-table>
   </StandardListTemplate>
 
-  <el-dialog v-model="detailVisible" title="发送日志" width="720px">
+  <el-dialog v-model="detailVisible" :title="t('notify.sendLogTitle')" width="720px">
     <div v-loading="detailLoading">
       <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" show-icon />
       <template v-if="detail">
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="记录ID">{{ detail.message.id }}</el-descriptions-item>
-          <el-descriptions-item label="状态">
+          <el-descriptions-item :label="t('notify.recordId')">{{
+            detail.message.id
+          }}</el-descriptions-item>
+          <el-descriptions-item :label="t('common.status')">
             <el-tag :type="STATUS_TAG[detail.message.deliveryStatus] ?? 'info'" size="small">
-              {{ detail.message.deliveryStatus }}
+              {{ enumLabel('NOTIFY_DELIVERY', detail.message.deliveryStatus) }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="接收人">{{
+          <el-descriptions-item :label="t('notify.recipient')">{{
             detail.message.recipientId
           }}</el-descriptions-item>
-          <el-descriptions-item label="渠道">{{
+          <el-descriptions-item :label="t('common.channel')">{{
             detail.message.channel ?? '-'
           }}</el-descriptions-item>
-          <el-descriptions-item label="标题" :span="2">{{
+          <el-descriptions-item :label="t('common.title')" :span="2">{{
             detail.message.title
           }}</el-descriptions-item>
-          <el-descriptions-item label="失败原因" :span="2">
+          <el-descriptions-item :label="t('common.failureReason')" :span="2">
             {{ detail.message.failureReason ?? '-' }}
           </el-descriptions-item>
         </el-descriptions>
 
-        <h4 class="log-section-title">投递尝试（含原始失败与最新结果）</h4>
+        <h4 class="log-section-title">{{ t('notify.deliveryAttempts') }}</h4>
         <el-alert
           v-if="detail.attempts.length === 0"
-          title="无尝试流水"
+          :title="t('notify.noAttempts')"
           type="info"
           :closable="false"
           show-icon
         />
         <el-table v-else :data="detail.attempts" stripe size="small">
           <el-table-column prop="attemptNo" label="#" width="60" />
-          <el-table-column prop="status" label="结果" width="90" />
-          <el-table-column prop="failureReason" label="失败原因" min-width="200" />
-          <el-table-column prop="createTime" label="时间" min-width="170" />
+          <el-table-column prop="status" :label="t('common.result')" width="90" />
+          <el-table-column
+            prop="failureReason"
+            :label="t('common.failureReason')"
+            min-width="200"
+          />
+          <el-table-column prop="createTime" :label="t('common.time')" min-width="170" />
         </el-table>
       </template>
     </div>
     <template #footer>
-      <el-button @click="detailVisible = false">关闭</el-button>
+      <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
     </template>
   </el-dialog>
 </template>

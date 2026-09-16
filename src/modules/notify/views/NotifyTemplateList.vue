@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * NotifyTemplateList — 消息模板管理列表页（P36 / M05-F02-01）。
  *
@@ -55,7 +58,7 @@ async function loadTemplates() {
     list.value = result.list
     total.value = result.total
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? err.msg : '加载消息模板列表失败'
+    errorMsg.value = err instanceof ApiError ? err.msg : t('notify.templateListLoadFailed')
   } finally {
     loading.value = false
   }
@@ -114,19 +117,29 @@ async function handleToggle(row: NotifyTemplate) {
   const target = !row.enabled
   try {
     await ElMessageBox.confirm(
-      target ? `确认启用模板「${row.name}」？` : '停用后该模板不可预览与发送，确认停用？',
-      target ? '启用模板' : '停用模板',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' },
+      target
+        ? t('notify.confirmEnableTemplate', { name: row.name })
+        : t('notify.confirmDisableTemplate'),
+      target ? t('notify.enableTemplate') : t('notify.disableTemplate'),
+      {
+        get confirmButtonText() {
+          return t('common.confirm')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+      },
     )
   } catch {
     return
   }
   try {
     await toggleNotifyTemplate(row.id, target)
-    ElMessage.success(target ? '已启用' : '已停用')
+    ElMessage.success(target ? t('common.statusEnabled') : t('common.statusDisabled'))
     void loadTemplates()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '启停失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('notify.toggleFailed'))
   }
 }
 
@@ -135,20 +148,24 @@ async function handleToggle(row: NotifyTemplate) {
 async function handleDelete(row: NotifyTemplate) {
   if (!canManage.value) return
   try {
-    await ElMessageBox.confirm(
-      '删除后不可再按此模板发送；历史通知内容不受影响。确认删除？',
-      '删除模板',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
-    )
+    await ElMessageBox.confirm(t('notify.confirmDeleteTemplate'), t('notify.deleteTemplate'), {
+      get confirmButtonText() {
+        return t('common.delete')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
+      type: 'warning',
+    })
   } catch {
     return
   }
   try {
     await deleteNotifyTemplate(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     void loadTemplates()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '删除失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('common.deleteFailed'))
   }
 }
 
@@ -175,7 +192,7 @@ async function runPreview() {
   try {
     variables = JSON.parse(previewVarsText.value)
   } catch {
-    previewError.value = '变量 JSON 不合法'
+    previewError.value = t('notify.variablesJsonInvalid')
     return
   }
   previewLoading.value = true
@@ -188,7 +205,7 @@ async function runPreview() {
       variables,
     })
   } catch (err) {
-    previewError.value = err instanceof ApiError ? err.msg : '预览失败'
+    previewError.value = err instanceof ApiError ? err.msg : t('notify.previewFailed')
   } finally {
     previewLoading.value = false
   }
@@ -199,7 +216,7 @@ defineExpose({ list, errorMsg, retryLoad: loadTemplates })
 
 <template>
   <StandardListTemplate
-    title="消息模板"
+    :title="t('router.messageTemplate')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -208,13 +225,15 @@ defineExpose({ list, errorMsg, retryLoad: loadTemplates })
     @update:page-size="handlePageSizeChange"
   >
     <template #toolbar-actions>
-      <el-button v-if="canManage" type="primary" @click="openCreate">新增模板</el-button>
+      <el-button v-if="canManage" type="primary" @click="openCreate">{{
+        t('notify.newTemplate')
+      }}</el-button>
     </template>
 
     <template #filter>
       <el-input
         v-model="filter.keyword"
-        placeholder="搜索代码或名称"
+        :placeholder="t('notify.searchTemplatePlaceholder')"
         clearable
         style="width: 220px"
         @keyup.enter="handleQuery"
@@ -222,19 +241,19 @@ defineExpose({ list, errorMsg, retryLoad: loadTemplates })
       />
       <el-select
         v-model="filter.enabled"
-        placeholder="全部状态"
+        :placeholder="t('common.allStatuses')"
         clearable
         style="width: 130px"
         @change="handleQuery"
       >
-        <el-option label="启用" :value="true" />
-        <el-option label="停用" :value="false" />
+        <el-option :label="t('common.enable')" :value="true" />
+        <el-option :label="t('common.disable')" :value="false" />
       </el-select>
     </template>
 
     <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <el-alert
@@ -247,42 +266,46 @@ defineExpose({ list, errorMsg, retryLoad: loadTemplates })
     />
 
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="templateCode" label="模板代码" min-width="140" />
-      <el-table-column prop="name" label="名称" min-width="140" />
+      <el-table-column prop="templateCode" :label="t('notify.templateCode')" min-width="140" />
+      <el-table-column prop="name" :label="t('common.name')" min-width="140" />
       <el-table-column
         prop="titleTemplate"
-        label="标题模板"
+        :label="t('notify.titleTemplate')"
         min-width="200"
         show-overflow-tooltip
       />
-      <el-table-column label="状态" width="90">
+      <el-table-column :label="t('common.status')" width="90">
         <template #default="{ row }">
           <el-tag :type="(row as NotifyTemplate).enabled ? 'success' : 'info'" size="small">
-            {{ (row as NotifyTemplate).enabled ? '启用' : '停用' }}
+            {{ (row as NotifyTemplate).enabled ? t('common.enable') : t('common.disable') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="250" fixed="right">
+      <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
+      <el-table-column :label="t('common.actions')" width="250" fixed="right">
         <template #default="{ row }">
           <el-button size="small" link type="primary" @click="openPreview(row as NotifyTemplate)">
-            预览
+            {{ t('common.preview') }}
           </el-button>
           <template v-if="canManage">
-            <el-button size="small" link type="primary" @click="openEdit(row as NotifyTemplate)">
-              编辑
-            </el-button>
+            <el-button size="small" link type="primary" @click="openEdit(row as NotifyTemplate)">{{
+              t('common.edit')
+            }}</el-button>
             <el-button
               size="small"
               link
               :type="(row as NotifyTemplate).enabled ? 'warning' : 'success'"
               @click="handleToggle(row as NotifyTemplate)"
             >
-              {{ (row as NotifyTemplate).enabled ? '停用' : '启用' }}
+              {{ (row as NotifyTemplate).enabled ? t('common.disable') : t('common.enable') }}
             </el-button>
-            <el-button size="small" link type="danger" @click="handleDelete(row as NotifyTemplate)">
-              删除
-            </el-button>
+            <el-button
+              size="small"
+              link
+              type="danger"
+              @click="handleDelete(row as NotifyTemplate)"
+              >{{ t('common.delete') }}</el-button
+            >
           </template>
         </template>
       </el-table-column>
@@ -298,18 +321,18 @@ defineExpose({ list, errorMsg, retryLoad: loadTemplates })
   <!-- 预览弹窗 -->
   <el-dialog
     v-model="previewVisible"
-    :title="`预览：${previewRow?.name ?? ''}`"
+    :title="t('notify.previewDialogTitle', { name: previewRow?.name ?? '' })"
     width="640px"
     destroy-on-close
   >
     <div class="preview-body">
       <div class="form-field">
-        <label class="form-field__label">变量值（JSON 对象）</label>
+        <label class="form-field__label">{{ t('notify.previewVariablesLabel') }}</label>
         <el-input
           v-model="previewVarsText"
           type="textarea"
           :rows="4"
-          placeholder='{"userName": "张三"}'
+          :placeholder="t('notify.templateVarsPlaceholder')"
           style="font-family: monospace"
         />
       </div>
@@ -323,20 +346,22 @@ defineExpose({ list, errorMsg, retryLoad: loadTemplates })
       <template v-if="previewResult">
         <div class="preview-result">
           <div class="preview-result__item">
-            <label>标题</label>
+            <label>{{ t('common.title') }}</label>
             <span>{{ previewResult.title }}</span>
           </div>
           <div class="preview-result__item">
-            <label>正文</label>
+            <label>{{ t('notify.bodyLabel') }}</label>
             <span>{{ previewResult.content }}</span>
           </div>
         </div>
-        <el-text size="small" type="info">预览与真实发送使用同一渲染服务，结果一致。</el-text>
+        <el-text size="small" type="info">{{ t('notify.previewSameRendererNote') }}</el-text>
       </template>
     </div>
     <template #footer>
-      <el-button @click="previewVisible = false">关闭</el-button>
-      <el-button type="primary" :loading="previewLoading" @click="runPreview">渲染预览</el-button>
+      <el-button @click="previewVisible = false">{{ t('common.close') }}</el-button>
+      <el-button type="primary" :loading="previewLoading" @click="runPreview">{{
+        t('notify.renderPreview')
+      }}</el-button>
     </template>
   </el-dialog>
 </template>

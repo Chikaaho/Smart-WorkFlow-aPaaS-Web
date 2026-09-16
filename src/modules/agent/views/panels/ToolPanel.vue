@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * TOOL 节点属性面板：工具下拉（internal/external 合并，value=toolName 精确值）
  * + 输入/输出变量名。写回统一 emit 上行：updateNodeData（工具）/ varNameChange（变量名）。
@@ -21,34 +24,39 @@ defineEmits<{
 
 <template>
   <div class="field-row">
-    <div class="field-label">工具</div>
+    <div class="field-label">{{ t('agent.toolLabel') }}</div>
     <el-select
       :model-value="(node.data?.[NODE_CONFIG_KEY_TOOL_NAME] as string | undefined) ?? null"
-      placeholder="选择工具"
+      :placeholder="t('agent.selectTool')"
       style="width: 100%"
       @change="(v) => $emit('updateNodeData', NODE_CONFIG_KEY_TOOL_NAME, v)"
     >
       <el-option
-        v-for="t in toolOptions"
-        :key="`${t.source}:${t.toolName}`"
-        :label="`${t.toolName}（${t.source === 'internal' ? '内部' : '外部'}）`"
-        :value="t.toolName"
+        v-for="tool in toolOptions"
+        :key="`${tool.source}:${tool.toolName}`"
+        :label="
+          t('common.nameWithCode', {
+            name: tool.toolName,
+            code: tool.source === 'internal' ? t('common.internal') : t('common.external'),
+          })
+        "
+        :value="tool.toolName"
       />
     </el-select>
   </div>
   <div class="field-row">
-    <div class="field-label">输入变量名</div>
+    <div class="field-label">{{ t('agent.inputVariableName') }}</div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_INPUT_VAR] as string | undefined) ?? ''"
-      :placeholder="`留空 = 默认变量 ${DEFAULT_VARIABLE_NAME}`"
+      :placeholder="t('agent.varNamePlaceholder', { DEFAULT_VARIABLE_NAME })"
       @change="(v) => $emit('varNameChange', NODE_CONFIG_KEY_INPUT_VAR, v)"
     />
   </div>
   <div class="field-row">
-    <div class="field-label">输出变量名</div>
+    <div class="field-label">{{ t('agent.outputVariableName') }}</div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_OUTPUT_VAR] as string | undefined) ?? ''"
-      :placeholder="`留空 = 默认变量 ${DEFAULT_VARIABLE_NAME}`"
+      :placeholder="t('agent.varNamePlaceholder', { DEFAULT_VARIABLE_NAME })"
       @change="(v) => $emit('varNameChange', NODE_CONFIG_KEY_OUTPUT_VAR, v)"
     />
   </div>

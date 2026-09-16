@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 附件/图片（ATTACHMENT/IMAGE）控件。
  * 值 = [{storageKey, name}]；上传走 /workflow/attachments/upload（登录态），
@@ -50,7 +53,7 @@ async function onFileChange(event: Event) {
     ]
     emit('update:modelValue', next)
   } catch {
-    ElMessage.error('上传失败')
+    ElMessage.error(t('common.uploadFailed'))
   } finally {
     uploading.value = false
     input.value = ''
@@ -88,7 +91,13 @@ function removeItem(item: AttachmentItem) {
     </ul>
     <label v-if="!readonly" class="attachment-control__upload">
       <el-icon :size="16"><UploadFilled /></el-icon>
-      <span>{{ uploading ? '上传中…' : isImage ? '上传图片' : '上传附件' }}</span>
+      <span>{{
+        uploading
+          ? t('common.uploading')
+          : isImage
+            ? t('common.uploadImage')
+            : t('common.uploadAttachment')
+      }}</span>
       <input type="file" :disabled="uploading" @change="onFileChange" />
     </label>
   </div>

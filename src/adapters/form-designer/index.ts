@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 import type { FormSchema, FormSchemaField, FieldType, TableSubField } from '@/contracts/form-schema'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 
@@ -236,7 +237,7 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
 
   if (field.required) {
     // required → validate 数组（form-create/Element Plus 必填校验直通通道）
-    rule.validate = [{ required: true, message: '必填', trigger: 'blur' }]
+    rule.validate = [{ required: true, message: i18n.global.t('form.required'), trigger: 'blur' }]
   }
 
   switch (field.type) {
@@ -282,7 +283,12 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     case 'REFERENCE': {
       // 统一按钮占位：禁用态输入框，视觉上与普通 TEXT 区分。不查目标数据、不发请求。
       rule.type = 'input'
-      rule.props = { disabled: true, placeholder: '引用字段选择器' }
+      rule.props = {
+        disabled: true,
+        get placeholder() {
+          return i18n.global.t('form-designer.referenceFieldSelector')
+        },
+      }
       break
     }
 
@@ -324,7 +330,13 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
       // 人员/部门选择：渲染层按 __selector__ 元数据挂真实选择器；
       // 提交值为数字型对象 ID，存在性/租户由服务端 Facade 校验
       rule.type = 'input'
-      rule.props = { disabled: true, placeholder: field.type === 'USER' ? '人员选择' : '部门选择' }
+      rule.props = {
+        disabled: true,
+        placeholder:
+          field.type === 'USER'
+            ? i18n.global.t('common.userPicker')
+            : i18n.global.t('common.deptPicker'),
+      }
       ;(rule as Record<string, unknown>).__selector__ = field.type === 'USER' ? 'user' : 'dept'
       break
     }
@@ -332,7 +344,7 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     case 'FORMULA': {
       // 公式：客户端值不消费；预览值为服务端计算结果（只读展示）
       rule.type = 'input'
-      rule.props = { disabled: true, placeholder: '服务端计算' }
+      rule.props = { disabled: true, placeholder: i18n.global.t('component.serverCalculated') }
       ;(rule as Record<string, unknown>).__formula__ = true
       break
     }

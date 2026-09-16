@@ -7,7 +7,8 @@
  *
  * 每条描述符声明三样：
  *  1. 节点类型判别子（type，对齐 graphAdapter 的 NODE_TYPE_* 常量）；
- *  2. 节点类型中文名（label，空态说明等面板内展示用）；
+ *  2. 节点类型文案键（labelKey，空态说明等面板内展示用；存键不存求值结果，
+ *     避免模块加载期把语言固化，切换语言后失效）；
  *  3. 属性面板组件（component，props 收 NodePanelProps，交互事件经 emit 上行到
  *     GraphDesigner 统一处理——模型配置/变量名写回、maxIterations 校验、出边关键词、
  *     删边等既有语义全部保留在消费方）。
@@ -55,21 +56,21 @@ export interface NodePanelProps {
 export interface NodePanelDescriptor {
   /** 节点类型判别子（对齐 graphAdapter NODE_TYPE_* 常量，注册表不限定枚举以保扩展性）。 */
   type: string
-  /** 节点类型中文名。 */
-  label: string
+  /** 节点类型文案键（与 graphAdapter.NODE_TYPE_LABEL_KEYS 同源同值）。 */
+  labelKey: string
   /** 属性面板组件（NodePanelProps 入参 + 类型化 emits，见各面板）。 */
   component: Component
 }
 
 export const NODE_PANEL_REGISTRY: NodePanelDescriptor[] = [
-  { type: NODE_TYPE_START, label: '开始', component: EmptyPanel },
-  { type: NODE_TYPE_END, label: '结束', component: EmptyPanel },
-  { type: NODE_TYPE_LLM, label: 'LLM 调用', component: LlmPanel },
-  { type: NODE_TYPE_TOOL, label: '工具调用', component: ToolPanel },
-  { type: NODE_TYPE_CONDITION, label: '条件分支', component: ConditionPanel },
-  { type: NODE_TYPE_LOOP, label: '循环', component: LoopPanel },
-  { type: NODE_TYPE_FORK, label: '并行分支', component: ForkPanel },
-  { type: NODE_TYPE_JOIN, label: '汇合', component: JoinPanel },
+  { type: NODE_TYPE_START, labelKey: 'agent.nodeStart', component: EmptyPanel },
+  { type: NODE_TYPE_END, labelKey: 'agent.nodeEnd', component: EmptyPanel },
+  { type: NODE_TYPE_LLM, labelKey: 'agent.nodeLlm', component: LlmPanel },
+  { type: NODE_TYPE_TOOL, labelKey: 'agent.nodeTool', component: ToolPanel },
+  { type: NODE_TYPE_CONDITION, labelKey: 'agent.nodeCondition', component: ConditionPanel },
+  { type: NODE_TYPE_LOOP, labelKey: 'agent.nodeLoop', component: LoopPanel },
+  { type: NODE_TYPE_FORK, labelKey: 'agent.nodeFork', component: ForkPanel },
+  { type: NODE_TYPE_JOIN, labelKey: 'agent.nodeJoin', component: JoinPanel },
 ]
 
 /** 按 type 取描述符；取不到返回 undefined（消费方兜底：无面板渲染）。 */

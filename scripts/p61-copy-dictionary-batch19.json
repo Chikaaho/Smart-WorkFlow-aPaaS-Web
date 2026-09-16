@@ -1,0 +1,130 @@
+{
+  "_comment": "P61 R1 补遗 批次19：跨行文本节点（按钮文字与标签分行书写）此前逃过按行扫描的硬编码门禁，现补齐键化。门禁已改为整文件补扫跨行文本节点。",
+  "Token 使用统计": { "key": "agent.tokenUsageStats", "en": "Token usage" },
+  "数据来自模型供应商响应中的 usage，仅为本次会话可观测到的用量，非账单依据。": {
+    "key": "agent.tokenUsageSessionNote",
+    "en": "Taken from the model provider's usage response for this conversation. Observable usage only, not a billing statement."
+  },
+  "数据来自模型供应商响应中的 usage，仅为本次执行可观测到的用量，非账单依据；失败重试等未暴露的尝试不计入。": {
+    "key": "agent.tokenUsageExecNote",
+    "en": "Taken from the model provider's usage response for this execution. Observable usage only, not a billing statement; unexposed attempts such as failed retries are not counted."
+  },
+  "单步": { "key": "agent.debugStep", "en": "Step" },
+  "继续": { "key": "agent.debugResume", "en": "Resume" },
+  "停止": { "key": "agent.debugStop", "en": "Stop" },
+  "暂无断点候选（执行节点为空）": {
+    "key": "agent.noBreakpointCandidates",
+    "en": "No breakpoint candidates (no execution nodes)."
+  },
+  "节点属性": { "key": "agent.nodeProperties", "en": "Node properties" },
+  "删除节点": { "key": "agent.deleteNode", "en": "Delete node" },
+  "运行": { "key": "agent.run", "en": "Run" },
+  "查看详情 →": { "key": "agent.viewExecution", "en": "View details →" },
+  "Bean 上的方法名，约定签名 String execute(String params)": {
+    "key": "agent.beanMethodHint",
+    "en": "Method name on the bean; expected signature String execute(String params)"
+  },
+  "连通性测试": { "key": "agent.connectivityTest", "en": "Connectivity test" },
+  "删除边": { "key": "agent.deleteEdge", "en": "Delete edge" },
+  "系统 Prompt": { "key": "agent.systemPromptLabel", "en": "System prompt" },
+  "用户 Prompt 模板": { "key": "agent.userPromptLabel", "en": "User prompt template" },
+  "定义本次节点调用的用户消息；支持": {
+    "key": "agent.userPromptHintLead",
+    "en": "The user message for this node invocation; supports "
+  },
+  "引用命名变量；未配置或留空时直接使用输入变量的原文；引用未定义变量将导致执行失败": {
+    "key": "agent.userPromptHintTail",
+    "en": " named variables. If unset or empty the raw input variable is used; referencing an undefined variable fails the execution."
+  },
+  "确认选择": { "key": "form.confirmSelection", "en": "Confirm selection" },
+  "填报值 = 稳定对象标识；正式提交由服务端按契约解析并冻结 value/display，伪造或越权对象会被拒绝。": {
+    "key": "form.datasourceValueNote",
+    "en": "The stored value is a stable object identifier. On submit the server resolves and freezes value/display per contract; forged or unauthorized objects are rejected."
+  },
+  "清除选择": { "key": "form.clearSelection", "en": "Clear selection" },
+  "编辑子表": { "key": "form.editSubTable", "en": "Edit sub-table" },
+  "仅展示已发布版本（只读）。历史预览不会修改当前草稿，本轮不提供回滚。": {
+    "key": "form.historyPreviewNote",
+    "en": "Published versions only (read-only). Previewing history never changes the current draft; rollback is out of scope for this release."
+  },
+  "该表单尚未发布过，暂无历史版本。": {
+    "key": "form.noHistoryVersions",
+    "en": "This form has never been published, so there is no version history."
+  },
+  "当前表单尚未保存，暂无稳定表单标识。请先在「表单设计」区保存草稿后再管理关联流程。": {
+    "key": "form.noFormKeyHint",
+    "en": "The form is not saved yet, so there is no stable form key. Save a draft in the design area before managing related processes."
+  },
+  "进入管理 / 编辑": { "key": "form.openInAdmin", "en": "Manage / edit" },
+  "发起范围": { "key": "form.initiationScope", "en": "Initiation scope" },
+  "此设置只控制普通用户是否能发起，不授予管理、数据或审批权限。": {
+    "key": "form.initiationScopeNote",
+    "en": "This setting only controls whether ordinary users can start the form. It grants no admin, data or approval permission."
+  },
+  "此表单已发布，表名和字段已冻结，不可编辑。": {
+    "key": "form.publishedFrozenNote",
+    "en": "This form is published: table name and fields are frozen and cannot be edited."
+  },
+  "流程由系统按已发布表单绑定解析": {
+    "key": "form.processResolvedByBinding",
+    "en": "The process is resolved by the system from the published form binding."
+  },
+  "提交草稿": { "key": "form.submitDraft", "en": "Submit draft" },
+  "为「已发布 + 允许 IoT 接入」的流程模板配置设备动作：设备来源（设计时固定 / 发起表单字段 / 流程变量）、能力、参数字段与失败策略（阻断 / 记录后继续 / 人工处理）。设备下拉仅显示合格设备 （已发布 + 可接入流程 + 连接启用）。": {
+    "key": "iot.flowActionHelp",
+    "en": "Configure device actions for process templates that are published and IoT-enabled: device source (fixed at design / form field / process variable), capability, parameter fields and failure policy (block / log and continue / manual). The device dropdown lists eligible devices only (published + process-enabled + connection enabled)."
+  },
+  "流程联动仅可选择「已发布 + 允许 IoT 接入」的设备与流程模板": {
+    "key": "iot.ruleEligibleNote",
+    "en": "Process rules can only select devices and process templates that are published and IoT-enabled."
+  },
+  "服务端确认人数：": {
+    "key": "notify.serverConfirmedCount",
+    "en": "Server-confirmed recipient count: "
+  },
+  "发送": { "key": "notify.send", "en": "Send" },
+  "标记已读": { "key": "notify.markRead", "en": "Mark as read" },
+  "跳转": { "key": "notify.jump", "en": "Go" },
+  "查看详情": { "key": "common.viewDetails", "en": "View details" },
+  "加载更多": { "key": "common.loadMore", "en": "Load more" },
+  "重发": { "key": "notify.resend", "en": "Resend" },
+  "仅支持简单变量替换；不支持表达式、条件、脚本。变量值按纯文本处理。": {
+    "key": "notify.templateLimitNote",
+    "en": "Simple variable substitution only: no expressions, conditions or scripts. Variable values are treated as plain text."
+  },
+  "第三方企业身份（企业微信 / 飞书 / 钉钉）绑定后可经企业统一身份入口登录；绑定不改变本地角色与权限。": {
+    "key": "auth.ssoBindingNote",
+    "en": "After binding an enterprise identity (WeCom / Feishu / DingTalk) you can sign in through the corporate identity entry. Binding does not change local roles or permissions."
+  },
+  "仅展示数据范围内且启用的用户；停用/不可见成员在回显时单独标记。": {
+    "key": "system.memberCandidateNote",
+    "en": "Lists enabled users within your data scope only; disabled or invisible members are marked separately when displayed."
+  },
+  "批量通过": { "key": "workflow.batchApprove", "en": "Batch approve" },
+  "批量不通过": { "key": "workflow.batchDisapprove", "en": "Batch reject" },
+  "不通过": { "key": "workflow.disapprove", "en": "Reject" },
+  "催办": { "key": "workflow.urge", "en": "Urge" },
+  "查看流程图": { "key": "workflow.viewDiagram", "en": "View diagram" },
+  "设计": { "key": "workflow.design", "en": "Design" },
+  "删除所选": { "key": "workflow.deleteSelected", "en": "Delete selected" },
+  "活跃节点": { "key": "workflow.activeNode", "en": "Active nodes" },
+  "已完成节点": { "key": "workflow.completedNode", "en": "Completed nodes" },
+  "转办": { "key": "workflow.transferOwnTask", "en": "Transfer" },
+  "委托": { "key": "workflow.delegateAction", "en": "Delegate" },
+  "沟通": { "key": "workflow.consultTask", "en": "Consult" },
+  "复制创建定义": { "key": "workflow.copyCreateDefinition", "en": "Copy to create definition" },
+  "打开": { "key": "common.open", "en": "Open" },
+  "办理": { "key": "workflow.handle", "en": "Handle" },
+  "暂无常用事项，可在「配置」中从流程中心选择": {
+    "key": "workspace.noFavorites",
+    "en": "No favorite items yet. Pick them from the process center in Settings."
+  },
+  "将外部身份（标识摘要": {
+    "key": "auth.ssoBindLead",
+    "en": "Bind the external identity (digest "
+  },
+  "）绑定到当前本地账号。 同一外部身份仅可绑定一个账号。": {
+    "key": "auth.ssoBindTail",
+    "en": ") to the current local account. One external identity can be bound to only one account."
+  }
+}

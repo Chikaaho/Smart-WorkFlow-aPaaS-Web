@@ -1,0 +1,24 @@
+{
+  "_comment": "P61 R1 非展示文案登记：逐条给出「为什么不是生产可达的用户可见文案」。按文件作用域，避免同一中文在别处是展示文案时被连带豁免。",
+  "src/modules/form/api/i2-choices.ts": {
+    "${'　'.repeat(depth)}${n.name}": "全角空格仅用于层级缩进填充（'　'.repeat(depth)），其余是数据字段名，非界面文案"
+  },
+  "src/modules/iot/views/IotProductList.vue": {
+    "温度": "物模型草稿示例载荷中的字段名，随用户编辑，非界面文案"
+  },
+  "src/modules/iot/views/IotScriptList.vue": {
+    "// handler(input) 为唯一入口；可用宿主函数：": "脚本编辑器预填示例代码的正文，是用户可编辑的数据内容而非界面文案",
+    "收到消息": "示例脚本中 fun_log 的日志文本参数，属脚本数据而非界面文案"
+  },
+  "src/modules/form/designer/subfield-convert.ts": {
+    "[subfield-convert] 跳过子表内不允许的字段类型：\"${sub.name}\"（type: ${sub.type}）": "console.warn 开发期诊断，不进入用户界面",
+    "[subfield-convert] 拒收子表内不允许的字段类型：\"${item.field.name}\"（type: ${item.field.type}）": "console.warn 开发期诊断，不进入用户界面"
+  },
+  "src/modules/form/views/FormDefList.vue": {
+    "管理员停用": "随启停请求提交给后端的审计原因值，非界面文案",
+    "管理员启用": "随启停请求提交给后端的审计原因值，非界面文案"
+  },
+  "src/modules/workflow/views/MyInstances.vue": {
+    "发起人撤回": "随撤回归档请求提交给后端的审计原因值，非界面文案"
+  }
+}

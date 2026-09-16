@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 /**
  * 系统管理状态语义常量（仅服务用户页 / 部门页）。
  *
@@ -29,15 +30,40 @@ export const SYS_DEPT_STATUS = {
 
 /** 用户状态下拉选项（表单 + 筛选共用） */
 export const userStatusOptions = [
-  { label: '正常', value: SYS_USER_STATUS.NORMAL },
-  { label: '停用', value: SYS_USER_STATUS.DISABLED },
-  { label: '锁定', value: SYS_USER_STATUS.LOCKED },
+  {
+    get label() {
+      return i18n.global.t('common.statusNormal')
+    },
+    value: SYS_USER_STATUS.NORMAL,
+  },
+  {
+    get label() {
+      return i18n.global.t('common.disable')
+    },
+    value: SYS_USER_STATUS.DISABLED,
+  },
+  {
+    get label() {
+      return i18n.global.t('system.statusLocked')
+    },
+    value: SYS_USER_STATUS.LOCKED,
+  },
 ] as const
 
 /** 部门状态下拉选项（表单共用） */
 export const deptStatusOptions = [
-  { label: '正常', value: SYS_DEPT_STATUS.NORMAL },
-  { label: '停用', value: SYS_DEPT_STATUS.DISABLED },
+  {
+    get label() {
+      return i18n.global.t('common.statusNormal')
+    },
+    value: SYS_DEPT_STATUS.NORMAL,
+  },
+  {
+    get label() {
+      return i18n.global.t('common.disable')
+    },
+    value: SYS_DEPT_STATUS.DISABLED,
+  },
 ] as const
 
 /** 用户状态列表 tag 类型映射（三态全写，避免二元式把 2 误显示为停用） */
@@ -58,13 +84,13 @@ export function userStatusTagType(status?: number): 'success' | 'info' | 'warnin
 export function userStatusLabel(status?: number): string {
   switch (status) {
     case SYS_USER_STATUS.NORMAL:
-      return '正常'
+      return i18n.global.t('common.statusNormal')
     case SYS_USER_STATUS.DISABLED:
-      return '停用'
+      return i18n.global.t('common.disable')
     case SYS_USER_STATUS.LOCKED:
-      return '锁定'
+      return i18n.global.t('system.statusLocked')
     default:
-      return '停用'
+      return i18n.global.t('common.disable')
   }
 }
 
@@ -75,5 +101,7 @@ export function deptStatusTagType(status?: number): 'success' | 'info' {
 
 /** 部门状态列表 tag 文案映射 */
 export function deptStatusLabel(status?: number): string {
-  return status === SYS_DEPT_STATUS.NORMAL ? '正常' : '停用'
+  return status === SYS_DEPT_STATUS.NORMAL
+    ? i18n.global.t('common.statusNormal')
+    : i18n.global.t('common.disable')
 }

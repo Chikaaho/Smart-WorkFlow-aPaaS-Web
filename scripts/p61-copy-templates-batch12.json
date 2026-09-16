@@ -1,0 +1,51 @@
+{
+  "_comment": "P61 R1 参数化文案 批次12：拼接型文案的格式键。占位符必须在此声明 vars，否则目录生成时会被当作字面文本转义，运行期不做插值。",
+  "测试结果：${testResult.success ? '服务可达' : '网络不可达'}": {
+    "key": "agent.connectivityTestTitle",
+    "zh": "测试结果：{result}",
+    "en": "Test result: {result}",
+    "vars": ["result"]
+  },
+  "物模型 — ${currentProduct?.name ?? ''}": {
+    "key": "iot.thingModelDialogTitle",
+    "zh": "物模型 — {name}",
+    "en": "Thing model — {name}",
+    "vars": ["name"]
+  },
+  "试运行成功（${exec.durationMs}ms）：${exec.outputJson ?? '无输出'}": {
+    "key": "iot.scriptDryRunSuccess",
+    "zh": "试运行成功（{durationMs}ms）：{output}",
+    "en": "Dry run succeeded ({durationMs}ms): {output}",
+    "vars": ["durationMs", "output"]
+  },
+  "${ACTION_LABELS[interveneAction.value]}已执行": {
+    "key": "workflow.interventionExecuted",
+    "zh": "{action}已执行",
+    "en": "{action} executed",
+    "vars": ["action"]
+  },
+  "实例干预 - ${ACTION_LABELS[interveneAction]}": {
+    "key": "workflow.interventionDialogTitle",
+    "zh": "实例干预 - {action}",
+    "en": "Instance intervention - {action}",
+    "vars": ["action"]
+  },
+  "：${row.opinionData.comment}": {
+    "key": "workflow.opinionCommentSuffix",
+    "zh": "：{comment}",
+    "en": ": {comment}",
+    "vars": ["comment"]
+  },
+  "（${detail.opinionForm.formId} v${detail.opinionForm.version}）": {
+    "key": "workflow.opinionFormSuffix",
+    "zh": "（{formId} v{version}）",
+    "en": " ({formId} v{version})",
+    "vars": ["formId", "version"]
+  },
+  "选择关联记录 — ${title || '目标表单'}": {
+    "key": "form.referenceSelectorTitle",
+    "zh": "选择关联记录 — {title}",
+    "en": "Select related record — {title}",
+    "vars": ["title"]
+  }
+}

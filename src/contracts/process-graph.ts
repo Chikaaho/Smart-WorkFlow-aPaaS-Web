@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 /**
  * ProcessGraph —— 自研流程设计器单一图契约（I3 §4.1）。
  *
@@ -70,10 +71,22 @@ export const NODE_RUNTIME_STATE_CLASS: Record<ProcessNodeRuntimeState, string> =
 }
 
 export const NODE_RUNTIME_STATE_LABEL: Record<ProcessNodeRuntimeState, string> = {
-  current: '当前节点',
-  completed: '已完成',
-  passedOver: '未经过',
-  cancelled: '已取消',
-  failed: '失败',
-  idle: '未运行',
+  get current() {
+    return i18n.global.t('common.currentNode')
+  },
+  get completed() {
+    return i18n.global.t('common.statusCompleted')
+  },
+  get passedOver() {
+    return i18n.global.t('workflow.edgeNotTaken')
+  },
+  get cancelled() {
+    return i18n.global.t('workflow.runtimeStateCancelled')
+  },
+  get failed() {
+    return i18n.global.t('common.resultFailed')
+  },
+  get idle() {
+    return i18n.global.t('workflow.runtimeStateIdle')
+  },
 }

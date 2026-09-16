@@ -1,0 +1,94 @@
+{
+  "_comment": "P61 R1 参数化文案 批次6",
+  "业务错误(${code})": {
+    "key": "foundation.businessError",
+    "zh": "业务错误({code})",
+    "en": "Business error ({code})",
+    "vars": ["code"]
+  },
+  "categoryEditing ? '编辑分类' : '新建分类'": {
+    "key": "workflow.categoryDialogTitle",
+    "zh": "categoryEditing ? '编辑分类' : '新建分类'",
+    "en": "categoryEditing ? 'Edit category' : 'New category'",
+    "vars": [],
+    "note": "Vue 属性绑定（:title）中的三元表达式，非单条文案；需拆成两条键：编辑分支 workflow.categoryDialogTitleEdit（编辑分类 / Edit category），新增分支 workflow.categoryDialogTitleNew（新建分类 / New category）。zh/en 保留表达式外壳以便原样对照。"
+  },
+  "确认删除分类「${category.name}」？已有事项归属时须先解除归属。": {
+    "key": "workflow.deleteCategoryConfirm",
+    "zh": "确认删除分类「{name}」？已有事项归属时须先解除归属。",
+    "en": "Delete category \"{name}\"? Any items assigned to it must be unassigned first.",
+    "vars": ["name"]
+  },
+  "分类 ${id}": {
+    "key": "workflow.categoryFallback",
+    "zh": "分类 {id}",
+    "en": "Category {id}",
+    "vars": ["id"]
+  },
+  "${ACTION_LABELS[interveneAction.value]}已执行": {
+    "key": "workflow.interveneDone",
+    "zh": "{action}已执行",
+    "en": "{action} completed",
+    "vars": [],
+    "note": "插值为查表表达式 ACTION_LABELS[interveneAction.value]，无法静态命名；zh/en 以 {action} 占位，需在调用点解析该表达式后传入"
+  },
+  "`实例干预 - ${ACTION_LABELS[interveneAction]}`": {
+    "key": "workflow.interveneDialogTitle",
+    "zh": "实例干预 - {action}",
+    "en": "Instance intervention - {action}",
+    "vars": [],
+    "note": "插值为查表表达式 ACTION_LABELS[interveneAction]，无法静态命名；zh/en 以 {action} 占位，需在调用点解析该表达式后传入"
+  },
+  "${title}详情": {
+    "key": "iot.detailDialogTitle",
+    "zh": "{title}详情",
+    "en": "{title} details",
+    "vars": ["title"]
+  },
+  "已重试：新命令 ${result.id}（${result.status}）": {
+    "key": "iot.retrySuccess",
+    "zh": "已重试：新命令 {id}（{status}）",
+    "en": "Retried: new command {id} ({status})",
+    "vars": ["id", "status"]
+  },
+  "确定要删除部门\"${row.name}\"吗？如有子部门将不允许删除。": {
+    "key": "system.deleteDeptConfirm",
+    "zh": "确定要删除部门\"{name}\"吗？如有子部门将不允许删除。",
+    "en": "Delete department \"{name}\"? Departments with sub-departments cannot be deleted.",
+    "vars": ["name"]
+  },
+  "['显示字段', '自定义过滤条件']": {
+    "key": "form.configSeamDisplayAndFilter",
+    "zh": "['显示字段', '自定义过滤条件']",
+    "en": "['Display field', 'Custom filter condition']",
+    "vars": [],
+    "note": "数组字面量（ReferenceConfig 的 ConfigSeamNote items 参数），非单条文案；实际展示文案为「显示字段」「自定义过滤条件」，改写为 :items=\"[t('form.configSeamDisplayField'), t('form.configSeamCustomFilter')]\" 即可。zh/en 保留表达式外壳以便原样对照。"
+  },
+  "'年-月-日（YYYY-MM-DD）'": {
+    "key": "form.dateFormatValue",
+    "zh": "'年-月-日（YYYY-MM-DD）'",
+    "en": "'YYYY-MM-DD'",
+    "vars": [],
+    "note": "Vue 绑定属性 :model-value 中的字符串字面量（含外层单引号），非独立文案；实际展示文案为「年-月-日（YYYY-MM-DD）」（只读展示），改写为 :model-value=\"t('form.dateFormatValue')\" 即可。"
+  },
+  "['默认值']": {
+    "key": "form.configSeamDefaultValue",
+    "zh": "['默认值']",
+    "en": "['Default value']",
+    "vars": [],
+    "note": "数组字面量（DateConfig 的 ConfigSeamNote items 参数），实际展示文案为「默认值」/「Default value」；改写为 :items=\"[t('form.configSeamDefaultValue')]\" 即可，故 zh/en 保留表达式外壳以便原样对照。"
+  },
+  "如：ROUND(${price} * ${qty}, 2)；支持 + - * / 与 ABS/ROUND/MIN/MAX/DAYS": {
+    "key": "form.formulaExpressionPlaceholder",
+    "zh": "如：ROUND(${price} * ${qty}, 2)；支持 + - * / 与 ABS/ROUND/MIN/MAX/DAYS",
+    "en": "Example: ROUND(${price} * ${qty}, 2); supports + - * / and ABS/ROUND/MIN/MAX/DAYS",
+    "vars": [],
+    "note": "示例中的 ${price}/${qty} 是公式语法示例文本（须原样展示），不是运行时插值，故 vars 为空且 zh/en 保留原文"
+  },
+  "`${label}节点无可编辑属性`": {
+    "key": "agent.emptyPanelDescription",
+    "zh": "{label}节点无可编辑属性",
+    "en": "The {label} node has no editable properties",
+    "vars": ["label"]
+  }
+}

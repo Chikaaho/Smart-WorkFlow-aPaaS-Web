@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * DeptList — 部门管理列表页（树形表格）。
  *
@@ -46,7 +49,12 @@ const filter = reactive<{ name: string; status: number | '' }>({ name: '', statu
 
 /** 状态下拉：全部（不传 status）+ 复用 deptStatusOptions 的 正常(0)/停用(1) 语义 */
 const statusFilterOptions: Array<{ label: string; value: number | '' }> = [
-  { label: '全部', value: '' },
+  {
+    get label() {
+      return t('common.all')
+    },
+    value: '',
+  },
   ...deptStatusOptions.map((opt) => ({ label: opt.label, value: opt.value })),
 ]
 
@@ -84,7 +92,7 @@ async function loadTree() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载部门列表失败'
+      errorMsg.value = t('system.deptListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -111,7 +119,7 @@ const isFilterEmpty = computed(() => hasFilter.value && isEmpty.value)
 // ─── 弹窗状态 ───
 
 const dialogVisible = ref(false)
-const dialogTitle = computed(() => (editingId.value ? '编辑部门' : '新建部门'))
+const dialogTitle = computed(() => (editingId.value ? t('system.editDept') : t('system.newDept')))
 const editingId = ref<string | null>(null)
 const submitting = ref(false)
 const formError = ref('')
@@ -133,6 +141,8 @@ async function loadLeaderOptions() {
     const result = await pageUsers({ pageNum: 1, pageSize: 200 }, { status: 0 })
     leaderOptions.value = result.list
   } catch {
+    ElMessage.error(t('common.loadFailed'))
+    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     leaderOptions.value = []
   }
 }
@@ -176,7 +186,7 @@ async function openEdit(row: SysDept) {
     form.status = detail.status
     form.leaderId = detail.leaderId ?? ''
   } catch {
-    formError.value = '加载部门详情失败'
+    formError.value = t('system.deptDetailLoadFailed')
     return
   }
   dialogVisible.value = true
@@ -210,11 +220,11 @@ const parentDeptOptions = computed(() => {
 
 async function handleSubmit() {
   if (!form.name.trim()) {
-    formError.value = '部门名称不能为空'
+    formError.value = t('system.deptNameRequired')
     return
   }
   if (!form.code.trim()) {
-    formError.value = '部门编码不能为空'
+    formError.value = t('system.deptCodeRequired')
     return
   }
 
@@ -223,10 +233,10 @@ async function handleSubmit() {
   try {
     if (editingId.value) {
       await updateDept({ ...form, id: editingId.value })
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.updateSuccess'))
     } else {
       await createDept({ ...form })
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.createSuccess'))
     }
     closeDialog()
     void loadTree()
@@ -234,7 +244,7 @@ async function handleSubmit() {
     if (err instanceof ApiError) {
       formError.value = err.msg
     } else {
-      formError.value = '保存失败'
+      formError.value = t('common.saveFailed')
     }
   } finally {
     submitting.value = false
@@ -244,22 +254,30 @@ async function handleSubmit() {
 async function handleDelete(row: SysDept) {
   try {
     await ElMessageBox.confirm(
-      `确定要删除部门"${row.name}"吗？如有子部门将不允许删除。`,
-      '删除确认',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' },
+      t('system.deleteDeptConfirm', { name: row.name }),
+      t('common.deleteConfirmTitle'),
+      {
+        get confirmButtonText() {
+          return t('common.confirm')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+      },
     )
   } catch {
     return // 用户取消
   }
   try {
     await deleteDept(row.id!)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     void loadTree()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('common.deleteFailed'))
     }
   }
 }
@@ -285,11 +303,11 @@ onMounted(() => {
 <template>
   <div class="dept-list">
     <!-- 工具栏（复用 ListToolbar） -->
-    <ListToolbar title="部门管理" :total="treeData.length">
+    <ListToolbar :title="t('system.deptManagement')" :total="treeData.length">
       <template #actions>
-        <el-button v-perm="'system:dept:create'" type="primary" @click="openCreate()"
-          >新建部门</el-button
-        >
+        <el-button v-perm="'system:dept:create'" type="primary" @click="openCreate()">{{
+          t('system.newDept')
+        }}</el-button>
       </template>
     </ListToolbar>
 
@@ -297,7 +315,7 @@ onMounted(() => {
     <div class="dept-list__filter">
       <el-input
         v-model="filter.name"
-        placeholder="部门名称"
+        :placeholder="t('system.deptName')"
         clearable
         style="width: 200px"
         @keyup.enter="handleQuery"
@@ -310,8 +328,8 @@ onMounted(() => {
           :value="opt.value"
         />
       </el-select>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </div>
 
     <!-- 错误提示 -->
@@ -334,22 +352,22 @@ onMounted(() => {
         default-expand-all
         :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
       >
-        <el-table-column prop="name" label="部门名称" min-width="200" />
-        <el-table-column prop="code" label="部门编码" min-width="120" />
-        <el-table-column label="负责人" width="110">
+        <el-table-column prop="name" :label="t('system.deptName')" min-width="200" />
+        <el-table-column prop="code" :label="t('system.deptCode')" min-width="120" />
+        <el-table-column :label="t('system.owner')" width="110">
           <template #default="{ row }">
             {{ row.leaderId ? row.leaderName || leaderName(row.leaderId) : '' }}
           </template>
         </el-table-column>
-        <el-table-column prop="sort" label="排序" width="70" />
-        <el-table-column prop="status" label="状态" width="80">
+        <el-table-column prop="sort" :label="t('common.sort')" width="70" />
+        <el-table-column prop="status" :label="t('common.status')" width="80">
           <template #default="{ row }">
             <el-tag :type="deptStatusTagType(row.status)" size="small">
               {{ deptStatusLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column :label="t('common.actions')" width="220" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="hasPerm('system:dept:create')"
@@ -357,7 +375,7 @@ onMounted(() => {
               link
               type="primary"
               @click="addChildRow(row)"
-              >新建子部门</el-button
+              >{{ t('system.newSubDept') }}</el-button
             >
             <el-button
               v-if="hasPerm('system:dept:update')"
@@ -365,7 +383,7 @@ onMounted(() => {
               link
               type="primary"
               @click="editRow(row)"
-              >编辑</el-button
+              >{{ t('common.edit') }}</el-button
             >
             <el-button
               v-if="hasPerm('system:dept:delete')"
@@ -373,7 +391,7 @@ onMounted(() => {
               link
               type="danger"
               @click="deleteRow(row)"
-              >删除</el-button
+              >{{ t('common.delete') }}</el-button
             >
           </template>
         </el-table-column>
@@ -381,12 +399,12 @@ onMounted(() => {
 
       <!-- 空态：筛选条件下无匹配（提示重置，不回退全量树、不显示新建入口） -->
       <div v-if="isFilterEmpty" class="dept-list__empty">
-        <span class="dept-list__empty-text">无匹配部门</span>
-        <el-button @click="handleReset">重置筛选</el-button>
+        <span class="dept-list__empty-text">{{ t('system.noMatchingDept') }}</span>
+        <el-button @click="handleReset">{{ t('common.resetFilters') }}</el-button>
       </div>
       <!-- 空态：无筛选条件且数据为空（新建部门入口） -->
       <div v-else-if="isEmpty" class="dept-list__empty">
-        <el-button type="primary" @click="openCreate()">新建部门</el-button>
+        <el-button type="primary" @click="openCreate()">{{ t('system.newDept') }}</el-button>
       </div>
     </div>
   </div>
@@ -405,45 +423,45 @@ onMounted(() => {
         <el-alert :title="formError" type="error" :closable="false" show-icon />
       </template>
 
-      <FormSection title="基本信息">
+      <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
           <div class="form-field">
-            <label class="form-field__label">上级部门</label>
+            <label class="form-field__label">{{ t('system.parentDept') }}</label>
             <el-tree-select
               v-model="form.parentId"
               :data="parentDeptOptions"
               node-key="id"
               :props="{ label: 'name', children: 'children' }"
-              placeholder="选择上级部门"
+              :placeholder="t('system.parentDeptPlaceholder')"
               clearable
               style="width: 100%"
               check-strictly
             />
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">部门名称</label>
+            <label class="form-field__label">{{ t('system.deptName') }}</label>
             <el-input
               v-model="form.name"
-              placeholder="请输入部门名称"
+              :placeholder="t('system.deptNamePlaceholder')"
               maxlength="64"
               show-word-limit
             />
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">部门编码</label>
+            <label class="form-field__label">{{ t('system.deptCode') }}</label>
             <el-input
               v-model="form.code"
-              placeholder="请输入部门编码"
+              :placeholder="t('system.deptCodePlaceholder')"
               maxlength="64"
               show-word-limit
             />
           </div>
           <div class="form-field">
-            <label class="form-field__label">排序</label>
+            <label class="form-field__label">{{ t('common.sort') }}</label>
             <el-input-number v-model="form.sort" :min="0" :max="9999" style="width: 100%" />
           </div>
           <div class="form-field">
-            <label class="form-field__label">状态</label>
+            <label class="form-field__label">{{ t('common.status') }}</label>
             <el-select v-model="form.status" style="width: 100%">
               <el-option
                 v-for="opt in deptStatusOptions"
@@ -454,10 +472,10 @@ onMounted(() => {
             </el-select>
           </div>
           <div class="form-field">
-            <label class="form-field__label">部门负责人</label>
+            <label class="form-field__label">{{ t('system.deptLeader') }}</label>
             <el-select
               v-model="form.leaderId"
-              placeholder="选择负责人（供流程审批取值）"
+              :placeholder="t('system.leaderPlaceholder')"
               clearable
               filterable
               style="width: 100%"
@@ -465,7 +483,11 @@ onMounted(() => {
               <el-option
                 v-for="user in leaderOptions"
                 :key="user.id"
-                :label="user.realName ? `${user.realName}（${user.username}）` : user.username"
+                :label="
+                  user.realName
+                    ? t('common.nameWithCode', { name: user.realName, code: user.username })
+                    : user.username
+                "
                 :value="user.id ?? ''"
               />
             </el-select>
@@ -474,8 +496,10 @@ onMounted(() => {
       </FormSection>
 
       <template #actions>
-        <el-button @click="closeDialog">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+          t('common.save')
+        }}</el-button>
       </template>
     </StandardFormTemplate>
   </el-dialog>

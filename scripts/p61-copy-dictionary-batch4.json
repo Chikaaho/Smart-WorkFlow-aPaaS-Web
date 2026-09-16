@@ -1,0 +1,400 @@
+{
+  "_comment": "P61 R1 术语字典 批次4：流程任务办理/表单填报与设计/IoT 设备与产品/任务执行日志/系统字典/Agent 会话与轨迹/请求失败分类等模块的用户可见文案。",
+  "加载任务详情失败": {
+    "key": "workflow.loadTaskDetailFailed",
+    "en": "Failed to load task details"
+  },
+  "审批确认": { "key": "workflow.approveConfirmTitle", "en": "Confirm approval" },
+  "审批通过": { "key": "workflow.approve", "en": "Approve" },
+  "审批操作失败": { "key": "workflow.approveFailed", "en": "Approval failed" },
+  "驳回确认": { "key": "workflow.rejectConfirmTitle", "en": "Confirm rejection" },
+  "驳回操作失败": { "key": "workflow.rejectFailed", "en": "Rejection failed" },
+  "退回确认": { "key": "workflow.returnConfirmTitle", "en": "Confirm return" },
+  "已退回": { "key": "common.statusReturned", "en": "Returned" },
+  "退回操作失败": { "key": "workflow.returnFailed", "en": "Return failed" },
+  "转办任务": { "key": "workflow.transferTask", "en": "Transfer task" },
+  "确认转办？转出人失去当前办理权": {
+    "key": "workflow.transferConfirm",
+    "en": "Transfer this task? The current assignee will lose the right to handle it."
+  },
+  "委托任务": { "key": "workflow.delegateTask", "en": "Delegate task" },
+  "确认委托？受托人完成后回到原责任人": {
+    "key": "workflow.delegateConfirm",
+    "en": "Delegate this task? It returns to the original assignee after the delegate finishes."
+  },
+  "沟通征询": { "key": "workflow.consult", "en": "Consultation" },
+  "确认发起沟通？接收人不获得审批权": {
+    "key": "workflow.consultConfirm",
+    "en": "Start the consultation? The recipients will not gain approval rights."
+  },
+  "加签": { "key": "workflow.addSign", "en": "Add signer" },
+  "确认向所选人员追加签批？": {
+    "key": "workflow.addSignConfirm",
+    "en": "Add sign-off tasks for the selected people?"
+  },
+  "补签": { "key": "workflow.supplementSign", "en": "Supplement sign-off" },
+  "确认对原实例/原节点补充确认？补签不改写原终态": {
+    "key": "workflow.supplementSignConfirm",
+    "en": "Add a supplementary confirmation to the original instance or node? This does not change the original final state."
+  },
+  "请填写有效的目标用户 ID": {
+    "key": "workflow.targetUserIdInvalid",
+    "en": "Enter a valid target user ID."
+  },
+  "请填写至少一个沟通接收人用户 ID（逗号分隔）": {
+    "key": "workflow.consultReceiversRequired",
+    "en": "Enter at least one recipient user ID (comma-separated)."
+  },
+  "请填写至少一个参与人用户 ID（逗号分隔）": {
+    "key": "workflow.participantsRequired",
+    "en": "Enter at least one participant user ID (comma-separated)."
+  },
+  "已提交": { "key": "common.statusSubmitted", "en": "Submitted" },
+  "← 返回待办": { "key": "workflow.backToTodo", "en": "← Back to to-dos" },
+  "当前审批人": { "key": "workflow.currentApprover", "en": "Current approver" },
+  "表单数据（本次提交）": {
+    "key": "workflow.formDataThisSubmission",
+    "en": "Form data (this submission)"
+  },
+  "表单记录加载失败或已不存在": {
+    "key": "workflow.formRecordUnavailable",
+    "en": "The form record could not be loaded or no longer exists."
+  },
+  "该表单无可展示业务字段": {
+    "key": "workflow.noDisplayableFields",
+    "en": "This form has no displayable business fields."
+  },
+  "变量名": { "key": "workflow.variableName", "en": "Variable name" },
+  "变量值": { "key": "workflow.variableValue", "en": "Variable value" },
+  "审批历史": { "key": "workflow.approvalHistory", "en": "Approval history" },
+  "暂无审批历史": { "key": "workflow.noApprovalHistory", "en": "No approval history" },
+  "审批人": { "key": "workflow.approver", "en": "Approver" },
+  "审批结果": { "key": "workflow.approvalResult", "en": "Approval result" },
+  "动作/意见": { "key": "workflow.actionOpinion", "en": "Action / comment" },
+  "退回到": { "key": "workflow.returnToLabel", "en": "Return to" },
+  "选择已通过节点": { "key": "workflow.selectApprovedNode", "en": "Select an approved node" },
+  "备注（可选）": { "key": "workflow.remarkOptional", "en": "Remark (optional)" },
+  "目标用户 ID": { "key": "workflow.targetUserId", "en": "Target user ID" },
+  "正整数用户 ID": { "key": "workflow.targetUserIdPlaceholder", "en": "Positive integer user ID" },
+  "接收人用户 ID（逗号分隔）": {
+    "key": "workflow.receiverIdsLabel",
+    "en": "Recipient user IDs (comma-separated)"
+  },
+  "如 1,2,3": { "key": "workflow.receiverIdsExample", "en": "e.g. 1,2,3" },
+  "征询内容": { "key": "workflow.consultContent", "en": "Consultation content" },
+  "参与人用户 ID（逗号分隔）": {
+    "key": "workflow.participantIdsLabel",
+    "en": "Participant user IDs (comma-separated)"
+  },
+  "如 2,3": { "key": "workflow.participantIdsExample", "en": "e.g. 2,3" },
+  "顺序": { "key": "workflow.signOrder", "en": "Order" },
+  "并行": { "key": "workflow.parallel", "en": "Parallel" },
+  "串行": { "key": "workflow.serial", "en": "Serial" },
+  "补充确认人用户 ID（逗号分隔）": {
+    "key": "workflow.supplementConfirmerIdsLabel",
+    "en": "Confirmer user IDs (comma-separated)"
+  },
+  "补签是否触发受控业务动作的说明（默认仅审计补充）": {
+    "key": "workflow.supplementTriggerNote",
+    "en": "Note on whether the supplement sign-off triggers controlled business actions (audit-only supplement by default)"
+  },
+  "可选": { "key": "common.optional", "en": "Optional" },
+  "（查看）": { "key": "form.titleSuffixView", "en": "(View)" },
+  "（编辑）": { "key": "form.titleSuffixEdit", "en": "(Edit)" },
+  "表单定义加载失败，请检查 formKey 是否正确": {
+    "key": "form.definitionLoadFailed",
+    "en": "Failed to load the form definition. Check that the formKey is correct."
+  },
+  "记录已被删除": { "key": "form.recordDeleted", "en": "The record has been deleted." },
+  "记录加载失败": { "key": "form.recordLoadFailedTitle", "en": "Failed to load the record" },
+  "此字段为必填项": { "key": "form.fieldRequired", "en": "This field is required." },
+  "请完善必填项后再提交": {
+    "key": "form.completeRequired",
+    "en": "Complete the required fields before submitting."
+  },
+  "记录已被他人修改，请刷新后重试": {
+    "key": "form.recordChangedByOthers",
+    "en": "The record was changed by someone else. Refresh and try again."
+  },
+  "保存失败，请稍后重试": { "key": "form.saveFailed", "en": "Failed to save. Try again later." },
+  "流程已发起": { "key": "form.processStarted", "en": "Process started" },
+  "提交成功，流程已发起": {
+    "key": "form.submittedProcessStarted",
+    "en": "Submitted successfully. Process started."
+  },
+  "提交成功（该表单未关联已发布流程，仅保存数据）": {
+    "key": "form.submittedDataOnly",
+    "en": "Submitted successfully (this form is not linked to a published process; only the data was saved)."
+  },
+  "提交失败：后端提交端点待上线": {
+    "key": "form.submitEndpointUnavailable",
+    "en": "Submission failed: the backend submit endpoint is not available yet."
+  },
+  "草稿加载失败": { "key": "form.draftLoadFailedTitle", "en": "Failed to load the draft" },
+  "草稿已创建": { "key": "form.draftCreated", "en": "Draft created" },
+  "提交成功": { "key": "common.submitSuccess", "en": "Submitted successfully" },
+  "提交草稿失败": { "key": "form.draftSubmitFailed", "en": "Failed to submit the draft" },
+  "表单不存在或加载失败": {
+    "key": "form.notFoundOrLoadFailed",
+    "en": "The form does not exist or failed to load."
+  },
+  "带 * 为必填项": { "key": "form.requiredHint", "en": "Fields marked with * are required" },
+  "草稿标题（可选）": { "key": "form.draftTitleOptional", "en": "Draft title (optional)" },
+  "重绑最新版本": { "key": "form.rebindLatest", "en": "Rebind to the latest version" },
+  "返回我的草稿": { "key": "form.backToMyDrafts", "en": "Back to my drafts" },
+  "无法打开该表单": { "key": "form.cannotOpenTitle", "en": "Unable to open the form" },
+  "表单不存在": { "key": "form.notFound", "en": "Form not found" },
+  "无权访问该表单": { "key": "form.noAccessTitle", "en": "No access to this form" },
+  "您缺少表单查看权限，无法读取该表单": {
+    "key": "form.noViewPermission",
+    "en": "You do not have form view permission and cannot read this form."
+  },
+  "表单不存在或无权访问": {
+    "key": "form.notFoundOrNoAccess",
+    "en": "The form does not exist or you have no access to it."
+  },
+  "未保存的修改": { "key": "form.unsavedChangesTitle", "en": "Unsaved changes" },
+  "保存并继续": { "key": "form.saveAndContinue", "en": "Save and continue" },
+  "放弃修改并继续": { "key": "form.discardAndContinue", "en": "Discard changes and continue" },
+  "请先保存草稿再发布": {
+    "key": "form.saveBeforePublish",
+    "en": "Save the draft before publishing."
+  },
+  "发布后表名/字段名冻结，不可修改。确认发布？": {
+    "key": "form.publishConfirm",
+    "en": "Table and field names are frozen after publishing and cannot be changed. Publish now?"
+  },
+  "确认发布": { "key": "form.publishConfirmTitle", "en": "Confirm publish" },
+  "表单设计": { "key": "form.tabDesign", "en": "Form design" },
+  "关联流程": { "key": "form.tabProcesses", "en": "Linked processes" },
+  "预览": { "key": "common.preview", "en": "Preview" },
+  "历史版本": { "key": "form.versionHistory", "en": "Version history" },
+  "返回表单列表": { "key": "form.backToList", "en": "Back to form list" },
+  "设备已创建（草稿）": { "key": "iot.deviceCreatedDraft", "en": "Device created (draft)" },
+  "发布失败：需绑定已发布物模型的产品": {
+    "key": "iot.publishNeedsPublishedModel",
+    "en": "Publish failed: bind a product with a published thing model."
+  },
+  "禁用": { "key": "common.disable", "en": "Disable", "alias": true },
+  "已禁用": { "key": "common.statusDisabled", "en": "Disabled", "alias": true },
+  "流程接入开关已更新": {
+    "key": "iot.processAccessUpdated",
+    "en": "Process access switch updated"
+  },
+  "未发布设备不能开启流程接入": {
+    "key": "iot.processAccessNeedsPublish",
+    "en": "Process access cannot be enabled for an unpublished device."
+  },
+  "设备管理": { "key": "iot.deviceManagement", "en": "Device management" },
+  "新增设备": { "key": "iot.newDevice", "en": "New device" },
+  "腾讯标识": { "key": "iot.tencentIdentifier", "en": "Tencent identifier" },
+  "管理状态": { "key": "iot.managementStatus", "en": "Management status" },
+  "连接状态": { "key": "iot.connectionStatus", "en": "Connection status" },
+  "流程接入": { "key": "iot.processAccess", "en": "Process access" },
+  "最后上报": { "key": "iot.lastReported", "en": "Last reported" },
+  "刷新状态": { "key": "iot.refreshStatus", "en": "Refresh status" },
+  "暂无设备": { "key": "iot.noDevices", "en": "No devices" },
+  "产品": { "key": "iot.product", "en": "Product" },
+  "选择产品": { "key": "iot.selectProduct", "en": "Select a product" },
+  "提交的内容有误，请按提示修改后重试": {
+    "key": "errors.inputInvalid",
+    "en": "Some entries are invalid. Please correct them and try again."
+  },
+  "按提示修正输入": { "key": "foundation.fixInput", "en": "Fix the input as prompted" },
+  "登录状态已失效，请重新登录": {
+    "key": "errors.sessionExpired",
+    "en": "Your session has expired. Please sign in again."
+  },
+  "重新登录": { "key": "foundation.signInAgain", "en": "Sign in again" },
+  "您没有执行该操作的权限，请联系管理员分配相应权限": {
+    "key": "errors.permissionDenied",
+    "en": "You do not have permission to do that. Please ask an administrator for access."
+  },
+  "联系管理员授权": { "key": "foundation.contactAdmin", "en": "Ask an administrator for access" },
+  "该对象不存在或已被删除，请返回列表刷新后重试": {
+    "key": "errors.notFound",
+    "en": "That item does not exist or has been deleted. Go back to the list and refresh."
+  },
+  "返回列表刷新": { "key": "foundation.backToListRefresh", "en": "Back to the list and refresh" },
+  "数据已被其他操作改变，请刷新后重试": {
+    "key": "errors.conflict",
+    "en": "The data was changed by another action. Please refresh and try again."
+  },
+  "刷新后重试": { "key": "foundation.refreshAndRetry", "en": "Refresh and try again" },
+  "已提交处理，请稍后在列表中查看结果": {
+    "key": "foundation.acceptedInProgress",
+    "en": "Submitted. Check the list later for the result."
+  },
+  "稍后在列表查看结果": {
+    "key": "foundation.checkResultInList",
+    "en": "Check the result in the list later"
+  },
+  "服务暂时不可用，请稍后重试": {
+    "key": "errors.network",
+    "en": "The service is temporarily unavailable. Please try again later."
+  },
+  "稍后重试": { "key": "foundation.retryLater", "en": "Try again later" },
+  "该功能尚未正确配置，请先完成配置或联系管理员处理": {
+    "key": "foundation.notConfigured",
+    "en": "This feature is not configured correctly. Finish the configuration or ask an administrator."
+  },
+  "完成配置或联系管理员": {
+    "key": "foundation.finishConfigOrContactAdmin",
+    "en": "Finish the configuration or ask an administrator"
+  },
+  "系统暂时无法处理该请求，请稍后重试": {
+    "key": "errors.systemFault",
+    "en": "The system could not process this request. Please try again later."
+  },
+  "分析数据加载失败": {
+    "key": "workflow.analyticsLoadFailed",
+    "en": "Failed to load analytics data"
+  },
+  "流程分析": { "key": "workflow.processAnalytics", "en": "Process analytics" },
+  "流程定义 Key（可空=全部）": {
+    "key": "workflow.processDefKeyFilter",
+    "en": "Process definition key (blank = all)"
+  },
+  "发起量": { "key": "workflow.startedCount", "en": "Started" },
+  "完成量": { "key": "workflow.completedCount", "en": "Completed" },
+  "平均耗时": { "key": "workflow.avgDuration", "en": "Average duration" },
+  "P50 耗时": { "key": "workflow.p50Duration", "en": "P50 duration" },
+  "P90 耗时": { "key": "workflow.p90Duration", "en": "P90 duration" },
+  "耗时样本数": { "key": "workflow.durationSampleCount", "en": "Duration samples" },
+  "节点停留（瓶颈）": {
+    "key": "workflow.nodeDwellBottleneck",
+    "en": "Node dwell time (bottlenecks)"
+  },
+  "样本": { "key": "workflow.sampleCount", "en": "Samples" },
+  "平均停留": { "key": "workflow.avgDwell", "en": "Average dwell" },
+  "P90 停留": { "key": "workflow.p90Dwell", "en": "P90 dwell" },
+  "办理人工作量": { "key": "workflow.assigneeWorkload", "en": "Assignee workload" },
+  "用户 ID": { "key": "workflow.userId", "en": "User ID" },
+  "动作次数": { "key": "workflow.actionCount", "en": "Action count" },
+  "产品已创建（物模型 v1 草稿可在详情中维护）": {
+    "key": "iot.productCreatedDraft",
+    "en": "Product created (the thing model v1 draft can be maintained in the details)"
+  },
+  "物模型草稿已保存": { "key": "iot.modelDraftSaved", "en": "Thing model draft saved" },
+  "发布当前草稿物模型？设备将绑定该版本。": {
+    "key": "iot.publishModelConfirm",
+    "en": "Publish the current thing model draft? Devices will bind to this version."
+  },
+  "发布物模型": { "key": "iot.publishModel", "en": "Publish thing model" },
+  "物模型已发布": { "key": "iot.modelPublished", "en": "Thing model published" },
+  "产品与物模型": { "key": "iot.productsAndModels", "en": "Products and thing models" },
+  "新增产品": { "key": "iot.newProduct", "en": "New product" },
+  "连接类型": { "key": "iot.connectionType", "en": "Connection type" },
+  "物模型": { "key": "iot.thingModel", "en": "Thing model" },
+  "暂无产品": { "key": "iot.noProducts", "en": "No products" },
+  "自建 MQTT": { "key": "iot.mqttSelfBuilt", "en": "Self-hosted MQTT" },
+  "腾讯 IoT": { "key": "iot.tencentIot", "en": "Tencent IoT" },
+  "编辑中": { "key": "common.statusEditing", "en": "Editing" },
+  "提交中": { "key": "common.statusSubmitting", "en": "Submitting" },
+  "加载草稿列表失败": { "key": "workflow.draftsLoadFailed", "en": "Failed to load drafts" },
+  "确认删除该草稿？删除后不可恢复。": {
+    "key": "workflow.deleteDraftConfirm",
+    "en": "Delete this draft? This cannot be undone."
+  },
+  "确认提交该草稿进入审批流程？": {
+    "key": "workflow.submitDraftConfirm",
+    "en": "Submit this draft for approval?"
+  },
+  "提交确认": { "key": "workflow.submitConfirmTitle", "en": "Confirm submission" },
+  "可发起的已发布表单": { "key": "workflow.startableForms", "en": "Published forms you can start" },
+  "暂无可发起的已发布表单": {
+    "key": "workflow.noStartableForms",
+    "en": "No published forms available to start"
+  },
+  "审批流程由系统根据已发布表单的有效绑定自动解析。": {
+    "key": "workflow.autoResolveProcessHint",
+    "en": "The approval process is resolved automatically from the active bindings of the published form."
+  },
+  "我的草稿": { "key": "workflow.myDrafts", "en": "My drafts" },
+  "可从上方\"可发起的已发布表单\"点击\"发起\"进入填报": {
+    "key": "workflow.startFromListHint",
+    "en": "Click \"Start\" in \"Published forms you can start\" above to fill in the form."
+  },
+  "缺少任务 ID 参数": { "key": "job.missingJobId", "en": "Missing job ID parameter" },
+  "加载执行日志失败": { "key": "job.logLoadFailed", "en": "Failed to load execution logs" },
+  "自动": { "key": "job.triggerAuto", "en": "Automatic" },
+  "手动": { "key": "job.triggerManual", "en": "Manual" },
+  "执行日志": { "key": "job.executionLog", "en": "Execution log" },
+  "请从任务列表页跳转访问执行日志": {
+    "key": "job.openFromJobListHint",
+    "en": "Open the execution log from the job list page."
+  },
+  "触发方式": { "key": "job.triggerType", "en": "Trigger type" },
+  "执行详情": { "key": "job.executionDetail", "en": "Execution details" },
+  "结果信息": { "key": "job.resultInfo", "en": "Result" },
+  "执行参数": { "key": "job.executionParams", "en": "Execution parameters" },
+  "异常堆栈": { "key": "job.errorStack", "en": "Stack trace" },
+  "等待中": { "key": "common.statusWaiting", "en": "Waiting" },
+  "输入变量 (Input)": { "key": "agent.inputVariables", "en": "Input variables (Input)" },
+  "输出结果 (Output)": { "key": "agent.outputResults", "en": "Output results (Output)" },
+  "错误信息 (Error Message)": {
+    "key": "agent.errorMessage",
+    "en": "Error message (Error Message)"
+  },
+  "时间信息": { "key": "agent.timingInfo", "en": "Timing" },
+  "开始时间:": { "key": "agent.startTimeLabel", "en": "Start time:" },
+  "结束时间:": { "key": "agent.endTimeLabel", "en": "End time:" },
+  "暂无节点执行记录": { "key": "agent.noNodeRecords", "en": "No node execution records" },
+  "加载字典类型列表失败": {
+    "key": "system.dictTypeListLoadFailed",
+    "en": "Failed to load dictionary types"
+  },
+  "编辑字典类型": { "key": "system.editDictType", "en": "Edit dictionary type" },
+  "加载字典类型详情失败": {
+    "key": "system.dictTypeDetailLoadFailed",
+    "en": "Failed to load the dictionary type details"
+  },
+  "字典名称不能为空": { "key": "system.dictNameRequired", "en": "Dictionary name is required." },
+  "字典编码不能为空": { "key": "system.dictCodeRequired", "en": "Dictionary code is required." },
+  "字典管理": { "key": "system.dictManagement", "en": "Dictionary management" },
+  "加载会话列表失败": {
+    "key": "agent.conversationsLoadFailed",
+    "en": "Failed to load conversations"
+  },
+  "会话历史": { "key": "agent.conversationHistory", "en": "Conversation history" },
+  "会话 ID": { "key": "agent.conversationId", "en": "Conversation ID" },
+  "(未命名会话)": { "key": "agent.untitledConversation", "en": "(Untitled conversation)" },
+  "查看消息": { "key": "agent.viewMessages", "en": "View messages" },
+  "暂无会话记录": { "key": "agent.noConversations", "en": "No conversations" },
+  "流程名称不能为空": { "key": "workflow.processNameRequired", "en": "Process name is required." },
+  "请选择关联表单": { "key": "workflow.selectLinkedForm", "en": "Select a linked form." },
+  "创建失败": { "key": "workflow.createFailed", "en": "Failed to create" },
+  "创建流程定义": {
+    "key": "workflow.createProcessDef",
+    "en": "Create process definition",
+    "alias": true
+  },
+  "新建流程定义": { "key": "workflow.createProcessDef", "en": "Create process definition" },
+  "选择表单": { "key": "workflow.selectForm", "en": "Select a form" },
+  "关联已发布的表单定义，用于流程启动时加载表单": {
+    "key": "workflow.linkPublishedFormHint",
+    "en": "Link a published form definition so the form can be loaded when the process starts."
+  },
+  "未登录": { "key": "auth.notSignedIn", "en": "Not signed in" },
+  "进入后台": { "key": "auth.enterBackend", "en": "Admin console" },
+  "返回前台": { "key": "auth.backToPortal", "en": "Back to portal" },
+  "退出登录": { "key": "auth.signOut", "en": "Sign out" },
+  "带": { "key": "form.requiredHintPrefix", "en": "Fields marked with" },
+  "为必填项": { "key": "form.requiredHintSuffix", "en": "are required" },
+  "尚无字段，先在设计器拖入字段再预览": {
+    "key": "form.previewEmptyHint",
+    "en": "No fields yet. Drag fields into the designer before previewing."
+  },
+  "企业微信": { "key": "foundation.ssoWecom", "en": "WeCom" },
+  "飞书": { "key": "foundation.ssoFeishu", "en": "Feishu" },
+  "钉钉": { "key": "foundation.ssoDingtalk", "en": "DingTalk" },
+  "批量审批": { "key": "workflow.batchApproval", "en": "Batch approval" },
+  "批量意见（不通过时必填；强制意见表单节点仍需逐项提交意见表单）": {
+    "key": "workflow.batchCommentHint",
+    "en": "Batch comment (required when rejecting; nodes with a mandatory comment form still need individual comment forms)"
+  },
+  "批量办理结果（逐项）": { "key": "workflow.batchResults", "en": "Batch results (per item)" },
+  "占位页面": { "key": "page.placeholder", "en": "Placeholder page" },
+  "选择数据对象": { "key": "component.selectDataObject", "en": "Select a data object" },
+  "选择人员": { "key": "component.selectUser", "en": "Select people" }
+}

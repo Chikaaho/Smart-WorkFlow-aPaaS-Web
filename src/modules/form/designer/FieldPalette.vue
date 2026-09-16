@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 控件库（设计器左栏）。
  *
@@ -104,7 +107,7 @@ function addFromPalette(descriptor: FieldTypeDescriptor) {
 
 <template>
   <aside class="palette" :class="{ 'palette--disabled': disabled }">
-    <h2 class="palette__title">控件库</h2>
+    <h2 class="palette__title">{{ t('form.controlPalette') }}</h2>
     <VueDraggable
       :model-value="[...palette]"
       :group="{ name: group, pull: 'clone', put: false }"

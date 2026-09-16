@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * RelatedProcessesPanel — 表单工作台「关联流程」工作区（P52）。
  *
@@ -13,6 +16,7 @@
  */
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ApiError } from '@/foundation/request'
 import { createProcessDef, pageProcessDefs } from '@/modules/workflow/api'
 import type { ProcessDef } from '@/contracts/bpm'
 
@@ -44,7 +48,7 @@ async function load() {
     total.value = result.total
   } catch {
     if (seq !== requestSeq) return
-    ElMessage.error('加载关联流程失败')
+    ElMessage.error(t('form.relatedProcessLoadFailed'))
   } finally {
     if (seq === requestSeq) loading.value = false
   }
@@ -74,18 +78,19 @@ function openCreate() {
 async function submitCreate() {
   const name = newName.value.trim()
   if (!name) {
-    ElMessage.warning('请输入流程名称')
+    ElMessage.warning(t('common.processNamePlaceholder'))
     return
   }
   creating.value = true
   try {
     await createProcessDef({ name, formKey: props.formKey })
-    ElMessage.success('关联流程已创建')
+    ElMessage.success(t('form.relatedProcessCreated'))
     createVisible.value = false
     pageNum.value = 1
     await load()
-  } catch {
-    // 错误信息已经统一请求层/业务码提示
+  } catch (err) {
+    // 请求层只抛 ApiError、不做全局提示，这里必须自己说话
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.createFailed'))
   } finally {
     creating.value = false
   }
@@ -104,35 +109,37 @@ function handlePageChange(page: number) {
 
 <template>
   <div class="related-processes">
-    <p class="related-processes__hint">
-      与当前表单「{{ formKey }}」关联的全部流程。创建流程时自动绑定当前表单，关联由服务端持久化。
-    </p>
+    <p class="related-processes__hint">{{ t('form.relatedProcessHint', { formKey }) }}</p>
 
     <div v-if="!hasFormKey" class="related-processes__empty">
-      当前表单尚未保存，暂无稳定表单标识。请先在「表单设计」区保存草稿后再管理关联流程。
+      {{ t('form.noFormKeyHint') }}
     </div>
 
     <template v-else>
       <div class="related-processes__toolbar">
-        <el-button type="primary" @click="openCreate">创建关联流程</el-button>
-        <span class="related-processes__total">共 {{ total }} 条</span>
+        <el-button type="primary" @click="openCreate">{{
+          t('form.createRelatedProcess')
+        }}</el-button>
+        <span class="related-processes__total">{{ t('common.totalItems', { total }) }}</span>
       </div>
 
       <el-table v-loading="loading" :data="records">
-        <el-table-column prop="name" label="流程名称" min-width="180" />
-        <el-table-column label="状态" width="110">
+        <el-table-column prop="name" :label="t('common.processName')" min-width="180" />
+        <el-table-column :label="t('common.status')" width="110">
           <template #default="{ row }">
             <el-tag :type="row.status === 'PUBLISHED' ? 'success' : 'info'" size="small">
-              {{ row.status === 'PUBLISHED' ? '已发布' : '草稿' }}
+              {{
+                row.status === 'PUBLISHED' ? t('common.statusPublished') : t('common.statusDraft')
+              }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="defVersion" label="版本" width="80" />
-        <el-table-column prop="updateTime" label="最近更新时间" min-width="160" />
-        <el-table-column label="操作" width="140" align="right">
+        <el-table-column prop="defVersion" :label="t('common.version')" width="80" />
+        <el-table-column prop="updateTime" :label="t('common.lastUpdatedAt')" min-width="160" />
+        <el-table-column :label="t('common.actions')" width="140" align="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="emit('enter-process', procRow(row))">
-              进入管理 / 编辑
+              {{ t('form.openInAdmin') }}
             </el-button>
           </template>
         </el-table-column>
@@ -149,18 +156,29 @@ function handlePageChange(page: number) {
       </div>
     </template>
 
-    <el-dialog v-model="createVisible" title="创建关联流程" width="480px" append-to-body>
+    <el-dialog
+      v-model="createVisible"
+      :title="t('form.createRelatedProcess')"
+      width="480px"
+      append-to-body
+    >
       <el-form label-width="90px" @submit.prevent>
-        <el-form-item label="表单标识">
+        <el-form-item :label="t('common.formKey')">
           <el-input :model-value="formKey" disabled />
         </el-form-item>
-        <el-form-item label="流程名称" required>
-          <el-input v-model="newName" placeholder="请输入流程名称" maxlength="100" />
+        <el-form-item :label="t('common.processName')" required>
+          <el-input
+            v-model="newName"
+            :placeholder="t('common.processNamePlaceholder')"
+            maxlength="100"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="submitCreate">创建</el-button>
+        <el-button @click="createVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="creating" @click="submitCreate">{{
+          t('common.create')
+        }}</el-button>
       </template>
     </el-dialog>
   </div>

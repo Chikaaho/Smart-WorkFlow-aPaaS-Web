@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * DatasourceConfig — I2 DATASOURCE 字段配置面板。
  * 编辑 dsBinding 稳定标识（queryKey/version/valueField/displayField）。
@@ -44,39 +47,39 @@ function onVersion(value: string) {
   />
 
   <div class="row">
-    <label class="row__label">查询契约 queryKey</label>
+    <label class="row__label">{{ t('form.queryContractKeyLabel') }}</label>
     <el-input
       :model-value="binding().queryKey"
-      placeholder="如：vendor_options（管理员登记的版本化契约）"
+      :placeholder="t('form.queryKeyPlaceholder')"
       @update:model-value="(v: string) => patchBinding({ queryKey: v })"
     />
   </div>
   <div class="row">
-    <label class="row__label">契约版本（留空 = 启用版本）</label>
+    <label class="row__label">{{ t('form.contractVersionLabel') }}</label>
     <el-input
       :model-value="binding().version === undefined ? '' : String(binding().version)"
-      placeholder="如：1"
+      :placeholder="t('form.contractVersionPlaceholder')"
       @update:model-value="onVersion"
     />
   </div>
   <div class="row">
-    <label class="row__label">值字段（稳定业务 ID 列）</label>
+    <label class="row__label">{{ t('form.valueFieldLabel') }}</label>
     <el-input
       :model-value="binding().valueField"
-      placeholder="如：vendor_id"
+      :placeholder="t('form.valueFieldPlaceholder')"
       @update:model-value="(v: string) => patchBinding({ valueField: v })"
     />
   </div>
   <div class="row">
-    <label class="row__label">显示字段列</label>
+    <label class="row__label">{{ t('form.displayFieldLabel') }}</label>
     <el-input
       :model-value="binding().displayField"
-      placeholder="如：vendor_name"
+      :placeholder="t('form.displayFieldPlaceholder')"
       @update:model-value="(v: string) => patchBinding({ displayField: v })"
     />
   </div>
   <p class="row__hint">
-    填报值 = 稳定对象标识；正式提交由服务端按契约解析并冻结 value/display，伪造或越权对象会被拒绝。
+    {{ t('form.datasourceValueNote') }}
   </p>
 </template>
 

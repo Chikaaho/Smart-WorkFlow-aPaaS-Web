@@ -1,0 +1,81 @@
+{
+  "_comment": "P61 R1 批次14：含复杂插值（函数调用/三元/空值合并）的模板文本节点。参数值由调用方表达式填充，模板只持有文案。",
+  "输入: {value}": {
+    "key": "agent.inputTokensInline",
+    "zh": "输入: {value}",
+    "en": "Input: {value}",
+    "vars": ["value"]
+  },
+  "输出: {value}": {
+    "key": "agent.outputTokensInline",
+    "zh": "输出: {value}",
+    "en": "Output: {value}",
+    "vars": ["value"]
+  },
+  "第 {round} 轮": {
+    "key": "agent.roundLabel",
+    "zh": "第 {round} 轮",
+    "en": "Round {round}",
+    "vars": ["round"]
+  },
+  "{count} 个子字段": {
+    "key": "form.subFieldCountLabel",
+    "zh": "{count} 个子字段",
+    "en": "{count} sub-fields",
+    "vars": ["count"]
+  },
+  "草稿 v{draftVersion} / 发布 v{publishedVersion}": {
+    "key": "iot.scriptVersionPairLabel",
+    "zh": "草稿 v{draftVersion} / 发布 v{publishedVersion}",
+    "en": "Draft v{draftVersion} / Published v{publishedVersion}",
+    "vars": ["draftVersion", "publishedVersion"]
+  },
+  "标识摘要 {digest}…": {
+    "key": "auth.digestPrefixLabel",
+    "zh": "标识摘要 {digest}…",
+    "en": "Identity digest {digest}…",
+    "vars": ["digest"]
+  },
+  "{name}（已停用或不可见）": {
+    "key": "system.memberDisabledSuffix",
+    "zh": "{name}（已停用或不可见）",
+    "en": "{name} (disabled or not visible)",
+    "vars": ["name"]
+  },
+  "全部（{count}）": {
+    "key": "workflow.catalogAllWithCount",
+    "zh": "全部（{count}）",
+    "en": "All ({count})",
+    "vars": ["count"]
+  },
+  "未分类（{count}）": {
+    "key": "workflow.catalogUncategorizedWithCount",
+    "zh": "未分类（{count}）",
+    "en": "Uncategorized ({count})",
+    "vars": ["count"]
+  },
+  "定位 {target}": {
+    "key": "workflow.validationLocateLabel",
+    "zh": "定位 {target}",
+    "en": "Locate {target}",
+    "vars": ["target"]
+  },
+  "校验结果：{count} 条可判定错误": {
+    "key": "workflow.validationSummary",
+    "zh": "校验结果：{count} 条可判定错误",
+    "en": "Validation result: {count} actionable errors",
+    "vars": ["count"]
+  },
+  "交接清单 #{id} — {status}（迁移 {migrated} / 失败 {failed} / 共 {total}）": {
+    "key": "workflow.handoverSummary",
+    "zh": "交接清单 #{id} — {status}（迁移 {migrated} / 失败 {failed} / 共 {total}）",
+    "en": "Handover #{id} — {status} (migrated {migrated} / failed {failed} / total {total})",
+    "vars": ["id", "status", "migrated", "failed", "total"]
+  },
+  "版本 v{version}": {
+    "key": "agent.versionValueLabel",
+    "zh": "版本 v{version}",
+    "en": "Version v{version}",
+    "vars": ["version"]
+  }
+}

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * TaskDetail — 任务详情页。
  *
@@ -102,7 +105,7 @@ async function loadDetail() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载任务详情失败'
+      errorMsg.value = t('workflow.mobileTaskDetailLoadFailed')
     }
   } finally {
     loading.value = false
@@ -278,7 +281,7 @@ function opinionFieldRequiredMissing(): boolean {
 
 function ensureOpinionData(): boolean {
   if (!opinionFieldRequiredMissing()) return true
-  ElMessage.warning('请填写必填审批意见')
+  ElMessage.warning(t('workflow.commentRequired'))
   return false
 }
 
@@ -302,7 +305,7 @@ async function runAction(
       ElMessage.error(finalStatus.failureReason ?? failMsg)
       acting.value = null
     } else {
-      ElMessage.warning('处理中，可稍后在结果中查看')
+      ElMessage.warning(t('common.processingCheckLater'))
       acting.value = null
     }
   } catch (err) {
@@ -318,9 +321,13 @@ async function handleApprove() {
 
   let confirmed = false
   try {
-    await ElMessageBox.confirm('确认审批通过此任务？', '审批确认', {
-      confirmButtonText: '通过',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('workflow.confirmApprove'), t('workflow.approveConfirmTitle'), {
+      get confirmButtonText() {
+        return t('common.approve')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
       type: 'info',
     })
     confirmed = true
@@ -329,7 +336,12 @@ async function handleApprove() {
   } finally {
     if (!confirmed) acting.value = null
   }
-  await runAction('complete', actionPayload('APPROVE'), '审批通过', '审批操作失败')
+  await runAction(
+    'complete',
+    actionPayload('APPROVE'),
+    t('common.statusApproved'),
+    t('workflow.approveActionFailed'),
+  )
 }
 
 async function handleReject() {
@@ -339,9 +351,13 @@ async function handleReject() {
 
   let confirmed = false
   try {
-    await ElMessageBox.confirm('确认驳回此任务？', '驳回确认', {
-      confirmButtonText: '驳回',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('workflow.confirmReject'), t('workflow.rejectConfirmTitle'), {
+      get confirmButtonText() {
+        return t('common.reject')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
       type: 'warning',
     })
     confirmed = true
@@ -350,20 +366,29 @@ async function handleReject() {
   } finally {
     if (!confirmed) acting.value = null
   }
-  await runAction('reject', actionPayload('REJECT'), '已驳回', '驳回操作失败')
+  await runAction(
+    'reject',
+    actionPayload('REJECT'),
+    t('common.statusRejected'),
+    t('workflow.rejectActionFailed'),
+  )
 }
 
 async function handleReturn() {
   if (acting.value) return
   const target = returnTargetNodeId.value || returnTargets.value[0]?.nodeKey
   if (!target) {
-    ElMessage.warning('当前没有可退回的已通过人工节点')
+    ElMessage.warning(t('workflow.noReturnTargets'))
     return
   }
   try {
-    await ElMessageBox.confirm('确认将流程退回所选人工节点？', '退回确认', {
-      confirmButtonText: '退回',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('workflow.confirmReturn'), t('workflow.returnConfirmTitle'), {
+      get confirmButtonText() {
+        return t('common.returnBack')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
       type: 'warning',
     })
   } catch {
@@ -373,8 +398,8 @@ async function handleReturn() {
   await runAction(
     'return',
     { action: 'RETURN', returnTargetNodeId: target, ...actionPayload('RETURN') },
-    '已退回',
-    '退回操作失败',
+    t('common.statusReturned'),
+    t('workflow.returnFailed'),
   )
 }
 
@@ -398,11 +423,38 @@ const lifecycleDialog = ref<null | {
 const lifecycleSubmitting = ref(false)
 
 const LIFECYCLE_META: Record<string, { title: string; confirm: string }> = {
-  TRANSFER: { title: '转办任务', confirm: '确认转办？转出人失去当前办理权' },
-  DELEGATE: { title: '委托任务', confirm: '确认委托？受托人完成后回到原责任人' },
-  COMMUNICATE: { title: '沟通征询', confirm: '确认发起沟通？接收人不获得审批权' },
-  ADD_SIGN: { title: '加签', confirm: '确认向所选人员追加签批？' },
-  SUPPLEMENT_SIGN: { title: '补签', confirm: '确认对原实例/原节点补充确认？补签不改写原终态' },
+  TRANSFER: {
+    get title() {
+      return t('workflow.transferTask')
+    },
+    confirm: t('workflow.transferConfirm'),
+  },
+  DELEGATE: {
+    get title() {
+      return t('workflow.delegateTask')
+    },
+    confirm: t('workflow.delegateConfirm'),
+  },
+  COMMUNICATE: {
+    get title() {
+      return t('workflow.consult')
+    },
+    confirm: t('workflow.consultConfirm'),
+  },
+  ADD_SIGN: {
+    get title() {
+      return t('workflow.addSign')
+    },
+    confirm: t('workflow.addSignConfirm'),
+  },
+  SUPPLEMENT_SIGN: {
+    get title() {
+      return t('workflow.supplementSign')
+    },
+    get confirm() {
+      return t('workflow.supplementSignConfirm')
+    },
+  },
 }
 
 function openLifecycle(
@@ -420,7 +472,7 @@ async function submitLifecycle() {
   if (dialog.kind === 'TRANSFER' || dialog.kind === 'DELEGATE') {
     const target = String(dialog.targetUserId ?? '').trim()
     if (!/^\d+$/.test(target) || /^0+$/.test(target)) {
-      ElMessage.warning('请填写有效的目标用户 ID')
+      ElMessage.warning(t('workflow.targetUserIdInvalid'))
       return
     }
     payload = { targetUserId: target, reason: opinionComment.value || undefined }
@@ -430,7 +482,7 @@ async function submitLifecycle() {
       .map((item) => Number(item.trim()))
       .filter((item) => Number.isInteger(item) && item > 0)
     if (receivers.length === 0) {
-      ElMessage.warning('请填写至少一个沟通接收人用户 ID（逗号分隔）')
+      ElMessage.warning(t('workflow.consultReceiversRequired'))
       return
     }
     payload = { receivers, message: dialog.message ?? '' }
@@ -440,7 +492,7 @@ async function submitLifecycle() {
       .map((item) => Number(item.trim()))
       .filter((item) => Number.isInteger(item) && item > 0)
     if (raw.length === 0) {
-      ElMessage.warning('请填写至少一个参与人用户 ID（逗号分隔）')
+      ElMessage.warning(t('workflow.participantsRequired'))
       return
     }
     if (dialog.kind === 'ADD_SIGN') {
@@ -466,11 +518,11 @@ async function submitLifecycle() {
     } else {
       await supplementSignInstance(detail.value.processInstanceId, payload)
     }
-    ElMessage.success(meta.title + '已提交')
+    ElMessage.success(meta.title + t('common.statusSubmitted'))
     lifecycleDialog.value = null
     await navigateAfterAction()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : meta.title + '操作失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : meta.title + t('common.operationFailed'))
   } finally {
     lifecycleSubmitting.value = false
   }
@@ -483,12 +535,22 @@ function formatVariables(vars: Record<string, unknown>): [string, string][] {
 // ─── 审批结果映射 ───
 const APPROVAL_RESULT_MAP: Record<string, { label: string; type: 'success' | 'danger' | 'info' }> =
   {
-    APPROVED: { label: '通过', type: 'success' },
-    REJECTED: { label: '驳回', type: 'danger' },
+    APPROVED: {
+      get label() {
+        return t('common.approve')
+      },
+      type: 'success',
+    },
+    REJECTED: {
+      get label() {
+        return t('common.reject')
+      },
+      type: 'danger',
+    },
   }
 
 function getApprovalResultLabel(result: string | null): string {
-  if (!result) return '进行中'
+  if (!result) return t('common.statusInProgress')
   return APPROVAL_RESULT_MAP[result]?.label ?? result
 }
 
@@ -510,8 +572,8 @@ onMounted(loadDetail)
   <div v-loading="loading" class="task-detail">
     <!-- 顶栏 -->
     <div class="detail-header">
-      <el-button @click="goBack">← 返回待办</el-button>
-      <h2>任务详情</h2>
+      <el-button @click="goBack">{{ t('workflow.backToTodo') }}</el-button>
+      <h2>{{ t('workflow.taskDetail') }}</h2>
     </div>
 
     <!-- 错误提示 -->
@@ -526,37 +588,49 @@ onMounted(loadDetail)
 
     <!-- 任务信息 -->
     <el-card v-if="detail" class="detail-card">
-      <template #header><span>基本信息</span></template>
+      <template #header
+        ><span>{{ t('common.basicInfo') }}</span></template
+      >
       <el-descriptions :column="2" border>
-        <el-descriptions-item label="任务名称">{{ detail.taskName }}</el-descriptions-item>
-        <el-descriptions-item label="任务编号">
+        <el-descriptions-item :label="t('common.taskName')">{{
+          detail.taskName
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t('common.taskNo')">
           <span :title="detail.taskId">{{ formatTaskId(detail.taskId) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="流程名称">{{
+        <el-descriptions-item :label="t('common.processName')">{{
           detail.processName ?? '-'
         }}</el-descriptions-item>
-        <el-descriptions-item label="流程标识">{{
+        <el-descriptions-item :label="t('common.processKey')">{{
           detail.processDefinitionKey
         }}</el-descriptions-item>
-        <el-descriptions-item label="表单标识">{{ detail.formKey }}</el-descriptions-item>
-        <el-descriptions-item label="业务单号">{{ detail.businessKey }}</el-descriptions-item>
-        <el-descriptions-item label="当前审批人">
+        <el-descriptions-item :label="t('common.formKey')">{{
+          detail.formKey
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t('common.businessNo')">{{
+          detail.businessKey
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t('workflow.currentApprover')">
           {{ detail.assigneeName ?? detail.assignee }}
         </el-descriptions-item>
-        <el-descriptions-item label="发起人">
+        <el-descriptions-item :label="t('common.initiator')">
           {{ detail.initiatorName ?? detail.initiatorId }}
         </el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ detail.createTime }}</el-descriptions-item>
+        <el-descriptions-item :label="t('common.createTime')">{{
+          detail.createTime
+        }}</el-descriptions-item>
       </el-descriptions>
     </el-card>
 
     <!-- 本次提交的表单数据 -->
     <el-card v-if="detail?.formKey && detail?.businessKey" class="detail-card">
-      <template #header><span>表单数据（本次提交）</span></template>
+      <template #header
+        ><span>{{ t('workflow.formDataThisSubmission') }}</span></template
+      >
       <div v-loading="formRecordLoading">
         <el-alert
           v-if="!formRecordLoading && !formRecord"
-          title="表单记录加载失败或已不存在"
+          :title="t('workflow.formRecordUnavailable')"
           type="warning"
           :closable="false"
           show-icon
@@ -567,57 +641,67 @@ onMounted(loadDetail)
           </el-descriptions-item>
         </el-descriptions>
         <el-descriptions v-else-if="formRecord" :column="2" border>
-          <el-descriptions-item label="说明">该表单无可展示业务字段</el-descriptions-item>
+          <el-descriptions-item :label="t('common.description')">{{
+            t('workflow.noDisplayableFields')
+          }}</el-descriptions-item>
         </el-descriptions>
       </div>
     </el-card>
 
     <!-- 流程变量 -->
     <el-card v-if="detail && Object.keys(detail.processVariables).length > 0" class="detail-card">
-      <template #header><span>流程变量</span></template>
+      <template #header
+        ><span>{{ t('common.processVariable') }}</span></template
+      >
       <el-table :data="formatVariables(detail.processVariables)" stripe>
-        <el-table-column prop="0" label="变量名" min-width="180" />
-        <el-table-column prop="1" label="变量值" min-width="280" />
+        <el-table-column prop="0" :label="t('workflow.variableName')" min-width="180" />
+        <el-table-column prop="1" :label="t('workflow.variableValue')" min-width="280" />
       </el-table>
     </el-card>
 
     <!-- 审批历史 -->
     <el-card v-if="detail" class="detail-card">
-      <template #header><span>审批历史</span></template>
+      <template #header
+        ><span>{{ t('workflow.approvalHistory') }}</span></template
+      >
       <el-alert
         v-if="detail.approvalHistory.length === 0"
-        title="暂无审批历史"
+        :title="t('workflow.noApprovalHistory')"
         type="info"
         :closable="false"
         show-icon
       />
       <el-table v-else :data="detail.approvalHistory" stripe>
-        <el-table-column label="任务编号" min-width="140">
+        <el-table-column :label="t('common.taskNo')" min-width="140">
           <template #default="{ row }">
             <span :title="row.taskId">{{ formatTaskId(row.taskId) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="taskName" label="任务名称" min-width="120" />
-        <el-table-column label="审批人" min-width="120">
+        <el-table-column prop="taskName" :label="t('common.taskName')" min-width="120" />
+        <el-table-column :label="t('workflow.approver')" min-width="120">
           <template #default="{ row }">
             {{ row.assigneeName ?? row.assignee ?? '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="审批结果" min-width="100">
+        <el-table-column :label="t('workflow.approvalResult')" min-width="100">
           <template #default="{ row }">
             <el-tag :type="getApprovalResultType(row.approvalResult)" size="small">
               {{ getApprovalResultLabel(row.approvalResult) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="动作/意见" min-width="180">
+        <el-table-column :label="t('workflow.actionOpinion')" min-width="180">
           <template #default="{ row }">
             {{ row.action ?? '-'
-            }}{{ row.opinionData?.comment ? `：${row.opinionData.comment}` : '' }}
+            }}{{
+              row.opinionData?.comment
+                ? t('workflow.opinionCommentSuffix', { comment: row.opinionData.comment })
+                : ''
+            }}
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" label="创建时间" min-width="170" />
-        <el-table-column label="完成时间" min-width="170">
+        <el-table-column prop="createTime" :label="t('common.createTime')" min-width="170" />
+        <el-table-column :label="t('workflow.completedAt')" min-width="170">
           <template #default="{ row }">
             {{ row.endTime ?? '-' }}
           </template>
@@ -628,8 +712,12 @@ onMounted(loadDetail)
     <!-- 操作栏 -->
     <div v-if="detail" class="detail-actions">
       <div v-if="returnTargets.length > 0" class="return-config">
-        <span>退回到</span>
-        <el-select v-model="returnTargetNodeId" placeholder="选择已通过节点" style="width: 180px">
+        <span>{{ t('workflow.returnToLabel') }}</span>
+        <el-select
+          v-model="returnTargetNodeId"
+          :placeholder="t('workflow.selectApprovedNode')"
+          style="width: 180px"
+        >
           <el-option
             v-for="target in returnTargets"
             :key="target.nodeKey"
@@ -643,15 +731,17 @@ onMounted(loadDetail)
           :loading="acting === 'return'"
           :disabled="acting !== null"
           @click="handleReturn"
+          >{{ t('common.returnBack') }}</el-button
         >
-          退回
-        </el-button>
       </div>
       <div v-if="opinionFields.length > 0" class="opinion-form">
         <div class="opinion-form__title">
           审批意见{{
             detail.opinionForm?.formId
-              ? `（${detail.opinionForm.formId} v${detail.opinionForm.version}）`
+              ? t('workflow.opinionFormSuffix', {
+                  formId: detail.opinionForm.formId,
+                  version: detail.opinionForm.version,
+                })
               : ''
           }}
         </div>
@@ -678,7 +768,7 @@ onMounted(loadDetail)
               :value="String(opinionFieldValue(field) ?? '')"
               @change="setOpinionFieldValue(field.key, ($event.target as HTMLSelectElement).value)"
             >
-              <option value="">请选择</option>
+              <option value="">{{ t('common.pleaseSelect') }}</option>
               <option v-for="option in field.options ?? []" :key="option" :value="option">
                 {{ option }}
               </option>
@@ -720,7 +810,7 @@ onMounted(loadDetail)
         v-model="opinionComment"
         class="opinion-input"
         rows="3"
-        placeholder="备注（可选）"
+        :placeholder="t('workflow.remarkOptional')"
       />
       <el-button
         type="primary"
@@ -729,7 +819,7 @@ onMounted(loadDetail)
         :disabled="acting !== null"
         @click="handleApprove"
       >
-        审批通过
+        {{ t('common.statusApproved') }}
       </el-button>
       <el-button
         type="danger"
@@ -737,24 +827,23 @@ onMounted(loadDetail)
         :loading="acting === 'reject'"
         :disabled="acting !== null"
         @click="handleReject"
+        >{{ t('common.reject') }}</el-button
       >
-        驳回
-      </el-button>
       <el-divider direction="vertical" />
       <el-button size="large" :disabled="acting !== null" @click="openLifecycle('TRANSFER')">
-        转办
+        {{ t('workflow.transferOwnTask') }}
       </el-button>
       <el-button size="large" :disabled="acting !== null" @click="openLifecycle('DELEGATE')">
-        委托
+        {{ t('workflow.delegateAction') }}
       </el-button>
       <el-button size="large" :disabled="acting !== null" @click="openLifecycle('COMMUNICATE')">
-        沟通
+        {{ t('workflow.consultTask') }}
       </el-button>
       <el-button size="large" :disabled="acting !== null" @click="openLifecycle('ADD_SIGN')">
-        加签
+        {{ t('workflow.addSign') }}
       </el-button>
       <el-button size="large" :disabled="acting !== null" @click="openLifecycle('SUPPLEMENT_SIGN')">
-        补签
+        {{ t('workflow.supplementSign') }}
       </el-button>
     </div>
 
@@ -769,37 +858,49 @@ onMounted(loadDetail)
         <template
           v-if="lifecycleDialog?.kind === 'TRANSFER' || lifecycleDialog?.kind === 'DELEGATE'"
         >
-          <el-form-item label="目标用户 ID">
-            <el-input v-model="lifecycleDialog.targetUserId" placeholder="正整数用户 ID" />
+          <el-form-item :label="t('workflow.targetUserId')">
+            <el-input
+              v-model="lifecycleDialog.targetUserId"
+              :placeholder="t('workflow.targetUserIdPlaceholder')"
+            />
           </el-form-item>
         </template>
         <template v-if="lifecycleDialog?.kind === 'COMMUNICATE'">
-          <el-form-item label="接收人用户 ID（逗号分隔）">
-            <el-input v-model="lifecycleDialog.receivers" placeholder="如 1,2,3" />
+          <el-form-item :label="t('workflow.receiverIdsLabel')">
+            <el-input
+              v-model="lifecycleDialog.receivers"
+              :placeholder="t('workflow.receiverIdsExample')"
+            />
           </el-form-item>
-          <el-form-item label="征询内容">
+          <el-form-item :label="t('workflow.consultContent')">
             <el-input v-model="lifecycleDialog.message" type="textarea" :rows="3" />
           </el-form-item>
         </template>
         <template v-if="lifecycleDialog?.kind === 'ADD_SIGN'">
-          <el-form-item label="参与人用户 ID（逗号分隔）">
-            <el-input v-model="lifecycleDialog.participants" placeholder="如 2,3" />
+          <el-form-item :label="t('workflow.participantIdsLabel')">
+            <el-input
+              v-model="lifecycleDialog.participants"
+              :placeholder="t('workflow.participantIdsExample')"
+            />
           </el-form-item>
-          <el-form-item label="顺序">
+          <el-form-item :label="t('workflow.signOrder')">
             <el-radio-group v-model="lifecycleDialog.mode">
-              <el-radio value="PARALLEL">并行</el-radio>
-              <el-radio value="SERIAL">串行</el-radio>
+              <el-radio value="PARALLEL">{{ t('workflow.parallel') }}</el-radio>
+              <el-radio value="SERIAL">{{ t('workflow.serial') }}</el-radio>
             </el-radio-group>
           </el-form-item>
         </template>
         <template v-if="lifecycleDialog?.kind === 'SUPPLEMENT_SIGN'">
-          <el-form-item label="补充确认人用户 ID（逗号分隔）">
-            <el-input v-model="lifecycleDialog.participants" placeholder="如 2,3" />
+          <el-form-item :label="t('workflow.supplementConfirmerIdsLabel')">
+            <el-input
+              v-model="lifecycleDialog.participants"
+              :placeholder="t('workflow.participantIdsExample')"
+            />
           </el-form-item>
-          <el-form-item label="说明">
+          <el-form-item :label="t('common.description')">
             <el-input
               v-model="lifecycleDialog.message"
-              placeholder="补签是否触发受控业务动作的说明（默认仅审计补充）"
+              :placeholder="t('workflow.supplementTriggerNote')"
             />
           </el-form-item>
         </template>
@@ -809,15 +910,15 @@ onMounted(loadDetail)
             lifecycleDialog?.kind === 'DELEGATE' ||
             lifecycleDialog?.kind === 'ADD_SIGN'
           "
-          label="备注"
+          :label="t('common.remark')"
         >
-          <el-input v-model="opinionComment" placeholder="可选" />
+          <el-input v-model="opinionComment" :placeholder="t('notify.optionalTag')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="lifecycleDialog = null">取消</el-button>
+        <el-button @click="lifecycleDialog = null">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="lifecycleSubmitting" @click="submitLifecycle">
-          确认
+          {{ t('common.confirm') }}
         </el-button>
       </template>
     </el-dialog>

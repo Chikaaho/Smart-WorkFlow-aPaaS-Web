@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * IotRuntimeLogs — IoT 运行记录（P21 A2/A7 可观测性）。
  *
@@ -7,6 +11,7 @@
  */
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ApiError } from '@/foundation/request'
 import {
   listMessages,
   listCommands,
@@ -21,6 +26,8 @@ import {
 
 const activeTab = ref('messages')
 const loading = ref(false)
+/** 本次加载的失败原因；非空时页面显示错误态而不是空态。 */
+const loadError = ref('')
 
 const messages = ref<IotMessageLog[]>([])
 const commands = ref<IotCommandRecord[]>([])
@@ -28,7 +35,7 @@ const scriptExecs = ref<IotScriptExec[]>([])
 const triggers = ref<IotProcessTriggerRecord[]>([])
 
 const detailVisible = ref(false)
-const detailTitle = ref('对象详情')
+const detailTitle = ref(t('iot.objectDetail'))
 const selectedDetail = ref<Record<string, unknown> | null>(null)
 const detailJson = computed(() =>
   selectedDetail.value ? JSON.stringify(selectedDetail.value, null, 2) : '',
@@ -36,33 +43,36 @@ const detailJson = computed(() =>
 
 function openDetail(row: Record<string, unknown>, title: string) {
   selectedDetail.value = row
-  detailTitle.value = `${title}详情`
+  detailTitle.value = t('iot.detailDialogTitle', { title })
   detailVisible.value = true
 }
 
 function openMessageDetail(row: IotMessageLog) {
-  openDetail(row as unknown as Record<string, unknown>, '消息')
+  openDetail(row as unknown as Record<string, unknown>, t('common.message'))
 }
 
 function openCommandDetail(row: IotCommandRecord) {
-  openDetail(row as unknown as Record<string, unknown>, '命令')
+  openDetail(row as unknown as Record<string, unknown>, t('iot.commandsTab'))
 }
 
 function openScriptDetail(row: IotScriptExec) {
-  openDetail(row as unknown as Record<string, unknown>, '脚本执行')
+  openDetail(row as unknown as Record<string, unknown>, t('iot.scriptExecutionsTab'))
 }
 
 function openTriggerDetail(row: IotProcessTriggerRecord) {
-  openDetail(row as unknown as Record<string, unknown>, '流程触发')
+  openDetail(row as unknown as Record<string, unknown>, t('iot.processTriggersTab'))
 }
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     if (activeTab.value === 'messages') messages.value = await listMessages()
     else if (activeTab.value === 'commands') commands.value = await listCommands()
     else if (activeTab.value === 'scripts') scriptExecs.value = await listScriptExecs()
     else triggers.value = await listProcessTriggers()
+  } catch (err) {
+    loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
@@ -70,7 +80,7 @@ async function load() {
 
 async function handleRetry(row: IotCommandRecord) {
   const result = await retryCommand(row.id)
-  ElMessage.success(`已重试：新命令 ${result.id}（${result.status}）`)
+  ElMessage.success(t('iot.retrySuccess', { id: result.id, status: result.status }))
   await load()
 }
 
@@ -90,6 +100,7 @@ function statusTag(status: string): 'success' | 'danger' | 'warning' | 'info' {
 const isEmpty = computed(
   () =>
     !loading.value &&
+    !loadError.value &&
     ((activeTab.value === 'messages' && messages.value.length === 0) ||
       (activeTab.value === 'commands' && commands.value.length === 0) ||
       (activeTab.value === 'scripts' && scriptExecs.value.length === 0) ||
@@ -101,9 +112,22 @@ onMounted(() => void load())
 
 <template>
   <div style="padding: 16px">
-    <h3 style="margin: 0 0 12px">运行记录</h3>
+    <h3 style="margin: 0 0 12px">{{ t('iot.runtimeLogsTitle') }}</h3>
     <el-tabs v-model="activeTab" @tab-change="load">
-      <el-tab-pane label="消息" name="messages">
+      <el-tab-pane :label="t('common.message')" name="messages">
+        <el-alert
+          v-if="loadError"
+          :title="loadError"
+          type="error"
+          show-icon
+          :closable="false"
+          class="load-error"
+        >
+          <template #default>
+            <el-button link type="primary" @click="load">{{ t('common.retry') }}</el-button>
+          </template>
+        </el-alert>
+
         <el-table
           v-loading="loading"
           :data="messages"
@@ -111,21 +135,38 @@ onMounted(() => void load())
           size="small"
           @row-click="openMessageDetail"
         >
-          <el-table-column prop="topic" label="主题" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="payloadType" label="类型" width="110" />
-          <el-table-column label="解析" width="110">
+          <el-table-column
+            prop="topic"
+            :label="t('common.subject')"
+            min-width="180"
+            show-overflow-tooltip
+          />
+          <el-table-column prop="payloadType" :label="t('common.type')" width="110" />
+          <el-table-column :label="t('iot.parsedResult')" width="110">
             <template #default="{ row }">
-              <el-tag :type="statusTag(row.parseStatus)" size="small">{{ row.parseStatus }}</el-tag>
+              <el-tag :type="statusTag(row.parseStatus)" size="small">{{
+                enumLabel('IOT_TASK_STATE', row.parseStatus)
+              }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="parseError" label="错误" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="payload" label="载荷" min-width="200" show-overflow-tooltip />
+          <el-table-column
+            prop="parseError"
+            :label="t('common.error')"
+            min-width="160"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="payload"
+            :label="t('iot.payload')"
+            min-width="200"
+            show-overflow-tooltip
+          />
           <el-table-column prop="qos" label="QoS" width="55" />
-          <el-table-column prop="createTime" label="时间" min-width="150" />
+          <el-table-column prop="createTime" :label="t('common.time')" min-width="150" />
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane label="命令" name="commands">
+      <el-tab-pane :label="t('iot.commandsTab')" name="commands">
         <el-table
           v-loading="loading"
           :data="commands"
@@ -133,26 +174,40 @@ onMounted(() => void load())
           size="small"
           @row-click="openCommandDetail"
         >
-          <el-table-column prop="deviceId" label="设备" width="70" />
-          <el-table-column prop="capabilityType" label="能力" width="120" />
-          <el-table-column prop="capabilityId" label="标识" min-width="120" show-overflow-tooltip />
-          <el-table-column label="状态" width="120">
+          <el-table-column prop="deviceId" :label="t('common.device')" width="70" />
+          <el-table-column prop="capabilityType" :label="t('iot.capability')" width="120" />
+          <el-table-column
+            prop="capabilityId"
+            :label="t('common.identifier')"
+            min-width="120"
+            show-overflow-tooltip
+          />
+          <el-table-column :label="t('common.status')" width="120">
             <template #default="{ row }">
-              <el-tag :type="statusTag(row.status)" size="small">{{ row.status }}</el-tag>
+              <el-tag :type="statusTag(row.status)" size="small">{{
+                enumLabel('IOT_TASK_STATE', row.status)
+              }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="sourceType" label="来源" width="90" />
-          <el-table-column prop="error" label="错误" min-width="150" show-overflow-tooltip />
-          <el-table-column label="操作" width="90" fixed="right">
+          <el-table-column prop="sourceType" :label="t('common.source')" width="90" />
+          <el-table-column
+            prop="error"
+            :label="t('common.error')"
+            min-width="150"
+            show-overflow-tooltip
+          />
+          <el-table-column :label="t('common.actions')" width="90" fixed="right">
             <template #default="{ row }">
-              <el-button size="small" @click="handleRetry(row as IotCommandRecord)">重试</el-button>
+              <el-button size="small" @click="handleRetry(row as IotCommandRecord)">{{
+                t('common.retry')
+              }}</el-button>
             </template>
           </el-table-column>
-          <el-table-column prop="createTime" label="时间" min-width="150" />
+          <el-table-column prop="createTime" :label="t('common.time')" min-width="150" />
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane label="脚本执行" name="scripts">
+      <el-tab-pane :label="t('iot.scriptExecutionsTab')" name="scripts">
         <el-table
           v-loading="loading"
           :data="scriptExecs"
@@ -160,26 +215,38 @@ onMounted(() => void load())
           size="small"
           @row-click="openScriptDetail"
         >
-          <el-table-column prop="scriptId" label="脚本" width="70" />
-          <el-table-column prop="scriptVersion" label="版本" width="60" />
-          <el-table-column label="状态" width="90">
+          <el-table-column prop="scriptId" :label="t('iot.script')" width="70" />
+          <el-table-column prop="scriptVersion" :label="t('common.version')" width="60" />
+          <el-table-column :label="t('common.status')" width="90">
             <template #default="{ row }">
-              <el-tag :type="statusTag(row.status)" size="small">{{ row.status }}</el-tag>
+              <el-tag :type="statusTag(row.status)" size="small">{{
+                enumLabel('IOT_TASK_STATE', row.status)
+              }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="durationMs" label="耗时(ms)" width="90" />
+          <el-table-column prop="durationMs" :label="t('common.durationMs')" width="90" />
           <el-table-column
             prop="triggerRef"
-            label="触发引用"
+            :label="t('iot.triggerRef')"
             min-width="140"
             show-overflow-tooltip
           />
-          <el-table-column prop="outputJson" label="输出" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="error" label="错误" min-width="160" show-overflow-tooltip />
+          <el-table-column
+            prop="outputJson"
+            :label="t('iot.output')"
+            min-width="180"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="error"
+            :label="t('common.error')"
+            min-width="160"
+            show-overflow-tooltip
+          />
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane label="流程触发" name="triggers">
+      <el-tab-pane :label="t('iot.processTriggersTab')" name="triggers">
         <el-table
           v-loading="loading"
           :data="triggers"
@@ -187,30 +254,41 @@ onMounted(() => void load())
           size="small"
           @row-click="openTriggerDetail"
         >
-          <el-table-column prop="ruleId" label="规则" width="70" />
+          <el-table-column prop="ruleId" :label="t('iot.rule')" width="70" />
           <el-table-column
             prop="idempotentKey"
-            label="幂等键"
+            :label="t('iot.idempotencyKey')"
             min-width="200"
             show-overflow-tooltip
           />
-          <el-table-column label="状态" width="90">
+          <el-table-column :label="t('common.status')" width="90">
             <template #default="{ row }">
-              <el-tag :type="statusTag(row.status)" size="small">{{ row.status }}</el-tag>
+              <el-tag :type="statusTag(row.status)" size="small">{{
+                enumLabel('IOT_TASK_STATE', row.status)
+              }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="processInstanceId" label="流程实例" min-width="140" />
+          <el-table-column
+            prop="processInstanceId"
+            :label="t('common.processInstance')"
+            min-width="140"
+          />
           <el-table-column
             prop="formSnapshot"
-            label="表单快照"
+            :label="t('iot.formSnapshot')"
             min-width="200"
             show-overflow-tooltip
           />
-          <el-table-column prop="error" label="失败原因" min-width="160" show-overflow-tooltip />
+          <el-table-column
+            prop="error"
+            :label="t('common.failureReason')"
+            min-width="160"
+            show-overflow-tooltip
+          />
         </el-table>
       </el-tab-pane>
     </el-tabs>
-    <el-empty v-if="isEmpty" description="暂无记录" />
+    <el-empty v-if="isEmpty" :description="t('common.noRecords')" />
     <el-dialog v-model="detailVisible" :title="detailTitle" width="760px">
       <pre
         style="

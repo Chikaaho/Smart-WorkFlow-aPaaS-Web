@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 单行文本（TEXT）配置面板。
  * 契约键：label / name / required / length（最大长度）。
@@ -24,18 +27,18 @@ const emit = defineEmits<{ update: [patch: FieldPatch] }>()
     />
 
     <div class="row">
-      <label class="row__label">最大长度</label>
+      <label class="row__label">{{ t('form.maxLength') }}</label>
       <el-input-number
         :model-value="props.field.length"
         :min="1"
         :controls="true"
-        placeholder="不限"
+        :placeholder="t('form.unlimited')"
         class="row__control"
         @update:model-value="(v: number | undefined) => emit('update', { length: v })"
       />
     </div>
 
-    <ConfigSeamNote :items="['占位提示', '默认值']" />
+    <ConfigSeamNote :items="[t('form.placeholderHint'), t('form.defaultValue')]" />
   </div>
 </template>
 

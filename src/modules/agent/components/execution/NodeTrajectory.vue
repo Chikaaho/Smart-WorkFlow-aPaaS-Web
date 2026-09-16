@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * NodeTrajectory — 节点轨迹子视图
  *
@@ -27,10 +31,30 @@ const STATUS_MAP: Record<
   string,
   { label: string; type: 'success' | 'warning' | 'info' | 'danger' | '' }
 > = {
-  PENDING: { label: '等待中', type: 'info' },
-  RUNNING: { label: '运行中', type: 'warning' },
-  SUCCESS: { label: '成功', type: 'success' },
-  FAILED: { label: '失败', type: 'danger' },
+  PENDING: {
+    get label() {
+      return t('common.statusWaiting')
+    },
+    type: 'info',
+  },
+  RUNNING: {
+    get label() {
+      return t('common.statusRunning')
+    },
+    type: 'warning',
+  },
+  SUCCESS: {
+    get label() {
+      return t('common.resultSuccess')
+    },
+    type: 'success',
+  },
+  FAILED: {
+    get label() {
+      return t('common.resultFailed')
+    },
+    type: 'danger',
+  },
 }
 
 function getStatusLabel(status: string): string {
@@ -53,7 +77,7 @@ function formatLatency(latencyMs: number): string {
 // M07-F04-02: Token 格式化函数
 function formatTokenCount(count: number | null | undefined): string {
   if (count === null || count === undefined) {
-    return '未知'
+    return t('common.unknown')
   }
   if (count === 0) {
     return '0'
@@ -178,7 +202,7 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
           <!-- 节点元信息 -->
           <div class="node-meta">
             <el-tag size="small" :type="getStatusType(node.nodeType) || undefined" effect="plain">
-              {{ node.nodeType }}
+              {{ enumLabel('AGENT_NODE_TYPE', node.nodeType) }}
             </el-tag>
             <el-tag size="small" :type="getStatusType(node.status) || undefined" effect="plain">
               {{ getStatusLabel(node.status) }}
@@ -186,17 +210,17 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
             <span class="node-latency">{{ formatLatency(node.nodeLatencyMs) }}</span>
             <!-- M07-F04-02: Token 使用信息（仅 LLM 节点显示；null=未知，明确展示而非隐藏） -->
             <span v-if="node.nodeType === 'LLM'" class="node-token">
-              输入: {{ formatTokenCount(node.inputTokens) }}
+              {{ t('agent.inputTokensInline', { value: formatTokenCount(node.inputTokens) }) }}
             </span>
             <span v-if="node.nodeType === 'LLM'" class="node-token">
-              输出: {{ formatTokenCount(node.outputTokens) }}
+              {{ t('agent.outputTokensInline', { value: formatTokenCount(node.outputTokens) }) }}
             </span>
           </div>
 
           <!-- 展开区域：变量快照 -->
           <div v-if="selectedNode?.nodeId === node.nodeId" class="node-details">
             <div class="detail-section">
-              <div class="detail-title">输入变量 (Input)</div>
+              <div class="detail-title">{{ t('agent.inputVariables') }}</div>
               <div class="detail-content">
                 <div v-if="!isPureString(node.input)">
                   <pre class="json-preview">{{
@@ -204,12 +228,12 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
                   }}</pre>
                 </div>
                 <div v-else-if="node.input" class="text-preview">{{ node.input }}</div>
-                <div v-else class="empty-tip">无</div>
+                <div v-else class="empty-tip">{{ t('common.none') }}</div>
               </div>
             </div>
 
             <div class="detail-section">
-              <div class="detail-title">输出结果 (Output)</div>
+              <div class="detail-title">{{ t('agent.outputResults') }}</div>
               <div class="detail-content">
                 <div v-if="!isPureString(node.output)">
                   <pre class="json-preview">{{
@@ -217,23 +241,23 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
                   }}</pre>
                 </div>
                 <div v-else-if="node.output" class="text-preview">{{ node.output }}</div>
-                <div v-else class="empty-tip">无</div>
+                <div v-else class="empty-tip">{{ t('common.none') }}</div>
               </div>
             </div>
 
             <div v-if="node.errorMessage" class="detail-section error-section">
-              <div class="detail-title">错误信息 (Error Message)</div>
+              <div class="detail-title">{{ t('agent.errorMessage') }}</div>
               <div class="detail-content text-preview">{{ node.errorMessage }}</div>
             </div>
 
             <div class="detail-section times-section">
-              <div class="detail-title">时间信息</div>
+              <div class="detail-title">{{ t('agent.timingInfo') }}</div>
               <div class="time-row">
-                <span class="label">开始时间:</span>
+                <span class="label">{{ t('agent.startTimeLabel') }}</span>
                 <span class="value">{{ formatTimestamp(node.startTime || '-') }}</span>
               </div>
               <div class="time-row">
-                <span class="label">结束时间:</span>
+                <span class="label">{{ t('agent.endTimeLabel') }}</span>
                 <span class="value">{{ formatTimestamp(node.endTime || '-') }}</span>
               </div>
             </div>
@@ -243,7 +267,7 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
     </div>
 
     <!-- 空状态 -->
-    <el-empty v-if="processedNodes.length === 0" description="暂无节点执行记录" />
+    <el-empty v-if="processedNodes.length === 0" :description="t('agent.noNodeRecords')" />
   </div>
 </template>
 

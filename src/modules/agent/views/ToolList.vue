@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ToolList — 工具管理列表页（M07-F03-02）。
  *
@@ -84,7 +87,7 @@ async function loadInternalTools() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载内部工具列表失败'
+      errorMsg.value = t('agent.internalToolListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -103,7 +106,7 @@ async function loadExternalTools() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载外部工具列表失败'
+      errorMsg.value = t('agent.externalToolListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -181,13 +184,13 @@ async function handleToggle(row: AgentToolInternalConfig | AgentToolExternalConf
     } else {
       await toggleExternalTool(row.id, !row.enabled)
     }
-    ElMessage.success(row.enabled ? '已停用' : '已启用')
+    ElMessage.success(row.enabled ? t('common.statusDisabled') : t('common.statusEnabled'))
     loadCurrentList()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('启停操作失败')
+      ElMessage.error(t('agent.toolToggleFailed'))
     }
   } finally {
     togglingId.value = null
@@ -216,14 +219,19 @@ function handleSaved() {
 // ─── 删除 ───
 
 async function handleDelete(row: AgentToolInternalConfig | AgentToolExternalConfig) {
-  const typeLabel = activeTab.value === 'internal' ? '内部工具' : '外部工具'
+  const typeLabel =
+    activeTab.value === 'internal' ? t('common.internalTool') : t('common.externalTool')
   try {
     await ElMessageBox.confirm(
-      `确认删除${typeLabel}「${row.name}」？删除后不可恢复。`,
-      '删除确认',
+      t('agent.confirmDeleteTool', { typeLabel, name: row.name }),
+      t('common.deleteConfirmTitle'),
       {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
+        get confirmButtonText() {
+          return t('common.delete')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
         type: 'warning',
       },
     )
@@ -236,13 +244,13 @@ async function handleDelete(row: AgentToolInternalConfig | AgentToolExternalConf
     } else {
       await deleteExternalTool(row.id)
     }
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     loadCurrentList()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('common.deleteFailed'))
     }
   }
 }
@@ -266,7 +274,7 @@ onMounted(() => {
 
 <template>
   <StandardListTemplate
-    title="工具管理"
+    :title="t('router.toolManagement')"
     :total="currentTotal"
     :page-num="currentPageNum"
     :page-size="currentPageSize"
@@ -276,26 +284,26 @@ onMounted(() => {
   >
     <template #toolbar-actions>
       <el-button v-if="canManage" type="primary" @click="openCreate">
-        新建{{ activeTab === 'internal' ? '内部工具' : '外部工具' }}
+        {{ activeTab === 'internal' ? t('agent.newInternalTool') : t('agent.newExternalTool') }}
       </el-button>
     </template>
 
     <template #filter>
       <el-tabs v-model="activeTab" class="tool-tabs" @tab-change="handleTabChange">
-        <el-tab-pane label="内部工具" name="internal" />
-        <el-tab-pane label="外部 HTTP 工具" name="external" />
+        <el-tab-pane :label="t('common.internalTool')" name="internal" />
+        <el-tab-pane :label="t('agent.externalHttpTool')" name="external" />
       </el-tabs>
       <el-input
         v-model="filter.name"
-        placeholder="名称关键字"
+        :placeholder="t('agent.nameKeywordPlaceholder')"
         clearable
         style="width: 200px"
         @keyup.enter="handleQuery"
       />
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <el-alert
@@ -309,39 +317,46 @@ onMounted(() => {
 
     <!-- 内部工具表格 -->
     <el-table v-if="activeTab === 'internal'" v-loading="loading" :data="internalList" stripe>
-      <el-table-column prop="name" label="工具名" min-width="160" />
-      <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-      <el-table-column label="Bean / 方法" min-width="220">
+      <el-table-column prop="name" :label="t('common.toolName')" min-width="160" />
+      <el-table-column
+        prop="description"
+        :label="t('common.descriptionField')"
+        min-width="200"
+        show-overflow-tooltip
+      />
+      <el-table-column :label="t('agent.beanAndMethod')" min-width="220">
         <template #default="{ row }">
           <span class="mono-text">{{ (row as AgentToolInternalConfig).beanName }}</span>
           <span class="method-sep">.</span>
           <span class="mono-text">{{ (row as AgentToolInternalConfig).methodName }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="入参 Schema" width="100" align="center">
+      <el-table-column :label="t('agent.inputSchemaColumn')" width="100" align="center">
         <template #default="{ row }">
-          <el-tag v-if="(row as AgentToolInternalConfig).inputSchema" size="small" type="success"
-            >有</el-tag
-          >
-          <el-tag v-else size="small" type="info">无</el-tag>
+          <el-tag v-if="(row as AgentToolInternalConfig).inputSchema" size="small" type="success">{{
+            t('agent.hasSchema')
+          }}</el-tag>
+          <el-tag v-else size="small" type="info">{{ t('common.none') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="启停" width="80" align="center">
+      <el-table-column :label="t('common.toggle')" width="80" align="center">
         <template #default="{ row }">
           <el-tag
             :type="(row as AgentToolInternalConfig).enabled ? 'success' : 'info'"
             size="small"
           >
-            {{ (row as AgentToolInternalConfig).enabled ? '启用' : '停用' }}
+            {{
+              (row as AgentToolInternalConfig).enabled ? t('common.enable') : t('common.disable')
+            }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="220" fixed="right">
+      <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
+      <el-table-column :label="t('common.actions')" width="220" fixed="right">
         <template #default="{ row }">
-          <el-button v-if="canManage" size="small" link type="primary" @click="editRow(row)"
-            >编辑</el-button
-          >
+          <el-button v-if="canManage" size="small" link type="primary" @click="editRow(row)">{{
+            t('common.edit')
+          }}</el-button>
           <el-button
             v-if="canManage"
             size="small"
@@ -350,19 +365,26 @@ onMounted(() => {
             :loading="togglingId === (row as AgentToolInternalConfig).id"
             @click="toggleRow(row)"
           >
-            {{ (row as AgentToolInternalConfig).enabled ? '停用' : '启用' }}
+            {{
+              (row as AgentToolInternalConfig).enabled ? t('common.disable') : t('common.enable')
+            }}
           </el-button>
-          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)"
-            >删除</el-button
-          >
+          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)">{{
+            t('common.delete')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <!-- 外部 HTTP 工具表格 -->
     <el-table v-if="activeTab === 'external'" v-loading="loading" :data="externalList" stripe>
-      <el-table-column prop="name" label="工具名" min-width="160" />
-      <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
+      <el-table-column prop="name" :label="t('common.toolName')" min-width="160" />
+      <el-table-column
+        prop="description"
+        :label="t('common.descriptionField')"
+        min-width="200"
+        show-overflow-tooltip
+      />
       <el-table-column label="URL" min-width="260">
         <template #default="{ row }">
           <span class="url-text" :title="(row as AgentToolExternalConfig).url">
@@ -370,40 +392,42 @@ onMounted(() => {
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="方法" width="80" align="center">
+      <el-table-column :label="t('agent.methodColumn')" width="80" align="center">
         <template #default="{ row }">
           <el-tag size="small">{{ (row as AgentToolExternalConfig).httpMethod }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="超时(秒)" width="90" align="center">
+      <el-table-column :label="t('agent.timeoutSecondsColumn')" width="90" align="center">
         <template #default="{ row }">
           {{ (row as AgentToolExternalConfig).timeoutSeconds }}
         </template>
       </el-table-column>
-      <el-table-column label="入参 Schema" width="100" align="center">
+      <el-table-column :label="t('agent.inputSchemaColumn')" width="100" align="center">
         <template #default="{ row }">
-          <el-tag v-if="(row as AgentToolExternalConfig).inputSchema" size="small" type="success"
-            >有</el-tag
-          >
-          <el-tag v-else size="small" type="info">无</el-tag>
+          <el-tag v-if="(row as AgentToolExternalConfig).inputSchema" size="small" type="success">{{
+            t('agent.hasSchema')
+          }}</el-tag>
+          <el-tag v-else size="small" type="info">{{ t('common.none') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="启停" width="80" align="center">
+      <el-table-column :label="t('common.toggle')" width="80" align="center">
         <template #default="{ row }">
           <el-tag
             :type="(row as AgentToolExternalConfig).enabled ? 'success' : 'info'"
             size="small"
           >
-            {{ (row as AgentToolExternalConfig).enabled ? '启用' : '停用' }}
+            {{
+              (row as AgentToolExternalConfig).enabled ? t('common.enable') : t('common.disable')
+            }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="220" fixed="right">
+      <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
+      <el-table-column :label="t('common.actions')" width="220" fixed="right">
         <template #default="{ row }">
-          <el-button v-if="canManage" size="small" link type="primary" @click="editRow(row)"
-            >编辑</el-button
-          >
+          <el-button v-if="canManage" size="small" link type="primary" @click="editRow(row)">{{
+            t('common.edit')
+          }}</el-button>
           <el-button
             v-if="canManage"
             size="small"
@@ -412,18 +436,20 @@ onMounted(() => {
             :loading="togglingId === (row as AgentToolExternalConfig).id"
             @click="toggleRow(row)"
           >
-            {{ (row as AgentToolExternalConfig).enabled ? '停用' : '启用' }}
+            {{
+              (row as AgentToolExternalConfig).enabled ? t('common.disable') : t('common.enable')
+            }}
           </el-button>
-          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)"
-            >删除</el-button
-          >
+          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)">{{
+            t('common.delete')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <template #empty-action>
       <el-button v-if="canManage" type="primary" @click="openCreate">
-        新建{{ activeTab === 'internal' ? '内部工具' : '外部工具' }}
+        {{ activeTab === 'internal' ? t('agent.newInternalTool') : t('agent.newExternalTool') }}
       </el-button>
     </template>
   </StandardListTemplate>

@@ -1,0 +1,295 @@
+{
+  "_comment": "P61 R1 参数化文案 批次9",
+  "节点能力契约无效：${path}${message}": {
+    "key": "workflow.nodeCapabilityInvalid",
+    "zh": "节点能力契约无效：{path}{message}",
+    "en": "Invalid node capability contract: {path}{message}",
+    "vars": ["path", "message"]
+  },
+  "重复配置字段 ${field.key}": {
+    "key": "workflow.duplicateConfigField",
+    "zh": "重复配置字段 {key}",
+    "en": "Duplicate config field {key}",
+    "vars": ["key"],
+    "note": "原插值表达式为 field.key，已简化为 {key}"
+  },
+  "不支持的节点类别 ${capability.category}": {
+    "key": "workflow.unsupportedNodeCategory",
+    "zh": "不支持的节点类别 {category}",
+    "en": "Unsupported node category {category}",
+    "vars": ["category"],
+    "note": "原插值表达式为 capability.category，已简化为 {category}"
+  },
+  "重复节点类型 ${capability.type}": {
+    "key": "workflow.duplicateNodeType",
+    "zh": "重复节点类型 {type}",
+    "en": "Duplicate node type {type}",
+    "vars": ["type"],
+    "note": "原插值表达式为 capability.type，已简化为 {type}"
+  },
+  "节点能力不可用：${missing.join(', ')}": {
+    "key": "workflow.nodeCapabilitiesUnavailable",
+    "zh": "节点能力不可用：{missing}",
+    "en": "Node capabilities unavailable: {missing}",
+    "vars": ["missing"],
+    "note": "原插值表达式为 missing.join(', ')，已简化为 {missing}"
+  },
+  "节点 ${nodeId}（${nodeType}）入边不足：至少需要 ${topology.minIncoming} 条": {
+    "key": "workflow.nodeIncomingTooFew",
+    "zh": "节点 {nodeId}（{nodeType}）入边不足：至少需要 {minIncoming} 条",
+    "en": "Node {nodeId} ({nodeType}) has too few incoming edges: at least {minIncoming} required",
+    "vars": ["nodeId", "nodeType", "minIncoming"],
+    "note": "原插值表达式为 topology.minIncoming，已简化为 {minIncoming}"
+  },
+  "节点 ${nodeId}（${nodeType}）入边过多：最多允许 ${topology.maxIncoming} 条": {
+    "key": "workflow.nodeIncomingTooMany",
+    "zh": "节点 {nodeId}（{nodeType}）入边过多：最多允许 {maxIncoming} 条",
+    "en": "Node {nodeId} ({nodeType}) has too many incoming edges: at most {maxIncoming} allowed",
+    "vars": ["nodeId", "nodeType", "maxIncoming"],
+    "note": "原插值表达式为 topology.maxIncoming，已简化为 {maxIncoming}"
+  },
+  "节点 ${nodeId}（${nodeType}）出边不足：至少需要 ${topology.minOutgoing} 条": {
+    "key": "workflow.nodeOutgoingTooFew",
+    "zh": "节点 {nodeId}（{nodeType}）出边不足：至少需要 {minOutgoing} 条",
+    "en": "Node {nodeId} ({nodeType}) has too few outgoing edges: at least {minOutgoing} required",
+    "vars": ["nodeId", "nodeType", "minOutgoing"],
+    "note": "原插值表达式为 topology.minOutgoing，已简化为 {minOutgoing}"
+  },
+  "节点 ${nodeId}（${nodeType}）出边过多：最多允许 ${topology.maxOutgoing} 条": {
+    "key": "workflow.nodeOutgoingTooMany",
+    "zh": "节点 {nodeId}（{nodeType}）出边过多：最多允许 {maxOutgoing} 条",
+    "en": "Node {nodeId} ({nodeType}) has too many outgoing edges: at most {maxOutgoing} allowed",
+    "vars": ["nodeId", "nodeType", "maxOutgoing"],
+    "note": "原插值表达式为 topology.maxOutgoing，已简化为 {maxOutgoing}"
+  },
+  "流程图元素 ${index} 必须是对象": {
+    "key": "workflow.graphElementMustBeObject",
+    "zh": "流程图元素 {index} 必须是对象",
+    "en": "Process graph element {index} must be an object",
+    "vars": ["index"]
+  },
+  "流程图节点 ${index} 缺少 id": {
+    "key": "workflow.graphNodeMissingId",
+    "zh": "流程图节点 {index} 缺少 id",
+    "en": "Process graph node {index} is missing an id",
+    "vars": ["index"]
+  },
+  "流程图节点 id 重复：${element.id}": {
+    "key": "workflow.graphNodeDuplicateId",
+    "zh": "流程图节点 id 重复：{id}",
+    "en": "Duplicate process graph node id: {id}",
+    "vars": ["id"],
+    "note": "原插值表达式为 element.id，已简化为 {id}"
+  },
+  "流程图节点 ${element.id} 缺少 type": {
+    "key": "workflow.graphNodeMissingType",
+    "zh": "流程图节点 {id} 缺少 type",
+    "en": "Process graph node {id} is missing a type",
+    "vars": ["id"],
+    "note": "原插值表达式为 element.id，已简化为 {id}"
+  },
+  "节点 ${element.id} 使用了能力清单未知类型：${element.type}": {
+    "key": "workflow.nodeUnknownType",
+    "zh": "节点 {id} 使用了能力清单未知类型：{type}",
+    "en": "Node {id} uses a type unknown to the capability list: {type}",
+    "vars": ["id", "type"],
+    "note": "原插值表达式为 element.id / element.type，已简化为 {id} / {type}"
+  },
+  "节点 ${element.id}（${element.type}）未具备完整设计/保存/发布/运行能力": {
+    "key": "workflow.nodeNotFullySupported",
+    "zh": "节点 {id}（{type}）未具备完整设计/保存/发布/运行能力",
+    "en": "Node {id} ({type}) does not support the full design/save/publish/run chain",
+    "vars": ["id", "type"],
+    "note": "原插值表达式为 element.id / element.type，已简化为 {id} / {type}"
+  },
+  "节点 ${element.id}（${element.type}）缺少必填配置：${field.label}": {
+    "key": "workflow.nodeMissingRequiredConfig",
+    "zh": "节点 {id}（{type}）缺少必填配置：{label}",
+    "en": "Node {id} ({type}) is missing required config: {label}",
+    "vars": ["id", "type", "label"],
+    "note": "原插值表达式为 element.id / element.type / field.label，已简化"
+  },
+  "流程图边 ${index} 缺少 id": {
+    "key": "workflow.graphEdgeMissingId",
+    "zh": "流程图边 {index} 缺少 id",
+    "en": "Process graph edge {index} is missing an id",
+    "vars": ["index"]
+  },
+  "流程图边 ${element.id} 缺少 source": {
+    "key": "workflow.graphEdgeMissingSource",
+    "zh": "流程图边 {id} 缺少 source",
+    "en": "Process graph edge {id} is missing a source",
+    "vars": ["id"],
+    "note": "原插值表达式为 element.id，已简化为 {id}"
+  },
+  "流程图边 ${element.id} 缺少 target": {
+    "key": "workflow.graphEdgeMissingTarget",
+    "zh": "流程图边 {id} 缺少 target",
+    "en": "Process graph edge {id} is missing a target",
+    "vars": ["id"],
+    "note": "原插值表达式为 element.id，已简化为 {id}"
+  },
+  "流程图元素 ${index} 的 kind 不受支持": {
+    "key": "workflow.graphElementKindUnsupported",
+    "zh": "流程图元素 {index} 的 kind 不受支持",
+    "en": "Unsupported kind for process graph element {index}",
+    "vars": ["index"]
+  },
+  "流程图边 ${edge.id} 引用了不存在的节点": {
+    "key": "workflow.graphEdgeDanglingRef",
+    "zh": "流程图边 {id} 引用了不存在的节点",
+    "en": "Process graph edge {id} references a node that does not exist",
+    "vars": ["id"],
+    "note": "原插值表达式为 edge.id，已简化为 {id}"
+  },
+  "流程图缺少必要节点：${requiredType}": {
+    "key": "workflow.graphMissingRequiredNode",
+    "zh": "流程图缺少必要节点：{requiredType}",
+    "en": "The process graph is missing a required node: {requiredType}",
+    "vars": ["requiredType"]
+  },
+  "确认向 ${count} 人发送通知？": {
+    "key": "notify.batchSendConfirm",
+    "zh": "确认向 {count} 人发送通知？",
+    "en": "Send the notification to {count} recipients?",
+    "vars": ["count"]
+  },
+  "成功向 ${result.recipientCount} 人发送通知": {
+    "key": "notify.batchSendSuccess",
+    "zh": "成功向 {count} 人发送通知",
+    "en": "Notification sent to {count} recipients",
+    "vars": ["count"],
+    "note": "原插值表达式为 result.recipientCount，已简化为 {count}"
+  },
+  "{\"userName\": \"张三\"}": {
+    "key": "notify.variablesJsonPlaceholder",
+    "zh": "{\"userName\": \"张三\"}",
+    "en": "{\"userName\": \"John\"}",
+    "vars": [],
+    "note": "JSON 示例占位符：花括号为 JSON 字面量而非运行时插值（vars 为空）；改键后 zh 保留原文，en 仅本地化示例人名"
+  },
+  "删除 Topic「${row.topic}」？": {
+    "key": "iot.deleteTopicConfirm",
+    "zh": "删除 Topic「{topic}」？",
+    "en": "Delete topic \"{topic}\"?",
+    "vars": ["topic"],
+    "note": "原插值表达式为 row.topic，已简化为 {topic}"
+  },
+  "editingId ? '编辑 Topic' : '新增 Topic'": {
+    "key": "iot.topicDialogTitle",
+    "zh": "editingId ? '编辑 Topic' : '新增 Topic'",
+    "en": "editingId ? 'Edit topic' : 'New topic'",
+    "vars": [],
+    "note": "Vue 属性绑定（:title）中的三元表达式，非单条文案；需拆成两条键：编辑分支 iot.topicDialogTitleEdit（编辑 Topic / Edit topic），新增分支 iot.topicDialogTitleNew（新增 Topic / New topic）。zh/en 保留表达式外壳以便原样对照。"
+  },
+  "支持 {deviceKey} 模板变量与 +/# 通配": {
+    "key": "iot.topicTemplatePlaceholder",
+    "zh": "支持 {deviceKey} 模板变量与 +/# 通配",
+    "en": "Supports the {deviceKey} template variable and +/# wildcards",
+    "vars": [],
+    "note": "{deviceKey} 为 MQTT Topic 模板变量示例文本（须原样展示），不是运行时插值，故 vars 为空"
+  },
+  "isEdit ? '编辑消息模板' : '新增消息模板'": {
+    "key": "notify.templateDialogTitle",
+    "zh": "isEdit ? '编辑消息模板' : '新增消息模板'",
+    "en": "isEdit ? 'Edit message template' : 'New message template'",
+    "vars": [],
+    "note": "Vue 属性绑定（:title）中的三元表达式，非单条文案；需拆成两条键：编辑分支 notify.templateDialogTitleEdit（编辑消息模板 / Edit message template），新增分支 notify.templateDialogTitleNew（新增消息模板 / New message template）。zh/en 保留表达式外壳以便原样对照。"
+  },
+  "支持 ${userName} 占位符，如：${userName} 的审批提醒": {
+    "key": "notify.titleTemplatePlaceholder",
+    "zh": "支持 ${userName} 占位符，如：${userName} 的审批提醒",
+    "en": "Supports the ${userName} placeholder, e.g. \"${userName} approval reminder\"",
+    "vars": [],
+    "note": "示例中的 ${userName} 是消息模板占位符语法示例（须原样展示），不是运行时插值，故 vars 为空且 zh/en 保留该语法"
+  },
+  "您好 ${userName}，单据 ${docNo} 待处理。": {
+    "key": "notify.contentTemplatePlaceholder",
+    "zh": "您好 ${userName}，单据 ${docNo} 待处理。",
+    "en": "Hello ${userName}, document ${docNo} is awaiting your action.",
+    "vars": [],
+    "note": "示例中的 ${userName}/${docNo} 是消息模板占位符语法示例（须原样展示），不是运行时插值，故 vars 为空且 zh/en 保留该语法"
+  },
+  "图 #${s.graphDefId}": {
+    "key": "agent.graphFallbackName",
+    "zh": "图 #{graphDefId}",
+    "en": "Graph #{graphDefId}",
+    "vars": ["graphDefId"],
+    "note": "原插值表达式为 s.graphDefId，已简化为 {graphDefId}"
+  },
+  "冷却至 ${row.lockedUntil}": {
+    "key": "agent.coolingUntil",
+    "zh": "冷却至 {lockedUntil}",
+    "en": "Cooling down until {lockedUntil}",
+    "vars": ["lockedUntil"],
+    "note": "原插值表达式为 row.lockedUntil，已简化为 {lockedUntil}"
+  },
+  "确认删除「${row.name}」？删除后不可恢复。": {
+    "key": "agent.confirmDeleteGraph",
+    "zh": "确认删除「{name}」？删除后不可恢复。",
+    "en": "Delete \"{name}\"? This cannot be undone.",
+    "vars": ["name"],
+    "note": "原插值为 ${row.name}，成员访问表达式"
+  },
+  "`测试结果：${testResult.success ? '服务可达' : '网络不可达'}`": {
+    "key": "agent.connectivityTestMessage",
+    "zh": "测试结果：{result}",
+    "en": "Test result: {result}",
+    "vars": ["result"],
+    "note": "插值为三元表达式 testResult.success ? '服务可达' : '网络不可达'，无法静态命名，已简化为 {result}；两条分支文案「服务可达」/「网络不可达」需另建键（建议 agent.connectivityReachable / agent.connectivityUnreachable），由调用点解析后传入"
+  },
+  "确定要删除字典项\"${row.label}\"吗？": {
+    "key": "system.deleteDictDataConfirm",
+    "zh": "确定要删除字典项\"{label}\"吗？",
+    "en": "Delete dictionary item \"{label}\"?",
+    "vars": ["label"],
+    "note": "原插值表达式为 row.label，已简化为 {label}"
+  },
+  "`字典项管理`": {
+    "key": "system.dictItemTitle",
+    "zh": "字典项管理",
+    "en": "Dictionary item management",
+    "vars": [],
+    "note": "Vue 绑定属性 :title=\"`字典项管理`\" 中的反引号模板字面量（无插值），非独立文案；实际展示文案为「字典项管理」，改键后直接以 t('system.dictItemTitle') 绑定即可"
+  },
+  "${row.name}-副本": {
+    "key": "workflow.templateCopyName",
+    "zh": "{name}-副本",
+    "en": "{name} copy",
+    "vars": ["name"],
+    "note": "原插值表达式为 row.name，已简化为 {name}"
+  },
+  "确定要删除岗位\"${row.name}\"吗？删除后不可恢复。": {
+    "key": "system.deletePostConfirm",
+    "zh": "确定要删除岗位\"{name}\"吗？删除后不可恢复。",
+    "en": "Delete post \"{name}\"? This cannot be undone.",
+    "vars": ["name"],
+    "note": "原插值表达式为 row.name，已简化为 {name}"
+  },
+  "`${t.toolName}（${t.source === 'internal' ? '内部' : '外部'}）`": {
+    "key": "agent.toolOptionLabel",
+    "zh": "{toolName}（{source}）",
+    "en": "{toolName} ({source})",
+    "vars": ["toolName", "source"],
+    "note": "插值为条件表达式 t.source === 'internal' ? '内部' : '外部'，已简化为 {source}；两条分支文案「内部」/「外部」需另建键（建议 agent.toolSourceInternal / agent.toolSourceExternal），由调用点解析后传入"
+  },
+  "`留空 = 默认变量 ${DEFAULT_VARIABLE_NAME}`": {
+    "key": "agent.varNamePlaceholder",
+    "zh": "留空 = 默认变量 {DEFAULT_VARIABLE_NAME}",
+    "en": "Empty = default variable {DEFAULT_VARIABLE_NAME}",
+    "vars": ["DEFAULT_VARIABLE_NAME"]
+  },
+  "`流程图 - ${currentDefName}`": {
+    "key": "workflow.processGraphDialogTitle",
+    "zh": "流程图 - {currentDefName}",
+    "en": "Process diagram - {currentDefName}",
+    "vars": ["currentDefName"]
+  },
+  "'请确认流程定义有可查看的图数据'": {
+    "key": "workflow.processGraphEmptyHint",
+    "zh": "请确认流程定义有可查看的图数据",
+    "en": "Check that the process definition has viewable diagram data",
+    "vars": [],
+    "note": "Vue 绑定属性 :sub-title=\"'请确认流程定义有可查看的图数据'\" 中的字符串字面量（含外层单引号），非独立文案；实际展示文案为「请确认流程定义有可查看的图数据」，改键后直接以 t('workflow.processGraphEmptyHint') 绑定即可"
+  }
+}

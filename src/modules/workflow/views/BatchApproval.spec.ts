@@ -71,6 +71,7 @@ describe('BatchApproval', () => {
       success: 1,
       failed: 1,
       total: 2,
+      processing: 0,
     })
     const wrapper = mount(BatchApproval, { global: { stubs: minimalStubs } })
     await Promise.resolve()

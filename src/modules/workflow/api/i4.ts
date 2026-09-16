@@ -211,9 +211,13 @@ export interface BatchItemResult {
   message?: string
 }
 
-export async function batchTaskAction(
-  items: BatchItemInput[],
-): Promise<{ results: BatchItemResult[]; success: number; failed: number; total: number }> {
+export async function batchTaskAction(items: BatchItemInput[]): Promise<{
+  results: BatchItemResult[]
+  success: number
+  failed: number
+  total: number
+  processing: number
+}> {
   return request({
     method: 'POST',
     url: '/workflow/tasks/batch-action',

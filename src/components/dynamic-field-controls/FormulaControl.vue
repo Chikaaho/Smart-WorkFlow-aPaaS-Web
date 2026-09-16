@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 公式（FORMULA）控件（I2）：只读展示。
  * 客户端不计算公式——值来自服务端（提交后重算落列、编辑回显读库），
@@ -14,6 +17,6 @@ defineProps<DynamicFieldControlProps>()
     :size="subField ? 'small' : undefined"
     :model-value="modelValue === null || modelValue === undefined ? '' : String(modelValue)"
     disabled
-    placeholder="服务端计算"
+    :placeholder="t('component.serverCalculated')"
   />
 </template>

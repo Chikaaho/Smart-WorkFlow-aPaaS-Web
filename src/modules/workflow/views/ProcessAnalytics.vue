@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ProcessAnalytics — 流程基础分析（I4 §3.3）。
  * 发起/完成/运行/驳回、平均与分位耗时（可复算口径）、节点停留与办理人工作量。
@@ -38,7 +41,7 @@ async function loadSummary() {
       processDefKey: processDefKey.value || undefined,
     })
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? err.msg : '分析数据加载失败'
+    errorMsg.value = err instanceof ApiError ? err.msg : t('workflow.analyticsLoadFailed')
   } finally {
     loading.value = false
   }
@@ -49,16 +52,18 @@ onMounted(loadSummary)
 
 <template>
   <div class="analytics-page">
-    <h2 class="page-title">流程分析</h2>
+    <h2 class="page-title">{{ t('workflow.processAnalytics') }}</h2>
     <div class="filter-bar">
       <el-input
         v-model="processDefKey"
-        placeholder="流程定义 Key（可空=全部）"
+        :placeholder="t('workflow.processDefKeyFilter')"
         clearable
         style="width: 240px"
         @keyup.enter="loadSummary"
       />
-      <el-button type="primary" :loading="loading" @click="loadSummary">查询</el-button>
+      <el-button type="primary" :loading="loading" @click="loadSummary">{{
+        t('common.query')
+      }}</el-button>
     </div>
 
     <el-alert v-if="errorMsg" :title="errorMsg" type="error" :closable="false" />
@@ -68,25 +73,25 @@ onMounted(loadSummary)
         <el-col :span="6"
           ><div class="stat-card">
             <div class="stat-value">{{ summary.launched }}</div>
-            <div class="stat-label">发起量</div>
+            <div class="stat-label">{{ t('workflow.startedCount') }}</div>
           </div></el-col
         >
         <el-col :span="6"
           ><div class="stat-card">
             <div class="stat-value">{{ summary.completed }}</div>
-            <div class="stat-label">完成量</div>
+            <div class="stat-label">{{ t('workflow.completedCount') }}</div>
           </div></el-col
         >
         <el-col :span="6"
           ><div class="stat-card">
             <div class="stat-value">{{ summary.running }}</div>
-            <div class="stat-label">运行中</div>
+            <div class="stat-label">{{ t('common.statusRunning') }}</div>
           </div></el-col
         >
         <el-col :span="6"
           ><div class="stat-card">
             <div class="stat-value">{{ summary.rejected }}</div>
-            <div class="stat-label">驳回</div>
+            <div class="stat-label">{{ t('common.reject') }}</div>
           </div></el-col
         >
       </el-row>
@@ -94,25 +99,25 @@ onMounted(loadSummary)
         <el-col :span="6"
           ><div class="stat-card">
             <div class="stat-value">{{ formatMs(summary.avgDurationMs) }}</div>
-            <div class="stat-label">平均耗时</div>
+            <div class="stat-label">{{ t('workflow.avgDuration') }}</div>
           </div></el-col
         >
         <el-col :span="6"
           ><div class="stat-card">
             <div class="stat-value">{{ formatMs(summary.p50DurationMs) }}</div>
-            <div class="stat-label">P50 耗时</div>
+            <div class="stat-label">{{ t('workflow.p50Duration') }}</div>
           </div></el-col
         >
         <el-col :span="6"
           ><div class="stat-card">
             <div class="stat-value">{{ formatMs(summary.p90DurationMs) }}</div>
-            <div class="stat-label">P90 耗时</div>
+            <div class="stat-label">{{ t('workflow.p90Duration') }}</div>
           </div></el-col
         >
         <el-col :span="6"
           ><div class="stat-card">
             <div class="stat-value">{{ summary.durationSample }}</div>
-            <div class="stat-label">耗时样本数</div>
+            <div class="stat-label">{{ t('workflow.durationSampleCount') }}</div>
           </div></el-col
         >
       </el-row>
@@ -120,27 +125,27 @@ onMounted(loadSummary)
       <el-row :gutter="16" class="stat-row">
         <el-col :span="12">
           <el-card shadow="never">
-            <template #header>节点停留（瓶颈）</template>
+            <template #header>{{ t('workflow.nodeDwellBottleneck') }}</template>
             <el-table :data="nodeEntries" size="small" max-height="320">
-              <el-table-column prop="nodeKey" label="节点" min-width="140" />
-              <el-table-column prop="count" label="样本" width="80" />
-              <el-table-column label="平均停留" width="110">
+              <el-table-column prop="nodeKey" :label="t('common.node')" min-width="140" />
+              <el-table-column prop="count" :label="t('workflow.sampleCount')" width="80" />
+              <el-table-column :label="t('workflow.avgDwell')" width="110">
                 <template #default="{ row }">{{ formatMs(row.avgStayMs) }}</template>
               </el-table-column>
-              <el-table-column label="P90 停留" width="110">
+              <el-table-column :label="t('workflow.p90Dwell')" width="110">
                 <template #default="{ row }">{{ formatMs(row.p90StayMs) }}</template>
               </el-table-column>
-              <template #empty>暂无数据</template>
+              <template #empty>{{ t('common.emptyData') }}</template>
             </el-table>
           </el-card>
         </el-col>
         <el-col :span="12">
           <el-card shadow="never">
-            <template #header>办理人工作量</template>
+            <template #header>{{ t('workflow.assigneeWorkload') }}</template>
             <el-table :data="workloadEntries" size="small" max-height="320">
-              <el-table-column prop="userId" label="用户 ID" min-width="120" />
-              <el-table-column prop="count" label="动作次数" width="120" />
-              <template #empty>暂无数据</template>
+              <el-table-column prop="userId" :label="t('workflow.userId')" min-width="120" />
+              <el-table-column prop="count" :label="t('workflow.actionCount')" width="120" />
+              <template #empty>{{ t('common.emptyData') }}</template>
             </el-table>
           </el-card>
         </el-col>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * IotConnectionList — IoT 连接配置管理（P21 A1）。
  *
@@ -7,6 +10,9 @@
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ApiError } from '@/foundation/request'
+import { LoadErrorState } from '@/components/page-layout'
+import { enumLabel } from '@/foundation/i18n/enum-label'
 import {
   listConnections,
   createConnection,
@@ -20,6 +26,8 @@ import {
 } from '../api'
 
 const loading = ref(false)
+/** 本次加载的失败对象；非空时页面显示分类错误态而不是空态。 */
+const loadError = ref<ApiError | null>(null)
 const list = ref<IotConnection[]>([])
 
 const dialogVisible = ref(false)
@@ -36,12 +44,18 @@ const form = reactive({
   keepalive: 60,
 })
 
-const isEmpty = computed(() => !loading.value && list.value.length === 0)
+const isEmpty = computed(
+  () => !loading.value && !loadError.value && !loadError.value && list.value.length === 0,
+)
 
 async function load() {
   loading.value = true
+  loadError.value = null
   try {
     list.value = await listConnections()
+  } catch (err) {
+    // 保留完整 ApiError：错误态需要分类结论、恢复动作与事件引用，不只是文案串
+    loadError.value = err instanceof ApiError ? err : null
   } finally {
     loading.value = false
   }
@@ -81,17 +95,17 @@ function openEdit(row: IotConnection) {
 
 async function save() {
   if (!form.code || !form.name) {
-    ElMessage.warning('标识与名称必填')
+    ElMessage.warning(t('iot.identifierAndNameRequired'))
     return
   }
   const body: Record<string, unknown> = { ...form }
   if (!form.password) delete body.password
   if (editingId.value) {
     await updateConnection(editingId.value, body)
-    ElMessage.success('已保存')
+    ElMessage.success(t('common.saved'))
   } else {
     await createConnection(body)
-    ElMessage.success('已创建')
+    ElMessage.success(t('common.created'))
   }
   dialogVisible.value = false
   void load()
@@ -100,37 +114,49 @@ async function save() {
 async function handleTest(row: IotConnection) {
   const result = await testConnection(row.id)
   if (result.category === 'SUCCESS') {
-    ElMessage.success(`连接成功：${result.detail}`)
+    ElMessage.success(t('iot.connectionTestSuccess', { detail: result.detail }))
   } else {
-    ElMessage.error(`连接失败（${result.category}）：${result.detail}`)
+    ElMessage.error(
+      t('iot.connectionTestFailed', { category: result.category, detail: result.detail }),
+    )
   }
   void load()
 }
 
 async function handleConnect(row: IotConnection) {
   const result = await connectConnection(row.id)
-  ElMessage.success(`常驻连接已建立，恢复订阅 ${result.subscriptions} 条`)
+  ElMessage.success(t('iot.subscriptionsRestored', { subscriptions: result.subscriptions }))
 }
 
 async function handleRotate(row: IotConnection) {
-  const { value } = await ElMessageBox.prompt('输入新口令（只写，不可回读）', '凭证轮换', {
-    inputType: 'password',
-    confirmButtonText: '轮换',
-  })
+  const { value } = await ElMessageBox.prompt(
+    t('iot.newPasswordPrompt'),
+    t('iot.credentialRotation'),
+    {
+      inputType: 'password',
+      get confirmButtonText() {
+        return t('iot.rotate')
+      },
+    },
+  )
   await rotateConnectionPassword(row.id, value)
-  ElMessage.success('凭证已轮换')
+  ElMessage.success(t('iot.credentialRotated'))
 }
 
 async function handleToggle(row: IotConnection) {
   await toggleConnection(row.id, row.enabled !== 1)
-  ElMessage.success(row.enabled === 1 ? '已停用' : '已启用')
+  ElMessage.success(row.enabled === 1 ? t('common.statusDisabled') : t('common.statusEnabled'))
   void load()
 }
 
 async function handleDelete(row: IotConnection) {
-  await ElMessageBox.confirm(`删除连接「${row.name}」？`, '删除', { type: 'warning' })
+  await ElMessageBox.confirm(
+    t('iot.deleteConnectionConfirm', { name: row.name }),
+    t('common.delete'),
+    { type: 'warning' },
+  )
   await deleteConnection(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('common.deleted'))
   void load()
 }
 
@@ -140,15 +166,16 @@ onMounted(() => void load())
 <template>
   <div style="padding: 16px">
     <div style="display: flex; justify-content: space-between; margin-bottom: 12px">
-      <h3 style="margin: 0">连接配置</h3>
-      <el-button type="primary" @click="openCreate">新增连接</el-button>
+      <h3 style="margin: 0">{{ t('iot.connectionConfig') }}</h3>
+      <el-button type="primary" @click="openCreate">{{ t('iot.newConnection') }}</el-button>
     </div>
+    <LoadErrorState v-if="loadError" :error="loadError" @retry="load" />
 
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="code" label="标识" min-width="110" />
-      <el-table-column prop="name" label="名称" min-width="130" />
-      <el-table-column prop="connType" label="类型" width="90" />
-      <el-table-column label="地址" min-width="170">
+      <el-table-column prop="code" :label="t('common.identifier')" min-width="110" />
+      <el-table-column prop="name" :label="t('common.name')" min-width="130" />
+      <el-table-column prop="connType" :label="t('common.type')" width="90" />
+      <el-table-column :label="t('common.address')" min-width="170">
         <template #default="{ row }">
           {{
             row.connType === 'MQTT'
@@ -157,7 +184,7 @@ onMounted(() => void load())
           }}
         </template>
       </el-table-column>
-      <el-table-column label="凭证" width="90">
+      <el-table-column :label="t('iot.credential')" width="90">
         <template #default="{ row }">
           <el-tag v-if="row.hasPassword" type="info" size="small">{{
             row.passwordMasked ?? '******'
@@ -165,7 +192,7 @@ onMounted(() => void load())
           <span v-else>—</span>
         </template>
       </el-table-column>
-      <el-table-column label="健康" width="100">
+      <el-table-column :label="t('iot.health')" width="100">
         <template #default="{ row }">
           <el-tag
             :type="
@@ -177,80 +204,94 @@ onMounted(() => void load())
             "
             size="small"
           >
-            {{ row.healthStatus }}
+            {{ enumLabel('IOT_HEALTH', row.healthStatus) }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column
         prop="lastCheckResult"
-        label="最后检查"
+        :label="t('iot.lastChecked')"
         min-width="200"
         show-overflow-tooltip
       />
-      <el-table-column label="启停" width="70">
+      <el-table-column :label="t('common.toggle')" width="70">
         <template #default="{ row }">
           <el-tag :type="row.enabled === 1 ? 'success' : 'info'" size="small">{{
-            row.enabled === 1 ? '启用' : '停用'
+            row.enabled === 1 ? t('common.enable') : t('common.disable')
           }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column :label="t('common.actions')" width="280" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="handleTest(row as IotConnection)">测试</el-button>
+          <el-button size="small" @click="handleTest(row as IotConnection)">{{
+            t('common.test')
+          }}</el-button>
           <el-button
             v-if="row.connType === 'MQTT' && row.enabled === 1"
             size="small"
             type="success"
             @click="handleConnect(row as IotConnection)"
-            >连接</el-button
+            >{{ t('iot.connect') }}</el-button
           >
-          <el-button size="small" @click="handleRotate(row as IotConnection)">轮换</el-button>
-          <el-button size="small" @click="openEdit(row as IotConnection)">编辑</el-button>
-          <el-button size="small" @click="handleToggle(row as IotConnection)">{{
-            row.enabled === 1 ? '停用' : '启用'
+          <el-button size="small" @click="handleRotate(row as IotConnection)">{{
+            t('iot.rotate')
           }}</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row as IotConnection)"
-            >删除</el-button
-          >
+          <el-button size="small" @click="openEdit(row as IotConnection)">{{
+            t('common.edit')
+          }}</el-button>
+          <el-button size="small" @click="handleToggle(row as IotConnection)">{{
+            row.enabled === 1 ? t('common.disable') : t('common.enable')
+          }}</el-button>
+          <el-button size="small" type="danger" @click="handleDelete(row as IotConnection)">{{
+            t('common.delete')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="isEmpty" description="暂无连接配置" />
+    <el-empty v-if="isEmpty" :description="t('iot.noConnections')" />
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑连接' : '新增连接'" width="520px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editingId ? t('iot.editConnection') : t('iot.newConnection')"
+      width="520px"
+    >
       <el-form label-width="90px">
-        <el-form-item label="标识" required>
-          <el-input v-model="form.code" :disabled="!!editingId" placeholder="唯一标识" />
+        <el-form-item :label="t('common.identifier')" required>
+          <el-input
+            v-model="form.code"
+            :disabled="!!editingId"
+            :placeholder="t('iot.uniqueIdentifier')"
+          />
         </el-form-item>
-        <el-form-item label="名称" required>
+        <el-form-item :label="t('common.name')" required>
           <el-input v-model="form.name" />
         </el-form-item>
-        <el-form-item label="类型">
+        <el-form-item :label="t('common.type')">
           <el-select v-model="form.connType" :disabled="!!editingId">
-            <el-option label="自建 MQTT" value="MQTT" />
-            <el-option label="腾讯 IoT" value="TENCENT" />
+            <el-option :label="t('iot.mqttSelfBuilt')" value="MQTT" />
+            <el-option :label="t('iot.tencentIot')" value="TENCENT" />
           </el-select>
         </el-form-item>
         <template v-if="form.connType === 'MQTT'">
-          <el-form-item label="主机" required>
+          <el-form-item :label="t('iot.host')" required>
             <el-input v-model="form.host" />
           </el-form-item>
-          <el-form-item label="端口" required>
+          <el-form-item :label="t('iot.port')" required>
             <el-input-number v-model="form.port" :min="1" :max="65535" />
           </el-form-item>
           <el-form-item label="TLS">
             <el-switch v-model="form.useTls" :active-value="1" :inactive-value="0" />
           </el-form-item>
         </template>
-        <el-form-item label="用户名">
+        <el-form-item :label="t('common.username')">
           <el-input v-model="form.username" />
         </el-form-item>
-        <el-form-item label="口令">
+        <el-form-item :label="t('iot.password')">
           <el-input
             v-model="form.password"
             type="password"
             show-password
-            :placeholder="editingId ? '留空保持不变' : '口令'"
+            :placeholder="editingId ? t('iot.passwordKeepPlaceholder') : t('iot.password')"
           />
         </el-form-item>
         <el-form-item label="keepalive">
@@ -258,8 +299,8 @@ onMounted(() => void load())
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </div>

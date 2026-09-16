@@ -5,7 +5,8 @@ import {
   getNodePanelDescriptor,
   registerNodePanelDescriptor,
 } from './node-panel-registry'
-import { NODE_TYPE_LABELS } from '@/modules/agent/utils/graphAdapter'
+import { NODE_TYPE_LABEL_KEYS } from '@/modules/agent/utils/graphAdapter'
+import { ENUM_LABEL_KEYS } from '@/foundation/i18n/enum-label'
 
 // 与图设计器 8 类节点全集对齐——新增/删减节点类型时本断言会逼着同步注册表。
 const EXPECTED_TYPES = ['START', 'END', 'LLM', 'TOOL', 'CONDITION', 'LOOP', 'FORK', 'JOIN']
@@ -17,9 +18,10 @@ describe('NODE_PANEL_REGISTRY', () => {
     expect(new Set(types)).toEqual(new Set(EXPECTED_TYPES))
   })
 
-  it('labels align with NODE_TYPE_LABELS (单一显示数据源)', () => {
+  it('labelKey 与 graphAdapter 及全局枚举表三方同源（单一显示数据源）', () => {
     for (const d of NODE_PANEL_REGISTRY) {
-      expect(d.label).toBe(NODE_TYPE_LABELS[d.type])
+      expect(d.labelKey).toBe(NODE_TYPE_LABEL_KEYS[d.type])
+      expect(d.labelKey).toBe(ENUM_LABEL_KEYS.AGENT_NODE_TYPE[d.type as 'START'])
     }
   })
 
@@ -56,13 +58,21 @@ describe('NODE_PANEL_REGISTRY', () => {
     })
 
     // 新增
-    registerNodePanelDescriptor({ type: 'PROBE', label: '探针', component: ProbePanelA })
+    registerNodePanelDescriptor({
+      type: 'PROBE',
+      labelKey: 'agent.nodeProbe',
+      component: ProbePanelA,
+    })
     expect(getNodePanelDescriptor('PROBE')?.component).toBe(ProbePanelA)
 
     // 同 type 覆盖式注册（幂等：不产生重复条目）
-    registerNodePanelDescriptor({ type: 'PROBE', label: '探针2', component: ProbePanelB })
+    registerNodePanelDescriptor({
+      type: 'PROBE',
+      labelKey: 'agent.nodeProbe2',
+      component: ProbePanelB,
+    })
     expect(getNodePanelDescriptor('PROBE')?.component).toBe(ProbePanelB)
-    expect(getNodePanelDescriptor('PROBE')?.label).toBe('探针2')
+    expect(getNodePanelDescriptor('PROBE')?.labelKey).toBe('agent.nodeProbe2')
     expect(NODE_PANEL_REGISTRY.filter((d) => d.type === 'PROBE')).toHaveLength(1)
   })
 })

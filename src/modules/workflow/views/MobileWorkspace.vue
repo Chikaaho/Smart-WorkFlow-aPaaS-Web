@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * MobileWorkspace — 移动端统一工作台（I4 §3.7，响应式 H5 正式形态）。
  * 覆盖：待办详情（任务/业务表单数据回显）、正式意见表单动态渲染（必填/显隐/初值）、
@@ -89,7 +93,7 @@ async function loadTab(tab: MobileTab) {
       rows.value = (await myDrafts(page)).list as unknown as Row[]
     }
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? err.msg : '加载失败'
+    errorMsg.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
@@ -141,7 +145,7 @@ async function openTask(row: Row) {
       }
     }
   } catch (err) {
-    submitError.value = err instanceof ApiError ? err.msg : '加载任务详情失败'
+    submitError.value = err instanceof ApiError ? err.msg : t('workflow.mobileTaskDetailLoadFailed')
   } finally {
     detailLoading.value = false
   }
@@ -279,7 +283,7 @@ async function submitHandle(action: 'APPROVE' | 'DISAPPROVE') {
   if (!detail.value) return
   // 反向：缺必填在 H5 内确定拒绝（后端 ApprovalOpinionValidator 同口径二次把关）
   if (hasOpinionForm.value && opinionRequiredMissing()) {
-    ElMessage.warning('请填写必填审批意见')
+    ElMessage.warning(t('workflow.commentRequired'))
     return
   }
   submitting.value = true
@@ -300,17 +304,17 @@ async function submitHandle(action: 'APPROVE' | 'DISAPPROVE') {
     )
     const finalStatus = await pollCommandStatus(accepted.commandId)
     if (finalStatus?.status === 'COMPLETED') {
-      ElMessage.success('已办理')
+      ElMessage.success(t('workflow.handled'))
       detailVisible.value = false
       await loadTab('todo')
     } else if (finalStatus?.status === 'FAILED') {
-      submitError.value = finalStatus.failureReason || '办理失败（命令执行失败）'
+      submitError.value = finalStatus.failureReason || t('workflow.actionFailedCommand')
     } else {
-      ElMessage.info('处理中，请稍后在列表确认')
+      ElMessage.info(t('workflow.processingCheckList'))
       detailVisible.value = false
     }
   } catch (err) {
-    submitError.value = err instanceof ApiError ? err.msg : '办理失败'
+    submitError.value = err instanceof ApiError ? err.msg : t('workflow.actionFailed')
   } finally {
     submitting.value = false
   }
@@ -340,7 +344,8 @@ void (async () => {
     refInstance.value = await getInstanceDetail(refId)
     refVisible.value = true
   } catch (err) {
-    refInstanceError.value = err instanceof ApiError ? err.msg : '无权访问该业务对象'
+    // 非 ApiError（网络/超时）不能断言成无权限：那是在替后端下结论
+    refInstanceError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
     refVisible.value = true
   }
 })()
@@ -349,14 +354,16 @@ void (async () => {
 <template>
   <div class="mobile-workspace">
     <header class="m-header">
-      <h1 class="m-title">工作台</h1>
-      <el-button link type="primary" @click="router.push('/m/form/leave_form')"> 发起 </el-button>
+      <h1 class="m-title">{{ t('common.workspace') }}</h1>
+      <el-button link type="primary" @click="router.push('/m/form/leave_form')">{{
+        t('common.start')
+      }}</el-button>
     </header>
 
     <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-      <el-tab-pane label="待办" name="todo" />
-      <el-tab-pane label="我发起的" name="initiated" />
-      <el-tab-pane label="草稿" name="drafts" />
+      <el-tab-pane :label="t('workflow.todoTab')" name="todo" />
+      <el-tab-pane :label="t('common.startedByMe')" name="initiated" />
+      <el-tab-pane :label="t('common.statusDraft')" name="drafts" />
     </el-tabs>
 
     <el-alert v-if="errorMsg" :title="errorMsg" type="error" :closable="false" />
@@ -370,17 +377,19 @@ void (async () => {
       >
         <div class="m-item-title">{{ rowTitle(row) }}</div>
         <div class="m-item-meta">
-          <span>{{ row.status || (activeTab === 'todo' ? '待办理' : '—') }}</span>
+          <span>{{
+            row.status || (activeTab === 'todo' ? t('workflow.pendingHandle') : '—')
+          }}</span>
           <span>{{ row.createTime || '' }}</span>
         </div>
       </li>
-      <li v-if="isEmpty" class="m-item m-empty">暂无数据</li>
+      <li v-if="isEmpty" class="m-item m-empty">{{ t('common.emptyData') }}</li>
     </ul>
 
     <!-- I6 G4b：深链恢复的实例详情（只读，服务端对象权限已裁决） -->
     <el-drawer v-model="refVisible" size="92%" direction="btt" class="m-detail">
       <template #title>
-        <span class="m-detail-title">流程实例详情</span>
+        <span class="m-detail-title">{{ t('workflow.instanceDetailTitle') }}</span>
       </template>
       <div class="m-detail-body">
         <el-alert
@@ -391,25 +400,29 @@ void (async () => {
         />
         <template v-if="refInstance">
           <section class="m-section">
-            <h3 class="m-section-title">基本信息</h3>
+            <h3 class="m-section-title">{{ t('common.basicInfo') }}</h3>
             <div class="m-kv">
-              <span>实例 ID</span><b>{{ refInstance.processInstanceId }}</b>
+              <span>{{ t('common.instanceId') }}</span
+              ><b>{{ refInstance.processInstanceId }}</b>
             </div>
             <div class="m-kv">
-              <span>状态</span><b>{{ refInstance.status }}</b>
+              <span>{{ t('common.status') }}</span
+              ><b>{{ enumLabel('WORKFLOW_INSTANCE', refInstance.status) }}</b>
             </div>
             <div class="m-kv">
-              <span>发起人</span><b>{{ refInstance.initiatorId }}</b>
+              <span>{{ t('common.initiator') }}</span
+              ><b>{{ refInstance.initiatorId }}</b>
             </div>
             <div class="m-kv">
-              <span>表单</span><b>{{ refInstance.formKey }}</b>
+              <span>{{ t('common.form') }}</span
+              ><b>{{ refInstance.formKey }}</b>
             </div>
           </section>
           <section class="m-section">
-            <h3 class="m-section-title">流转记录</h3>
-            <div v-for="(t, i) in refInstance.flowTrace || []" :key="i" class="m-kv">
-              <span>{{ t.activityName || t.activityId || i }}</span>
-              <b>{{ t.assigneeName || t.assignee || '' }} {{ t.endTime || '' }}</b>
+            <h3 class="m-section-title">{{ t('common.flowHistory') }}</h3>
+            <div v-for="(trace, i) in refInstance.flowTrace || []" :key="i" class="m-kv">
+              <span>{{ trace.activityName || trace.activityId || i }}</span>
+              <b>{{ trace.assigneeName || trace.assignee || '' }} {{ trace.endTime || '' }}</b>
             </div>
           </section>
         </template>
@@ -419,33 +432,38 @@ void (async () => {
     <!-- 详情面板：任务/业务表单详情 + 正式意见表单 -->
     <el-drawer v-model="detailVisible" size="92%" direction="btt" class="m-detail">
       <template #title>
-        <span class="m-detail-title">{{ detail?.taskName || '任务详情' }}</span>
+        <span class="m-detail-title">{{ detail?.taskName || t('workflow.taskDetail') }}</span>
       </template>
       <div v-loading="detailLoading" class="m-detail-body">
         <el-alert v-if="submitError" :title="submitError" type="error" :closable="false" />
 
         <template v-if="detail">
           <section class="m-section">
-            <h3 class="m-section-title">任务信息</h3>
+            <h3 class="m-section-title">{{ t('workflow.taskInfo') }}</h3>
             <div class="m-kv">
-              <span>流程名称</span><b>{{ detail.processName || detail.processDefinitionKey }}</b>
+              <span>{{ t('common.processName') }}</span
+              ><b>{{ detail.processName || detail.processDefinitionKey }}</b>
             </div>
             <div class="m-kv">
-              <span>发起人</span><b>{{ detail.initiatorName || detail.initiatorId || '—' }}</b>
+              <span>{{ t('common.initiator') }}</span
+              ><b>{{ detail.initiatorName || detail.initiatorId || '—' }}</b>
             </div>
             <div class="m-kv">
-              <span>当前办理人</span><b>{{ detail.assigneeName || detail.assignee || '—' }}</b>
+              <span>{{ t('workflow.currentAssignee') }}</span
+              ><b>{{ detail.assigneeName || detail.assignee || '—' }}</b>
             </div>
             <div class="m-kv">
-              <span>业务单号</span><b>{{ detail.businessKey || '—' }}</b>
+              <span>{{ t('common.businessNo') }}</span
+              ><b>{{ detail.businessKey || '—' }}</b>
             </div>
             <div class="m-kv">
-              <span>创建时间</span><b>{{ detail.createTime || '—' }}</b>
+              <span>{{ t('common.createTime') }}</span
+              ><b>{{ detail.createTime || '—' }}</b>
             </div>
           </section>
 
           <section class="m-section">
-            <h3 class="m-section-title">表单数据（本次提交）</h3>
+            <h3 class="m-section-title">{{ t('workflow.formDataThisSubmission') }}</h3>
             <template v-if="formFieldRows.length">
               <div v-for="row in formFieldRows" :key="row.key" class="m-kv">
                 <span>{{ row.label }}</span>
@@ -462,12 +480,14 @@ void (async () => {
                 <b v-else>{{ row.value }}</b>
               </div>
             </template>
-            <p v-else class="m-empty-line">表单记录加载失败或已不存在</p>
+            <p v-else class="m-empty-line">{{ t('workflow.formRecordUnavailable') }}</p>
           </section>
 
           <section class="m-section">
             <h3 class="m-section-title">
-              {{ hasOpinionForm ? '审批意见（正式意见表单）' : '审批意见' }}
+              {{
+                hasOpinionForm ? t('workflow.approvalCommentFormal') : t('workflow.approvalComment')
+              }}
             </h3>
             <div v-for="field in visibleOpinionFields" :key="field.key" class="m-opinion-field">
               <template v-if="field.type === 'NOTE'">
@@ -498,7 +518,7 @@ void (async () => {
                     setOpinionFieldValue(field.key, ($event.target as HTMLSelectElement).value)
                   "
                 >
-                  <option value="">请选择</option>
+                  <option value="">{{ t('common.pleaseSelect') }}</option>
                   <option v-for="option in field.options ?? []" :key="option" :value="option">
                     {{ option }}
                   </option>
@@ -572,13 +592,15 @@ void (async () => {
           </section>
 
           <div class="m-actions">
-            <el-button :disabled="submitting" @click="detailVisible = false">取消</el-button>
+            <el-button :disabled="submitting" @click="detailVisible = false">{{
+              t('common.cancel')
+            }}</el-button>
             <el-button type="danger" :loading="submitting" @click="submitHandle('DISAPPROVE')">
-              不通过
+              {{ t('workflow.disapprove') }}
             </el-button>
-            <el-button type="primary" :loading="submitting" @click="submitHandle('APPROVE')">
-              通过
-            </el-button>
+            <el-button type="primary" :loading="submitting" @click="submitHandle('APPROVE')">{{
+              t('common.approve')
+            }}</el-button>
           </div>
         </template>
       </div>

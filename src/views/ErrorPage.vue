@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
@@ -7,7 +10,7 @@ const route = useRoute()
 <template>
   <div class="error-page">
     <h1>{{ route.meta.errorCode }}</h1>
-    <p>{{ route.meta.title ?? '出错了' }}</p>
+    <p>{{ route.meta.title ?? t('view.errorTitle') }}</p>
   </div>
 </template>
 

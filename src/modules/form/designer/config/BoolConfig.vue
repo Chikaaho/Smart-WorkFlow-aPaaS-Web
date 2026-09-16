@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 开关（BOOL）配置面板。
  * 契约键：label / name（按规格不含「必填」，故隐藏 required 行）。
@@ -24,6 +27,6 @@ const emit = defineEmits<{ update: [patch: FieldPatch] }>()
       @update="(p) => emit('update', p)"
     />
 
-    <ConfigSeamNote :items="['默认开 / 关']" />
+    <ConfigSeamNote :items="[t('form.configSeamDefaultOnOff')]" />
   </div>
 </template>

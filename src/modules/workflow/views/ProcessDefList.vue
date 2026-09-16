@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ProcessDefList — 流程定义列表页（页型 B）。
  *
@@ -30,8 +33,18 @@ const PROCESS_DEF_STATUS_MAP: Record<
   ProcessDef['status'],
   { label: string; type: 'success' | 'warning' | 'info' | 'danger' }
 > = {
-  DRAFT: { label: '草稿', type: 'info' },
-  PUBLISHED: { label: '已发布', type: 'success' },
+  DRAFT: {
+    get label() {
+      return t('common.statusDraft')
+    },
+    type: 'info',
+  },
+  PUBLISHED: {
+    get label() {
+      return t('common.statusPublished')
+    },
+    type: 'success',
+  },
 }
 
 function getStatusLabel(status: ProcessDef['status']): string {
@@ -103,7 +116,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载流程定义列表失败'
+      errorMsg.value = t('workflow.processDefListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -149,7 +162,9 @@ async function openViewer(row: ProcessDef) {
     }
   } catch (e: unknown) {
     viewerError.value =
-      (e as Record<string, string>)?.msg || (e as Error)?.message || '流程图加载失败'
+      (e as Record<string, string>)?.msg ||
+      (e as Error)?.message ||
+      t('workflow.processGraphLoadFailed')
   } finally {
     viewerLoading.value = false
   }
@@ -170,13 +185,13 @@ async function handlePublish(row: ProcessDef) {
   publishingId.value = row.id
   try {
     await publishProcessDef(row.id)
-    ElMessage.success('发布成功')
+    ElMessage.success(t('common.publishSuccess'))
     await loadList()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('发布失败')
+      ElMessage.error(t('common.publishFailed'))
     }
   } finally {
     publishingId.value = null
@@ -186,20 +201,20 @@ async function handlePublish(row: ProcessDef) {
 /** 删除流程定义（带确认对话框，仅 DRAFT 状态可删除） */
 async function handleDelete(row: ProcessDef) {
   if (row.status !== 'DRAFT') {
-    ElMessage.warning('只有草稿状态的流程定义可以删除')
+    ElMessage.warning(t('workflow.onlyDraftDeletable'))
     return
   }
 
   deletingId.value = row.id
   try {
     await deleteProcessDef(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     await loadList()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('common.deleteFailed'))
     }
   } finally {
     deletingId.value = null
@@ -211,7 +226,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="流程定义"
+    :title="t('common.processDef')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -221,10 +236,12 @@ onMounted(loadList)
   >
     <!-- 工具栏操作按钮 -->
     <template #toolbar-actions>
-      <el-button v-if="returnFormId" @click="backToWorkbench">返回表单工作台</el-button>
+      <el-button v-if="returnFormId" @click="backToWorkbench">{{
+        t('workflow.backToFormWorkbench')
+      }}</el-button>
       <el-button type="primary" @click="createDialogVisible = true">
         <el-icon><Plus /></el-icon>
-        创建流程定义
+        {{ t('workflow.createProcessDef') }}
       </el-button>
     </template>
 
@@ -232,7 +249,7 @@ onMounted(loadList)
     <template #empty-action>
       <el-button type="primary" @click="createDialogVisible = true">
         <el-icon><Plus /></el-icon>
-        创建流程定义
+        {{ t('workflow.createProcessDef') }}
       </el-button>
     </template>
 
@@ -248,25 +265,25 @@ onMounted(loadList)
 
     <!-- 表格 -->
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="name" label="流程名称" min-width="160" />
-      <el-table-column prop="processKey" label="流程标识" min-width="160" />
-      <el-table-column prop="formKey" label="关联表单" min-width="140" />
-      <el-table-column prop="defVersion" label="版本" width="80" align="center" />
-      <el-table-column prop="status" label="状态" width="100">
+      <el-table-column prop="name" :label="t('common.processName')" min-width="160" />
+      <el-table-column prop="processKey" :label="t('common.processKey')" min-width="160" />
+      <el-table-column prop="formKey" :label="t('common.boundForm')" min-width="140" />
+      <el-table-column prop="defVersion" :label="t('common.version')" width="80" align="center" />
+      <el-table-column prop="status" :label="t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="getStatusType(statusRow(row).status)" size="small">
             {{ getStatusLabel(statusRow(row).status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
+      <el-table-column :label="t('common.actions')" width="280" fixed="right">
         <template #default="{ row }">
           <el-button size="small" link type="primary" @click="openViewer(row as ProcessDef)">
-            查看流程图
+            {{ t('workflow.viewDiagram') }}
           </el-button>
           <el-button size="small" link type="warning" @click="openDesigner(row as ProcessDef)">
-            设计
+            {{ t('workflow.design') }}
           </el-button>
           <el-button
             size="small"
@@ -274,18 +291,16 @@ onMounted(loadList)
             type="success"
             :loading="publishingId === (row as ProcessDef).id"
             @click="handlePublish(row as ProcessDef)"
+            >{{ t('common.publish') }}</el-button
           >
-            发布
-          </el-button>
           <el-button
             size="small"
             link
             type="danger"
             :disabled="(row as ProcessDef).status !== 'DRAFT'"
             @click="handleDelete(row as ProcessDef)"
+            >{{ t('common.delete') }}</el-button
           >
-            删除
-          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -294,7 +309,7 @@ onMounted(loadList)
   <!-- 查看流程图对话框 -->
   <el-dialog
     v-model="viewerVisible"
-    :title="`流程图 - ${currentDefName}`"
+    :title="t('workflow.graphDialogTitle', { currentDefName })"
     :close-on-click-modal="false"
     destroy-on-close
     width="900px"
@@ -305,7 +320,7 @@ onMounted(loadList)
         v-if="viewerError"
         icon="error"
         :title="viewerError"
-        :sub-title="'请确认流程定义有可查看的图数据'"
+        :sub-title="t('workflow.confirmViewableGraph')"
       />
       <ProcessGraphView v-else :graph="viewerGraph" :height="480" />
     </div>

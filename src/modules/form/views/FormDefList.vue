@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * FormDefList — 表单定义列表页（页型B）。
  *
@@ -45,7 +48,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载表单定义列表失败'
+      errorMsg.value = t('form.defListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -106,15 +109,19 @@ async function toggleLifecycleRow(r: unknown, action: 'disable' | 'enable') {
   try {
     if (action === 'disable') {
       await disableFormDef(row.id, '管理员停用')
-      ElMessage.success('表单已停用：禁止新的填报、提交与流程发起；历史记录可继续查看')
+      ElMessage.success(t('form.disabledNotice'))
     } else {
       await enableFormDef(row.id, '管理员启用')
-      ElMessage.success('表单已启用')
+      ElMessage.success(t('form.enabledNotice'))
     }
     await loadList()
   } catch (err) {
     ElMessage.error(
-      err instanceof ApiError ? err.msg : action === 'disable' ? '停用失败' : '启用失败',
+      err instanceof ApiError
+        ? err.msg
+        : action === 'disable'
+          ? t('common.disableFailed')
+          : t('common.enableFailed'),
     )
   }
 }
@@ -141,17 +148,17 @@ async function saveVisibility() {
   const raw = visibilityUserIds.value.trim()
   const userIds = raw ? raw.split(',').map((value) => Number(value.trim())) : []
   if (userIds.some((id) => !Number.isInteger(id) || id <= 0)) {
-    errorMsg.value = '用户 ID 必须是正整数，多个 ID 用英文逗号分隔'
+    errorMsg.value = t('form.visibilityUserIdInvalid')
     return
   }
   visibilitySaving.value = true
   try {
     await updateFormVisibility(visibilityForm.value.id, userIds)
-    ElMessage.success('发起可见范围已保存')
+    ElMessage.success(t('form.visibilityScopeSaved'))
     visibilityDialogVisible.value = false
     await loadList()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '保存发起可见范围失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('form.visibilityScopeSaveFailed'))
   } finally {
     visibilitySaving.value = false
   }
@@ -162,7 +169,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="表单管理"
+    :title="t('form.managementTitle')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -172,22 +179,22 @@ onMounted(loadList)
   >
     <!-- 工具栏：新建按钮 -->
     <template #toolbar-actions>
-      <el-button type="primary" @click="goCreate">新建表单</el-button>
+      <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
     </template>
 
     <!-- 筛选区：名称搜索 -->
     <template #filter>
       <el-input
         v-model="keyword"
-        placeholder="表单名称 / 标识"
+        :placeholder="t('form.searchFormPlaceholder')"
         clearable
         style="width: 240px"
         @keyup.enter="handleQuery"
       />
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <!-- 表格 -->
@@ -200,21 +207,23 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="name" label="表单名称" min-width="160" />
-      <el-table-column prop="formKey" label="业务标识" min-width="140" />
-      <el-table-column prop="status" label="状态" width="100">
+      <el-table-column prop="name" :label="t('common.formName')" min-width="160" />
+      <el-table-column prop="formKey" :label="t('common.businessKey')" min-width="140" />
+      <el-table-column prop="status" :label="t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="getFormDefStatusType(row.status)" size="small">
             {{ getFormDefStatusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="250" fixed="right">
+      <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
+      <el-table-column :label="t('common.actions')" width="250" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editRow(row)">编辑</el-button>
+          <el-button size="small" link type="primary" @click="editRow(row)">{{
+            t('common.edit')
+          }}</el-button>
           <el-button size="small" link type="primary" @click="openVisibilityRow(row)">
-            发起范围
+            {{ t('form.initiationScope') }}
           </el-button>
           <!-- I2 生命周期：停用/启用（服务端审计；前端按钮不替代服务端状态检查） -->
           <el-button
@@ -223,45 +232,47 @@ onMounted(loadList)
             link
             type="danger"
             @click="toggleLifecycleRow(row, 'disable')"
+            >{{ t('common.disable') }}</el-button
           >
-            停用
-          </el-button>
           <el-button
             v-if="row.status === 'DISABLED'"
             size="small"
             link
             type="success"
             @click="toggleLifecycleRow(row, 'enable')"
+            >{{ t('common.enable') }}</el-button
           >
-            启用
-          </el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <!-- 空态 -->
     <template #empty-action>
-      <el-button type="primary" @click="goCreate">新建表单</el-button>
+      <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
     </template>
   </StandardListTemplate>
 
-  <el-dialog v-model="visibilityDialogVisible" title="业务发起可见范围" width="520px">
+  <el-dialog
+    v-model="visibilityDialogVisible"
+    :title="t('form.startVisibilityScope')"
+    width="520px"
+  >
     <p v-if="visibilityForm" class="visibility-form__hint">
       {{ visibilityForm.name }}（{{ visibilityForm.formKey }}）
     </p>
     <el-input
       v-model="visibilityUserIds"
-      placeholder="留空表示当前租户全部用户，例如 1001,1002"
+      :placeholder="t('form.startVisibilityPlaceholder')"
       clearable
     />
     <p class="visibility-form__hint">
-      此设置只控制普通用户是否能发起，不授予管理、数据或审批权限。
+      {{ t('form.initiationScopeNote') }}
     </p>
     <template #footer>
-      <el-button @click="visibilityDialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="visibilitySaving" @click="saveVisibility">
-        保存
-      </el-button>
+      <el-button @click="visibilityDialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="visibilitySaving" @click="saveVisibility">{{
+        t('common.save')
+      }}</el-button>
     </template>
   </el-dialog>
 </template>

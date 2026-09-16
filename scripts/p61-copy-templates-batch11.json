@@ -1,0 +1,45 @@
+{
+  "_comment": "P61 R1 参数化文案 批次11：占位符名与源码表达式同名（或成员表达式末段同名）的收口，codemod 可直接改写。",
+  "该配置处于限流冷却中，冷却至 ${lockedUntil}": {
+    "key": "agent.modelCoolingDown",
+    "zh": "该配置处于限流冷却中，冷却至 {lockedUntil}",
+    "en": "This configuration is cooling down until {lockedUntil}",
+    "vars": ["lockedUntil"]
+  },
+  "${label}节点无可编辑属性": {
+    "key": "agent.nodeNoEditableProps",
+    "zh": "{label}节点无可编辑属性",
+    "en": "The {label} node has no editable properties",
+    "vars": ["label"]
+  },
+  "历史版本 V${previewVersion} · 只读": {
+    "key": "form.historyBadge",
+    "zh": "历史版本 V{previewVersion} · 只读",
+    "en": "History version V{previewVersion} · read-only",
+    "vars": ["previewVersion"]
+  },
+  "表单数据 — ${formKey}": {
+    "key": "form.dataDialogTitle",
+    "zh": "表单数据 — {formKey}",
+    "en": "Form data — {formKey}",
+    "vars": ["formKey"]
+  },
+  "流程图 - ${currentDefName}": {
+    "key": "workflow.graphDialogTitle",
+    "zh": "流程图 - {currentDefName}",
+    "en": "Process diagram - {currentDefName}",
+    "vars": ["currentDefName"]
+  },
+  "成功向 ${result.recipientCount} 人发送通知": {
+    "key": "notify.batchSendSuccess",
+    "zh": "成功向 {recipientCount} 人发送通知",
+    "en": "Notification sent to {recipientCount} recipients",
+    "vars": ["recipientCount"]
+  },
+  "${dt.name}（${dt.code}）": {
+    "key": "common.nameWithCode",
+    "zh": "{name}（{code}）",
+    "en": "{name} ({code})",
+    "vars": ["name", "code"]
+  }
+}

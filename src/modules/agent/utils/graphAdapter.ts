@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 /**
  * 图元素双向转换层：后端 ProcessGraph.elements（kind 区分的统一列表）
  * ↔ flow-graph adapter 的 FlowGraphData（节点/边分离模型）。
@@ -50,16 +51,27 @@ export const NODE_TYPE_LOOP = 'LOOP'
 export const NODE_TYPE_FORK = 'FORK'
 export const NODE_TYPE_JOIN = 'JOIN'
 
-/** 节点类型 → 画布默认显示名（仅展示用途，不落库，往返无字段） */
-export const NODE_TYPE_LABELS: Record<string, string> = {
-  [NODE_TYPE_START]: '开始',
-  [NODE_TYPE_END]: '结束',
-  [NODE_TYPE_LLM]: 'LLM 调用',
-  [NODE_TYPE_TOOL]: '工具调用',
-  [NODE_TYPE_CONDITION]: '条件分支',
-  [NODE_TYPE_LOOP]: '循环',
-  [NODE_TYPE_FORK]: '并行分支',
-  [NODE_TYPE_JOIN]: '汇合',
+/**
+ * 节点类型 → 文案键（仅展示用途，不落库，往返无字段）。
+ *
+ * 存**键**而不是求值结果：模块加载期求值会把语言固化，之后切换语言不再生效。
+ * 取显示名一律走 nodeTypeLabel()（或统一枚举表 enumLabel('AGENT_NODE_TYPE', type)）。
+ */
+export const NODE_TYPE_LABEL_KEYS: Record<string, string> = {
+  [NODE_TYPE_START]: 'agent.nodeStart',
+  [NODE_TYPE_END]: 'agent.nodeEnd',
+  [NODE_TYPE_LLM]: 'agent.nodeLlm',
+  [NODE_TYPE_TOOL]: 'agent.nodeTool',
+  [NODE_TYPE_CONDITION]: 'agent.nodeCondition',
+  [NODE_TYPE_LOOP]: 'agent.nodeLoop',
+  [NODE_TYPE_FORK]: 'agent.nodeFork',
+  [NODE_TYPE_JOIN]: 'agent.nodeJoin',
+}
+
+/** 节点类型显示名；未登记类型回落为类型本身（不回落为键名）。 */
+export function nodeTypeLabel(type: string): string {
+  const key = NODE_TYPE_LABEL_KEYS[type]
+  return key ? i18n.global.t(key) : type
 }
 
 function isNode(el: GraphElement): boolean {

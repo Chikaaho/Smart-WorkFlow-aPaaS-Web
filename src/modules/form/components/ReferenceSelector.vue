@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ReferenceSelector — REFERENCE 字段关联选择器弹窗。
  *
@@ -65,7 +68,7 @@ const searchFields = computed(() => (definition.value ? deriveSearchFields(defin
 
 const dialogTitle = computed(() => {
   const title = definition.value?.title ?? props.targetFormKey
-  return `选择关联记录 — ${title || '目标表单'}`
+  return t('form.referenceSelectorTitle', { title: title || t('form.targetForm') })
 })
 
 /* ── 加载 definition ── */
@@ -76,7 +79,8 @@ async function loadDefinition() {
     definition.value = await getFormDefinition(props.targetFormKey)
   } catch (e) {
     const err = e as { code?: number; message?: string }
-    errorMsg.value = getErrorMessage(err.code ?? -1, err.message) || '加载目标表单定义失败'
+    errorMsg.value =
+      getErrorMessage(err.code ?? -1, err.message) || t('form.targetFormDefLoadFailed')
   }
 }
 
@@ -105,7 +109,8 @@ async function loadData() {
     selectedRow.value = null
   } catch (e) {
     const err = e as { code?: number; message?: string }
-    errorMsg.value = getErrorMessage(err.code ?? -1, err.message) || '查询目标表单数据失败'
+    errorMsg.value =
+      getErrorMessage(err.code ?? -1, err.message) || t('form.targetFormDataQueryFailed')
     result.value = null
   } finally {
     loading.value = false
@@ -153,7 +158,7 @@ function handleRowDblclick(row: Record<string, unknown>) {
 
 function confirmSelection() {
   if (!selectedRow.value) {
-    ElMessage.warning('请选择一条记录')
+    ElMessage.warning(t('common.selectOneRecord'))
     return
   }
   const row = selectedRow.value
@@ -194,7 +199,7 @@ watch(
 function formatCellValue(row: Record<string, unknown>, col: ColumnConfig): string {
   const raw = row[col.prop]
   if (raw === null || raw === undefined) return '-'
-  if (col.type === 'BOOL') return raw === 1 || raw === true ? '是' : '否'
+  if (col.type === 'BOOL') return raw === 1 || raw === true ? t('common.yes') : t('common.no')
   return String(raw)
 }
 </script>
@@ -224,14 +229,14 @@ function formatCellValue(row: Record<string, unknown>, col: ColumnConfig): strin
       <div class="reference-selector__search">
         <el-input
           v-model="searchKeyword"
-          placeholder="请输入关键词搜索"
+          :placeholder="t('form.keywordSearchPlaceholder')"
           clearable
           style="width: 260px"
           @keyup.enter="handleSearch"
           @clear="handleReset"
         />
-        <el-button type="primary" @click="handleSearch">搜索</el-button>
-        <el-button @click="handleReset">重置</el-button>
+        <el-button type="primary" @click="handleSearch">{{ t('common.search') }}</el-button>
+        <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
       </div>
 
       <!-- 表格 -->
@@ -273,14 +278,16 @@ function formatCellValue(row: Record<string, unknown>, col: ColumnConfig): strin
 
         <!-- 空态 -->
         <template #empty>
-          <span v-if="!loading" style="color: var(--sw-text-secondary)">暂无数据</span>
+          <span v-if="!loading" style="color: var(--sw-text-secondary)">{{
+            t('common.emptyData')
+          }}</span>
         </template>
       </el-table>
 
       <!-- 分页 -->
       <div class="reference-selector__pagination">
         <span class="reference-selector__pagination-total">
-          共 {{ result?.total ?? 0 }} 条记录
+          {{ t('common.totalRecords', { total: result?.total ?? 0 }) }}
         </span>
         <el-pagination
           :current-page="pageNum"
@@ -297,9 +304,9 @@ function formatCellValue(row: Record<string, unknown>, col: ColumnConfig): strin
     </div>
 
     <template #footer>
-      <el-button @click="close">取消</el-button>
+      <el-button @click="close">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :disabled="!selectedRow" @click="confirmSelection">
-        确认选择
+        {{ t('form.confirmSelection') }}
       </el-button>
     </template>
   </el-dialog>

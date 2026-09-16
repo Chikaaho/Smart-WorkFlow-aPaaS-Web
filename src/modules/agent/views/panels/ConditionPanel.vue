@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * CONDITION 节点属性面板：出边关键词编辑（写 edge.label，画布原生渲染边标签；
  * 留空 = 默认边）。写回统一 emit 上行：keywordChange（逐边关键词，改后画布重挂载在
@@ -16,23 +19,18 @@ defineEmits<{
 
 <template>
   <div class="field-row">
-    <div class="field-label">出边关键词</div>
-    <el-alert
-      title="输入关键词后文本命中即走该边；留空为默认边（仅一条）"
-      type="info"
-      :closable="false"
-      show-icon
-    />
+    <div class="field-label">{{ t('agent.outgoingKeywords') }}</div>
+    <el-alert :title="t('agent.outgoingKeywordsHint')" type="info" :closable="false" show-icon />
     <div v-for="edge in conditionOutEdges" :key="edge.id" class="edge-row">
       <div class="edge-name">{{ edgeDisplayName(edge) }}</div>
       <el-input
         :model-value="edge.label ?? ''"
-        placeholder="关键词（留空=默认边）"
+        :placeholder="t('agent.keywordPlaceholder')"
         size="small"
         @change="(v) => $emit('keywordChange', edge, v)"
       />
       <el-button size="small" link type="danger" @click="$emit('removeEdge', edge.id)">
-        删除边
+        {{ t('agent.deleteEdge') }}
       </el-button>
     </div>
   </div>

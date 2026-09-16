@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ModelList — 大模型配置列表页（页型 B）。
  *
@@ -35,7 +38,9 @@ const { hasPerm } = usePermission()
 const PROTOCOL_MAP: Record<string, string> = {
   openai: 'OpenAI',
   ollama: 'Ollama',
-  other: '其他',
+  get other() {
+    return t('common.other')
+  },
 }
 
 function getProtocolLabel(protocolType: string): string {
@@ -51,9 +56,9 @@ interface LockState {
 
 function getLockState(row: AgentModelConfig): LockState {
   if (!row.lockedUntil) return { active: false, label: '' }
-  const t = new Date(row.lockedUntil).getTime()
-  if (!Number.isFinite(t) || t <= Date.now()) return { active: false, label: '' }
-  return { active: true, label: `冷却至 ${row.lockedUntil}` }
+  const lockedMs = new Date(row.lockedUntil).getTime()
+  if (!Number.isFinite(lockedMs) || lockedMs <= Date.now()) return { active: false, label: '' }
+  return { active: true, label: t('agent.coolingUntil', { lockedUntil: row.lockedUntil }) }
 }
 
 // ─── 列表状态 ───
@@ -84,7 +89,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载大模型配置列表失败'
+      errorMsg.value = t('agent.modelListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -150,7 +155,7 @@ async function handleTest(row: AgentModelConfig) {
     testDialogVisible.value = true
   } catch (err) {
     // 请求层业务码异常：直接透出后端消息，不改判语义
-    ElMessage.error(err instanceof ApiError ? err.msg : '连通性测试失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('agent.connectivityTestFailed'))
   } finally {
     testingId.value = null
   }
@@ -165,23 +170,31 @@ function closeTestDialog() {
 
 async function handleDelete(row: AgentModelConfig) {
   try {
-    await ElMessageBox.confirm(`确认删除「${row.name}」？删除后不可恢复。`, '删除确认', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      t('agent.confirmDeleteGraph', { name: row.name }),
+      t('common.deleteConfirmTitle'),
+      {
+        get confirmButtonText() {
+          return t('common.delete')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+      },
+    )
   } catch {
     return // 用户取消
   }
   try {
     await deleteModel(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     void loadList()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('common.deleteFailed'))
     }
   }
 }
@@ -204,7 +217,7 @@ onMounted(() => {
 
 <template>
   <StandardListTemplate
-    title="大模型管理"
+    :title="t('agent.modelManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -213,21 +226,23 @@ onMounted(() => {
     @update:page-size="handlePageSizeChange"
   >
     <template #toolbar-actions>
-      <el-button v-if="canManage" type="primary" @click="openCreate">新建</el-button>
+      <el-button v-if="canManage" type="primary" @click="openCreate">{{
+        t('common.create')
+      }}</el-button>
     </template>
 
     <template #filter>
       <el-input
         v-model="filter.name"
-        placeholder="名称关键字"
+        :placeholder="t('agent.nameKeywordPlaceholder')"
         clearable
         style="width: 200px"
         @keyup.enter="handleQuery"
       />
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <el-alert
@@ -240,7 +255,7 @@ onMounted(() => {
     />
 
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="name" label="名称" min-width="180">
+      <el-table-column prop="name" :label="t('common.name')" min-width="180">
         <template #default="{ row }">
           {{ (row as AgentModelConfig).name }}
           <el-tag
@@ -253,33 +268,33 @@ onMounted(() => {
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="协议类型" width="110">
+      <el-table-column :label="t('agent.protocolType')" width="110">
         <template #default="{ row }">
           {{ getProtocolLabel((row as AgentModelConfig).protocolType) }}
         </template>
       </el-table-column>
-      <el-table-column prop="modelName" label="模型名称" min-width="140" />
-      <el-table-column label="API 地址" min-width="220">
+      <el-table-column prop="modelName" :label="t('agent.modelName')" min-width="140" />
+      <el-table-column :label="t('agent.apiUrl')" min-width="220">
         <template #default="{ row }">
           <span class="base-url" :title="(row as AgentModelConfig).baseUrl">
             {{ (row as AgentModelConfig).baseUrl }}
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="启停" width="80" align="center">
+      <el-table-column :label="t('common.toggle')" width="80" align="center">
         <template #default="{ row }">
           <el-tag :type="(row as AgentModelConfig).enabled ? 'success' : 'info'" size="small">
-            {{ (row as AgentModelConfig).enabled ? '启用' : '停用' }}
+            {{ (row as AgentModelConfig).enabled ? t('common.enable') : t('common.disable') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="多 Key 分组" width="130">
+      <el-table-column :label="t('agent.multiKeyGroup')" width="130">
         <template #default="{ row }">
           {{ (row as AgentModelConfig).groupKey ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="sort" label="优先级" width="80" align="center" />
-      <el-table-column label="锁定状态" width="170">
+      <el-table-column prop="sort" :label="t('agent.priority')" width="80" align="center" />
+      <el-table-column :label="t('agent.lockStatus')" width="170">
         <template #default="{ row }">
           <template v-if="getLockState(row as AgentModelConfig).active">
             <el-tag type="warning" size="small">
@@ -287,14 +302,16 @@ onMounted(() => {
             </el-tag>
           </template>
           <template v-else>
-            <el-tag type="success" size="small">正常</el-tag>
+            <el-tag type="success" size="small">{{ t('common.statusNormal') }}</el-tag>
           </template>
         </template>
       </el-table-column>
-      <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
+      <el-table-column :label="t('common.actions')" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editRow(row)">编辑</el-button>
+          <el-button size="small" link type="primary" @click="editRow(row)">{{
+            t('common.edit')
+          }}</el-button>
           <el-button
             v-if="canTest"
             size="small"
@@ -304,17 +321,19 @@ onMounted(() => {
             :disabled="testingId !== null"
             @click="testRow(row)"
           >
-            连通性测试
+            {{ t('agent.connectivityTest') }}
           </el-button>
-          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)">
-            删除
-          </el-button>
+          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)">{{
+            t('common.delete')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <template #empty-action>
-      <el-button v-if="canManage" type="primary" @click="openCreate">新建大模型配置</el-button>
+      <el-button v-if="canManage" type="primary" @click="openCreate">{{
+        t('agent.newModelConfig')
+      }}</el-button>
     </template>
   </StandardListTemplate>
 
@@ -328,28 +347,34 @@ onMounted(() => {
   <!-- 连通性测试结果（直接展示后端结论，不自行改判语义） -->
   <el-dialog
     v-model="testDialogVisible"
-    title="连通性测试结果"
+    :title="t('agent.connectivityTestResult')"
     :close-on-click-modal="false"
     width="480px"
     @closed="closeTestDialog"
   >
     <template v-if="testResult">
       <div class="test-result">
-        <div class="test-result__name">配置：{{ testRowName }}</div>
+        <div class="test-result__name">{{ t('agent.testConfigLabel', { testRowName }) }}</div>
         <el-alert
-          :title="`测试结果：${testResult.success ? '服务可达' : '网络不可达'}`"
+          :title="
+            t('agent.connectivityTestTitle', {
+              result: testResult.success
+                ? t('agent.serviceReachable')
+                : t('agent.networkUnreachable'),
+            })
+          "
           :type="testResult.success ? 'success' : 'error'"
           :closable="false"
           show-icon
         />
         <div class="test-result__detail">
-          <div>后端消息：{{ testResult.message }}</div>
-          <div>探测耗时：{{ testResult.latencyMs }} ms</div>
+          <div>{{ t('agent.backendMessageLabel', { message: testResult.message }) }}</div>
+          <div>{{ t('agent.probeLatencyLabel', { latencyMs: testResult.latencyMs }) }}</div>
         </div>
       </div>
     </template>
     <template #footer>
-      <el-button @click="closeTestDialog">关闭</el-button>
+      <el-button @click="closeTestDialog">{{ t('common.close') }}</el-button>
     </template>
   </el-dialog>
 </template>

@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 /**
  * 文件存储 API 层 —— 5 个端点。
  *
@@ -99,7 +100,7 @@ export async function downloadFile(storageKey: string): Promise<{ blob: Blob; fi
     { headers: token ? { Authorization: `Bearer ${token}` } : {} },
   )
   if (!response.ok) {
-    throw new Error(`下载失败: HTTP ${response.status}`)
+    throw new Error(i18n.global.t('storage.downloadRequestFailed', { status: response.status }))
   }
   const blob = await response.blob()
   // 从 Content-Disposition 提取 filename（后端用 filename*=UTF-8'' 编码）

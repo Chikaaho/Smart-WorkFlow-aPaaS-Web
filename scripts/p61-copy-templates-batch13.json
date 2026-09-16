@@ -1,0 +1,117 @@
+{
+  "_comment": "P61 R1 批次13：含插值的模板文本节点（此前扫描器排除花括号而漏检）。zh 为合成模板，取值由 codemod 用 {{ expr }} 填充。",
+  "版本 v{graphDefVersion}": {
+    "key": "agent.versionLabel",
+    "zh": "版本 v{graphDefVersion}",
+    "en": "Version v{graphDefVersion}",
+    "vars": ["graphDefVersion"]
+  },
+  "分类：{errorCategory}": {
+    "key": "agent.errorCategoryLabel",
+    "zh": "分类：{errorCategory}",
+    "en": "Category: {errorCategory}",
+    "vars": ["errorCategory"]
+  },
+  "输出：{output}": {
+    "key": "agent.outputLabel",
+    "zh": "输出：{output}",
+    "en": "Output: {output}",
+    "vars": ["output"]
+  },
+  "原因：{errorMessage}": {
+    "key": "agent.reasonLabel",
+    "zh": "原因：{errorMessage}",
+    "en": "Reason: {errorMessage}",
+    "vars": ["errorMessage"]
+  },
+  "已配置：{maskedApiKey}（留空提交将保持现有密钥）": {
+    "key": "agent.maskedApiKeyLabel",
+    "zh": "已配置：{maskedApiKey}（留空提交将保持现有密钥）",
+    "en": "Configured: {maskedApiKey} (leave empty to keep the current key)",
+    "vars": ["maskedApiKey"]
+  },
+  "配置：{testRowName}": {
+    "key": "agent.testConfigLabel",
+    "zh": "配置：{testRowName}",
+    "en": "Configuration: {testRowName}",
+    "vars": ["testRowName"]
+  },
+  "后端消息：{message}": {
+    "key": "agent.backendMessageLabel",
+    "zh": "后端消息：{message}",
+    "en": "Server message: {message}",
+    "vars": ["message"]
+  },
+  "与当前表单「{formKey}」关联的全部流程。创建流程时自动绑定当前表单，关联由服务端持久化。": {
+    "key": "form.relatedProcessHint",
+    "zh": "与当前表单「{formKey}」关联的全部流程。创建流程时自动绑定当前表单，关联由服务端持久化。",
+    "en": "All processes linked to the current form \"{formKey}\". Creating a process binds the current form automatically; links are persisted by the server.",
+    "vars": ["formKey"]
+  },
+  "字典类型：{dictName}（{dictCode}）": {
+    "key": "system.dictTypeWithCode",
+    "zh": "字典类型：{dictName}（{dictCode}）",
+    "en": "Dictionary type: {dictName} ({dictCode})",
+    "vars": ["dictName", "dictCode"]
+  },
+  "字典编码：{dictCode}": {
+    "key": "system.dictCodeLabel",
+    "zh": "字典编码：{dictCode}",
+    "en": "Dictionary code: {dictCode}",
+    "vars": ["dictCode"]
+  },
+  "草稿版本 v{version}": {
+    "key": "workflow.draftVersionLabel",
+    "zh": "草稿版本 v{version}",
+    "en": "Draft version v{version}",
+    "vars": ["version"]
+  },
+  "共 {total} 条记录": {
+    "key": "common.totalRecords",
+    "zh": "共 {total} 条记录",
+    "en": "Total {total} records",
+    "vars": ["total"]
+  },
+  "共 {total} 条": {
+    "key": "common.totalItems",
+    "zh": "共 {total} 条",
+    "en": "Total {total}",
+    "vars": ["total"]
+  },
+  "耗时 {latencyMs}ms": {
+    "key": "agent.latencyLabel",
+    "zh": "耗时 {latencyMs}ms",
+    "en": "Took {latencyMs} ms",
+    "vars": ["latencyMs"]
+  },
+  "探测耗时：{latencyMs} ms": {
+    "key": "agent.probeLatencyLabel",
+    "zh": "探测耗时：{latencyMs} ms",
+    "en": "Probe latency: {latencyMs} ms",
+    "vars": ["latencyMs"]
+  },
+  "{colSpan} / 24 列": {
+    "key": "form.colSpanLabel",
+    "zh": "{colSpan} / 24 列",
+    "en": "{colSpan} / 24 columns",
+    "vars": ["colSpan"]
+  },
+  "子表字段编辑 · {tableLabel}": {
+    "key": "form.subFieldEditorTitle",
+    "zh": "子表字段编辑 · {tableLabel}",
+    "en": "Sub-table field editor · {tableLabel}",
+    "vars": ["tableLabel"]
+  },
+  "标题（未读 {unreadCount}）": {
+    "key": "notify.titleWithUnread",
+    "zh": "标题（未读 {unreadCount}）",
+    "en": "Title ({unreadCount} unread)",
+    "vars": ["unreadCount"]
+  },
+  "收件箱（未读 {unreadCount}）": {
+    "key": "notify.inboxWithUnread",
+    "zh": "收件箱（未读 {unreadCount}）",
+    "en": "Inbox ({unreadCount} unread)",
+    "vars": ["unreadCount"]
+  }
+}

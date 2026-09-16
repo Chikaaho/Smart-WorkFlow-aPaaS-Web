@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * CreateProcessDefDialog — 创建流程定义弹窗。
  *
@@ -76,8 +79,8 @@ function clearFormSelection() {
 // ─── 本地校验 ───
 
 function validate(): string | null {
-  if (!form.name.trim()) return '流程名称不能为空'
-  if (!form.formKey.trim()) return '请选择关联表单'
+  if (!form.name.trim()) return t('workflow.processNameRequired')
+  if (!form.formKey.trim()) return t('workflow.selectLinkedForm')
   return null
 }
 
@@ -96,11 +99,11 @@ async function handleSubmit() {
       name: form.name.trim(),
       formKey: form.formKey.trim(),
     })
-    ElMessage.success('创建成功')
+    ElMessage.success(t('common.createSuccess'))
     emit('saved')
     emit('update:visible', false)
   } catch (err) {
-    formError.value = err instanceof ApiError ? err.msg : '创建失败'
+    formError.value = err instanceof ApiError ? err.msg : t('workflow.createFailed')
   } finally {
     submitting.value = false
   }
@@ -110,7 +113,7 @@ async function handleSubmit() {
 <template>
   <el-dialog
     v-model="dialogModel"
-    title="创建流程定义"
+    :title="t('workflow.createProcessDef')"
     :close-on-click-modal="false"
     destroy-on-close
     width="560px"
@@ -121,18 +124,22 @@ async function handleSubmit() {
         <el-alert v-if="formError" :title="formError" type="error" :closable="false" show-icon />
       </template>
 
-      <FormSection title="基本信息">
+      <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="1">
           <div class="form-field form-field--required">
-            <label class="form-field__label">流程名称</label>
-            <el-input v-model="form.name" placeholder="请输入流程名称" maxlength="100" />
+            <label class="form-field__label">{{ t('common.processName') }}</label>
+            <el-input
+              v-model="form.name"
+              :placeholder="t('common.processNamePlaceholder')"
+              maxlength="100"
+            />
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">关联表单</label>
+            <label class="form-field__label">{{ t('common.boundForm') }}</label>
             <div class="form-field__selector">
               <el-input
                 :model-value="form.formName ? `${form.formName} (${form.formKey})` : ''"
-                placeholder="请选择关联的表单定义"
+                :placeholder="t('common.boundFormPlaceholder')"
                 readonly
                 @click="formSelectVisible = true"
               >
@@ -146,16 +153,22 @@ async function handleSubmit() {
                   </el-icon>
                 </template>
               </el-input>
-              <el-button type="primary" @click="formSelectVisible = true"> 选择表单 </el-button>
+              <el-button type="primary" @click="formSelectVisible = true">
+                {{ t('workflow.selectForm') }}
+              </el-button>
             </div>
-            <div class="form-field__hint">关联已发布的表单定义，用于流程启动时加载表单</div>
+            <div class="form-field__hint">{{ t('workflow.linkPublishedFormHint') }}</div>
           </div>
         </FormGrid>
       </FormSection>
 
       <template #actions>
-        <el-button :disabled="submitting" @click="emit('update:visible', false)"> 取消 </el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit"> 创建 </el-button>
+        <el-button :disabled="submitting" @click="emit('update:visible', false)">{{
+          t('common.cancel')
+        }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+          t('common.create')
+        }}</el-button>
       </template>
     </StandardFormTemplate>
 

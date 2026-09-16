@@ -1,0 +1,15 @@
+{
+  "_comment": "P61 二级批次15（R2c-N）：批量发送的部分成功提示。计数占位符由后端返回的逐项结果填充，前端不推算。",
+  "发送完成：成功 {successCount} 人，失败 {failureCount} 人，请查看失败明细": {
+    "key": "notify.batchSendPartial",
+    "zh": "发送完成：成功 {successCount} 人，失败 {failureCount} 人，请查看失败明细",
+    "en": "Send finished: {successCount} delivered, {failureCount} failed. Review the failure details.",
+    "vars": ["successCount", "failureCount"]
+  },
+  "本次导入未落库 {failed} 行：其中 {invalid} 行不合法，其余为整批原子策略连带回滚。": {
+    "key": "form.importAtomicRollbackNote",
+    "zh": "本次导入未落库 {failed} 行：其中 {invalid} 行不合法，其余为整批原子策略连带回滚。",
+    "en": "No rows were imported: {invalid} of the {failed} unapplied rows were invalid; the rest were rolled back with the batch.",
+    "vars": ["failed", "invalid"]
+  }
+}

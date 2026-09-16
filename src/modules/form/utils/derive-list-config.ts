@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 /**
  * 表单数据列表页配置推导 —— 从 FormSchema definition 自动列/筛选配置。
  *
@@ -77,7 +78,7 @@ export function deriveColumns(schema: FormSchema): ColumnConfig[] {
   }
 
   // 末尾固定追加创建时间列
-  columns.push({ prop: 'create_time', label: '创建时间', type: 'DATE' })
+  columns.push({ prop: 'create_time', label: i18n.global.t('common.createTime'), type: 'DATE' })
 
   return columns
 }

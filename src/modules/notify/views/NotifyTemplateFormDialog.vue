@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * NotifyTemplateFormDialog — 消息模板新增/编辑弹窗（P36 / M05-F02-01）。
  *
@@ -79,7 +82,7 @@ async function initForm() {
     const detail = await getNotifyTemplate(props.templateId)
     fillForm(detail)
   } catch (err) {
-    formError.value = err instanceof ApiError ? err.msg : '加载模板详情失败'
+    formError.value = err instanceof ApiError ? err.msg : t('notify.templateDetailLoadFailed')
   } finally {
     loadingDetail.value = false
   }
@@ -96,13 +99,13 @@ watch(
 // ─── 本地校验（格式类）；占位符合法性交给后端提取接口 ───
 
 function validate(): string | null {
-  if (!form.templateCode.trim()) return '模板代码不能为空'
+  if (!form.templateCode.trim()) return t('notify.templateCodeRequired')
   if (!/^[A-Za-z][A-Za-z0-9_]{1,98}$/.test(form.templateCode.trim())) {
-    return '模板代码须为字母开头、仅字母/数字/下划线、长度2-99'
+    return t('notify.templateCodeFormat')
   }
-  if (!form.name.trim()) return '模板名称不能为空'
-  if (!form.titleTemplate.trim()) return '标题模板不能为空'
-  if (!form.contentTemplate.trim()) return '正文模板不能为空'
+  if (!form.name.trim()) return t('notify.templateNameRequired')
+  if (!form.titleTemplate.trim()) return t('notify.titleTemplateRequired')
+  if (!form.contentTemplate.trim()) return t('notify.contentTemplateRequired')
   return null
 }
 
@@ -127,16 +130,16 @@ async function handleSubmit() {
     }
     if (isEdit.value && props.templateId !== null) {
       await updateNotifyTemplate(props.templateId, req)
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.updateSuccess'))
     } else {
       await createNotifyTemplate(req)
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.createSuccess'))
     }
     emit('saved')
     emit('update:visible', false)
   } catch (err) {
     // 非法占位符/代码重复等业务拒绝信息直接展示（后端为唯一裁决）
-    formError.value = err instanceof ApiError ? err.msg : '保存失败'
+    formError.value = err instanceof ApiError ? err.msg : t('common.saveFailed')
   } finally {
     submitting.value = false
   }
@@ -146,7 +149,7 @@ async function handleSubmit() {
 <template>
   <el-dialog
     v-model="dialogModel"
-    :title="isEdit ? '编辑消息模板' : '新增消息模板'"
+    :title="isEdit ? t('notify.editTemplate') : t('notify.newTemplate')"
     :close-on-click-modal="false"
     destroy-on-close
     width="720px"
@@ -158,68 +161,80 @@ async function handleSubmit() {
         <el-alert v-if="varsError" :title="varsError" type="error" :closable="false" show-icon />
       </template>
 
-      <FormSection title="基本信息">
+      <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
           <div class="form-field form-field--required">
-            <label class="form-field__label">模板代码</label>
+            <label class="form-field__label">{{ t('notify.templateCode') }}</label>
             <el-input
               v-model="form.templateCode"
-              placeholder="如 WELCOME_MAIL"
+              :placeholder="t('notify.templateCodePlaceholder')"
               maxlength="100"
               :disabled="isEdit"
             />
             <div class="form-field__hint">
-              发送标识，同租户唯一；{{ isEdit ? '创建后不可变更' : '创建后不可修改' }}
+              发送标识，同租户唯一；{{
+                isEdit
+                  ? t('notify.templateCodeImmutableEdit')
+                  : t('notify.templateCodeImmutableNew')
+              }}
             </div>
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">名称</label>
-            <el-input v-model="form.name" placeholder="模板展示名" maxlength="100" />
+            <label class="form-field__label">{{ t('common.name') }}</label>
+            <el-input
+              v-model="form.name"
+              :placeholder="t('notify.templateDisplayNamePlaceholder')"
+              maxlength="100"
+            />
           </div>
           <div class="form-field">
-            <label class="form-field__label">启停</label>
-            <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
-            <div class="form-field__hint">停用后不可预览与发送</div>
+            <label class="form-field__label">{{ t('common.toggle') }}</label>
+            <el-switch
+              v-model="form.enabled"
+              :active-text="t('common.enable')"
+              :inactive-text="t('common.disable')"
+            />
+            <div class="form-field__hint">{{ t('notify.disableHint') }}</div>
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="模板内容">
+      <FormSection :title="t('notify.templateContent')">
         <FormGrid :columns="1">
           <div class="form-field form-field--required">
-            <label class="form-field__label">标题模板</label>
+            <label class="form-field__label">{{ t('notify.titleTemplate') }}</label>
             <el-input
               v-model="form.titleTemplate"
-              placeholder="支持 ${userName} 占位符，如：${userName} 的审批提醒"
+              :placeholder="t('notify.subjectPlaceholder')"
               maxlength="200"
               style="font-family: monospace"
             />
-            <div class="form-field__hint">变量名以字母或下划线开头，仅含字母/数字/下划线</div>
+            <div class="form-field__hint">{{ t('notify.variableNameFormat') }}</div>
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">正文模板</label>
+            <label class="form-field__label">{{ t('notify.contentTemplate') }}</label>
             <el-input
               v-model="form.contentTemplate"
               type="textarea"
               :rows="5"
-              placeholder="您好 ${userName}，单据 ${docNo} 待处理。"
+              :placeholder="t('notify.contentPlaceholder')"
               style="font-family: monospace"
             />
             <div class="form-field__hint">
-              仅支持简单变量替换；不支持表达式、条件、脚本。变量值按纯文本处理。
+              {{ t('notify.templateLimitNote') }}
             </div>
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="备注">
+      <FormSection :title="t('common.remark')">
         <FormGrid :columns="1">
           <div class="form-field">
             <el-input
               v-model="form.remark"
               type="textarea"
               :rows="3"
-              placeholder="请输入备注"
+              :placeholder="t('common.remarkPlaceholder')"
               maxlength="256"
               show-word-limit
             />
@@ -228,17 +243,16 @@ async function handleSubmit() {
       </FormSection>
 
       <template #actions>
-        <el-button :disabled="submitting || loadingDetail" @click="emit('update:visible', false)">
-          取消
-        </el-button>
+        <el-button :disabled="submitting || loadingDetail" @click="emit('update:visible', false)">{{
+          t('common.cancel')
+        }}</el-button>
         <el-button
           type="primary"
           :loading="submitting"
           :disabled="loadingDetail"
           @click="handleSubmit"
+          >{{ t('common.save') }}</el-button
         >
-          保存
-        </el-button>
       </template>
     </StandardFormTemplate>
   </el-dialog>

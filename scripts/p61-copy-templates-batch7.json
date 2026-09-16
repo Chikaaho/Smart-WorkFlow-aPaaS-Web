@@ -1,0 +1,127 @@
+{
+  "_comment": "P61 R1 参数化文案 批次7：含插值（${...}）的运行时文案，以及无法用精确匹配改写的数组字面量、字面花括号示例。这些文案不进术语字典，需按键手工改写。",
+  "确定要删除任务\"${row.jobName}\"吗？删除后不可恢复。": {
+    "key": "job.confirmDeleteJob",
+    "zh": "确定要删除任务\"{jobName}\"吗？删除后不可恢复。",
+    "en": "Delete job \"{jobName}\"? This cannot be undone.",
+    "vars": ["jobName"],
+    "note": "原始插值为 ${row.jobName}"
+  },
+  "确定要手动触发任务\"${row.jobName}\"吗？": {
+    "key": "job.confirmTriggerJob",
+    "zh": "确定要手动触发任务\"{jobName}\"吗？",
+    "en": "Trigger job \"{jobName}\" manually?",
+    "vars": ["jobName"],
+    "note": "原始插值为 ${row.jobName}"
+  },
+  "`设备动作 — ${editingDef?.name ?? ''}`": {
+    "key": "iot.deviceActionDialogTitle",
+    "zh": "设备动作 — {name}",
+    "en": "Device action — {name}",
+    "vars": ["name"],
+    "note": "原始插值为 ${editingDef?.name ?? ''}；原文外层反引号为模板字面量界定符，已去除"
+  },
+  "确定将该用户移出角色\"${membersRole.value.name}\"吗？": {
+    "key": "system.confirmRemoveRoleMember",
+    "zh": "确定将该用户移出角色\"{name}\"吗？",
+    "en": "Remove this user from the role \"{name}\"?",
+    "vars": ["name"],
+    "note": "原始插值为 ${membersRole.value.name}（成员访问表达式，简化为 {name}）"
+  },
+  "确定要删除角色\"${row.name}\"吗？删除后不可恢复。": {
+    "key": "system.deleteRoleConfirm",
+    "zh": "确定要删除角色\"{name}\"吗？删除后不可恢复。",
+    "en": "Delete role \"{name}\"? This cannot be undone.",
+    "vars": ["name"],
+    "note": "原始插值为 ${row.name}"
+  },
+  "`角色成员：${membersRole?.name ?? ''}`": {
+    "key": "system.roleMembersDialogTitle",
+    "zh": "角色成员：{name}",
+    "en": "Role members: {name}",
+    "vars": ["name"],
+    "note": "原始插值为 ${membersRole?.name ?? ''}；原文外层反引号为模板字面量界定符，已去除"
+  },
+  "确认启用模板「${row.name}」？": {
+    "key": "notify.confirmEnableTemplate",
+    "zh": "确认启用模板「{name}」？",
+    "en": "Enable the template \"{name}\"?",
+    "vars": ["name"],
+    "note": "原始插值为 ${row.name}"
+  },
+  "`预览：${previewRow?.name ?? ''}`": {
+    "key": "notify.previewDialogTitle",
+    "zh": "预览：{name}",
+    "en": "Preview: {name}",
+    "vars": ["name"],
+    "note": "原始插值为 ${previewRow?.name ?? ''}；原文外层反引号为模板字面量界定符，已去除"
+  },
+  "{\"userName\": \"张三\"}": {
+    "key": "notify.variablesJsonPlaceholder",
+    "zh": "{\"userName\": \"张三\"}",
+    "en": "{\"userName\": \"John Doe\"}",
+    "vars": [],
+    "note": "花括号为字面 JSON 示例（变量值输入框的占位样例），不是插值；vars 为空。写回 vue-i18n 时需转义字面花括号（如 {'{'} / {'}'}），避免消息编译器把示例当占位符解析。"
+  },
+  "重发结果：${status}": {
+    "key": "notify.resendResult",
+    "zh": "重发结果：{status}",
+    "en": "Resend result: {status}",
+    "vars": ["status"]
+  },
+  "上传成功：${result.storageName}": {
+    "key": "storage.uploadSucceeded",
+    "zh": "上传成功：{storageName}",
+    "en": "Uploaded successfully: {storageName}",
+    "vars": ["storageName"],
+    "note": "原始插值为 ${result.storageName}"
+  },
+  "确定要删除文件\"${row.originalName}\"吗？删除后不可恢复。": {
+    "key": "storage.confirmDeleteFile",
+    "zh": "确定要删除文件\"{originalName}\"吗？删除后不可恢复。",
+    "en": "Delete file \"{originalName}\"? This cannot be undone.",
+    "vars": ["originalName"],
+    "note": "原始插值为 ${row.originalName}"
+  },
+  "确认删除${typeLabel}「${row.name}」？删除后不可恢复。": {
+    "key": "agent.confirmDeleteTool",
+    "zh": "确认删除{typeLabel}「{name}」？删除后不可恢复。",
+    "en": "Delete {typeLabel} \"{name}\"? This cannot be undone.",
+    "vars": ["typeLabel", "name"],
+    "note": "原始插值为 ${typeLabel} 与 ${row.name}；typeLabel 由调用点按当前 Tab 解析为「内部工具」/「外部工具」（见 common.internalTool / common.externalTool）"
+  },
+  "用户#${uid}": {
+    "key": "system.userFallbackName",
+    "zh": "用户#{uid}",
+    "en": "User #{uid}",
+    "vars": ["uid"]
+  },
+  "确定要删除用户组\"${row.groupName}\"吗？删除后成员关系一并移除。": {
+    "key": "system.deleteUserGroupConfirm",
+    "zh": "确定要删除用户组\"{groupName}\"吗？删除后成员关系一并移除。",
+    "en": "Delete user group \"{groupName}\"? Its member relations will be removed as well.",
+    "vars": ["groupName"],
+    "note": "原始插值为 ${row.groupName}"
+  },
+  "`历史版本 V${previewVersion} · 只读`": {
+    "key": "form.historyVersionBadge",
+    "zh": "历史版本 V{previewVersion} · 只读",
+    "en": "Historical version V{previewVersion} · Read-only",
+    "vars": ["previewVersion"],
+    "note": "原文外层反引号为模板字面量界定符，已去除"
+  },
+  "下载失败: HTTP ${response.status}": {
+    "key": "storage.downloadRequestFailed",
+    "zh": "下载失败: HTTP {status}",
+    "en": "Download failed: HTTP {status}",
+    "vars": ["status"],
+    "note": "原始插值为 ${response.status}（成员访问表达式，简化为 {status}）。该文案由 storage API 层 throw；列表页对非 ApiError 仅上屏通用「下载失败」（storage.downloadFailed），此处仍按键治理，避免错误对象将来被直接上屏。"
+  },
+  "['最小值', '最大值', '步长 / 精度', '默认值']": {
+    "key": "form.configSeamNumberItems",
+    "zh": "['最小值', '最大值', '步长 / 精度', '默认值']",
+    "en": "['Minimum', 'Maximum', 'Step / precision', 'Default value']",
+    "vars": [],
+    "note": "数组字面量（NumberConfig 的 ConfigSeamNote items 参数），非单条文案；实际展示文案为「最小值」「最大值」「步长 / 精度」「默认值」，改写为 :items=\"[t('form.configSeamMin'), t('form.configSeamMax'), t('form.configSeamStepPrecision'), t('form.configSeamDefaultValue')]\" 即可（「默认值」已由 form.configSeamDefaultValue 治理）。zh/en 保留表达式外壳以便原样对照。"
+  }
+}

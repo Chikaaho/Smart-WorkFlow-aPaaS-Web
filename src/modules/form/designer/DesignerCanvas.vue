@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 画布（设计器中栏）—— 所见即所得（WYSIWYG）。
  *
@@ -110,7 +113,7 @@ function remove(id: string) {
         @click="select(item.id)"
       >
         <div class="field-shell__bar">
-          <span class="field-shell__handle" title="拖拽排序">
+          <span class="field-shell__handle" :title="t('form.dragToSort')">
             <el-icon><Rank /></el-icon>
           </span>
           <span class="field-shell__type">{{ typeLabel(item) }}</span>
@@ -121,7 +124,7 @@ function remove(id: string) {
             link
             type="danger"
             :icon="Delete"
-            title="删除字段"
+            :title="t('form.deleteField')"
             @click.stop="remove(item.id)"
           />
         </div>
@@ -132,7 +135,9 @@ function remove(id: string) {
               <span class="field-shell__table-label">{{
                 item.field.label || item.field.name
               }}</span>
-              <span class="field-shell__table-count">{{ subFieldCount(item) }} 个子字段</span>
+              <span class="field-shell__table-count">{{
+                t('form.subFieldCountLabel', { count: subFieldCount(item) })
+              }}</span>
             </div>
             <el-button
               class="field-shell__table-edit"
@@ -140,7 +145,7 @@ function remove(id: string) {
               :disabled="readonly"
               @click.stop="editTable(item.id)"
             >
-              编辑子表
+              {{ t('form.editSubTable') }}
             </el-button>
           </div>
           <!-- 真控件长相（design 态 pointer-events:none，整块作为选中热区） -->
@@ -149,7 +154,7 @@ function remove(id: string) {
       </div>
     </VueDraggable>
 
-    <p v-if="items.length === 0" class="canvas__empty">从左侧控件库拖入字段开始设计</p>
+    <p v-if="items.length === 0" class="canvas__empty">{{ t('form.canvasEmptyHint') }}</p>
   </section>
 </template>
 

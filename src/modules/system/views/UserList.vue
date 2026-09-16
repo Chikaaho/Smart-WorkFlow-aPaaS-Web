@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * UserList — 用户管理列表页（页型B）。
  *
@@ -76,7 +79,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载用户列表失败'
+      errorMsg.value = t('system.userListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -144,17 +147,21 @@ async function loadRoleOptions() {
     const result = await pageRoles({ pageNum: 1, pageSize: 200 }, {})
     roleOptions.value = result.list
   } catch {
+    ElMessage.error(t('common.loadFailed'))
+    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     roleOptions.value = []
   }
   try {
     const result = await pagePosts({ pageNum: 1, pageSize: 200 }, {})
     postOptions.value = result.list.filter((item) => item.status === undefined || item.status === 1)
   } catch {
+    ElMessage.error(t('common.loadFailed'))
     postOptions.value = []
   }
   try {
     deptOptions.value = await listDeptTree()
   } catch {
+    ElMessage.error(t('common.loadFailed'))
     deptOptions.value = []
   }
 }
@@ -162,7 +169,7 @@ async function loadRoleOptions() {
 // ─── 弹窗状态 ───
 
 const dialogVisible = ref(false)
-const dialogTitle = computed(() => (editingId.value ? '编辑用户' : '新建用户'))
+const dialogTitle = computed(() => (editingId.value ? t('system.editUser') : t('system.newUser')))
 const editingId = ref<string | null>(null)
 const submitting = ref(false)
 const formError = ref('')
@@ -220,7 +227,7 @@ async function openEdit(row: SysUser) {
     })
     // 编辑模式不设置 plainPassword
   } catch {
-    formError.value = '加载用户详情失败'
+    formError.value = t('system.userDetailLoadFailed')
     return
   }
   dialogVisible.value = true
@@ -233,7 +240,7 @@ function closeDialog() {
 
 async function handleSubmit() {
   if (!form.username.trim()) {
-    formError.value = '用户名不能为空'
+    formError.value = t('system.usernameRequired')
     return
   }
 
@@ -247,12 +254,12 @@ async function handleSubmit() {
       await updateUser({ ...updateData, id: editingId.value })
       await updateUserRoles(editingId.value, roleIds.value)
       await updateUserPosts(editingId.value, toPostPayload())
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.updateSuccess'))
     } else {
       const id = await createUser({ ...form })
       await updateUserRoles(id, roleIds.value)
       await updateUserPosts(id, toPostPayload())
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.createSuccess'))
     }
     closeDialog()
     void loadList()
@@ -260,7 +267,7 @@ async function handleSubmit() {
     if (err instanceof ApiError) {
       formError.value = err.msg
     } else {
-      formError.value = '保存失败'
+      formError.value = t('common.saveFailed')
     }
   } finally {
     submitting.value = false
@@ -269,23 +276,31 @@ async function handleSubmit() {
 
 async function handleDelete(row: SysUser) {
   try {
-    await ElMessageBox.confirm(`确定要删除用户"${row.username}"吗？删除后不可恢复。`, '删除确认', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      t('system.confirmDeleteUser', { username: row.username }),
+      t('common.deleteConfirmTitle'),
+      {
+        get confirmButtonText() {
+          return t('common.confirm')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+      },
+    )
   } catch {
     return // 用户取消
   }
   try {
     await deleteUser(row.id!)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     void loadList()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('common.deleteFailed'))
     }
   }
 }
@@ -303,7 +318,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="用户管理"
+    :title="t('system.userManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -313,21 +328,26 @@ onMounted(loadList)
   >
     <!-- 工具栏：新建按钮 -->
     <template #toolbar-actions>
-      <el-button v-perm="'system:user:create'" type="primary" @click="openCreate"
-        >新建用户</el-button
-      >
+      <el-button v-perm="'system:user:create'" type="primary" @click="openCreate">{{
+        t('system.newUser')
+      }}</el-button>
     </template>
 
     <!-- 筛选区 -->
     <template #filter>
       <el-input
         v-model="filter.username"
-        placeholder="用户名"
+        :placeholder="t('common.username')"
         clearable
         style="width: 180px"
         @keyup.enter="handleQuery"
       />
-      <el-select v-model="filter.status" placeholder="状态" clearable style="width: 120px">
+      <el-select
+        v-model="filter.status"
+        :placeholder="t('common.status')"
+        clearable
+        style="width: 120px"
+      >
         <el-option
           v-for="opt in userStatusOptions"
           :key="opt.value"
@@ -337,8 +357,8 @@ onMounted(loadList)
       </el-select>
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <!-- 表格区 -->
@@ -351,23 +371,34 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="username" label="用户名" min-width="120" />
-      <el-table-column prop="realName" label="姓名" min-width="100" />
-      <el-table-column prop="email" label="邮箱" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="phone" label="手机号" width="130" />
-      <el-table-column prop="sex" label="性别" width="70">
+      <el-table-column prop="username" :label="t('common.username')" min-width="120" />
+      <el-table-column prop="realName" :label="t('system.fullName')" min-width="100" />
+      <el-table-column
+        prop="email"
+        :label="t('system.email')"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column prop="phone" :label="t('system.phone')" width="130" />
+      <el-table-column prop="sex" :label="t('system.gender')" width="70">
         <template #default="{ row }">
-          {{ row.sex === 1 ? '男' : row.sex === 2 ? '女' : '未知' }}
+          {{
+            row.sex === 1
+              ? t('common.male')
+              : row.sex === 2
+                ? t('common.female')
+                : t('common.unknown')
+          }}
         </template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="80">
+      <el-table-column prop="status" :label="t('common.status')" width="80">
         <template #default="{ row }">
           <el-tag :type="userStatusTagType(row.status)" size="small">
             {{ userStatusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column :label="t('common.actions')" width="180" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="hasPerm('system:user:update')"
@@ -375,7 +406,7 @@ onMounted(loadList)
             link
             type="primary"
             @click="editRow(row)"
-            >编辑</el-button
+            >{{ t('common.edit') }}</el-button
           >
           <el-button
             v-if="hasPerm('system:user:delete')"
@@ -383,7 +414,7 @@ onMounted(loadList)
             link
             type="danger"
             @click="deleteRow(row)"
-            >删除</el-button
+            >{{ t('common.delete') }}</el-button
           >
         </template>
       </el-table-column>
@@ -391,9 +422,9 @@ onMounted(loadList)
 
     <!-- 空态操作 -->
     <template #empty-action>
-      <el-button v-perm="'system:user:create'" type="primary" @click="openCreate"
-        >新建用户</el-button
-      >
+      <el-button v-perm="'system:user:create'" type="primary" @click="openCreate">{{
+        t('system.newUser')
+      }}</el-button>
     </template>
   </StandardListTemplate>
 
@@ -411,39 +442,51 @@ onMounted(loadList)
         <el-alert :title="formError" type="error" :closable="false" show-icon />
       </template>
 
-      <FormSection title="基本信息">
+      <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
           <div class="form-field form-field--required">
-            <label class="form-field__label">用户名</label>
+            <label class="form-field__label">{{ t('common.username') }}</label>
             <el-input
               v-model="form.username"
-              placeholder="请输入用户名"
+              :placeholder="t('system.usernamePlaceholder')"
               maxlength="64"
               show-word-limit
             />
           </div>
           <div class="form-field">
-            <label class="form-field__label">姓名</label>
-            <el-input v-model="form.realName" placeholder="请输入姓名" maxlength="32" />
+            <label class="form-field__label">{{ t('system.fullName') }}</label>
+            <el-input
+              v-model="form.realName"
+              :placeholder="t('system.fullNamePlaceholder')"
+              maxlength="32"
+            />
           </div>
           <div class="form-field">
-            <label class="form-field__label">邮箱</label>
-            <el-input v-model="form.email" placeholder="请输入邮箱" maxlength="128" />
+            <label class="form-field__label">{{ t('system.email') }}</label>
+            <el-input
+              v-model="form.email"
+              :placeholder="t('system.emailPlaceholder')"
+              maxlength="128"
+            />
           </div>
           <div class="form-field">
-            <label class="form-field__label">手机号</label>
-            <el-input v-model="form.phone" placeholder="请输入手机号" maxlength="20" />
+            <label class="form-field__label">{{ t('system.phone') }}</label>
+            <el-input
+              v-model="form.phone"
+              :placeholder="t('system.phonePlaceholder')"
+              maxlength="20"
+            />
           </div>
           <div class="form-field">
-            <label class="form-field__label">性别</label>
+            <label class="form-field__label">{{ t('system.gender') }}</label>
             <el-select v-model="form.sex" style="width: 100%">
-              <el-option label="未知" :value="0" />
-              <el-option label="男" :value="1" />
-              <el-option label="女" :value="2" />
+              <el-option :label="t('common.unknown')" :value="0" />
+              <el-option :label="t('common.male')" :value="1" />
+              <el-option :label="t('common.female')" :value="2" />
             </el-select>
           </div>
           <div class="form-field">
-            <label class="form-field__label">状态</label>
+            <label class="form-field__label">{{ t('common.status') }}</label>
             <el-select v-model="form.status" style="width: 100%">
               <el-option
                 v-for="opt in userStatusOptions"
@@ -454,8 +497,12 @@ onMounted(loadList)
             </el-select>
           </div>
           <div class="form-field">
-            <label class="form-field__label">所属部门</label>
-            <el-select v-model="form.deptId" placeholder="请选择部门" style="width: 100%">
+            <label class="form-field__label">{{ t('system.department') }}</label>
+            <el-select
+              v-model="form.deptId"
+              :placeholder="t('system.selectDept')"
+              style="width: 100%"
+            >
               <el-option
                 v-for="dept in deptOptions"
                 :key="dept.id"
@@ -465,14 +512,14 @@ onMounted(loadList)
             </el-select>
           </div>
           <div class="form-field">
-            <label class="form-field__label">岗位（任职部门）</label>
+            <label class="form-field__label">{{ t('system.postDeptShort') }}</label>
             <el-checkbox-group v-model="postIds">
               <div v-for="post in postOptions" :key="post.id" class="post-row">
                 <el-checkbox :value="post.id">{{ post.name }}</el-checkbox>
                 <el-select
                   v-if="postIds.includes(post.id!)"
                   v-model="postDeptMap[post.id!]"
-                  placeholder="任职部门（默认主部门）"
+                  :placeholder="t('system.postDept')"
                   clearable
                   size="small"
                   style="width: 200px"
@@ -488,7 +535,7 @@ onMounted(loadList)
             </el-checkbox-group>
           </div>
           <div class="form-field">
-            <label class="form-field__label">角色</label>
+            <label class="form-field__label">{{ t('common.role') }}</label>
             <el-checkbox-group v-model="roleIds">
               <el-checkbox v-for="role in roleOptions" :key="role.id" :value="role.id">
                 {{ role.name }}
@@ -496,11 +543,11 @@ onMounted(loadList)
             </el-checkbox-group>
           </div>
           <div v-if="!editingId" class="form-field">
-            <label class="form-field__label">密码</label>
+            <label class="form-field__label">{{ t('common.password') }}</label>
             <el-input
               v-model="form.plainPassword"
               type="password"
-              placeholder="请输入密码"
+              :placeholder="t('system.passwordPlaceholder')"
               maxlength="64"
               show-password
             />
@@ -509,8 +556,10 @@ onMounted(loadList)
       </FormSection>
 
       <template #actions>
-        <el-button @click="closeDialog">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+          t('common.save')
+        }}</el-button>
       </template>
     </StandardFormTemplate>
   </el-dialog>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 通用配置行：标签 + 列名（带 UX 校验）+ 必填 + 默认值（v0.0.2）。
  *
@@ -34,10 +37,10 @@ const emit = defineEmits<{ update: [patch: FieldPatch] }>()
 /** 列名 UX 校验信息（仅提示，不拦死操作；后端发布才是真校验）。 */
 const nameError = computed(() => {
   if (!isValidColumnName(props.name)) {
-    return '列名须以小写字母或下划线开头，仅含小写字母 / 数字 / 下划线'
+    return t('form.columnNameFormat')
   }
   if (!isColumnNameUnique(props.name, props.otherNames)) {
-    return '列名在本表单内重复'
+    return t('form.columnNameDuplicate')
   }
   return ''
 })
@@ -85,26 +88,26 @@ function onDefaultBool(v: string | number | boolean) {
 
 <template>
   <div class="row">
-    <label class="row__label">标签</label>
+    <label class="row__label">{{ t('form.fieldLabel') }}</label>
     <el-input
       :model-value="label"
-      placeholder="字段显示名"
+      :placeholder="t('form.fieldLabelPlaceholder')"
       @update:model-value="(v: string) => emit('update', { label: v })"
     />
   </div>
 
   <div class="row">
-    <label class="row__label">列名</label>
+    <label class="row__label">{{ t('form.columnName') }}</label>
     <el-input
       :model-value="name"
-      placeholder="英文列名"
+      :placeholder="t('form.columnNamePlaceholder')"
       @update:model-value="(v: string) => emit('update', { name: v })"
     />
     <p v-if="nameError" class="row__error">{{ nameError }}</p>
   </div>
 
   <div v-if="showRequired" class="row row--inline">
-    <label class="row__label">必填</label>
+    <label class="row__label">{{ t('form.required') }}</label>
     <el-switch
       :model-value="required"
       @update:model-value="
@@ -114,22 +117,26 @@ function onDefaultBool(v: string | number | boolean) {
   </div>
 
   <div v-if="defaultMode === 'bool'" class="row row--inline">
-    <label class="row__label">默认值</label>
+    <label class="row__label">{{ t('form.defaultValue') }}</label>
     <el-select
       :model-value="defaultValue === undefined ? '' : String(defaultValue)"
       clearable
       style="width: 120px"
       @update:model-value="(v: string) => onDefaultBool(v === 'true')"
     >
-      <el-option label="开" value="true" />
-      <el-option label="关" value="false" />
+      <el-option :label="t('common.on')" value="true" />
+      <el-option :label="t('common.off')" value="false" />
     </el-select>
   </div>
   <div v-else class="row">
-    <label class="row__label">默认值</label>
+    <label class="row__label">{{ t('form.defaultValue') }}</label>
     <el-input
       :model-value="defaultText"
-      :placeholder="defaultMode === 'array' ? '逗号分隔的默认选项' : '新建填报时的默认值'"
+      :placeholder="
+        defaultMode === 'array'
+          ? t('form.arrayDefaultPlaceholder')
+          : t('form.createDefaultPlaceholder')
+      "
       @update:model-value="onDefaultText"
     />
   </div>

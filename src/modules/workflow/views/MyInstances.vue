@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * MyInstances — 我发起的流程列表页（页型 B）。
  *
@@ -30,11 +33,36 @@ const STATUS_TAG: Record<
   string,
   { label: string; type: 'warning' | 'success' | 'danger' | 'info' }
 > = {
-  RUNNING: { label: '进行中', type: 'warning' },
-  APPROVED: { label: '已通过', type: 'success' },
-  REJECTED: { label: '已驳回', type: 'danger' },
-  WITHDRAWN: { label: '已撤回', type: 'warning' },
-  DISCARDED: { label: '已废弃', type: 'info' },
+  RUNNING: {
+    get label() {
+      return t('common.statusInProgress')
+    },
+    type: 'warning',
+  },
+  APPROVED: {
+    get label() {
+      return t('common.statusApproved')
+    },
+    type: 'success',
+  },
+  REJECTED: {
+    get label() {
+      return t('common.statusRejected')
+    },
+    type: 'danger',
+  },
+  WITHDRAWN: {
+    get label() {
+      return t('common.statusWithdrawn')
+    },
+    type: 'warning',
+  },
+  DISCARDED: {
+    get label() {
+      return t('workflow.statusDiscarded')
+    },
+    type: 'info',
+  },
 }
 
 /** I3 §4.7：发起人撤回（尚未越过不可撤回边界时可用；重复请求幂等）。 */
@@ -47,21 +75,29 @@ function asInstance(row: unknown): ProcessInstance {
 async function withdrawRow(rowRaw: unknown) {
   const row = asInstance(rowRaw)
   try {
-    await ElMessageBox.confirm('确认撤回该申请？撤回将关闭当前任务并形成已撤回终态。', '撤回确认', {
-      confirmButtonText: '撤回',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      t('workflow.withdrawConfirmMessage'),
+      t('workflow.withdrawConfirmTitle'),
+      {
+        get confirmButtonText() {
+          return t('common.withdraw')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+      },
+    )
   } catch {
     return
   }
   withdrawingId.value = row.processInstanceId
   try {
     await withdrawInstance(row.processInstanceId, { reason: '发起人撤回' })
-    ElMessage.success('已撤回')
+    ElMessage.success(t('common.statusWithdrawn'))
     await loadList()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '撤回失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.withdrawFailed'))
   } finally {
     withdrawingId.value = null
   }
@@ -90,7 +126,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载我发起的流程失败'
+      errorMsg.value = t('workflow.startedByMeLoadFailed')
     }
   } finally {
     loading.value = false
@@ -134,7 +170,7 @@ async function openDetail(row: ProcessInstance) {
   try {
     detail.value = await myInstanceDetail(row.id)
   } catch (err) {
-    detailError.value = err instanceof ApiError ? err.msg : '加载流程详情失败'
+    detailError.value = err instanceof ApiError ? err.msg : t('workflow.instanceDetailLoadFailed')
   } finally {
     detailLoading.value = false
   }
@@ -143,16 +179,37 @@ async function openDetail(row: ProcessInstance) {
 // ─── 流转记录映射 ───
 const APPROVAL_RESULT_MAP: Record<string, { label: string; type: 'success' | 'danger' | 'info' }> =
   {
-    APPROVED: { label: '通过', type: 'success' },
-    REJECTED: { label: '驳回', type: 'danger' },
-    RETURNED: { label: '已退回', type: 'info' },
+    APPROVED: {
+      get label() {
+        return t('common.approve')
+      },
+      type: 'success',
+    },
+    REJECTED: {
+      get label() {
+        return t('common.reject')
+      },
+      type: 'danger',
+    },
+    RETURNED: {
+      get label() {
+        return t('common.statusReturned')
+      },
+      type: 'info',
+    },
   }
 
 // 动作标签（对齐 MyProcessed 的 ACTION_TAG 口径）
 const ACTION_LABEL_MAP: Record<string, string> = {
-  APPROVE: '通过',
-  REJECT: '驳回',
-  RETURN: '退回',
+  get APPROVE() {
+    return t('common.approve')
+  },
+  get REJECT() {
+    return t('common.reject')
+  },
+  get RETURN() {
+    return t('common.returnBack')
+  },
 }
 
 function actionLabel(action: string | null): string {
@@ -161,7 +218,7 @@ function actionLabel(action: string | null): string {
 }
 
 function resultLabel(result: string | null): string {
-  if (!result) return '进行中'
+  if (!result) return t('common.statusInProgress')
   return APPROVAL_RESULT_MAP[result]?.label ?? result
 }
 
@@ -182,14 +239,14 @@ async function urge(row: ProcessInstance) {
   try {
     const resp = await urgeMyInstance(row.id)
     if (resp.result === 'ACCEPTED') {
-      ElMessage.success(resp.detail || '已通知当前待办人')
+      ElMessage.success(resp.detail || t('workflow.urgeSent'))
     } else if (resp.result === 'COOLDOWN') {
-      ElMessage.warning(resp.detail || '冷却中，暂不能再次催办')
+      ElMessage.warning(resp.detail || t('workflow.urgeCoolingDown'))
     } else {
-      ElMessage.info(resp.detail || '当前不能催办')
+      ElMessage.info(resp.detail || t('workflow.urgeNotAvailable'))
     }
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '催办失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.urgeFailed'))
   } finally {
     urgingId.value = null
   }
@@ -205,7 +262,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="我发起的"
+    :title="t('common.startedByMe')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -217,26 +274,26 @@ onMounted(loadList)
     <template #filter>
       <el-select
         v-model="filter.status"
-        placeholder="状态"
+        :placeholder="t('common.status')"
         clearable
         style="width: 140px"
         @change="handleSearch"
       >
-        <el-option label="进行中" value="RUNNING" />
-        <el-option label="已通过" value="APPROVED" />
-        <el-option label="已驳回" value="REJECTED" />
+        <el-option :label="t('common.statusInProgress')" value="RUNNING" />
+        <el-option :label="t('common.statusApproved')" value="APPROVED" />
+        <el-option :label="t('common.statusRejected')" value="REJECTED" />
       </el-select>
       <el-input
         v-model="filter.keyword"
-        placeholder="流程名称/业务单号"
+        :placeholder="t('workflow.searchProcessPlaceholder')"
         clearable
         style="width: 200px"
         @keyup.enter="handleSearch"
       />
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleSearch">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleSearch">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <!-- 空态 -->
@@ -256,25 +313,27 @@ onMounted(loadList)
 
     <!-- 表格 -->
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
-      <el-table-column label="流程名称" min-width="150">
+      <el-table-column :label="t('common.processName')" min-width="150">
         <template #default="{ row }">
           {{ row.processName ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="processDefKey" label="流程标识" min-width="150" />
-      <el-table-column prop="businessKey" label="业务单号" min-width="120" />
-      <el-table-column prop="formKey" label="表单标识" min-width="130" />
-      <el-table-column label="状态" width="100">
+      <el-table-column prop="processDefKey" :label="t('common.processKey')" min-width="150" />
+      <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="120" />
+      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="130" />
+      <el-table-column :label="t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">
             {{ statusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" label="发起时间" min-width="170" />
-      <el-table-column label="操作" width="190" fixed="right">
+      <el-table-column prop="createTime" :label="t('common.startTimeShort')" min-width="170" />
+      <el-table-column :label="t('common.actions')" width="190" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" type="primary" link @click="openDetailRow(row)">详情</el-button>
+          <el-button size="small" type="primary" link @click="openDetailRow(row)">{{
+            t('common.detail')
+          }}</el-button>
           <el-button
             v-if="row.status === 'RUNNING'"
             v-perm="'workflow:urge'"
@@ -284,7 +343,7 @@ onMounted(loadList)
             :disabled="urgingId === row.id"
             @click="urgeRow(row)"
           >
-            催办
+            {{ t('workflow.urge') }}
           </el-button>
           <el-button
             v-if="row.status === 'RUNNING'"
@@ -295,7 +354,7 @@ onMounted(loadList)
             :disabled="withdrawingId === row.processInstanceId"
             @click="withdrawRow(row)"
           >
-            撤回
+            {{ t('common.withdraw') }}
           </el-button>
         </template>
       </el-table-column>
@@ -303,43 +362,47 @@ onMounted(loadList)
 
     <!-- 详情弹窗 -->
   </StandardListTemplate>
-  <el-dialog v-model="detailVisible" title="流程详情" width="760px">
+  <el-dialog v-model="detailVisible" :title="t('workflow.instanceDetail')" width="760px">
     <div v-loading="detailLoading">
       <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" show-icon />
       <template v-if="detail">
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="流程名称">
+          <el-descriptions-item :label="t('common.processName')">
             {{ detail.processName ?? '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="状态">
+          <el-descriptions-item :label="t('common.status')">
             <el-tag :type="statusTagType(detail.status)" size="small">
               {{ statusLabel(detail.status) }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="流程标识">
+          <el-descriptions-item :label="t('common.processKey')">
             {{ detail.instance.processDefKey }}
           </el-descriptions-item>
-          <el-descriptions-item label="业务单号">{{ detail.businessKey }}</el-descriptions-item>
-          <el-descriptions-item label="表单标识">{{ detail.formKey }}</el-descriptions-item>
-          <el-descriptions-item label="发起时间">
+          <el-descriptions-item :label="t('common.businessNo')">{{
+            detail.businessKey
+          }}</el-descriptions-item>
+          <el-descriptions-item :label="t('common.formKey')">{{
+            detail.formKey
+          }}</el-descriptions-item>
+          <el-descriptions-item :label="t('common.startTimeShort')">
             {{ detail.instance.createTime }}
           </el-descriptions-item>
         </el-descriptions>
 
         <!-- 当前进度 -->
-        <h4 class="detail-section-title">当前进度</h4>
+        <h4 class="detail-section-title">{{ t('workflow.currentProgress') }}</h4>
         <el-alert
           v-if="detail.progress.length === 0"
-          title="流程已结束，无进行中的节点"
+          :title="t('workflow.flowEndedNoActiveNode')"
           type="info"
           :closable="false"
           show-icon
         />
         <el-table v-else :data="detail.progress" stripe size="small">
-          <el-table-column prop="taskName" label="节点" min-width="140" />
-          <el-table-column prop="nodeKey" label="节点标识" min-width="140" />
-          <el-table-column prop="assignee" label="办理人" min-width="120" />
-          <el-table-column label="任务编号" min-width="140">
+          <el-table-column prop="taskName" :label="t('common.node')" min-width="140" />
+          <el-table-column prop="nodeKey" :label="t('workflow.nodeKey')" min-width="140" />
+          <el-table-column prop="assignee" :label="t('workflow.assignee')" min-width="120" />
+          <el-table-column :label="t('common.taskNo')" min-width="140">
             <template #default="{ row }">
               {{ row.taskId }}
             </template>
@@ -347,40 +410,40 @@ onMounted(loadList)
         </el-table>
 
         <!-- 流转记录 -->
-        <h4 class="detail-section-title">流转记录</h4>
+        <h4 class="detail-section-title">{{ t('common.flowHistory') }}</h4>
         <el-alert
           v-if="detail.history.length === 0"
-          title="暂无流转记录"
+          :title="t('workflow.noFlowRecords')"
           type="info"
           :closable="false"
           show-icon
         />
         <el-table v-else :data="detail.history" stripe size="small">
-          <el-table-column prop="taskName" label="节点" min-width="120" />
-          <el-table-column label="办理人" min-width="110">
+          <el-table-column prop="taskName" :label="t('common.node')" min-width="120" />
+          <el-table-column :label="t('workflow.assignee')" min-width="110">
             <template #default="{ row }">
               {{ row.assigneeName ?? row.assignee ?? '-' }}
             </template>
           </el-table-column>
-          <el-table-column label="动作" width="90">
+          <el-table-column :label="t('common.action')" width="90">
             <template #default="{ row }">
               {{ actionLabel(row.action) }}
             </template>
           </el-table-column>
-          <el-table-column label="结果" width="90">
+          <el-table-column :label="t('common.result')" width="90">
             <template #default="{ row }">
               <el-tag :type="resultTagType(row.approvalResult)" size="small">
                 {{ resultLabel(row.approvalResult) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="意见" min-width="150">
+          <el-table-column :label="t('common.comment')" min-width="150">
             <template #default="{ row }">
               {{ row.opinionData?.comment ?? '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="createTime" label="到达时间" min-width="160" />
-          <el-table-column label="办理时间" min-width="160">
+          <el-table-column prop="createTime" :label="t('workflow.arrivedAt')" min-width="160" />
+          <el-table-column :label="t('workflow.handledAt')" min-width="160">
             <template #default="{ row }">
               {{ row.endTime ?? '-' }}
             </template>
@@ -389,7 +452,7 @@ onMounted(loadList)
       </template>
     </div>
     <template #footer>
-      <el-button @click="detailVisible = false">关闭</el-button>
+      <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
     </template>
   </el-dialog>
 </template>

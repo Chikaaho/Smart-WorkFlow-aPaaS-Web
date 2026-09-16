@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * DebugSessionView — 图单步调试会话页
  *
@@ -50,11 +53,36 @@ const STATUS_MAP: Record<
   string,
   { label: string; type: 'success' | 'warning' | 'info' | 'danger' | '' }
 > = {
-  PAUSED: { label: '已暂停', type: '' },
-  COMPLETED: { label: '已完成', type: 'success' },
-  FAILED: { label: '失败', type: 'danger' },
-  STOPPED: { label: '已停止', type: 'info' },
-  EXPIRED: { label: '已过期', type: 'warning' },
+  PAUSED: {
+    get label() {
+      return t('common.statusPaused')
+    },
+    type: '',
+  },
+  COMPLETED: {
+    get label() {
+      return t('common.statusCompleted')
+    },
+    type: 'success',
+  },
+  FAILED: {
+    get label() {
+      return t('common.resultFailed')
+    },
+    type: 'danger',
+  },
+  STOPPED: {
+    get label() {
+      return t('common.statusStopped')
+    },
+    type: 'info',
+  },
+  EXPIRED: {
+    get label() {
+      return t('common.statusExpired')
+    },
+    type: 'warning',
+  },
 }
 
 function getStatusLabel(status: string): string {
@@ -97,7 +125,7 @@ function formatLatency(latencyMs: number | null | undefined): string {
 }
 
 function formatTokenCount(count: number | null | undefined): string {
-  if (count === null || count === undefined) return '未知'
+  if (count === null || count === undefined) return t('common.unknown')
   if (count === 0) return '0'
   return count.toLocaleString()
 }
@@ -112,7 +140,7 @@ const totalTokens = computed(() => {
 
 // variables 展示：JSON 美化，失败回落原文
 const variablesPreview = computed(() => {
-  if (!session.value?.variables) return '(空)'
+  if (!session.value?.variables) return t('common.blank')
   try {
     const v = session.value.variables
     if (typeof v === 'string') {
@@ -184,9 +212,9 @@ async function loadSession() {
         router.replace('/404')
         return
       }
-      error.value = err.msg || '加载调试会话失败'
+      error.value = err.msg || t('agent.debugSessionLoadFailed')
     } else {
-      error.value = '加载调试会话失败'
+      error.value = t('agent.debugSessionLoadFailed')
     }
   } finally {
     loading.value = false
@@ -216,13 +244,13 @@ async function handleStep() {
     await reloadAfterAction()
   } catch (err) {
     if (err instanceof ApiError && err.code === 409) {
-      versionConflictTip.value = '版本冲突：会话已被其他操作更新，已自动刷新，请重试。'
+      versionConflictTip.value = t('agent.debugVersionConflict')
       await reloadAfterAction()
     } else if (err instanceof ApiError) {
-      ElMessage.error(err.msg || '单步执行失败')
+      ElMessage.error(err.msg || t('agent.debugStepFailed'))
       await reloadAfterAction()
     } else {
-      ElMessage.error('单步执行失败')
+      ElMessage.error(t('agent.debugStepFailed'))
     }
   } finally {
     actionLoading.value = null
@@ -237,8 +265,8 @@ async function handleContinue() {
     await continueDebugSession(sessionId.value)
     await reloadAfterAction()
   } catch (err) {
-    if (err instanceof ApiError) ElMessage.error(err.msg || '继续执行失败')
-    else ElMessage.error('继续执行失败')
+    if (err instanceof ApiError) ElMessage.error(err.msg || t('agent.debugContinueFailed'))
+    else ElMessage.error(t('agent.debugContinueFailed'))
     await reloadAfterAction()
   } finally {
     actionLoading.value = null
@@ -253,8 +281,8 @@ async function handleStop() {
     await stopDebugSession(sessionId.value)
     await reloadAfterAction()
   } catch (err) {
-    if (err instanceof ApiError) ElMessage.error(err.msg || '停止失败')
-    else ElMessage.error('停止失败')
+    if (err instanceof ApiError) ElMessage.error(err.msg || t('agent.debugStopFailed'))
+    else ElMessage.error(t('agent.debugStopFailed'))
     await reloadAfterAction()
   } finally {
     actionLoading.value = null
@@ -272,8 +300,8 @@ async function handleBreakpointToggle(nodeId: string) {
     const updated = await updateDebugBreakpoints(sessionId.value, next)
     session.value = updated
   } catch (err) {
-    if (err instanceof ApiError) ElMessage.error(err.msg || '更新断点失败')
-    else ElMessage.error('更新断点失败')
+    if (err instanceof ApiError) ElMessage.error(err.msg || t('agent.debugBreakpointUpdateFailed'))
+    else ElMessage.error(t('agent.debugBreakpointUpdateFailed'))
   } finally {
     actionLoading.value = null
   }
@@ -282,13 +310,13 @@ async function handleBreakpointToggle(nodeId: string) {
 async function handleAddBreakpoint() {
   const v = newBreakpointInput.value.trim()
   if (!v) {
-    ElMessage.warning('请输入节点 ID')
+    ElMessage.warning(t('agent.debugNodeIdRequired'))
     return
   }
   if (!session.value || !isPaused.value) return
   const current = new Set(session.value.breakpoints ?? [])
   if (current.has(v)) {
-    ElMessage.warning('该断点已存在')
+    ElMessage.warning(t('agent.debugBreakpointExists'))
     return
   }
   current.add(v)
@@ -298,8 +326,8 @@ async function handleAddBreakpoint() {
     session.value = updated
     newBreakpointInput.value = ''
   } catch (err) {
-    if (err instanceof ApiError) ElMessage.error(err.msg || '添加断点失败')
-    else ElMessage.error('添加断点失败')
+    if (err instanceof ApiError) ElMessage.error(err.msg || t('agent.debugBreakpointAddFailed'))
+    else ElMessage.error(t('agent.debugBreakpointAddFailed'))
   } finally {
     actionLoading.value = null
   }
@@ -311,7 +339,7 @@ function goBack() {
 
 onMounted(() => {
   if (!sessionId.value || isNaN(sessionId.value)) {
-    error.value = '无效的调试会话 ID'
+    error.value = t('agent.debugInvalidSessionId')
   } else {
     void loadSession()
   }
@@ -328,9 +356,8 @@ onMounted(() => {
       <!-- 头部 -->
       <div class="page-header">
         <el-button @click="goBack">
-          <el-icon><ArrowLeft /></el-icon>
-          返回
-        </el-button>
+          <el-icon><ArrowLeft /></el-icon>{{ t('common.back') }}</el-button
+        >
         <div class="header-info">
           <span class="session-id">#{{ session.id }}</span>
           <el-tag
@@ -340,9 +367,13 @@ onMounted(() => {
           >
             {{ getStatusLabel(session.status) }}
           </el-tag>
-          <span class="graph-meta">图 #{{ session.graphDefId }}</span>
+          <span class="graph-meta">{{
+            t('agent.graphFallbackName', { graphDefId: session.graphDefId })
+          }}</span>
           <span class="divider">·</span>
-          <span class="def-version">版本 v{{ session.graphDefVersion }}</span>
+          <span class="def-version">{{
+            t('agent.versionLabel', { graphDefVersion: session.graphDefVersion })
+          }}</span>
           <span class="trace-count">trace {{ session.traceCount }}</span>
           <span class="latency">{{ formatLatency(session.latencyMs) }}</span>
         </div>
@@ -351,7 +382,7 @@ onMounted(() => {
       <!-- 输入预览 -->
       <el-card shadow="never" class="detail-section">
         <template #header>
-          <div class="section-title">输入预览</div>
+          <div class="section-title">{{ t('agent.debugInputPreview') }}</div>
         </template>
         <div class="content-preview-box">
           <pre>{{ session.input }}</pre>
@@ -361,23 +392,23 @@ onMounted(() => {
       <!-- 当前状态卡 -->
       <el-card shadow="never" class="detail-section">
         <template #header>
-          <div class="section-title">当前状态</div>
+          <div class="section-title">{{ t('agent.debugCurrentState') }}</div>
         </template>
         <div class="state-grid">
           <div class="state-item">
-            <span class="state-label">下一节点:</span>
+            <span class="state-label">{{ t('agent.debugNextNode') }}</span>
             <span class="state-value monospace">{{ session.nextNodeId ?? '-' }}</span>
           </div>
           <div class="state-item">
-            <span class="state-label">分支:</span>
+            <span class="state-label">{{ t('agent.debugBranch') }}</span>
             <span class="state-value monospace">{{ session.nextBranchId ?? '-' }}</span>
           </div>
           <div class="state-item">
-            <span class="state-label">过期时间:</span>
+            <span class="state-label">{{ t('agent.debugExpiresAt') }}</span>
             <span class="state-value">{{ formatTimestamp(session.expiresAt) }}</span>
           </div>
           <div class="state-item full-width">
-            <span class="state-label">变量:</span>
+            <span class="state-label">{{ t('agent.debugVariables') }}</span>
             <div class="variables-preview">
               <pre>{{ variablesPreview }}</pre>
             </div>
@@ -388,7 +419,7 @@ onMounted(() => {
       <!-- 控制区 -->
       <el-card shadow="never" class="detail-section">
         <template #header>
-          <div class="section-title">调试控制</div>
+          <div class="section-title">{{ t('agent.debugControls') }}</div>
         </template>
         <div class="controls">
           <el-button
@@ -397,7 +428,7 @@ onMounted(() => {
             :loading="actionLoading === 'step'"
             @click="handleStep"
           >
-            单步
+            {{ t('agent.debugStep') }}
           </el-button>
           <el-button
             type="success"
@@ -405,7 +436,7 @@ onMounted(() => {
             :loading="actionLoading === 'continue'"
             @click="handleContinue"
           >
-            继续
+            {{ t('agent.debugResume') }}
           </el-button>
           <el-button
             type="danger"
@@ -413,9 +444,9 @@ onMounted(() => {
             :loading="actionLoading === 'stop'"
             @click="handleStop"
           >
-            停止
+            {{ t('agent.debugStop') }}
           </el-button>
-          <span v-if="!isPaused" class="controls-hint">仅 PAUSED 状态可操作</span>
+          <span v-if="!isPaused" class="controls-hint">{{ t('agent.debugPausedOnly') }}</span>
         </div>
         <el-alert
           v-if="versionConflictTip"
@@ -430,13 +461,13 @@ onMounted(() => {
       <!-- 断点 -->
       <el-card shadow="never" class="detail-section">
         <template #header>
-          <div class="section-title">断点</div>
+          <div class="section-title">{{ t('agent.debugBreakpoints') }}</div>
         </template>
         <div
           v-if="breakpointCandidates.length === 0 && (session.breakpoints?.length ?? 0) === 0"
           class="empty-tip"
         >
-          暂无断点候选（执行节点为空）
+          {{ t('agent.noBreakpointCandidates') }}
         </div>
         <div v-else class="breakpoints-list">
           <label
@@ -456,7 +487,7 @@ onMounted(() => {
         <div class="breakpoint-add">
           <el-input
             v-model="newBreakpointInput"
-            placeholder="输入节点 ID 添加断点"
+            :placeholder="t('agent.debugBreakpointPlaceholder')"
             size="small"
             style="width: 240px"
             :disabled="!isPaused"
@@ -467,7 +498,7 @@ onMounted(() => {
             type="primary"
             :disabled="!isPaused || actionLoading === 'breakpoint'"
             @click="handleAddBreakpoint"
-            >添加</el-button
+            >{{ t('common.add') }}</el-button
           >
         </div>
       </el-card>
@@ -479,47 +510,47 @@ onMounted(() => {
         class="detail-section error-section"
       >
         <template #header>
-          <div class="section-title error-title">错误信息</div>
+          <div class="section-title error-title">{{ t('agent.errorInfoSection') }}</div>
         </template>
         <div class="error-content">
           <div v-if="session.errorCategory" class="error-category">
-            分类：{{ session.errorCategory }}
+            {{ t('agent.errorCategoryLabel', { errorCategory: session.errorCategory }) }}
           </div>
           <SafeHtml v-if="session.errorMessage" :html="session.errorMessage" />
-          <span v-else class="text-muted">无详细错误</span>
+          <span v-else class="text-muted">{{ t('agent.debugNoErrorDetail') }}</span>
         </div>
       </el-card>
 
       <!-- 结果展示（COMPLETED） -->
       <el-card v-if="session.status === 'COMPLETED'" shadow="never" class="detail-section">
         <template #header>
-          <div class="section-title">执行结果</div>
+          <div class="section-title">{{ t('agent.debugExecutionResult') }}</div>
         </template>
         <div class="content-preview-box">
-          <pre>{{ session.resultText ?? '(空)' }}</pre>
+          <pre>{{ session.resultText ?? t('common.blank') }}</pre>
         </div>
       </el-card>
 
       <!-- 耗时与 Token 汇总 -->
       <el-card shadow="never" class="detail-section">
         <template #header>
-          <div class="section-title">耗时与 Token</div>
+          <div class="section-title">{{ t('agent.debugLatencyAndTokens') }}</div>
         </template>
         <div class="token-grid">
           <div class="token-item">
-            <span class="token-label">耗时</span>
+            <span class="token-label">{{ t('common.duration') }}</span>
             <span class="token-value">{{ formatLatency(session.latencyMs) }}</span>
           </div>
           <div class="token-item">
-            <span class="token-label">输入 Token</span>
+            <span class="token-label">{{ t('agent.inputTokensColumn') }}</span>
             <span class="token-value">{{ formatTokenCount(session.inputTokens) }}</span>
           </div>
           <div class="token-item">
-            <span class="token-label">输出 Token</span>
+            <span class="token-label">{{ t('agent.outputTokensColumn') }}</span>
             <span class="token-value">{{ formatTokenCount(session.outputTokens) }}</span>
           </div>
           <div class="token-item">
-            <span class="token-label">总 Token</span>
+            <span class="token-label">{{ t('agent.totalTokensColumn') }}</span>
             <span class="token-value">{{ formatTokenCount(totalTokens) }}</span>
           </div>
         </div>
@@ -528,13 +559,13 @@ onMounted(() => {
       <!-- 节点轨迹 -->
       <el-card shadow="never" class="detail-section">
         <template #header>
-          <div class="section-title">节点轨迹</div>
+          <div class="section-title">{{ t('agent.nodeTrajectory') }}</div>
         </template>
         <NodeTrajectory :nodes="trajectoryNodes" />
       </el-card>
     </template>
 
-    <el-empty v-else description="暂无调试会话数据" />
+    <el-empty v-else :description="t('agent.debugSessionEmpty')" />
   </div>
 </template>
 

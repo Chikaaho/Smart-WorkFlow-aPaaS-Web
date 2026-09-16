@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 配置项 seam 占位说明。
  *
@@ -15,7 +18,7 @@ defineProps<{
 
 <template>
   <div class="seam">
-    <p class="seam__title">以下配置待契约扩展后接入（本刀不自造键）</p>
+    <p class="seam__title">{{ t('form.seamNotice') }}</p>
     <ul class="seam__list">
       <li v-for="it in items" :key="it">{{ it }}</li>
     </ul>

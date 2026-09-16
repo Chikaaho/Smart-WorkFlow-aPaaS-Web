@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ListToolbar — 表格上方工具栏。
  * 左侧：标题 + 记录数；右侧：操作按钮区（#actions slot）。
@@ -11,7 +14,9 @@ defineProps<{ title?: string; total?: number }>()
     <div class="list-toolbar__left">
       <slot>
         <h2 v-if="title" class="list-toolbar__title">{{ title }}</h2>
-        <span v-if="total !== undefined" class="list-toolbar__total">共 {{ total }} 条记录</span>
+        <span v-if="total !== undefined" class="list-toolbar__total">{{
+          t('common.totalRecords', { total })
+        }}</span>
       </slot>
     </div>
     <div v-if="$slots.actions" class="list-toolbar__actions">

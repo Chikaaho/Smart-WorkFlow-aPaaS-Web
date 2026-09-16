@@ -1,0 +1,13 @@
+{
+  "_comment": "P61 R2b 已复核豁免：键由 scripts 审计的 catch 体首段精确生成（见 .p61-tmp/allowkeys.mjs），值必须写清依据；无依据的豁免视为缺键。",
+  "src/modules/form/views/FormData.vue :: persistedListConfig.value = null": "可选的持久化列配置：失败回落默认列布局属降级而非错误，主数据（表单数据列表）的失败另有独立错误态",
+  "src/modules/form/views/FormDesigner.vue :: ": "publishDefinition 内部已 catch 并 ElMessage.error（draft-actions.ts），此处再提示会双重报错",
+  "src/modules/form/views/FormRender.vue :: ": "轮询重试循环：中途报错属预期，打断重试反而制造错误结论；超限后由调用方给出结论，不冒充成功",
+  "src/modules/workflow/views/MobileWorkspace.vue :: refDisplayMap.value[field.name] = String(refId)": "逐字段引用回显：失败时显示原始 ID 而非编造名称；逐字段 toast 是噪音且不阻塞主流程",
+  "src/modules/workflow/views/MobileWorkspace.vue :: formRecord.value = null": "引用记录详情取不到时显示原始 ID（同一回显链路），不阻塞填报",
+  "src/modules/workflow/views/MobileWorkspace.vue :: formSchema.value = null": "同上：引用字段回显链路的降级，主表单 schema 的失败另有独立错误分支",
+  "src/modules/workflow/views/TaskDetail.vue :: refDisplayMap.value[field.name] = String(refId)": "逐字段引用回显：失败时显示原始 ID 而非编造名称；逐字段 toast 是噪音",
+  "src/modules/workflow/views/TaskDetail.vue :: formRecord.value = null": "引用记录详情取不到时显示原始 ID（同一回显链路），不阻塞审批",
+  "src/modules/workflow/views/TaskDetail.vue :: formSchema.value = null": "同上：引用字段回显链路的降级，主表单的失败另有独立错误分支",
+  "src/modules/workflow/views/TaskDetail.vue :: ": "提交/动作后的非关键回读：失败已有独立的提交结果反馈，这里再提示会掩盖真实结果"
+}

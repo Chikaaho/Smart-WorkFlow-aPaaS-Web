@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 import { ElMessage } from 'element-plus'
 import type { FormSchema } from '@/contracts/form-schema'
 import type { FormDefDTO, FormDefStatus } from '../api/form-def'
@@ -45,10 +46,10 @@ export async function saveDraftDefinition(
     const definitionJson = JSON.stringify(definition)
     await saveFormConfig(id, definitionJson)
 
-    ElMessage.success('草稿已保存')
+    ElMessage.success(i18n.global.t('common.draftSaved'))
     return { id, status: 'DRAFT' }
   } catch (err) {
-    handleError(err, '保存草稿失败')
+    handleError(err, i18n.global.t('common.saveDraftFailed'))
     throw err
   }
 }
@@ -66,10 +67,10 @@ export async function publishDefinition(definition: FormSchema, id: string): Pro
     await saveFormConfig(id, definitionJson)
 
     const published = await publishFormDef(id)
-    ElMessage.success('发布成功')
+    ElMessage.success(i18n.global.t('common.publishSuccess'))
     return published
   } catch (err) {
-    handleError(err, '发布失败')
+    handleError(err, i18n.global.t('common.publishFailed'))
     throw err
   }
 }

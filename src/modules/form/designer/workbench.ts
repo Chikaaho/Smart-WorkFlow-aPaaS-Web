@@ -1,17 +1,20 @@
 /**
  * 表单工作台纯函数（P52）。
  *
- * 保存状态机文案与脏判定集中在此，便于单测；组件层只消费。
+ * 保存状态机语义与脏判定集中在此，便于单测；组件层只消费。
  * 状态语义（方向 §3.1）：
  *   - 未修改 / 未保存 / 保存中 / 保存成功 / 保存失败 五态；
  *   - 保存失败不得显示成功，也不得清除未保存标记（isDirty 仍为 true）。
+ *
+ * 展示文案一律来自 zh-CN/en-US 权威目录，本模块只产出**状态标识**与目录键，
+ * 不持有任何语言的字面量（语言切换与目录一致性由 locales 单源保证）。
  */
 
 /** 瞬态阶段：idle=无进行中动作；saving/saved/error 为一次保存动作的瞬态。 */
 export type WorkbenchSavePhase = 'idle' | 'saving' | 'saved' | 'error'
 
-/** 工作台保存状态（展示文案）。 */
-export type WorkbenchSaveState = '未修改' | '未保存' | '保存中' | '保存成功' | '保存失败'
+/** 工作台保存状态（语义标识；展示文案见 saveStateKey）。 */
+export type WorkbenchSaveState = 'unchanged' | 'unsaved' | 'saving' | 'saveSuccess' | 'saveFailed'
 
 /**
  * 解析当前应展示的保存状态。
@@ -21,10 +24,15 @@ export type WorkbenchSaveState = '未修改' | '未保存' | '保存中' | '保�
  * - idle 时按脏标记区分「未修改 / 未保存」。
  */
 export function resolveSaveState(isDirty: boolean, phase: WorkbenchSavePhase): WorkbenchSaveState {
-  if (phase === 'saving') return '保存中'
-  if (phase === 'saved') return '保存成功'
-  if (phase === 'error') return '保存失败'
-  return isDirty ? '未保存' : '未修改'
+  if (phase === 'saving') return 'saving'
+  if (phase === 'saved') return 'saveSuccess'
+  if (phase === 'error') return 'saveFailed'
+  return isDirty ? 'unsaved' : 'unchanged'
+}
+
+/** 保存状态 → 权威目录键。 */
+export function saveStateKey(state: WorkbenchSaveState): string {
+  return `common.${state}`
 }
 
 /**
@@ -50,4 +58,8 @@ export function parseWorkbenchTab(raw: unknown): WorkbenchTab {
  */
 export type LeaveGuardAction = 'save' | 'discard' | 'cancel'
 
-export const LEAVE_GUARD_MESSAGE = '当前表单存在未保存的修改，离开将丢失这些修改。'
+/**
+ * 离开保护提示的文案键。导出键而非求值结果：模块加载期求值会把语言固化，
+ * 之后切换语言不会生效。
+ */
+export const LEAVE_GUARD_MESSAGE_KEY = 'form.unsavedLeaveWarning'

@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 import type {
   BpmNodeCapability,
   BpmNodeConfigField,
@@ -30,26 +31,28 @@ function isRecord(value: unknown): value is UnknownRecord {
 }
 
 function contractError(path: string, message: string): never {
-  throw new NodeCapabilityContractError(`节点能力契约无效：${path}${message}`)
+  throw new NodeCapabilityContractError(
+    i18n.global.t('workflow.nodeCapabilityInvalid', { path, message }),
+  )
 }
 
 function requiredString(value: unknown, path: string): string {
   if (typeof value !== 'string' || value.trim() === '') {
-    contractError(path, '必须是非空字符串')
+    contractError(path, i18n.global.t('workflow.mustBeNonEmptyString'))
   }
   return value
 }
 
 function requiredBoolean(value: unknown, path: string): boolean {
   if (typeof value !== 'boolean') {
-    contractError(path, '必须是布尔值')
+    contractError(path, i18n.global.t('workflow.mustBeBoolean'))
   }
   return value
 }
 
 function requiredNonNegativeInteger(value: unknown, path: string): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    contractError(path, '必须是非负整数')
+    contractError(path, i18n.global.t('workflow.mustBeNonNegativeInteger'))
   }
   return value
 }
@@ -60,7 +63,7 @@ function optionalMaxInteger(value: unknown, path: string): number | null {
 }
 
 function parseTopology(value: unknown, path: string): BpmNodeTopology {
-  if (!isRecord(value)) contractError(path, '必须是对象')
+  if (!isRecord(value)) contractError(path, i18n.global.t('common.mustBeObject'))
 
   const topology = {
     minIncoming: requiredNonNegativeInteger(value.minIncoming, `${path}.minIncoming`),
@@ -70,24 +73,24 @@ function parseTopology(value: unknown, path: string): BpmNodeTopology {
   }
 
   if (topology.maxIncoming !== null && topology.maxIncoming < topology.minIncoming) {
-    contractError(`${path}.maxIncoming`, '不能小于 minIncoming')
+    contractError(`${path}.maxIncoming`, i18n.global.t('workflow.maxIncomingBelowMin'))
   }
   if (topology.maxOutgoing !== null && topology.maxOutgoing < topology.minOutgoing) {
-    contractError(`${path}.maxOutgoing`, '不能小于 minOutgoing')
+    contractError(`${path}.maxOutgoing`, i18n.global.t('workflow.maxOutgoingBelowMin'))
   }
   return topology
 }
 
 function parseConfigFields(value: unknown, path: string): BpmNodeConfigField[] {
-  if (!Array.isArray(value)) contractError(path, '必须是数组')
+  if (!Array.isArray(value)) contractError(path, i18n.global.t('workflow.mustBeArray'))
 
   const keys = new Set<string>()
   return value.map((item, index) => {
     const itemPath = `${path}[${index}]`
-    if (!isRecord(item)) contractError(itemPath, '必须是对象')
+    if (!isRecord(item)) contractError(itemPath, i18n.global.t('common.mustBeObject'))
     const validation = item.validation
     if (validation !== undefined && !isRecord(validation)) {
-      contractError(`${itemPath}.validation`, '必须是对象')
+      contractError(`${itemPath}.validation`, i18n.global.t('common.mustBeObject'))
     }
     const field = {
       key: requiredString(item.key, `${itemPath}.key`),
@@ -96,14 +99,18 @@ function parseConfigFields(value: unknown, path: string): BpmNodeConfigField[] {
       required: requiredBoolean(item.required, `${itemPath}.required`),
       ...(validation === undefined ? {} : { validation }),
     }
-    if (keys.has(field.key)) contractError(`${itemPath}.key`, `重复配置字段 ${field.key}`)
+    if (keys.has(field.key))
+      contractError(
+        `${itemPath}.key`,
+        i18n.global.t('workflow.duplicateConfigField', { key: field.key }),
+      )
     keys.add(field.key)
     return field
   })
 }
 
 function parseSupports(value: unknown, path: string): BpmNodeSupports {
-  if (!isRecord(value)) contractError(path, '必须是对象')
+  if (!isRecord(value)) contractError(path, i18n.global.t('common.mustBeObject'))
   return {
     design: requiredBoolean(value.design, `${path}.design`),
     save: requiredBoolean(value.save, `${path}.save`),
@@ -115,16 +122,16 @@ function parseSupports(value: unknown, path: string): BpmNodeSupports {
 /** 将 request 返回的 unknown 解析为严格能力清单；未知形状不会静默降级。 */
 export function parseBpmNodeCapabilities(input: unknown): BpmNodeCapability[] {
   if (!Array.isArray(input)) {
-    contractError('data', '必须是节点能力数组')
+    contractError('data', i18n.global.t('workflow.mustBeCapabilityArray'))
   }
   if (input.length === 0) {
-    contractError('data', '节点能力清单不能为空')
+    contractError('data', i18n.global.t('workflow.capabilityListEmpty'))
   }
 
   const types = new Set<string>()
   return input.map((item, index) => {
     const itemPath = `data[${index}]`
-    if (!isRecord(item)) contractError(itemPath, '必须是对象')
+    if (!isRecord(item)) contractError(itemPath, i18n.global.t('common.mustBeObject'))
 
     const capability: BpmNodeCapability = {
       type: requiredString(item.type, `${itemPath}.type`),
@@ -141,10 +148,16 @@ export function parseBpmNodeCapabilities(input: unknown): BpmNodeCapability[] {
     }
 
     if (!['EVENT', 'TASK', 'GATEWAY', 'OTHER'].includes(capability.category)) {
-      contractError(`${itemPath}.category`, `不支持的节点类别 ${capability.category}`)
+      contractError(
+        `${itemPath}.category`,
+        i18n.global.t('workflow.unsupportedNodeCategory', { category: capability.category }),
+      )
     }
     if (types.has(capability.type)) {
-      contractError(`${itemPath}.type`, `重复节点类型 ${capability.type}`)
+      contractError(
+        `${itemPath}.type`,
+        i18n.global.t('workflow.duplicateNodeType', { type: capability.type }),
+      )
     }
     types.add(capability.type)
     return capability
@@ -195,7 +208,11 @@ export function assertRequiredNodeCapabilities(
     return capability === undefined || !isFullySupported(capability)
   })
   if (missing.length > 0) {
-    throw new NodeCapabilityContractError(`节点能力不可用：${missing.join(', ')}`)
+    throw new NodeCapabilityContractError(
+      i18n.global.t('workflow.nodeCapabilitiesUnavailable', {
+        missing: missing.join(i18n.global.t('common.enumSeparator')),
+      }),
+    )
   }
 }
 
@@ -236,16 +253,40 @@ function checkTopology(
 ): string[] {
   const errors: string[] = []
   if (incoming < topology.minIncoming) {
-    errors.push(`节点 ${nodeId}（${nodeType}）入边不足：至少需要 ${topology.minIncoming} 条`)
+    errors.push(
+      i18n.global.t('workflow.nodeIncomingTooFew', {
+        nodeId,
+        nodeType,
+        minIncoming: topology.minIncoming,
+      }),
+    )
   }
   if (topology.maxIncoming !== null && incoming > topology.maxIncoming) {
-    errors.push(`节点 ${nodeId}（${nodeType}）入边过多：最多允许 ${topology.maxIncoming} 条`)
+    errors.push(
+      i18n.global.t('workflow.nodeIncomingTooMany', {
+        nodeId,
+        nodeType,
+        maxIncoming: topology.maxIncoming,
+      }),
+    )
   }
   if (outgoing < topology.minOutgoing) {
-    errors.push(`节点 ${nodeId}（${nodeType}）出边不足：至少需要 ${topology.minOutgoing} 条`)
+    errors.push(
+      i18n.global.t('workflow.nodeOutgoingTooFew', {
+        nodeId,
+        nodeType,
+        minOutgoing: topology.minOutgoing,
+      }),
+    )
   }
   if (topology.maxOutgoing !== null && outgoing > topology.maxOutgoing) {
-    errors.push(`节点 ${nodeId}（${nodeType}）出边过多：最多允许 ${topology.maxOutgoing} 条`)
+    errors.push(
+      i18n.global.t('workflow.nodeOutgoingTooMany', {
+        nodeId,
+        nodeType,
+        maxOutgoing: topology.maxOutgoing,
+      }),
+    )
   }
   return errors
 }
@@ -259,7 +300,7 @@ export function validateProcessGraphCapabilities(
   capabilities: readonly BpmNodeCapability[],
   requiredTypes: readonly string[] = [],
 ): string[] {
-  if (!Array.isArray(graph.elements)) return ['流程图缺少 elements 数组']
+  if (!Array.isArray(graph.elements)) return [i18n.global.t('workflow.graphMissingElements')]
 
   const errors: string[] = []
   const nodeIds = new Set<string>()
@@ -273,61 +314,71 @@ export function validateProcessGraphCapabilities(
 
   for (const [index, raw] of graph.elements.entries()) {
     if (!isRecord(raw)) {
-      errors.push(`流程图元素 ${index} 必须是对象`)
+      errors.push(i18n.global.t('workflow.graphElementMustBeObject', { index }))
       continue
     }
     const element = raw as GraphElementLike
     if (element.kind === 'node') {
       if (typeof element.id !== 'string' || element.id.trim() === '') {
-        errors.push(`流程图节点 ${index} 缺少 id`)
+        errors.push(i18n.global.t('workflow.graphNodeMissingId', { index }))
         continue
       }
       if (nodeIds.has(element.id)) {
-        errors.push(`流程图节点 id 重复：${element.id}`)
+        errors.push(i18n.global.t('workflow.graphNodeDuplicateId', { id: element.id }))
         continue
       }
       nodeIds.add(element.id)
       if (typeof element.type !== 'string' || element.type.trim() === '') {
-        errors.push(`流程图节点 ${element.id} 缺少 type`)
+        errors.push(i18n.global.t('workflow.graphNodeMissingType', { id: element.id }))
         continue
       }
       const capability = findNodeCapability(capabilities, element.type)
       nodes.push({ id: element.id, type: element.type, element, capability })
       if (!capability) {
-        errors.push(`节点 ${element.id} 使用了能力清单未知类型：${element.type}`)
+        errors.push(
+          i18n.global.t('workflow.nodeUnknownType', { id: element.id, type: element.type }),
+        )
         continue
       }
       if (!isFullySupported(capability)) {
-        errors.push(`节点 ${element.id}（${element.type}）未具备完整设计/保存/发布/运行能力`)
+        errors.push(
+          i18n.global.t('workflow.nodeNotFullySupported', { id: element.id, type: element.type }),
+        )
       }
       const config = isRecord(element.config) ? element.config : {}
       for (const field of capability.configFields) {
         if (field.required && !hasConfigValue(readConfigValue(config, field.key))) {
-          errors.push(`节点 ${element.id}（${element.type}）缺少必填配置：${field.label}`)
+          errors.push(
+            i18n.global.t('workflow.nodeMissingRequiredConfig', {
+              id: element.id,
+              type: element.type,
+              label: field.label,
+            }),
+          )
         }
       }
     } else if (element.kind === 'edge') {
       if (typeof element.id !== 'string' || element.id.trim() === '') {
-        errors.push(`流程图边 ${index} 缺少 id`)
+        errors.push(i18n.global.t('workflow.graphEdgeMissingId', { index }))
         continue
       }
       if (typeof element.source !== 'string' || element.source.trim() === '') {
-        errors.push(`流程图边 ${element.id} 缺少 source`)
+        errors.push(i18n.global.t('workflow.graphEdgeMissingSource', { id: element.id }))
         continue
       }
       if (typeof element.target !== 'string' || element.target.trim() === '') {
-        errors.push(`流程图边 ${element.id} 缺少 target`)
+        errors.push(i18n.global.t('workflow.graphEdgeMissingTarget', { id: element.id }))
         continue
       }
       edges.push({ id: element.id, source: element.source, target: element.target })
     } else {
-      errors.push(`流程图元素 ${index} 的 kind 不受支持`)
+      errors.push(i18n.global.t('workflow.graphElementKindUnsupported', { index }))
     }
   }
 
   for (const edge of edges) {
     if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
-      errors.push(`流程图边 ${edge.id} 引用了不存在的节点`)
+      errors.push(i18n.global.t('workflow.graphEdgeDanglingRef', { id: edge.id }))
     }
   }
 
@@ -340,7 +391,7 @@ export function validateProcessGraphCapabilities(
 
   for (const requiredType of requiredTypes) {
     if (!nodes.some((node) => node.type === requiredType)) {
-      errors.push(`流程图缺少必要节点：${requiredType}`)
+      errors.push(i18n.global.t('workflow.graphMissingRequiredNode', { requiredType }))
     }
   }
 

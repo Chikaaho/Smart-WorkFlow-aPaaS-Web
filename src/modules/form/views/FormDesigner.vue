@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 表单设计器工作台（P52）。
  *
@@ -28,10 +31,12 @@ import RelatedProcessesPanel from '../designer/RelatedProcessesPanel.vue'
 import { saveDraftDefinition, publishDefinition as publishDef } from '../designer/draft-actions'
 import {
   resolveSaveState,
+  saveStateKey,
   isDefinitionDirty,
   parseWorkbenchTab,
-  LEAVE_GUARD_MESSAGE,
+  LEAVE_GUARD_MESSAGE_KEY,
   type WorkbenchSavePhase,
+  type WorkbenchSaveState,
   type WorkbenchTab,
 } from '../designer/workbench'
 import { applyFieldPatch, type FieldPatch } from '../designer/field-config'
@@ -52,10 +57,10 @@ const formVersion = ref<number | null>(null)
 /** 身份加载失败（不存在/已删除/无权）：明确拒绝态，不回退其他表单。 */
 const rejected = ref(false)
 const rejectReason = ref('')
-const rejectTitle = ref('无法打开该表单')
+const rejectTitle = ref(t('form.cannotOpenTitle'))
 
 /* ── 设计态 ── */
-const title = ref('未命名表单')
+const title = ref(t('common.untitledForm'))
 const items = ref<DesignerItem[]>([])
 const selectedId = ref<string | null>(null)
 /** 显隐联动规则（v0.0.2 P2）：按 target 存储每字段至多一条。 */
@@ -73,12 +78,15 @@ const currentJson = computed(() => JSON.stringify(buildDefinition()))
 const isDirty = computed(() => isDefinitionDirty(baselineJson.value, currentJson.value))
 const saveState = computed(() => resolveSaveState(isDirty.value, savePhase.value))
 
-const SAVE_STATE_TYPE: Record<string, 'info' | 'warning' | 'primary' | 'success' | 'danger'> = {
-  未修改: 'info',
-  未保存: 'warning',
-  保存中: 'primary',
-  保存成功: 'success',
-  保存失败: 'danger',
+const SAVE_STATE_TYPE: Record<
+  WorkbenchSaveState,
+  'info' | 'warning' | 'primary' | 'success' | 'danger'
+> = {
+  unchanged: 'info',
+  unsaved: 'warning',
+  saving: 'primary',
+  saveSuccess: 'success',
+  saveFailed: 'danger',
 }
 
 /* ── 已发布标记（驱动灰化） ── */
@@ -194,10 +202,11 @@ async function loadForm(id: string) {
     // 优先用 ApiError 携带的后端中文 message（如"表单不存在"），
     // 避免"业务错误(1300)"这类不可读兜底；403 明确为无权限拒绝态
     if (err instanceof ApiError && err.code === 403) {
-      rejectTitle.value = '无权访问该表单'
-      rejectReason.value = err.msg || '您缺少表单查看权限，无法读取该表单'
+      rejectTitle.value = t('form.noAccessTitle')
+      rejectReason.value = err.msg || t('form.noViewPermission')
     } else {
-      rejectReason.value = err instanceof ApiError && err.msg ? err.msg : '表单不存在或无权访问'
+      rejectReason.value =
+        err instanceof ApiError && err.msg ? err.msg : t('form.notFoundOrNoAccess')
     }
     ;(globalThis as unknown as { __loadErr?: unknown }).__loadErr = {
       name: (err as { name?: string }).name,
@@ -217,8 +226,8 @@ function resetWorkbench() {
   formVersion.value = null
   rejected.value = false
   rejectReason.value = ''
-  rejectTitle.value = '无法打开该表单'
-  title.value = '未命名表单'
+  rejectTitle.value = t('form.cannotOpenTitle')
+  title.value = t('common.untitledForm')
   items.value = []
   selectedId.value = null
   editingTableId.value = null
@@ -268,10 +277,14 @@ async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
   if (!isDirty.value) return 'proceed'
   let action: 'save' | 'discard' | 'cancel'
   try {
-    await ElMessageBox.confirm(LEAVE_GUARD_MESSAGE, '未保存的修改', {
+    await ElMessageBox.confirm(t(LEAVE_GUARD_MESSAGE_KEY), t('form.unsavedChangesTitle'), {
       distinguishCancelAndClose: true,
-      confirmButtonText: '保存并继续',
-      cancelButtonText: '放弃修改并继续',
+      get confirmButtonText() {
+        return t('form.saveAndContinue')
+      },
+      get cancelButtonText() {
+        return t('form.discardAndContinue')
+      },
       type: 'warning',
     })
     action = 'save'
@@ -385,7 +398,7 @@ async function publish() {
   if (rejected.value) return
   if (isPublished.value) return
   if (!formId.value) {
-    ElMessage.warning('请先保存草稿再发布')
+    ElMessage.warning(t('form.saveBeforePublish'))
     return
   }
   // 有未保存修改：先走统一保护；保存失败/用户取消不得继续发布
@@ -400,9 +413,13 @@ async function publish() {
   }
 
   try {
-    await ElMessageBox.confirm('发布后表名/字段名冻结，不可修改。确认发布？', '发布确认', {
-      confirmButtonText: '确认发布',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('form.publishConfirm'), t('common.publishConfirmTitle'), {
+      get confirmButtonText() {
+        return t('form.publishConfirmTitle')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
       type: 'warning',
     })
   } catch {
@@ -453,16 +470,16 @@ function preValidateBeforePublish(list: DesignerItem[]): string | null {
   for (const item of list) {
     const field = item.field
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(field.name)) {
-      return `字段名 "${field.name}" 不合法（仅允许字母/数字/下划线，且不能以数字开头）`
+      return t('form.invalidColumnName', { name: field.name })
     }
     if (field.type === 'DICT' && !field.dictType) {
-      return `字典字段 "${field.name}" 未绑定字典类型`
+      return t('form.dictFieldNoType', { name: field.name })
     }
     if (field.type === 'REFERENCE' && !field.targetFormId) {
-      return `引用字段 "${field.name}" 未指定目标表单`
+      return t('form.referenceFieldNoTarget', { name: field.name })
     }
     if (field.type === 'TABLE' && field.subFields.length === 0) {
-      return `子表格字段 "${field.name}" 未定义子列`
+      return t('form.subTableNoColumns', { name: field.name })
     }
   }
   return null
@@ -481,14 +498,14 @@ function backToList() {
         <el-input
           v-model="title"
           class="designer__title"
-          placeholder="表单名称"
+          :placeholder="t('common.formName')"
           :disabled="isPublished"
         />
         <el-tag v-if="formKey" size="small" type="info" class="designer__formkey">
           {{ formKey }}
         </el-tag>
         <el-tag size="small" :type="isPublished ? 'success' : 'info'">
-          {{ isPublished ? '已发布' : '草稿' }}
+          {{ isPublished ? t('common.statusPublished') : t('common.statusDraft') }}
         </el-tag>
         <el-tag v-if="isPublished && formVersion" size="small" type="success">
           V{{ formVersion }}
@@ -500,27 +517,28 @@ function backToList() {
         :model-value="activeTab"
         @update:model-value="onTabChange($event as WorkbenchTab)"
       >
-        <el-radio-button value="design">表单设计</el-radio-button>
-        <el-radio-button value="processes">关联流程</el-radio-button>
+        <el-radio-button value="design">{{ t('form.tabDesign') }}</el-radio-button>
+        <el-radio-button value="processes">{{ t('form.tabProcesses') }}</el-radio-button>
       </el-radio-group>
 
       <div class="designer__actions">
         <el-tag :type="SAVE_STATE_TYPE[saveState]" size="small" class="designer__save-state">
-          {{ saveState }}
+          {{ t(saveStateKey(saveState)) }}
         </el-tag>
-        <el-button @click="previewVisible = true">预览</el-button>
-        <el-button :disabled="isPublished || saveState === '保存中'" @click="saveDraft">
-          保存
-        </el-button>
+        <el-button @click="previewVisible = true">{{ t('common.preview') }}</el-button>
+        <el-button :disabled="isPublished || saveState === 'saving'" @click="saveDraft">{{
+          t('common.save')
+        }}</el-button>
         <el-button
           type="primary"
-          :disabled="isPublished || saveState === '保存中'"
-          :title="isPublished ? '表单已发布，不可重复发布' : undefined"
+          :disabled="isPublished || saveState === 'saving'"
+          :title="isPublished ? t('form.publishedNoRepublish') : undefined"
           @click="publish"
+          >{{ t('common.publish') }}</el-button
         >
-          发布
-        </el-button>
-        <el-button :disabled="!formId" @click="historyVisible = true">历史版本</el-button>
+        <el-button :disabled="!formId" @click="historyVisible = true">{{
+          t('form.versionHistory')
+        }}</el-button>
       </div>
     </header>
 
@@ -528,12 +546,12 @@ function backToList() {
     <div v-if="rejected" class="designer__rejected">
       <p class="designer__rejected-title">{{ rejectTitle }}</p>
       <p class="designer__rejected-reason">{{ rejectReason }}</p>
-      <el-button type="primary" @click="backToList">返回表单列表</el-button>
+      <el-button type="primary" @click="backToList">{{ t('form.backToList') }}</el-button>
     </div>
 
     <template v-else>
       <div v-if="loading" class="designer__loading">
-        <span>加载中...</span>
+        <span>{{ t('common.loading') }}</span>
       </div>
 
       <!-- ═══ 工作区：表单设计 ═══ -->
@@ -570,7 +588,7 @@ function backToList() {
 
       <!-- 已发布状态提示条 -->
       <div v-if="isPublished && activeTab === 'design'" class="designer__published-bar">
-        此表单已发布，表名和字段已冻结，不可编辑。
+        {{ t('form.publishedFrozenNote') }}
       </div>
     </template>
 

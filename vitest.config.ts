@@ -48,6 +48,8 @@ export default defineConfig({
       ...configDefaults.exclude,
       'src/modules/agent/views/tool-production-menu-chain-live.spec.ts',
     ],
+    // P61 R1：组件文案已进入 i18n 目录，统一为所有 mount() 注入 i18n 插件
+    setupFiles: ['src/test-setup.ts'],
     // 激活 mock dispatch 链：API 函数 → request → dispatchMock → handlers.ts
     env: {
       VITE_USE_MOCK: 'true',

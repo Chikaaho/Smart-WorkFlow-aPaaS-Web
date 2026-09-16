@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ConversationList — 会话历史列表页
  *
@@ -44,9 +48,9 @@ async function loadConversations() {
     conversations.value = await listConversations()
   } catch (err) {
     if (err instanceof ApiError) {
-      error.value = err.msg || '加载会话列表失败'
+      error.value = err.msg || t('agent.conversationsLoadFailed')
     } else {
-      error.value = '加载会话列表失败'
+      error.value = t('agent.conversationsLoadFailed')
     }
   } finally {
     loading.value = false
@@ -68,7 +72,7 @@ onMounted(() => {
   <div class="conversation-list-page">
     <!-- 页面标题 -->
     <div class="page-header">
-      <h2 class="page-title">会话历史</h2>
+      <h2 class="page-title">{{ t('agent.conversationHistory') }}</h2>
     </div>
 
     <!-- 加载中骨架屏 -->
@@ -79,31 +83,35 @@ onMounted(() => {
 
     <!-- 会话列表 -->
     <el-table v-else-if="conversations.length > 0" :data="conversations" stripe>
-      <el-table-column prop="id" label="会话 ID" width="100" />
-      <el-table-column prop="title" label="标题">
+      <el-table-column prop="id" :label="t('agent.conversationId')" width="100" />
+      <el-table-column prop="title" :label="t('common.title')">
         <template #default="{ row }">
-          {{ row.title || '(未命名会话)' }}
+          {{ row.title || t('agent.untitledConversation') }}
         </template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="100">
+      <el-table-column prop="status" :label="t('common.status')" width="100">
         <template #default="{ row }">
-          <el-tag size="small" type="success">{{ row.status }}</el-tag>
+          <el-tag size="small" type="success">{{
+            enumLabel('AGENT_CONVERSATION', row.status)
+          }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" label="创建时间" width="180">
+      <el-table-column prop="createTime" :label="t('common.createTime')" width="180">
         <template #default="{ row }">
           {{ formatTimestamp(row.createTime) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column :label="t('common.actions')" width="120" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="viewConversation(row.id)"> 查看消息 </el-button>
+          <el-button link type="primary" @click="viewConversation(row.id)">
+            {{ t('agent.viewMessages') }}
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <!-- 空状态 -->
-    <el-empty v-else description="暂无会话记录" />
+    <el-empty v-else :description="t('agent.noConversations')" />
   </div>
 </template>
 

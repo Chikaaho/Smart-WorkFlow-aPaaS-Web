@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 配置面板（设计器右栏）—— 宿主只按注册表动态挂载，禁写死类型 switch。
  *
@@ -54,9 +57,9 @@ function updateColSpan(value: number | null | undefined) {
 
 <template>
   <aside class="config">
-    <h2 class="config__title">字段配置</h2>
+    <h2 class="config__title">{{ t('form.fieldSettingsTitle') }}</h2>
 
-    <p v-if="!field" class="config__hint">请选择一个字段</p>
+    <p v-if="!field" class="config__hint">{{ t('form.selectFieldHint') }}</p>
 
     <template v-else>
       <div class="config__meta">
@@ -66,8 +69,8 @@ function updateColSpan(value: number | null | undefined) {
 
       <div v-if="!readonly" class="config__layout">
         <div class="config__layout-label">
-          <span>列宽</span>
-          <span class="config__layout-value">{{ colSpan }} / 24 列</span>
+          <span>{{ t('form.columnWidth') }}</span>
+          <span class="config__layout-value">{{ t('form.colSpanLabel', { colSpan }) }}</span>
         </div>
         <el-input-number
           :model-value="colSpan"
@@ -78,11 +81,11 @@ function updateColSpan(value: number | null | undefined) {
           class="config__layout-control"
           @update:model-value="updateColSpan"
         />
-        <p class="config__layout-hint">调整后会按从左到右、从上到下自动紧凑排布。</p>
+        <p class="config__layout-hint">{{ t('form.columnWidthHint') }}</p>
       </div>
 
       <!-- 已发布：只读，不渲染可编辑配置面板 -->
-      <p v-if="readonly" class="config__readonly-hint">已发布表单，配置只读</p>
+      <p v-if="readonly" class="config__readonly-hint">{{ t('form.publishedReadonly') }}</p>
 
       <!-- 配置内容挂载位：简单字段已填入面板；REF/TABLE 仍为 null → 占位。 -->
       <template v-else>
@@ -94,7 +97,7 @@ function updateColSpan(value: number | null | undefined) {
           @update="(p: FieldPatch) => emit('update', p)"
         />
         <p v-else class="config__placeholder">
-          「{{ descriptor?.label ?? '该字段' }}」配置项待接入（后续刀）
+          「{{ descriptor?.label ?? t('form.thisField') }}」配置项待接入（后续刀）
         </p>
 
         <!-- v0.0.2 P2：显隐联动规则（LABEL 非输入字段也可控显隐） -->

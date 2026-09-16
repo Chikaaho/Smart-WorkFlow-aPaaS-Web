@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * InternalToolFormDialog — 内部工具新增/编辑弹窗（M07-F03-02）。
  *
@@ -83,7 +86,7 @@ async function initForm() {
     const detail = await getInternalTool(props.toolId)
     fillForm(detail)
   } catch (err) {
-    formError.value = err instanceof ApiError ? err.msg : '加载内部工具详情失败'
+    formError.value = err instanceof ApiError ? err.msg : t('agent.internalToolLoadFailed')
   } finally {
     loadingDetail.value = false
   }
@@ -100,18 +103,18 @@ watch(
 // ─── 校验 ───
 
 function validate(): string | null {
-  if (!form.name.trim()) return '工具名不能为空'
+  if (!form.name.trim()) return t('agent.toolNameRequired')
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(form.name.trim())) {
-    return '工具名只能包含英文字母、数字和下划线，且以字母或下划线开头'
+    return t('agent.toolNameFormat')
   }
-  if (!form.description.trim()) return '描述不能为空'
-  if (!form.beanName.trim()) return 'Bean 名称不能为空'
-  if (!form.methodName.trim()) return '方法名不能为空'
+  if (!form.description.trim()) return t('agent.toolDescriptionRequired')
+  if (!form.beanName.trim()) return t('agent.beanNameRequired')
+  if (!form.methodName.trim()) return t('agent.methodNameRequired')
   if (form.inputSchema.trim()) {
     try {
       JSON.parse(form.inputSchema.trim())
     } catch {
-      return '入参 Schema 不是合法的 JSON 格式'
+      return t('agent.inputSchemaInvalidJson')
     }
   }
   return null
@@ -143,15 +146,15 @@ async function handleSubmit() {
     const req = buildSaveReq()
     if (props.toolId !== null) {
       await updateInternalTool(props.toolId, req)
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.updateSuccess'))
     } else {
       await createInternalTool(req)
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.createSuccess'))
     }
     emit('saved')
     emit('update:visible', false)
   } catch (err) {
-    formError.value = err instanceof ApiError ? err.msg : '保存失败'
+    formError.value = err instanceof ApiError ? err.msg : t('common.saveFailed')
   } finally {
     submitting.value = false
   }
@@ -161,7 +164,7 @@ async function handleSubmit() {
 <template>
   <el-dialog
     v-model="dialogModel"
-    :title="toolId !== null ? '编辑内部工具' : '新增内部工具'"
+    :title="toolId !== null ? t('agent.editInternalTool') : t('agent.newInternalTool')"
     :close-on-click-modal="false"
     destroy-on-close
     width="720px"
@@ -172,54 +175,62 @@ async function handleSubmit() {
         <el-alert v-if="formError" :title="formError" type="error" :closable="false" show-icon />
       </template>
 
-      <FormSection title="基本信息">
+      <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
           <div class="form-field form-field--required">
-            <label class="form-field__label">工具名</label>
+            <label class="form-field__label">{{ t('common.toolName') }}</label>
             <el-input
               v-model="form.name"
-              placeholder="英文下划线格式，如 get_weather"
+              :placeholder="t('agent.toolNamePlaceholderInternal')"
               maxlength="128"
             />
-            <div class="form-field__hint">传给 LLM 的工具标识，必须为英文下划线格式</div>
+            <div class="form-field__hint">{{ t('agent.toolNameHint') }}</div>
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">描述</label>
+            <label class="form-field__label">{{ t('common.descriptionField') }}</label>
             <el-input
               v-model="form.description"
-              placeholder="描述工具的用途，传给 LLM 理解工具语义"
+              :placeholder="t('agent.toolDescriptionHint')"
               maxlength="512"
             />
           </div>
           <div class="form-field">
-            <label class="form-field__label">启停</label>
-            <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
+            <label class="form-field__label">{{ t('common.toggle') }}</label>
+            <el-switch
+              v-model="form.enabled"
+              :active-text="t('common.enable')"
+              :inactive-text="t('common.disable')"
+            />
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="调用配置">
+      <FormSection :title="t('agent.invocationSectionTitle')">
         <FormGrid :columns="2">
           <div class="form-field form-field--required">
-            <label class="form-field__label">Bean 名称</label>
-            <el-input v-model="form.beanName" placeholder="Spring Bean 名称" maxlength="128" />
-            <div class="form-field__hint">Spring 容器中的 Bean 名称（白名单值）</div>
+            <label class="form-field__label">{{ t('agent.beanName') }}</label>
+            <el-input
+              v-model="form.beanName"
+              :placeholder="t('agent.beanNamePlaceholder')"
+              maxlength="128"
+            />
+            <div class="form-field__hint">{{ t('agent.beanNameHint') }}</div>
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">方法名</label>
+            <label class="form-field__label">{{ t('agent.methodName') }}</label>
             <el-input
               v-model="form.methodName"
-              placeholder="约定签名：String execute(String params)"
+              :placeholder="t('agent.methodNamePlaceholder')"
               maxlength="128"
             />
             <div class="form-field__hint">
-              Bean 上的方法名，约定签名 String execute(String params)
+              {{ t('agent.beanMethodHint') }}
             </div>
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="入参 Schema（可选）">
+      <FormSection :title="t('agent.inputSchemaOptional')">
         <FormGrid :columns="1">
           <div class="form-field">
             <label class="form-field__label">inputSchema</label>
@@ -227,22 +238,22 @@ async function handleSubmit() {
               v-model="form.inputSchema"
               type="textarea"
               :rows="6"
-              placeholder='JSON Schema 字符串，描述入参结构，如 {"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}'
+              :placeholder="t('agent.jsonSchemaPlaceholderCity')"
               style="font-family: monospace"
             />
-            <div class="form-field__hint">可选；填写后必须为合法 JSON Schema</div>
+            <div class="form-field__hint">{{ t('agent.inputSchemaOptionalHint') }}</div>
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="备注">
+      <FormSection :title="t('common.remark')">
         <FormGrid :columns="1">
           <div class="form-field">
             <el-input
               v-model="form.remark"
               type="textarea"
               :rows="3"
-              placeholder="请输入备注"
+              :placeholder="t('common.remarkPlaceholder')"
               maxlength="256"
               show-word-limit
             />
@@ -251,17 +262,16 @@ async function handleSubmit() {
       </FormSection>
 
       <template #actions>
-        <el-button :disabled="submitting || loadingDetail" @click="emit('update:visible', false)">
-          取消
-        </el-button>
+        <el-button :disabled="submitting || loadingDetail" @click="emit('update:visible', false)">{{
+          t('common.cancel')
+        }}</el-button>
         <el-button
           type="primary"
           :loading="submitting"
           :disabled="loadingDetail"
           @click="handleSubmit"
+          >{{ t('common.save') }}</el-button
         >
-          保存
-        </el-button>
       </template>
     </StandardFormTemplate>
   </el-dialog>

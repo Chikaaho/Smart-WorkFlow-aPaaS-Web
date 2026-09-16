@@ -5,6 +5,10 @@ import { useAuth } from '@/foundation/auth'
 import type { LoginChallengeDTO } from '@/foundation/auth'
 import { SSO_PROVIDERS, startSsoLoginAuthorize } from '@/foundation/auth/sso'
 import type { SsoProvider } from '@/foundation/auth/sso'
+import { useI18n } from '@/locales'
+import LocaleSwitch from '@/components/LocaleSwitch.vue'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -34,7 +38,7 @@ async function reloadChallenge(): Promise<void> {
     challenge.value = await fetchChallenge()
   } catch {
     challenge.value = null
-    errorMessage.value = '无法获取登录挑战，请检查网络'
+    errorMessage.value = t('errors.network')
   }
 }
 
@@ -45,7 +49,7 @@ onMounted(() => {
 async function onSubmit(): Promise<void> {
   errorMessage.value = ''
   if (!challenge.value) {
-    errorMessage.value = '登录挑战未就绪，请刷新验证码'
+    errorMessage.value = t('auth.captchaNotReady')
     return
   }
   submitting.value = true
@@ -58,7 +62,7 @@ async function onSubmit(): Promise<void> {
     })
     await router.push(safeRedirect(route.query.redirect))
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '登录失败'
+    errorMessage.value = error instanceof Error ? error.message : t('auth.signIn')
     // 挑战是一次性的：无论失败原因，旧挑战已消费/作废，必须换新挑战再试
     password.value = ''
     await reloadChallenge()
@@ -71,7 +75,7 @@ async function onSsoLogin(): Promise<void> {
   ssoError.value = ''
   const tenant = Number(ssoTenantId.value)
   if (!Number.isInteger(tenant) || tenant < 0) {
-    ssoError.value = '请输入有效的租户 ID'
+    ssoError.value = t('auth.tenantIdInvalid')
     return
   }
   ssoBusy.value = true
@@ -81,7 +85,7 @@ async function onSsoLogin(): Promise<void> {
     // 服务端重定向到 Provider 授权页；state 由服务端签发，前端不持久化
     globalThis.location.href = start.authorizeUrl
   } catch (error) {
-    ssoError.value = error instanceof Error ? error.message : '第三方登录发起失败'
+    ssoError.value = error instanceof Error ? error.message : t('errors.network')
   } finally {
     ssoBusy.value = false
   }
@@ -91,24 +95,27 @@ async function onSsoLogin(): Promise<void> {
 <template>
   <div class="login-page">
     <form class="login-page__form" @submit.prevent="onSubmit">
-      <h1>CH-aPaaS</h1>
+      <div class="login-page__top">
+        <h1>CH-aPaaS</h1>
+        <LocaleSwitch />
+      </div>
       <label>
-        用户名
+        {{ t('common.username') }}
         <input v-model="username" type="text" autocomplete="username" required />
       </label>
       <label>
-        密码
+        {{ t('common.password') }}
         <input v-model="password" type="password" autocomplete="current-password" required />
       </label>
       <label>
-        验证码
+        {{ t('auth.captcha') }}
         <div class="login-page__captcha-row">
           <input v-model="captcha" type="text" autocomplete="off" required maxlength="8" />
           <img
             v-if="challenge"
             class="login-page__captcha"
             alt=""
-            title="点击刷新验证码"
+            :title="t('auth.refreshCaptcha')"
             :src="challenge.captchaImage"
             @click="reloadChallenge"
           />
@@ -117,29 +124,29 @@ async function onSsoLogin(): Promise<void> {
             class="login-page__captcha login-page__captcha--loading"
             @click="reloadChallenge"
           >
-            刷新
+            {{ t('auth.refresh') }}
           </span>
         </div>
       </label>
       <p v-if="errorMessage" class="login-page__error">{{ errorMessage }}</p>
       <button type="submit" :disabled="submitting || !challenge">
-        {{ submitting ? '登录中...' : '登录' }}
+        {{ submitting ? t('auth.signingIn') : t('auth.signIn') }}
       </button>
       <div class="login-page__sso">
-        <p class="login-page__sso-title">第三方账号登录</p>
+        <p class="login-page__sso-title">{{ t('auth.thirdParty') }}</p>
         <div class="login-page__sso-row">
-          <select v-model="ssoProvider" aria-label="选择 Provider">
+          <select v-model="ssoProvider" :aria-label="t('auth.chooseProvider')">
             <option v-for="p in SSO_PROVIDERS" :key="p.key" :value="p.key">{{ p.label }}</option>
           </select>
           <input
             v-model="ssoTenantId"
             type="number"
             min="0"
-            placeholder="租户 ID"
-            aria-label="租户 ID"
+            :placeholder="t('auth.tenantId')"
+            :aria-label="t('auth.tenantId')"
           />
           <button type="button" :disabled="ssoBusy" @click="onSsoLogin">
-            {{ ssoBusy ? '跳转中...' : '前往授权' }}
+            {{ ssoBusy ? t('auth.redirecting') : t('auth.goToAuthorize') }}
           </button>
         </div>
         <p v-if="ssoError" class="login-page__error">{{ ssoError }}</p>

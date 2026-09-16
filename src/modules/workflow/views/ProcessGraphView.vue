@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /* global WheelEvent, PointerEvent, Element, HTMLElement */
 /**
  * ProcessGraphView — 自研流程图只读渲染（I3 §4.1：定义查看与实例轨迹高亮共用内核）。
@@ -133,7 +137,7 @@ defineExpose({ fitViewport, zoom })
   <div class="pg-view" :style="{ height: (height ?? 420) + 'px' }">
     <el-alert
       v-if="spec?.compatibilityLayout"
-      title="历史图缺少画布坐标，已按确定性兼容布局展示；图形拓扑完整可用"
+      :title="t('workflow.compatLayoutNotice')"
       type="info"
       :closable="false"
       show-icon
@@ -189,22 +193,24 @@ defineExpose({ fitViewport, zoom })
           text-anchor="middle"
           class="pg-node-type"
         >
-          {{ node.type }}
+          {{ enumLabel('WORKFLOW_NODE_TYPE', node.type) }}
         </text>
       </g>
     </svg>
     <div class="pg-legend">
       <template v-if="trace">
-        <span><i class="dot dot-current" /> 当前节点</span>
-        <span><i class="dot dot-completed" /> 已完成</span>
-        <span><i class="dot dot-passed-over" /> 未经过</span>
+        <span><i class="dot dot-current" />{{ t('common.currentNode') }}</span>
+        <span><i class="dot dot-completed" />{{ t('common.statusCompleted') }}</span>
+        <span><i class="dot dot-passed-over" /> {{ t('workflow.edgeNotTaken') }}</span>
       </template>
-      <span v-if="spec?.compatibilityLayout" class="pg-compat-tag">兼容布局</span>
+      <span v-if="spec?.compatibilityLayout" class="pg-compat-tag">{{
+        t('workflow.compatLayout')
+      }}</span>
     </div>
     <div class="pg-zoom">
       <el-button size="small" circle @click="zoom(1 / 1.2)">＋</el-button>
       <el-button size="small" circle @click="zoom(1.2)">－</el-button>
-      <el-button size="small" @click="fitViewport">适配</el-button>
+      <el-button size="small" @click="fitViewport">{{ t('workflow.fitView') }}</el-button>
     </div>
   </div>
 </template>

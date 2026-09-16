@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * JobLog — 定时任务执行日志查看页（页型 B，只读）。
  *
@@ -49,7 +52,7 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
 
 async function loadList() {
   if (noJobId.value) {
-    errorMsg.value = '缺少任务 ID 参数'
+    errorMsg.value = t('job.missingJobId')
     return
   }
   loading.value = true
@@ -59,7 +62,7 @@ async function loadList() {
     list.value = result.list
     total.value = result.total
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? err.msg : '加载执行日志失败'
+    errorMsg.value = err instanceof ApiError ? err.msg : t('job.logLoadFailed')
   } finally {
     loading.value = false
   }
@@ -115,13 +118,13 @@ function execStatusTagType(status: ExecStatus): 'success' | 'danger' | 'warning'
 }
 
 function execStatusLabel(status: ExecStatus): string {
-  if (status === 'SUCCESS') return '成功'
-  if (status === 'FAILED') return '失败'
-  return '运行中'
+  if (status === 'SUCCESS') return t('common.resultSuccess')
+  if (status === 'FAILED') return t('common.resultFailed')
+  return t('common.statusRunning')
 }
 
 function triggerTypeLabel(type: TriggerType): string {
-  return type === 'AUTO' ? '自动' : '手动'
+  return type === 'AUTO' ? t('job.triggerAuto') : t('job.triggerManual')
 }
 
 onMounted(loadList)
@@ -129,7 +132,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="执行日志"
+    :title="t('job.executionLog')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -138,21 +141,26 @@ onMounted(loadList)
     @update:page-size="handlePageSizeChange"
   >
     <template #filter>
-      <el-select v-model="filter.execStatus" placeholder="执行状态" clearable style="width: 140px">
-        <el-option label="运行中" value="RUNNING" />
-        <el-option label="成功" value="SUCCESS" />
-        <el-option label="失败" value="FAILED" />
+      <el-select
+        v-model="filter.execStatus"
+        :placeholder="t('common.executionStatus')"
+        clearable
+        style="width: 140px"
+      >
+        <el-option :label="t('common.statusRunning')" value="RUNNING" />
+        <el-option :label="t('common.resultSuccess')" value="SUCCESS" />
+        <el-option :label="t('common.resultFailed')" value="FAILED" />
       </el-select>
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <!-- 缺少 jobId -->
     <el-alert
       v-if="noJobId"
-      title="请从任务列表页跳转访问执行日志"
+      :title="t('job.openFromJobListHint')"
       type="info"
       :closable="false"
       show-icon
@@ -169,8 +177,13 @@ onMounted(loadList)
     />
 
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="jobName" label="任务名称" min-width="140" show-overflow-tooltip />
-      <el-table-column label="触发方式" width="80" align="center">
+      <el-table-column
+        prop="jobName"
+        :label="t('common.taskName')"
+        min-width="140"
+        show-overflow-tooltip
+      />
+      <el-table-column :label="t('job.triggerType')" width="80" align="center">
         <template #default="{ row }">
           <el-tag
             size="small"
@@ -180,25 +193,32 @@ onMounted(loadList)
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="执行状态" width="80" align="center">
+      <el-table-column :label="t('common.executionStatus')" width="80" align="center">
         <template #default="{ row }">
           <el-tag size="small" :type="execStatusTagType((row as JobLog).execStatus as ExecStatus)">
             {{ execStatusLabel((row as JobLog).execStatus as ExecStatus) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="startTime" label="开始时间" width="170" />
-      <el-table-column prop="endTime" label="结束时间" width="170" />
-      <el-table-column label="耗时" width="100" align="right">
+      <el-table-column prop="startTime" :label="t('common.startTime')" width="170" />
+      <el-table-column prop="endTime" :label="t('common.endTime')" width="170" />
+      <el-table-column :label="t('common.duration')" width="100" align="right">
         <template #default="{ row }">
           {{ (row as JobLog).duration != null ? `${(row as JobLog).duration}ms` : '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="resultMsg" label="结果" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="createTime" label="创建时间" width="170" />
-      <el-table-column label="操作" width="80" fixed="right">
+      <el-table-column
+        prop="resultMsg"
+        :label="t('common.result')"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column prop="createTime" :label="t('common.createTime')" width="170" />
+      <el-table-column :label="t('common.actions')" width="80" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="detailRow(row)">详情</el-button>
+          <el-button size="small" link type="primary" @click="detailRow(row)">{{
+            t('common.detail')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -212,36 +232,48 @@ onMounted(loadList)
   <!-- 详情弹窗 -->
   <el-dialog
     v-model="detailVisible"
-    title="执行详情"
+    :title="t('job.executionDetail')"
     width="640px"
     destroy-on-close
     @closed="closeDetail"
   >
     <template v-if="detailLog">
       <el-descriptions :column="2" border>
-        <el-descriptions-item label="任务名称">{{ detailLog.jobName }}</el-descriptions-item>
-        <el-descriptions-item label="触发方式">{{
+        <el-descriptions-item :label="t('common.taskName')">{{
+          detailLog.jobName
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t('job.triggerType')">{{
           triggerTypeLabel(detailLog.triggerType as TriggerType)
         }}</el-descriptions-item>
-        <el-descriptions-item label="执行状态">
+        <el-descriptions-item :label="t('common.executionStatus')">
           <el-tag size="small" :type="execStatusTagType(detailLog.execStatus as ExecStatus)">
             {{ execStatusLabel(detailLog.execStatus as ExecStatus) }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="耗时">{{
+        <el-descriptions-item :label="t('common.duration')">{{
           detailLog.duration != null ? `${detailLog.duration}ms` : '-'
         }}</el-descriptions-item>
-        <el-descriptions-item label="开始时间">{{
+        <el-descriptions-item :label="t('common.startTime')">{{
           detailLog.startTime ?? '-'
         }}</el-descriptions-item>
-        <el-descriptions-item label="结束时间">{{ detailLog.endTime ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="结果信息" :span="2">{{
+        <el-descriptions-item :label="t('common.endTime')">{{
+          detailLog.endTime ?? '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t('job.resultInfo')" :span="2">{{
           detailLog.resultMsg ?? '-'
         }}</el-descriptions-item>
-        <el-descriptions-item v-if="detailLog.jobParams" label="执行参数" :span="2">
+        <el-descriptions-item
+          v-if="detailLog.jobParams"
+          :label="t('job.executionParams')"
+          :span="2"
+        >
           <code style="white-space: pre-wrap; font-size: 12px">{{ detailLog.jobParams }}</code>
         </el-descriptions-item>
-        <el-descriptions-item v-if="detailLog.exceptionStack" label="异常堆栈" :span="2">
+        <el-descriptions-item
+          v-if="detailLog.exceptionStack"
+          :label="t('job.errorStack')"
+          :span="2"
+        >
           <code style="white-space: pre-wrap; font-size: 12px; color: #f56c6c">{{
             detailLog.exceptionStack
           }}</code>
@@ -249,7 +281,7 @@ onMounted(loadList)
       </el-descriptions>
     </template>
     <template #footer>
-      <el-button @click="closeDetail">关闭</el-button>
+      <el-button @click="closeDetail">{{ t('common.close') }}</el-button>
     </template>
   </el-dialog>
 </template>

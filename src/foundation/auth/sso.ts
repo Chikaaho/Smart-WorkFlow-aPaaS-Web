@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 import { request } from '@/foundation/request'
 import { setTokenResponse } from './token'
 
@@ -31,9 +32,9 @@ interface SsoBindingsDTO {
 export type SsoProvider = 'WECOM' | 'FEISHU' | 'DINGTALK'
 
 export const SSO_PROVIDERS: ReadonlyArray<{ key: SsoProvider; label: string }> = [
-  { key: 'WECOM', label: '企业微信' },
-  { key: 'FEISHU', label: '飞书' },
-  { key: 'DINGTALK', label: '钉钉' },
+  { key: 'WECOM', label: i18n.global.t('foundation.ssoWecom') },
+  { key: 'FEISHU', label: i18n.global.t('foundation.ssoFeishu') },
+  { key: 'DINGTALK', label: i18n.global.t('foundation.ssoDingtalk') },
 ]
 
 // ========== API ==========

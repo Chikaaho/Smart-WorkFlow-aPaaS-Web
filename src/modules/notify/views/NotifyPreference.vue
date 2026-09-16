@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * NotifyPreference — 订阅偏好页（I6）。
  * 普通用户只能在允许范围内调整可选外部渠道/非强制事件；必须送达项由服务端拒绝关闭。
@@ -22,7 +25,7 @@ async function loadPreferences() {
     items.value = await getNotifySubscription()
   } catch (err) {
     if (err instanceof ApiError) errorMsg.value = err.msg
-    else errorMsg.value = '加载订阅偏好失败'
+    else errorMsg.value = t('notify.preferencesLoadFailed')
     ElMessage.error(errorMsg.value)
   } finally {
     loading.value = false
@@ -35,11 +38,11 @@ async function handleSave() {
     await saveNotifySubscription(
       items.value.map((i) => ({ eventType: i.eventType, channel: i.channel, enabled: i.enabled })),
     )
-    ElMessage.success('订阅偏好已保存')
+    ElMessage.success(t('notify.preferencesSaved'))
     await loadPreferences()
   } catch (err) {
     if (err instanceof ApiError) ElMessage.error(err.msg)
-    else ElMessage.error('保存失败')
+    else ElMessage.error(t('common.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -50,14 +53,16 @@ onMounted(loadPreferences)
 
 <template>
   <StandardListTemplate
-    title="订阅偏好"
+    :title="t('notify.subscriptionPreferences')"
     :total="items.length"
     :page-num="1"
     :page-size="50"
     :empty="items.length === 0 && !loading"
   >
     <template #page-action>
-      <el-button type="primary" :loading="saving" @click="handleSave">保存偏好</el-button>
+      <el-button type="primary" :loading="saving" @click="handleSave">{{
+        t('notify.savePreferences')
+      }}</el-button>
     </template>
     <el-alert
       v-if="errorMsg"
@@ -68,16 +73,16 @@ onMounted(loadPreferences)
       style="margin-bottom: 12px"
     />
     <el-table v-loading="loading" :data="items" stripe style="width: 100%">
-      <el-table-column prop="eventType" label="事件" min-width="180" />
-      <el-table-column prop="channel" label="渠道" width="140" />
-      <el-table-column label="接收该通知" width="120">
+      <el-table-column prop="eventType" :label="t('common.event')" min-width="180" />
+      <el-table-column prop="channel" :label="t('common.channel')" width="140" />
+      <el-table-column :label="t('notify.receiveNotification')" width="120">
         <template #default="{ row }">
           <el-switch v-model="row.enabled" />
         </template>
       </el-table-column>
     </el-table>
     <el-alert
-      title="订阅变化只影响之后的投递，不改变已产生的通知；必须送达的待办与安全/状态通知（站内信）不可关闭。"
+      :title="t('notify.preferencesHint')"
       type="info"
       :closable="false"
       show-icon

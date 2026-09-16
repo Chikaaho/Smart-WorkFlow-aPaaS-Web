@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * TemplateCenter — 流程模板中心（I4 §3.2）。
  * 分类/状态/关键词筛选；启用/停用；复制后编辑并发布（创建 DRAFT 定义跳设计器）。
@@ -44,7 +47,7 @@ async function loadList() {
     list.value = result.list
     total.value = result.total
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? err.msg : '加载模板列表失败'
+    errorMsg.value = err instanceof ApiError ? err.msg : t('workflow.templateListLoadFailed')
   } finally {
     loading.value = false
   }
@@ -56,10 +59,12 @@ async function handleToggle(row: BpmTemplate) {
   togglingId.value = row.id
   try {
     await changeTemplateStatus(row.id, row.status === 'DISABLED')
-    ElMessage.success(row.status === 'DISABLED' ? '已启用' : '已停用')
+    ElMessage.success(
+      row.status === 'DISABLED' ? t('common.statusEnabled') : t('common.statusDisabled'),
+    )
     await loadList()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '操作失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('common.operationFailed'))
   } finally {
     togglingId.value = null
   }
@@ -71,11 +76,14 @@ const copyingId = ref<number | null>(null)
 async function handleCopy(row: BpmTemplate) {
   copyingId.value = row.id
   try {
-    const def = await copyTemplateToDefinition(row.id, `${row.name}-副本`)
-    ElMessage.success('已复制为流程定义草稿，可继续编辑发布')
+    const def = await copyTemplateToDefinition(
+      row.id,
+      t('workflow.templateCopyName', { name: row.name }),
+    )
+    ElMessage.success(t('workflow.templateCopiedToDraft'))
     await router.push(`/workflow/defs/${def.id}/design`)
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '复制失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('common.copyFailed'))
   } finally {
     copyingId.value = null
   }
@@ -86,7 +94,7 @@ function statusType(s: BpmTemplate['status']): 'success' | 'info' {
 }
 
 function statusLabel(s: BpmTemplate['status']): string {
-  return s === 'ENABLED' ? '启用' : '停用'
+  return s === 'ENABLED' ? t('common.enable') : t('common.disable')
 }
 
 function search() {
@@ -118,7 +126,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="流程模板中心"
+    :title="t('router.processTemplateCenter')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -129,48 +137,50 @@ onMounted(loadList)
     <template #filter>
       <el-input
         v-model="keyword"
-        placeholder="模板名称/描述"
+        :placeholder="t('workflow.templateKeywordPlaceholder')"
         clearable
         style="width: 200px"
         @keyup.enter="search"
       />
       <el-input
         v-model="category"
-        placeholder="分类"
+        :placeholder="t('common.category')"
         clearable
         style="width: 140px"
         @keyup.enter="search"
       />
-      <el-select v-model="status" placeholder="状态" clearable style="width: 120px">
-        <el-option label="启用" value="ENABLED" />
-        <el-option label="停用" value="DISABLED" />
+      <el-select v-model="status" :placeholder="t('common.status')" clearable style="width: 120px">
+        <el-option :label="t('common.enable')" value="ENABLED" />
+        <el-option :label="t('common.disable')" value="DISABLED" />
       </el-select>
-      <el-button type="primary" @click="search">查询</el-button>
-      <el-button @click="resetFilters">重置</el-button>
+      <el-button type="primary" @click="search">{{ t('common.query') }}</el-button>
+      <el-button @click="resetFilters">{{ t('common.reset') }}</el-button>
     </template>
 
     <el-table v-loading="loading" :data="list">
-      <el-table-column label="模板名称" min-width="160">
+      <el-table-column :label="t('workflow.templateName')" min-width="160">
         <template #default="{ row }">{{ row?.name }}</template>
       </el-table-column>
-      <el-table-column label="分类" min-width="100">
+      <el-table-column :label="t('common.category')" min-width="100">
         <template #default="{ row }">{{ row?.category || '—' }}</template>
       </el-table-column>
-      <el-table-column label="绑定表单" min-width="140">
+      <el-table-column :label="t('workflow.boundForm')" min-width="140">
         <template #default="{ row }">{{ row?.formKey }}</template>
       </el-table-column>
-      <el-table-column label="版本" width="70">
+      <el-table-column :label="t('common.version')" width="70">
         <template #default="{ row }">V{{ row?.templateVersion }}</template>
       </el-table-column>
-      <el-table-column label="范围" width="90">
-        <template #default="{ row }">{{ row?.scopeType === 'DEPT' ? '本部门' : '全局' }}</template>
+      <el-table-column :label="t('workflow.scope')" width="90">
+        <template #default="{ row }">{{
+          row?.scopeType === 'DEPT' ? t('workflow.scopeDept') : t('workflow.scopeGlobal')
+        }}</template>
       </el-table-column>
-      <el-table-column label="状态" width="90">
+      <el-table-column :label="t('common.status')" width="90">
         <template #default="{ row }">
           <el-tag v-if="row" :type="statusType(row.status)">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column :label="t('common.actions')" width="180" fixed="right">
         <template #default="{ row }">
           <template v-if="row">
             <el-button
@@ -180,19 +190,19 @@ onMounted(loadList)
               :loading="copyingId === row.id"
               @click="handleCopy(row as BpmTemplate)"
             >
-              复制创建定义
+              {{ t('workflow.copyCreateDefinition') }}
             </el-button>
             <el-button
               link
               :loading="togglingId === row.id"
               @click="handleToggle(row as BpmTemplate)"
             >
-              {{ row.status === 'ENABLED' ? '停用' : '启用' }}
+              {{ row.status === 'ENABLED' ? t('common.disable') : t('common.enable') }}
             </el-button>
           </template>
         </template>
       </el-table-column>
-      <template #empty>暂无可见模板</template>
+      <template #empty>{{ t('workflow.noVisibleTemplates') }}</template>
     </el-table>
   </StandardListTemplate>
 </template>

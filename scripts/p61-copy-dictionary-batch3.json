@@ -1,0 +1,179 @@
+{
+  "_comment": "P61 R1 术语字典 批次3：系统管理列表页、流程/审批、Agent、任务、表单设计的领域通用词。",
+  "通过": { "key": "common.approve", "en": "Approve" },
+  "退回": { "key": "common.returnBack", "en": "Return" },
+  "新建部门": { "key": "system.newDept", "en": "New department" },
+  "新建子部门": { "key": "system.newSubDept", "en": "New sub-department" },
+  "部门名称": { "key": "system.deptName", "en": "Department name" },
+  "部门编码": { "key": "system.deptCode", "en": "Department code" },
+  "部门负责人": { "key": "system.deptLeader", "en": "Department owner" },
+  "上级部门": { "key": "system.parentDept", "en": "Parent department" },
+  "选择上级部门": { "key": "system.parentDeptPlaceholder", "en": "Select a parent department" },
+  "选择负责人（供流程审批取值）": {
+    "key": "system.leaderPlaceholder",
+    "en": "Select an owner (used by flow approvals)"
+  },
+  "请输入部门名称": { "key": "system.deptNamePlaceholder", "en": "Enter the department name" },
+  "请输入部门编码": { "key": "system.deptCodePlaceholder", "en": "Enter the department code" },
+  "新建字典类型": { "key": "system.newDictType", "en": "New dictionary type" },
+  "管理字典项": { "key": "system.manageDictItems", "en": "Manage items" },
+  "字典名称": { "key": "system.dictName", "en": "Dictionary name" },
+  "字典编码": { "key": "system.dictCode", "en": "Dictionary code" },
+  "请输入字典名称": { "key": "system.dictNamePlaceholder", "en": "Enter the dictionary name" },
+  "请输入字典编码": { "key": "system.dictCodePlaceholder", "en": "Enter the dictionary code" },
+  "新建字典项": { "key": "system.newDictItem", "en": "New dictionary item" },
+  "字典标签": { "key": "system.dictLabel", "en": "Label" },
+  "字典键值": { "key": "system.dictValue", "en": "Value" },
+  "请输入字典标签": { "key": "system.dictLabelPlaceholder", "en": "Enter the label" },
+  "请输入字典键值": { "key": "system.dictValuePlaceholder", "en": "Enter the value" },
+  "表格回显样式类": { "key": "system.dictTagStyle", "en": "Table tag style" },
+  "下拉列表样式类": { "key": "system.dictSelectStyle", "en": "Dropdown style" },
+  "新建岗位": { "key": "system.newPost", "en": "New position" },
+  "岗位编码": { "key": "system.postCode", "en": "Position code" },
+  "岗位名称": { "key": "system.postName", "en": "Position name" },
+  "请输入岗位编码": { "key": "system.postCodePlaceholder", "en": "Enter the position code" },
+  "请输入岗位名称": { "key": "system.postNamePlaceholder", "en": "Enter the position name" },
+  "新建角色": { "key": "system.newRole", "en": "New role" },
+  "角色名称": { "key": "system.roleName", "en": "Role name" },
+  "角色编码": { "key": "system.roleCode", "en": "Role code" },
+  "请输入角色名称": { "key": "system.roleNamePlaceholder", "en": "Enter the role name" },
+  "请输入角色编码": { "key": "system.roleCodePlaceholder", "en": "Enter the role code" },
+  "数据权限": { "key": "system.dataScope", "en": "Data scope" },
+  "菜单与按钮权限": { "key": "system.menuPermissions", "en": "Menu and button permissions" },
+  "成员": { "key": "system.members", "en": "Members" },
+  "搜索用户名添加成员": {
+    "key": "system.searchUserPlaceholder",
+    "en": "Search by username to add members"
+  },
+  "新建用户": { "key": "system.newUser", "en": "New user" },
+  "姓名": { "key": "system.fullName", "en": "Full name" },
+  "请输入姓名": { "key": "system.fullNamePlaceholder", "en": "Enter the full name" },
+  "请输入邮箱": { "key": "system.emailPlaceholder", "en": "Enter the email address" },
+  "请输入手机号": { "key": "system.phonePlaceholder", "en": "Enter the phone number" },
+  "请输入用户名": { "key": "system.usernamePlaceholder", "en": "Enter the username" },
+  "请输入密码": { "key": "system.passwordPlaceholder", "en": "Enter the password" },
+  "请选择部门": { "key": "system.selectDept", "en": "Select a department" },
+  "任职部门（默认主部门）": { "key": "system.postDept", "en": "Department (primary by default)" },
+  "岗位（任职部门）": { "key": "system.postDeptShort", "en": "Positions (and departments)" },
+  "新建用户组": { "key": "system.newUserGroup", "en": "New user group" },
+  "组名称": { "key": "system.groupName", "en": "Group name" },
+  "请输入业务标识，租户内唯一": {
+    "key": "system.businessKeyPlaceholder",
+    "en": "Enter a business key, unique within the organisation"
+  },
+  "请输入组名称": { "key": "system.groupNamePlaceholder", "en": "Enter the group name" },
+  "请输入说明": { "key": "system.descriptionPlaceholder", "en": "Enter a description" },
+  "新建表单": { "key": "form.newForm", "en": "New form" },
+  "表单名称 / 标识": { "key": "form.searchFormPlaceholder", "en": "Form name / key" },
+  "表单标识已存在": { "key": "form.keyDuplicate", "en": "This form key is already in use" },
+  "任务 ID": { "key": "common.taskId", "en": "Task ID" },
+  "流程定义": { "key": "common.processDef", "en": "Flow definition" },
+  "关联表单": { "key": "common.boundForm", "en": "Bound form" },
+  "请选择关联的表单定义": {
+    "key": "common.boundFormPlaceholder",
+    "en": "Select a form definition"
+  },
+  "流程监控": { "key": "workflow.monitor", "en": "Flow monitoring" },
+  "任务详情": { "key": "workflow.taskDetail", "en": "Task details" },
+  "已办任务": { "key": "workflow.processedTasks", "en": "Handled tasks" },
+  "实例状态": { "key": "workflow.instanceStatus", "en": "Instance status" },
+  "办理人": { "key": "workflow.assignee", "en": "Assignee" },
+  "已废弃": { "key": "workflow.statusDiscarded", "en": "Discarded" },
+  "未分类": { "key": "workflow.uncategorized", "en": "Uncategorised" },
+  "完成时间": { "key": "workflow.completedAt", "en": "Completed at" },
+  "全部状态": { "key": "common.allStatuses", "en": "All statuses" },
+  "流程名称/业务单号": {
+    "key": "workflow.searchProcessPlaceholder",
+    "en": "Flow name / business no."
+  },
+  "任务名称": { "key": "common.taskName", "en": "Task name" },
+  "待办加载失败": {
+    "key": "workflow.todoLoadFailed",
+    "en": "Could not load your to-dos. Please try again."
+  },
+  "请先选择要批量办理的任务": {
+    "key": "workflow.selectBatchTasks",
+    "en": "Select the tasks to handle in bulk first."
+  },
+  "批量不通过必须填写意见": {
+    "key": "workflow.batchRejectNeedsComment",
+    "en": "A comment is required when rejecting in bulk."
+  },
+  "批量提交失败": {
+    "key": "workflow.batchSubmitFailed",
+    "en": "Bulk submission did not complete. Please try again."
+  },
+  "请填写必填审批意见": { "key": "workflow.commentRequired", "en": "A comment is required." },
+  "已办理": { "key": "workflow.handled", "en": "Handled" },
+  "确认审批通过此任务？": { "key": "workflow.confirmApprove", "en": "Approve this task?" },
+  "确认驳回此任务？": { "key": "workflow.confirmReject", "en": "Reject this task?" },
+  "确认将流程退回所选人工节点？": {
+    "key": "workflow.confirmReturn",
+    "en": "Return the flow to the selected node?"
+  },
+  "当前没有可退回的已通过人工节点": {
+    "key": "workflow.noReturnTargets",
+    "en": "There is no completed manual node to return to."
+  },
+  "加载工作台失败": {
+    "key": "workflow.workspaceLoadFailed",
+    "en": "Could not load the workspace. Please try again."
+  },
+  "常用事项不能超过 20 个": {
+    "key": "workflow.favoritesLimit",
+    "en": "You can pin at most 20 items."
+  },
+  "工作台配置已保存": { "key": "workflow.workspaceSaved", "en": "Workspace settings saved" },
+  "保存配置失败": {
+    "key": "workflow.workspaceSaveFailed",
+    "en": "Could not save the settings. Please try again."
+  },
+  "已恢复默认布局": { "key": "workflow.layoutRestored", "en": "Default layout restored" },
+  "恢复默认失败": {
+    "key": "workflow.layoutRestoreFailed",
+    "en": "Could not restore the default layout. Please try again."
+  },
+  "暂无可批量办理的待办": {
+    "key": "workflow.noBatchTodos",
+    "en": "No tasks available for bulk handling."
+  },
+  "请选择一条记录": { "key": "common.selectOneRecord", "en": "Select one record." },
+  "请选择一个目标表单": { "key": "form.selectTargetForm", "en": "Select a target form." },
+  "所选表单不在列表中": {
+    "key": "form.targetFormNotFound",
+    "en": "The selected form is not in the list."
+  },
+  "加载历史版本失败": {
+    "key": "form.historyLoadFailed",
+    "en": "Could not load the version history. Please try again."
+  },
+  "读取历史版本失败": {
+    "key": "form.historyReadFailed",
+    "en": "Could not read that version. Please try again."
+  },
+  "关联流程已创建": { "key": "form.relatedProcessCreated", "en": "Linked flow created" },
+  "加载关联流程失败": {
+    "key": "form.relatedProcessLoadFailed",
+    "en": "Could not load linked flows. Please try again."
+  },
+  "停用失败": { "key": "common.disableFailed", "en": "Could not disable. Please try again." },
+  "启用失败": { "key": "common.enableFailed", "en": "Could not enable. Please try again." },
+  "请选择 .xlsx 格式的文件": {
+    "key": "form.importSelectXlsx",
+    "en": "Please choose an .xlsx file."
+  },
+  "模板下载成功": { "key": "form.templateDownloaded", "en": "Template downloaded" },
+  "导出成功": { "key": "form.exported", "en": "Exported" },
+  "删除草稿失败": {
+    "key": "workflow.draftDeleteFailed",
+    "en": "Could not delete the draft. Please try again."
+  },
+  "草稿已删除": { "key": "workflow.draftDeleted", "en": "Draft deleted" },
+  "提交失败": { "key": "common.submitFailed", "en": "Could not submit. Please try again." },
+  "撤回失败": { "key": "workflow.withdrawFailed", "en": "Could not withdraw. Please try again." },
+  "已撤回": { "key": "common.statusWithdrawn", "en": "Withdrawn", "alias": true },
+  "催办失败": {
+    "key": "workflow.urgeFailed",
+    "en": "Could not send the reminder. Please try again."
+  }
+}

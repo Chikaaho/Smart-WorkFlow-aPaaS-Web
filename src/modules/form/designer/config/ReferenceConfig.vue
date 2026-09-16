@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 引用（REFERENCE）配置面板。
  *
@@ -45,15 +48,15 @@ function onFormSelected(formKey: string, formName: string) {
 
     <!-- 引用表单选择 -->
     <div class="row">
-      <label class="row__label">引用表单</label>
+      <label class="row__label">{{ t('form.referenceForm') }}</label>
       <div class="row__target">
         <span v-if="props.field.targetFormId" class="row__target-info">
           {{ selectedFormName || props.field.targetFormId }}
           <code class="row__target-key">{{ props.field.targetFormId }}</code>
         </span>
-        <span v-else class="row__target-empty">未选择</span>
+        <span v-else class="row__target-empty">{{ t('form.notSelected') }}</span>
         <el-button size="small" @click="openSelector">
-          {{ props.field.targetFormId ? '更换' : '选择' }}
+          {{ props.field.targetFormId ? t('form.changeTarget') : t('common.select') }}
         </el-button>
       </div>
     </div>
@@ -66,11 +69,13 @@ function onFormSelected(formKey: string, formName: string) {
         size="small"
         @click="emit('update', { targetFormId: undefined })"
       >
-        清除选择
+        {{ t('form.clearSelection') }}
       </el-button>
     </div>
 
-    <ConfigSeamNote :items="['显示字段', '自定义过滤条件']" />
+    <ConfigSeamNote
+      :items="[t('form.configSeamVisibleFields'), t('form.configSeamCustomFilter')]"
+    />
 
     <FormSelectorDialog
       :visible="selectorVisible"

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * NotifyInboxMobile — 移动 H5 收件箱（I6）。
  * 与 PC 收件箱读取同一消息、同一已读状态与同一对象权限（方向 §3.7）。
@@ -37,11 +40,13 @@ async function loadList(reset = false) {
     try {
       unreadCount.value = await unreadNotifyCount()
     } catch {
+      ElMessage.error(t('common.loadFailed'))
+      // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
       unreadCount.value = 0
     }
   } catch (err) {
     if (err instanceof ApiError) errorMsg.value = err.msg
-    else errorMsg.value = '加载收件箱失败'
+    else errorMsg.value = t('notify.inboxLoadFailed')
     ElMessage.error(errorMsg.value)
   } finally {
     loading.value = false
@@ -61,19 +66,21 @@ async function markRead(msg: NotifyMessage) {
     unreadCount.value = Math.max(0, unreadCount.value - 1)
   } catch (err) {
     if (err instanceof ApiError) ElMessage.error(err.msg)
-    else ElMessage.error('操作失败')
+    else ElMessage.error(t('common.operationFailed'))
   }
 }
 
 async function readAll() {
   try {
     const affected = await readAllNotify()
-    ElMessage.success(affected > 0 ? `已全部标记为已读（${affected} 条）` : '没有未读通知')
+    ElMessage.success(
+      affected > 0 ? t('notify.allMarkedRead', { affected }) : t('notify.noUnreadNotifications'),
+    )
     pageNum.value = 1
     await loadList(true)
   } catch (err) {
     if (err instanceof ApiError) ElMessage.error(err.msg)
-    else ElMessage.error('全部已读失败')
+    else ElMessage.error(t('notify.markAllReadFailed'))
   }
 }
 
@@ -86,11 +93,11 @@ async function openLink(msg: NotifyMessage) {
     if (linkType === 'WF_TASK' || linkType === 'WF_PROCESS') {
       void router.push({ path: '/m/workflow', query: { ref: encodeURIComponent(linkId) } })
     } else {
-      ElMessage.info('该通知暂无页面跳转')
+      ElMessage.info(t('notify.noLinkAvailable'))
     }
   } catch (err) {
     if (err instanceof ApiError) ElMessage.error(err.msg)
-    else ElMessage.error('无权访问该业务对象')
+    else ElMessage.error(t('common.noAccessToObject'))
   }
 }
 
@@ -100,11 +107,16 @@ onMounted(() => void loadList(true))
 <template>
   <div class="m-notify">
     <div class="m-notify-header">
-      <h2>收件箱（未读 {{ unreadCount }}）</h2>
-      <el-button size="small" type="primary" @click="readAll">全部已读</el-button>
+      <h2>{{ t('notify.inboxWithUnread', { unreadCount }) }}</h2>
+      <el-button size="small" type="primary" @click="readAll">{{
+        t('notify.markAllRead')
+      }}</el-button>
     </div>
     <el-alert v-if="errorMsg" :title="errorMsg" type="error" :closable="false" show-icon />
-    <el-empty v-if="!loading && list.length === 0 && !errorMsg" description="暂无通知" />
+    <el-empty
+      v-if="!loading && list.length === 0 && !errorMsg"
+      :description="t('notify.noNotifications')"
+    />
     <div
       v-for="msg in list"
       :key="msg.id"
@@ -126,9 +138,9 @@ onMounted(() => void loadList(true))
           type="primary"
           @click.stop="openLink(msg)"
         >
-          查看详情
+          {{ t('common.viewDetails') }}
         </el-button>
-        <span v-else-if="!msg.read" class="ops-hint">点击标记已读</span>
+        <span v-else-if="!msg.read" class="ops-hint">{{ t('notify.clickToMarkRead') }}</span>
       </div>
     </div>
     <el-button
@@ -138,7 +150,7 @@ onMounted(() => void loadList(true))
       :loading="loading"
       @click="handleMore"
     >
-      加载更多
+      {{ t('common.loadMore') }}
     </el-button>
   </div>
 </template>

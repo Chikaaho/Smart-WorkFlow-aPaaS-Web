@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { authGuard, clearDynamicRoutes, ROOT_LAYOUT_NAME } from './guard'
 import { setUnauthorizedHandler, setRefreshHandler } from '@/foundation/request'
@@ -29,7 +30,11 @@ export const routes: RouteRecordRaw[] = [
         path: 'workspace',
         name: 'workspace',
         component: () => import('@/modules/workflow/views/WorkspaceHome.vue'),
-        meta: { title: '工作台' },
+        meta: {
+          get title() {
+            return i18n.global.t('common.workspace')
+          },
+        },
       },
       {
         // v0.0.2 P4 流程中心（前台普通视角）：按分类/关键词浏览本人可发起事项。
@@ -38,21 +43,34 @@ export const routes: RouteRecordRaw[] = [
         path: 'workflow/catalog/:processKey?',
         name: 'process-catalog-static',
         component: () => import('@/modules/workflow/views/ProcessCatalog.vue'),
-        meta: { title: '流程中心' },
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.processCenter')
+          },
+        },
       },
       {
         // v0.0.2 P4 流程中心后台管理（分类/事项归属/发布状态）。
         path: 'workflow/catalog-admin',
         name: 'process-catalog-admin',
         component: () => import('@/modules/workflow/views/ProcessCatalogAdmin.vue'),
-        meta: { title: '事项管理', authority: ['workflow:catalog:manage'] },
+        meta: {
+          get title() {
+            return i18n.global.t('router.itemManagement')
+          },
+          authority: ['workflow:catalog:manage'],
+        },
       },
       {
         // v0.0.2 P4 个人办理：抄送我的（只读，不含审批操作权）。命名对齐 menu -static 规避同名替换。
         path: 'workflow/my-cc',
         name: 'my-cc-static',
         component: () => import('@/modules/workflow/views/MyCc.vue'),
-        meta: { title: '抄送我的' },
+        meta: {
+          get title() {
+            return i18n.global.t('router.myCc')
+          },
+        },
       },
       {
         // P52：表单设计器工作台。路径与菜单种子（form/designer）同段，但带 :id 段且
@@ -62,20 +80,30 @@ export const routes: RouteRecordRaw[] = [
         path: 'form/designer/:id?',
         name: 'form-designer-workbench',
         component: () => import('@/modules/form/views/FormDesigner.vue'),
-        meta: { title: '表单设计器' },
+        meta: {
+          get title() {
+            return i18n.global.t('router.formDesigner')
+          },
+        },
       },
       {
         path: 'form/form-render/:formKey',
         name: 'form-render',
         component: () => import('@/modules/form/views/FormRender.vue'),
-        meta: { title: '表单渲染' },
+        meta: {
+          get title() {
+            return i18n.global.t('router.formRender')
+          },
+        },
       },
       {
         path: 'form/form-data/:formKey',
         name: 'form-data',
         component: () => import('@/modules/form/views/FormData.vue'),
         meta: {
-          title: '表单数据',
+          get title() {
+            return i18n.global.t('router.formData')
+          },
           authority: ['form:data:template', 'form:data:import', 'form:data:export'],
         },
       },
@@ -83,117 +111,195 @@ export const routes: RouteRecordRaw[] = [
         path: 'form/form-def-list',
         name: 'form-def-list',
         component: () => import('@/modules/form/views/FormDefList.vue'),
-        meta: { title: '表单管理' },
+        meta: {
+          get title() {
+            return i18n.global.t('form.managementTitle')
+          },
+        },
       },
       {
         path: 'agent/graph-designer/:id',
         name: 'agent-graph-designer',
         component: () => import('@/modules/agent/views/GraphDesigner.vue'),
-        meta: { title: '图设计器' },
+        meta: {
+          get title() {
+            return i18n.global.t('router.graphDesigner')
+          },
+        },
       },
       {
         // I3 第一方流程设计器：统一节点能力端点构建面板与配置，ProcessGraph 单一图契约。
         path: 'workflow/defs/:defId/design',
         name: 'workflow-def-designer',
         component: () => import('@/modules/workflow/views/ProcessDesigner.vue'),
-        meta: { title: '流程设计器', authority: ['workflow:def:design'] },
+        meta: {
+          get title() {
+            return i18n.global.t('router.processDesigner')
+          },
+          authority: ['workflow:def:design'],
+        },
       },
       {
         path: 'workflow/task/:taskId',
         name: 'TaskDetail',
         component: () => import('@/modules/workflow/views/TaskDetail.vue'),
-        meta: { title: '任务详情' },
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.taskDetail')
+          },
+        },
       },
       {
         path: 'workflow/processed',
         name: 'ProcessedList',
         component: () => import('@/modules/workflow/views/ProcessedList.vue'),
-        meta: { title: '已办任务' },
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.processedTasks')
+          },
+        },
       },
       {
         path: 'workflow/instances',
         name: 'ProcessInstanceList',
         component: () => import('@/modules/workflow/views/ProcessInstanceList.vue'),
-        meta: { title: '流程监控' },
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.monitor')
+          },
+        },
       },
       {
         // I4 §3.2 流程模板中心：复制后编辑并发布
         path: 'workflow/templates',
         name: 'TemplateCenter',
         component: () => import('@/modules/workflow/views/TemplateCenter.vue'),
-        meta: { title: '流程模板中心' },
+        meta: {
+          get title() {
+            return i18n.global.t('router.processTemplateCenter')
+          },
+        },
       },
       {
         // I4 §3.3 实例监控与受控干预（服务端权限+数据范围）
         path: 'workflow/monitor',
         name: 'InstanceMonitor',
         component: () => import('@/modules/workflow/views/InstanceMonitor.vue'),
-        meta: { title: '实例监控干预' },
+        meta: {
+          get title() {
+            return i18n.global.t('router.instanceMonitor')
+          },
+        },
       },
       {
         // I4 §3.3 流程基础分析
         path: 'workflow/analytics',
         name: 'ProcessAnalytics',
         component: () => import('@/modules/workflow/views/ProcessAnalytics.vue'),
-        meta: { title: '流程分析' },
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.processAnalytics')
+          },
+        },
       },
       {
         // I4 §3.5 批量审批
         path: 'workflow/batch-approval',
         name: 'BatchApproval',
         component: () => import('@/modules/workflow/views/BatchApproval.vue'),
-        meta: { title: '批量审批' },
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.batchApproval')
+          },
+        },
       },
       {
         // I4 §3.6 流程交接
         path: 'workflow/handover',
         name: 'TaskHandover',
         component: () => import('@/modules/workflow/views/TaskHandover.vue'),
-        meta: { title: '流程交接' },
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.handoverTitle')
+          },
+        },
       },
       {
         // I4 §3.7 统一工作台（待办/已办/发起/草稿/抄送/消息入口）
         path: 'workflow/center',
         name: 'WorkflowCenter',
         component: () => import('@/modules/workflow/views/WorkflowCenter.vue'),
-        meta: { title: '工作台' },
+        meta: {
+          get title() {
+            return i18n.global.t('common.workspace')
+          },
+        },
       },
       {
         path: 'agent/executions/list',
         name: 'agent-execution-list',
         component: () => import('@/modules/agent/views/ExecutionList.vue'),
-        meta: { title: '执行历史' },
+        meta: {
+          get title() {
+            return i18n.global.t('router.executionHistory')
+          },
+        },
       },
       {
         path: 'agent/executions/detail/:executionId',
         name: 'agent-execution-detail',
         component: () => import('@/modules/agent/views/ExecutionDetail.vue'),
-        meta: { title: '执行详情', authority: ['agent:model:view'] },
+        meta: {
+          get title() {
+            return i18n.global.t('job.executionDetail')
+          },
+          authority: ['agent:model:view'],
+        },
       },
       // M07-F04-02: 会话历史路由
       {
         path: 'agent/conversations/list',
         name: 'agent-conversation-list',
         component: () => import('@/modules/agent/views/ConversationList.vue'),
-        meta: { title: '会话历史', authority: ['agent:model:view'] },
+        meta: {
+          get title() {
+            return i18n.global.t('agent.conversationHistory')
+          },
+          authority: ['agent:model:view'],
+        },
       },
       {
         path: 'agent/conversations/detail/:sessionId',
         name: 'agent-conversation-detail',
         component: () => import('@/modules/agent/views/ConversationDetail.vue'),
-        meta: { title: '会话消息', authority: ['agent:model:view'] },
+        meta: {
+          get title() {
+            return i18n.global.t('agent.conversationMessages')
+          },
+          authority: ['agent:model:view'],
+        },
       },
       {
         path: 'agent/debug/:sessionId',
         name: 'agent-debug-session',
         component: () => import('@/modules/agent/views/DebugSessionView.vue'),
-        meta: { title: '单步调试', authority: ['agent:model:view'] },
+        meta: {
+          get title() {
+            return i18n.global.t('agent.stepDebug')
+          },
+          authority: ['agent:model:view'],
+        },
       },
       {
         path: 'agent/tool',
         name: 'agent-tool-list',
         component: () => import('@/modules/agent/views/ToolList.vue'),
-        meta: { title: '工具管理', authority: ['agent:tool:view'] },
+        meta: {
+          get title() {
+            return i18n.global.t('router.toolManagement')
+          },
+          authority: ['agent:tool:view'],
+        },
       },
       {
         // 消息模板管理页（P36/M05-F02-01）：菜单树经 V38 seed（notify/templates），
@@ -201,42 +307,72 @@ export const routes: RouteRecordRaw[] = [
         path: 'notify/template',
         name: 'notify-template-list',
         component: () => import('@/modules/notify/views/NotifyTemplateList.vue'),
-        meta: { title: '消息模板', authority: ['notify:template:view'] },
+        meta: {
+          get title() {
+            return i18n.global.t('router.messageTemplate')
+          },
+          authority: ['notify:template:view'],
+        },
       },
       {
         // 批量发送通知页：独立发送权限 notify:batch:send。
         path: 'notify/batch-send',
         name: 'notify-batch-send',
         component: () => import('@/modules/notify/views/NotifyBatchSend.vue'),
-        meta: { title: '发送通知', authority: ['notify:batch:send'] },
+        meta: {
+          get title() {
+            return i18n.global.t('router.sendNotification')
+          },
+          authority: ['notify:batch:send'],
+        },
       },
       {
         // I6：通知规则管理页（动态菜单 V90 同源；静态路由保证直达 URL 可达）
         path: 'notify/rule',
         name: 'notify-rule-list',
         component: () => import('@/modules/notify/views/NotifyRuleList.vue'),
-        meta: { title: '通知规则', authority: ['notify:rule:view'] },
+        meta: {
+          get title() {
+            return i18n.global.t('notify.rules')
+          },
+          authority: ['notify:rule:view'],
+        },
       },
       {
         // I6：渠道配置页
         path: 'notify/channel',
         name: 'notify-channel-list',
         component: () => import('@/modules/notify/views/NotifyChannelList.vue'),
-        meta: { title: '渠道配置', authority: ['notify:channel:view'] },
+        meta: {
+          get title() {
+            return i18n.global.t('notify.channelConfig')
+          },
+          authority: ['notify:channel:view'],
+        },
       },
       {
         // I6：订阅偏好页
         path: 'notify/preference',
         name: 'notify-preference',
         component: () => import('@/modules/notify/views/NotifyPreference.vue'),
-        meta: { title: '订阅偏好', authority: ['notify:preference'] },
+        meta: {
+          get title() {
+            return i18n.global.t('notify.subscriptionPreferences')
+          },
+          authority: ['notify:preference'],
+        },
       },
       {
         // v0.0.2 P3：通知发送记录（有权管理者），发送记录查询/失败重发/关联日志。
         path: 'notify/record',
         name: 'notify-record-list',
         component: () => import('@/modules/notify/views/NotifyRecordList.vue'),
-        meta: { title: '发送记录', authority: ['notify:record:view'] },
+        meta: {
+          get title() {
+            return i18n.global.t('router.sendRecords')
+          },
+          authority: ['notify:record:view'],
+        },
       },
     ],
   },
@@ -247,21 +383,33 @@ export const routes: RouteRecordRaw[] = [
     path: '/m/form/:formKey',
     name: 'mobile-form-render',
     component: () => import('@/modules/form/views/MobileFormRender.vue'),
-    meta: { title: '移动填报' },
+    meta: {
+      get title() {
+        return i18n.global.t('router.mobileFormEntry')
+      },
+    },
   },
   {
     // I4 §3.7 移动端工作台（响应式 H5）：发起入口/待办办理/草稿/结果查询
     path: '/m/workflow',
     name: 'mobile-workflow-center',
     component: () => import('@/modules/workflow/views/MobileWorkspace.vue'),
-    meta: { title: '移动工作台' },
+    meta: {
+      get title() {
+        return i18n.global.t('router.mobileWorkspace')
+      },
+    },
   },
   {
     // I6 §3.7 移动 H5 收件箱：与 PC 收件箱同一消息/已读状态/对象权限
     path: '/m/notify',
     name: 'mobile-notify-inbox',
     component: () => import('@/modules/notify/views/NotifyInboxMobile.vue'),
-    meta: { title: '移动收件箱' },
+    meta: {
+      get title() {
+        return i18n.global.t('router.mobileInbox')
+      },
+    },
   },
   {
     path: '/login',
@@ -288,25 +436,29 @@ export const routes: RouteRecordRaw[] = [
     path: '/account/bindings',
     name: 'account-bindings',
     component: () => import('@/modules/system/views/AccountBindings.vue'),
-    meta: { title: '账号绑定' },
+    meta: {
+      get title() {
+        return i18n.global.t('auth.accountBindings')
+      },
+    },
   },
   {
     path: '/403',
     name: 'forbidden',
     component: () => import('@/views/ErrorPage.vue'),
-    meta: { public: true, errorCode: 403, title: '无权限访问' },
+    meta: { public: true, errorCode: 403, title: i18n.global.t('router.forbidden') },
   },
   {
     path: '/404',
     name: 'not-found',
     component: () => import('@/views/ErrorPage.vue'),
-    meta: { public: true, errorCode: 404, title: '页面不存在' },
+    meta: { public: true, errorCode: 404, title: i18n.global.t('router.pageNotFound') },
   },
   {
     path: '/500',
     name: 'server-error',
     component: () => import('@/views/ErrorPage.vue'),
-    meta: { public: true, errorCode: 500, title: '服务异常' },
+    meta: { public: true, errorCode: 500, title: i18n.global.t('router.serverError') },
   },
 ]
 

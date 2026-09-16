@@ -1,0 +1,135 @@
+{
+  "_comment": "P61 R1 参数化文案 批次5：含插值（${...}）的运行时文案，以及无法用精确匹配改写的复合表达式（三元/数组字面量）与字面花括号示例。这些文案不进术语字典，需按键手工改写。",
+  "modelId !== null ? '编辑大模型配置' : '新增大模型配置'": {
+    "key": "agent.modelConfigDialogTitle",
+    "zh": "modelId !== null ? '编辑大模型配置' : '新增大模型配置'",
+    "en": "modelId !== null ? 'Edit model configuration' : 'New model configuration'",
+    "vars": [],
+    "note": "Vue 属性绑定中的三元表达式，非单条文案；需拆成两条键：编辑分支 agent.modelConfigDialogTitleEdit（编辑大模型配置 / Edit model configuration），新增分支 agent.modelConfigDialogTitleNew（新增大模型配置 / New model configuration）。"
+  },
+  "`该配置处于限流冷却中，冷却至 ${lockedUntil}`": {
+    "key": "agent.rateLimitCoolingUntil",
+    "zh": "该配置处于限流冷却中，冷却至 {lockedUntil}",
+    "en": "This configuration is in rate-limit cooldown until {lockedUntil}",
+    "vars": ["lockedUntil"]
+  },
+  "editingId ? '编辑草稿（生成新版本）' : '新增脚本'": {
+    "key": "iot.scriptDialogTitle",
+    "zh": "editingId ? '编辑草稿（生成新版本）' : '新增脚本'",
+    "en": "editingId ? 'Edit draft (creates a new version)' : 'New script'",
+    "vars": [],
+    "note": "Vue 属性绑定中的三元表达式，非单条文案；需拆成两条键：编辑分支 iot.scriptDialogTitleEdit（编辑草稿（生成新版本） / Edit draft (creates a new version)），新增分支 iot.scriptDialogTitleNew（新增脚本 / New script）。"
+  },
+  "校验失败：${result.error}": {
+    "key": "iot.validationFailed",
+    "zh": "校验失败：{error}",
+    "en": "Validation failed: {error}",
+    "vars": ["error"]
+  },
+  "试运行成功（${exec.durationMs}ms）：${exec.outputJson ?? '无输出'}": {
+    "key": "iot.dryRunSucceeded",
+    "zh": "试运行成功（{durationMs}ms）：{output}",
+    "en": "Test run succeeded ({durationMs}ms): {output}",
+    "vars": ["durationMs", "output"],
+    "note": "output 对应的插值是复合表达式 exec.outputJson ?? '无输出'（缺值时回退「无输出」），调用侧需传 { output: exec.outputJson ?? t('iot.dryRunNoOutput') }；回退文案另立一键 iot.dryRunNoOutput（无输出 / No output）。"
+  },
+  "试运行 ${exec.status}：${exec.error}": {
+    "key": "iot.dryRunFailed",
+    "zh": "试运行 {status}：{error}",
+    "en": "Test run {status}: {error}",
+    "vars": ["status", "error"]
+  },
+  "停用脚本「${row.name}」？": {
+    "key": "iot.confirmDisableScript",
+    "zh": "停用脚本「{name}」？",
+    "en": "Disable script \"{name}\"?",
+    "vars": ["name"]
+  },
+  "toolId !== null ? '编辑外部 HTTP 工具' : '新增外部 HTTP 工具'": {
+    "key": "agent.externalToolDialogTitle",
+    "zh": "toolId !== null ? '编辑外部 HTTP 工具' : '新增外部 HTTP 工具'",
+    "en": "toolId !== null ? 'Edit external HTTP tool' : 'New external HTTP tool'",
+    "vars": [],
+    "note": "Vue 属性绑定中的三元表达式，非单条文案；需拆成两条键：编辑分支 agent.externalToolDialogTitleEdit（编辑外部 HTTP 工具 / Edit external HTTP tool），新增分支 agent.externalToolDialogTitleNew（新增外部 HTTP 工具 / New external HTTP tool）。"
+  },
+  "JSON Schema 字符串，描述入参结构，如 {\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}": {
+    "key": "agent.inputSchemaPlaceholderExternal",
+    "zh": "JSON Schema 字符串，描述入参结构，如 {\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}",
+    "en": "JSON Schema string describing the input structure, e.g. {\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}",
+    "vars": [],
+    "note": "花括号为字面 JSON 示例（占位符里给用户的样例），不是插值；vars 为空。写回 vue-i18n 时需转义字面花括号（如 {'{'} / {'}'}），避免消息编译器把示例当占位符解析。"
+  },
+  "toolId !== null ? '编辑内部工具' : '新增内部工具'": {
+    "key": "agent.internalToolDialogTitle",
+    "zh": "toolId !== null ? '编辑内部工具' : '新增内部工具'",
+    "en": "toolId !== null ? 'Edit internal tool' : 'New internal tool'",
+    "vars": [],
+    "note": "Vue 属性绑定中的三元表达式，非单条文案；需拆成两条键：编辑分支 agent.internalToolDialogTitleEdit（编辑内部工具 / Edit internal tool），新增分支 agent.internalToolDialogTitleNew（新增内部工具 / New internal tool）。"
+  },
+  "JSON Schema 字符串，描述入参结构，如 {\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}": {
+    "key": "agent.inputSchemaPlaceholderInternal",
+    "zh": "JSON Schema 字符串，描述入参结构，如 {\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}",
+    "en": "JSON Schema string describing the input structure, e.g. {\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}",
+    "vars": [],
+    "note": "花括号为字面 JSON 示例（占位符里给用户的样例），不是插值；vars 为空。写回 vue-i18n 时需转义字面花括号（如 {'{'} / {'}'}），避免消息编译器把示例当占位符解析。"
+  },
+  "确定删除通知规则 ${row.ruleCode} 吗？": {
+    "key": "notify.confirmDeleteRule",
+    "zh": "确定删除通知规则 {ruleCode} 吗？",
+    "en": "Delete notification rule {ruleCode}?",
+    "vars": ["ruleCode"]
+  },
+  "editing ? '编辑规则' : '新建规则'": {
+    "key": "notify.ruleDialogTitle",
+    "zh": "editing ? '编辑规则' : '新建规则'",
+    "en": "editing ? 'Edit rule' : 'New rule'",
+    "vars": [],
+    "note": "Vue 属性绑定中的三元表达式，非单条文案；需拆成两条键：编辑分支 notify.ruleDialogTitleEdit（编辑规则 / Edit rule），新增分支 notify.ruleDialogTitleNew（新建规则 / New rule）。"
+  },
+  "确定要删除用户\"${row.username}\"吗？删除后不可恢复。": {
+    "key": "system.confirmDeleteUser",
+    "zh": "确定要删除用户\"{username}\"吗？删除后不可恢复。",
+    "en": "Delete user \"{username}\"? This cannot be undone.",
+    "vars": ["username"]
+  },
+  "defaultMode === 'array' ? '逗号分隔的默认选项' : '新建填报时的默认值'": {
+    "key": "form.defaultTextPlaceholder",
+    "zh": "defaultMode === 'array' ? '逗号分隔的默认选项' : '新建填报时的默认值'",
+    "en": "defaultMode === 'array' ? 'Comma-separated default options' : 'Default value for a new submission'",
+    "vars": [],
+    "note": "Vue 属性绑定中的三元表达式，非单条文案；需拆成两条键：数组模式 form.defaultTextPlaceholderArray（逗号分隔的默认选项 / Comma-separated default options），单值模式 form.defaultTextPlaceholderScalar（新建填报时的默认值 / Default value for a new submission）。"
+  },
+  "例如：请根据以下内容生成摘要：{{input}}": {
+    "key": "agent.userPromptPlaceholder",
+    "zh": "例如：请根据以下内容生成摘要：{{input}}",
+    "en": "For example: summarize the following: {{input}}",
+    "vars": [],
+    "note": "{{input}} 是给用户看的变量占位语法示例，属字面文本而非插值；vars 为空。写回 vue-i18n 时需转义花括号，避免被当作参数。"
+  },
+  "`留空 = 默认变量 ${DEFAULT_VARIABLE_NAME}`": {
+    "key": "agent.varNamePlaceholder",
+    "zh": "留空 = 默认变量 {DEFAULT_VARIABLE_NAME}",
+    "en": "Empty = default variable {DEFAULT_VARIABLE_NAME}",
+    "vars": ["DEFAULT_VARIABLE_NAME"]
+  },
+  "分类 ${id}": {
+    "key": "workflow.categoryFallback",
+    "zh": "分类 {id}",
+    "en": "Category {id}",
+    "vars": ["id"]
+  },
+  "['默认值']": {
+    "key": "form.configSeamDefaultValue",
+    "zh": "['默认值']",
+    "en": "['Default value']",
+    "vars": [],
+    "note": "数组字面量（ConfigSeamNote 的 items 参数），实际展示文案为「默认值」/「Default value」；改写为 :items=\"[t('form.configSeamDefaultValue')]\" 即可，故 zh/en 保留表达式外壳以便原样对照。"
+  },
+  "['默认开 / 关']": {
+    "key": "form.configSeamDefaultBool",
+    "zh": "['默认开 / 关']",
+    "en": "['Default on / off']",
+    "vars": [],
+    "note": "数组字面量（ConfigSeamNote 的 items 参数），实际展示文案为「默认开 / 关」/「Default on / off」；改写为 :items=\"[t('form.configSeamDefaultBool')]\" 即可，故 zh/en 保留表达式外壳以便原样对照。"
+  }
+}

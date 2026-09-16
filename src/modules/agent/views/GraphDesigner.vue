@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { i18n, useI18n } from '@/locales'
+
+const { t } = useI18n()
 /* global HTMLElement */
 /**
  * GraphDesigner — 图设计器画布页（参数化静态路由 agent/graph-designer/:id）。
@@ -48,13 +52,13 @@ import {
   NODE_TYPE_END,
   NODE_TYPE_FORK,
   NODE_TYPE_JOIN,
-  NODE_TYPE_LABELS,
   NODE_TYPE_LLM,
   NODE_TYPE_LOOP,
   NODE_TYPE_START,
   NODE_TYPE_TOOL,
   elementsToFlowGraphData,
   flowGraphDataToElements,
+  nodeTypeLabel,
 } from '@/modules/agent/utils/graphAdapter'
 import { getNodePanelDescriptor } from './panels/node-panel-registry'
 import type {
@@ -113,7 +117,9 @@ const conditionOutEdges = computed<FlowGraphEdge[]>(() => {
  */
 const panelDescriptor = computed(() => getNodePanelDescriptor(selectedNodeType.value))
 const panelComponent = computed(() => panelDescriptor.value?.component ?? null)
-const panelLabel = computed(() => panelDescriptor.value?.label ?? selectedNodeType.value)
+const panelLabel = computed(() =>
+  panelDescriptor.value ? i18n.global.t(panelDescriptor.value.labelKey) : selectedNodeType.value,
+)
 
 const NODE_TYPES = [
   NODE_TYPE_START,
@@ -155,7 +161,7 @@ function addNode(type: string) {
   const node: FlowGraphNode = {
     id: `n-${Date.now()}-${count}`,
     type,
-    label: NODE_TYPE_LABELS[type] ?? type,
+    label: nodeTypeLabel(type),
     position: { x: 60 + (count % 5) * 100, y: 60 + Math.floor(count / 5) * 80 },
     data: {},
   }
@@ -243,7 +249,7 @@ function handleMaxIterationsChange(value: unknown) {
     return
   }
   if (parsed < 1 || !Number.isInteger(parsed)) {
-    ElMessage.warning('LOOP 节点 maxIterations 必须 ≥ 1')
+    ElMessage.warning(t('agent.loopMaxIterationsInvalid'))
     removeKey()
     return
   }
@@ -278,7 +284,7 @@ async function loadGraph() {
     const data = elementsToFlowGraphData(graph.elements)
     // 节点显示名：按类型映射（仅展示用途，不落库）
     graphData.value = {
-      nodes: data.nodes.map((n) => ({ ...n, label: NODE_TYPE_LABELS[n.type ?? ''] ?? n.type })),
+      nodes: data.nodes.map((n) => ({ ...n, label: nodeTypeLabel(n.type ?? '') })),
       edges: data.edges,
     }
     await nextTick()
@@ -286,7 +292,7 @@ async function loadGraph() {
       graphInstance.value = mountFlowGraph(canvasRef.value, graphData.value, graphEvents)
     }
   } catch (err) {
-    loadError.value = err instanceof ApiError ? err.msg : '加载图定义失败'
+    loadError.value = err instanceof ApiError ? err.msg : t('agent.graphDefLoadFailed')
   } finally {
     loading.value = false
   }
@@ -298,7 +304,9 @@ async function loadOptions() {
     modelOptions.value = models
     toolOptions.value = tools
   } catch (err) {
-    ElMessage.warning('下拉数据加载失败：' + ((err as ApiError).msg ?? '未知错误'))
+    ElMessage.warning(
+      t('agent.dropdownLoadFailed') + ((err as ApiError).msg ?? t('common.unknownError')),
+    )
   }
 }
 
@@ -315,9 +323,9 @@ async function handleSaveDraft() {
       canvas: {},
     }
     await saveDraftGraph(graphId.value, graph)
-    ElMessage.success('草稿已保存')
+    ElMessage.success(t('common.draftSaved'))
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '保存草稿失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('common.saveDraftFailed'))
   } finally {
     saving.value = false
   }
@@ -329,9 +337,9 @@ async function handlePublish() {
     const published = await publishGraphDef(graphId.value)
     graphKey.value = published.graphKey
     version.value = published.defVersion
-    ElMessage.success(`发布成功，当前版本 v${published.defVersion}（发布后可继续编辑并再次发布）`)
+    ElMessage.success(t('agent.graphPublishedWithHint', { defVersion: published.defVersion }))
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '发布失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('common.publishFailed'))
   } finally {
     publishing.value = false
   }
@@ -340,7 +348,7 @@ async function handlePublish() {
 async function handleExecute() {
   const input = executeInput.value.trim()
   if (!input) {
-    ElMessage.warning('请输入测试文本')
+    ElMessage.warning(t('agent.testTextRequired'))
     return
   }
   executing.value = true
@@ -350,7 +358,7 @@ async function handleExecute() {
   } catch (err) {
     executeResult.value = {
       success: false,
-      errorMessage: err instanceof ApiError ? err.msg : '执行失败',
+      errorMessage: err instanceof ApiError ? err.msg : t('agent.executionFailed'),
       latencyMs: 0,
     }
   } finally {
@@ -364,7 +372,7 @@ function handleViewExecutionDetail() {
   if (eid) {
     void router.push(`/agent/executions/detail/${eid}`)
   } else {
-    ElMessage.warning('暂无可跳转的执行记录')
+    ElMessage.warning(t('agent.noExecutionToJumpTo'))
   }
 }
 
@@ -386,17 +394,19 @@ onBeforeUnmount(() => {
     <!-- 头部 -->
     <div class="designer-header">
       <div class="header-title">
-        <span class="title-text">{{ graphName || '未命名图' }}</span>
+        <span class="title-text">{{ graphName || t('agent.untitledGraph') }}</span>
         <el-tag v-if="version" size="small" type="info">v{{ version }}</el-tag>
       </div>
       <div class="header-actions">
-        <el-button size="small" @click="router.push('/agent/graph-def')">返回列表</el-button>
-        <el-button size="small" type="primary" :loading="saving" @click="handleSaveDraft">
-          保存草稿
-        </el-button>
-        <el-button size="small" type="success" :loading="publishing" @click="handlePublish">
-          发布
-        </el-button>
+        <el-button size="small" @click="router.push('/agent/graph-def')">{{
+          t('common.backToList')
+        }}</el-button>
+        <el-button size="small" type="primary" :loading="saving" @click="handleSaveDraft">{{
+          t('common.saveDraft')
+        }}</el-button>
+        <el-button size="small" type="success" :loading="publishing" @click="handlePublish">{{
+          t('common.publish')
+        }}</el-button>
       </div>
     </div>
 
@@ -412,7 +422,7 @@ onBeforeUnmount(() => {
     <div v-else v-loading="loading" class="designer-body">
       <!-- 节点色板 -->
       <div class="palette">
-        <div class="palette-title">节点</div>
+        <div class="palette-title">{{ t('common.node') }}</div>
         <el-button
           v-for="type in NODE_TYPES"
           :key="type"
@@ -420,7 +430,7 @@ onBeforeUnmount(() => {
           class="palette-item"
           @click="addNode(type)"
         >
-          {{ NODE_TYPE_LABELS[type] ?? type }}
+          {{ nodeTypeLabel(type) }}
         </el-button>
       </div>
 
@@ -433,8 +443,8 @@ onBeforeUnmount(() => {
       <div class="property-panel">
         <template v-if="selectedNode">
           <div class="panel-title">
-            节点属性
-            <span class="panel-sub">{{ selectedNode.type }}</span>
+            {{ t('agent.nodeProperties') }}
+            <span class="panel-sub">{{ enumLabel('AGENT_NODE_TYPE', selectedNode.type) }}</span>
           </div>
 
           <!-- 面板主体：按节点类型查 NODE_PANEL_REGISTRY 动态挂载（无 if/switch 链） -->
@@ -457,51 +467,53 @@ onBeforeUnmount(() => {
           <!-- 删除节点（START 除外） -->
           <div v-if="selectedNodeType !== NODE_TYPE_START" class="panel-footer">
             <el-button size="small" type="danger" plain @click="removeSelectedNode">
-              删除节点
+              {{ t('agent.deleteNode') }}
             </el-button>
           </div>
         </template>
-        <el-empty v-else description="点击画布节点编辑属性" :image-size="60" />
+        <el-empty v-else :description="t('agent.clickNodeToEditHint')" :image-size="60" />
       </div>
     </div>
 
     <!-- 执行测试面板（结果不落库，刷新即失） -->
     <div class="execute-panel">
       <div class="execute-row">
-        <span class="execute-label">执行测试</span>
+        <span class="execute-label">{{ t('agent.runTest') }}</span>
         <el-input
           v-model="executeInput"
-          placeholder="输入测试文本（图须已发布）"
+          :placeholder="t('agent.testTextPlaceholder')"
           style="width: 360px"
           size="small"
         />
         <el-button type="primary" size="small" :loading="executing" @click="handleExecute">
-          运行
+          {{ t('agent.run') }}
         </el-button>
       </div>
       <el-alert
         v-if="executeResult"
-        :title="executeResult.success ? '执行成功' : '执行失败'"
+        :title="executeResult.success ? t('agent.executionSucceeded') : t('agent.executionFailed')"
         :type="executeResult.success ? 'success' : 'error'"
         :closable="false"
         show-icon
         class="execute-result"
       >
         <template v-if="executeResult.success && executeResult.output">
-          <div>输出：{{ executeResult.output }}</div>
+          <div>{{ t('agent.outputLabel', { output: executeResult.output }) }}</div>
         </template>
         <template v-else-if="!executeResult.success && executeResult.errorMessage">
-          <div>原因：{{ executeResult.errorMessage }}</div>
+          <div>{{ t('agent.reasonLabel', { errorMessage: executeResult.errorMessage }) }}</div>
         </template>
-        <div class="execute-meta">耗时 {{ executeResult.latencyMs }}ms</div>
+        <div class="execute-meta">
+          {{ t('agent.latencyLabel', { latencyMs: executeResult.latencyMs }) }}
+        </div>
         <!-- Step12：利用响应中的 executionId 直达本次执行详情 -->
         <div v-if="executeResult.executionId" class="execute-detail-link">
           <el-button size="small" link type="primary" @click="handleViewExecutionDetail">
-            查看详情 →
+            {{ t('agent.viewExecution') }}
           </el-button>
         </div>
       </el-alert>
-      <div class="execute-hint">执行结果已持久化，可通过上方按钮直达本次执行详情。</div>
+      <div class="execute-hint">{{ t('agent.executionResultPersisted') }}</div>
     </div>
   </div>
 </template>

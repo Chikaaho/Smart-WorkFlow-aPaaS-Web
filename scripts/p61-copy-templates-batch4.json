@@ -1,0 +1,91 @@
+{
+  "_comment": "P61 R1 参数化文案 批次4",
+  "表单 — ${formKey}": {
+    "key": "form.titleWithKey",
+    "zh": "表单 — {formKey}",
+    "en": "Form — {formKey}",
+    "vars": ["formKey"]
+  },
+  "${schema.value.title}（草稿填报）": {
+    "key": "form.draftEntryTitle",
+    "zh": "{title}（草稿填报）",
+    "en": "{title} (draft entry)",
+    "vars": ["title"],
+    "note": "原始插值为 ${schema.value.title}"
+  },
+  "记录加载失败：${err.msg}": {
+    "key": "form.recordLoadFailedDetail",
+    "zh": "记录加载失败：{msg}",
+    "en": "Failed to load the record: {msg}",
+    "vars": ["msg"],
+    "note": "原始插值为 ${err.msg}"
+  },
+  "提交成功，记录 ID：${id}": {
+    "key": "form.submitSuccessWithId",
+    "zh": "提交成功，记录 ID：{id}",
+    "en": "Submitted successfully. Record ID: {id}",
+    "vars": ["id"]
+  },
+  "草稿加载失败：${err.msg}": {
+    "key": "form.draftLoadFailedDetail",
+    "zh": "草稿加载失败：{msg}",
+    "en": "Failed to load the draft: {msg}",
+    "vars": ["msg"],
+    "note": "原始插值为 ${err.msg}"
+  },
+  "字段名 \"${field.name}\" 不合法（仅允许字母/数字/下划线，且不能以数字开头）": {
+    "key": "form.invalidColumnName",
+    "zh": "字段名 \"{name}\" 不合法（仅允许字母/数字/下划线，且不能以数字开头）",
+    "en": "Invalid field name \"{name}\" (only letters, digits, and underscores are allowed, and it cannot start with a digit)",
+    "vars": ["name"],
+    "note": "原始插值为 ${field.name}"
+  },
+  "字典字段 \"${field.name}\" 未绑定字典类型": {
+    "key": "form.dictFieldNoType",
+    "zh": "字典字段 \"{name}\" 未绑定字典类型",
+    "en": "Dictionary field \"{name}\" has no dictionary type bound",
+    "vars": ["name"],
+    "note": "原始插值为 ${field.name}"
+  },
+  "引用字段 \"${field.name}\" 未指定目标表单": {
+    "key": "form.referenceFieldNoTarget",
+    "zh": "引用字段 \"{name}\" 未指定目标表单",
+    "en": "Reference field \"{name}\" has no target form specified",
+    "vars": ["name"],
+    "note": "原始插值为 ${field.name}"
+  },
+  "子表格字段 \"${field.name}\" 未定义子列": {
+    "key": "form.subTableNoColumns",
+    "zh": "子表格字段 \"{name}\" 未定义子列",
+    "en": "Sub-table field \"{name}\" has no sub-columns defined",
+    "vars": ["name"],
+    "note": "原始插值为 ${field.name}"
+  },
+  "禁用设备「${row.name}」？": {
+    "key": "iot.disableDeviceConfirm",
+    "zh": "停用设备「{name}」？",
+    "en": "Disable device \"{name}\"?",
+    "vars": ["name"],
+    "note": "原始插值为 ${row.name}；原文书名号「」已改为英文直引号"
+  },
+  "连接状态：${status}": {
+    "key": "iot.connectionStatusMessage",
+    "zh": "连接状态：{status}",
+    "en": "Connection status: {status}",
+    "vars": ["status"]
+  },
+  "`物模型 — ${currentProduct?.name ?? ''}`": {
+    "key": "iot.thingModelTitle",
+    "zh": "物模型 — {name}",
+    "en": "Thing model — {name}",
+    "vars": ["name"],
+    "note": "原始插值为 ${currentProduct?.name ?? ''}；原文外层反引号为模板字面量界定符，已去除"
+  },
+  "确定要删除字典类型\"${row.name}\"吗？删除后该类型下的字典项将不可用。": {
+    "key": "system.deleteDictTypeConfirm",
+    "zh": "确定要删除字典类型\"{name}\"吗？删除后该类型下的字典项将不可用。",
+    "en": "Delete dictionary type \"{name}\"? Items under this type will become unavailable.",
+    "vars": ["name"],
+    "note": "原始插值为 ${row.name}"
+  }
+}

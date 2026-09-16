@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 日期（DATE）配置面板。
  * 契约键：label / name / required。
@@ -25,13 +28,13 @@ const emit = defineEmits<{ update: [patch: FieldPatch] }>()
     />
 
     <div class="row">
-      <label class="row__label">日期格式</label>
+      <label class="row__label">{{ t('form.dateFormat') }}</label>
       <!-- v1 锁定 YYYY-MM-DD：只读展示，禁止乱填（亦无契约键承载，仅信息提示）。 -->
-      <el-input :model-value="'年-月-日（YYYY-MM-DD）'" disabled class="row__control" />
-      <p class="row__hint">v1 固定为年-月-日，暂不支持自定义。</p>
+      <el-input :model-value="t('form.dateFormatExample')" disabled class="row__control" />
+      <p class="row__hint">{{ t('form.dateFormatLockedHint') }}</p>
     </div>
 
-    <ConfigSeamNote :items="['默认值']" />
+    <ConfigSeamNote :items="[t('form.defaultValue')]" />
   </div>
 </template>
 

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 引用（REFERENCE）控件：只读输入框 + 弹窗选择器（ReferenceSelector）。
  * 弹窗显隐与回显显示值均为本组件内部状态；选择结果经 emit 出（id 落库、value 展示）。
@@ -36,10 +39,14 @@ function onReferenceSelect(payload: IdValueProperty) {
 
 <template>
   <div class="dynamic-field__reference">
-    <el-input :model-value="referenceDisplayText" placeholder="请选择关联记录" readonly>
+    <el-input
+      :model-value="referenceDisplayText"
+      :placeholder="t('component.selectReferencePlaceholder')"
+      readonly
+    >
       <template #append>
         <el-button :disabled="readonly || !targetFormId" @click="referenceSelectorVisible = true">
-          选择
+          {{ t('common.select') }}
         </el-button>
       </template>
     </el-input>

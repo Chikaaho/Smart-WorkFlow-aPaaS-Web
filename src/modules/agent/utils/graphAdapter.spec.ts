@@ -8,11 +8,12 @@ import {
   NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE,
   NODE_TYPE_FORK,
   NODE_TYPE_JOIN,
-  NODE_TYPE_LABELS,
+  NODE_TYPE_LABEL_KEYS,
   NODE_TYPE_LOOP,
   elementsToFlowGraphData,
   flowGraphDataToElements,
   edgeKeyword,
+  nodeTypeLabel,
 } from './graphAdapter'
 import type { GraphElement } from '@/contracts/agent'
 
@@ -136,9 +137,10 @@ describe('graphAdapter 双向转换', () => {
     expect(NODE_TYPE_FORK).toBe('FORK')
     expect(NODE_TYPE_JOIN).toBe('JOIN')
     expect(NODE_CONFIG_KEY_MAX_ITERATIONS).toBe('maxIterations')
-    expect(NODE_TYPE_LABELS[NODE_TYPE_LOOP]).toBe('循环')
-    expect(NODE_TYPE_LABELS[NODE_TYPE_FORK]).toBe('并行分支')
-    expect(NODE_TYPE_LABELS[NODE_TYPE_JOIN]).toBe('汇合')
+    expect(nodeTypeLabel(NODE_TYPE_LOOP)).toBe('循环')
+    expect(nodeTypeLabel(NODE_TYPE_FORK)).toBe('并行分支')
+    expect(nodeTypeLabel(NODE_TYPE_JOIN)).toBe('汇合')
+    expect(NODE_TYPE_LABEL_KEYS[NODE_TYPE_LOOP]).toBe('agent.nodeLoop')
   })
 
   it('LOOP/FORK/JOIN 节点（带/不带 config）elements → data → elements 往返透传不崩溃', () => {

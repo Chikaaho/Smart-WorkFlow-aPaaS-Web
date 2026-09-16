@@ -1,0 +1,10 @@
+{
+  "_comment": "P61 R1/R2a 补回：重建目录时丢失、且源码仍在引用的键。这些键的中文只存在于旧 locale 文件里、源码中没有对应字面量，字典捕获不到；缺席会让页面渲染出键名。值与来源见 product/.../evidence 的旧目录对账记录。",
+  "开始": { "key": "agent.nodeStart", "en": "Start" },
+  "结束": { "key": "agent.nodeEnd", "en": "End" },
+  "条件": { "key": "common.condition", "en": "Condition" },
+  "抄送": { "key": "workflow.cc", "en": "CC" },
+  "校验": { "key": "iot.validate", "en": "Validate" },
+  "新建规则": { "key": "common.newRule", "en": "New rule" },
+  "新增规则": { "key": "common.newRule", "en": "New rule", "alias": true }
+}

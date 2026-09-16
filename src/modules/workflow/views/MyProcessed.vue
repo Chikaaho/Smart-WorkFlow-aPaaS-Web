@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * MyProcessed — 我的已办列表页（新契约，页型 B）。
  *
@@ -25,18 +28,48 @@ const filter = reactive<{ source: string }>({ source: '' })
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
 
 const ACTION_TAG: Record<string, { label: string; type: 'success' | 'danger' | 'warning' }> = {
-  APPROVE: { label: '通过', type: 'success' },
-  REJECT: { label: '驳回', type: 'danger' },
-  RETURN: { label: '退回', type: 'warning' },
+  APPROVE: {
+    get label() {
+      return t('common.approve')
+    },
+    type: 'success',
+  },
+  REJECT: {
+    get label() {
+      return t('common.reject')
+    },
+    type: 'danger',
+  },
+  RETURN: {
+    get label() {
+      return t('common.returnBack')
+    },
+    type: 'warning',
+  },
 }
 
 const INSTANCE_STATUS_TAG: Record<
   string,
   { label: string; type: 'warning' | 'success' | 'danger' }
 > = {
-  RUNNING: { label: '进行中', type: 'warning' },
-  APPROVED: { label: '已通过', type: 'success' },
-  REJECTED: { label: '已驳回', type: 'danger' },
+  RUNNING: {
+    get label() {
+      return t('common.statusInProgress')
+    },
+    type: 'warning',
+  },
+  APPROVED: {
+    get label() {
+      return t('common.statusApproved')
+    },
+    type: 'success',
+  },
+  REJECTED: {
+    get label() {
+      return t('common.statusRejected')
+    },
+    type: 'danger',
+  },
 }
 
 async function loadList() {
@@ -53,7 +86,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载我的已办失败'
+      errorMsg.value = t('workflow.processedLoadFailed')
     }
   } finally {
     loading.value = false
@@ -87,7 +120,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="我的已办"
+    :title="t('workflow.myProcessed')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -99,18 +132,18 @@ onMounted(loadList)
     <template #filter>
       <el-select
         v-model="filter.source"
-        placeholder="来源"
+        :placeholder="t('common.source')"
         clearable
         style="width: 180px"
         @change="handleSearch"
       >
-        <el-option label="动作通道" value="ACTION" />
-        <el-option label="历史兼容" value="HISTORY_COMPAT" />
+        <el-option :label="t('workflow.sourceAction')" value="ACTION" />
+        <el-option :label="t('workflow.sourceHistoryCompat')" value="HISTORY_COMPAT" />
       </el-select>
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleSearch">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleSearch">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <!-- 空态 -->
@@ -130,15 +163,15 @@ onMounted(loadList)
 
     <!-- 表格 -->
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
-      <el-table-column prop="taskName" label="任务名称" min-width="130" />
-      <el-table-column label="流程名称" min-width="140">
+      <el-table-column prop="taskName" :label="t('common.taskName')" min-width="130" />
+      <el-table-column :label="t('common.processName')" min-width="140">
         <template #default="{ row }">
           {{ row.processName ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="formKey" label="表单标识" min-width="130" />
-      <el-table-column prop="businessKey" label="业务单号" min-width="120" />
-      <el-table-column label="动作" width="90">
+      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="130" />
+      <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="120" />
+      <el-table-column :label="t('common.action')" width="90">
         <template #default="{ row }">
           <el-tag v-if="row.action" :type="ACTION_TAG[row.action]?.type ?? 'info'" size="small">
             {{ ACTION_TAG[row.action]?.label ?? row.action }}
@@ -146,12 +179,12 @@ onMounted(loadList)
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column label="办理时间" min-width="170">
+      <el-table-column :label="t('workflow.handledAt')" min-width="170">
         <template #default="{ row }">
           {{ row.handleTime ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="实例状态" width="100">
+      <el-table-column :label="t('workflow.instanceStatus')" width="100">
         <template #default="{ row }">
           <el-tag
             v-if="row.instanceStatus"
@@ -163,10 +196,14 @@ onMounted(loadList)
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column label="来源" width="100">
+      <el-table-column :label="t('common.source')" width="100">
         <template #default="{ row }">
           <el-tag :type="row.source === 'ACTION' ? 'success' : 'info'" size="small" effect="plain">
-            {{ row.source === 'ACTION' ? '动作通道' : '历史兼容' }}
+            {{
+              row.source === 'ACTION'
+                ? t('workflow.sourceAction')
+                : t('workflow.sourceHistoryCompat')
+            }}
           </el-tag>
         </template>
       </el-table-column>

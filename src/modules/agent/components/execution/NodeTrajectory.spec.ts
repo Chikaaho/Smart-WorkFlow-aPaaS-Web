@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import NodeTrajectory from './NodeTrajectory.vue'
+import { enumLabel } from '@/foundation/i18n/enum-label'
 import type { AgentGraphExecutionNode } from '@/contracts/agent'
 
 // ──────────────────────────────────────────────────────────────
@@ -266,9 +267,10 @@ describe('NodeTrajectory.vue — FORK/JOIN/LOOP/失败节点专项测试', () =>
     // fork(0), join(0) 同属根分支; LLM-A(0-0) / LLM-B(0-1) 是并行子分支
     // branchId 完全来自后端数据，前端不做推断
     const allNodeTypes = itemsText(wrapper)
-    expect(allNodeTypes.some((t) => t.includes('FORK'))).toBe(true)
-    expect(allNodeTypes.some((t) => t.includes('JOIN'))).toBe(true)
-    expect(allNodeTypes.some((t) => t.includes('LLM'))).toBe(true)
+    // 节点类型经 enumLabel 走权威目录，断言目录文案而不是线值本身
+    expect(allNodeTypes.some((t) => t.includes(enumLabel('AGENT_NODE_TYPE', 'FORK')))).toBe(true)
+    expect(allNodeTypes.some((t) => t.includes(enumLabel('AGENT_NODE_TYPE', 'JOIN')))).toBe(true)
+    expect(allNodeTypes.some((t) => t.includes(enumLabel('AGENT_NODE_TYPE', 'LLM')))).toBe(true)
     wrapper.unmount()
   })
 

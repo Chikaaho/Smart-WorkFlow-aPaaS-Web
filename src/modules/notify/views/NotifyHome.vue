@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * NotifyHome — 通知消息列表页（页型 B）。
  *
@@ -48,8 +51,18 @@ const BIZ_TYPE_MAP: Record<
   string,
   { label: string; type: 'primary' | 'success' | 'warning' | 'info' | 'danger' }
 > = {
-  WF_TODO: { label: '流程待办', type: 'warning' },
-  WF_APPROVED: { label: '审批结果', type: 'success' },
+  WF_TODO: {
+    get label() {
+      return t('notify.bizTypeTodo')
+    },
+    type: 'warning',
+  },
+  WF_APPROVED: {
+    get label() {
+      return t('workflow.approvalResult')
+    },
+    type: 'success',
+  },
 }
 
 function getBizTypeTag(bizType: string): {
@@ -79,6 +92,8 @@ async function loadList() {
     try {
       unreadCount.value = await unreadNotifyCount()
     } catch {
+      ElMessage.error(t('common.loadFailed'))
+      // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
       unreadCount.value = 0
     }
   } catch (err) {
@@ -86,8 +101,8 @@ async function loadList() {
       errorMsg.value = err.msg
       ElMessage.error(err.msg)
     } else {
-      errorMsg.value = '加载通知列表失败'
-      ElMessage.error('加载通知列表失败')
+      errorMsg.value = t('notify.listLoadFailed')
+      ElMessage.error(t('notify.listLoadFailed'))
     }
   } finally {
     loading.value = false
@@ -108,11 +123,13 @@ function handlePageSizeChange(p: number) {
 async function handleReadAll() {
   try {
     const affected = await readAllNotify()
-    ElMessage.success(affected > 0 ? `已全部标记为已读（${affected} 条）` : '没有未读通知')
+    ElMessage.success(
+      affected > 0 ? t('notify.allMarkedRead', { affected }) : t('notify.noUnreadNotifications'),
+    )
     await loadList()
   } catch (err) {
     if (err instanceof ApiError) ElMessage.error(err.msg)
-    else ElMessage.error('全部已读失败')
+    else ElMessage.error(t('notify.markAllReadFailed'))
   }
 }
 
@@ -141,7 +158,7 @@ async function handleMarkRead(row: NotifyMessage) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('操作失败')
+      ElMessage.error(t('common.operationFailed'))
     }
   } finally {
     readingId.value = null
@@ -156,9 +173,13 @@ async function handleDelete(row: NotifyMessage) {
   if (deletingId.value !== null) return // 防重复点击
 
   try {
-    await ElMessageBox.confirm('确定要删除该通知吗？删除后不可恢复。', '删除确认', {
-      confirmButtonText: '确定删除',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('notify.deleteConfirmMessage'), t('common.deleteConfirmTitle'), {
+      get confirmButtonText() {
+        return t('common.confirmDelete')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
       type: 'warning',
     })
   } catch {
@@ -170,12 +191,12 @@ async function handleDelete(row: NotifyMessage) {
     await deleteMessage(row.id)
     list.value = list.value.filter((item) => item.id !== row.id)
     total.value = list.value.length
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('common.deleteFailed'))
     }
   } finally {
     deletingId.value = null
@@ -190,11 +211,11 @@ async function openLink(row: NotifyMessage) {
     if (target.linkType === 'WF_TASK' || target.linkType === 'WF_PROCESS') {
       void pcRouter.push({ path: '/workflow/instances', query: { focus: target.linkId } })
     } else {
-      ElMessage.info('该通知暂无页面跳转')
+      ElMessage.info(t('notify.noLinkAvailable'))
     }
   } catch (err) {
     if (err instanceof ApiError) ElMessage.error(err.msg)
-    else ElMessage.error('无权访问该业务对象')
+    else ElMessage.error(t('common.noAccessToObject'))
   }
 }
 
@@ -203,7 +224,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="通知消息"
+    :title="t('notify.messagesTitle')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -230,18 +251,18 @@ onMounted(loadList)
     <div class="filter-bar">
       <el-select
         v-model="filterRead"
-        placeholder="已读状态"
+        :placeholder="t('notify.readStatus')"
         clearable
         style="width: 140px"
         @change="handleFilterChange"
       >
-        <el-option label="全部" value="" />
-        <el-option label="未读" :value="false" />
-        <el-option label="已读" :value="true" />
+        <el-option :label="t('common.all')" value="" />
+        <el-option :label="t('notify.unread')" :value="false" />
+        <el-option :label="t('notify.read')" :value="true" />
       </el-select>
       <el-input
         v-model="filterKeyword"
-        placeholder="搜索标题或内容"
+        :placeholder="t('notify.searchPlaceholder')"
         clearable
         style="width: 220px; margin-left: 12px"
         @keyup.enter="handleKeywordSearch"
@@ -258,7 +279,7 @@ onMounted(loadList)
       </el-table-column>
       <el-table-column prop="title" min-width="200">
         <template #header>
-          <span>标题（未读 {{ unreadCount }}）</span>
+          <span>{{ t('notify.titleWithUnread', { unreadCount }) }}</span>
           <el-button
             size="small"
             text
@@ -266,24 +287,24 @@ onMounted(loadList)
             style="margin-left: 8px"
             @click="handleReadAll"
           >
-            全部已读
+            {{ t('notify.markAllRead') }}
           </el-button>
         </template>
       </el-table-column>
-      <el-table-column label="内容预览" min-width="300">
+      <el-table-column :label="t('notify.contentPreview')" min-width="300">
         <template #default="{ row }">
           <span class="content-preview">{{ row.content }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="类型" width="120">
+      <el-table-column :label="t('common.type')" width="120">
         <template #default="{ row }">
           <el-tag :type="getBizTypeTag(row.bizType).type" size="small" disable-transitions>
             {{ getBizTypeTag(row.bizType).label }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" label="时间" width="180" />
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column prop="createTime" :label="t('common.time')" width="180" />
+      <el-table-column :label="t('common.actions')" width="160" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="!row.read"
@@ -294,11 +315,11 @@ onMounted(loadList)
             :disabled="readingId !== null || deletingId !== null"
             @click="markRow(row)"
           >
-            标记已读
+            {{ t('notify.markRead') }}
           </el-button>
-          <span v-else class="read-label">已读</span>
+          <span v-else class="read-label">{{ t('notify.read') }}</span>
           <el-button size="small" text type="primary" @click="openLink(row as NotifyMessage)">
-            跳转
+            {{ t('notify.jump') }}
           </el-button>
           <el-button
             size="small"
@@ -307,9 +328,8 @@ onMounted(loadList)
             :loading="deletingId === row.id"
             :disabled="readingId !== null || deletingId !== null"
             @click="deleteRow(row)"
+            >{{ t('common.delete') }}</el-button
           >
-            删除
-          </el-button>
         </template>
       </el-table-column>
     </el-table>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * PreviewModal — 全屏预览（填写态真表单）。
  *
@@ -28,7 +31,7 @@ function schemaForField(field: FormSchemaField): FormSchema {
   <el-dialog
     v-model="visible"
     fullscreen
-    :title="schema.title || '表单预览'"
+    :title="schema.title || t('form.preview')"
     class="preview-modal"
     append-to-body
   >
@@ -38,7 +41,10 @@ function schemaForField(field: FormSchemaField): FormSchema {
     </div>
     <div class="preview-modal__stage">
       <div v-if="hasFields" class="preview-modal__form">
-        <p class="preview-modal__hint">带 <span class="preview-modal__star">*</span> 为必填项</p>
+        <p class="preview-modal__hint">
+          {{ t('form.requiredHintPrefix') }} <span class="preview-modal__star">*</span>
+          {{ t('form.requiredHintSuffix') }}
+        </p>
         <!-- 每个字段独立进入防腐层，外层网格统一解释 colSpan；字段顺序仍来自同一 schema。 -->
         <div class="preview-modal__grid">
           <div
@@ -52,7 +58,7 @@ function schemaForField(field: FormSchemaField): FormSchema {
           </div>
         </div>
       </div>
-      <p v-else class="preview-modal__empty">尚无字段，先在设计器拖入字段再预览</p>
+      <p v-else class="preview-modal__empty">{{ t('form.previewEmptyHint') }}</p>
     </div>
   </el-dialog>
 </template>

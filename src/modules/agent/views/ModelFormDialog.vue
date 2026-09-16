@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /* global URL */
 /**
  * ModelFormDialog — 大模型配置新增/编辑弹窗（独立组件，仅被 ModelList 引用）。
@@ -42,15 +45,36 @@ const emit = defineEmits<{
 // ─── 协议差异提示（三值契约，切换时给用户可理解的差异说明） ───
 
 const PROTOCOL_OPTIONS = [
-  { label: 'OpenAI（兼容协议）', value: 'openai' },
-  { label: 'Ollama（本地）', value: 'ollama' },
-  { label: '其他', value: 'other' },
+  {
+    get label() {
+      return t('agent.protocolOpenAi')
+    },
+    value: 'openai',
+  },
+  {
+    get label() {
+      return t('agent.protocolOllama')
+    },
+    value: 'ollama',
+  },
+  {
+    get label() {
+      return t('common.other')
+    },
+    value: 'other',
+  },
 ] as const
 
 const PROTOCOL_HINTS: Record<string, string> = {
-  openai: 'OpenAI 兼容协议：需配置 API Key，请求头自动附加 Bearer 鉴权',
-  ollama: 'Ollama 本地协议：本地服务无需 API Key，密钥可留空',
-  other: '其他协议：仅做可达性探测，不附加鉴权头',
+  get openai() {
+    return t('agent.protocolHintOpenAi')
+  },
+  get ollama() {
+    return t('agent.protocolHintOllama')
+  },
+  get other() {
+    return t('agent.protocolHintOther')
+  },
 }
 
 const protocolHint = computed(() => PROTOCOL_HINTS[form.protocolType] ?? '')
@@ -88,8 +112,8 @@ const formError = ref('')
 /** 限流冷却展示（运行态只读）：非空且未过期才提示。 */
 const lockedActive = computed(() => {
   if (!lockedUntil.value) return false
-  const t = new Date(lockedUntil.value).getTime()
-  return Number.isFinite(t) && t > Date.now()
+  const lockedMs = new Date(lockedUntil.value).getTime()
+  return Number.isFinite(lockedMs) && lockedMs > Date.now()
 })
 
 // ─── 弹窗显隐桥接（props.visible ↔ update:visible） ───
@@ -150,7 +174,7 @@ async function initForm() {
     const detail = await getModel(props.modelId)
     fillForm(detail)
   } catch (err) {
-    formError.value = err instanceof ApiError ? err.msg : '加载模型详情失败'
+    formError.value = err instanceof ApiError ? err.msg : t('agent.modelDetailLoadFailed')
   } finally {
     loadingDetail.value = false
   }
@@ -167,35 +191,35 @@ watch(
 // ─── 校验（必填/数值范围/URL；校验失败不提交） ───
 
 function validate(): string | null {
-  if (!form.name.trim()) return '名称不能为空'
-  if (!form.protocolType) return '请选择协议类型'
-  if (!form.baseUrl.trim()) return 'API 地址不能为空'
+  if (!form.name.trim()) return t('agent.configNameRequired')
+  if (!form.protocolType) return t('agent.selectProtocol')
+  if (!form.baseUrl.trim()) return t('agent.apiUrlRequired')
   try {
     new URL(form.baseUrl.trim())
   } catch {
-    return 'API 地址格式不正确（需为 http(s):// 开头的完整地址）'
+    return t('agent.apiUrlInvalid')
   }
-  if (!form.modelName.trim()) return '模型名称不能为空'
+  if (!form.modelName.trim()) return t('agent.modelNameRequired')
   if (form.temperature !== null && (form.temperature < 0 || form.temperature > 2)) {
-    return 'temperature 取值范围为 0 ~ 2'
+    return t('agent.temperatureRange')
   }
   if (form.maxTokens !== null && form.maxTokens < 1) {
-    return 'maxTokens 需为正整数'
+    return t('agent.maxTokensPositiveInteger')
   }
   if (form.topP !== null && (form.topP < 0 || form.topP > 1)) {
-    return 'topP 取值范围为 0 ~ 1'
+    return t('agent.topPRange')
   }
   if (form.timeoutSeconds == null || form.timeoutSeconds < 1) {
-    return '超时时间需为正整数（秒）'
+    return t('agent.timeoutPositiveInteger')
   }
   if (form.retryCount == null || form.retryCount < 0) {
-    return '重试次数需为非负整数'
+    return t('agent.retriesNonNegativeInteger')
   }
   if (form.sort == null || form.sort < 0) {
-    return '组内优先级需为非负整数'
+    return t('agent.groupPriorityNonNegativeInteger')
   }
   if (form.quotaCooldownSeconds == null || form.quotaCooldownSeconds < 0) {
-    return '限流冷却秒数需为非负整数'
+    return t('agent.rateLimitCooldownNonNegativeInteger')
   }
   return null
 }
@@ -239,15 +263,15 @@ async function handleSubmit() {
     const req = buildSaveReq()
     if (props.modelId !== null) {
       await updateModel(props.modelId, req)
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.updateSuccess'))
     } else {
       await createModel(req)
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.createSuccess'))
     }
     emit('saved')
     emit('update:visible', false)
   } catch (err) {
-    formError.value = err instanceof ApiError ? err.msg : '保存失败'
+    formError.value = err instanceof ApiError ? err.msg : t('common.saveFailed')
   } finally {
     // 明文 Key 已随 req 离手，立即清除输入框状态，组件内不做任何保留
     form.apiKey = ''
@@ -259,7 +283,7 @@ async function handleSubmit() {
 <template>
   <el-dialog
     v-model="dialogModel"
-    :title="modelId !== null ? '编辑大模型配置' : '新增大模型配置'"
+    :title="modelId !== null ? t('agent.editModelConfig') : t('agent.newModelConfig')"
     :close-on-click-modal="false"
     destroy-on-close
     width="720px"
@@ -270,25 +294,25 @@ async function handleSubmit() {
         <el-alert v-if="formError" :title="formError" type="error" :closable="false" show-icon />
         <el-alert
           v-if="lockedActive"
-          :title="`该配置处于限流冷却中，冷却至 ${lockedUntil}`"
+          :title="t('agent.modelCoolingDown', { lockedUntil })"
           type="warning"
           :closable="false"
           show-icon
         />
       </template>
 
-      <FormSection title="基本信息">
+      <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
           <div class="form-field form-field--required">
-            <label class="form-field__label">名称</label>
+            <label class="form-field__label">{{ t('common.name') }}</label>
             <el-input
               v-model="form.name"
-              placeholder="请输入模型配置名称（如：GPT-4o 主模型）"
+              :placeholder="t('agent.modelConfigNamePlaceholder')"
               maxlength="128"
             />
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">协议类型</label>
+            <label class="form-field__label">{{ t('agent.protocolType') }}</label>
             <el-select v-model="form.protocolType" style="width: 100%">
               <el-option
                 v-for="opt in PROTOCOL_OPTIONS"
@@ -307,7 +331,7 @@ async function handleSubmit() {
             />
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">API 地址</label>
+            <label class="form-field__label">{{ t('agent.apiUrl') }}</label>
             <el-input
               v-model="form.baseUrl"
               placeholder="https://api.openai.com/v1"
@@ -315,8 +339,12 @@ async function handleSubmit() {
             />
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">模型名称</label>
-            <el-input v-model="form.modelName" placeholder="如：gpt-4o / llama3" maxlength="128" />
+            <label class="form-field__label">{{ t('agent.modelName') }}</label>
+            <el-input
+              v-model="form.modelName"
+              :placeholder="t('agent.modelNamePlaceholder')"
+              maxlength="128"
+            />
           </div>
           <div class="form-field">
             <label class="form-field__label">API Key</label>
@@ -324,24 +352,28 @@ async function handleSubmit() {
               v-model="form.apiKey"
               type="password"
               show-password
-              placeholder="留空=不修改（编辑时保持旧密钥 / 新增时不配置）"
+              :placeholder="t('agent.apiKeyKeepHint')"
               maxlength="512"
             />
             <div class="form-field__hint">
-              <template v-if="maskedApiKey"
-                >已配置：{{ maskedApiKey }}（留空提交将保持现有密钥）</template
-              >
-              <template v-else>未配置密钥（本地协议可留空）</template>
+              <template v-if="maskedApiKey">{{
+                t('agent.maskedApiKeyLabel', { maskedApiKey })
+              }}</template>
+              <template v-else>{{ t('agent.apiKeyUnset') }}</template>
             </div>
           </div>
           <div class="form-field">
-            <label class="form-field__label">启停</label>
-            <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
+            <label class="form-field__label">{{ t('common.toggle') }}</label>
+            <el-switch
+              v-model="form.enabled"
+              :active-text="t('common.enable')"
+              :inactive-text="t('common.disable')"
+            />
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="调用参数">
+      <FormSection :title="t('agent.callParameters')">
         <FormGrid :columns="2">
           <div class="form-field">
             <label class="form-field__label">Temperature</label>
@@ -360,7 +392,7 @@ async function handleSubmit() {
               v-model="form.maxTokens"
               :min="1"
               :step="1"
-              placeholder="最大输出 Token 数"
+              :placeholder="t('agent.maxOutputTokens')"
               style="width: 100%"
             />
           </div>
@@ -376,69 +408,69 @@ async function handleSubmit() {
             />
           </div>
           <div class="form-field">
-            <label class="form-field__label">超时时间（秒）</label>
+            <label class="form-field__label">{{ t('agent.timeoutSeconds') }}</label>
             <el-input-number
               v-model="form.timeoutSeconds"
               :min="1"
               :step="1"
-              placeholder="默认 30"
+              :placeholder="t('agent.defaultThirty')"
               style="width: 100%"
             />
           </div>
           <div class="form-field">
-            <label class="form-field__label">重试次数</label>
+            <label class="form-field__label">{{ t('agent.retries') }}</label>
             <el-input-number
               v-model="form.retryCount"
               :min="0"
               :step="1"
-              placeholder="默认 0"
+              :placeholder="t('agent.defaultZero')"
               style="width: 100%"
             />
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="多 Key 配置">
+      <FormSection :title="t('agent.multiKeyConfig')">
         <FormGrid :columns="2">
           <div class="form-field">
-            <label class="form-field__label">多 Key 分组</label>
+            <label class="form-field__label">{{ t('agent.multiKeyGroup') }}</label>
             <el-input
               v-model="form.groupKey"
-              placeholder="同分组多 Key 轮询，留空=独立配置"
+              :placeholder="t('agent.multiKeyGroupHint')"
               maxlength="64"
             />
           </div>
           <div class="form-field">
-            <label class="form-field__label">组内优先级</label>
+            <label class="form-field__label">{{ t('agent.groupPriority') }}</label>
             <el-input-number
               v-model="form.sort"
               :min="0"
               :step="1"
-              placeholder="组内优先级，越小越优先"
+              :placeholder="t('agent.groupPriorityHint')"
               style="width: 100%"
             />
           </div>
           <div class="form-field">
-            <label class="form-field__label">额度冷却（秒）</label>
+            <label class="form-field__label">{{ t('agent.quotaCooldownSeconds') }}</label>
             <el-input-number
               v-model="form.quotaCooldownSeconds"
               :min="0"
               :step="1"
-              placeholder="限流锁定冷却秒数，默认 60"
+              :placeholder="t('agent.rateLimitCooldownHint')"
               style="width: 100%"
             />
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="备注">
+      <FormSection :title="t('common.remark')">
         <FormGrid :columns="1">
           <div class="form-field">
             <el-input
               v-model="form.remark"
               type="textarea"
               :rows="3"
-              placeholder="请输入备注"
+              :placeholder="t('common.remarkPlaceholder')"
               maxlength="256"
               show-word-limit
             />
@@ -447,15 +479,15 @@ async function handleSubmit() {
       </FormSection>
 
       <template #actions>
-        <el-button :disabled="submitting || loadingDetail" @click="emit('update:visible', false)"
-          >取消</el-button
-        >
+        <el-button :disabled="submitting || loadingDetail" @click="emit('update:visible', false)">{{
+          t('common.cancel')
+        }}</el-button>
         <el-button
           type="primary"
           :loading="submitting"
           :disabled="loadingDetail"
           @click="handleSubmit"
-          >保存</el-button
+          >{{ t('common.save') }}</el-button
         >
       </template>
     </StandardFormTemplate>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * WorkspaceHome — 工作台（v0.0.2 P54，三类身份默认首页）。
  *
@@ -41,14 +44,24 @@ const ccList = ref<Array<Record<string, unknown>>>([])
 const draftsList = ref<Array<Record<string, unknown>>>([])
 const favoriteItems = ref<CatalogItem[]>([])
 
-const COMPONENT_TITLES: Record<WorkspaceComponentKey, string> = {
-  todo: '我的待办',
-  myProcessed: '我的已办',
-  myInitiated: '我发起的',
-  cc: '抄送',
-  favoriteItems: '常用事项',
-  drafts: '草稿',
-  messages: '消息',
+/**
+ * 工作台卡片标题的**文案键**（不是求值结果）。
+ * 模块加载期调用 t() 会把语言固化，切换语言后卡片标题不跟着变——真实浏览器已抓到该现象。
+ * 取值一律经 componentTitle()，在渲染期解析。
+ */
+const COMPONENT_TITLE_KEYS: Record<WorkspaceComponentKey, string> = {
+  todo: 'workflow.myTodoTitle',
+  myProcessed: 'workflow.myProcessed',
+  myInitiated: 'common.startedByMe',
+  cc: 'workflow.cc',
+  favoriteItems: 'workflow.favoriteItems',
+  drafts: 'common.statusDraft',
+  messages: 'common.message',
+}
+
+/** 卡片标题显示名：渲染期按当前语言解析。 */
+function componentTitle(key: WorkspaceComponentKey): string {
+  return t(COMPONENT_TITLE_KEYS[key])
 }
 
 const orderedVisible = computed(() =>
@@ -67,7 +80,7 @@ async function loadLayout() {
     favoriteKeys.value = resp.layout.favoriteItemKeys
     await Promise.all([loadComponentData(), loadFavorites()])
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '加载工作台失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.workspaceLoadFailed'))
   } finally {
     loading.value = false
   }
@@ -167,6 +180,8 @@ async function loadFavorites() {
     const keys = new Set(favoriteKeys.value)
     favoriteItems.value = page.list.filter((item) => keys.has(item.itemKey))
   } catch {
+    ElMessage.error(t('common.loadFailed'))
+    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     favoriteItems.value = []
   }
 }
@@ -184,6 +199,8 @@ async function openConfig() {
     const page = await queryCatalogItems({ pageNum: 1, pageSize: 100 })
     catalogChoices.value = page.list
   } catch {
+    ElMessage.error(t('common.loadFailed'))
+    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     catalogChoices.value = []
   }
 }
@@ -217,7 +234,7 @@ function toggleFavorite(key: string) {
   } else if (favoriteKeys.value.length < 20) {
     favoriteKeys.value.push(key)
   } else {
-    ElMessage.warning('常用事项不能超过 20 个')
+    ElMessage.warning(t('workflow.favoritesLimit'))
     return
   }
   dirty.value = true
@@ -232,22 +249,22 @@ async function saveConfig() {
     custom.value = true
     dirty.value = false
     configVisible.value = false
-    ElMessage.success('工作台配置已保存')
+    ElMessage.success(t('workflow.workspaceSaved'))
     await loadLayout()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '保存配置失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.workspaceSaveFailed'))
   }
 }
 
 async function resetConfig() {
   try {
     await resetWorkspaceLayout()
-    ElMessage.success('已恢复默认布局')
+    ElMessage.success(t('workflow.layoutRestored'))
     dirty.value = false
     configVisible.value = false
     await loadLayout()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '恢复默认失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.layoutRestoreFailed'))
   }
 }
 
@@ -257,8 +274,8 @@ onMounted(loadLayout)
 <template>
   <div v-loading="loading" class="workspace">
     <header class="workspace__header">
-      <h2 class="workspace__title">工作台</h2>
-      <el-button :icon="Setting" text @click="openConfig">配置</el-button>
+      <h2 class="workspace__title">{{ t('common.workspace') }}</h2>
+      <el-button :icon="Setting" text @click="openConfig">{{ t('common.configure') }}</el-button>
     </header>
 
     <div class="workspace__grid">
@@ -268,10 +285,12 @@ onMounted(loadLayout)
         class="workspace-card"
         :class="{ 'workspace-card--wide': component.span === 2 }"
       >
-        <h3 class="workspace-card__title">{{ COMPONENT_TITLES[component.key] }}</h3>
+        <h3 class="workspace-card__title">{{ componentTitle(component.key) }}</h3>
 
         <template v-if="component.key === 'todo'">
-          <p v-if="todoList.length === 0" class="workspace-card__empty">暂无待办任务</p>
+          <p v-if="todoList.length === 0" class="workspace-card__empty">
+            {{ t('workflow.noTodoTasks') }}
+          </p>
           <ul v-else class="workspace-card__list">
             <li v-for="(item, index) in todoList" :key="index" class="workspace-card__row">
               <span>{{ (item.name as string) ?? (item.taskId as string) ?? '-' }}</span>
@@ -281,27 +300,31 @@ onMounted(loadLayout)
                 type="primary"
                 @click="router.push(`/workflow/task/${item.taskId as string}`)"
               >
-                办理
+                {{ t('workflow.handle') }}
               </el-button>
             </li>
           </ul>
         </template>
 
         <template v-else-if="component.key === 'myProcessed'">
-          <p v-if="processedList.length === 0" class="workspace-card__empty">暂无已办任务</p>
+          <p v-if="processedList.length === 0" class="workspace-card__empty">
+            {{ t('workflow.noProcessedTasks') }}
+          </p>
           <ul v-else class="workspace-card__list">
             <li v-for="(item, index) in processedList" :key="index" class="workspace-card__row">
               <span>{{ (item.taskName as string) ?? '-' }}</span>
               <el-tag v-if="item.action" size="small" type="info">{{ item.action }}</el-tag>
             </li>
           </ul>
-          <el-button size="small" link type="primary" @click="router.push('/workflow/processed')"
-            >查看全部</el-button
-          >
+          <el-button size="small" link type="primary" @click="router.push('/workflow/processed')">{{
+            t('common.viewAll')
+          }}</el-button>
         </template>
 
         <template v-else-if="component.key === 'myInitiated'">
-          <p v-if="initiatedList.length === 0" class="workspace-card__empty">暂无发起的流程</p>
+          <p v-if="initiatedList.length === 0" class="workspace-card__empty">
+            {{ t('workflow.noStartedProcesses') }}
+          </p>
           <ul v-else class="workspace-card__list">
             <li v-for="(item, index) in initiatedList" :key="index" class="workspace-card__row">
               <span>{{ (item.processDefKey as string) ?? '-' }}</span>
@@ -311,7 +334,9 @@ onMounted(loadLayout)
         </template>
 
         <template v-else-if="component.key === 'cc'">
-          <p v-if="ccList.length === 0" class="workspace-card__empty">暂无抄送</p>
+          <p v-if="ccList.length === 0" class="workspace-card__empty">
+            {{ t('workflow.noCcItems') }}
+          </p>
           <ul v-else class="workspace-card__list">
             <li v-for="(item, index) in ccList" :key="index" class="workspace-card__row">
               <span>{{ (item.formKey as string) ?? '-' }}</span>
@@ -321,26 +346,28 @@ onMounted(loadLayout)
         </template>
 
         <template v-else-if="component.key === 'drafts'">
-          <p v-if="draftsList.length === 0" class="workspace-card__empty">暂无草稿</p>
+          <p v-if="draftsList.length === 0" class="workspace-card__empty">
+            {{ t('workflow.noDrafts') }}
+          </p>
           <ul v-else class="workspace-card__list">
             <li v-for="(item, index) in draftsList" :key="index" class="workspace-card__row">
               <span>{{ (item.formKey as string) ?? '-' }}</span>
-              <el-button size="small" link type="primary" @click="openDraft(item)"
-                >继续编辑</el-button
-              >
+              <el-button size="small" link type="primary" @click="openDraft(item)">{{
+                t('workflow.continueEditing')
+              }}</el-button>
             </li>
           </ul>
         </template>
 
         <template v-else-if="component.key === 'messages'">
-          <p class="workspace-card__empty">站内信与流程消息入口</p>
-          <el-button size="small" type="primary" @click="router.push('/notify/record')"
-            >打开消息</el-button
-          >
+          <p class="workspace-card__empty">{{ t('workflow.messagesEntryHint') }}</p>
+          <el-button size="small" type="primary" @click="router.push('/notify/record')">{{
+            t('workflow.openMessages')
+          }}</el-button>
         </template>
         <template v-else>
           <p v-if="favoriteItems.length === 0" class="workspace-card__empty">
-            暂无常用事项，可在「配置」中从流程中心选择
+            {{ t('workspace.noFavorites') }}
           </p>
           <div v-else class="workspace-card__favorites">
             <button
@@ -359,8 +386,8 @@ onMounted(loadLayout)
     </div>
 
     <!-- 配置抽屉 -->
-    <el-drawer v-model="configVisible" title="工作台配置" size="420px">
-      <h4 class="config-section">组件显隐与顺序</h4>
+    <el-drawer v-model="configVisible" :title="t('workflow.workspaceConfig')" size="420px">
+      <h4 class="config-section">{{ t('workflow.widgetVisibilityOrder') }}</h4>
       <ul class="config-list">
         <li
           v-for="component in components.slice().sort((a, b) => a.order - b.order)"
@@ -368,23 +395,23 @@ onMounted(loadLayout)
           class="config-list__row"
         >
           <el-switch v-model="component.visible" @change="toggleVisible(component)" />
-          <span class="config-list__name">{{ COMPONENT_TITLES[component.key] }}</span>
+          <span class="config-list__name">{{ componentTitle(component.key) }}</span>
           <el-button size="small" @click="toggleSpan(component)">
-            {{ component.span === 2 ? '半宽' : '整行' }}
+            {{ component.span === 2 ? t('workflow.halfWidth') : t('workflow.fullWidth') }}
           </el-button>
-          <el-button size="small" :disabled="component.order <= 1" @click="move(component, -1)"
-            >上移</el-button
-          >
+          <el-button size="small" :disabled="component.order <= 1" @click="move(component, -1)">{{
+            t('common.moveUp')
+          }}</el-button>
           <el-button
             size="small"
             :disabled="component.order >= components.length"
             @click="move(component, 1)"
-            >下移</el-button
+            >{{ t('common.moveDown') }}</el-button
           >
         </li>
       </ul>
 
-      <h4 class="config-section">常用事项（从本人可发起事项中选择）</h4>
+      <h4 class="config-section">{{ t('workflow.favoritesPickerHint') }}</h4>
       <ul class="config-favorites">
         <li v-for="item in catalogChoices" :key="item.itemKey" class="config-list__row">
           <el-checkbox
@@ -397,8 +424,10 @@ onMounted(loadLayout)
       </ul>
 
       <template #footer>
-        <el-button @click="resetConfig">恢复默认</el-button>
-        <el-button type="primary" :disabled="!dirty" @click="saveConfig">保存配置</el-button>
+        <el-button @click="resetConfig">{{ t('common.restoreDefault') }}</el-button>
+        <el-button type="primary" :disabled="!dirty" @click="saveConfig">{{
+          t('workflow.saveWorkspaceConfig')
+        }}</el-button>
       </template>
     </el-drawer>
   </div>

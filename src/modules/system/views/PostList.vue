@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * PostList — 岗位管理列表页（页型B）。
  *
@@ -50,7 +53,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载岗位列表失败'
+      errorMsg.value = t('system.postListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -94,7 +97,7 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
 // ─── 弹窗状态 ───
 
 const dialogVisible = ref(false)
-const dialogTitle = computed(() => (editingId.value ? '编辑岗位' : '新建岗位'))
+const dialogTitle = computed(() => (editingId.value ? t('system.editPost') : t('system.newPost')))
 const editingId = ref<string | null>(null)
 const submitting = ref(false)
 const formError = ref('')
@@ -133,7 +136,7 @@ async function openEdit(row: SysPost) {
     form.status = detail.status
     form.description = detail.description ?? ''
   } catch {
-    formError.value = '加载岗位详情失败'
+    formError.value = t('system.postDetailLoadFailed')
     return
   }
   dialogVisible.value = true
@@ -145,11 +148,11 @@ function closeDialog() {
 
 async function handleSubmit() {
   if (!form.code.trim()) {
-    formError.value = '岗位编码不能为空'
+    formError.value = t('system.postCodeRequired')
     return
   }
   if (!form.name.trim()) {
-    formError.value = '岗位名称不能为空'
+    formError.value = t('system.postNameRequired')
     return
   }
 
@@ -158,10 +161,10 @@ async function handleSubmit() {
   try {
     if (editingId.value) {
       await updatePost({ ...form, id: editingId.value })
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.updateSuccess'))
     } else {
       await createPost({ ...form })
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.createSuccess'))
     }
     closeDialog()
     void loadList()
@@ -169,7 +172,7 @@ async function handleSubmit() {
     if (err instanceof ApiError) {
       formError.value = err.msg
     } else {
-      formError.value = '保存失败'
+      formError.value = t('common.saveFailed')
     }
   } finally {
     submitting.value = false
@@ -178,23 +181,31 @@ async function handleSubmit() {
 
 async function handleDelete(row: SysPost) {
   try {
-    await ElMessageBox.confirm(`确定要删除岗位"${row.name}"吗？删除后不可恢复。`, '删除确认', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      t('system.deletePostConfirm', { name: row.name }),
+      t('common.deleteConfirmTitle'),
+      {
+        get confirmButtonText() {
+          return t('common.confirm')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+      },
+    )
   } catch {
     return // 用户取消
   }
   try {
     await deletePost(row.id!)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     void loadList()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('common.deleteFailed'))
     }
   }
 }
@@ -212,7 +223,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="岗位管理"
+    :title="t('system.postManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -222,35 +233,40 @@ onMounted(loadList)
   >
     <!-- 工具栏：新建按钮 -->
     <template #toolbar-actions>
-      <el-button v-perm="'system:post:create'" type="primary" @click="openCreate"
-        >新建岗位</el-button
-      >
+      <el-button v-perm="'system:post:create'" type="primary" @click="openCreate">{{
+        t('system.newPost')
+      }}</el-button>
     </template>
 
     <!-- 筛选区 -->
     <template #filter>
       <el-input
         v-model="filter.code"
-        placeholder="岗位编码"
+        :placeholder="t('system.postCode')"
         clearable
         style="width: 180px"
         @keyup.enter="handleQuery"
       />
       <el-input
         v-model="filter.name"
-        placeholder="岗位名称"
+        :placeholder="t('system.postName')"
         clearable
         style="width: 180px"
         @keyup.enter="handleQuery"
       />
-      <el-select v-model="filter.status" placeholder="状态" clearable style="width: 120px">
-        <el-option label="正常" :value="1" />
-        <el-option label="停用" :value="0" />
+      <el-select
+        v-model="filter.status"
+        :placeholder="t('common.status')"
+        clearable
+        style="width: 120px"
+      >
+        <el-option :label="t('common.statusNormal')" :value="1" />
+        <el-option :label="t('common.disable')" :value="0" />
       </el-select>
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <!-- 表格区 -->
@@ -263,17 +279,17 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="code" label="岗位编码" min-width="120" />
-      <el-table-column prop="name" label="岗位名称" min-width="140" />
-      <el-table-column prop="sort" label="排序" width="70" />
-      <el-table-column prop="status" label="状态" width="80">
+      <el-table-column prop="code" :label="t('system.postCode')" min-width="120" />
+      <el-table-column prop="name" :label="t('system.postName')" min-width="140" />
+      <el-table-column prop="sort" :label="t('common.sort')" width="70" />
+      <el-table-column prop="status" :label="t('common.status')" width="80">
         <template #default="{ row }">
           <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
-            {{ row.status === 1 ? '正常' : '停用' }}
+            {{ row.status === 1 ? t('common.statusNormal') : t('common.disable') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column :label="t('common.actions')" width="180" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="hasPerm('system:post:update')"
@@ -281,7 +297,7 @@ onMounted(loadList)
             link
             type="primary"
             @click="editRow(row)"
-            >编辑</el-button
+            >{{ t('common.edit') }}</el-button
           >
           <el-button
             v-if="hasPerm('system:post:delete')"
@@ -289,7 +305,7 @@ onMounted(loadList)
             link
             type="danger"
             @click="deleteRow(row)"
-            >删除</el-button
+            >{{ t('common.delete') }}</el-button
           >
         </template>
       </el-table-column>
@@ -297,9 +313,9 @@ onMounted(loadList)
 
     <!-- 空态操作 -->
     <template #empty-action>
-      <el-button v-if="hasPerm('system:post:create')" type="primary" @click="openCreate"
-        >新建岗位</el-button
-      >
+      <el-button v-if="hasPerm('system:post:create')" type="primary" @click="openCreate">{{
+        t('system.newPost')
+      }}</el-button>
     </template>
   </StandardListTemplate>
 
@@ -317,46 +333,46 @@ onMounted(loadList)
         <el-alert :title="formError" type="error" :closable="false" show-icon />
       </template>
 
-      <FormSection title="基本信息">
+      <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
           <div class="form-field form-field--required">
-            <label class="form-field__label">岗位编码</label>
+            <label class="form-field__label">{{ t('system.postCode') }}</label>
             <el-input
               v-model="form.code"
-              placeholder="请输入岗位编码"
+              :placeholder="t('system.postCodePlaceholder')"
               maxlength="64"
               show-word-limit
             />
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">岗位名称</label>
+            <label class="form-field__label">{{ t('system.postName') }}</label>
             <el-input
               v-model="form.name"
-              placeholder="请输入岗位名称"
+              :placeholder="t('system.postNamePlaceholder')"
               maxlength="64"
               show-word-limit
             />
           </div>
           <div class="form-field">
-            <label class="form-field__label">排序</label>
+            <label class="form-field__label">{{ t('common.sort') }}</label>
             <el-input-number v-model="form.sort" :min="0" :max="9999" style="width: 100%" />
           </div>
           <div class="form-field">
-            <label class="form-field__label">状态</label>
+            <label class="form-field__label">{{ t('common.status') }}</label>
             <el-select v-model="form.status" style="width: 100%">
-              <el-option label="正常" :value="1" />
-              <el-option label="停用" :value="0" />
+              <el-option :label="t('common.statusNormal')" :value="1" />
+              <el-option :label="t('common.disable')" :value="0" />
             </el-select>
           </div>
         </FormGrid>
         <FormGrid :columns="1" style="margin-top: 0">
           <div class="form-field">
-            <label class="form-field__label">备注</label>
+            <label class="form-field__label">{{ t('common.remark') }}</label>
             <el-input
               v-model="form.description"
               type="textarea"
               :rows="3"
-              placeholder="请输入备注"
+              :placeholder="t('common.remarkPlaceholder')"
               maxlength="256"
               show-word-limit
             />
@@ -365,8 +381,10 @@ onMounted(loadList)
       </FormSection>
 
       <template #actions>
-        <el-button @click="closeDialog">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+          t('common.save')
+        }}</el-button>
       </template>
     </StandardFormTemplate>
   </el-dialog>

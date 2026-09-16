@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * FormRender — 低代码表单渲染页（页型 A）。
  *
@@ -27,7 +30,7 @@ import {
   updateFormData,
   normalizeSubmitData,
 } from '@/modules/form/api/form'
-import { ApiError } from '@/foundation/request'
+import { ApiError, getErrorMessage } from '@/foundation/request'
 import DynamicField from '@/components/DynamicField.vue'
 import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-display'
 import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
@@ -76,9 +79,13 @@ const draftRefreshVersion = ref(false) // 保存时是否重绑表单最新已�
 // 查看只读模式：有 recordId 且 mode=view；无 recordId 时永远是新建（可编辑）
 const isViewMode = computed(() => !!recordId && mode === 'view')
 const pageTitle = computed(() => {
-  if (!schema.value) return `表单 — ${formKey}`
-  if (isDraftMode.value) return `${schema.value.title}（草稿填报）`
-  const modeLabel = isViewMode.value ? '（查看）' : recordId ? '（编辑）' : ''
+  if (!schema.value) return t('form.titleWithKey', { formKey })
+  if (isDraftMode.value) return t('form.draftEntryTitle', { title: schema.value.title })
+  const modeLabel = isViewMode.value
+    ? t('form.titleSuffixView')
+    : recordId
+      ? t('form.titleSuffixEdit')
+      : ''
   return `${schema.value.title}${modeLabel}`
 })
 
@@ -150,7 +157,7 @@ async function loadSchema() {
       for (const field of schema.value.fields) initField(field)
     }
   } catch {
-    errorMsg.value = '表单定义加载失败，请检查 formKey 是否正确'
+    errorMsg.value = t('form.definitionLoadFailed')
   } finally {
     loading.value = false
   }
@@ -219,26 +226,22 @@ async function loadRecord(schema: FormSchema) {
   } catch (err) {
     if (err instanceof ApiError) {
       if (err.code === 1507) {
-        errorMsg.value = '记录已被删除'
+        errorMsg.value = t('form.recordDeleted')
         return
       }
-      errorMsg.value = `记录加载失败：${err.msg}`
+      errorMsg.value = t('form.recordLoadFailedDetail', { msg: err.msg })
     } else {
-      errorMsg.value = '记录加载失败'
+      errorMsg.value = t('form.recordLoadFailedTitle')
     }
   }
 }
 
-/* ── 业务错误码映射 ── */
-
+/* ── 业务错误码映射 ──
+ * P61 §3.4：同一业务码只允许一个文案权威。本页不再自建映射，
+ * 统一走 `foundation/request/error-code-map`（后端 msg 优先 → 中央兜底），
+ * 消除「同一码在 FormData 页与本页显示不同文案」的漂移。 */
 function businessError(code: number, fallback: string): string {
-  const MAP: Record<number, string> = {
-    1401: '必填字段缺失，请检查所有必填项',
-    1403: '字段值超出字典允许范围，请重新选择',
-    1507: '记录已被删除',
-    1508: '记录已被他人修改，请刷新后重试',
-  }
-  return MAP[code] ?? fallback
+  return getErrorMessage(code, fallback)
 }
 
 /**
@@ -311,7 +314,7 @@ function validateRequiredFields(): boolean {
   for (const field of schema.value.fields) {
     if (hiddenFields.value.has(field.name)) continue // 隐藏字段不参与本次必填校验
     if (field.required && isEmptyRequiredValue(formData[field.name])) {
-      validationErrors[field.name] = '此字段为必填项'
+      validationErrors[field.name] = t('form.fieldRequired')
     }
   }
 
@@ -326,7 +329,7 @@ async function handleSubmit() {
   successMsg.value = ''
 
   if (!validateRequiredFields()) {
-    errorMsg.value = '请完善必填项后再提交'
+    errorMsg.value = t('form.completeRequired')
     submitting.value = false
     return
   }
@@ -336,13 +339,13 @@ async function handleSubmit() {
     try {
       const payload = buildUpdatePayload()
       await updateFormData(formKey, recordId, payload)
-      successMsg.value = '保存成功'
+      successMsg.value = t('common.saveSuccess')
       // 保存成功后重新加载记录（版本号已变，拉取最新数据）
       if (schema.value) await loadRecord(schema.value)
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === 1507) {
-          errorMsg.value = '记录已被删除'
+          errorMsg.value = t('form.recordDeleted')
           // 回列表
           // eslint-disable-next-line no-undef
           window.setTimeout(() => {
@@ -352,7 +355,7 @@ async function handleSubmit() {
           return
         }
         if (err.code === 1508) {
-          errorMsg.value = '记录已被他人修改，请刷新后重试'
+          errorMsg.value = t('foundation.errRecordModified')
           // 刷新数据
           if (schema.value) await loadRecord(schema.value)
           submitting.value = false
@@ -360,7 +363,7 @@ async function handleSubmit() {
         }
         errorMsg.value = businessError(err.code, err.msg)
       } else {
-        errorMsg.value = '保存失败，请稍后重试'
+        errorMsg.value = t('form.saveFailed')
       }
     } finally {
       submitting.value = false
@@ -377,14 +380,16 @@ async function handleSubmit() {
       }
     }
     const id = await submitForm(formKey, submitData, schema.value?.fields)
-    successMsg.value = `提交成功，记录 ID：${id}`
+    successMsg.value = t('form.submitSuccessWithId', { id })
 
     // 按业务键（记录 ID）查询流程实例，只有实例真实创建才提示"流程已发起"。
     // 实例由表单提交事件在事务提交后异步创建，短暂轮询等待其可见（最多约 5s）。
     const started = await waitForInstanceByBusinessKey(id)
     if (started) {
       ElMessage.success({
-        message: '提交成功，流程已发起',
+        get message() {
+          return t('form.submittedProcessStarted')
+        },
         duration: 3000,
       })
       // 跳转到发起人可查看实例状态与流转记录的真实页面
@@ -395,7 +400,9 @@ async function handleSubmit() {
     } else {
       // 未绑定流程/发起失败：如实提示仅保存数据，不声称流程已发起
       ElMessage.info({
-        message: '提交成功（该表单未关联已发布流程，仅保存数据）',
+        get message() {
+          return t('form.submittedDataOnly')
+        },
         duration: 4000,
       })
     }
@@ -403,7 +410,7 @@ async function handleSubmit() {
     if (err instanceof ApiError) {
       errorMsg.value = businessError(err.code, err.msg)
     } else {
-      errorMsg.value = '提交失败：后端提交端点待上线'
+      errorMsg.value = t('form.submitEndpointUnavailable')
     }
   } finally {
     submitting.value = false
@@ -470,7 +477,10 @@ async function loadDraftPayload(schema: FormSchema) {
       }
     }
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? `草稿加载失败：${err.msg}` : '草稿加载失败'
+    errorMsg.value =
+      err instanceof ApiError
+        ? t('form.draftLoadFailedDetail', { msg: err.msg })
+        : t('form.draftLoadFailedTitle')
   }
 }
 
@@ -504,17 +514,17 @@ async function handleSaveDraft() {
         payload,
         refreshFormVersion: draftRefreshVersion.value || undefined,
       })
-      ElMessage.success('草稿已保存')
+      ElMessage.success(t('common.draftSaved'))
     } else {
       await createDraft({
         title: draftTitle.value.trim() || null,
         formKey,
         payload,
       })
-      ElMessage.success('草稿已创建')
+      ElMessage.success(t('form.draftCreated'))
     }
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '保存草稿失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('common.saveDraftFailed'))
   } finally {
     draftSaving.value = false
   }
@@ -524,7 +534,7 @@ async function handleSaveDraft() {
 async function handleSubmitDraft() {
   if (!schema.value) return
   if (!validateRequiredFields()) {
-    errorMsg.value = '请完善必填项后再提交'
+    errorMsg.value = t('form.completeRequired')
     return
   }
   draftSaving.value = true
@@ -539,19 +549,19 @@ async function handleSubmitDraft() {
     const accept = await submitDraft(draftId)
     const finalStatus = await pollCommandStatus(accept.commandId)
     if (finalStatus?.status === 'COMPLETED') {
-      ElMessage.success('提交成功')
+      ElMessage.success(t('common.submitSuccess'))
       // eslint-disable-next-line no-undef
       window.setTimeout(() => {
         void router.push('/workflow/my-drafts')
       }, 1200)
     } else if (finalStatus?.status === 'FAILED') {
-      errorMsg.value = finalStatus.failureReason ?? '提交失败'
+      errorMsg.value = finalStatus.failureReason ?? t('common.submitFailed')
     } else {
       // 超时未终态：如实提示，不伪装成功
-      ElMessage.warning('处理中，可稍后在结果中查看')
+      ElMessage.warning(t('common.processingCheckLater'))
     }
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '提交草稿失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('form.draftSubmitFailed'))
   } finally {
     draftSaving.value = false
   }
@@ -587,12 +597,12 @@ onMounted(loadSchema)
         class="form-render-page__alert"
       />
 
-      <el-empty v-if="!schema && !errorMsg" description="表单不存在或加载失败" />
+      <el-empty v-if="!schema && !errorMsg" :description="t('form.notFoundOrLoadFailed')" />
 
       <template v-else-if="schema">
         <!-- 页标题 -->
         <h1 class="form-render-page__title">{{ pageTitle }}</h1>
-        <p v-if="!isViewMode" class="form-render-page__hint">带 * 为必填项</p>
+        <p v-if="!isViewMode" class="form-render-page__hint">{{ t('form.requiredHint') }}</p>
 
         <!-- 字段渲染区 -->
         <div class="form-render-page__card">
@@ -630,30 +640,34 @@ onMounted(loadSchema)
           <div class="form-render-page__draft-bar">
             <el-input
               v-model="draftTitle"
-              placeholder="草稿标题（可选）"
+              :placeholder="t('form.draftTitleOptional')"
               maxlength="100"
               class="form-render-page__draft-title"
             />
             <span class="form-render-page__draft-process-hint">
-              流程由系统按已发布表单绑定解析
+              {{ t('form.processResolvedByBinding') }}
             </span>
-            <el-checkbox v-if="draftId" v-model="draftRefreshVersion">重绑最新版本</el-checkbox>
-            <el-button :loading="draftSaving" @click="handleSaveDraft">保存草稿</el-button>
+            <el-checkbox v-if="draftId" v-model="draftRefreshVersion">{{
+              t('form.rebindLatest')
+            }}</el-checkbox>
+            <el-button :loading="draftSaving" @click="handleSaveDraft">{{
+              t('common.saveDraft')
+            }}</el-button>
             <el-button
               v-if="draftId"
               type="primary"
               :loading="draftSaving"
               @click="handleSubmitDraft"
             >
-              提交草稿
+              {{ t('form.submitDraft') }}
             </el-button>
-            <el-button link @click="backToDrafts">返回我的草稿</el-button>
+            <el-button link @click="backToDrafts">{{ t('form.backToMyDrafts') }}</el-button>
           </div>
         </template>
         <!-- 操作按钮：表单数据模式（行为不变） -->
         <template v-else-if="!isViewMode">
           <el-button type="primary" :loading="submitting" @click="handleSubmit">
-            {{ recordId ? '保存' : '提交' }}
+            {{ recordId ? t('common.save') : t('common.submit') }}
           </el-button>
         </template>
       </template>

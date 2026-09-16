@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 /**
  * 表单定义状态（FormDefStatus）中文映射 + 标签色。
  *
@@ -16,9 +17,24 @@ export interface StatusMapEntry {
 
 /** 状态 → 中文 label + 标签色。 */
 export const FORM_DEF_STATUS_MAP: Record<FormDefStatus, StatusMapEntry> = {
-  DRAFT: { label: '草稿', type: 'info' },
-  PUBLISHED: { label: '已发布', type: 'success' },
-  DISABLED: { label: '已停用', type: 'danger' },
+  DRAFT: {
+    get label() {
+      return i18n.global.t('common.statusDraft')
+    },
+    type: 'info',
+  },
+  PUBLISHED: {
+    get label() {
+      return i18n.global.t('common.statusPublished')
+    },
+    type: 'success',
+  },
+  DISABLED: {
+    get label() {
+      return i18n.global.t('common.statusDisabled')
+    },
+    type: 'danger',
+  },
 }
 
 /** 取中文 label（兜底回退 key）。 */

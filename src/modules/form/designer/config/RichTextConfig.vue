@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 多行文本（RICH_TEXT）配置面板。
  * 契约键：label / name / required。占位提示、默认值无契约键 → seam。
@@ -22,6 +25,6 @@ const emit = defineEmits<{ update: [patch: FieldPatch] }>()
       @update="(p) => emit('update', p)"
     />
 
-    <ConfigSeamNote :items="['占位提示', '默认值']" />
+    <ConfigSeamNote :items="[t('form.placeholderHint'), t('form.defaultValue')]" />
   </div>
 </template>

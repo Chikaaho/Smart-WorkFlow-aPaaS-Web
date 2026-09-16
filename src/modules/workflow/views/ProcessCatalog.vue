@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ProcessCatalog — 流程中心（v0.0.2 P4，前台普通视角）。
  *
@@ -32,8 +35,8 @@ const counts = ref<Record<string, number>>({})
 const isEmpty = computed(() => !loading.value && !errorMsg.value && items.value.length === 0)
 
 function categoryLabel(id: number | null): string {
-  if (id === null) return '未分类'
-  return categories.value.find((c) => c.id === id)?.name ?? `分类 ${id}`
+  if (id === null) return t('workflow.uncategorized')
+  return categories.value.find((c) => c.id === id)?.name ?? t('workflow.categoryFallback', { id })
 }
 
 function itemCountOf(categoryId: number | ''): number {
@@ -61,7 +64,7 @@ async function loadCatalog() {
     categories.value = categoryList
     counts.value = await queryCategoryCounts()
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? err.msg : '加载流程中心失败'
+    errorMsg.value = err instanceof ApiError ? err.msg : t('workflow.processCenterLoadFailed')
   } finally {
     loading.value = false
   }
@@ -83,20 +86,20 @@ onMounted(loadCatalog)
 <template>
   <div class="catalog-page">
     <header class="catalog-page__header">
-      <h2 class="catalog-page__title">流程中心</h2>
-      <p class="catalog-page__subtitle">选择业务事项，进入关联表单发起申请</p>
+      <h2 class="catalog-page__title">{{ t('workflow.processCenter') }}</h2>
+      <p class="catalog-page__subtitle">{{ t('workflow.catalogSubtitle') }}</p>
     </header>
 
     <div class="catalog-page__toolbar">
       <el-input
         v-model="keyword"
-        placeholder="搜索事项名称/表单标识"
+        :placeholder="t('workflow.searchCatalogPlaceholder')"
         clearable
         style="width: 260px"
         @keyup.enter="loadCatalog"
         @clear="loadCatalog"
       />
-      <el-button type="primary" @click="loadCatalog">搜索</el-button>
+      <el-button type="primary" @click="loadCatalog">{{ t('common.search') }}</el-button>
     </div>
 
     <div class="catalog-page__categories">
@@ -106,7 +109,7 @@ onMounted(loadCatalog)
         :effect="activeCategory === '' ? 'dark' : 'plain'"
         @click="selectCategory('')"
       >
-        全部（{{ itemCountOf('') }}）
+        {{ t('workflow.catalogAllWithCount', { count: itemCountOf('') }) }}
       </el-tag>
       <el-tag
         v-for="category in categories"
@@ -124,7 +127,7 @@ onMounted(loadCatalog)
         :effect="activeCategory === 0 ? 'dark' : 'plain'"
         @click="selectCategory(0)"
       >
-        未分类（{{ itemCountOf(0) }}）
+        {{ t('workflow.catalogUncategorizedWithCount', { count: itemCountOf(0) }) }}
       </el-tag>
     </div>
 
@@ -138,7 +141,7 @@ onMounted(loadCatalog)
     />
 
     <div v-loading="loading" class="catalog-page__grid">
-      <el-empty v-if="isEmpty" description="暂无可发起的事项" />
+      <el-empty v-if="isEmpty" :description="t('workflow.noCatalogItems')" />
       <button
         v-for="item in items"
         :key="item.itemKey"
@@ -151,7 +154,7 @@ onMounted(loadCatalog)
           <el-tag size="small" type="info">{{ categoryLabel(item.categoryId) }}</el-tag>
           <span class="catalog-card__form">{{ item.formKey }}</span>
         </span>
-        <span class="catalog-card__action">去填报 →</span>
+        <span class="catalog-card__action">{{ t('workflow.goToForm') }}</span>
       </button>
     </div>
   </div>

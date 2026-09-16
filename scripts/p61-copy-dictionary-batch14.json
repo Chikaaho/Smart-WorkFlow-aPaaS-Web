@@ -1,0 +1,5 @@
+{
+  "_comment": "P61 R2a 术语收敛 批次14：跨模块重复的通用术语统一到 common 段，消除同文异键。",
+  "密码": { "key": "common.password", "en": "Password" },
+  "耗时(ms)": { "key": "common.durationMs", "en": "Duration (ms)" }
+}

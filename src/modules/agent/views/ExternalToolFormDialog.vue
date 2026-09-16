@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /* global URL */
 /**
  * ExternalToolFormDialog — 外部 HTTP 工具新增/编辑弹窗（M07-F03-02）。
@@ -96,7 +99,7 @@ async function initForm() {
     const detail = await getExternalTool(props.toolId)
     fillForm(detail)
   } catch (err) {
-    formError.value = err instanceof ApiError ? err.msg : '加载外部工具详情失败'
+    formError.value = err instanceof ApiError ? err.msg : t('agent.externalToolLoadFailed')
   } finally {
     loadingDetail.value = false
   }
@@ -113,29 +116,29 @@ watch(
 // ─── 校验 ───
 
 function validate(): string | null {
-  if (!form.name.trim()) return '工具名不能为空'
+  if (!form.name.trim()) return t('agent.toolNameRequired')
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(form.name.trim())) {
-    return '工具名只能包含英文字母、数字和下划线，且以字母或下划线开头'
+    return t('agent.toolNameFormat')
   }
-  if (!form.description.trim()) return '描述不能为空'
-  if (!form.url.trim()) return 'URL 不能为空'
+  if (!form.description.trim()) return t('agent.toolDescriptionRequired')
+  if (!form.url.trim()) return t('agent.urlRequired')
   try {
     const u = new URL(form.url.trim())
     if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-      return 'URL 必须为 http:// 或 https:// 开头'
+      return t('agent.urlSchemeRequired')
     }
   } catch {
-    return 'URL 格式不正确（需为 http(s):// 开头的完整地址）'
+    return t('agent.urlInvalid')
   }
-  if (!form.httpMethod) return '请选择 HTTP 方法'
+  if (!form.httpMethod) return t('agent.selectHttpMethod')
   if (form.timeoutSeconds == null || form.timeoutSeconds < 1) {
-    return '超时时间需为正整数（秒）'
+    return t('agent.timeoutPositiveInteger')
   }
   if (form.inputSchema.trim()) {
     try {
       JSON.parse(form.inputSchema.trim())
     } catch {
-      return '入参 Schema 不是合法的 JSON 格式'
+      return t('agent.inputSchemaInvalidJson')
     }
   }
   return null
@@ -168,15 +171,15 @@ async function handleSubmit() {
     const req = buildSaveReq()
     if (props.toolId !== null) {
       await updateExternalTool(props.toolId, req)
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.updateSuccess'))
     } else {
       await createExternalTool(req)
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.createSuccess'))
     }
     emit('saved')
     emit('update:visible', false)
   } catch (err) {
-    formError.value = err instanceof ApiError ? err.msg : '保存失败'
+    formError.value = err instanceof ApiError ? err.msg : t('common.saveFailed')
   } finally {
     submitting.value = false
   }
@@ -186,7 +189,7 @@ async function handleSubmit() {
 <template>
   <el-dialog
     v-model="dialogModel"
-    :title="toolId !== null ? '编辑外部 HTTP 工具' : '新增外部 HTTP 工具'"
+    :title="toolId !== null ? t('agent.editExternalHttpTool') : t('agent.newExternalHttpTool')"
     :close-on-click-modal="false"
     destroy-on-close
     width="720px"
@@ -197,45 +200,49 @@ async function handleSubmit() {
         <el-alert v-if="formError" :title="formError" type="error" :closable="false" show-icon />
       </template>
 
-      <FormSection title="基本信息">
+      <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
           <div class="form-field form-field--required">
-            <label class="form-field__label">工具名</label>
+            <label class="form-field__label">{{ t('common.toolName') }}</label>
             <el-input
               v-model="form.name"
-              placeholder="英文下划线格式，如 web_search"
+              :placeholder="t('agent.toolNamePlaceholder')"
               maxlength="128"
             />
-            <div class="form-field__hint">传给 LLM 的工具标识，必须为英文下划线格式</div>
+            <div class="form-field__hint">{{ t('agent.toolNameHint') }}</div>
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">描述</label>
+            <label class="form-field__label">{{ t('common.descriptionField') }}</label>
             <el-input
               v-model="form.description"
-              placeholder="描述工具的用途，传给 LLM 理解工具语义"
+              :placeholder="t('agent.toolDescriptionHint')"
               maxlength="512"
             />
           </div>
           <div class="form-field">
-            <label class="form-field__label">启停</label>
-            <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
+            <label class="form-field__label">{{ t('common.toggle') }}</label>
+            <el-switch
+              v-model="form.enabled"
+              :active-text="t('common.enable')"
+              :inactive-text="t('common.disable')"
+            />
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="HTTP 配置">
+      <FormSection :title="t('agent.httpSectionTitle')">
         <FormGrid :columns="2">
           <div class="form-field form-field--required">
-            <label class="form-field__label">请求 URL</label>
+            <label class="form-field__label">{{ t('agent.requestUrl') }}</label>
             <el-input
               v-model="form.url"
               placeholder="https://api.example.com/v1/tool"
               maxlength="1024"
             />
-            <div class="form-field__hint">完整的 HTTP 请求地址（含路径）</div>
+            <div class="form-field__hint">{{ t('agent.requestUrlHint') }}</div>
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">HTTP 方法</label>
+            <label class="form-field__label">{{ t('agent.httpMethod') }}</label>
             <el-select v-model="form.httpMethod" style="width: 100%">
               <el-option
                 v-for="opt in HTTP_METHOD_OPTIONS"
@@ -246,20 +253,20 @@ async function handleSubmit() {
             </el-select>
           </div>
           <div class="form-field">
-            <label class="form-field__label">超时时间（秒）</label>
+            <label class="form-field__label">{{ t('agent.timeoutSeconds') }}</label>
             <el-input-number
               v-model="form.timeoutSeconds"
               :min="1"
               :max="300"
               :step="1"
-              placeholder="默认 30"
+              :placeholder="t('agent.defaultThirty')"
               style="width: 100%"
             />
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="入参 Schema（可选）">
+      <FormSection :title="t('agent.inputSchemaOptional')">
         <FormGrid :columns="1">
           <div class="form-field">
             <label class="form-field__label">inputSchema</label>
@@ -267,22 +274,22 @@ async function handleSubmit() {
               v-model="form.inputSchema"
               type="textarea"
               :rows="6"
-              placeholder='JSON Schema 字符串，描述入参结构，如 {"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}'
+              :placeholder="t('agent.jsonSchemaPlaceholderQuery')"
               style="font-family: monospace"
             />
-            <div class="form-field__hint">可选；填写后必须为合法 JSON Schema</div>
+            <div class="form-field__hint">{{ t('agent.inputSchemaOptionalHint') }}</div>
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="备注">
+      <FormSection :title="t('common.remark')">
         <FormGrid :columns="1">
           <div class="form-field">
             <el-input
               v-model="form.remark"
               type="textarea"
               :rows="3"
-              placeholder="请输入备注"
+              :placeholder="t('common.remarkPlaceholder')"
               maxlength="256"
               show-word-limit
             />
@@ -291,17 +298,16 @@ async function handleSubmit() {
       </FormSection>
 
       <template #actions>
-        <el-button :disabled="submitting || loadingDetail" @click="emit('update:visible', false)">
-          取消
-        </el-button>
+        <el-button :disabled="submitting || loadingDetail" @click="emit('update:visible', false)">{{
+          t('common.cancel')
+        }}</el-button>
         <el-button
           type="primary"
           :loading="submitting"
           :disabled="loadingDetail"
           @click="handleSubmit"
+          >{{ t('common.save') }}</el-button
         >
-          保存
-        </el-button>
       </template>
     </StandardFormTemplate>
   </el-dialog>

@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 import type { Component } from 'vue'
 import type { FieldType, FormSchemaField } from '@/contracts/form-schema'
 import { defaultFormFieldColSpan } from '@/contracts/form-layout'
@@ -52,134 +53,198 @@ function baseField(type: FieldType, name: string, label: string) {
 export const FIELD_TYPE_REGISTRY: readonly FieldTypeDescriptor[] = [
   {
     type: 'TEXT',
-    label: '单行文本',
+    get label() {
+      return i18n.global.t('form.fieldTypeText')
+    },
     icon: 'EditPen',
-    createDefault: (name) => ({ ...baseField('TEXT', name, '单行文本') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({ ...baseField('TEXT', name, i18n.global.t('form.fieldTypeText')) }) as FormSchemaField,
     configComponent: TextConfig,
   },
   {
     type: 'RICH_TEXT',
-    label: '多行文本',
+    get label() {
+      return i18n.global.t('form.fieldTypeRichText')
+    },
     icon: 'Document',
-    createDefault: (name) => ({ ...baseField('RICH_TEXT', name, '多行文本') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({
+        ...baseField('RICH_TEXT', name, i18n.global.t('form.fieldTypeRichText')),
+      }) as FormSchemaField,
     configComponent: RichTextConfig,
   },
   {
     type: 'NUMBER',
-    label: '数字',
+    get label() {
+      return i18n.global.t('form.fieldTypeNumber')
+    },
     icon: 'Histogram',
-    createDefault: (name) => ({ ...baseField('NUMBER', name, '数字') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({ ...baseField('NUMBER', name, i18n.global.t('form.fieldTypeNumber')) }) as FormSchemaField,
     configComponent: NumberConfig,
   },
   {
     type: 'DATE',
-    label: '日期',
+    get label() {
+      return i18n.global.t('form.fieldTypeDate')
+    },
     icon: 'Calendar',
-    createDefault: (name) => ({ ...baseField('DATE', name, '日期') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({ ...baseField('DATE', name, i18n.global.t('form.fieldTypeDate')) }) as FormSchemaField,
     configComponent: DateConfig,
   },
   {
     type: 'BOOL',
-    label: '开关',
+    get label() {
+      return i18n.global.t('form.fieldTypeSwitch')
+    },
     icon: 'Switch',
-    createDefault: (name) => ({ ...baseField('BOOL', name, '开关') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({ ...baseField('BOOL', name, i18n.global.t('form.fieldTypeSwitch')) }) as FormSchemaField,
     configComponent: BoolConfig,
   },
   {
     type: 'DICT',
-    label: '字典选择',
+    get label() {
+      return i18n.global.t('form.fieldTypeDict')
+    },
     icon: 'List',
     // DICT 必带 dictType（DictField 契约要求），初值空串，配置面板再选具体字典。
     createDefault: (name) =>
-      ({ ...baseField('DICT', name, '字典选择'), dictType: '' }) as FormSchemaField,
+      ({
+        ...baseField('DICT', name, i18n.global.t('form.fieldTypeDict')),
+        dictType: '',
+      }) as FormSchemaField,
     configComponent: DictConfig,
   },
   {
     type: 'REFERENCE',
-    label: '引用',
+    get label() {
+      return i18n.global.t('form.fieldTypeReference')
+    },
     icon: 'Connection',
     // REFERENCE 的 targetFormId 可选，配置面板再选目标表单。
-    createDefault: (name) => ({ ...baseField('REFERENCE', name, '引用') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({
+        ...baseField('REFERENCE', name, i18n.global.t('form.fieldTypeReference')),
+      }) as FormSchemaField,
     configComponent: ReferenceConfig,
   },
   {
     type: 'TABLE',
-    label: '子表格',
+    get label() {
+      return i18n.global.t('form.fieldTypeTable')
+    },
     icon: 'Grid',
     // TABLE 必带 subFields（TableField 契约要求），初值空数组，子字段编辑是后面的刀。
     createDefault: (name) =>
-      ({ ...baseField('TABLE', name, '子表格'), subFields: [] }) as FormSchemaField,
+      ({
+        ...baseField('TABLE', name, i18n.global.t('form.fieldTypeTable')),
+        subFields: [],
+      }) as FormSchemaField,
     configComponent: null,
   },
   // ══════ v0.0.2 OA（P2 表单子集） ══════
   {
     type: 'MULTISELECT',
-    label: '多选',
+    get label() {
+      return i18n.global.t('form.fieldTypeMultiSelect')
+    },
     icon: 'Finished',
     createDefault: (name) =>
-      ({ ...baseField('MULTISELECT', name, '多选'), options: [] }) as FormSchemaField,
+      ({
+        ...baseField('MULTISELECT', name, i18n.global.t('form.fieldTypeMultiSelect')),
+        options: [],
+      }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },
   {
     type: 'ATTACHMENT',
-    label: '附件',
+    get label() {
+      return i18n.global.t('form.fieldTypeAttachment')
+    },
     icon: 'Paperclip',
-    createDefault: (name) => ({ ...baseField('ATTACHMENT', name, '附件') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({
+        ...baseField('ATTACHMENT', name, i18n.global.t('form.fieldTypeAttachment')),
+      }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },
   {
     type: 'IMAGE',
-    label: '图片',
+    get label() {
+      return i18n.global.t('form.fieldTypeImage')
+    },
     icon: 'Picture',
-    createDefault: (name) => ({ ...baseField('IMAGE', name, '图片') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({ ...baseField('IMAGE', name, i18n.global.t('form.fieldTypeImage')) }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },
   {
     type: 'LABEL',
-    label: '说明文字',
+    get label() {
+      return i18n.global.t('form.fieldTypeLabel')
+    },
     icon: 'InfoFilled',
-    createDefault: (name) => ({ ...baseField('LABEL', name, '说明文字') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({ ...baseField('LABEL', name, i18n.global.t('form.fieldTypeLabel')) }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },
   // ══════ I2 低代码表单收口 ══════
   {
     type: 'TIME',
-    label: '时间',
+    get label() {
+      return i18n.global.t('common.time')
+    },
     icon: 'Clock',
-    createDefault: (name) => ({ ...baseField('TIME', name, '时间') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({ ...baseField('TIME', name, i18n.global.t('common.time')) }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },
   {
     type: 'USER',
-    label: '人员选择',
+    get label() {
+      return i18n.global.t('common.userPicker')
+    },
     icon: 'User',
-    createDefault: (name) => ({ ...baseField('USER', name, '人员选择') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({ ...baseField('USER', name, i18n.global.t('common.userPicker')) }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },
   {
     type: 'DEPT',
-    label: '部门选择',
+    get label() {
+      return i18n.global.t('common.deptPicker')
+    },
     icon: 'OfficeBuilding',
-    createDefault: (name) => ({ ...baseField('DEPT', name, '部门选择') }) as FormSchemaField,
+    createDefault: (name) =>
+      ({ ...baseField('DEPT', name, i18n.global.t('common.deptPicker')) }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },
   {
     type: 'FORMULA',
-    label: '公式',
+    get label() {
+      return i18n.global.t('form.fieldTypeFormula')
+    },
     icon: 'Coin',
     // FORMULA 必带 expression；正式值由服务端重算，客户端值不消费。
     createDefault: (name) =>
-      ({ ...baseField('FORMULA', name, '公式'), expression: '' }) as FormSchemaField,
+      ({
+        ...baseField('FORMULA', name, i18n.global.t('form.fieldTypeFormula')),
+        expression: '',
+      }) as FormSchemaField,
     configComponent: FormulaConfig,
   },
   {
     type: 'DATASOURCE',
-    label: '外部数据',
+    get label() {
+      return i18n.global.t('form.fieldTypeDatasource')
+    },
     icon: 'Link',
     // DATASOURCE 必带 dsBinding 稳定标识；SQL/密钥只存服务端契约注册表。
     createDefault: (name) =>
       ({
-        ...baseField('DATASOURCE', name, '外部数据'),
+        ...baseField('DATASOURCE', name, i18n.global.t('form.fieldTypeDatasource')),
         dsBinding: { queryKey: '', valueField: '', displayField: '' },
       }) as FormSchemaField,
     configComponent: DatasourceConfig,

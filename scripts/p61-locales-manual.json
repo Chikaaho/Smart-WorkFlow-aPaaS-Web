@@ -1,0 +1,101 @@
+{
+  "_comment": "P61 locale 手工段（auth/errors/page/locale/app）。字典段由 p61-gen-locales.mjs 从 p61-copy-dictionary.json 合并为 common 段；两文件由同源生成，保证 zh/en 键集零差异。",
+  "zh-CN": {
+    "app": { "name": "CH-aPaaS" },
+    "locale": {
+      "label": "语言",
+      "zh-CN": "中文",
+      "en-US": "English",
+      "switch": "切换语言"
+    },
+    "auth": {
+      "signIn": "登录",
+      "signingIn": "登录中...",
+      "username": "用户名",
+      "password": "密码",
+      "captcha": "验证码",
+      "captchaNotReady": "请先完成验证码校验（可点击图片刷新）",
+      "tenantIdInvalid": "请输入有效的租户 ID",
+      "refreshCaptcha": "点击刷新验证码",
+      "refresh": "刷新",
+      "thirdParty": "第三方账号登录",
+      "goToAuthorize": "前往授权",
+      "redirecting": "跳转中...",
+      "tenantId": "租户 ID",
+      "chooseProvider": "选择 Provider",
+      "signOut": "退出登录",
+      "accountBindings": "账号绑定",
+      "enterBackend": "进入后台",
+      "backToPortal": "返回前台",
+      "notSignedIn": "未登录"
+    },
+    "errors": {
+      "network": "服务暂时不可用，请稍后重试",
+      "timeout": "请求超时，请稍后重试",
+      "sessionExpired": "登录状态已失效，请重新登录",
+      "permissionDenied": "您没有执行该操作的权限，请联系管理员分配相应权限",
+      "notFound": "该对象不存在或已被删除，请返回列表刷新后重试",
+      "conflict": "数据已被其他操作改变，请刷新后重试",
+      "inputInvalid": "提交的内容有误，请按提示修改后重试",
+      "systemFault": "系统暂时无法处理该请求，请稍后重试",
+      "retry": "重试"
+    },
+    "page": {
+      "forbidden": "无权限访问",
+      "notFound": "页面不存在",
+      "serverError": "服务异常",
+      "oops": "出错了",
+      "placeholder": "占位页面",
+      "noData": "暂无数据"
+    }
+  },
+  "en-US": {
+    "app": { "name": "CH-aPaaS" },
+    "locale": {
+      "label": "Language",
+      "zh-CN": "中文",
+      "en-US": "English",
+      "switch": "Switch language"
+    },
+    "auth": {
+      "signIn": "Sign in",
+      "signingIn": "Signing in...",
+      "username": "Username",
+      "password": "Password",
+      "captcha": "Verification code",
+      "captchaNotReady": "Please complete the verification first (click the image to refresh).",
+      "tenantIdInvalid": "Please enter a valid tenant ID.",
+      "refreshCaptcha": "Click to refresh the code",
+      "refresh": "Refresh",
+      "thirdParty": "Third-party sign-in",
+      "goToAuthorize": "Continue",
+      "redirecting": "Redirecting...",
+      "tenantId": "Tenant ID",
+      "chooseProvider": "Choose provider",
+      "signOut": "Sign out",
+      "accountBindings": "Linked accounts",
+      "enterBackend": "Admin console",
+      "backToPortal": "Back to portal",
+      "notSignedIn": "Not signed in"
+    },
+    "errors": {
+      "network": "The service is temporarily unavailable. Please try again later.",
+      "timeout": "The request timed out. Please try again later.",
+      "sessionExpired": "Your session has expired. Please sign in again.",
+      "permissionDenied": "You do not have permission to do that. Please ask an administrator for access.",
+      "notFound": "That item does not exist or has been deleted. Go back to the list and refresh.",
+      "conflict": "The data was changed by another action. Please refresh and try again.",
+      "inputInvalid": "Some entries are invalid. Please correct them and try again.",
+      "systemFault": "The system could not process this request. Please try again later.",
+      "retry": "Retry"
+    },
+    "page": {
+      "forbidden": "No access",
+      "notFound": "Page not found",
+      "serverError": "Server error",
+      "oops": "Something went wrong",
+      "placeholder": "Placeholder page",
+      "noData": "No data"
+    }
+  }
+}

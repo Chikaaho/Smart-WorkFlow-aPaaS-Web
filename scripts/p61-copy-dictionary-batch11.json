@@ -1,0 +1,69 @@
+{
+  "_comment": "P61 R1 术语字典 批次11：嵌套在表达式内的文案（三元分支、数组元素、属性拼接）收口。",
+  "编辑外部 HTTP 工具": { "key": "agent.editExternalHttpTool", "en": "Edit external HTTP tool" },
+  "新增外部 HTTP 工具": { "key": "agent.newExternalHttpTool", "en": "New external HTTP tool" },
+  "编辑内部工具": { "key": "agent.editInternalTool", "en": "Edit internal tool" },
+  "新增内部工具": { "key": "agent.newInternalTool", "en": "New internal tool" },
+  "编辑大模型配置": { "key": "agent.editModelConfig", "en": "Edit model configuration" },
+  "新增大模型配置": {
+    "key": "agent.newModelConfig",
+    "en": "New model configuration",
+    "alias": true
+  },
+  "编辑消息模板": { "key": "notify.editTemplate", "en": "Edit message template" },
+  "新增消息模板": { "key": "notify.newTemplate", "en": "New message template", "alias": true },
+  "内部": { "key": "common.internal", "en": "Internal" },
+  "外部": { "key": "common.external", "en": "External" },
+  "服务可达": { "key": "agent.serviceReachable", "en": "Service reachable" },
+  "网络不可达": { "key": "agent.networkUnreachable", "en": "Network unreachable" },
+  "无输出": { "key": "iot.noOutput", "en": "No output" },
+  "字典项管理": { "key": "system.dictItemManagement", "en": "Dictionary items" },
+  "年-月-日（YYYY-MM-DD）": {
+    "key": "form.dateFormatExample",
+    "en": "Year-Month-Day (YYYY-MM-DD)"
+  },
+  "默认开 / 关": { "key": "form.configSeamDefaultOnOff", "en": "Default on / off" },
+  "显示字段": { "key": "form.configSeamVisibleFields", "en": "Visible fields" },
+  "自定义过滤条件": { "key": "form.configSeamCustomFilter", "en": "Custom filter condition" },
+  "逗号分隔的默认选项": {
+    "key": "form.arrayDefaultPlaceholder",
+    "en": "Comma-separated default options"
+  },
+  "新建填报时的默认值": {
+    "key": "form.createDefaultPlaceholder",
+    "en": "Default value for new submissions"
+  },
+  "请确认流程定义有可查看的图数据": {
+    "key": "workflow.confirmViewableGraph",
+    "en": "Confirm this process definition has viewable graph data."
+  },
+  "支持 {deviceKey} 模板变量与 +/# 通配": {
+    "key": "iot.topicPlaceholder",
+    "en": "Supports the {deviceKey} template variable and +/# wildcards"
+  },
+  "JSON Schema 字符串，描述入参结构，如 {\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}": {
+    "key": "agent.jsonSchemaPlaceholderQuery",
+    "en": "JSON Schema string describing the input shape, e.g. {\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}"
+  },
+  "JSON Schema 字符串，描述入参结构，如 {\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}": {
+    "key": "agent.jsonSchemaPlaceholderCity",
+    "en": "JSON Schema string describing the input shape, e.g. {\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}"
+  },
+  "支持 ${userName} 占位符，如：${userName} 的审批提醒": {
+    "key": "notify.subjectPlaceholder",
+    "en": "Supports the ${userName} placeholder, e.g. Approval reminder for ${userName}"
+  },
+  "您好 ${userName}，单据 ${docNo} 待处理。": {
+    "key": "notify.contentPlaceholder",
+    "en": "Hello ${userName}, document ${docNo} is awaiting your action."
+  },
+  "如：ROUND(${price} * ${qty}, 2)；支持 + - * / 与 ABS/ROUND/MIN/MAX/DAYS": {
+    "key": "form.formulaPlaceholder",
+    "en": "e.g. ROUND(${price} * ${qty}, 2); supports + - * / and ABS/ROUND/MIN/MAX/DAYS"
+  },
+  "{\"userName\": \"张三\"}": {
+    "key": "notify.templateVarsPlaceholder",
+    "en": "{\"userName\": \"John Doe\"}"
+  },
+  "、": { "key": "common.enumSeparator", "en": ", " }
+}

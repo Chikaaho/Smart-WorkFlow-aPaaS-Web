@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * LLM 节点属性面板：模型配置下拉 + 系统 Prompt + 用户 Prompt 模板 + 输入/输出变量名。
  * 写回统一 emit 上行：updateNodeData（模型配置/文本字段，空白删键语义在
@@ -34,66 +37,66 @@ function onPromptChange(key: string, val: unknown) {
 
 <template>
   <div class="field-row">
-    <div class="field-label">模型配置</div>
+    <div class="field-label">{{ t('agent.modelConfig') }}</div>
     <el-select
       :model-value="(node.data?.[NODE_CONFIG_KEY_MODEL_ID] as number | undefined) ?? null"
-      placeholder="选择模型配置"
+      :placeholder="t('agent.selectModelConfig')"
       style="width: 100%"
       @change="(v) => $emit('updateNodeData', NODE_CONFIG_KEY_MODEL_ID, v)"
     >
       <el-option
         v-for="m in modelOptions"
         :key="m.id"
-        :label="`${m.name}（${m.modelName}）`"
+        :label="t('common.nameWithCode', { name: m.name, code: m.modelName })"
         :value="m.id"
       />
     </el-select>
   </div>
   <div class="field-row">
     <div class="field-label">
-      系统 Prompt
-      <span class="field-hint">定义模型在该节点的角色、规则或背景</span>
+      {{ t('agent.systemPromptLabel') }}
+      <span class="field-hint">{{ t('agent.systemPromptHint') }}</span>
     </div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_SYSTEM_PROMPT] as string | undefined) ?? ''"
       type="textarea"
       :rows="4"
-      placeholder="留空则不注入系统消息"
+      :placeholder="t('agent.systemPromptEmptyHint')"
       maxlength="4000"
       @change="(v) => onPromptChange(NODE_CONFIG_KEY_SYSTEM_PROMPT, v)"
     />
   </div>
   <div class="field-row">
     <div class="field-label">
-      用户 Prompt 模板
+      {{ t('agent.userPromptLabel') }}
       <span class="field-hint">
-        定义本次节点调用的用户消息；支持
+        {{ t('agent.userPromptHintLead') }}
         <code v-text="VAR_SYNTAX_EXAMPLE" />
-        引用命名变量；未配置或留空时直接使用输入变量的原文；引用未定义变量将导致执行失败
+        {{ t('agent.userPromptHintTail') }}
       </span>
     </div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE] as string | undefined) ?? ''"
       type="textarea"
       :rows="4"
-      placeholder="例如：请根据以下内容生成摘要：{{input}}"
+      :placeholder="t('agent.userPromptPlaceholder')"
       maxlength="4000"
       @change="(v) => onPromptChange(NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE, v)"
     />
   </div>
   <div class="field-row">
-    <div class="field-label">输入变量名</div>
+    <div class="field-label">{{ t('agent.inputVariableName') }}</div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_INPUT_VAR] as string | undefined) ?? ''"
-      :placeholder="`留空 = 默认变量 ${DEFAULT_VARIABLE_NAME}`"
+      :placeholder="t('agent.varNamePlaceholder', { DEFAULT_VARIABLE_NAME })"
       @change="(v) => $emit('varNameChange', NODE_CONFIG_KEY_INPUT_VAR, v)"
     />
   </div>
   <div class="field-row">
-    <div class="field-label">输出变量名</div>
+    <div class="field-label">{{ t('agent.outputVariableName') }}</div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_OUTPUT_VAR] as string | undefined) ?? ''"
-      :placeholder="`留空 = 默认变量 ${DEFAULT_VARIABLE_NAME}`"
+      :placeholder="t('agent.varNamePlaceholder', { DEFAULT_VARIABLE_NAME })"
       @change="(v) => $emit('varNameChange', NODE_CONFIG_KEY_OUTPUT_VAR, v)"
     />
   </div>

@@ -1,0 +1,820 @@
+{
+  "_comment": "P61 R1 术语字典 批次5：Agent 模型/工具配置、IoT 脚本、通知渠道与规则、表单设计器配置面板、用户管理、流程中心、SSO 回跳与请求层错误提示。含插值/表达式的文案见 p61-copy-templates-batch5.json。",
+  "OpenAI（兼容协议）": {
+    "key": "agent.protocolOpenAi",
+    "en": "OpenAI (compatible protocol)"
+  },
+  "Ollama（本地）": {
+    "key": "agent.protocolOllama",
+    "en": "Ollama (local)"
+  },
+  "OpenAI 兼容协议：需配置 API Key，请求头自动附加 Bearer 鉴权": {
+    "key": "agent.protocolHintOpenAi",
+    "en": "OpenAI-compatible: an API key is required; the Bearer token is added to the request headers automatically."
+  },
+  "Ollama 本地协议：本地服务无需 API Key，密钥可留空": {
+    "key": "agent.protocolHintOllama",
+    "en": "Local Ollama: the local service needs no API key, so the key can be left empty."
+  },
+  "其他协议：仅做可达性探测，不附加鉴权头": {
+    "key": "agent.protocolHintOther",
+    "en": "Other protocols: only reachability is probed; no authentication header is added."
+  },
+  "加载模型详情失败": {
+    "key": "agent.modelDetailLoadFailed",
+    "en": "Could not load the model configuration. Please try again."
+  },
+  "名称不能为空": {
+    "key": "agent.configNameRequired",
+    "en": "Name is required."
+  },
+  "请选择协议类型": {
+    "key": "agent.selectProtocol",
+    "en": "Select a protocol type"
+  },
+  "API 地址不能为空": {
+    "key": "agent.apiUrlRequired",
+    "en": "API URL is required."
+  },
+  "API 地址格式不正确（需为 http(s):// 开头的完整地址）": {
+    "key": "agent.apiUrlInvalid",
+    "en": "Enter a full API URL that starts with http(s)://."
+  },
+  "模型名称不能为空": {
+    "key": "agent.modelNameRequired",
+    "en": "Model name is required."
+  },
+  "temperature 取值范围为 0 ~ 2": {
+    "key": "agent.temperatureRange",
+    "en": "temperature must be between 0 and 2."
+  },
+  "maxTokens 需为正整数": {
+    "key": "agent.maxTokensPositiveInteger",
+    "en": "maxTokens must be a positive integer."
+  },
+  "topP 取值范围为 0 ~ 1": {
+    "key": "agent.topPRange",
+    "en": "topP must be between 0 and 1."
+  },
+  "超时时间需为正整数（秒）": {
+    "key": "agent.timeoutPositiveInteger",
+    "en": "Timeout must be a positive integer (in seconds)."
+  },
+  "重试次数需为非负整数": {
+    "key": "agent.retriesNonNegativeInteger",
+    "en": "Retries must be a non-negative integer."
+  },
+  "组内优先级需为非负整数": {
+    "key": "agent.groupPriorityNonNegativeInteger",
+    "en": "Group priority must be a non-negative integer."
+  },
+  "限流冷却秒数需为非负整数": {
+    "key": "agent.rateLimitCooldownNonNegativeInteger",
+    "en": "Rate-limit cooldown must be a non-negative integer (in seconds)."
+  },
+  "请输入模型配置名称（如：GPT-4o 主模型）": {
+    "key": "agent.modelConfigNamePlaceholder",
+    "en": "Enter a model configuration name (e.g. GPT-4o primary)"
+  },
+  "协议类型": {
+    "key": "agent.protocolType",
+    "en": "Protocol"
+  },
+  "API 地址": {
+    "key": "agent.apiUrl",
+    "en": "API URL"
+  },
+  "模型名称": {
+    "key": "agent.modelName",
+    "en": "Model name"
+  },
+  "如：gpt-4o / llama3": {
+    "key": "agent.modelNamePlaceholder",
+    "en": "e.g. gpt-4o / llama3"
+  },
+  "留空=不修改（编辑时保持旧密钥 / 新增时不配置）": {
+    "key": "agent.apiKeyKeepHint",
+    "en": "Leave empty to keep the current key when editing, or to configure no key when creating"
+  },
+  "未配置密钥（本地协议可留空）": {
+    "key": "agent.apiKeyUnset",
+    "en": "No API key configured (optional for local protocols)"
+  },
+  "调用参数": {
+    "key": "agent.callParameters",
+    "en": "Call parameters"
+  },
+  "最大输出 Token 数": {
+    "key": "agent.maxOutputTokens",
+    "en": "Max output tokens"
+  },
+  "超时时间（秒）": {
+    "key": "agent.timeoutSeconds",
+    "en": "Timeout (seconds)"
+  },
+  "默认 30": {
+    "key": "agent.defaultThirty",
+    "en": "Default 30"
+  },
+  "重试次数": {
+    "key": "agent.retries",
+    "en": "Retries"
+  },
+  "默认 0": {
+    "key": "agent.defaultZero",
+    "en": "Default 0"
+  },
+  "多 Key 配置": {
+    "key": "agent.multiKeyConfig",
+    "en": "Multi-key settings"
+  },
+  "多 Key 分组": {
+    "key": "agent.multiKeyGroup",
+    "en": "Multi-key group"
+  },
+  "同分组多 Key 轮询，留空=独立配置": {
+    "key": "agent.multiKeyGroupHint",
+    "en": "Keys in the same group are polled in turn; leave empty to configure each key separately"
+  },
+  "组内优先级": {
+    "key": "agent.groupPriority",
+    "en": "Group priority"
+  },
+  "组内优先级，越小越优先": {
+    "key": "agent.groupPriorityHint",
+    "en": "Group priority; lower values are tried first"
+  },
+  "额度冷却（秒）": {
+    "key": "agent.quotaCooldownSeconds",
+    "en": "Quota cooldown (seconds)"
+  },
+  "限流锁定冷却秒数，默认 60": {
+    "key": "agent.rateLimitCooldownHint",
+    "en": "Cooldown in seconds after a rate-limit lock; defaults to 60"
+  },
+  "收到消息": {
+    "key": "iot.jsSampleLogMessage",
+    "en": "Message received"
+  },
+  "草稿已更新（新版本）": {
+    "key": "iot.draftUpdatedNewVersion",
+    "en": "Draft updated (new version)"
+  },
+  "脚本已创建": {
+    "key": "iot.scriptCreated",
+    "en": "Script created"
+  },
+  "校验通过": {
+    "key": "iot.validationPassed",
+    "en": "Validation passed"
+  },
+  "发布失败：先通过校验": {
+    "key": "iot.publishNeedsValidation",
+    "en": "Publishing failed: validate the script first."
+  },
+  "受控脚本": {
+    "key": "iot.scriptListTitle",
+    "en": "Managed scripts"
+  },
+  "新增脚本": {
+    "key": "iot.newScript",
+    "en": "New script"
+  },
+  "语言": {
+    "key": "common.language",
+    "en": "Language"
+  },
+  "触发": {
+    "key": "iot.trigger",
+    "en": "Trigger"
+  },
+  "校验": {
+    "key": "iot.validate",
+    "en": "Validate"
+  },
+  "试运行": {
+    "key": "iot.dryRun",
+    "en": "Test run"
+  },
+  "执行记录": {
+    "key": "iot.executionRecords",
+    "en": "Execution records"
+  },
+  "暂无脚本": {
+    "key": "iot.noScripts",
+    "en": "No scripts yet"
+  },
+  "触发类型": {
+    "key": "iot.triggerType",
+    "en": "Trigger type"
+  },
+  "消息 MESSAGE": {
+    "key": "iot.triggerTypeMessage",
+    "en": "Message (MESSAGE)"
+  },
+  "规则 RULE": {
+    "key": "iot.triggerTypeRule",
+    "en": "Rule (RULE)"
+  },
+  "手动 MANUAL": {
+    "key": "iot.triggerTypeManual",
+    "en": "Manual (MANUAL)"
+  },
+  "超时(ms)": {
+    "key": "iot.timeoutMs",
+    "en": "Timeout (ms)"
+  },
+  "源码": {
+    "key": "iot.sourceCode",
+    "en": "Source code"
+  },
+  "填入示例": {
+    "key": "iot.insertSample",
+    "en": "Insert sample"
+  },
+  "脚本执行记录": {
+    "key": "iot.executionRecordsTitle",
+    "en": "Script execution records"
+  },
+  "耗时(ms)": {
+    "key": "iot.durationMs",
+    "en": "Duration (ms)"
+  },
+  "输出": {
+    "key": "iot.output",
+    "en": "Output"
+  },
+  "加载外部工具详情失败": {
+    "key": "agent.externalToolLoadFailed",
+    "en": "Could not load the external tool. Please try again."
+  },
+  "工具名不能为空": {
+    "key": "agent.toolNameRequired",
+    "en": "Tool name is required."
+  },
+  "工具名只能包含英文字母、数字和下划线，且以字母或下划线开头": {
+    "key": "agent.toolNameFormat",
+    "en": "The tool name may contain only letters, digits and underscores, and must start with a letter or an underscore."
+  },
+  "描述不能为空": {
+    "key": "agent.toolDescriptionRequired",
+    "en": "Description is required."
+  },
+  "URL 不能为空": {
+    "key": "agent.urlRequired",
+    "en": "URL is required."
+  },
+  "URL 必须为 http:// 或 https:// 开头": {
+    "key": "agent.urlSchemeRequired",
+    "en": "The URL must start with http:// or https://."
+  },
+  "URL 格式不正确（需为 http(s):// 开头的完整地址）": {
+    "key": "agent.urlInvalid",
+    "en": "Enter a full URL that starts with http(s)://."
+  },
+  "请选择 HTTP 方法": {
+    "key": "agent.selectHttpMethod",
+    "en": "Select an HTTP method"
+  },
+  "入参 Schema 不是合法的 JSON 格式": {
+    "key": "agent.inputSchemaInvalidJson",
+    "en": "The input schema is not valid JSON."
+  },
+  "英文下划线格式，如 web_search": {
+    "key": "agent.toolNamePlaceholder",
+    "en": "Lowercase words separated by underscores, e.g. web_search"
+  },
+  "传给 LLM 的工具标识，必须为英文下划线格式": {
+    "key": "agent.toolNameHint",
+    "en": "The tool identifier passed to the LLM; it must use lowercase letters and underscores"
+  },
+  "描述工具的用途，传给 LLM 理解工具语义": {
+    "key": "agent.toolDescriptionHint",
+    "en": "Describe what the tool does so the LLM can understand it"
+  },
+  "HTTP 配置": {
+    "key": "agent.httpSectionTitle",
+    "en": "HTTP settings"
+  },
+  "请求 URL": {
+    "key": "agent.requestUrl",
+    "en": "Request URL"
+  },
+  "完整的 HTTP 请求地址（含路径）": {
+    "key": "agent.requestUrlHint",
+    "en": "Full HTTP request address, including the path"
+  },
+  "HTTP 方法": {
+    "key": "agent.httpMethod",
+    "en": "HTTP method"
+  },
+  "入参 Schema（可选）": {
+    "key": "agent.inputSchemaOptional",
+    "en": "Input schema (optional)"
+  },
+  "可选；填写后必须为合法 JSON Schema": {
+    "key": "agent.inputSchemaOptionalHint",
+    "en": "Optional; if provided, it must be a valid JSON Schema"
+  },
+  "加载内部工具详情失败": {
+    "key": "agent.internalToolLoadFailed",
+    "en": "Could not load the internal tool. Please try again."
+  },
+  "Bean 名称不能为空": {
+    "key": "agent.beanNameRequired",
+    "en": "Bean name is required."
+  },
+  "方法名不能为空": {
+    "key": "agent.methodNameRequired",
+    "en": "Method name is required."
+  },
+  "英文下划线格式，如 get_weather": {
+    "key": "agent.toolNamePlaceholderInternal",
+    "en": "Lowercase words separated by underscores, e.g. get_weather"
+  },
+  "调用配置": {
+    "key": "agent.invocationSectionTitle",
+    "en": "Invocation settings"
+  },
+  "Bean 名称": {
+    "key": "agent.beanName",
+    "en": "Bean name"
+  },
+  "Spring Bean 名称": {
+    "key": "agent.beanNamePlaceholder",
+    "en": "Spring bean name"
+  },
+  "Spring 容器中的 Bean 名称（白名单值）": {
+    "key": "agent.beanNameHint",
+    "en": "The bean name in the Spring container (must be on the allowlist)"
+  },
+  "方法名": {
+    "key": "agent.methodName",
+    "en": "Method name"
+  },
+  "约定签名：String execute(String params)": {
+    "key": "agent.methodNamePlaceholder",
+    "en": "Expected signature: String execute(String params)"
+  },
+  "加载通知规则失败": {
+    "key": "notify.rulesLoadFailed",
+    "en": "Could not load the notification rules. Please try again."
+  },
+  "已更新": {
+    "key": "common.updated",
+    "en": "Updated"
+  },
+  "通知规则": {
+    "key": "notify.rules",
+    "en": "Notification rules"
+  },
+  "新建规则": {
+    "key": "notify.newRule",
+    "en": "New rule"
+  },
+  "规则编码": {
+    "key": "notify.ruleCode",
+    "en": "Rule code"
+  },
+  "渠道顺序": {
+    "key": "notify.channelOrder",
+    "en": "Channel order"
+  },
+  "接收人规则": {
+    "key": "notify.recipientRule",
+    "en": "Recipient rule"
+  },
+  "必须送达": {
+    "key": "notify.mustDeliver",
+    "en": "Must be delivered"
+  },
+  "必须": {
+    "key": "notify.requiredTag",
+    "en": "Required"
+  },
+  "可选": {
+    "key": "notify.optionalTag",
+    "en": "Optional"
+  },
+  "字母开头，2-99 位": {
+    "key": "notify.ruleCodePlaceholder",
+    "en": "Starts with a letter, 2-99 characters"
+  },
+  "如 IN_APP,EMAIL": {
+    "key": "notify.channelOrderPlaceholder",
+    "en": "e.g. IN_APP,EMAIL"
+  },
+  "如 ASSIGNEE / ROLE:admin / INITIATOR": {
+    "key": "notify.recipientRulePlaceholder",
+    "en": "e.g. ASSIGNEE / ROLE:admin / INITIATOR"
+  },
+  "失败策略": {
+    "key": "notify.failurePolicy",
+    "en": "Failure policy"
+  },
+  "自动重试（RETRY）": {
+    "key": "notify.failurePolicyRetry",
+    "en": "Retry automatically (RETRY)"
+  },
+  "人工处理（MANUAL）": {
+    "key": "notify.failurePolicyManual",
+    "en": "Handle manually (MANUAL)"
+  },
+  "站内信": {
+    "key": "notify.channelInApp",
+    "en": "In-app message"
+  },
+  "短信": {
+    "key": "notify.channelSms",
+    "en": "SMS"
+  },
+  "邮件": {
+    "key": "notify.channelEmail",
+    "en": "Email"
+  },
+  "飞书卡片": {
+    "key": "notify.channelFeishu",
+    "en": "Feishu card"
+  },
+  "钉钉通知": {
+    "key": "notify.channelDingtalk",
+    "en": "DingTalk notification"
+  },
+  "企业微信卡片": {
+    "key": "notify.channelWechatWork",
+    "en": "WeCom card"
+  },
+  "加载渠道状态失败": {
+    "key": "notify.channelStatusLoadFailed",
+    "en": "Could not load the channel status. Please try again."
+  },
+  "渠道已启用": {
+    "key": "notify.channelEnabled",
+    "en": "Channel enabled"
+  },
+  "渠道已停用": {
+    "key": "notify.channelDisabled",
+    "en": "Channel disabled"
+  },
+  "渠道配置": {
+    "key": "notify.channelConfig",
+    "en": "Channel configuration"
+  },
+  "系统级装配": {
+    "key": "notify.systemConfigured",
+    "en": "System-level setup"
+  },
+  "已装配": {
+    "key": "notify.configured",
+    "en": "Configured"
+  },
+  "未装配": {
+    "key": "notify.notConfigured",
+    "en": "Not configured"
+  },
+  "发件标识": {
+    "key": "notify.senderDisplay",
+    "en": "Sender identity"
+  },
+  "配置摘要": {
+    "key": "notify.configSummary",
+    "en": "Configuration summary"
+  },
+  "租户级启用": {
+    "key": "notify.tenantEnabled",
+    "en": "Tenant-level enablement"
+  },
+  "恒启用": {
+    "key": "notify.alwaysEnabled",
+    "en": "Always enabled"
+  },
+  "显隐联动": {
+    "key": "form.visibilityRule",
+    "en": "Visibility rule"
+  },
+  "满足": {
+    "key": "form.whenLabel",
+    "en": "When"
+  },
+  "全部条件": {
+    "key": "form.allConditions",
+    "en": "All conditions"
+  },
+  "任一条件": {
+    "key": "form.anyCondition",
+    "en": "Any condition"
+  },
+  "时显示本字段": {
+    "key": "form.showThisField",
+    "en": "show this field"
+  },
+  "字段": {
+    "key": "common.field",
+    "en": "Field"
+  },
+  "等于": {
+    "key": "form.opEquals",
+    "en": "Equals"
+  },
+  "不等于": {
+    "key": "form.opNotEquals",
+    "en": "Does not equal"
+  },
+  "为空": {
+    "key": "form.opIsEmpty",
+    "en": "Is empty"
+  },
+  "非空": {
+    "key": "form.opIsNotEmpty",
+    "en": "Is not empty"
+  },
+  "值": {
+    "key": "common.value",
+    "en": "Value"
+  },
+  "删": {
+    "key": "form.removeCondition",
+    "en": "Remove"
+  },
+  "+ 加条件": {
+    "key": "form.addCondition",
+    "en": "+ Add condition"
+  },
+  "正式提交时由服务端复算并过滤隐藏字段；草稿保留原输入。": {
+    "key": "form.visibilityRuleNote",
+    "en": "On final submission the server recalculates the rule and filters out hidden fields; drafts keep the original input."
+  },
+  "加载用户列表失败": {
+    "key": "system.userListLoadFailed",
+    "en": "Could not load the user list. Please try again."
+  },
+  "编辑用户": {
+    "key": "system.editUser",
+    "en": "Edit user"
+  },
+  "加载用户详情失败": {
+    "key": "system.userDetailLoadFailed",
+    "en": "Could not load the user details. Please try again."
+  },
+  "用户名不能为空": {
+    "key": "system.usernameRequired",
+    "en": "Username is required."
+  },
+  "用户管理": {
+    "key": "system.userManagement",
+    "en": "User management"
+  },
+  "邮箱": {
+    "key": "system.email",
+    "en": "Email"
+  },
+  "手机号": {
+    "key": "system.phone",
+    "en": "Phone"
+  },
+  "性别": {
+    "key": "system.gender",
+    "en": "Gender"
+  },
+  "男": {
+    "key": "common.male",
+    "en": "Male"
+  },
+  "女": {
+    "key": "common.female",
+    "en": "Female"
+  },
+  "所属部门": {
+    "key": "system.department",
+    "en": "Department"
+  },
+  "角色": {
+    "key": "common.role",
+    "en": "Role"
+  },
+  "密码": {
+    "key": "system.password",
+    "en": "Password"
+  },
+  "列名须以小写字母或下划线开头，仅含小写字母 / 数字 / 下划线": {
+    "key": "form.columnNameFormat",
+    "en": "The column name must start with a lowercase letter or an underscore and contain only lowercase letters, digits and underscores."
+  },
+  "列名在本表单内重复": {
+    "key": "form.columnNameDuplicate",
+    "en": "This column name is already used in this form."
+  },
+  "标签": {
+    "key": "form.fieldLabel",
+    "en": "Label"
+  },
+  "字段显示名": {
+    "key": "form.fieldLabelPlaceholder",
+    "en": "Field label"
+  },
+  "列名": {
+    "key": "form.columnName",
+    "en": "Column name"
+  },
+  "英文列名": {
+    "key": "form.columnNamePlaceholder",
+    "en": "Column name in English"
+  },
+  "必填": {
+    "key": "form.required",
+    "en": "Required"
+  },
+  "默认值": {
+    "key": "form.defaultValue",
+    "en": "Default value"
+  },
+  "开": {
+    "key": "common.on",
+    "en": "On"
+  },
+  "关": {
+    "key": "common.off",
+    "en": "Off"
+  },
+  "加载会话消息失败": {
+    "key": "agent.conversationMessagesLoadFailed",
+    "en": "Could not load the conversation messages. Please try again."
+  },
+  "无效的会话 ID": {
+    "key": "agent.invalidConversationId",
+    "en": "Invalid conversation ID."
+  },
+  "会话消息": {
+    "key": "agent.conversationMessages",
+    "en": "Conversation messages"
+  },
+  "供应商可观测 usage（输入/输出/总计），非账单、非完整失败尝试成本": {
+    "key": "agent.usageObservabilityTooltip",
+    "en": "Usage observed from the provider (input/output/total); not a billing figure and not the cost of failed attempts."
+  },
+  "总 Token:": {
+    "key": "agent.totalTokensLabel",
+    "en": "Total tokens:"
+  },
+  "用户": {
+    "key": "agent.roleUser",
+    "en": "User"
+  },
+  "助手": {
+    "key": "agent.roleAssistant",
+    "en": "Assistant"
+  },
+  "暂无消息记录": {
+    "key": "agent.noMessages",
+    "en": "No messages yet"
+  },
+  "模型配置": {
+    "key": "agent.modelConfig",
+    "en": "Model configuration"
+  },
+  "选择模型配置": {
+    "key": "agent.selectModelConfig",
+    "en": "Select a model configuration"
+  },
+  "定义模型在该节点的角色、规则或背景": {
+    "key": "agent.systemPromptHint",
+    "en": "Describe the model's role, rules or context for this node"
+  },
+  "留空则不注入系统消息": {
+    "key": "agent.systemPromptEmptyHint",
+    "en": "Leave empty to send no system message"
+  },
+  "输入变量名": {
+    "key": "agent.inputVariableName",
+    "en": "Input variable name"
+  },
+  "输出变量名": {
+    "key": "agent.outputVariableName",
+    "en": "Output variable name"
+  },
+  "加载流程中心失败": {
+    "key": "workflow.processCenterLoadFailed",
+    "en": "Could not load the process center. Please try again."
+  },
+  "流程中心": {
+    "key": "workflow.processCenter",
+    "en": "Process Center"
+  },
+  "选择业务事项，进入关联表单发起申请": {
+    "key": "workflow.catalogSubtitle",
+    "en": "Pick a business item to open its form and start a request"
+  },
+  "搜索事项名称/表单标识": {
+    "key": "workflow.searchCatalogPlaceholder",
+    "en": "Search item name / form key"
+  },
+  "暂无可发起的事项": {
+    "key": "workflow.noCatalogItems",
+    "en": "No items available to start"
+  },
+  "去填报 →": {
+    "key": "workflow.goToForm",
+    "en": "Fill in →"
+  },
+  "绑定字典": {
+    "key": "form.bindDict",
+    "en": "Bound dictionary"
+  },
+  "选择字典类型": {
+    "key": "form.selectDictType",
+    "en": "Select a dictionary type"
+  },
+  "显示方式": {
+    "key": "form.displayMode",
+    "en": "Display mode"
+  },
+  "下拉": {
+    "key": "form.renderSelect",
+    "en": "Dropdown"
+  },
+  "单选": {
+    "key": "form.renderRadio",
+    "en": "Radio"
+  },
+  "登录票据缺失，请重新登录": {
+    "key": "view.ssoTicketMissing",
+    "en": "The sign-in ticket is missing. Please sign in again."
+  },
+  "SSO 登录失败，请重试": {
+    "key": "view.ssoLoginFailed",
+    "en": "Single sign-on failed. Please try again."
+  },
+  "正在完成第三方登录…": {
+    "key": "view.completingThirdPartyLogin",
+    "en": "Completing third-party sign-in…"
+  },
+  "请稍候，正在建立本地会话": {
+    "key": "view.establishingLocalSession",
+    "en": "Please wait while we set up your local session."
+  },
+  "SSO 登录未完成": {
+    "key": "view.ssoLoginIncomplete",
+    "en": "Single sign-on not completed"
+  },
+  "返回账号密码登录": {
+    "key": "view.backToPasswordLogin",
+    "en": "Back to password sign-in"
+  },
+  "未修改": {
+    "key": "common.unchanged",
+    "en": "No changes"
+  },
+  "未保存": {
+    "key": "common.unsaved",
+    "en": "Unsaved"
+  },
+  "保存中": {
+    "key": "common.saving",
+    "en": "Saving"
+  },
+  "当前表单存在未保存的修改，离开将丢失这些修改。": {
+    "key": "form.unsavedLeaveWarning",
+    "en": "This form has unsaved changes that will be lost if you leave."
+  },
+  "出边关键词": {
+    "key": "agent.outgoingKeywords",
+    "en": "Outgoing edge keywords"
+  },
+  "输入关键词后文本命中即走该边；留空为默认边（仅一条）": {
+    "key": "agent.outgoingKeywordsHint",
+    "en": "When the text matches the keywords, this edge is taken. Leave empty for the default edge (only one allowed)."
+  },
+  "关键词（留空=默认边）": {
+    "key": "agent.keywordPlaceholder",
+    "en": "Keywords (empty = default edge)"
+  },
+  "下载响应解析失败": {
+    "key": "foundation.downloadParseFailed",
+    "en": "Could not parse the downloaded response. Please try again."
+  },
+  "创建关联流程": {
+    "key": "form.createRelatedProcess",
+    "en": "Create linked flow",
+    "alias": true
+  },
+  "新建关联流程": {
+    "key": "form.createRelatedProcess",
+    "en": "Create linked flow"
+  },
+  "最近更新时间": {
+    "key": "common.lastUpdatedAt",
+    "en": "Last updated"
+  },
+  "选择部门": {
+    "key": "component.selectDept",
+    "en": "Select a department"
+  },
+  "输入 Token:": {
+    "key": "agent.inputTokensLabel",
+    "en": "Input tokens:"
+  },
+  "输出 Token:": {
+    "key": "agent.outputTokensLabel",
+    "en": "Output tokens:"
+  }
+}

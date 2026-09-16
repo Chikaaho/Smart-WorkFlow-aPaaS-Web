@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+import { useLocalizedMenuTree } from '../menu-title'
+
+const { t } = useI18n()
+const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -17,6 +22,7 @@ import { useAuth } from '@/foundation/auth'
 import { clearDynamicRoutes } from '@/router/guard'
 import { canEnterAdminArea, firstAdminLeafPath, resolveArea } from '@/foundation/area'
 import { buildMenuTrail } from '../menu-utils'
+import LocaleSwitch from '@/components/LocaleSwitch.vue'
 
 // 顶栏（决策文档 · 外壳刀 §5）：折叠按钮 / 面包屑 / 前后台切换 / 用户下拉。
 const route = useRoute()
@@ -27,8 +33,8 @@ const userStore = useUserStore()
 const { logout } = useAuth()
 
 const collapsed = computed(() => appStore.sidebarCollapsed)
-const breadcrumb = computed(() => buildMenuTrail(menuStore.menu, route.path))
-const displayName = computed(() => userStore.user?.displayName || '未登录')
+const breadcrumb = computed(() => buildMenuTrail(localizedMenu.value, route.path))
+const displayName = computed(() => userStore.user?.displayName || t('auth.notSignedIn'))
 
 // v0.0.2 P55：前后台切换。进入后台仅对服务端认可的管理员可见；返回前台任何位置可用。
 const currentArea = computed(() => resolveArea(route.path))
@@ -86,7 +92,7 @@ function onCommand(command: string): void {
 
     <el-button v-if="showEnterAdmin" text class="app-topbar__area-switch" @click="onEnterAdmin">
       <el-icon :size="16"><OfficeBuilding /></el-icon>
-      <span>进入后台</span>
+      <span>{{ t('auth.enterBackend') }}</span>
     </el-button>
     <el-button
       v-if="currentArea === 'admin'"
@@ -95,8 +101,10 @@ function onCommand(command: string): void {
       @click="onBackPortal"
     >
       <el-icon :size="16"><HomeFilled /></el-icon>
-      <span>返回前台</span>
+      <span>{{ t('auth.backToPortal') }}</span>
     </el-button>
+
+    <LocaleSwitch class="app-topbar__locale" />
 
     <el-dropdown trigger="click" @command="onCommand">
       <span class="app-topbar__user">
@@ -106,12 +114,12 @@ function onCommand(command: string): void {
       </span>
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item command="account-bindings" :icon="OfficeBuilding"
-            >账号绑定</el-dropdown-item
-          >
-          <el-dropdown-item command="logout" :icon="SwitchButton" divided
-            >退出登录</el-dropdown-item
-          >
+          <el-dropdown-item command="account-bindings" :icon="OfficeBuilding">{{
+            t('auth.accountBindings')
+          }}</el-dropdown-item>
+          <el-dropdown-item command="logout" :icon="SwitchButton" divided>{{
+            t('auth.signOut')
+          }}</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * MyDrafts — 我的草稿列表页（页型 B）。
  *
@@ -40,10 +43,30 @@ const STATUS_TAG: Record<
   BpmDraftStatus,
   { label: string; type: 'info' | 'warning' | 'success' | 'danger' }
 > = {
-  EDITING: { label: '编辑中', type: 'info' },
-  SUBMITTING: { label: '提交中', type: 'warning' },
-  SUBMITTED: { label: '已提交', type: 'success' },
-  FAILED: { label: '提交失败', type: 'danger' },
+  EDITING: {
+    get label() {
+      return t('common.statusEditing')
+    },
+    type: 'info',
+  },
+  SUBMITTING: {
+    get label() {
+      return t('common.statusSubmitting')
+    },
+    type: 'warning',
+  },
+  SUBMITTED: {
+    get label() {
+      return t('common.statusSubmitted')
+    },
+    type: 'success',
+  },
+  FAILED: {
+    get label() {
+      return t('common.submitFailed')
+    },
+    type: 'danger',
+  },
 }
 
 // 可发起的已发布表单：GET /form/def/published（服务端按可见范围过滤，仅 PUBLISHED）
@@ -58,6 +81,8 @@ async function loadOptions(): Promise<void> {
     const forms = await publishedFormDefs()
     initiateForms.value = forms.map((f) => ({ formKey: f.formKey, name: f.name }))
   } catch {
+    ElMessage.error(t('common.loadFailed'))
+    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     // 发起列表加载失败不阻断草稿页；不提供任意流程标识输入。
   }
 }
@@ -74,7 +99,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载草稿列表失败'
+      errorMsg.value = t('workflow.draftsLoadFailed')
     }
   } finally {
     loading.value = false
@@ -111,9 +136,13 @@ function openEdit(row: BpmDraft) {
 // ─── 删除 ───
 async function handleDelete(row: BpmDraft) {
   try {
-    await ElMessageBox.confirm('确认删除该草稿？删除后不可恢复。', '删除确认', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('workflow.deleteDraftConfirm'), t('common.deleteConfirmTitle'), {
+      get confirmButtonText() {
+        return t('common.delete')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
       type: 'warning',
     })
   } catch {
@@ -121,10 +150,10 @@ async function handleDelete(row: BpmDraft) {
   }
   try {
     await deleteDraft(row.id)
-    ElMessage.success('草稿已删除')
+    ElMessage.success(t('workflow.draftDeleted'))
     await loadList()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '删除草稿失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.draftDeleteFailed'))
   }
 }
 
@@ -132,9 +161,13 @@ async function handleDelete(row: BpmDraft) {
 async function handleSubmit(row: BpmDraft) {
   if (submittingId.value !== null) return
   try {
-    await ElMessageBox.confirm('确认提交该草稿进入审批流程？', '提交确认', {
-      confirmButtonText: '提交',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('workflow.submitDraftConfirm'), t('workflow.submitConfirmTitle'), {
+      get confirmButtonText() {
+        return t('common.submit')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
       type: 'info',
     })
   } catch {
@@ -145,15 +178,15 @@ async function handleSubmit(row: BpmDraft) {
     const accept = await submitDraft(row.id)
     const finalStatus = await pollCommandStatus(accept.commandId)
     if (finalStatus?.status === 'COMPLETED') {
-      ElMessage.success('提交成功')
+      ElMessage.success(t('common.submitSuccess'))
     } else if (finalStatus?.status === 'FAILED') {
-      ElMessage.error(finalStatus.failureReason ?? '提交失败')
+      ElMessage.error(finalStatus.failureReason ?? t('common.submitFailed'))
     } else {
       // 超时未终态：如实提示，不伪装成功
-      ElMessage.warning('处理中，可稍后在结果中查看')
+      ElMessage.warning(t('common.processingCheckLater'))
     }
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '提交失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('common.submitFailed'))
   } finally {
     submittingId.value = null
     await loadList()
@@ -184,24 +217,24 @@ onMounted(() => {
        置于列表模板之外：0 草稿的空态下发起入口仍可见（A2 首次发起可用）。 -->
   <el-card shadow="never" class="initiate-card" data-testid="initiate-forms">
     <template #header>
-      <span>可发起的已发布表单</span>
+      <span>{{ t('workflow.startableForms') }}</span>
     </template>
-    <el-table :data="initiateForms" size="small" empty-text="暂无可发起的已发布表单">
-      <el-table-column prop="name" label="表单名称" min-width="160" />
-      <el-table-column prop="formKey" label="表单标识" min-width="160" />
-      <el-table-column label="操作" width="90">
+    <el-table :data="initiateForms" size="small" :empty-text="t('workflow.noStartableForms')">
+      <el-table-column prop="name" :label="t('common.formName')" min-width="160" />
+      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="160" />
+      <el-table-column :label="t('common.actions')" width="90">
         <template #default="{ row }">
-          <el-button type="primary" size="small" @click="startFromForm(row.formKey)">
-            发起
-          </el-button>
+          <el-button type="primary" size="small" @click="startFromForm(row.formKey)">{{
+            t('common.start')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
-    <p class="draft-flow-hint">审批流程由系统根据已发布表单的有效绑定自动解析。</p>
+    <p class="draft-flow-hint">{{ t('workflow.autoResolveProcessHint') }}</p>
   </el-card>
 
   <StandardListTemplate
-    title="我的草稿"
+    :title="t('workflow.myDrafts')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -211,7 +244,7 @@ onMounted(() => {
   >
     <!-- 空态 -->
     <template #empty-action>
-      <span class="draft-flow-hint">可从上方"可发起的已发布表单"点击"发起"进入填报</span>
+      <span class="draft-flow-hint">{{ t('workflow.startFromListHint') }}</span>
     </template>
 
     <!-- 错误提示 -->
@@ -226,33 +259,35 @@ onMounted(() => {
 
     <!-- 表格 -->
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
-      <el-table-column label="标题" min-width="140">
+      <el-table-column :label="t('common.title')" min-width="140">
         <template #default="{ row }">
           {{ row.title ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="formKey" label="表单标识" min-width="130" />
-      <el-table-column label="流程" min-width="140">
+      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="130" />
+      <el-table-column :label="t('common.process')" min-width="140">
         <template #default="{ row }">
           {{ row.processDefKey ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="100">
+      <el-table-column :label="t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="STATUS_TAG[row.status as BpmDraftStatus]?.type ?? 'info'" size="small">
             {{ STATUS_TAG[row.status as BpmDraftStatus]?.label ?? row.status }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="失败原因" min-width="160">
+      <el-table-column :label="t('common.failureReason')" min-width="160">
         <template #default="{ row }">
           {{ row.lastError ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="updateTime" label="更新时间" min-width="170" />
-      <el-table-column label="操作" width="190" fixed="right">
+      <el-table-column prop="updateTime" :label="t('common.updateTime')" min-width="170" />
+      <el-table-column :label="t('common.actions')" width="190" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" type="primary" link @click="openEditRow(row)">编辑</el-button>
+          <el-button size="small" type="primary" link @click="openEditRow(row)">{{
+            t('common.edit')
+          }}</el-button>
           <el-button
             size="small"
             type="success"
@@ -260,10 +295,11 @@ onMounted(() => {
             :loading="submittingId === row.id"
             :disabled="submittingId !== null"
             @click="submitRow(row)"
+            >{{ t('common.submit') }}</el-button
           >
-            提交
-          </el-button>
-          <el-button size="small" type="danger" link @click="deleteRow(row)">删除</el-button>
+          <el-button size="small" type="danger" link @click="deleteRow(row)">{{
+            t('common.delete')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>

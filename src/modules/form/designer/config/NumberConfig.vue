@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 数字（NUMBER）配置面板。
  * 契约键：label / name / required。
@@ -23,6 +26,13 @@ const emit = defineEmits<{ update: [patch: FieldPatch] }>()
       @update="(p) => emit('update', p)"
     />
 
-    <ConfigSeamNote :items="['最小值', '最大值', '步长 / 精度', '默认值']" />
+    <ConfigSeamNote
+      :items="[
+        t('form.configSeamMin'),
+        t('form.configSeamMax'),
+        t('form.configSeamStep'),
+        t('form.defaultValue'),
+      ]"
+    />
   </div>
 </template>

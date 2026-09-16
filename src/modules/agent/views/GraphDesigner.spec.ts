@@ -548,7 +548,7 @@ describe('GraphDesigner.vue', () => {
   it('可插拔性：测试型注册新节点面板（PROBE），GraphDesigner 消费方零改动即渲染', async () => {
     registerNodePanelDescriptor({
       type: 'PROBE',
-      label: '探针',
+      labelKey: 'agent.nodeProbe',
       component: defineComponent({
         name: 'ProbePanel',
         template: '<div data-testid="probe-panel">探针面板内容</div>',

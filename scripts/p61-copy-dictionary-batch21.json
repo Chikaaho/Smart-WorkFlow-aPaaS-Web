@@ -1,0 +1,383 @@
+{
+  "_comment": "P61 R8b 批次21：数据库 sys_menu 种子的菜单与权限标题（在侧边栏/面包屑/角色授权树中对用户可见）。命名以标题形态判定：动作/权限描述用 perm.*，页面菜单用 menu.*；取值一律经 useMenuTitle 渲染期解析，服务端标题作回退。",
+  "模型新建/编辑/删除": {
+    "key": "perm.AgentModelManage",
+    "en": "Create/edit/delete models"
+  },
+  "模型连通性测试": {
+    "key": "perm.AgentModelTest",
+    "en": "Model connectivity test"
+  },
+  "工具新建/编辑/删除/启停": {
+    "key": "perm.AgentToolManage",
+    "en": "Create/edit/delete/toggle tools"
+  },
+  "批量审批": {
+    "key": "workflow.batchApproval",
+    "en": "Batch approval"
+  },
+  "分类/事项管理": {
+    "key": "perm.CatalogManage",
+    "en": "Category/item management"
+  },
+  "部门新增": {
+    "key": "perm.DeptCreate",
+    "en": "Create department"
+  },
+  "部门删除": {
+    "key": "perm.DeptDelete",
+    "en": "Delete department"
+  },
+  "部门修改": {
+    "key": "perm.DeptUpdate",
+    "en": "Edit department"
+  },
+  "记录删除": {
+    "key": "perm.FormDataDelete",
+    "en": "Delete record"
+  },
+  "记录编辑": {
+    "key": "perm.FormDataEdit",
+    "en": "Edit record"
+  },
+  "数据导出": {
+    "key": "perm.FormDataExport",
+    "en": "Export data"
+  },
+  "数据导入": {
+    "key": "perm.FormDataImport",
+    "en": "Import data"
+  },
+  "记录查询": {
+    "key": "perm.FormDataQuery",
+    "en": "Query records"
+  },
+  "表单填报提交": {
+    "key": "perm.FormDataSubmit",
+    "en": "Submit form entry"
+  },
+  "下载模板": {
+    "key": "form.downloadTemplate",
+    "en": "Download template"
+  },
+  "表单发布": {
+    "key": "perm.FormDesignPublish",
+    "en": "Publish form"
+  },
+  "表单草稿保存": {
+    "key": "perm.FormDesignSave",
+    "en": "Save form draft"
+  },
+  "实例监控干预": {
+    "key": "router.instanceMonitor",
+    "en": "Instance monitoring intervention"
+  },
+  "监控干预操作": {
+    "key": "perm.InstanceMonitorManage",
+    "en": "Monitoring intervention"
+  },
+  "连接配置": {
+    "key": "iot.connectionConfig",
+    "en": "Connections"
+  },
+  "设备管理": {
+    "key": "iot.deviceManagement",
+    "en": "Devices"
+  },
+  "流程设备动作": {
+    "key": "iot.processDeviceActions",
+    "en": "Process device actions"
+  },
+  "产品物模型": {
+    "key": "menu.IotProductList",
+    "en": "Products and thing models"
+  },
+  "事件规则": {
+    "key": "iot.eventRules",
+    "en": "Event rules"
+  },
+  "运行记录": {
+    "key": "iot.runtimeLogsTitle",
+    "en": "Runtime logs"
+  },
+  "受控脚本": {
+    "key": "iot.scriptListTitle",
+    "en": "Sandboxed scripts"
+  },
+  "Topic 配置": {
+    "key": "iot.topicConfig",
+    "en": "Topic configuration"
+  },
+  "定时任务": {
+    "key": "job.scheduledJobs",
+    "en": "Scheduled jobs"
+  },
+  "任务新增": {
+    "key": "perm.JobCreate",
+    "en": "Create job"
+  },
+  "任务删除": {
+    "key": "perm.JobDelete",
+    "en": "Delete job"
+  },
+  "任务暂停": {
+    "key": "perm.JobPause",
+    "en": "Pause job"
+  },
+  "任务恢复": {
+    "key": "perm.JobResume",
+    "en": "Resume job"
+  },
+  "任务触发": {
+    "key": "perm.JobTrigger",
+    "en": "Trigger job"
+  },
+  "任务修改": {
+    "key": "perm.JobUpdate",
+    "en": "Edit job"
+  },
+  "低代码": {
+    "key": "menu.lowcode",
+    "en": "Low-code"
+  },
+  "批量发送": {
+    "key": "menu.NotifyBatchSend",
+    "en": "Batch send"
+  },
+  "批量发送操作": {
+    "key": "perm.NotifyBatchSendAction",
+    "en": "Batch send action"
+  },
+  "渠道启停/重试策略": {
+    "key": "perm.NotifyChannelManage",
+    "en": "Channel toggling / retry policy"
+  },
+  "发送记录": {
+    "key": "router.sendRecords",
+    "en": "Delivery records"
+  },
+  "记录必要详情（含正文与尝试流水，独立权限并审计）": {
+    "key": "perm.NotifyRecordDetail",
+    "en": "Record detail (body and attempts; separate permission, audited)"
+  },
+  "失败重发": {
+    "key": "perm.NotifyRecordResend",
+    "en": "Resend failures"
+  },
+  "规则新建/编辑/启停/删除": {
+    "key": "perm.NotifyRuleManage",
+    "en": "Create/edit/toggle/delete rules"
+  },
+  "模板新建/编辑/删除/启停/预览/发送": {
+    "key": "perm.NotifyTemplateManage",
+    "en": "Create/edit/delete/toggle/preview/send templates"
+  },
+  "岗位新增": {
+    "key": "perm.PostCreate",
+    "en": "Create post"
+  },
+  "岗位删除": {
+    "key": "perm.PostDelete",
+    "en": "Delete post"
+  },
+  "岗位修改": {
+    "key": "perm.PostUpdate",
+    "en": "Edit post"
+  },
+  "流程分析": {
+    "key": "workflow.processAnalytics",
+    "en": "Process analytics"
+  },
+  "流程中心": {
+    "key": "workflow.processCenter",
+    "en": "Process center"
+  },
+  "角色新增": {
+    "key": "perm.RoleCreate",
+    "en": "Create role"
+  },
+  "角色删除": {
+    "key": "perm.RoleDelete",
+    "en": "Delete role"
+  },
+  "角色修改": {
+    "key": "perm.RoleUpdate",
+    "en": "Edit role"
+  },
+  "文件删除": {
+    "key": "perm.StorageDelete",
+    "en": "Delete file"
+  },
+  "文件下载": {
+    "key": "perm.StorageDownload",
+    "en": "Download file"
+  },
+  "文件上传": {
+    "key": "perm.StorageUpload",
+    "en": "Upload file"
+  },
+  "流程交接": {
+    "key": "workflow.handoverTitle",
+    "en": "Task handover"
+  },
+  "流程模板中心": {
+    "key": "router.processTemplateCenter",
+    "en": "Process template center"
+  },
+  "模板复制": {
+    "key": "perm.TemplateCopy",
+    "en": "Copy template"
+  },
+  "模板新建": {
+    "key": "perm.TemplateCreate",
+    "en": "Create template"
+  },
+  "模板删除": {
+    "key": "perm.TemplateDelete",
+    "en": "Delete template"
+  },
+  "模板编辑": {
+    "key": "perm.TemplateSave",
+    "en": "Edit template"
+  },
+  "模板查看": {
+    "key": "perm.TemplateView",
+    "en": "View template"
+  },
+  "用户新增": {
+    "key": "perm.UserCreate",
+    "en": "Create user"
+  },
+  "用户删除": {
+    "key": "perm.UserDelete",
+    "en": "Delete user"
+  },
+  "用户修改": {
+    "key": "perm.UserUpdate",
+    "en": "Edit user"
+  },
+  "流程创建": {
+    "key": "menu.WorkflowDefCreate",
+    "en": "Create process"
+  },
+  "流程删除": {
+    "key": "perm.WorkflowDefDelete",
+    "en": "Delete process"
+  },
+  "流程发布": {
+    "key": "perm.WorkflowDefPublish",
+    "en": "Publish process"
+  },
+  "流程定义": {
+    "key": "common.processDef",
+    "en": "Process definitions"
+  },
+  "流程修改": {
+    "key": "perm.WorkflowDefSave",
+    "en": "Edit process"
+  },
+  "发布版本挂起/激活": {
+    "key": "perm.WorkflowDefSuspend",
+    "en": "Suspend/activate published version"
+  },
+  "流程草稿校验": {
+    "key": "perm.WorkflowDefValidate",
+    "en": "Validate process draft"
+  },
+  "流程设计器页": {
+    "key": "menu.WorkflowDesigner",
+    "en": "Process designer"
+  },
+  "流程监控": {
+    "key": "workflow.monitor",
+    "en": "Process monitor"
+  },
+  "抄送我的": {
+    "key": "router.myCc",
+    "en": "CC to me"
+  },
+  "我的草稿": {
+    "key": "workflow.myDrafts",
+    "en": "My drafts"
+  },
+  "我发起的": {
+    "key": "common.startedByMe",
+    "en": "Started by me"
+  },
+  "我的已办": {
+    "key": "workflow.myProcessed",
+    "en": "My processed"
+  },
+  "P0紧急流程调用": {
+    "key": "perm.WorkflowP0Dispatch",
+    "en": "P0 emergency process invocation"
+  },
+  "已办任务": {
+    "key": "workflow.processedTasks",
+    "en": "Processed tasks"
+  },
+  "任务加签/补签": {
+    "key": "perm.WorkflowTaskAddSign",
+    "en": "Task add-sign / supplement sign"
+  },
+  "授权代理规则": {
+    "key": "perm.WorkflowTaskAuthorize",
+    "en": "Delegation rules"
+  },
+  "沟通征询": {
+    "key": "workflow.consult",
+    "en": "Consultation"
+  },
+  "任务委托": {
+    "key": "perm.WorkflowTaskDelegate",
+    "en": "Task delegation"
+  },
+  "实例废弃": {
+    "key": "perm.WorkflowTaskDiscard",
+    "en": "Discard instance"
+  },
+  "时限与自动动作管理": {
+    "key": "perm.WorkflowTaskManage",
+    "en": "Time limits and automated actions"
+  },
+  "任务转办": {
+    "key": "perm.WorkflowTaskTransfer",
+    "en": "Task transfer"
+  },
+  "发起人撤回": {
+    "key": "perm.WorkflowTaskWithdraw",
+    "en": "Initiator withdrawal"
+  },
+  "待办任务": {
+    "key": "workflow.todoTasks",
+    "en": "To-do tasks"
+  },
+  "催办": {
+    "key": "workflow.urge",
+    "en": "Urge"
+  },
+  "系统管理": {
+    "key": "menu.system",
+    "en": "System"
+  },
+  "低代码概览": {
+    "key": "menu.lowcodeHome",
+    "en": "Low-code overview"
+  },
+  "表单设计": {
+    "key": "form.tabDesign",
+    "en": "Form design"
+  },
+  "数据源管理": {
+    "key": "perm.ds_manage",
+    "en": "Datasource management"
+  },
+  "数据源执行": {
+    "key": "perm.ds_execute",
+    "en": "Datasource execution"
+  },
+  "SSO审计查询": {
+    "key": "perm.sso_audit",
+    "en": "SSO audit query"
+  }
+}

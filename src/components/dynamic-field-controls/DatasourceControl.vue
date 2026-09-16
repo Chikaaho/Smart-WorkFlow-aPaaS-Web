@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 受控外部数据源（DATASOURCE）控件（I2）。
  * 值 = 稳定对象标识（valueField 列）；候选经服务端统一查询入口加载
@@ -6,6 +9,7 @@
  * 提交时服务端按契约解析 display 并冻结摘要，伪造/越权对象被拒绝。
  */
 import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
 import type { DatasourceField } from '@/contracts/form-schema'
 import { extQuery, type ExtQueryRow } from '@/modules/form/api/i2-choices'
@@ -31,7 +35,8 @@ onMounted(async () => {
       label: String(row[binding.displayField] ?? row[binding.valueField] ?? ''),
     }))
   } catch {
-    // 契约缺失/停用/超限为可判定失败：不伪造候选，留空由服务端提交链兜底
+    // 契约缺失/停用/超限为可判定失败：不伪造候选，但必须让作者看见失败
+    ElMessage.error(t('common.loadFailed'))
     options.value = []
   }
   const current =
@@ -53,7 +58,7 @@ function onChange(value: unknown) {
     filterable
     clearable
     :disabled="readonly"
-    placeholder="选择数据对象"
+    :placeholder="t('component.selectDataObject')"
     @change="onChange"
   >
     <el-option v-for="o in options" :key="o.value" :label="o.label" :value="o.value" />

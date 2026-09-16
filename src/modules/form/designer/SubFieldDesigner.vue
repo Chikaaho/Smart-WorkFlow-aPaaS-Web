@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 子表盖层子画布 —— 编辑子表字段的内部字段。
  *
@@ -77,8 +80,10 @@ function back() {
 <template>
   <div class="sub-designer">
     <header class="sub-designer__header">
-      <el-button class="sub-designer__back" :icon="ArrowLeft" link @click="back">返回</el-button>
-      <span class="sub-designer__title">子表字段编辑 · {{ tableLabel }}</span>
+      <el-button class="sub-designer__back" :icon="ArrowLeft" link @click="back">{{
+        t('common.back')
+      }}</el-button>
+      <span class="sub-designer__title">{{ t('form.subFieldEditorTitle', { tableLabel }) }}</span>
     </header>
 
     <div class="sub-designer__body">

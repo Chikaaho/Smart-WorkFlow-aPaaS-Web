@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * RulesEditor — 字段显隐联动规则编辑（v0.0.2 P2）。
  *
@@ -69,30 +72,30 @@ function needsValue(op: VisibilityCondition['op']): boolean {
 <template>
   <div class="rules-editor">
     <div class="rules-editor__head">
-      <span class="rules-editor__title">显隐联动</span>
+      <span class="rules-editor__title">{{ t('form.visibilityRule') }}</span>
       <el-switch :model-value="hasRule" @update:model-value="onToggle" />
     </div>
 
     <template v-if="hasRule && rule">
       <div class="rules-editor__row">
-        <span class="rules-editor__label">满足</span>
+        <span class="rules-editor__label">{{ t('form.whenLabel') }}</span>
         <el-select
           :model-value="rule.logic"
           size="small"
           style="width: 90px"
           @update:model-value="onLogic"
         >
-          <el-option label="全部条件" value="ALL" />
-          <el-option label="任一条件" value="ANY" />
+          <el-option :label="t('form.allConditions')" value="ALL" />
+          <el-option :label="t('form.anyCondition')" value="ANY" />
         </el-select>
-        <span class="rules-editor__hint">时显示本字段</span>
+        <span class="rules-editor__hint">{{ t('form.showThisField') }}</span>
       </div>
 
       <div v-for="(condition, index) in rule.conditions" :key="index" class="rules-editor__row">
         <el-select
           :model-value="condition.field"
           size="small"
-          placeholder="字段"
+          :placeholder="t('common.field')"
           style="width: 110px"
           @update:model-value="(v: string) => onConditionChange(index, { field: v })"
         >
@@ -106,24 +109,28 @@ function needsValue(op: VisibilityCondition['op']): boolean {
             (v: VisibilityCondition['op']) => onConditionChange(index, { op: v })
           "
         >
-          <el-option label="等于" value="EQ" />
-          <el-option label="不等于" value="NE" />
-          <el-option label="为空" value="EMPTY" />
-          <el-option label="非空" value="NOT_EMPTY" />
+          <el-option :label="t('form.opEquals')" value="EQ" />
+          <el-option :label="t('form.opNotEquals')" value="NE" />
+          <el-option :label="t('form.opIsEmpty')" value="EMPTY" />
+          <el-option :label="t('form.opIsNotEmpty')" value="NOT_EMPTY" />
         </el-select>
         <el-input
           v-if="needsValue(condition.op)"
           :model-value="condition.value ?? ''"
           size="small"
-          placeholder="值"
+          :placeholder="t('common.value')"
           style="width: 90px"
           @update:model-value="(v: string) => onConditionChange(index, { value: v })"
         />
-        <el-button size="small" text type="danger" @click="removeCondition(index)">删</el-button>
+        <el-button size="small" text type="danger" @click="removeCondition(index)">{{
+          t('form.removeCondition')
+        }}</el-button>
       </div>
 
-      <el-button size="small" text type="primary" @click="addCondition">+ 加条件</el-button>
-      <p class="rules-editor__note">正式提交时由服务端复算并过滤隐藏字段；草稿保留原输入。</p>
+      <el-button size="small" text type="primary" @click="addCondition">{{
+        t('form.addCondition')
+      }}</el-button>
+      <p class="rules-editor__note">{{ t('form.visibilityRuleNote') }}</p>
     </template>
   </div>
 </template>

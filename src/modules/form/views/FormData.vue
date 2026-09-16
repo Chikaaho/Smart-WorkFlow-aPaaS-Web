@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /* global Event, HTMLInputElement, URL, document */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, LoadErrorState } from '@/components/page-layout'
 import DictSelect from '@/foundation/dict/DictSelect.vue'
 import DictTag from '@/foundation/dict/DictTag.vue'
 import {
@@ -20,6 +23,7 @@ import { usePermission } from '@/foundation/permission'
 import { deriveColumns, deriveFilterFields } from '@/modules/form/utils/derive-list-config'
 import { getListConfig } from '@/modules/form/api/i2-choices'
 import { getErrorMessage } from '@/foundation/request/error-code-map'
+import { ApiError } from '@/foundation/request'
 import type { FormSchema } from '@/contracts/form-schema'
 import type { PageResult } from '@/contracts/common'
 
@@ -35,6 +39,8 @@ const formKey = String(route.params.formKey)
 // ── 状态 ──
 const loading = ref(false)
 const errorMsg = ref('')
+/** 查询失败的归一化对象；有值时渲染分类错误态与重试入口，而不是空表。 */
+const loadError = ref<ApiError | null>(null)
 const schema = ref<FormSchema | null>(null)
 const result = ref<PageResult<Record<string, unknown>> | null>(null)
 const pageNum = ref(1)
@@ -79,18 +85,35 @@ const dateRange = ref<[string, string] | null>(null)
 const dateFieldName = ref('')
 
 // ── 空态 ──
+// 失败不能被渲染成「暂无数据」：查询失败与成功空结果是两种状态。
 const isEmpty = computed(
-  () => !loading.value && !errorMsg.value && (result.value?.list.length ?? 0) === 0,
+  () =>
+    !loading.value && !errorMsg.value && !loadError.value && (result.value?.list.length ?? 0) === 0,
 )
 
 // ── 导入相关状态 ──
 const importLoading = ref(false)
+const importResultVisible = ref(false)
 const importResult = ref<{
   totalRows: number
   successCount: number
   errorCount: number
   errors: Array<{ rowNum: number; message: string }>
+  processing: number
 } | null>(null)
+
+/** 处理中取服务端同步契约的显式值（恒为 0），不由前端臆算。 */
+const importProcessingCount = computed(() => importResult.value?.processing ?? 0)
+
+/**
+ * 整批回滚判定：失败行数多于实际不合法明细时，说明其余行是被整批原子策略连带
+ * 回滚的，而不是本身有问题。页面必须把这件事讲清楚，不用「失败 N」冒充 N 行都错。
+ */
+const importRolledBack = computed(() => {
+  const failed = importResult.value?.errorCount ?? 0
+  const invalid = importResult.value?.errors?.length ?? 0
+  return failed > invalid
+})
 
 // ── 加载 definition ──
 async function loadDefinition() {
@@ -110,7 +133,7 @@ async function loadDefinition() {
       }
     }
   } catch {
-    errorMsg.value = '表单定义加载失败：后端端点待上线'
+    errorMsg.value = t('form.definitionEndpointPending')
   }
 }
 
@@ -118,6 +141,7 @@ async function loadDefinition() {
 async function loadData() {
   loading.value = true
   errorMsg.value = ''
+  loadError.value = null
   try {
     const filters: QueryFilter[] = []
     // 普通筛选字段
@@ -140,10 +164,10 @@ async function loadData() {
       filters,
     })
   } catch (err: unknown) {
-    const errObj = err as { code?: number; message?: string }
-    const code = errObj.code ?? 0
-    const msg = getErrorMessage(code, errObj.message)
-    errorMsg.value = `查询失败：${msg}`
+    // 不再从裸对象猜 code/message：请求层已把 4xx/5xx/网络/超时归一为带分类的 ApiError，
+    // 页面按分类给出结论与恢复动作，并保留事件引用供用户反馈。
+    loadError.value = err instanceof ApiError ? err : null
+    errorMsg.value = loadError.value ? '' : t('form.queryFailed', { msg: String(err) })
     result.value = null
   } finally {
     loading.value = false
@@ -194,9 +218,13 @@ function handleEdit(row: Record<string, unknown>) {
 
 async function handleDelete(row: Record<string, unknown>) {
   try {
-    await ElMessageBox.confirm('确认删除该记录？此操作不可恢复。', '删除确认', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('form.deleteRecordConfirm'), t('common.deleteConfirmTitle'), {
+      get confirmButtonText() {
+        return t('common.confirm')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
       type: 'warning',
     })
   } catch {
@@ -205,7 +233,7 @@ async function handleDelete(row: Record<string, unknown>) {
 
   try {
     await deleteFormData(formKey, String(row.id))
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     await loadData()
   } catch (err: unknown) {
     const errObj = err as { code?: number; message?: string }
@@ -225,7 +253,7 @@ function formatCellValue(
 
   switch (col.type) {
     case 'BOOL':
-      return raw === 1 || raw === true || raw === '1' ? '是' : '否'
+      return raw === 1 || raw === true || raw === '1' ? t('common.yes') : t('common.no')
     case 'DATE':
       return String(raw)
     case 'REFERENCE':
@@ -251,12 +279,12 @@ async function handleDownloadTemplate() {
     a.click()
     URL.revokeObjectURL(url)
     document.body.removeChild(a)
-    ElMessage.success('模板下载成功')
+    ElMessage.success(t('form.templateDownloaded'))
   } catch (err: unknown) {
     const errObj = err as { code?: number; message?: string }
     const code = errObj.code ?? 0
     const msg = getErrorMessage(code, errObj.message)
-    ElMessage.error(`模板下载失败：${msg}`)
+    ElMessage.error(t('form.templateDownloadFailed', { msg }))
   }
 }
 
@@ -274,7 +302,7 @@ async function handleFileChange(event: Event) {
 
   // 验证文件类型
   if (!file.name.endsWith('.xlsx')) {
-    ElMessage.error('请选择 .xlsx 格式的文件')
+    ElMessage.error(t('form.importSelectXlsx'))
     return
   }
 
@@ -284,18 +312,25 @@ async function handleFileChange(event: Event) {
   try {
     const result = await importFormData(formKey, file)
     importResult.value = result
+    // R2c：总量/成功/失败与逐行明细必须可见，不能只靠一条 toast
+    importResultVisible.value = true
 
     if (result.errorCount === 0) {
-      ElMessage.success(`导入成功：${result.successCount} 条数据`)
+      ElMessage.success(t('form.importSucceeded', { successCount: result.successCount }))
       await loadData()
     } else {
-      ElMessage.warning(`导入完成：成功 ${result.successCount} 条，失败 ${result.errorCount} 条`)
+      ElMessage.warning(
+        t('form.importCompletedWithErrors', {
+          successCount: result.successCount,
+          errorCount: result.errorCount,
+        }),
+      )
     }
   } catch (err: unknown) {
     const errObj = err as { code?: number; message?: string }
     const code = errObj.code ?? 0
     const msg = getErrorMessage(code, errObj.message)
-    ElMessage.error(`导入失败：${msg}`)
+    ElMessage.error(t('form.importFailed', { msg }))
   } finally {
     importLoading.value = false
     // 清空文件输入
@@ -341,12 +376,12 @@ async function handleExport() {
     a.click()
     URL.revokeObjectURL(url)
     document.body.removeChild(a)
-    ElMessage.success('导出成功')
+    ElMessage.success(t('form.exported'))
   } catch (err: unknown) {
     const errObj = err as { code?: number; message?: string }
     const code = errObj.code ?? 0
     const msg = getErrorMessage(code, errObj.message)
-    ElMessage.error(`导出失败：${msg}`)
+    ElMessage.error(t('form.exportFailed', { msg }))
   } finally {
     exportLoading.value = false
   }
@@ -363,7 +398,7 @@ onMounted(async () => {
 
 <template>
   <StandardListTemplate
-    :title="schema?.title ?? `表单数据 — ${formKey}`"
+    :title="schema?.title ?? t('form.dataDialogTitle', { formKey })"
     :total="result?.total ?? 0"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -391,8 +426,8 @@ onMounted(async () => {
           clearable
           style="width: 120px"
         >
-          <el-option label="是" value="1" />
-          <el-option label="否" value="0" />
+          <el-option :label="t('common.yes')" value="1" />
+          <el-option :label="t('common.no')" value="0" />
         </el-select>
         <!-- DICT → select + useDict -->
         <DictSelect
@@ -407,9 +442,9 @@ onMounted(async () => {
           v-else-if="ff.type === 'DATE'"
           v-model="dateRange"
           type="daterange"
-          range-separator="至"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
+          :range-separator="t('common.to')"
+          :start-placeholder="t('common.startDate')"
+          :end-placeholder="t('common.endDate')"
           value-format="YYYY-MM-DD"
           style="width: 240px"
         />
@@ -418,9 +453,12 @@ onMounted(async () => {
 
     <!-- 筛选操作按钮 -->
     <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
+
+    <!-- 查询失败：分类错误态 + 恢复动作 + 重试，不再渲染成空表或空态 -->
+    <LoadErrorState v-if="loadError" :error="loadError" @retry="loadData" />
 
     <!-- 表格 -->
     <el-table
@@ -466,22 +504,32 @@ onMounted(async () => {
       </el-table-column>
 
       <!-- 操作列 -->
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column :label="t('common.actions')" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="handleView(row)">查看</el-button>
-          <el-button size="small" link type="primary" @click="handleEdit(row)">编辑</el-button>
-          <el-button size="small" link type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-button size="small" link type="primary" @click="handleView(row)">{{
+            t('common.view')
+          }}</el-button>
+          <el-button size="small" link type="primary" @click="handleEdit(row)">{{
+            t('common.edit')
+          }}</el-button>
+          <el-button size="small" link type="danger" @click="handleDelete(row)">{{
+            t('common.delete')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <!-- toolbar 操作 -->
     <template #toolbar-actions>
-      <el-button v-if="canTemplate" @click="handleDownloadTemplate">下载模板</el-button>
-      <el-button v-if="canImport" :loading="importLoading" @click="handleImportClick"
-        >导入</el-button
-      >
-      <el-button v-if="canExport" :loading="exportLoading" @click="handleExport">导出</el-button>
+      <el-button v-if="canTemplate" @click="handleDownloadTemplate">{{
+        t('form.downloadTemplate')
+      }}</el-button>
+      <el-button v-if="canImport" :loading="importLoading" @click="handleImportClick">{{
+        t('common.import')
+      }}</el-button>
+      <el-button v-if="canExport" :loading="exportLoading" @click="handleExport">{{
+        t('common.export')
+      }}</el-button>
       <input
         ref="fileInputRef"
         type="file"
@@ -489,6 +537,69 @@ onMounted(async () => {
         style="display: none"
         @change="handleFileChange"
       />
+
+      <!-- R2c 导入结果：总量/成功/失败/处理中 + 逐行安全明细（不直出原始异常） -->
+      <el-dialog v-model="importResultVisible" :title="t('form.importResultTitle')" width="620px">
+        <el-descriptions :column="4" border>
+          <el-descriptions-item :label="t('form.importTotalRows')">
+            <span data-testid="import-result-total">{{ importResult?.totalRows ?? 0 }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('common.resultSuccess')">
+            <span data-testid="import-result-success">{{ importResult?.successCount ?? 0 }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('common.resultFailed')">
+            <span data-testid="import-result-failed">{{ importResult?.errorCount ?? 0 }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('common.resultProcessing')">
+            <span data-testid="import-result-processing">{{ importProcessingCount }}</span>
+          </el-descriptions-item>
+        </el-descriptions>
+        <p class="import-processing-note" data-testid="import-result-processing-note">
+          {{ t('form.importProcessingNote') }}
+        </p>
+        <!--
+          整批原子契约：任一行不合法则整批不落库。此时「失败」= 未落库的行数，
+          而明细只列出真正不合法的行；两者数量不同必须解释，否则用户会把
+          「失败 3」读成「3 行都有问题」。
+        -->
+        <p
+          v-if="importRolledBack"
+          class="import-rollback-note"
+          data-testid="import-result-rollback-note"
+        >
+          {{
+            t('form.importAtomicRollbackNote', {
+              failed: importResult?.errorCount ?? 0,
+              invalid: importResult?.errors?.length ?? 0,
+            })
+          }}
+        </p>
+        <template v-if="(importResult?.errors?.length ?? 0) > 0">
+          <div class="import-errors__title">{{ t('form.importErrorRows') }}</div>
+          <el-table :data="importResult?.errors ?? []" size="small" max-height="260">
+            <el-table-column prop="rowNum" :label="t('form.importRowNumber')" width="90" />
+            <el-table-column prop="message" :label="t('common.reason')" min-width="260" />
+          </el-table>
+        </template>
+        <template #footer>
+          <el-button type="primary" @click="importResultVisible = false">{{
+            t('common.confirm')
+          }}</el-button>
+        </template>
+      </el-dialog>
     </template>
   </StandardListTemplate>
 </template>
+
+<style scoped>
+.import-processing-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #909399;
+}
+.import-rollback-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #e6a23c;
+}
+</style>

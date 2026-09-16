@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * IotFlowActions — 流程设备动作配置（P21 A6/G2a）。
  *
@@ -8,7 +12,7 @@
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { request } from '@/foundation/request'
+import { ApiError, request } from '@/foundation/request'
 import { listEligibleDevices, type IotDevice } from '../api'
 
 interface ProcessDefRow {
@@ -22,6 +26,8 @@ interface ProcessDefRow {
 }
 
 const loading = ref(false)
+/** 本次加载的失败原因；非空时页面显示错误态而不是空态。 */
+const loadError = ref('')
 const defs = ref<ProcessDefRow[]>([])
 const devices = ref<IotDevice[]>([])
 
@@ -38,7 +44,9 @@ const form = reactive({
   failurePolicy: 'BLOCK',
 })
 
-const isEmpty = computed(() => !loading.value && defs.value.length === 0)
+const isEmpty = computed(
+  () => !loading.value && !loadError.value && !loadError.value && defs.value.length === 0,
+)
 
 interface ActionConfig {
   enabled: boolean
@@ -62,6 +70,7 @@ function parseAction(row: ProcessDefRow): ActionConfig | null {
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     const page = await request<{ records: ProcessDefRow[] }>({
       method: 'GET',
@@ -70,6 +79,8 @@ async function load() {
     })
     defs.value = page.records
     devices.value = await listEligibleDevices()
+  } catch (err) {
+    loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
@@ -82,11 +93,17 @@ function deviceName(deviceId?: number): string {
 }
 
 function sourceLabel(config: ActionConfig | null): string {
-  if (!config || !config.enabled) return '未启用'
+  if (!config || !config.enabled) return t('iot.notEnabled')
   const map: Record<string, string> = {
-    FIXED: '设计时固定',
-    FORM_FIELD: '发起表单字段',
-    VARIABLE: '流程变量',
+    get FIXED() {
+      return t('iot.deviceSourceFixed')
+    },
+    get FORM_FIELD() {
+      return t('iot.deviceSourceFormField')
+    },
+    get VARIABLE() {
+      return t('common.processVariable')
+    },
   }
   return map[config.deviceSource] ?? config.deviceSource
 }
@@ -110,7 +127,7 @@ function openEdit(row: ProcessDefRow) {
 async function save() {
   if (!editingDef.value) return
   if (form.deviceSource === 'FIXED' && !form.deviceId) {
-    ElMessage.warning('固定来源必须选择设备（仅显示合格设备）')
+    ElMessage.warning(t('iot.fixedSourceNeedsDevice'))
     return
   }
   const action: Record<string, unknown> = {
@@ -128,7 +145,7 @@ async function save() {
     url: `/workflow/defs/${editingDef.value.id}/iot-device-action`,
     data: { action },
   })
-  ElMessage.success('设备动作配置已保存')
+  ElMessage.success(t('iot.deviceActionSaved'))
   const target = defs.value.find((d) => d.id === result.id)
   if (target) target.iotDeviceActionJson = result.iotDeviceActionJson
   dialogVisible.value = false
@@ -140,32 +157,47 @@ onMounted(() => void load())
 <template>
   <div style="padding: 16px">
     <div style="margin-bottom: 12px">
-      <h3 style="margin: 0">流程设备动作</h3>
+      <h3 style="margin: 0">{{ t('iot.processDeviceActions') }}</h3>
       <p style="color: var(--el-text-color-secondary); font-size: 12px; margin: 4px 0 0">
-        为「已发布 + 允许 IoT 接入」的流程模板配置设备动作：设备来源（设计时固定 / 发起表单字段 /
-        流程变量）、能力、参数字段与失败策略（阻断 / 记录后继续 / 人工处理）。设备下拉仅显示合格设备
-        （已发布 + 可接入流程 + 连接启用）。
+        {{ t('iot.flowActionHelp') }}
       </p>
     </div>
+    <el-alert
+      v-if="loadError"
+      :title="loadError"
+      type="error"
+      show-icon
+      :closable="false"
+      class="load-error"
+    >
+      <template #default>
+        <el-button link type="primary" @click="load">{{ t('common.retry') }}</el-button>
+      </template>
+    </el-alert>
 
     <el-table v-loading="loading" :data="defs" stripe>
-      <el-table-column prop="processKey" label="流程模板" min-width="170" show-overflow-tooltip />
-      <el-table-column prop="name" label="名称" min-width="140" />
-      <el-table-column label="状态" width="100">
+      <el-table-column
+        prop="processKey"
+        :label="t('iot.processTemplate')"
+        min-width="170"
+        show-overflow-tooltip
+      />
+      <el-table-column prop="name" :label="t('common.name')" min-width="140" />
+      <el-table-column :label="t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="row.status === 'PUBLISHED' ? 'success' : 'info'" size="small">{{
-            row.status
+            enumLabel('IOT_RELEASE_STATE', row.status)
           }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="IoT 接入" width="90">
+      <el-table-column :label="t('iot.access')" width="90">
         <template #default="{ row }">
           <el-tag :type="row.iotAccessEnabled ? 'success' : 'info'" size="small">
-            {{ row.iotAccessEnabled ? '已开启' : '未开启' }}
+            {{ row.iotAccessEnabled ? t('iot.accessEnabled') : t('iot.accessDisabled') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="设备动作" min-width="220">
+      <el-table-column :label="t('iot.deviceAction')" min-width="220">
         <template #default="{ row }">
           <template
             v-if="parseAction(row as ProcessDefRow) && parseAction(row as ProcessDefRow)!.enabled"
@@ -183,42 +215,43 @@ onMounted(() => void load())
               / {{ parseAction(row as ProcessDefRow)!.failurePolicy }}
             </span>
           </template>
-          <span v-else style="color: var(--el-text-color-secondary)">未配置</span>
+          <span v-else style="color: var(--el-text-color-secondary)">{{
+            t('iot.notConfigured')
+          }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="110" fixed="right">
+      <el-table-column :label="t('common.actions')" width="110" fixed="right">
         <template #default="{ row }">
           <el-button
             size="small"
             type="primary"
             :disabled="row.status !== 'PUBLISHED'"
             @click="openEdit(row as ProcessDefRow)"
+            >{{ t('common.configure') }}</el-button
           >
-            配置
-          </el-button>
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="isEmpty" description="暂无流程模板" />
+    <el-empty v-if="isEmpty" :description="t('iot.noProcessTemplates')" />
 
     <el-dialog
       v-model="dialogVisible"
-      :title="`设备动作 — ${editingDef?.name ?? ''}`"
+      :title="t('iot.deviceActionDialogTitle', { name: editingDef?.name ?? '' })"
       width="560px"
     >
       <el-form label-width="110px">
-        <el-form-item label="启用">
+        <el-form-item :label="t('common.enable')">
           <el-switch v-model="form.enabled" />
         </el-form-item>
-        <el-form-item label="设备来源" required>
+        <el-form-item :label="t('iot.deviceSource')" required>
           <el-radio-group v-model="form.deviceSource">
-            <el-radio value="FIXED">设计时固定</el-radio>
-            <el-radio value="FORM_FIELD">发起表单字段</el-radio>
-            <el-radio value="VARIABLE">流程变量</el-radio>
+            <el-radio value="FIXED">{{ t('iot.deviceSourceFixed') }}</el-radio>
+            <el-radio value="FORM_FIELD">{{ t('iot.deviceSourceFormField') }}</el-radio>
+            <el-radio value="VARIABLE">{{ t('common.processVariable') }}</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="form.deviceSource === 'FIXED'" label="目标设备" required>
-          <el-select v-model="form.deviceId" placeholder="仅显示合格设备">
+        <el-form-item v-if="form.deviceSource === 'FIXED'" :label="t('iot.targetDevice')" required>
+          <el-select v-model="form.deviceId" :placeholder="t('iot.eligibleDevicesOnly')">
             <el-option
               v-for="d in devices"
               :key="d.id"
@@ -227,29 +260,37 @@ onMounted(() => void load())
             />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="form.deviceSource === 'FORM_FIELD'" label="表单字段" required>
-          <el-input v-model="form.deviceField" placeholder="发起表单中携带设备标识的字段名" />
+        <el-form-item
+          v-if="form.deviceSource === 'FORM_FIELD'"
+          :label="t('iot.formField')"
+          required
+        >
+          <el-input v-model="form.deviceField" :placeholder="t('iot.deviceFieldPlaceholder')" />
         </el-form-item>
-        <el-form-item v-if="form.deviceSource === 'VARIABLE'" label="流程变量" required>
-          <el-input v-model="form.variableName" placeholder="流程变量名" />
+        <el-form-item
+          v-if="form.deviceSource === 'VARIABLE'"
+          :label="t('common.processVariable')"
+          required
+        >
+          <el-input v-model="form.variableName" :placeholder="t('iot.variableNamePlaceholder')" />
         </el-form-item>
-        <el-form-item label="能力标识" required>
-          <el-input v-model="form.commandKey" placeholder="如 reboot / set_property" />
+        <el-form-item :label="t('iot.capabilityKey')" required>
+          <el-input v-model="form.commandKey" :placeholder="t('iot.capabilityKeyPlaceholder')" />
         </el-form-item>
-        <el-form-item label="参数字段">
-          <el-input v-model="form.paramField" placeholder="从表单取参数值的字段名（可空）" />
+        <el-form-item :label="t('iot.paramField')">
+          <el-input v-model="form.paramField" :placeholder="t('iot.paramFieldPlaceholder')" />
         </el-form-item>
-        <el-form-item label="失败策略" required>
+        <el-form-item :label="t('notify.failurePolicy')" required>
           <el-select v-model="form.failurePolicy">
-            <el-option label="阻断（命令失败回写流程触发失败）" value="BLOCK" />
-            <el-option label="记录后继续" value="CONTINUE" />
-            <el-option label="人工处理（命令保持 PENDING）" value="MANUAL" />
+            <el-option :label="t('iot.failurePolicyBlock')" value="BLOCK" />
+            <el-option :label="t('iot.failurePolicyContinue')" value="CONTINUE" />
+            <el-option :label="t('iot.failurePolicyManual')" value="MANUAL" />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </div>

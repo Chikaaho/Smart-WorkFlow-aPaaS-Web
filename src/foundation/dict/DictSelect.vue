@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 import { useDict } from './index'
 
 const props = withDefaults(
@@ -24,7 +27,7 @@ const { items } = useDict(props.type)
     v-if="renderAs === 'select'"
     v-model="model"
     clearable
-    placeholder="请选择"
+    :placeholder="t('common.pleaseSelect')"
     :size="size"
     :disabled="disabled"
   >

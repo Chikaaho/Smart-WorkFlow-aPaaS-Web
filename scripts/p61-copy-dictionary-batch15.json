@@ -1,0 +1,40 @@
+{
+  "_comment": "P61 R2a 枚举与同义收敛 批次15：枚举标签缺失的状态词 + 创建动作术语统一为「新建」 + 流程节点类型标签。节点类型用「X节点」全称，避免占用「条件/抄送/校验」这类通用词（那些词另有归属，占用会覆盖既有键）。",
+  "不健康": { "key": "iot.healthUnhealthy", "en": "Unhealthy" },
+  "已退役": { "key": "iot.statusRetired", "en": "Retired" },
+  "已归档": { "key": "iot.statusArchived", "en": "Archived" },
+  "待处理": { "key": "common.statusPending", "en": "Pending" },
+  "交接部分完成": { "key": "workflow.handoverPartial", "en": "Partially completed" },
+  "在线": { "key": "iot.online", "en": "Online" },
+  "离线": { "key": "iot.offline", "en": "Offline" },
+
+  "开始节点": { "key": "workflow.nodeTypeStart", "en": "Start event" },
+  "结束节点": { "key": "workflow.nodeTypeEnd", "en": "End event" },
+  "会签节点": { "key": "workflow.nodeTypeConsensus", "en": "Consensus task" },
+  "条件节点": { "key": "workflow.nodeTypeCondition", "en": "Condition" },
+  "通知节点": { "key": "workflow.nodeTypeNotification", "en": "Notification" },
+  "校验节点": { "key": "workflow.nodeTypeVerify", "en": "Verification" },
+
+  "新建模板": { "key": "notify.newTemplate", "en": "New template" },
+  "新增模板": { "key": "notify.newTemplate", "en": "New template", "alias": true },
+  "新建消息模板": { "key": "notify.newTemplate", "en": "New message template", "alias": true },
+  "新增消息模板": { "key": "notify.newTemplate", "en": "New message template", "alias": true },
+  "新建设备": { "key": "iot.newDevice", "en": "New device" },
+  "新增设备": { "key": "iot.newDevice", "en": "New device", "alias": true },
+  "新建产品": { "key": "iot.newProduct", "en": "New product" },
+  "新增产品": { "key": "iot.newProduct", "en": "New product", "alias": true },
+  "新建脚本": { "key": "iot.newScript", "en": "New script" },
+  "新增脚本": { "key": "iot.newScript", "en": "New script", "alias": true },
+  "新建连接": { "key": "iot.newConnection", "en": "New connection" },
+  "新增连接": { "key": "iot.newConnection", "en": "New connection", "alias": true },
+  "新建 Topic": { "key": "iot.newTopic", "en": "New topic" },
+  "新增 Topic": { "key": "iot.newTopic", "en": "New topic", "alias": true },
+  "新建外部 HTTP 工具": { "key": "agent.newExternalHttpTool", "en": "New external HTTP tool" },
+  "新增外部 HTTP 工具": {
+    "key": "agent.newExternalHttpTool",
+    "en": "New external HTTP tool",
+    "alias": true
+  },
+  "新建内部工具": { "key": "agent.newInternalTool", "en": "New internal tool" },
+  "新增内部工具": { "key": "agent.newInternalTool", "en": "New internal tool", "alias": true }
+}

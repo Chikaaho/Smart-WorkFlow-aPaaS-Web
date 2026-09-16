@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { i18n } from '@/locales'
 
 const mockPush = vi.fn()
 vi.mock('vue-router', () => ({
@@ -179,7 +180,8 @@ describe('TaskDetail.vue', () => {
 
     expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'complete', undefined)
     expect(pollCommandStatus).toHaveBeenCalledWith('cmd-1')
-    expect(ElMessage.success).toHaveBeenCalledWith('审批通过')
+    // 断言目录键而不是某个语言的字面量：文案收敛/改词不应让行为断言失效
+    expect(ElMessage.success).toHaveBeenCalledWith(i18n.global.t('common.statusApproved'))
     expect(mockPush).toHaveBeenCalledWith({ name: 'TodoList' })
   })
 
@@ -237,7 +239,7 @@ describe('TaskDetail.vue', () => {
 
     await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
 
-    expect(ElMessage.success).toHaveBeenCalledWith('审批通过')
+    expect(ElMessage.success).toHaveBeenCalledWith(i18n.global.t('common.statusApproved'))
     expect(ElMessage.error).not.toHaveBeenCalled()
   })
 

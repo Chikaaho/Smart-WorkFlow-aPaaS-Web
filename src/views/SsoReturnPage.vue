@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { exchangeSsoTicket } from '@/foundation/auth/sso'
@@ -20,7 +23,7 @@ function safeRedirect(raw: unknown): string {
 onMounted(async () => {
   const ticket = typeof route.query.sso_ticket === 'string' ? route.query.sso_ticket : ''
   if (!ticket) {
-    errorMessage.value = '登录票据缺失，请重新登录'
+    errorMessage.value = t('view.ssoTicketMissing')
     exchanging.value = false
     return
   }
@@ -28,7 +31,7 @@ onMounted(async () => {
     await exchangeSsoTicket(ticket)
     await router.push(safeRedirect(route.query.redirect))
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'SSO 登录失败，请重试'
+    errorMessage.value = error instanceof Error ? error.message : t('view.ssoLoginFailed')
     exchanging.value = false
   }
 })
@@ -38,13 +41,13 @@ onMounted(async () => {
   <div class="sso-return">
     <div class="card">
       <template v-if="exchanging">
-        <p class="title">正在完成第三方登录…</p>
-        <p class="hint">请稍候，正在建立本地会话</p>
+        <p class="title">{{ t('view.completingThirdPartyLogin') }}</p>
+        <p class="hint">{{ t('view.establishingLocalSession') }}</p>
       </template>
       <template v-else>
-        <p class="title error">SSO 登录未完成</p>
+        <p class="title error">{{ t('view.ssoLoginIncomplete') }}</p>
         <p class="hint">{{ errorMessage }}</p>
-        <router-link class="link" to="/login">返回账号密码登录</router-link>
+        <router-link class="link" to="/login">{{ t('view.backToPasswordLogin') }}</router-link>
       </template>
     </div>
   </div>

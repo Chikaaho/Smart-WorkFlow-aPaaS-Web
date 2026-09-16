@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * TaskHandover — 流程交接（I4 §3.6）。
  * 向导式：来源/目标用户 + 流程范围 + 代理规则显式勾选；逐项清单可复核；
@@ -24,7 +28,7 @@ const items = ref<HandoverItem[]>([])
 
 async function submit() {
   if (!fromUserId.value || !toUserId.value) {
-    ElMessage.warning('请填写来源与目标用户 ID')
+    ElMessage.warning(t('workflow.handoverFillUserIds'))
     return
   }
   submitting.value = true
@@ -41,9 +45,9 @@ async function submit() {
       includeProxyRules: includeProxyRules.value,
     })
     items.value = await queryHandoverItems(result.value.id)
-    ElMessage.success('交接已执行，清单如下')
+    ElMessage.success(t('workflow.handoverExecuted'))
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '交接执行失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.handoverFailed'))
   } finally {
     submitting.value = false
   }
@@ -56,10 +60,18 @@ function resultTag(resultValue: HandoverItem['result']) {
 function resultLabel(resultValue: HandoverItem['result']) {
   return (
     {
-      MIGRATED: '已迁移',
-      FAILED: '失败',
-      SKIPPED: '跳过',
-      SKIPPED_ALREADY_MIGRATED: '已迁移（跳过重复）',
+      get MIGRATED() {
+        return t('workflow.handoverMigrated')
+      },
+      get FAILED() {
+        return t('common.resultFailed')
+      },
+      get SKIPPED() {
+        return t('workflow.handoverSkipped')
+      },
+      get SKIPPED_ALREADY_MIGRATED() {
+        return t('workflow.handoverAlreadyMigrated')
+      },
     }[resultValue] ?? resultValue
   )
 }
@@ -67,45 +79,54 @@ function resultLabel(resultValue: HandoverItem['result']) {
 
 <template>
   <div class="handover-page">
-    <h2 class="page-title">流程交接</h2>
+    <h2 class="page-title">{{ t('workflow.handoverTitle') }}</h2>
     <el-card shadow="never" class="form-card">
       <el-form label-width="130px">
-        <el-form-item label="来源用户 ID">
+        <el-form-item :label="t('workflow.sourceUserId')">
           <el-input-number v-model="fromUserId" :min="1" controls-position="right" />
         </el-form-item>
-        <el-form-item label="目标用户 ID">
+        <el-form-item :label="t('workflow.targetUserId')">
           <el-input-number v-model="toUserId" :min="1" controls-position="right" />
         </el-form-item>
-        <el-form-item label="流程范围">
-          <el-input v-model="scopeText" placeholder="processDefKey，逗号分隔；留空=全部范围" />
+        <el-form-item :label="t('workflow.processScope')">
+          <el-input v-model="scopeText" :placeholder="t('workflow.processScopePlaceholder')" />
         </el-form-item>
-        <el-form-item label="随迁代理规则">
+        <el-form-item :label="t('workflow.carryOverDelegateRules')">
           <el-switch v-model="includeProxyRules" />
-          <span class="hint">仅有效期内的未来代理规则随迁；历史/抄送/已办永不迁移</span>
+          <span class="hint">{{ t('workflow.carryOverDelegateHint') }}</span>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="submitting" @click="submit">执行交接</el-button>
+          <el-button type="primary" :loading="submitting" @click="submit">{{
+            t('workflow.runHandover')
+          }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <el-card v-if="result" shadow="never" class="result-card">
       <template #header>
-        交接清单 #{{ result.id }} — {{ result.status }}（迁移 {{ result.migratedItems }} / 失败
-        {{ result.failedItems }} / 共 {{ result.totalItems }}）
+        {{
+          t('workflow.handoverSummary', {
+            id: result.id,
+            status: enumLabel('HANDOVER_RESULT', result.status),
+            migrated: result.migratedItems,
+            failed: result.failedItems,
+            total: result.totalItems,
+          })
+        }}
       </template>
       <el-table :data="items" size="small">
-        <el-table-column prop="itemType" label="类型" width="110" />
-        <el-table-column prop="taskId" label="任务 ID" min-width="170" />
-        <el-table-column prop="beforeAssignee" label="原责任人" width="100" />
-        <el-table-column prop="afterAssignee" label="新责任人" width="100" />
-        <el-table-column label="结果" width="150">
+        <el-table-column prop="itemType" :label="t('common.type')" width="110" />
+        <el-table-column prop="taskId" :label="t('common.taskId')" min-width="170" />
+        <el-table-column prop="beforeAssignee" :label="t('workflow.previousOwner')" width="100" />
+        <el-table-column prop="afterAssignee" :label="t('workflow.newOwner')" width="100" />
+        <el-table-column :label="t('common.result')" width="150">
           <template #default="{ row }">
             <el-tag :type="resultTag(row.result)">{{ resultLabel(row.result) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="failReason" label="失败原因" min-width="180" />
-        <template #empty>本次交接无迁移项</template>
+        <el-table-column prop="failReason" :label="t('common.failureReason')" min-width="180" />
+        <template #empty>{{ t('workflow.handoverEmpty') }}</template>
       </el-table>
     </el-card>
   </div>

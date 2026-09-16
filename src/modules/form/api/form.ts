@@ -249,6 +249,8 @@ export interface ImportResult {
     rowNum: number
     message: string
   }>
+  /** 同步契约：导入在单请求内闭环，服务端显式给出处理中=0 */
+  processing: number
 }
 
 export async function importFormData(formKey: string, file: File): Promise<ImportResult> {

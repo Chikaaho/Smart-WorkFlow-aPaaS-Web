@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { ElMessage } from 'element-plus'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * 部门选择（DEPT）控件（I2）。
  * 值 = 数字型部门 ID（存 id，展示部门名）；候选经系统部门树接口加载
@@ -22,6 +26,8 @@ onMounted(async () => {
   try {
     options.value = await loadDeptChoices()
   } catch {
+    ElMessage.error(t('common.loadFailed'))
+    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     options.value = []
   }
   const current =
@@ -43,7 +49,7 @@ function onChange(value: unknown) {
     filterable
     clearable
     :disabled="readonly"
-    placeholder="选择部门"
+    :placeholder="t('component.selectDept')"
     @change="onChange"
   >
     <el-option v-for="o in options" :key="o.id" :label="o.label" :value="o.id" />

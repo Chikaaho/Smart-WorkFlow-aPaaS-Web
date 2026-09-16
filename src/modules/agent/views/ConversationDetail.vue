@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ConversationDetail — 会话消息详情页
  *
@@ -66,7 +69,7 @@ function formatTimestamp(ts: string): string {
 
 function formatTokenCount(count: number | null | undefined): string {
   if (count === null || count === undefined) {
-    return '未知'
+    return t('common.unknown')
   }
   if (count === 0) {
     return '0'
@@ -87,9 +90,9 @@ async function loadMessages() {
         router.replace('/404')
         return
       }
-      error.value = err.msg || '加载会话消息失败'
+      error.value = err.msg || t('agent.conversationMessagesLoadFailed')
     } else {
-      error.value = '加载会话消息失败'
+      error.value = t('agent.conversationMessagesLoadFailed')
     }
   } finally {
     loading.value = false
@@ -104,7 +107,7 @@ function goBack() {
 // ─── 挂载 ───
 onMounted(() => {
   if (!sessionId.value || isNaN(sessionId.value)) {
-    error.value = '无效的会话 ID'
+    error.value = t('agent.invalidConversationId')
   } else {
     void loadMessages()
   }
@@ -117,11 +120,11 @@ onMounted(() => {
     <div class="page-header">
       <el-button @click="goBack">
         <el-icon><ArrowLeft /></el-icon>
-        返回列表
+        {{ t('common.backToList') }}
       </el-button>
       <div class="header-info">
         <span class="session-id">#{{ sessionId }}</span>
-        <span class="page-title">会话消息</span>
+        <span class="page-title">{{ t('agent.conversationMessages') }}</span>
       </div>
     </div>
 
@@ -129,31 +132,28 @@ onMounted(() => {
     <el-card v-if="!loading && !error" shadow="never" class="token-summary-card">
       <template #header>
         <div class="section-title">
-          Token 使用统计
-          <el-tooltip
-            content="供应商可观测 usage（输入/输出/总计），非账单、非完整失败尝试成本"
-            placement="top"
-          >
-            <span class="token-disclaimer-detail">可观测量</span>
+          {{ t('agent.tokenUsageStats') }}
+          <el-tooltip :content="t('agent.usageObservabilityTooltip')" placement="top">
+            <span class="token-disclaimer-detail">{{ t('common.observability') }}</span>
           </el-tooltip>
         </div>
       </template>
       <div class="token-grid">
         <div class="token-item">
-          <span class="token-label">输入 Token:</span>
+          <span class="token-label">{{ t('agent.inputTokensLabel') }}</span>
           <span class="token-value">{{ formatTokenCount(tokenSummary.totalInput) }}</span>
         </div>
         <div class="token-item">
-          <span class="token-label">输出 Token:</span>
+          <span class="token-label">{{ t('agent.outputTokensLabel') }}</span>
           <span class="token-value">{{ formatTokenCount(tokenSummary.totalOutput) }}</span>
         </div>
         <div class="token-item">
-          <span class="token-label">总 Token:</span>
+          <span class="token-label">{{ t('agent.totalTokensLabel') }}</span>
           <span class="token-value">{{ formatTokenCount(tokenSummary.totalTokens) }}</span>
         </div>
       </div>
       <div class="token-footnote">
-        数据来自模型供应商响应中的 usage，仅为本次会话可观测到的用量，非账单依据。
+        {{ t('agent.tokenUsageSessionNote') }}
       </div>
     </el-card>
 
@@ -175,20 +175,28 @@ onMounted(() => {
         }"
       >
         <div class="message-header">
-          <span class="message-role">{{ msg.role === 'USER' ? '用户' : '助手' }}</span>
-          <span class="message-order">第 {{ msg.msgOrder + 1 }} 轮</span>
+          <span class="message-role">{{
+            msg.role === 'USER' ? t('agent.roleUser') : t('agent.roleAssistant')
+          }}</span>
+          <span class="message-order">{{
+            t('agent.roundLabel', { round: msg.msgOrder + 1 })
+          }}</span>
           <span class="message-time">{{ formatTimestamp(msg.createTime) }}</span>
         </div>
         <div class="message-content">{{ msg.content }}</div>
         <div v-if="msg.role === 'ASSISTANT'" class="message-tokens">
-          <span class="token-tag"> 输入: {{ formatTokenCount(msg.inputTokens) }} </span>
-          <span class="token-tag"> 输出: {{ formatTokenCount(msg.outputTokens) }} </span>
+          <span class="token-tag">
+            {{ t('agent.inputTokensInline', { value: formatTokenCount(msg.inputTokens) }) }}
+          </span>
+          <span class="token-tag">
+            {{ t('agent.outputTokensInline', { value: formatTokenCount(msg.outputTokens) }) }}
+          </span>
         </div>
       </div>
     </div>
 
     <!-- 空状态 -->
-    <el-empty v-else description="暂无消息记录" />
+    <el-empty v-else :description="t('agent.noMessages')" />
   </div>
 </template>
 

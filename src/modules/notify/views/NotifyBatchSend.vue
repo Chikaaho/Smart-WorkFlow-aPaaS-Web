@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * NotifyBatchSend — 批量发送站内通知页面。
  *
@@ -142,8 +145,9 @@ onMounted(async () => {
       templateCode: t.templateCode,
       name: t.name,
     }))
-  } catch {
-    // 静默失败，页面仍可操作
+  } catch (err) {
+    // 部门/角色/模板都空会让页面不可用，不能静默
+    errorMsg.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   }
 })
 
@@ -192,6 +196,8 @@ function handleUserSearch(keyword: string) {
       const result = await searchUsers(keyword.trim())
       userCandidates.value = result.filter((u) => !selectedUsers.value.some((s) => s.id === u.id))
     } catch {
+      ElMessage.error(t('common.loadFailed'))
+      // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
       userCandidates.value = []
     } finally {
       userSearching.value = false
@@ -232,8 +238,10 @@ let countTimer: ReturnType<typeof globalThis.setTimeout> | null = null
 /** 构建解析请求（与发送请求相同形状） */
 function buildResolveReq(): NotifyBatchSendReq {
   return {
-    recipientUserIds: selectedUsers.value.map((u) => Number(u.id)),
-    recipientDeptIds: checkedDeptKeys.value.map(Number),
+    // 原样透传服务端 ID：Number() 会截断 64 位雪花值，导致服务端解析不到接收人
+    recipientUserIds: selectedUsers.value.map((u) => u.id ?? ''),
+    // 部门 ID 同理：字符串原值透传，避免 64 位 ID 被 Number() 截断
+    recipientDeptIds: checkedDeptKeys.value,
     recipientRoleCodes: checkedRoleCodes.value,
   }
 }
@@ -254,6 +262,8 @@ async function refreshServerCount() {
     const resp = await resolveCountNotify(req)
     serverCount.value = resp.recipientCount
   } catch {
+    ElMessage.error(t('common.loadFailed'))
+    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     serverCount.value = 0
   } finally {
     countLoading.value = false
@@ -283,15 +293,31 @@ const canSubmit = computed(() => {
 
 // ─── 发送 ───
 
+/** R2c-N 批量结果面板状态：四项计数 + 安全逐项失败明细。 */
+interface BatchResultView {
+  totalCount: number
+  successCount: number
+  failureCount: number
+  processingCount: number
+  failures: { recipientRef: string; category: string; errorKey: string; message: string }[]
+}
+
+const resultVisible = ref(false)
+const batchResult = ref<BatchResultView | null>(null)
+
 async function handleSend() {
   if (!canSubmit.value || submitting.value) return
 
   const count = serverCount.value
 
   try {
-    await ElMessageBox.confirm(`确认向 ${count} 人发送通知？`, '确认发送', {
-      confirmButtonText: '确认发送',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('notify.batchSendConfirm', { count }), t('notify.confirmSend'), {
+      get confirmButtonText() {
+        return t('notify.confirmSend')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
       type: 'warning',
     })
   } catch {
@@ -299,8 +325,10 @@ async function handleSend() {
   }
 
   const req: NotifyBatchSendReq = {
-    recipientUserIds: selectedUsers.value.map((u) => Number(u.id)),
-    recipientDeptIds: checkedDeptKeys.value.map(Number),
+    // 原样透传服务端 ID：Number() 会截断 64 位雪花值，导致服务端解析不到接收人
+    recipientUserIds: selectedUsers.value.map((u) => u.id ?? ''),
+    // 部门 ID 同理：字符串原值透传，避免 64 位 ID 被 Number() 截断
+    recipientDeptIds: checkedDeptKeys.value,
     recipientRoleCodes: checkedRoleCodes.value,
   }
 
@@ -312,7 +340,7 @@ async function handleSend() {
     try {
       req.variables = JSON.parse(variablesText.value)
     } catch {
-      ElMessage.error('变量 JSON 格式不正确')
+      ElMessage.error(t('notify.variablesInvalidJson'))
       return
     }
   }
@@ -321,37 +349,63 @@ async function handleSend() {
   errorMsg.value = ''
   try {
     const result = await batchSendNotify(req)
-    ElMessage.success(`成功向 ${result.recipientCount} 人发送通知`)
-    void router.push('/notify/inbox')
+    // R2c-N：结果计数取服务端返回值，不按本地行数推算；有失败项时留在本页等待下钻，
+    // 不把「整体请求成功」当成逐项全成功的成功提示。
+    batchResult.value = {
+      totalCount: result.totalCount ?? result.recipientCount,
+      successCount: result.successCount ?? result.recipientCount,
+      failureCount: result.failureCount ?? 0,
+      processingCount: result.processingCount ?? 0,
+      failures: result.failures ?? [],
+    }
+    resultVisible.value = true
+    if (batchResult.value.failureCount === 0) {
+      ElMessage.success(t('notify.batchSendSuccess', { recipientCount: result.recipientCount }))
+    } else {
+      ElMessage.warning(
+        t('notify.batchSendPartial', {
+          successCount: batchResult.value.successCount,
+          failureCount: batchResult.value.failureCount,
+        }),
+      )
+    }
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? err.msg : '发送失败'
+    errorMsg.value = err instanceof ApiError ? err.msg : t('notify.sendFailed')
     ElMessage.error(errorMsg.value)
   } finally {
     submitting.value = false
   }
 }
+
+function goToInbox() {
+  resultVisible.value = false
+  void router.push('/notify/inbox')
+}
 </script>
 
 <template>
-  <StandardFormTemplate title="发送通知" subtitle="选择接收对象和通知内容后发送">
+  <StandardFormTemplate
+    :title="t('router.sendNotification')"
+    :subtitle="t('notify.batchSendSubtitle')"
+  >
     <template #alert>
       <el-alert v-if="errorMsg" :title="errorMsg" type="error" :closable="false" show-icon />
     </template>
 
     <!-- ═══ 接收对象 ═══ -->
-    <FormSection title="接收对象">
+    <FormSection :title="t('notify.recipients')">
       <div class="recipient-tabs">
         <el-tabs v-model="recipientTab" type="border-card">
           <!-- 用户选择 Tab -->
-          <el-tab-pane label="按用户" name="user">
+          <el-tab-pane :label="t('notify.byUser')" name="user">
             <div class="user-search">
               <el-input
                 v-model="userKeyword"
-                placeholder="搜索用户名..."
+                :placeholder="t('notify.searchUsernamePlaceholder')"
                 clearable
                 @input="handleUserSearch"
               />
-              <div v-if="userSearching" class="search-loading">搜索中...</div>
+              <div v-if="userSearching" class="search-loading">{{ t('notify.searching') }}</div>
               <div v-if="userCandidates.length > 0" class="candidate-list">
                 <div
                   v-for="user in userCandidates"
@@ -376,7 +430,7 @@ async function handleSend() {
           </el-tab-pane>
 
           <!-- 部门选择 Tab -->
-          <el-tab-pane label="按部门" name="dept">
+          <el-tab-pane :label="t('notify.byDept')" name="dept">
             <el-tree
               ref="deptTreeRef"
               :data="deptTreeData"
@@ -388,7 +442,7 @@ async function handleSend() {
           </el-tab-pane>
 
           <!-- 角色选择 Tab -->
-          <el-tab-pane label="按角色" name="role">
+          <el-tab-pane :label="t('notify.byRole')" name="role">
             <el-checkbox-group v-model="checkedRoleCodes">
               <el-checkbox v-for="role in roleList" :key="role.id" :label="role.code">
                 {{ role.name }}
@@ -400,30 +454,38 @@ async function handleSend() {
     </FormSection>
 
     <!-- ═══ 通知内容 ═══ -->
-    <FormSection title="通知内容">
+    <FormSection :title="t('notify.notificationContent')">
       <el-tabs v-model="contentMode" type="border-card">
         <!-- 直接内容模式 -->
-        <el-tab-pane label="直接内容" name="direct">
+        <el-tab-pane :label="t('notify.directContent')" name="direct">
           <div class="form-field">
-            <label class="form-field__label">标题</label>
-            <el-input v-model="directTitle" placeholder="请输入通知标题" maxlength="200" />
+            <label class="form-field__label">{{ t('common.title') }}</label>
+            <el-input
+              v-model="directTitle"
+              :placeholder="t('notify.notificationTitlePlaceholder')"
+              maxlength="200"
+            />
           </div>
           <div class="form-field">
-            <label class="form-field__label">正文</label>
+            <label class="form-field__label">{{ t('notify.bodyLabel') }}</label>
             <el-input
               v-model="directContent"
               type="textarea"
               :rows="5"
-              placeholder="请输入通知正文"
+              :placeholder="t('notify.notificationBodyPlaceholder')"
             />
           </div>
         </el-tab-pane>
 
         <!-- 模板模式 -->
-        <el-tab-pane label="使用模板" name="template">
+        <el-tab-pane :label="t('notify.useTemplate')" name="template">
           <div class="form-field">
-            <label class="form-field__label">选择模板</label>
-            <el-select v-model="templateCode" placeholder="请选择模板" style="width: 100%">
+            <label class="form-field__label">{{ t('notify.selectTemplateLabel') }}</label>
+            <el-select
+              v-model="templateCode"
+              :placeholder="t('notify.selectTemplatePlaceholder')"
+              style="width: 100%"
+            >
               <el-option
                 v-for="tpl in enabledTemplates"
                 :key="tpl.templateCode"
@@ -433,12 +495,12 @@ async function handleSend() {
             </el-select>
           </div>
           <div class="form-field">
-            <label class="form-field__label">变量（JSON 格式）</label>
+            <label class="form-field__label">{{ t('notify.variablesJsonLabel') }}</label>
             <el-input
               v-model="variablesText"
               type="textarea"
               :rows="4"
-              placeholder='{"userName": "张三"}'
+              :placeholder="t('notify.templateVarsPlaceholder')"
               style="font-family: monospace"
             />
           </div>
@@ -449,16 +511,72 @@ async function handleSend() {
     <template #actions>
       <div class="send-actions">
         <span class="estimated-count">
-          服务端确认人数：<strong>{{ serverCount }}</strong>
-          <span v-if="countLoading" class="count-loading">（计算中…）</span>
+          {{ t('notify.serverConfirmedCount') }}<strong>{{ serverCount }}</strong>
+          <span v-if="countLoading" class="count-loading">{{ t('notify.countComputing') }}</span>
         </span>
-        <el-button @click="router.back()">取消</el-button>
+        <el-button @click="router.back()">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="handleSend">
-          发送
+          {{ t('notify.send') }}
         </el-button>
       </div>
     </template>
   </StandardFormTemplate>
+
+  <!-- R2c-N：批量结果面板 —— 总量 / 成功 / 失败 / 处理中 + 安全逐项失败明细 -->
+  <el-dialog v-model="resultVisible" :title="t('notify.batchResultTitle')" width="640px">
+    <div class="result-summary" data-testid="batch-result-summary">
+      <div class="result-cell">
+        <span class="result-cell__label">{{ t('common.total') }}</span>
+        <strong class="result-cell__value" data-testid="batch-result-total">{{
+          batchResult?.totalCount ?? 0
+        }}</strong>
+      </div>
+      <div class="result-cell">
+        <span class="result-cell__label">{{ t('common.resultSuccess') }}</span>
+        <strong
+          class="result-cell__value result-cell__value--success"
+          data-testid="batch-result-success"
+          >{{ batchResult?.successCount ?? 0 }}</strong
+        >
+      </div>
+      <div class="result-cell">
+        <span class="result-cell__label">{{ t('common.resultFailed') }}</span>
+        <strong
+          class="result-cell__value result-cell__value--danger"
+          data-testid="batch-result-failure"
+          >{{ batchResult?.failureCount ?? 0 }}</strong
+        >
+      </div>
+      <div class="result-cell">
+        <span class="result-cell__label">{{ t('common.resultProcessing') }}</span>
+        <strong class="result-cell__value" data-testid="batch-result-processing">{{
+          batchResult?.processingCount ?? 0
+        }}</strong>
+      </div>
+    </div>
+
+    <!-- 处理中为 0 是同步原子契约的定义，明说而不是留白 -->
+    <p class="result-note" data-testid="batch-result-processing-note">
+      {{ t('notify.batchResultProcessingNote') }}
+    </p>
+
+    <div v-if="(batchResult?.failures.length ?? 0) > 0" class="result-failures">
+      <h4 class="result-failures__title">{{ t('form.importErrorRows') }}</h4>
+      <el-table
+        :data="batchResult?.failures ?? []"
+        size="small"
+        data-testid="batch-result-failures"
+      >
+        <el-table-column :label="t('notify.recipients')" prop="recipientRef" width="180" />
+        <el-table-column :label="t('common.reason')" prop="message" />
+      </el-table>
+    </div>
+
+    <template #footer>
+      <el-button @click="resultVisible = false">{{ t('common.close') }}</el-button>
+      <el-button type="primary" @click="goToInbox">{{ t('notify.batchResultGoInbox') }}</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -531,5 +649,57 @@ async function handleSend() {
 .count-loading {
   color: #909399;
   font-size: 12px;
+}
+
+/* ─── R2c-N 批量结果面板 ─── */
+.result-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.result-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
+}
+
+.result-cell__label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.result-cell__value {
+  font-size: 20px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.result-cell__value--success {
+  color: #67c23a;
+}
+
+.result-cell__value--danger {
+  color: #f56c6c;
+}
+
+.result-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #909399;
+}
+
+.result-failures {
+  margin-top: 16px;
+}
+
+.result-failures__title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
 }
 </style>

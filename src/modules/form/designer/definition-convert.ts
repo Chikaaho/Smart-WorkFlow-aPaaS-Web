@@ -1,3 +1,4 @@
+import { i18n } from '@/locales'
 import type { FormSchema, FormSchemaField, VisibilityRule } from '@/contracts/form-schema'
 import type { DesignerItem } from './types'
 import { nextDesignerItemId } from './types'
@@ -15,7 +16,7 @@ export function itemsToDefinition(
   rules?: VisibilityRule[],
 ): FormSchema {
   return {
-    title: title.trim() || '未命名表单',
+    title: title.trim() || i18n.global.t('common.untitledForm'),
     fields: items.map((it) => {
       const colSpan = normalizeFormFieldColSpan(it.field.colSpan, it.field.type)
       return it.field.colSpan === colSpan ? it.field : { ...it.field, colSpan }

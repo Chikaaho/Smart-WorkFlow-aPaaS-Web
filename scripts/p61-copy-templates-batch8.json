@@ -1,0 +1,150 @@
+{
+  "_comment": "P61 R1 参数化文案 批次8",
+  "连接成功：${result.detail}": {
+    "key": "iot.connectionTestSuccess",
+    "zh": "连接成功：{detail}",
+    "en": "Connection succeeded: {detail}",
+    "vars": ["detail"],
+    "note": "原插值为成员访问表达式 ${result.detail}，简化为 {detail}"
+  },
+  "连接失败（${result.category}）：${result.detail}": {
+    "key": "iot.connectionTestFailed",
+    "zh": "连接失败（{category}）：{detail}",
+    "en": "Connection failed ({category}): {detail}",
+    "vars": ["category", "detail"],
+    "note": "原插值为 ${result.category} 与 ${result.detail}，均为成员访问表达式"
+  },
+  "常驻连接已建立，恢复订阅 ${result.subscriptions} 条": {
+    "key": "iot.subscriptionsRestored",
+    "zh": "常驻连接已建立，恢复订阅 {subscriptions} 条",
+    "en": "Persistent connection established; {subscriptions} subscriptions restored",
+    "vars": ["subscriptions"],
+    "note": "原插值为 ${result.subscriptions}，成员访问表达式"
+  },
+  "删除连接「${row.name}」？": {
+    "key": "iot.deleteConnectionConfirm",
+    "zh": "删除连接「{name}」？",
+    "en": "Delete connection \"{name}\"?",
+    "vars": ["name"],
+    "note": "原插值为 ${row.name}，成员访问表达式"
+  },
+  "editingId ? '编辑连接' : '新增连接'": {
+    "key": "iot.editConnection",
+    "zh": "编辑连接",
+    "en": "Edit connection",
+    "vars": [],
+    "note": "Vue 绑定属性扫描产物（:title=\"editingId ? '编辑连接' : '新增连接'\"），非独立文案；真实文案为「编辑连接」（本项 key iot.editConnection）与「新增连接」（key iot.newConnection，已在本批字典中）。"
+  },
+  "editingId ? '留空保持不变' : '口令'": {
+    "key": "iot.leaveBlankToKeepPassword",
+    "zh": "留空保持不变",
+    "en": "Leave blank to keep unchanged",
+    "vars": [],
+    "note": "Vue 绑定属性扫描产物（:placeholder=\"editingId ? '留空保持不变' : '口令'\"），非独立文案；真实文案为「留空保持不变」（本项 key iot.leaveBlankToKeepPassword）与「口令」（key iot.password，已在本批字典中）。"
+  },
+  "确认发布「${row.name}」？发布将生成新版本快照，之后仍可继续编辑并再次发布。": {
+    "key": "agent.confirmPublishGraph",
+    "zh": "确认发布「{name}」？发布将生成新版本快照，之后仍可继续编辑并再次发布。",
+    "en": "Publish \"{name}\"? Publishing creates a new version snapshot; you can keep editing and publish again afterwards.",
+    "vars": ["name"],
+    "note": "原插值为 ${row.name}，成员访问表达式"
+  },
+  "发布成功，当前版本 v${published.defVersion}": {
+    "key": "agent.graphPublished",
+    "zh": "发布成功，当前版本 v{defVersion}",
+    "en": "Published successfully; current version v{defVersion}",
+    "vars": ["defVersion"],
+    "note": "原插值为 ${published.defVersion}，成员访问表达式"
+  },
+  "确认删除「${row.name}」？删除后不可恢复。": {
+    "key": "agent.confirmDeleteGraph",
+    "zh": "确认删除「{name}」？删除后不可恢复。",
+    "en": "Delete \"{name}\"? This cannot be undone.",
+    "vars": ["name"],
+    "note": "原插值为 ${row.name}，成员访问表达式"
+  },
+  "发布成功，当前版本 v${published.defVersion}（发布后可继续编辑并再次发布）": {
+    "key": "agent.graphPublishedWithHint",
+    "zh": "发布成功，当前版本 v{defVersion}（发布后可继续编辑并再次发布）",
+    "en": "Published successfully; current version v{defVersion} (you can keep editing and publish again)",
+    "vars": ["defVersion"],
+    "note": "原插值为 ${published.defVersion}，成员访问表达式"
+  },
+  "executeResult.success ? '执行成功' : '执行失败'": {
+    "key": "agent.executionSucceeded",
+    "zh": "执行成功",
+    "en": "Execution succeeded",
+    "vars": [],
+    "note": "Vue 绑定属性扫描产物（:title=\"executeResult.success ? '执行成功' : '执行失败'\"），非独立文案；真实文案为「执行成功」（本项 key agent.executionSucceeded）与「执行失败」（key agent.executionFailed，已在本批字典中）。"
+  },
+  "已全部标记为已读（${affected} 条）": {
+    "key": "notify.allMarkedRead",
+    "zh": "已全部标记为已读（{affected} 条）",
+    "en": "All marked as read ({affected})",
+    "vars": ["affected"],
+    "note": "原插值为 ${affected}（简单标识符）；与 PC 收件箱同一文案，共用 notify.allMarkedRead"
+  },
+  "查询失败：${msg}": {
+    "key": "form.queryFailed",
+    "zh": "查询失败：{msg}",
+    "en": "Query failed: {msg}",
+    "vars": ["msg"],
+    "note": "原插值为 ${msg}（简单标识符）"
+  },
+  "模板下载失败：${msg}": {
+    "key": "form.templateDownloadFailed",
+    "zh": "模板下载失败：{msg}",
+    "en": "Template download failed: {msg}",
+    "vars": ["msg"],
+    "note": "原插值为 ${msg}（简单标识符）"
+  },
+  "导入成功：${result.successCount} 条数据": {
+    "key": "form.importSucceeded",
+    "zh": "导入成功：{successCount} 条数据",
+    "en": "Import succeeded: {successCount} rows",
+    "vars": ["successCount"],
+    "note": "原插值为 ${result.successCount}，成员访问表达式"
+  },
+  "导入完成：成功 ${result.successCount} 条，失败 ${result.errorCount} 条": {
+    "key": "form.importCompletedWithErrors",
+    "zh": "导入完成：成功 {successCount} 条，失败 {errorCount} 条",
+    "en": "Import finished: {successCount} succeeded, {errorCount} failed",
+    "vars": ["successCount", "errorCount"],
+    "note": "原插值为 ${result.successCount} 与 ${result.errorCount}，均为成员访问表达式"
+  },
+  "导入失败：${msg}": {
+    "key": "form.importFailed",
+    "zh": "导入失败：{msg}",
+    "en": "Import failed: {msg}",
+    "vars": ["msg"],
+    "note": "原插值为 ${msg}（简单标识符）"
+  },
+  "导出失败：${msg}": {
+    "key": "form.exportFailed",
+    "zh": "导出失败：{msg}",
+    "en": "Export failed: {msg}",
+    "vars": ["msg"],
+    "note": "原插值为 ${msg}（简单标识符）"
+  },
+  "schema?.title ?? `表单数据 — ${formKey}`": {
+    "key": "form.dataPageTitle",
+    "zh": "表单数据 — {formKey}",
+    "en": "Form Data — {formKey}",
+    "vars": ["formKey"],
+    "note": "Vue 绑定属性扫描产物（:title=\"schema?.title ?? `表单数据 — ${formKey}`\"），非独立文案；真实文案为「表单数据 — {formKey}」（本项 key form.dataPageTitle），作为表单定义标题缺失时的回退标题。"
+  },
+  "选择关联记录 — ${title || '目标表单'}": {
+    "key": "form.selectReferenceTitle",
+    "zh": "选择关联记录 — {title}",
+    "en": "Select Related Record — {title}",
+    "vars": ["title"],
+    "note": "原插值为短路表达式 ${title || '目标表单'}，暂简化为 {title}；表达式内的兜底字面量「目标表单」保留在代码中，如需单独治理请另立 key"
+  },
+  "['占位提示', '默认值']": {
+    "key": "form.placeholderSeamItem",
+    "zh": "占位提示",
+    "en": "Placeholder",
+    "vars": [],
+    "note": "Vue 绑定属性扫描产物（:items=\"['占位提示', '默认值']\"，由 ConfigSeamNote 逐项渲染为 seam 说明），非单条文案；真实文案为「占位提示」（本项 key form.placeholderSeamItem）与「默认值」（key form.defaultValue，批次5 已存在）。"
+  }
+}

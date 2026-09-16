@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * HistoryVersionsDialog — 历史发布版本（P52 工作台）。
  *
@@ -30,7 +33,7 @@ async function loadSnapshots() {
   try {
     snapshots.value = await listFormSnapshots(props.formId)
   } catch {
-    ElMessage.error('加载历史版本失败')
+    ElMessage.error(t('form.historyLoadFailed'))
   } finally {
     loading.value = false
   }
@@ -57,34 +60,42 @@ async function openPreview(version: number) {
     previewVersion.value = version
     previewVisible.value = true
   } catch {
-    ElMessage.error('读取历史版本失败')
+    ElMessage.error(t('form.historyReadFailed'))
   }
 }
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="历史版本" width="640px" append-to-body class="history-dialog">
+  <el-dialog
+    v-model="visible"
+    :title="t('form.versionHistory')"
+    width="640px"
+    append-to-body
+    class="history-dialog"
+  >
     <p class="history-dialog__hint">
-      仅展示已发布版本（只读）。历史预览不会修改当前草稿，本轮不提供回滚。
+      {{ t('form.historyPreviewNote') }}
     </p>
 
-    <div v-if="loading" class="history-dialog__loading">加载中...</div>
+    <div v-if="loading" class="history-dialog__loading">{{ t('common.loading') }}</div>
     <div v-else-if="snapshots.length === 0" class="history-dialog__empty">
-      该表单尚未发布过，暂无历史版本。
+      {{ t('form.noHistoryVersions') }}
     </div>
     <el-table v-else :data="snapshots" size="default">
-      <el-table-column label="版本号" width="120">
+      <el-table-column :label="t('form.versionNumber')" width="120">
         <template #default="{ row }">
           <el-tag size="small" type="info">V{{ row.formVersion }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="发布状态" width="120">
-        <template #default>已发布</template>
+      <el-table-column :label="t('form.publishStatus')" width="120">
+        <template #default>{{ t('common.statusPublished') }}</template>
       </el-table-column>
-      <el-table-column prop="createTime" label="发布时间" />
-      <el-table-column label="操作" width="120" align="right">
+      <el-table-column prop="createTime" :label="t('form.publishTime')" />
+      <el-table-column :label="t('common.actions')" width="120" align="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openPreview(row.formVersion)">只读预览</el-button>
+          <el-button link type="primary" @click="openPreview(row.formVersion)">{{
+            t('form.readonlyPreview')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -94,7 +105,7 @@ async function openPreview(version: number) {
       v-if="previewSchema"
       v-model:visible="previewVisible"
       :schema="previewSchema"
-      :badge="`历史版本 V${previewVersion} · 只读`"
+      :badge="t('form.historyBadge', { previewVersion })"
     />
   </el-dialog>
 </template>

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * IotProductList — 产品与物模型管理（P21 A3）。
  *
@@ -6,6 +10,7 @@
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ApiError } from '@/foundation/request'
 import {
   listProducts,
   createProduct,
@@ -17,6 +22,8 @@ import {
 } from '../api'
 
 const loading = ref(false)
+/** 本次加载的失败原因；非空时页面显示错误态而不是空态。 */
+const loadError = ref('')
 const list = ref<IotProduct[]>([])
 
 const dialogVisible = ref(false)
@@ -27,12 +34,17 @@ const currentProduct = ref<IotProduct | null>(null)
 const modelVersions = ref<IotThingModel[]>([])
 const modelText = ref('')
 
-const isEmpty = computed(() => !loading.value && list.value.length === 0)
+const isEmpty = computed(
+  () => !loading.value && !loadError.value && !loadError.value && list.value.length === 0,
+)
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     list.value = await listProducts()
+  } catch (err) {
+    loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
@@ -45,7 +57,7 @@ function openCreate() {
 
 async function save() {
   await createProduct({ ...form })
-  ElMessage.success('产品已创建（物模型 v1 草稿可在详情中维护）')
+  ElMessage.success(t('iot.productCreatedDraft'))
   dialogVisible.value = false
   void load()
 }
@@ -71,17 +83,17 @@ async function saveModel() {
   if (!currentProduct.value) return
   const model = JSON.parse(modelText.value)
   await saveThingModelDraft(currentProduct.value.id, model)
-  ElMessage.success('物模型草稿已保存')
+  ElMessage.success(t('iot.modelDraftSaved'))
   modelVersions.value = await listThingModels(currentProduct.value.id)
 }
 
 async function publishModel() {
   if (!currentProduct.value) return
-  await ElMessageBox.confirm('发布当前草稿物模型？设备将绑定该版本。', '发布物模型', {
+  await ElMessageBox.confirm(t('iot.publishModelConfirm'), t('iot.publishModel'), {
     type: 'warning',
   })
   await publishThingModel(currentProduct.value.id)
-  ElMessage.success('物模型已发布')
+  ElMessage.success(t('iot.modelPublished'))
   modelVersions.value = await listThingModels(currentProduct.value.id)
   void load()
 }
@@ -92,53 +104,76 @@ onMounted(() => void load())
 <template>
   <div style="padding: 16px">
     <div style="display: flex; justify-content: space-between; margin-bottom: 12px">
-      <h3 style="margin: 0">产品与物模型</h3>
-      <el-button type="primary" @click="openCreate">新增产品</el-button>
+      <h3 style="margin: 0">{{ t('iot.productsAndModels') }}</h3>
+      <el-button type="primary" @click="openCreate">{{ t('iot.newProduct') }}</el-button>
     </div>
+    <el-alert
+      v-if="loadError"
+      :title="loadError"
+      type="error"
+      show-icon
+      :closable="false"
+      class="load-error"
+    >
+      <template #default>
+        <el-button link type="primary" @click="load">{{ t('common.retry') }}</el-button>
+      </template>
+    </el-alert>
 
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="code" label="编码" min-width="120" />
-      <el-table-column prop="name" label="名称" min-width="140" />
-      <el-table-column prop="connType" label="连接类型" width="100" />
-      <el-table-column label="物模型" width="110">
+      <el-table-column prop="code" :label="t('common.code')" min-width="120" />
+      <el-table-column prop="name" :label="t('common.name')" min-width="140" />
+      <el-table-column prop="connType" :label="t('iot.connectionType')" width="100" />
+      <el-table-column :label="t('iot.thingModel')" width="110">
         <template #default="{ row }">
           <el-tag :type="row.modelStatus === 'PUBLISHED' ? 'success' : 'info'" size="small">{{
-            row.modelStatus
+            enumLabel('IOT_RELEASE_STATE', row.modelStatus)
           }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column
+        prop="description"
+        :label="t('common.description')"
+        min-width="180"
+        show-overflow-tooltip
+      />
+      <el-table-column :label="t('common.actions')" width="120" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" type="primary" @click="openModels(row as IotProduct)"
-            >物模型</el-button
-          >
+          <el-button size="small" type="primary" @click="openModels(row as IotProduct)">{{
+            t('iot.thingModel')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="isEmpty" description="暂无产品" />
+    <el-empty v-if="isEmpty" :description="t('iot.noProducts')" />
 
-    <el-dialog v-model="dialogVisible" title="新增产品" width="480px">
+    <el-dialog v-model="dialogVisible" :title="t('iot.newProduct')" width="480px">
       <el-form label-width="90px">
-        <el-form-item label="编码" required><el-input v-model="form.code" /></el-form-item>
-        <el-form-item label="名称" required><el-input v-model="form.name" /></el-form-item>
-        <el-form-item label="连接类型">
+        <el-form-item :label="t('common.code')" required
+          ><el-input v-model="form.code"
+        /></el-form-item>
+        <el-form-item :label="t('common.name')" required
+          ><el-input v-model="form.name"
+        /></el-form-item>
+        <el-form-item :label="t('iot.connectionType')">
           <el-select v-model="form.connType">
-            <el-option label="自建 MQTT" value="MQTT" />
-            <el-option label="腾讯 IoT" value="TENCENT" />
+            <el-option :label="t('iot.mqttSelfBuilt')" value="MQTT" />
+            <el-option :label="t('iot.tencentIot')" value="TENCENT" />
           </el-select>
         </el-form-item>
-        <el-form-item label="说明"><el-input v-model="form.description" /></el-form-item>
+        <el-form-item :label="t('common.description')"
+          ><el-input v-model="form.description"
+        /></el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
     <el-dialog
       v-model="modelVisible"
-      :title="`物模型 — ${currentProduct?.name ?? ''}`"
+      :title="t('iot.thingModelDialogTitle', { name: currentProduct?.name ?? '' })"
       width="760px"
     >
       <div style="margin-bottom: 8px">
@@ -149,7 +184,7 @@ onMounted(() => void load())
           size="small"
           style="margin-right: 6px"
         >
-          v{{ v.modelVersion }} · {{ v.status }}
+          v{{ v.modelVersion }} · {{ enumLabel('IOT_RELEASE_STATE', v.status) }}
         </el-tag>
       </div>
       <el-input
@@ -159,9 +194,9 @@ onMounted(() => void load())
         placeholder="properties/events/actions JSON"
       />
       <template #footer>
-        <el-button @click="modelVisible = false">关闭</el-button>
-        <el-button @click="saveModel">保存草稿</el-button>
-        <el-button type="primary" @click="publishModel">发布</el-button>
+        <el-button @click="modelVisible = false">{{ t('common.close') }}</el-button>
+        <el-button @click="saveModel">{{ t('common.saveDraft') }}</el-button>
+        <el-button type="primary" @click="publishModel">{{ t('common.publish') }}</el-button>
       </template>
     </el-dialog>
   </div>

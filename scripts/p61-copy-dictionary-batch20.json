@@ -1,0 +1,11 @@
+{
+  "_comment": "P61 R8b 批次20：数据库菜单种子里尚未登记的中文标题。已有键的菜单标题（如 工具管理/部门管理）直接复用既有语义键，不另立同义键。",
+  "流程引擎": { "key": "menu.workflow", "en": "Workflow" },
+  "通知": { "key": "menu.notify", "en": "Notifications" },
+  "收件箱": { "key": "menu.notifyInbox", "en": "Inbox" },
+  "智能体": { "key": "menu.agent", "en": "Agent" },
+  "物联网": { "key": "menu.iot", "en": "IoT" },
+  "开放接口": { "key": "menu.openapi", "en": "Open API" },
+  "任务管理": { "key": "menu.jobList", "en": "Jobs" },
+  "低代码概览": { "key": "menu.lowcodeHome", "en": "Low-code overview" }
+}

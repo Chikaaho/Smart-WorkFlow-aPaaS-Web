@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { i18n } from '@/locales'
 
 vi.mock('@/modules/workflow/api', () => ({
   queryTodoTasks: vi.fn(),
@@ -132,7 +133,7 @@ describe('TodoList.vue', () => {
 
     expect(acceptTaskAction).toHaveBeenCalledWith('mock-task-001', 'complete')
     expect(pollCommandStatus).toHaveBeenCalledWith('cmd-1')
-    expect(ElMessage.success).toHaveBeenCalledWith('审批通过')
+    expect(ElMessage.success).toHaveBeenCalledWith(i18n.global.t('common.statusApproved'))
     expect((wrapper.vm as unknown as { list: TodoTask[] }).list).toHaveLength(0)
   })
 

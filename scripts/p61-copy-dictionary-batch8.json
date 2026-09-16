@@ -1,0 +1,823 @@
+{
+  "_comment": "P61 R1 术语字典 批次8：router 路由标题 + iot 连接/事件规则、agent 图定义与设计器/执行详情、notify 收件箱与订阅偏好、workflow 工作台与实例监控、form 数据页与引用选择器、component 基础控件文案",
+  "流程中心": {
+    "key": "workflow.processCenter",
+    "en": "Process Center"
+  },
+  "事项管理": {
+    "key": "router.itemManagement",
+    "en": "Item Management"
+  },
+  "抄送我的": {
+    "key": "router.myCc",
+    "en": "CC to Me"
+  },
+  "表单设计器": {
+    "key": "router.formDesigner",
+    "en": "Form Designer"
+  },
+  "表单渲染": {
+    "key": "router.formRender",
+    "en": "Form Renderer"
+  },
+  "表单数据": {
+    "key": "router.formData",
+    "en": "Form Data"
+  },
+  "表单管理": {
+    "key": "form.managementTitle",
+    "en": "Form management"
+  },
+  "图设计器": {
+    "key": "router.graphDesigner",
+    "en": "Graph Designer"
+  },
+  "流程设计器": {
+    "key": "router.processDesigner",
+    "en": "Process Designer"
+  },
+  "流程模板中心": {
+    "key": "router.processTemplateCenter",
+    "en": "Process Template Center"
+  },
+  "实例监控干预": {
+    "key": "router.instanceMonitor",
+    "en": "Instance Monitoring"
+  },
+  "流程分析": {
+    "key": "workflow.processAnalytics",
+    "en": "Process analytics"
+  },
+  "批量审批": {
+    "key": "workflow.batchApproval",
+    "en": "Batch approval"
+  },
+  "流程交接": {
+    "key": "workflow.handoverTitle",
+    "en": "Flow handover"
+  },
+  "执行历史": {
+    "key": "router.executionHistory",
+    "en": "Execution History"
+  },
+  "执行详情": {
+    "key": "job.executionDetail",
+    "en": "Execution details"
+  },
+  "会话历史": {
+    "key": "agent.conversationHistory",
+    "en": "Conversation history"
+  },
+  "会话消息": {
+    "key": "agent.conversationMessages",
+    "en": "Conversation messages"
+  },
+  "单步调试": {
+    "key": "agent.stepDebug",
+    "en": "Step debugging"
+  },
+  "工具管理": {
+    "key": "router.toolManagement",
+    "en": "Tool Management"
+  },
+  "消息模板": {
+    "key": "router.messageTemplate",
+    "en": "Message Templates"
+  },
+  "发送通知": {
+    "key": "router.sendNotification",
+    "en": "Send Notification"
+  },
+  "通知规则": {
+    "key": "notify.rules",
+    "en": "Notification rules"
+  },
+  "渠道配置": {
+    "key": "notify.channelConfig",
+    "en": "Channel configuration"
+  },
+  "订阅偏好": {
+    "key": "notify.subscriptionPreferences",
+    "en": "Subscription preferences"
+  },
+  "发送记录": {
+    "key": "router.sendRecords",
+    "en": "Send Records"
+  },
+  "移动填报": {
+    "key": "router.mobileFormEntry",
+    "en": "Mobile Form Entry"
+  },
+  "移动工作台": {
+    "key": "router.mobileWorkspace",
+    "en": "Mobile Workspace"
+  },
+  "移动收件箱": {
+    "key": "router.mobileInbox",
+    "en": "Mobile Inbox"
+  },
+  "无权限访问": {
+    "key": "router.forbidden",
+    "en": "Access Denied"
+  },
+  "页面不存在": {
+    "key": "router.pageNotFound",
+    "en": "Page Not Found"
+  },
+  "服务异常": {
+    "key": "router.serverError",
+    "en": "Service Error"
+  },
+  "标识与名称必填": {
+    "key": "iot.identifierAndNameRequired",
+    "en": "Identifier and name are required."
+  },
+  "已保存": {
+    "key": "common.saved",
+    "en": "Saved"
+  },
+  "已创建": {
+    "key": "common.created",
+    "en": "Created"
+  },
+  "输入新口令（只写，不可回读）": {
+    "key": "iot.newPasswordPrompt",
+    "en": "Enter a new password (write-only; it cannot be read back)"
+  },
+  "凭证轮换": {
+    "key": "iot.credentialRotation",
+    "en": "Rotate credential"
+  },
+  "轮换": {
+    "key": "iot.rotate",
+    "en": "Rotate"
+  },
+  "凭证已轮换": {
+    "key": "iot.credentialRotated",
+    "en": "Credential rotated"
+  },
+  "已删除": {
+    "key": "common.deleted",
+    "en": "Deleted"
+  },
+  "连接配置": {
+    "key": "iot.connectionConfig",
+    "en": "Connections"
+  },
+  "新增连接": {
+    "key": "iot.newConnection",
+    "en": "New connection"
+  },
+  "地址": {
+    "key": "common.address",
+    "en": "Address"
+  },
+  "凭证": {
+    "key": "iot.credential",
+    "en": "Credential"
+  },
+  "健康": {
+    "key": "iot.health",
+    "en": "Health"
+  },
+  "最后检查": {
+    "key": "iot.lastChecked",
+    "en": "Last check"
+  },
+  "测试": {
+    "key": "common.test",
+    "en": "Test"
+  },
+  "连接": {
+    "key": "iot.connect",
+    "en": "Connect"
+  },
+  "暂无连接配置": {
+    "key": "iot.noConnections",
+    "en": "No connections"
+  },
+  "唯一标识": {
+    "key": "iot.uniqueIdentifier",
+    "en": "Unique identifier"
+  },
+  "自建 MQTT": {
+    "key": "iot.mqttSelfBuilt",
+    "en": "Self-hosted MQTT"
+  },
+  "腾讯 IoT": {
+    "key": "iot.tencentIot",
+    "en": "Tencent IoT"
+  },
+  "主机": {
+    "key": "iot.host",
+    "en": "Host"
+  },
+  "端口": {
+    "key": "iot.port",
+    "en": "Port"
+  },
+  "口令": {
+    "key": "iot.password",
+    "en": "Password"
+  },
+  "规则已创建（草稿）": {
+    "key": "iot.ruleCreatedDraft",
+    "en": "Rule created (draft)"
+  },
+  "事件规则": {
+    "key": "iot.eventRules",
+    "en": "Event rules"
+  },
+  "新增规则": {
+    "key": "iot.newRule",
+    "en": "New rule"
+  },
+  "条件": {
+    "key": "common.condition",
+    "en": "Condition"
+  },
+  "流程联动": {
+    "key": "iot.processLinkage",
+    "en": "Process linkage"
+  },
+  "触发记录": {
+    "key": "iot.triggerRecords",
+    "en": "Trigger records"
+  },
+  "暂无规则": {
+    "key": "iot.noRules",
+    "en": "No rules"
+  },
+  "仅显示可接入流程的已发布设备": {
+    "key": "iot.eligibleDevicesPlaceholder",
+    "en": "Only published devices eligible for process linkage are shown"
+  },
+  "规则类型": {
+    "key": "iot.ruleType",
+    "en": "Rule type"
+  },
+  "阈值 THRESHOLD": {
+    "key": "iot.ruleTypeThreshold",
+    "en": "Threshold THRESHOLD"
+  },
+  "属性变化 PROPERTY_CHANGED": {
+    "key": "iot.ruleTypePropertyChanged",
+    "en": "Property change PROPERTY_CHANGED"
+  },
+  "事件发生 EVENT_OCCUR": {
+    "key": "iot.ruleTypeEventOccur",
+    "en": "Event occurrence EVENT_OCCUR"
+  },
+  "上线 ONLINE": {
+    "key": "iot.ruleTypeOnline",
+    "en": "Online ONLINE"
+  },
+  "离线 OFFLINE": {
+    "key": "iot.ruleTypeOffline",
+    "en": "Offline OFFLINE"
+  },
+  "条件 JSON": {
+    "key": "iot.conditionJson",
+    "en": "Condition JSON"
+  },
+  "防抖(ms)": {
+    "key": "iot.debounceMs",
+    "en": "Debounce (ms)"
+  },
+  "冷却(ms)": {
+    "key": "iot.cooldownMs",
+    "en": "Cooldown (ms)"
+  },
+  "连续次数": {
+    "key": "iot.consecutiveCount",
+    "en": "Consecutive occurrences"
+  },
+  "流程模板": {
+    "key": "iot.processTemplate",
+    "en": "Process template"
+  },
+  "已发布且允许 IoT 接入的流程模板 key": {
+    "key": "iot.processTemplateKeyPlaceholder",
+    "en": "Key of a process template that is published and allows IoT access"
+  },
+  "表单映射": {
+    "key": "iot.formMapping",
+    "en": "Form mapping"
+  },
+  "规则触发与流程发起记录": {
+    "key": "iot.triggerRecordsTitle",
+    "en": "Rule triggers and process starts"
+  },
+  "幂等键": {
+    "key": "iot.idempotencyKey",
+    "en": "Idempotency key"
+  },
+  "流程实例": {
+    "key": "common.processInstance",
+    "en": "Process instance"
+  },
+  "触发时间": {
+    "key": "iot.triggeredAt",
+    "en": "Triggered at"
+  },
+  "触发记录详情": {
+    "key": "iot.triggerRecordDetail",
+    "en": "Trigger record details"
+  },
+  "我的待办": {
+    "key": "workflow.myTodoTitle",
+    "en": "My to-dos"
+  },
+  "我的已办": {
+    "key": "workflow.myProcessed",
+    "en": "My processed"
+  },
+  "抄送": {
+    "key": "workflow.cc",
+    "en": "CC"
+  },
+  "常用事项": {
+    "key": "workflow.favoriteItems",
+    "en": "Favorites"
+  },
+  "暂无待办任务": {
+    "key": "workflow.noTodoTasks",
+    "en": "No pending tasks"
+  },
+  "暂无已办任务": {
+    "key": "workflow.noProcessedTasks",
+    "en": "No processed tasks"
+  },
+  "查看全部": {
+    "key": "common.viewAll",
+    "en": "View all"
+  },
+  "暂无发起的流程": {
+    "key": "workflow.noStartedProcesses",
+    "en": "No started processes"
+  },
+  "暂无抄送": {
+    "key": "workflow.noCcItems",
+    "en": "No CC items"
+  },
+  "暂无草稿": {
+    "key": "workflow.noDrafts",
+    "en": "No drafts"
+  },
+  "继续编辑": {
+    "key": "workflow.continueEditing",
+    "en": "Continue editing"
+  },
+  "站内信与流程消息入口": {
+    "key": "workflow.messagesEntryHint",
+    "en": "In-app messages and process notifications"
+  },
+  "打开消息": {
+    "key": "workflow.openMessages",
+    "en": "Open messages"
+  },
+  "工作台配置": {
+    "key": "workflow.workspaceConfig",
+    "en": "Workspace settings"
+  },
+  "组件显隐与顺序": {
+    "key": "workflow.widgetVisibilityOrder",
+    "en": "Component visibility and order"
+  },
+  "半宽": {
+    "key": "workflow.halfWidth",
+    "en": "Half width"
+  },
+  "整行": {
+    "key": "workflow.fullWidth",
+    "en": "Full row"
+  },
+  "上移": {
+    "key": "common.moveUp",
+    "en": "Move up"
+  },
+  "下移": {
+    "key": "common.moveDown",
+    "en": "Move down"
+  },
+  "常用事项（从本人可发起事项中选择）": {
+    "key": "workflow.favoritesPickerHint",
+    "en": "Favorites (choose from the items you can start)"
+  },
+  "恢复默认": {
+    "key": "common.restoreDefault",
+    "en": "Restore defaults"
+  },
+  "保存配置": {
+    "key": "workflow.saveWorkspaceConfig",
+    "en": "Save settings"
+  },
+  "加载图定义列表失败": {
+    "key": "agent.graphDefListLoadFailed",
+    "en": "Could not load the graph definitions."
+  },
+  "请输入图名称": {
+    "key": "agent.graphNamePlaceholder",
+    "en": "Enter a graph name"
+  },
+  "新建图定义": {
+    "key": "agent.newGraphDef",
+    "en": "New graph definition"
+  },
+  "图名称不能为空": {
+    "key": "agent.graphNameRequired",
+    "en": "Graph name is required."
+  },
+  "创建成功，进入设计器": {
+    "key": "agent.graphCreatedEnteringDesigner",
+    "en": "Created successfully; opening the designer"
+  },
+  "创建图定义失败": {
+    "key": "agent.graphDefCreateFailed",
+    "en": "Could not create the graph definition."
+  },
+  "请输入调试输入": {
+    "key": "agent.debugInputPlaceholder",
+    "en": "Enter debug input"
+  },
+  "开始调试": {
+    "key": "agent.startDebug",
+    "en": "Start debugging"
+  },
+  "输入不能为空": {
+    "key": "agent.inputRequired",
+    "en": "Input is required."
+  },
+  "调试会话已创建": {
+    "key": "agent.debugSessionCreated",
+    "en": "Debug session created"
+  },
+  "创建调试会话失败": {
+    "key": "agent.debugSessionCreateFailed",
+    "en": "Could not create the debug session."
+  },
+  "图定义管理": {
+    "key": "agent.graphDefManagement",
+    "en": "Graph definitions"
+  },
+  "图名称": {
+    "key": "agent.graphName",
+    "en": "Graph name"
+  },
+  "图 Key": {
+    "key": "agent.graphKey",
+    "en": "Graph key"
+  },
+  "加载执行详情失败": {
+    "key": "agent.executionDetailLoadFailed",
+    "en": "Could not load the execution details."
+  },
+  "无效的执行 ID": {
+    "key": "agent.invalidExecutionId",
+    "en": "Invalid execution ID"
+  },
+  "输入内容": {
+    "key": "agent.inputContent",
+    "en": "Input"
+  },
+  "收起": {
+    "key": "common.collapse",
+    "en": "Collapse"
+  },
+  "展开": {
+    "key": "common.expand",
+    "en": "Expand"
+  },
+  "输出内容": {
+    "key": "agent.outputContent",
+    "en": "Output"
+  },
+  "错误信息": {
+    "key": "agent.errorInfoSection",
+    "en": "Error"
+  },
+  "时间信息": {
+    "key": "agent.timingInfo",
+    "en": "Timing"
+  },
+  "创建时间:": {
+    "key": "agent.createTimeLabel",
+    "en": "Created at:"
+  },
+  "更新时间:": {
+    "key": "agent.updateTimeLabel",
+    "en": "Updated at:"
+  },
+  "追踪 ID:": {
+    "key": "agent.traceIdLabel",
+    "en": "Trace ID:"
+  },
+  "供应商可观测 usage（输入/输出/总计），非账单、非完整失败尝试成本": {
+    "key": "agent.usageObservabilityTooltip",
+    "en": "Usage observed from the provider (input/output/total); not a billing figure and not the cost of failed attempts."
+  },
+  "总 Token:": {
+    "key": "agent.totalTokensLabel",
+    "en": "Total tokens:"
+  },
+  "节点轨迹": {
+    "key": "agent.nodeTrajectory",
+    "en": "Node trajectory"
+  },
+  "暂无执行详情数据": {
+    "key": "agent.noExecutionDetailData",
+    "en": "No execution detail data"
+  },
+  "LOOP 节点 maxIterations 必须 ≥ 1": {
+    "key": "agent.loopMaxIterationsInvalid",
+    "en": "maxIterations must be ≥ 1 for a LOOP node."
+  },
+  "加载图定义失败": {
+    "key": "agent.graphDefLoadFailed",
+    "en": "Could not load the graph definition."
+  },
+  "下拉数据加载失败：": {
+    "key": "agent.dropdownLoadFailed",
+    "en": "Could not load the dropdown data: "
+  },
+  "未知错误": {
+    "key": "common.unknownError",
+    "en": "Unknown error"
+  },
+  "请输入测试文本": {
+    "key": "agent.testTextRequired",
+    "en": "Please enter test text."
+  },
+  "执行失败": {
+    "key": "agent.executionFailed",
+    "en": "Execution failed"
+  },
+  "暂无可跳转的执行记录": {
+    "key": "agent.noExecutionToJumpTo",
+    "en": "No execution record is available to open."
+  },
+  "未命名图": {
+    "key": "agent.untitledGraph",
+    "en": "Untitled graph"
+  },
+  "返回列表": {
+    "key": "common.backToList",
+    "en": "Back to list"
+  },
+  "点击画布节点编辑属性": {
+    "key": "agent.clickNodeToEditHint",
+    "en": "Click a node on the canvas to edit its properties"
+  },
+  "执行测试": {
+    "key": "agent.runTest",
+    "en": "Run test"
+  },
+  "输入测试文本（图须已发布）": {
+    "key": "agent.testTextPlaceholder",
+    "en": "Enter test text (the graph must be published)"
+  },
+  "执行结果已持久化，可通过上方按钮直达本次执行详情。": {
+    "key": "agent.executionResultPersisted",
+    "en": "The execution result has been saved; use the button above to open its execution details."
+  },
+  "流程待办": {
+    "key": "notify.bizTypeTodo",
+    "en": "Process to-do"
+  },
+  "审批结果": {
+    "key": "workflow.approvalResult",
+    "en": "Approval result"
+  },
+  "加载通知列表失败": {
+    "key": "notify.listLoadFailed",
+    "en": "Could not load the notification list."
+  },
+  "没有未读通知": {
+    "key": "notify.noUnreadNotifications",
+    "en": "No unread notifications"
+  },
+  "全部已读失败": {
+    "key": "notify.markAllReadFailed",
+    "en": "Could not mark all as read."
+  },
+  "确定要删除该通知吗？删除后不可恢复。": {
+    "key": "notify.deleteConfirmMessage",
+    "en": "Delete this notification? This cannot be undone."
+  },
+  "该通知暂无页面跳转": {
+    "key": "notify.noLinkAvailable",
+    "en": "This notification has no page to open."
+  },
+  "通知消息": {
+    "key": "notify.messagesTitle",
+    "en": "Notifications"
+  },
+  "已读状态": {
+    "key": "notify.readStatus",
+    "en": "Read status"
+  },
+  "未读": {
+    "key": "notify.unread",
+    "en": "Unread"
+  },
+  "已读": {
+    "key": "notify.read",
+    "en": "Read"
+  },
+  "搜索标题或内容": {
+    "key": "notify.searchPlaceholder",
+    "en": "Search title or content"
+  },
+  "内容预览": {
+    "key": "notify.contentPreview",
+    "en": "Content preview"
+  },
+  "表单定义加载失败：后端端点待上线": {
+    "key": "form.definitionEndpointPending",
+    "en": "Could not load the form definition: the backend endpoint is not available yet."
+  },
+  "确认删除该记录？此操作不可恢复。": {
+    "key": "form.deleteRecordConfirm",
+    "en": "Delete this record? This cannot be undone."
+  },
+  "开始日期": {
+    "key": "common.startDate",
+    "en": "Start date"
+  },
+  "结束日期": {
+    "key": "common.endDate",
+    "en": "End date"
+  },
+  "下载模板": {
+    "key": "form.downloadTemplate",
+    "en": "Download template"
+  },
+  "加载流程实例列表失败": {
+    "key": "workflow.instanceListLoadFailed",
+    "en": "Could not load the process instance list."
+  },
+  "未找到对应流程定义，无法展示流程图": {
+    "key": "workflow.processDefNotFoundForDiagram",
+    "en": "The process definition was not found, so the diagram cannot be shown."
+  },
+  "加载实例详情失败": {
+    "key": "workflow.processInstanceDetailLoadFailed",
+    "en": "Could not load the instance details."
+  },
+  "流程实例详情": {
+    "key": "workflow.instanceDetailTitle",
+    "en": "Instance details"
+  },
+  "流程图": {
+    "key": "workflow.processDiagram",
+    "en": "Process diagram"
+  },
+  "暂无审批记录": {
+    "key": "workflow.noApprovalRecords",
+    "en": "No approval records"
+  },
+  "审批节点": {
+    "key": "workflow.approvalNode",
+    "en": "Approval node"
+  },
+  "审批人": {
+    "key": "workflow.approver",
+    "en": "Approver"
+  },
+  "审批状态": {
+    "key": "workflow.approvalStatus",
+    "en": "Approval status"
+  },
+  "进行中...": {
+    "key": "common.inProgressEllipsis",
+    "en": "In progress..."
+  },
+  "加载收件箱失败": {
+    "key": "notify.inboxLoadFailed",
+    "en": "Could not load the inbox."
+  },
+  "全部已读": {
+    "key": "notify.markAllRead",
+    "en": "Mark all as read"
+  },
+  "暂无通知": {
+    "key": "notify.noNotifications",
+    "en": "No notifications"
+  },
+  "点击标记已读": {
+    "key": "notify.clickToMarkRead",
+    "en": "Click to mark as read"
+  },
+  "绑定票据缺失，请从登录入口重新发起": {
+    "key": "view.ssoBindTicketMissing",
+    "en": "The binding ticket is missing. Please start again from the sign-in page."
+  },
+  "绑定候选已失效，请重新发起": {
+    "key": "view.ssoBindCandidateExpired",
+    "en": "The binding candidate has expired. Please start again."
+  },
+  "绑定失败": {
+    "key": "view.ssoBindFailed",
+    "en": "Binding failed."
+  },
+  "绑定第三方账号": {
+    "key": "view.bindThirdPartyAccount",
+    "en": "Bind third-party account"
+  },
+  "返回登录": {
+    "key": "view.backToLogin",
+    "en": "Back to sign-in"
+  },
+  "绑定中…": {
+    "key": "view.binding",
+    "en": "Binding..."
+  },
+  "确认绑定": {
+    "key": "view.confirmBind",
+    "en": "Confirm binding"
+  },
+  "加载订阅偏好失败": {
+    "key": "notify.preferencesLoadFailed",
+    "en": "Could not load subscription preferences."
+  },
+  "订阅偏好已保存": {
+    "key": "notify.preferencesSaved",
+    "en": "Subscription preferences saved"
+  },
+  "保存偏好": {
+    "key": "notify.savePreferences",
+    "en": "Save preferences"
+  },
+  "接收该通知": {
+    "key": "notify.receiveNotification",
+    "en": "Receive this notification"
+  },
+  "订阅变化只影响之后的投递，不改变已产生的通知；必须送达的待办与安全/状态通知（站内信）不可关闭。": {
+    "key": "notify.preferencesHint",
+    "en": "Changes to subscriptions only affect future deliveries and do not alter notifications already sent; mandatory to-dos and security/status notifications (in-app messages) cannot be turned off."
+  },
+  "上传失败": {
+    "key": "common.uploadFailed",
+    "en": "Upload failed."
+  },
+  "上传中…": {
+    "key": "common.uploading",
+    "en": "Uploading..."
+  },
+  "上传图片": {
+    "key": "common.uploadImage",
+    "en": "Upload image"
+  },
+  "上传附件": {
+    "key": "common.uploadAttachment",
+    "en": "Upload attachment"
+  },
+  "加载目标表单定义失败": {
+    "key": "form.targetFormDefLoadFailed",
+    "en": "Could not load the target form definition."
+  },
+  "查询目标表单数据失败": {
+    "key": "form.targetFormDataQueryFailed",
+    "en": "Could not query the target form data."
+  },
+  "请输入关键词搜索": {
+    "key": "form.keywordSearchPlaceholder",
+    "en": "Enter a keyword to search"
+  },
+  "选择关联表单": {
+    "key": "workflow.selectLinkedFormTitle",
+    "en": "Select form"
+  },
+  "仅展示已发布的表单作为可选绑定目标（草稿表单不可用）": {
+    "key": "workflow.publishedFormOnlyHint",
+    "en": "Only published forms can be chosen as binding targets (draft forms are unavailable)"
+  },
+  "搜索表单名称或 formKey": {
+    "key": "workflow.searchFormNamePlaceholder",
+    "en": "Search by form name or formKey"
+  },
+  "暂无可选表单": {
+    "key": "workflow.noSelectableForms",
+    "en": "No forms available"
+  },
+  "最大长度": {
+    "key": "form.maxLength",
+    "en": "Max length"
+  },
+  "不限": {
+    "key": "form.unlimited",
+    "en": "Unlimited"
+  },
+  "锁定": {
+    "key": "system.statusLocked",
+    "en": "Locked"
+  },
+  "请选择关联记录": {
+    "key": "component.selectReferencePlaceholder",
+    "en": "Select a related record"
+  },
+  "汇合节点：入边数 = 汇合分支数（≥2），等待全部分支到达后合并单点继续": {
+    "key": "agent.joinNodeHint",
+    "en": "Join node: the number of incoming edges equals the number of joined branches (≥ 2); execution waits for all branches to arrive and then continues from a single merged point"
+  }
+}

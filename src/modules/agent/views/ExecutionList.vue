@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ExecutionList — 图执行历史列表页（页型 B）。
  *
@@ -34,13 +37,48 @@ const STATUS_MAP: Record<
   string,
   { label: string; type: 'success' | 'warning' | 'info' | 'danger' }
 > = {
-  RUNNING: { label: '运行中', type: 'warning' },
-  SUCCESS: { label: '成功', type: 'success' },
-  FAILED: { label: '失败', type: 'danger' },
-  PAUSED: { label: '已暂停', type: 'info' },
-  COMPLETED: { label: '已完成', type: 'success' },
-  STOPPED: { label: '已停止', type: 'info' },
-  EXPIRED: { label: '已过期', type: 'warning' },
+  RUNNING: {
+    get label() {
+      return t('common.statusRunning')
+    },
+    type: 'warning',
+  },
+  SUCCESS: {
+    get label() {
+      return t('common.resultSuccess')
+    },
+    type: 'success',
+  },
+  FAILED: {
+    get label() {
+      return t('common.resultFailed')
+    },
+    type: 'danger',
+  },
+  PAUSED: {
+    get label() {
+      return t('common.statusPaused')
+    },
+    type: 'info',
+  },
+  COMPLETED: {
+    get label() {
+      return t('common.statusCompleted')
+    },
+    type: 'success',
+  },
+  STOPPED: {
+    get label() {
+      return t('common.statusStopped')
+    },
+    type: 'info',
+  },
+  EXPIRED: {
+    get label() {
+      return t('common.statusExpired')
+    },
+    type: 'warning',
+  },
 }
 
 function getStatusLabel(status: string): string {
@@ -48,8 +86,8 @@ function getStatusLabel(status: string): string {
 }
 
 function getStatusType(status: string): 'success' | 'warning' | 'info' | 'danger' {
-  const t = STATUS_MAP[status]?.type
-  return (t as 'success' | 'warning' | 'info' | 'danger' | undefined) ?? 'info'
+  const tagType = STATUS_MAP[status]?.type
+  return (tagType as 'success' | 'warning' | 'info' | 'danger' | undefined) ?? 'info'
 }
 
 type MergedRow = AgentGraphExecution & { _debug: boolean }
@@ -59,7 +97,9 @@ function debugToRow(s: AgentGraphDebugSession): MergedRow {
     id: s.id,
     graphDefId: s.graphDefId,
     graphKey: '',
-    graphName: `图 #${s.graphDefId}`,
+    get graphName() {
+      return t('agent.graphFallbackName', { graphDefId: s.graphDefId })
+    },
     graphDefVersion: s.graphDefVersion,
     defVersion: s.graphDefVersion,
     input: s.input,
@@ -99,7 +139,7 @@ const canViewDetail = computed(() => hasPerm('agent:model:view'))
 
 // M07-F04-02: Token 格式化（未知与 0 严格区分，total=未知时显示未知）
 function formatTokenCount(count: number | null | undefined): string {
-  if (count === null || count === undefined) return '未知'
+  if (count === null || count === undefined) return t('common.unknown')
   if (count === 0) return '0'
   return count.toLocaleString()
 }
@@ -176,7 +216,7 @@ async function loadList() {
     if (execRes.status === 'rejected' && debugRes.status === 'rejected') {
       const r: unknown = execRes.reason
       if (r instanceof ApiError) errorMsg.value = r.msg
-      else errorMsg.value = '加载执行历史记录列表失败'
+      else errorMsg.value = t('agent.executionListLoadFailed')
       list.value = []
       total.value = 0
       return
@@ -192,7 +232,7 @@ async function loadList() {
     total.value = execTotal + debugTotal
   } catch (err) {
     if (err instanceof ApiError) errorMsg.value = err.msg
-    else errorMsg.value = '加载执行历史记录列表失败'
+    else errorMsg.value = t('agent.executionListLoadFailed')
   } finally {
     loading.value = false
   }
@@ -225,7 +265,7 @@ onMounted(() => {
 
 <template>
   <StandardListTemplate
-    title="执行历史记录"
+    :title="t('agent.executionHistory')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -249,53 +289,53 @@ onMounted(() => {
 
     <!-- 表格 -->
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column label="来源" width="90">
+      <el-table-column :label="t('common.source')" width="90">
         <template #default="{ row }">
-          <el-tag v-if="row._debug" type="info" size="small">调试</el-tag>
-          <el-tag v-else size="small">执行</el-tag>
+          <el-tag v-if="row._debug" type="info" size="small">{{ t('agent.sourceDebug') }}</el-tag>
+          <el-tag v-else size="small">{{ t('agent.sourceExecution') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="graphName" label="图名称" min-width="180" />
-      <el-table-column prop="status" label="状态" width="120">
+      <el-table-column prop="graphName" :label="t('agent.graphName')" min-width="180" />
+      <el-table-column prop="status" :label="t('common.status')" width="120">
         <template #default="{ row }">
           <el-tag :type="getStatusType(row.status)" size="small">
             {{ getStatusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="版本" width="90">
+      <el-table-column :label="t('common.version')" width="90">
         <template #default="{ row }"> v{{ row.defVersion ?? '-' }} </template>
       </el-table-column>
-      <el-table-column prop="latencyMs" label="耗时 (ms)" width="100" align="right">
+      <el-table-column prop="latencyMs" :label="t('common.durationMs')" width="100" align="right">
         <template #default="{ row }">
           {{ row.latencyMs }}
         </template>
       </el-table-column>
       <!-- M07-F04-02: Token 汇总（输入 / 输出 / 总计；null=未知，不写零） -->
-      <el-table-column label="输入 Token" width="110" align="right">
+      <el-table-column :label="t('agent.inputTokensColumn')" width="110" align="right">
         <template #default="{ row }">
           <span class="token-cell">{{ formatTokenCount(row.inputTokens) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="输出 Token" width="110" align="right">
+      <el-table-column :label="t('agent.outputTokensColumn')" width="110" align="right">
         <template #default="{ row }">
           <span class="token-cell">{{ formatTokenCount(row.outputTokens) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="总 Token" width="110" align="right">
+      <el-table-column :label="t('agent.totalTokensColumn')" width="110" align="right">
         <template #default="{ row }">
           <span class="token-cell">{{ formatTokenCount(totalTokensOf(row)) }}</span>
         </template>
       </el-table-column>
       <!-- Token 非计费说明（D164 标准5） -->
-      <el-table-column label="口径" width="90">
+      <el-table-column :label="t('agent.usageCaliber')" width="90">
         <template #default>
-          <el-tooltip content="供应商可观测 usage，非账单、非完整失败尝试成本" placement="top">
-            <span class="token-disclaimer">可观测量</span>
+          <el-tooltip :content="t('agent.usageCaliberTooltip')" placement="top">
+            <span class="token-disclaimer">{{ t('common.observability') }}</span>
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column prop="errorCategory" label="失败分类" width="160">
+      <el-table-column prop="errorCategory" :label="t('agent.failureCategory')" width="160">
         <template #default="{ row }">
           <span v-if="row.errorCategory" class="error-category">
             {{ row.errorCategory }}
@@ -303,7 +343,7 @@ onMounted(() => {
           <span v-else class="text-muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column prop="errorMessage" label="失败摘要" min-width="180">
+      <el-table-column prop="errorMessage" :label="t('agent.failureSummary')" min-width="180">
         <template #default="{ row }">
           <span v-if="row.errorMessage" class="text-truncate">
             {{ row.errorMessage }}
@@ -311,8 +351,8 @@ onMounted(() => {
           <span v-else class="text-muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" label="发生时间" width="180" />
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column prop="createTime" :label="t('agent.occurredAt')" width="180" />
+      <el-table-column :label="t('common.actions')" width="100" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="canViewDetail"
@@ -320,9 +360,8 @@ onMounted(() => {
             link
             type="primary"
             @click="handleViewDetail(row)"
+            >{{ t('common.detail') }}</el-button
           >
-            详情
-          </el-button>
         </template>
       </el-table-column>
     </el-table>

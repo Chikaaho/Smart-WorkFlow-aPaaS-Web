@@ -1,10 +1,18 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+import { computed } from 'vue'
+
+const { t } = useI18n()
 /**
  * ListEmpty — 空态占位。
  * 包装 el-empty，文案/间距走 --sw-* token。
  * #action slot 可选，如"新建"按钮。
  */
-withDefaults(defineProps<{ description?: string }>(), { description: '暂无数据' })
+const props = defineProps<{ description?: string }>()
+
+// defineProps 会被提升到 setup 之外，默认值不能引用 t()；默认文案在渲染期解析
+const description = computed(() => props.description ?? t('common.emptyData'))
 </script>
 
 <template>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * DictTypeList — 字典类型列表页（页型B）。
  *
@@ -57,7 +60,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载字典类型列表失败'
+      errorMsg.value = t('system.dictTypeListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -101,7 +104,9 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
 // ─── 弹窗状态 ───
 
 const dialogVisible = ref(false)
-const dialogTitle = computed(() => (editingId.value ? '编辑字典类型' : '新建字典类型'))
+const dialogTitle = computed(() =>
+  editingId.value ? t('system.editDictType') : t('system.newDictType'),
+)
 const editingId = ref<string | null>(null)
 const submitting = ref(false)
 const formError = ref('')
@@ -137,7 +142,7 @@ async function openEdit(row: SysDictType) {
     form.status = detail.status
     form.description = detail.description ?? ''
   } catch {
-    formError.value = '加载字典类型详情失败'
+    formError.value = t('system.dictTypeDetailLoadFailed')
     return
   }
   dialogVisible.value = true
@@ -149,11 +154,11 @@ function closeDialog() {
 
 async function handleSubmit() {
   if (!form.name.trim()) {
-    formError.value = '字典名称不能为空'
+    formError.value = t('system.dictNameRequired')
     return
   }
   if (!form.code.trim()) {
-    formError.value = '字典编码不能为空'
+    formError.value = t('system.dictCodeRequired')
     return
   }
 
@@ -162,10 +167,10 @@ async function handleSubmit() {
   try {
     if (editingId.value) {
       await updateDictType({ ...form, id: editingId.value })
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.updateSuccess'))
     } else {
       await createDictType({ ...form })
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.createSuccess'))
     }
     closeDialog()
     void loadList()
@@ -173,7 +178,7 @@ async function handleSubmit() {
     if (err instanceof ApiError) {
       formError.value = err.msg
     } else {
-      formError.value = '保存失败'
+      formError.value = t('common.saveFailed')
     }
   } finally {
     submitting.value = false
@@ -183,22 +188,30 @@ async function handleSubmit() {
 async function handleDelete(row: SysDictType) {
   try {
     await ElMessageBox.confirm(
-      `确定要删除字典类型"${row.name}"吗？删除后该类型下的字典项将不可用。`,
-      '删除确认',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' },
+      t('system.deleteDictTypeConfirm', { name: row.name }),
+      t('common.deleteConfirmTitle'),
+      {
+        get confirmButtonText() {
+          return t('common.confirm')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+      },
     )
   } catch {
     return // 用户取消
   }
   try {
     await deleteDictType(row.id!)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     void loadList()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('common.deleteFailed'))
     }
   }
 }
@@ -226,7 +239,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="字典管理"
+    :title="t('system.dictManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -236,33 +249,38 @@ onMounted(loadList)
   >
     <!-- 工具栏：新建按钮 -->
     <template #toolbar-actions>
-      <el-button type="primary" @click="openCreate">新建字典类型</el-button>
+      <el-button type="primary" @click="openCreate">{{ t('system.newDictType') }}</el-button>
     </template>
 
     <!-- 筛选区 -->
     <template #filter>
       <el-input
         v-model="filter.name"
-        placeholder="字典名称"
+        :placeholder="t('system.dictName')"
         clearable
         style="width: 180px"
         @keyup.enter="handleQuery"
       />
       <el-input
         v-model="filter.code"
-        placeholder="字典编码"
+        :placeholder="t('system.dictCode')"
         clearable
         style="width: 180px"
         @keyup.enter="handleQuery"
       />
-      <el-select v-model="filter.status" placeholder="状态" clearable style="width: 120px">
-        <el-option label="正常" :value="0" />
-        <el-option label="停用" :value="1" />
+      <el-select
+        v-model="filter.status"
+        :placeholder="t('common.status')"
+        clearable
+        style="width: 120px"
+      >
+        <el-option :label="t('common.statusNormal')" :value="0" />
+        <el-option :label="t('common.disable')" :value="1" />
       </el-select>
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <!-- 表格区 -->
@@ -275,30 +293,39 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="name" label="字典名称" min-width="140" />
-      <el-table-column prop="code" label="字典编码" min-width="140" />
-      <el-table-column prop="status" label="状态" width="80">
+      <el-table-column prop="name" :label="t('system.dictName')" min-width="140" />
+      <el-table-column prop="code" :label="t('system.dictCode')" min-width="140" />
+      <el-table-column prop="status" :label="t('common.status')" width="80">
         <template #default="{ row }">
           <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
-            {{ row.status === 0 ? '正常' : '停用' }}
+            {{ row.status === 0 ? t('common.statusNormal') : t('common.disable') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="description" label="备注" min-width="160" show-overflow-tooltip />
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column
+        prop="description"
+        :label="t('common.remark')"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column :label="t('common.actions')" width="280" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editRow(row)">编辑</el-button>
-          <el-button size="small" link type="primary" @click="manageRow(row)">
-            管理字典项
-          </el-button>
-          <el-button size="small" link type="danger" @click="deleteRow(row)">删除</el-button>
+          <el-button size="small" link type="primary" @click="editRow(row)">{{
+            t('common.edit')
+          }}</el-button>
+          <el-button size="small" link type="primary" @click="manageRow(row)">{{
+            t('system.manageDictItems')
+          }}</el-button>
+          <el-button size="small" link type="danger" @click="deleteRow(row)">{{
+            t('common.delete')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <!-- 空态操作 -->
     <template #empty-action>
-      <el-button type="primary" @click="openCreate">新建字典类型</el-button>
+      <el-button type="primary" @click="openCreate">{{ t('system.newDictType') }}</el-button>
     </template>
   </StandardListTemplate>
 
@@ -316,43 +343,43 @@ onMounted(loadList)
         <el-alert :title="formError" type="error" :closable="false" show-icon />
       </template>
 
-      <FormSection title="基本信息">
+      <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
           <div class="form-field form-field--required">
-            <label class="form-field__label">字典名称</label>
+            <label class="form-field__label">{{ t('system.dictName') }}</label>
             <el-input
               v-model="form.name"
-              placeholder="请输入字典名称"
+              :placeholder="t('system.dictNamePlaceholder')"
               maxlength="64"
               show-word-limit
             />
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">字典编码</label>
+            <label class="form-field__label">{{ t('system.dictCode') }}</label>
             <el-input
               v-model="form.code"
-              placeholder="请输入字典编码"
+              :placeholder="t('system.dictCodePlaceholder')"
               :disabled="!!editingId"
               maxlength="64"
               show-word-limit
             />
           </div>
           <div class="form-field">
-            <label class="form-field__label">状态</label>
+            <label class="form-field__label">{{ t('common.status') }}</label>
             <el-select v-model="form.status" style="width: 100%">
-              <el-option label="正常" :value="0" />
-              <el-option label="停用" :value="1" />
+              <el-option :label="t('common.statusNormal')" :value="0" />
+              <el-option :label="t('common.disable')" :value="1" />
             </el-select>
           </div>
         </FormGrid>
         <FormGrid :columns="1" style="margin-top: 0">
           <div class="form-field">
-            <label class="form-field__label">备注</label>
+            <label class="form-field__label">{{ t('common.remark') }}</label>
             <el-input
               v-model="form.description"
               type="textarea"
               :rows="3"
-              placeholder="请输入备注"
+              :placeholder="t('common.remarkPlaceholder')"
               maxlength="256"
               show-word-limit
             />
@@ -361,8 +388,10 @@ onMounted(loadList)
       </FormSection>
 
       <template #actions>
-        <el-button @click="closeDialog">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+          t('common.save')
+        }}</el-button>
       </template>
     </StandardFormTemplate>
   </el-dialog>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * BatchApproval — 批量审批（I4 §3.5）。
  * 仅展示本人当前待办；提交后服务端逐项校验（归属/状态/意见要求/权限），
@@ -30,6 +33,8 @@ const comment = ref('')
 const submitting = ref(false)
 const results = ref<BatchItemResult[]>([])
 const resultVisible = ref(false)
+/** 批量结果汇总：总量 / 成功 / 失败 / 处理中 —— 批量审批是同步逐项执行，处理中恒为 0 */
+const summary = ref({ total: 0, success: 0, failed: 0, processing: 0 })
 
 const isEmpty = computed(() => !loading.value && list.value.length === 0)
 
@@ -41,7 +46,7 @@ async function loadList() {
     list.value = (result.list ?? []) as unknown as TodoRow[]
     total.value = result.total
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '待办加载失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.todoLoadFailed'))
   } finally {
     loading.value = false
   }
@@ -49,11 +54,11 @@ async function loadList() {
 
 async function submitBatch(action: 'APPROVE' | 'DISAPPROVE') {
   if (selected.value.length === 0) {
-    ElMessage.warning('请先选择要批量办理的任务')
+    ElMessage.warning(t('workflow.selectBatchTasks'))
     return
   }
   if (action === 'DISAPPROVE' && !comment.value.trim()) {
-    ElMessage.warning('批量不通过必须填写意见')
+    ElMessage.warning(t('workflow.batchRejectNeedsComment'))
     return
   }
   submitting.value = true
@@ -66,10 +71,18 @@ async function submitBatch(action: 'APPROVE' | 'DISAPPROVE') {
       })),
     )
     results.value = response.results
+    // R2c：汇总四项计数全部取服务端返回值，不由前端按行数推算，保证与实际结果一致。
+    // 处理中由服务端同步契约显式给出（恒为 0），显示它而不是省略这一栏。
+    summary.value = {
+      total: response.total,
+      success: response.success,
+      failed: response.failed,
+      processing: response.processing,
+    }
     resultVisible.value = true
     await loadList()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '批量提交失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.batchSubmitFailed'))
   } finally {
     submitting.value = false
   }
@@ -91,7 +104,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="批量审批"
+    :title="t('workflow.batchApproval')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -104,14 +117,14 @@ onMounted(loadList)
         v-model="comment"
         type="textarea"
         :rows="1"
-        placeholder="批量意见（不通过时必填；强制意见表单节点仍需逐项提交意见表单）"
+        :placeholder="t('workflow.batchCommentHint')"
         style="flex: 1"
       />
       <el-button type="success" :loading="submitting" @click="submitBatch('APPROVE')">
-        批量通过
+        {{ t('workflow.batchApprove') }}
       </el-button>
       <el-button type="danger" :loading="submitting" @click="submitBatch('DISAPPROVE')">
-        批量不通过
+        {{ t('workflow.batchDisapprove') }}
       </el-button>
     </template>
 
@@ -121,32 +134,57 @@ onMounted(loadList)
       @selection-change="(rows: TodoRow[]) => (selected = rows)"
     >
       <el-table-column type="selection" width="46" />
-      <el-table-column label="任务 ID" min-width="180">
+      <el-table-column :label="t('common.taskId')" min-width="180">
         <template #default="{ $index }">{{ list[$index]?.taskId }}</template>
       </el-table-column>
-      <el-table-column label="任务名称" min-width="140">
+      <el-table-column :label="t('common.taskName')" min-width="140">
         <template #default="{ $index }">{{ list[$index]?.name }}</template>
       </el-table-column>
-      <el-table-column label="流程定义" min-width="140">
+      <el-table-column :label="t('common.processDef')" min-width="140">
         <template #default="{ $index }">{{ list[$index]?.processDefinitionKey }}</template>
       </el-table-column>
-      <template #empty>暂无可批量办理的待办</template>
+      <template #empty>{{ t('workflow.noBatchTodos') }}</template>
     </el-table>
 
-    <el-dialog v-model="resultVisible" title="批量办理结果（逐项）" width="640px">
+    <el-dialog v-model="resultVisible" :title="t('workflow.batchResults')" width="720px">
+      <el-descriptions :column="4" border class="batch-summary">
+        <el-descriptions-item :label="t('common.total')">
+          <span data-testid="batch-approval-total">{{ summary.total }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('common.resultSuccess')">
+          <span data-testid="batch-approval-success">{{ summary.success }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('common.resultFailed')">
+          <span data-testid="batch-approval-failed">{{ summary.failed }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('common.resultProcessing')">
+          <span data-testid="batch-approval-processing">{{ summary.processing }}</span>
+        </el-descriptions-item>
+      </el-descriptions>
+      <p class="batch-processing-note" data-testid="batch-approval-processing-note">
+        {{ t('workflow.batchProcessingNote') }}
+      </p>
       <el-table :data="results" size="small">
-        <el-table-column prop="taskId" label="任务 ID" min-width="170" />
-        <el-table-column label="结果" width="90">
+        <el-table-column prop="taskId" :label="t('common.taskId')" min-width="170" />
+        <el-table-column :label="t('common.result')" width="90">
           <template #default="{ row }">
             <el-tag :type="row?.success ? 'success' : 'danger'">
-              {{ row?.success ? '成功' : '失败' }}
+              {{ row?.success ? t('common.resultSuccess') : t('common.resultFailed') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="message" label="失败原因" min-width="200">
+        <el-table-column prop="message" :label="t('common.failureReason')" min-width="200">
           <template #default="{ row }">{{ row?.message || '—' }}</template>
         </el-table-column>
       </el-table>
     </el-dialog>
   </StandardListTemplate>
 </template>
+
+<style scoped>
+.batch-processing-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #909399;
+}
+</style>

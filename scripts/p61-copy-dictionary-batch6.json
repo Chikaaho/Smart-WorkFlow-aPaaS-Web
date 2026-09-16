@@ -1,0 +1,433 @@
+{
+  "_comment": "P61 R1 术语字典 批次6：foundation 错误码兜底文案、流程中心/实例监控/交接/待办、IoT 运行记录、表单设计与表单管理、部门管理、Agent 节点注册表。",
+  "未知字段": { "key": "foundation.errUnknownField", "en": "Unknown field" },
+  "必填字段未填": {
+    "key": "foundation.errRequiredFieldMissing",
+    "en": "Required field not filled in"
+  },
+  "字段类型不正确": { "key": "foundation.errFieldTypeIncorrect", "en": "Incorrect field type" },
+  "字典值不在允许范围": {
+    "key": "foundation.errDictValueOutOfRange",
+    "en": "Dictionary value is out of the allowed range"
+  },
+  "表单不存在或未发布": {
+    "key": "foundation.errFormMissingOrUnpublished",
+    "en": "The form does not exist or is not published"
+  },
+  "字段未知": { "key": "foundation.errFieldUnknown", "en": "Field is unknown" },
+  "不可筛选": { "key": "foundation.errNotFilterable", "en": "This field cannot be filtered" },
+  "操作符与字段类型不匹配": {
+    "key": "foundation.errOperatorTypeMismatch",
+    "en": "The operator does not match the field type"
+  },
+  "操作符不支持": { "key": "foundation.errOperatorUnsupported", "en": "Unsupported operator" },
+  "记录被其他表单引用，不能删除": {
+    "key": "foundation.errRecordReferenced",
+    "en": "The record is referenced by another form and cannot be deleted"
+  },
+  "记录不存在或已被删除": {
+    "key": "foundation.errRecordNotFound",
+    "en": "The record does not exist or was deleted"
+  },
+  "记录已被他人修改，请刷新后重试": {
+    "key": "foundation.errRecordModified",
+    "en": "The record was modified by someone else. Refresh and try again."
+  },
+  "字段类型未知": { "key": "foundation.errFieldTypeUnknown", "en": "Unknown field type" },
+  "该字段类型暂未开放，请更换类型后重试": {
+    "key": "foundation.errFieldTypeNotOpen",
+    "en": "This field type is not available yet. Choose another type and try again."
+  },
+  "字段缺少必要属性，请在设计器中补全后重新发布": {
+    "key": "foundation.errFieldAttributeMissing",
+    "en": "The field is missing required properties. Complete them in the designer and publish again."
+  },
+  "表格字段不能嵌套，请调整字段结构后重试": {
+    "key": "foundation.errTableFieldNested",
+    "en": "Table fields cannot be nested. Adjust the field structure and try again."
+  },
+  "表单定义配置异常，请检查后重试": {
+    "key": "foundation.errDefinitionInvalid",
+    "en": "The form definition is misconfigured. Check it and try again."
+  },
+  "验证码不正确，请重新输入": {
+    "key": "foundation.errCaptchaIncorrect",
+    "en": "Incorrect verification code. Enter it again."
+  },
+  "验证码已过期，请刷新后重新输入": {
+    "key": "foundation.errCaptchaExpired",
+    "en": "The verification code has expired. Refresh the page and enter it again."
+  },
+  "本机时间与服务器相差过大，请校准系统时间后重试": {
+    "key": "foundation.errClockSkew",
+    "en": "Your device time differs too much from the server. Calibrate the system clock and try again."
+  },
+  "用户名或密码不正确，请重新输入": {
+    "key": "foundation.errBadCredentials",
+    "en": "Incorrect username or password. Try again."
+  },
+  "表单不存在": { "key": "foundation.errFormNotFound", "en": "Form not found" },
+  "表单名称已存在": {
+    "key": "foundation.errFormNameExists",
+    "en": "A form with this name already exists"
+  },
+  "表单已发布，不能修改": {
+    "key": "foundation.errFormPublishedImmutable",
+    "en": "This form is published and cannot be modified"
+  },
+  "表单处于草稿态，不能执行此操作": {
+    "key": "foundation.errFormInDraft",
+    "en": "This form is a draft; this action is not available"
+  },
+  "表单未发布，不能提交数据": {
+    "key": "foundation.errFormUnpublished",
+    "en": "This form is not published; data cannot be submitted"
+  },
+  "字段名不合法": { "key": "foundation.errFieldNameInvalid", "en": "Invalid field name" },
+  "字段名重复": { "key": "foundation.errFieldNameDuplicate", "en": "Duplicate field name" },
+  "动态宽表已存在": {
+    "key": "foundation.errDynamicTableExists",
+    "en": "The dynamic wide table already exists"
+  },
+  "表单发布失败": { "key": "foundation.errFormPublishFailed", "en": "Could not publish the form" },
+  "表单配置未找到": {
+    "key": "foundation.errFormConfigNotFound",
+    "en": "Form configuration not found"
+  },
+  "表单版本快照不存在": {
+    "key": "foundation.errFormVersionNotFound",
+    "en": "The form version snapshot does not exist"
+  },
+  "绑定表单不存在": {
+    "key": "foundation.errBoundFormNotFound",
+    "en": "The bound form does not exist"
+  },
+  "流程定义已发布，不可修改": {
+    "key": "foundation.errProcessDefPublished",
+    "en": "The process definition is published and cannot be modified"
+  },
+  "您没有执行该操作的权限，请联系管理员分配相应权限": {
+    "key": "foundation.errPermissionDenied",
+    "en": "You do not have permission to perform this action. Ask an administrator to grant it."
+  },
+  "流程实例已失败，不可继续审批": {
+    "key": "foundation.errInstanceFailed",
+    "en": "The process instance has failed; approval cannot continue"
+  },
+
+  "加载分类失败": { "key": "workflow.categoryLoadFailed", "en": "Could not load categories" },
+  "分类名称不能为空": { "key": "workflow.categoryNameRequired", "en": "Category name is required" },
+  "分类已更新": { "key": "workflow.categoryUpdated", "en": "Category updated" },
+  "分类已创建": { "key": "workflow.categoryCreated", "en": "Category created" },
+  "保存分类失败": { "key": "workflow.categorySaveFailed", "en": "Could not save the category" },
+  "分类已删除": { "key": "workflow.categoryDeleted", "en": "Category deleted" },
+  "删除失败（分类下仍有事项时须先解除归属）": {
+    "key": "workflow.categoryDeleteFailed",
+    "en": "Could not delete (unassign any items still under the category first)"
+  },
+  "加载事项列表失败": {
+    "key": "workflow.catalogItemsLoadFailed",
+    "en": "Could not load the item list"
+  },
+  "归属已调整": { "key": "workflow.itemAssignmentUpdated", "en": "Assignment updated" },
+  "调整归属失败": {
+    "key": "workflow.itemAssignmentFailed",
+    "en": "Could not update the assignment"
+  },
+  "事项管理（流程中心）": {
+    "key": "workflow.itemManagementTitle",
+    "en": "Item management (Process Center)"
+  },
+  "新建分类": { "key": "workflow.newCategory", "en": "New category" },
+  "事项名称/表单标识": { "key": "workflow.itemSearchPlaceholder", "en": "Item name / form key" },
+  "事项名称": { "key": "workflow.itemName", "en": "Item name" },
+  "事项标识": { "key": "workflow.itemKey", "en": "Item key" },
+  "流程状态": { "key": "workflow.flowStatus", "en": "Flow status" },
+  "表单": { "key": "common.form", "en": "Form" },
+  "未发布": { "key": "common.statusUnpublished", "en": "Unpublished" },
+  "绑定": { "key": "workflow.binding", "en": "Binding" },
+  "有效": { "key": "common.statusActive", "en": "Active" },
+  "归属": { "key": "workflow.assignment", "en": "Assignment" },
+  "分类名称": { "key": "common.categoryName", "en": "Category name" },
+  "调整事项归属": { "key": "workflow.assignItemsTitle", "en": "Reassign items" },
+  "事项": { "key": "workflow.item", "en": "Item" },
+  "分类列表": { "key": "workflow.categoryList", "en": "Categories" },
+  "事项数": { "key": "workflow.itemCount", "en": "Items" },
+
+  "加载监控列表失败": {
+    "key": "workflow.monitorLoadFailed",
+    "en": "Could not load the monitoring list"
+  },
+  "挂起": { "key": "workflow.suspend", "en": "Suspend" },
+  "终止": { "key": "workflow.terminate", "en": "Terminate" },
+  "迁移办理人": { "key": "workflow.transferAssignee", "en": "Transfer assignee" },
+  "干预执行失败": { "key": "workflow.interveneFailed", "en": "Could not run the intervention" },
+  "干预历史加载失败": {
+    "key": "workflow.interveneHistoryLoadFailed",
+    "en": "Could not load the intervention history"
+  },
+  "发起人 ID": { "key": "workflow.initiatorId", "en": "Initiator ID" },
+  "已终止": { "key": "common.statusTerminated", "en": "Terminated" },
+  "办理人 ID": { "key": "workflow.assigneeId", "en": "Assignee ID" },
+  "已挂起": { "key": "common.statusSuspended", "en": "Suspended" },
+  "干预": { "key": "workflow.intervene", "en": "Intervene" },
+  "迁移": { "key": "workflow.transferAction", "en": "Transfer" },
+  "历史": { "key": "common.history", "en": "History" },
+  "暂无可查看的实例": { "key": "workflow.noInstances", "en": "No instances to view" },
+  "目标办理人": { "key": "workflow.targetAssignee", "en": "Target assignee" },
+  "原因": { "key": "common.reason", "en": "Reason" },
+  "干预原因（记入审计）": {
+    "key": "workflow.interveneReasonPlaceholder",
+    "en": "Intervention reason (recorded in the audit log)"
+  },
+  "确认执行": { "key": "common.confirmExecute", "en": "Confirm" },
+  "干预历史": { "key": "workflow.interveneHistory", "en": "Intervention history" },
+  "前状态": { "key": "workflow.stateBefore", "en": "Previous status" },
+  "后状态": { "key": "workflow.stateAfter", "en": "New status" },
+  "暂无干预记录": { "key": "workflow.noInterventionRecords", "en": "No intervention records" },
+
+  "对象详情": { "key": "iot.objectDetail", "en": "Object details" },
+  "命令": { "key": "iot.commandsTab", "en": "Commands" },
+  "脚本执行": { "key": "iot.scriptExecutionsTab", "en": "Script runs" },
+  "流程触发": { "key": "iot.processTriggersTab", "en": "Process triggers" },
+  "运行记录": { "key": "iot.runtimeLogsTitle", "en": "Runtime logs" },
+  "解析": { "key": "iot.parsedResult", "en": "Parsed" },
+  "载荷": { "key": "iot.payload", "en": "Payload" },
+  "能力": { "key": "iot.capability", "en": "Capability" },
+  "重试": { "key": "common.retry", "en": "Retry" },
+  "脚本": { "key": "iot.script", "en": "Script" },
+  "耗时(ms)": { "key": "iot.durationMs", "en": "Duration (ms)" },
+  "触发引用": { "key": "iot.triggerRef", "en": "Trigger reference" },
+  "输出": { "key": "iot.output", "en": "Output" },
+  "规则": { "key": "iot.rule", "en": "Rule" },
+  "幂等键": { "key": "iot.idempotencyKey", "en": "Idempotency key" },
+  "流程实例": { "key": "common.processInstance", "en": "Process instance" },
+  "表单快照": { "key": "iot.formSnapshot", "en": "Form snapshot" },
+  "暂无记录": { "key": "common.noRecords", "en": "No records" },
+
+  "确认撤回该申请？撤回将关闭当前任务并形成已撤回终态。": {
+    "key": "workflow.withdrawConfirmMessage",
+    "en": "Withdraw this request? Withdrawing closes the current task and puts the flow into the withdrawn end state."
+  },
+  "撤回确认": { "key": "workflow.withdrawConfirmTitle", "en": "Confirm withdrawal" },
+  "撤回": { "key": "common.withdraw", "en": "Withdraw" },
+  "加载我发起的流程失败": {
+    "key": "workflow.startedByMeLoadFailed",
+    "en": "Could not load the flows you started"
+  },
+  "加载流程详情失败": {
+    "key": "workflow.instanceDetailLoadFailed",
+    "en": "Could not load the flow details"
+  },
+  "已退回": { "key": "common.statusReturned", "en": "Returned" },
+  "已通知当前待办人": {
+    "key": "workflow.urgeSent",
+    "en": "The current assignee has been notified"
+  },
+  "冷却中，暂不能再次催办": {
+    "key": "workflow.urgeCoolingDown",
+    "en": "Cooling down; you cannot send another reminder yet"
+  },
+  "当前不能催办": {
+    "key": "workflow.urgeNotAvailable",
+    "en": "Reminders are not available right now"
+  },
+  "流程详情": { "key": "workflow.instanceDetail", "en": "Flow details" },
+  "当前进度": { "key": "workflow.currentProgress", "en": "Current progress" },
+  "流程已结束，无进行中的节点": {
+    "key": "workflow.flowEndedNoActiveNode",
+    "en": "The flow has ended; there are no active nodes"
+  },
+  "节点标识": { "key": "workflow.nodeKey", "en": "Node key" },
+  "暂无流转记录": { "key": "workflow.noFlowRecords", "en": "No flow records" },
+  "意见": { "key": "common.comment", "en": "Comment" },
+  "到达时间": { "key": "workflow.arrivedAt", "en": "Arrived at" },
+  "办理时间": { "key": "workflow.handledAt", "en": "Handled at" },
+
+  "请填写来源与目标用户 ID": {
+    "key": "workflow.handoverFillUserIds",
+    "en": "Enter the source and target user IDs"
+  },
+  "交接已执行，清单如下": {
+    "key": "workflow.handoverExecuted",
+    "en": "Handover completed. The item list is below."
+  },
+  "交接执行失败": { "key": "workflow.handoverFailed", "en": "Could not run the handover" },
+  "已迁移": { "key": "workflow.handoverMigrated", "en": "Migrated" },
+  "跳过": { "key": "workflow.handoverSkipped", "en": "Skipped" },
+  "已迁移（跳过重复）": {
+    "key": "workflow.handoverAlreadyMigrated",
+    "en": "Already migrated (duplicate skipped)"
+  },
+  "流程交接": { "key": "workflow.handoverTitle", "en": "Flow handover" },
+  "来源用户 ID": { "key": "workflow.sourceUserId", "en": "Source user ID" },
+  "目标用户 ID": { "key": "workflow.targetUserId", "en": "Target user ID" },
+  "流程范围": { "key": "workflow.processScope", "en": "Flow scope" },
+  "processDefKey，逗号分隔；留空=全部范围": {
+    "key": "workflow.processScopePlaceholder",
+    "en": "processDefKey, comma-separated; leave empty for all flows"
+  },
+  "随迁代理规则": { "key": "workflow.carryOverDelegateRules", "en": "Carry over delegate rules" },
+  "仅有效期内的未来代理规则随迁；历史/抄送/已办永不迁移": {
+    "key": "workflow.carryOverDelegateHint",
+    "en": "Only future delegate rules within their validity period are carried over; history, CC, and completed items are never migrated."
+  },
+  "执行交接": { "key": "workflow.runHandover", "en": "Run handover" },
+  "原责任人": { "key": "workflow.previousOwner", "en": "Previous owner" },
+  "新责任人": { "key": "workflow.newOwner", "en": "New owner" },
+  "本次交接无迁移项": {
+    "key": "workflow.handoverEmpty",
+    "en": "No items were migrated in this handover"
+  },
+
+  "单行文本": { "key": "form.fieldTypeText", "en": "Single-line text" },
+  "多行文本": { "key": "form.fieldTypeRichText", "en": "Multi-line text" },
+  "数字": { "key": "form.fieldTypeNumber", "en": "Number" },
+  "日期": { "key": "form.fieldTypeDate", "en": "Date" },
+  "开关": { "key": "form.fieldTypeSwitch", "en": "Switch" },
+  "字典选择": { "key": "form.fieldTypeDict", "en": "Dictionary select" },
+  "引用": { "key": "form.fieldTypeReference", "en": "Reference" },
+  "子表格": { "key": "form.fieldTypeTable", "en": "Sub-table" },
+  "多选": { "key": "form.fieldTypeMultiSelect", "en": "Multi-select" },
+  "附件": { "key": "form.fieldTypeAttachment", "en": "Attachment" },
+  "图片": { "key": "form.fieldTypeImage", "en": "Image" },
+  "说明文字": { "key": "form.fieldTypeLabel", "en": "Description text" },
+  "公式": { "key": "form.fieldTypeFormula", "en": "Formula" },
+  "外部数据": { "key": "form.fieldTypeDatasource", "en": "External data" },
+
+  "加载任务详情失败": {
+    "key": "workflow.mobileTaskDetailLoadFailed",
+    "en": "Could not load the task details"
+  },
+  "办理失败（命令执行失败）": {
+    "key": "workflow.actionFailedCommand",
+    "en": "Action failed (command execution failed)"
+  },
+  "处理中，请稍后在列表确认": {
+    "key": "workflow.processingCheckList",
+    "en": "Processing. Confirm the result in the list later."
+  },
+  "办理失败": { "key": "workflow.actionFailed", "en": "Action failed" },
+  "待办": { "key": "workflow.todoTab", "en": "To-do" },
+  "待办理": { "key": "workflow.pendingHandle", "en": "Pending" },
+  "流程实例详情": { "key": "workflow.instanceDetailTitle", "en": "Instance details" },
+  "任务信息": { "key": "workflow.taskInfo", "en": "Task information" },
+  "当前办理人": { "key": "workflow.currentAssignee", "en": "Current assignee" },
+  "表单数据（本次提交）": {
+    "key": "workflow.formDataThisSubmission",
+    "en": "Form data (this submission)"
+  },
+  "表单记录加载失败或已不存在": {
+    "key": "workflow.formRecordUnavailable",
+    "en": "The form record could not be loaded or no longer exists"
+  },
+  "审批意见（正式意见表单）": {
+    "key": "workflow.approvalCommentFormal",
+    "en": "Approval comment (formal form)"
+  },
+  "审批意见": { "key": "workflow.approvalComment", "en": "Approval comment" },
+
+  "加载表单定义列表失败": {
+    "key": "form.defListLoadFailed",
+    "en": "Could not load the form definitions"
+  },
+  "表单已停用：禁止新的填报、提交与流程发起；历史记录可继续查看": {
+    "key": "form.disabledNotice",
+    "en": "Form disabled: new entries, submissions, and flow starts are blocked; existing records remain available."
+  },
+  "表单已启用": { "key": "form.enabledNotice", "en": "Form enabled" },
+  "用户 ID 必须是正整数，多个 ID 用英文逗号分隔": {
+    "key": "form.visibilityUserIdInvalid",
+    "en": "User IDs must be positive integers separated by commas"
+  },
+  "发起可见范围已保存": {
+    "key": "form.visibilityScopeSaved",
+    "en": "Start visibility scope saved"
+  },
+  "保存发起可见范围失败": {
+    "key": "form.visibilityScopeSaveFailed",
+    "en": "Could not save the start visibility scope"
+  },
+  "表单管理": { "key": "form.managementTitle", "en": "Form management" },
+  "业务发起可见范围": { "key": "form.startVisibilityScope", "en": "Start visibility scope" },
+  "留空表示当前租户全部用户，例如 1001,1002": {
+    "key": "form.startVisibilityPlaceholder",
+    "en": "Leave empty for all users in the tenant, e.g. 1001,1002"
+  },
+
+  "加载部门列表失败": { "key": "system.deptListLoadFailed", "en": "Could not load departments" },
+  "编辑部门": { "key": "system.editDept", "en": "Edit department" },
+  "加载部门详情失败": {
+    "key": "system.deptDetailLoadFailed",
+    "en": "Could not load the department details"
+  },
+  "部门名称不能为空": { "key": "system.deptNameRequired", "en": "Department name is required" },
+  "部门编码不能为空": { "key": "system.deptCodeRequired", "en": "Department code is required" },
+  "部门管理": { "key": "system.deptManagement", "en": "Department management" },
+  "负责人": { "key": "system.owner", "en": "Owner" },
+  "无匹配部门": { "key": "system.noMatchingDept", "en": "No matching departments" },
+  "重置筛选": { "key": "common.resetFilters", "en": "Reset filters" },
+
+  "开始": { "key": "agent.nodeStart", "en": "Start" },
+  "结束": { "key": "agent.nodeEnd", "en": "End" },
+  "LLM 调用": { "key": "agent.nodeLlm", "en": "LLM call" },
+  "工具调用": { "key": "agent.nodeTool", "en": "Tool call" },
+  "条件分支": { "key": "agent.nodeCondition", "en": "Condition branch" },
+  "循环": { "key": "agent.nodeLoop", "en": "Loop" },
+  "并行分支": { "key": "agent.nodeFork", "en": "Parallel branch" },
+  "汇合": { "key": "agent.nodeJoin", "en": "Join" },
+
+  "加载待办任务失败": {
+    "key": "workflow.todoTaskLoadFailed",
+    "en": "Could not load the to-do tasks"
+  },
+  "审批确认": { "key": "workflow.approveConfirmTitle", "en": "Confirm approval" },
+  "审批通过": { "key": "workflow.approved", "en": "Approved" },
+  "审批操作失败": { "key": "workflow.approveActionFailed", "en": "The approval action failed" },
+  "驳回确认": { "key": "workflow.rejectConfirmTitle", "en": "Confirm rejection" },
+  "驳回操作失败": { "key": "workflow.rejectActionFailed", "en": "The rejection action failed" },
+  "我的待办": { "key": "workflow.myTodoTitle", "en": "My to-dos" },
+
+  "字段配置": { "key": "form.fieldSettingsTitle", "en": "Field settings" },
+  "请选择一个字段": { "key": "form.selectFieldHint", "en": "Select a field" },
+  "列宽": { "key": "form.columnWidth", "en": "Column width" },
+  "调整后会按从左到右、从上到下自动紧凑排布。": {
+    "key": "form.columnWidthHint",
+    "en": "After adjustment, fields are packed automatically from left to right and top to bottom."
+  },
+  "已发布表单，配置只读": {
+    "key": "form.publishedReadonly",
+    "en": "This form is published; settings are read-only"
+  },
+  "该字段": { "key": "form.thisField", "en": "this field" },
+
+  "引用表单": { "key": "form.referenceForm", "en": "Reference form" },
+  "未选择": { "key": "form.notSelected", "en": "Not selected" },
+  "更换": { "key": "form.changeTarget", "en": "Change" },
+  "选择": { "key": "common.select", "en": "Select" },
+
+  "日期格式": { "key": "form.dateFormat", "en": "Date format" },
+  "v1 固定为年-月-日，暂不支持自定义。": {
+    "key": "form.dateFormatLockedHint",
+    "en": "v1 is fixed to YYYY-MM-DD; custom date formats are not supported yet."
+  },
+
+  "历史图缺少画布坐标，已按确定性兼容布局展示；图形拓扑完整可用": {
+    "key": "workflow.compatLayoutNotice",
+    "en": "This historical graph has no canvas coordinates, so it is rendered with a deterministic compatibility layout. The topology is fully usable."
+  },
+  "未经过": { "key": "workflow.edgeNotTaken", "en": "Not taken" },
+  "兼容布局": { "key": "workflow.compatLayout", "en": "Compatibility layout" },
+  "适配": { "key": "workflow.fitView", "en": "Fit" },
+
+  "公式表达式": { "key": "form.formulaExpression", "en": "Formula expression" },
+
+  "服务端计算": { "key": "component.serverCalculated", "en": "Calculated on the server" },
+
+  "以下配置待契约扩展后接入（本刀不自造键）": {
+    "key": "form.seamNotice",
+    "en": "The following settings will be wired up once the contract is extended (no ad-hoc keys in this change)"
+  },
+
+  "出错了": { "key": "view.errorTitle", "en": "Something went wrong" }
+}

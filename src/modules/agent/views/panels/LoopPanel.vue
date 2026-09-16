@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * LOOP 节点属性面板：最大迭代次数数字输入（Integer ≥1，空值/非法删键、<1 提示不写入、
  * 缺省后端默认 10 的语义全部在 GraphDesigner.handleMaxIterationsChange）。
@@ -15,21 +18,16 @@ defineEmits<{
 
 <template>
   <div class="field-row">
-    <div class="field-label">最大迭代次数</div>
+    <div class="field-label">{{ t('agent.maxIterations') }}</div>
     <el-input
       :model-value="String(node.data?.[NODE_CONFIG_KEY_MAX_ITERATIONS] ?? '')"
       type="number"
       min="1"
-      placeholder="留空 = 后端默认 10（≥1）"
+      :placeholder="t('agent.maxIterationsPlaceholder')"
       @change="(v) => $emit('maxIterationsChange', v)"
     />
   </div>
-  <el-alert
-    title="循环头节点：出边唯一进入循环体；迭代次数超限执行报错"
-    type="info"
-    :closable="false"
-    show-icon
-  />
+  <el-alert :title="t('agent.loopPanelHint')" type="info" :closable="false" show-icon />
 </template>
 
 <style scoped>

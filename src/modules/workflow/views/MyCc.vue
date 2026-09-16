@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * MyCc — 抄送我的（v0.0.2 OA 个人办理，页型 B）。
  *
@@ -50,7 +54,7 @@ async function loadList() {
     list.value = result.list
     total.value = result.total
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? err.msg : '加载抄送列表失败'
+    errorMsg.value = err instanceof ApiError ? err.msg : t('workflow.ccListLoadFailed')
   } finally {
     loading.value = false
   }
@@ -94,7 +98,7 @@ async function openDetail(row: MyCopyItem) {
   try {
     detail.value = await queryMyCopyDetail(row.id)
   } catch (err) {
-    detailError.value = err instanceof ApiError ? err.msg : '加载抄送详情失败'
+    detailError.value = err instanceof ApiError ? err.msg : t('workflow.ccDetailLoadFailed')
   } finally {
     detailLoading.value = false
   }
@@ -125,7 +129,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="抄送我的"
+    :title="t('router.myCc')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -137,29 +141,29 @@ onMounted(loadList)
       <el-date-picker
         v-model="filter.timeRange"
         type="datetimerange"
-        range-separator="至"
-        start-placeholder="开始时间"
-        end-placeholder="结束时间"
+        :range-separator="t('common.to')"
+        :start-placeholder="t('common.startTime')"
+        :end-placeholder="t('common.endTime')"
         style="width: 340px"
       />
       <el-input
         v-model="filter.processInstanceId"
-        placeholder="流程实例ID（精确）"
+        :placeholder="t('workflow.instanceIdExactPlaceholder')"
         clearable
         style="width: 260px"
         @keyup.enter="handleSearch"
       />
       <el-input
         v-model="filter.keyword"
-        placeholder="表单标识/业务单号/流程标识"
+        :placeholder="t('workflow.ccKeywordPlaceholder')"
         clearable
         style="width: 220px"
         @keyup.enter="handleSearch"
       />
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleSearch">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleSearch">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
     <template #empty-action>
       <span />
@@ -175,48 +179,50 @@ onMounted(loadList)
     />
 
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
-      <el-table-column prop="formKey" label="表单标识" min-width="140" />
-      <el-table-column prop="processDefKey" label="流程标识" min-width="150" />
-      <el-table-column prop="businessKey" label="业务单号" min-width="130" />
-      <el-table-column prop="nodeKey" label="抄送节点" min-width="120" />
-      <el-table-column label="实例状态" width="100">
+      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="140" />
+      <el-table-column prop="processDefKey" :label="t('common.processKey')" min-width="150" />
+      <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="130" />
+      <el-table-column prop="nodeKey" :label="t('workflow.ccNode')" min-width="120" />
+      <el-table-column :label="t('workflow.instanceStatus')" width="100">
         <template #default="{ row }">
-          {{ row.instanceStatus ?? '-' }}
+          {{ enumLabel('WORKFLOW_INSTANCE', row.instanceStatus ?? '-') }}
         </template>
       </el-table-column>
-      <el-table-column prop="deliveryStatus" label="投递状态" width="100" />
-      <el-table-column prop="createTime" label="抄送时间" min-width="170" />
-      <el-table-column label="操作" width="90" fixed="right">
+      <el-table-column prop="deliveryStatus" :label="t('workflow.deliveryStatus')" width="100" />
+      <el-table-column prop="createTime" :label="t('workflow.ccTime')" min-width="170" />
+      <el-table-column :label="t('common.actions')" width="90" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" type="primary" link @click="openDetailRow(row)">详情</el-button>
+          <el-button size="small" type="primary" link @click="openDetailRow(row)">{{
+            t('common.detail')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
   </StandardListTemplate>
 
-  <el-dialog v-model="detailVisible" title="抄送详情（只读）" width="760px">
+  <el-dialog v-model="detailVisible" :title="t('workflow.ccDetailTitle')" width="760px">
     <div v-loading="detailLoading">
       <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" show-icon />
       <template v-if="detail">
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="流程标识">
+          <el-descriptions-item :label="t('common.processKey')">
             {{ detailInstance?.processDefKey ?? '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="实例状态">
+          <el-descriptions-item :label="t('workflow.instanceStatus')">
             {{ detailInstance?.status ?? '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="业务单号">
+          <el-descriptions-item :label="t('common.businessNo')">
             {{ detailInstance?.businessKey ?? '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="抄送节点">
+          <el-descriptions-item :label="t('workflow.ccNode')">
             {{ detailCopy.nodeKey ?? '-' }}
           </el-descriptions-item>
         </el-descriptions>
 
-        <h4 class="detail-section-title">表单数据（只读快照）</h4>
+        <h4 class="detail-section-title">{{ t('workflow.formDataReadonlySnapshot') }}</h4>
         <el-alert
           v-if="Object.keys(detailFormData).length === 0"
-          title="无表单数据"
+          :title="t('workflow.noFormData')"
           type="info"
           :closable="false"
           show-icon
@@ -231,37 +237,37 @@ onMounted(loadList)
           </el-descriptions-item>
         </el-descriptions>
 
-        <h4 class="detail-section-title">审批进度</h4>
+        <h4 class="detail-section-title">{{ t('workflow.approvalProgress') }}</h4>
         <el-alert
           v-if="detail.progress.length === 0"
-          title="流程已结束，无进行中的节点"
+          :title="t('workflow.flowEndedNoActiveNode')"
           type="info"
           :closable="false"
           show-icon
         />
         <el-table v-else :data="detail.progress" stripe size="small">
-          <el-table-column prop="name" label="节点" min-width="140" />
-          <el-table-column prop="assignee" label="办理人" min-width="120" />
+          <el-table-column prop="name" :label="t('common.node')" min-width="140" />
+          <el-table-column prop="assignee" :label="t('workflow.assignee')" min-width="120" />
         </el-table>
 
-        <h4 class="detail-section-title">流转记录</h4>
+        <h4 class="detail-section-title">{{ t('common.flowHistory') }}</h4>
         <el-alert
           v-if="detail.history.length === 0"
-          title="暂无流转记录"
+          :title="t('workflow.noFlowRecords')"
           type="info"
           :closable="false"
           show-icon
         />
         <el-table v-else :data="detail.history" stripe size="small">
-          <el-table-column prop="taskName" label="节点" min-width="120" />
-          <el-table-column prop="action" label="动作" width="90" />
-          <el-table-column prop="settlementStatus" label="结果" width="90" />
-          <el-table-column prop="createTime" label="到达时间" min-width="160" />
+          <el-table-column prop="taskName" :label="t('common.node')" min-width="120" />
+          <el-table-column prop="action" :label="t('common.action')" width="90" />
+          <el-table-column prop="settlementStatus" :label="t('common.result')" width="90" />
+          <el-table-column prop="createTime" :label="t('workflow.arrivedAt')" min-width="160" />
         </el-table>
       </template>
     </div>
     <template #footer>
-      <el-button @click="detailVisible = false">关闭</el-button>
+      <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
     </template>
   </el-dialog>
 </template>

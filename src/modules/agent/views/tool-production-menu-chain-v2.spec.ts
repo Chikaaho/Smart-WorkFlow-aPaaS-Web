@@ -19,6 +19,7 @@ import { RouterView } from 'vue-router'
 import { switchMockSession, MOCK_CURRENT_SESSION } from '@/foundation/mock/seeds'
 import { authGuard, clearDynamicRoutes } from '@/router/guard'
 import { routes } from '@/router/index'
+import { i18n } from '@/locales'
 
 const ROUTE_TOOL = '/agent/tool'
 // 真实 router 挂载 + 组件渲染，全量并行下放宽超时（默认 5s 不够）
@@ -62,7 +63,7 @@ describe('K1-v2 生产菜单 → router.push → authGuard → ToolList 挂载�
     setActivePinia(pinia)
     const r = createTestRouter()
     clearDynamicRoutes(r)
-    const w = mount(App, { global: { plugins: [pinia, r] } })
+    const w = mount(App, { global: { plugins: [pinia, r, i18n] } })
     return { router: r, wrapper: w }
   }
 

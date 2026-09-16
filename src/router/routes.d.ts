@@ -21,6 +21,13 @@ declare module 'vue-router' {
     errorCode?: number
     /** 页面标题。 */
     title?: string
+    /**
+     * 动态菜单路由的菜单节点名（服务端菜单 name）。
+     *
+     * `title` 是建立路由时固化的服务端快照，切换语言不会重新求值；需要随语言变化的
+     * 页面（如占位页）应改用 `menuName` 走语义键解析。
+     */
+    menuName?: string
     /** 菜单图标名。 */
     icon?: string
   }

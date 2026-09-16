@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { i18n } from '@/locales'
 
 /**
  * RelatedProcessesPanel 单测（P52 关联流程工作区）。
@@ -84,8 +85,10 @@ describe('RelatedProcessesPanel', () => {
     })
     await flushPromises()
 
-    // 打开创建弹窗（工具栏「创建关联流程」按钮）并输入名称
-    const openBtn = wrapper.findAll('button').find((b) => b.text().includes('创建关联流程'))
+    // 打开创建弹窗（工具栏按钮）并输入名称；操作标签在 R2a 已统一为「新建」表述，
+    // 断言目录文案而不是写死的说法
+    const openLabel = i18n.global.t('form.createRelatedProcess')
+    const openBtn = wrapper.findAll('button').find((b) => b.text().includes(openLabel))
     expect(openBtn).toBeTruthy()
     await openBtn!.trigger('click')
     const input = wrapper.find('input[placeholder="请输入流程名称"]')
@@ -94,7 +97,9 @@ describe('RelatedProcessesPanel', () => {
     await input.trigger('input')
 
     const footerButtons = wrapper.findAll('.stub-dialog button')
-    const submitBtn = footerButtons.find((b) => b.text().trim() === '创建')
+    // 创建动作标签在 R2a 已统一为「新建」，断言目录文案而不是写死的说法
+    const createLabel = i18n.global.t('common.create')
+    const submitBtn = footerButtons.find((b) => b.text().trim() === createLabel)
     await submitBtn!.trigger('click')
     await flushPromises()
 

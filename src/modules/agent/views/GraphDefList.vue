@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * GraphDefList — 图定义列表页（页型 B）。
  *
@@ -34,8 +37,18 @@ const { hasPerm } = usePermission()
 // ─── 状态映射 ───
 
 const STATUS_MAP: Record<string, { label: string; type: 'success' | 'warning' | 'info' }> = {
-  DRAFT: { label: '草稿', type: 'info' },
-  PUBLISHED: { label: '已发布', type: 'success' },
+  DRAFT: {
+    get label() {
+      return t('common.statusDraft')
+    },
+    type: 'info',
+  },
+  PUBLISHED: {
+    get label() {
+      return t('common.statusPublished')
+    },
+    type: 'success',
+  },
 }
 
 function getStatusLabel(status: string): string {
@@ -70,7 +83,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载图定义列表失败'
+      errorMsg.value = t('agent.graphDefListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -93,21 +106,31 @@ function handlePageSizeChange(s: number) {
 /** 新建：输名称 → 服务端建初始图 → 跳设计器 */
 async function handleCreate() {
   try {
-    const { value: name } = await ElMessageBox.prompt('请输入图名称', '新建图定义', {
-      confirmButtonText: '创建',
-      cancelButtonText: '取消',
-      inputPattern: /\S+/,
-      inputErrorMessage: '图名称不能为空',
-    })
+    const { value: name } = await ElMessageBox.prompt(
+      t('agent.graphNamePlaceholder'),
+      t('agent.newGraphDef'),
+      {
+        get confirmButtonText() {
+          return t('common.create')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        inputPattern: /\S+/,
+        get inputErrorMessage() {
+          return t('agent.graphNameRequired')
+        },
+      },
+    )
     if (!name) return
     const id = await createGraphDef(name)
-    ElMessage.success('创建成功，进入设计器')
+    ElMessage.success(t('agent.graphCreatedEnteringDesigner'))
     await router.push(`/agent/graph-designer/${id}`)
   } catch (err) {
     // 取消输入（err === 'cancel'）或操作失败均静默
     if (err && (err as Error).message && (err as Error).message.includes('cancel')) return
     if (err instanceof Error && err.message !== 'cancel') {
-      ElMessage.error((err as ApiError).msg ?? '创建图定义失败')
+      ElMessage.error((err as ApiError).msg ?? t('agent.graphDefCreateFailed'))
     }
   }
 }
@@ -121,16 +144,24 @@ function handleEdit(row: AgentGraphDef) {
 async function handlePublish(row: AgentGraphDef) {
   try {
     await ElMessageBox.confirm(
-      `确认发布「${row.name}」？发布将生成新版本快照，之后仍可继续编辑并再次发布。`,
-      '发布确认',
-      { confirmButtonText: '发布', cancelButtonText: '取消', type: 'warning' },
+      t('agent.confirmPublishGraph', { name: row.name }),
+      t('common.publishConfirmTitle'),
+      {
+        get confirmButtonText() {
+          return t('common.publish')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+      },
     )
     const published = await publishGraphDef(row.id)
-    ElMessage.success(`发布成功，当前版本 v${published.defVersion}`)
+    ElMessage.success(t('agent.graphPublished', { defVersion: published.defVersion }))
     void loadList()
   } catch (err) {
     if (err && err !== 'cancel') {
-      ElMessage.error((err as ApiError).msg ?? '发布失败')
+      ElMessage.error((err as ApiError).msg ?? t('common.publishFailed'))
     }
   }
 }
@@ -138,17 +169,25 @@ async function handlePublish(row: AgentGraphDef) {
 /** 删除：二次确认 → 逻辑删除 */
 async function handleDelete(row: AgentGraphDef) {
   try {
-    await ElMessageBox.confirm(`确认删除「${row.name}」？删除后不可恢复。`, '删除确认', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      t('agent.confirmDeleteGraph', { name: row.name }),
+      t('common.deleteConfirmTitle'),
+      {
+        get confirmButtonText() {
+          return t('common.delete')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+      },
+    )
     await deleteGraphDef(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     void loadList()
   } catch (err) {
     if (err && err !== 'cancel') {
-      ElMessage.error((err as ApiError).msg ?? '删除失败')
+      ElMessage.error((err as ApiError).msg ?? t('common.deleteFailed'))
     }
   }
 }
@@ -156,19 +195,29 @@ async function handleDelete(row: AgentGraphDef) {
 /** 调试：输入文本 → 创建调试会话 → 跳转调试页（仅 PUBLISHED） */
 async function handleDebug(row: AgentGraphDef) {
   try {
-    const { value: input } = await ElMessageBox.prompt('请输入调试输入', '单步调试', {
-      confirmButtonText: '开始调试',
-      cancelButtonText: '取消',
-      inputPattern: /\S/,
-      inputErrorMessage: '输入不能为空',
-    })
+    const { value: input } = await ElMessageBox.prompt(
+      t('agent.debugInputPlaceholder'),
+      t('agent.stepDebug'),
+      {
+        get confirmButtonText() {
+          return t('agent.startDebug')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        inputPattern: /\S/,
+        get inputErrorMessage() {
+          return t('agent.inputRequired')
+        },
+      },
+    )
     if (input === undefined || input === null) return
     const session = await createDebugSession({ graphDefId: row.id, input: String(input) })
-    ElMessage.success('调试会话已创建')
+    ElMessage.success(t('agent.debugSessionCreated'))
     await router.push(`/agent/debug/${session.id}`)
   } catch (err) {
     if (err && err !== 'cancel') {
-      ElMessage.error((err as ApiError).msg ?? '创建调试会话失败')
+      ElMessage.error((err as ApiError).msg ?? t('agent.debugSessionCreateFailed'))
     }
   }
 }
@@ -188,7 +237,7 @@ onMounted(() => {
 
 <template>
   <StandardListTemplate
-    title="图定义管理"
+    :title="t('agent.graphDefManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -197,7 +246,9 @@ onMounted(() => {
     @update:page-size="handlePageSizeChange"
   >
     <template #toolbar-actions>
-      <el-button v-if="canManage" type="primary" @click="handleCreate">新建</el-button>
+      <el-button v-if="canManage" type="primary" @click="handleCreate">{{
+        t('common.create')
+      }}</el-button>
     </template>
 
     <!-- 错误提示 -->
@@ -212,46 +263,44 @@ onMounted(() => {
 
     <!-- 表格 -->
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="name" label="图名称" min-width="160" />
-      <el-table-column prop="graphKey" label="图 Key" min-width="180">
+      <el-table-column prop="name" :label="t('agent.graphName')" min-width="160" />
+      <el-table-column prop="graphKey" :label="t('agent.graphKey')" min-width="180">
         <template #default="{ row }">
           {{ (row as AgentGraphDef).graphKey ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="版本" width="80">
+      <el-table-column :label="t('common.version')" width="80">
         <template #default="{ row }"> v{{ (row as AgentGraphDef).defVersion }} </template>
       </el-table-column>
-      <el-table-column label="状态" width="100">
+      <el-table-column :label="t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="getStatusType((row as AgentGraphDef).status)" size="small">
             {{ getStatusLabel((row as AgentGraphDef).status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="updateTime" label="更新时间" width="180" />
-      <el-table-column label="操作" width="320" fixed="right">
+      <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
+      <el-table-column :label="t('common.actions')" width="320" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="handleEdit(row as AgentGraphDef)">
-            编辑
-          </el-button>
+          <el-button size="small" link type="primary" @click="handleEdit(row as AgentGraphDef)">{{
+            t('common.edit')
+          }}</el-button>
           <el-button
             v-if="canManage"
             size="small"
             link
             type="success"
             @click="handlePublish(row as AgentGraphDef)"
+            >{{ t('common.publish') }}</el-button
           >
-            发布
-          </el-button>
           <el-button
             v-if="canManage"
             size="small"
             link
             type="danger"
             @click="handleDelete(row as AgentGraphDef)"
+            >{{ t('common.delete') }}</el-button
           >
-            删除
-          </el-button>
           <el-button
             v-if="(row as AgentGraphDef).status === 'PUBLISHED'"
             size="small"
@@ -259,7 +308,7 @@ onMounted(() => {
             type="warning"
             @click="handleDebug(row as AgentGraphDef)"
           >
-            调试
+            {{ t('agent.sourceDebug') }}
           </el-button>
           <!-- 执行历史入口：从图定义上下文进入运行记录 -->
           <el-button
@@ -268,7 +317,7 @@ onMounted(() => {
             type="info"
             @click="handleViewExecutions(row as AgentGraphDef)"
           >
-            执行历史
+            {{ t('router.executionHistory') }}
           </el-button>
         </template>
       </el-table-column>

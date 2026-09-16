@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useMenuStore } from '@/stores/menu'
 import { resolveArea } from '@/foundation/area'
 import { visibleMenuForArea, openedMenuKeys } from '../menu-utils'
+import { useLocalizedMenuTree } from '../menu-title'
 import AppSidebarItem from './AppSidebarItem.vue'
 
 // 侧边栏：只读 menu store（单一数据源），不二次拉取。选中态与展开态随当前路由派生。
@@ -13,7 +14,8 @@ defineProps<{ collapse: boolean }>()
 const route = useRoute()
 const menuStore = useMenuStore()
 
-const items = computed(() => visibleMenuForArea(menuStore.menu, resolveArea(route.path)))
+const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
+const items = computed(() => visibleMenuForArea(localizedMenu.value, resolveArea(route.path)))
 const activePath = computed(() => route.path)
 const openeds = computed(() => openedMenuKeys(menuStore.menu, route.path))
 </script>

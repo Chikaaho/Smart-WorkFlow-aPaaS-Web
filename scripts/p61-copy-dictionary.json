@@ -1,0 +1,340 @@
+{
+  "_comment": "P61 R1 术语字典：中文原文 → locale 键 + 英文。codemod 按键做精确匹配改写；键集由 p61-key-copy.mjs 生成到 locales/，保证 zh/en 零差异。",
+  "取消": {
+    "key": "common.cancel",
+    "en": "Cancel"
+  },
+  "确定": {
+    "key": "common.confirm",
+    "en": "OK"
+  },
+  "关闭": {
+    "key": "common.close",
+    "en": "Close"
+  },
+  "操作": {
+    "key": "common.actions",
+    "en": "Actions"
+  },
+  "状态": {
+    "key": "common.status",
+    "en": "Status"
+  },
+  "名称": {
+    "key": "common.name",
+    "en": "Name"
+  },
+  "类型": {
+    "key": "common.type",
+    "en": "Type"
+  },
+  "排序": {
+    "key": "common.sort",
+    "en": "Order"
+  },
+  "备注": {
+    "key": "common.remark",
+    "en": "Notes"
+  },
+  "说明": {
+    "key": "common.description",
+    "en": "Description"
+  },
+  "时间": {
+    "key": "common.time",
+    "en": "Time"
+  },
+  "编码": {
+    "key": "common.code",
+    "en": "Code"
+  },
+  "版本": {
+    "key": "common.version",
+    "en": "Version"
+  },
+  "标题": {
+    "key": "common.title",
+    "en": "Title"
+  },
+  "结果": {
+    "key": "common.result",
+    "en": "Result"
+  },
+  "是": {
+    "key": "common.yes",
+    "en": "Yes"
+  },
+  "否": {
+    "key": "common.no",
+    "en": "No"
+  },
+  "未知": {
+    "key": "common.unknown",
+    "en": "Unknown"
+  },
+  "全部": {
+    "key": "common.all",
+    "en": "All"
+  },
+  "请输入备注": {
+    "key": "common.remarkPlaceholder",
+    "en": "Enter notes"
+  },
+  "查询": {
+    "key": "common.query",
+    "en": "Search"
+  },
+  "重置": {
+    "key": "common.reset",
+    "en": "Reset"
+  },
+  "保存": {
+    "key": "common.save",
+    "en": "Save"
+  },
+  "编辑": {
+    "key": "common.edit",
+    "en": "Edit"
+  },
+  "删除": {
+    "key": "common.delete",
+    "en": "Delete"
+  },
+  "确定删除": {
+    "key": "common.confirmDelete",
+    "en": "Delete"
+  },
+  "删除确认": {
+    "key": "common.deleteConfirmTitle",
+    "en": "Confirm deletion"
+  },
+  "新建": {
+    "key": "common.create",
+    "en": "New"
+  },
+  "添加": {
+    "key": "common.add",
+    "en": "Add"
+  },
+  "移除": {
+    "key": "common.remove",
+    "en": "Remove"
+  },
+  "启用": {
+    "key": "common.enable",
+    "en": "Enable"
+  },
+  "停用": {
+    "key": "common.disable",
+    "en": "Disable"
+  },
+  "启停": {
+    "key": "common.toggle",
+    "en": "Toggle"
+  },
+  "发布": {
+    "key": "common.publish",
+    "en": "Publish"
+  },
+  "正常": {
+    "key": "common.statusNormal",
+    "en": "Active"
+  },
+  "已停用": {
+    "key": "common.statusDisabled",
+    "en": "Disabled"
+  },
+  "已启用": {
+    "key": "common.statusEnabled",
+    "en": "Enabled"
+  },
+  "已发布": {
+    "key": "common.statusPublished",
+    "en": "Published"
+  },
+  "草稿": {
+    "key": "common.statusDraft",
+    "en": "Draft"
+  },
+  "运行中": {
+    "key": "common.statusRunning",
+    "en": "Running"
+  },
+  "进行中": {
+    "key": "common.statusInProgress",
+    "en": "In progress"
+  },
+  "已完成": {
+    "key": "common.statusCompleted",
+    "en": "Completed"
+  },
+  "已驳回": {
+    "key": "common.statusRejected",
+    "en": "Rejected"
+  },
+  "已撤回": {
+    "key": "common.statusWithdrawn",
+    "en": "Withdrawn"
+  },
+  "成功": {
+    "key": "common.resultSuccess",
+    "en": "Succeeded"
+  },
+  "失败": {
+    "key": "common.resultFailed",
+    "en": "Failed"
+  },
+  "失败原因": {
+    "key": "common.failureReason",
+    "en": "Failure reason"
+  },
+  "驳回": {
+    "key": "common.reject",
+    "en": "Reject"
+  },
+  "保存成功": {
+    "key": "common.saveSuccess",
+    "en": "Saved"
+  },
+  "保存失败": {
+    "key": "common.saveFailed",
+    "en": "Could not save. Please try again."
+  },
+  "创建成功": {
+    "key": "common.createSuccess",
+    "en": "Created"
+  },
+  "更新成功": {
+    "key": "common.updateSuccess",
+    "en": "Updated"
+  },
+  "删除成功": {
+    "key": "common.deleteSuccess",
+    "en": "Deleted"
+  },
+  "删除失败": {
+    "key": "common.deleteFailed",
+    "en": "Could not delete. Please try again."
+  },
+  "操作失败": {
+    "key": "common.operationFailed",
+    "en": "The operation did not complete. Please try again."
+  },
+  "发布成功": {
+    "key": "common.publishSuccess",
+    "en": "Published"
+  },
+  "暂无数据": {
+    "key": "common.emptyData",
+    "en": "No data"
+  },
+  "加载中...": {
+    "key": "common.loading",
+    "en": "Loading..."
+  },
+  "加载中…": {
+    "key": "common.loading",
+    "en": "Loading...",
+    "alias": true
+  },
+  "创建时间": {
+    "key": "common.createTime",
+    "en": "Created at"
+  },
+  "更新时间": {
+    "key": "common.updateTime",
+    "en": "Updated at"
+  },
+  "开始时间": {
+    "key": "common.startTime",
+    "en": "Start time"
+  },
+  "结束时间": {
+    "key": "common.endTime",
+    "en": "End time"
+  },
+  "基本信息": {
+    "key": "common.basicInfo",
+    "en": "Basic information"
+  },
+  "流程名称": {
+    "key": "common.processName",
+    "en": "Flow name"
+  },
+  "流程标识": {
+    "key": "common.processKey",
+    "en": "Flow key"
+  },
+  "表单标识": {
+    "key": "common.formKey",
+    "en": "Form key"
+  },
+  "业务标识": {
+    "key": "common.businessKey",
+    "en": "Business key"
+  },
+  "业务单号": {
+    "key": "common.businessNo",
+    "en": "Business no."
+  },
+  "任务名称": {
+    "key": "common.taskName",
+    "en": "Task name"
+  },
+  "节点": {
+    "key": "common.node",
+    "en": "Node"
+  },
+  "操作日志": {
+    "key": "common.operationLog",
+    "en": "Operation log"
+  },
+  "复制": {
+    "key": "common.copy",
+    "en": "Copy"
+  },
+  "查看": {
+    "key": "common.view",
+    "en": "View"
+  },
+  "详情": {
+    "key": "common.detail",
+    "en": "Details"
+  },
+  "返回": {
+    "key": "common.back",
+    "en": "Back"
+  },
+  "上一页": {
+    "key": "common.previousPage",
+    "en": "Previous"
+  },
+  "下一页": {
+    "key": "common.nextPage",
+    "en": "Next"
+  },
+  "请选择": {
+    "key": "common.pleaseSelect",
+    "en": "Please select"
+  },
+  "请输入": {
+    "key": "common.pleaseInput",
+    "en": "Please enter"
+  },
+  "请输入名称": {
+    "key": "common.namePlaceholder",
+    "en": "Enter a name"
+  },
+  "请输入描述": {
+    "key": "common.descriptionPlaceholder",
+    "en": "Enter a description"
+  },
+  "否（保留）": {
+    "key": "common.noKeep",
+    "en": "No (keep)"
+  },
+  "加载失败": {
+    "key": "common.loadFailed",
+    "en": "Could not load the data. Please try again."
+  }
+}

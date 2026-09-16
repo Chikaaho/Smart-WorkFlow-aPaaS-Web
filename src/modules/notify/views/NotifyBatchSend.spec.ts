@@ -245,7 +245,8 @@ describe('NotifyBatchSend.vue', () => {
     await vm.handleSend()
 
     expect(vi.mocked(batchSendNotify)).toHaveBeenCalledWith({
-      recipientUserIds: [1],
+      // 服务端 ID 是 64 位雪花值，页面按字符串原值透传，不做 Number() 截断
+      recipientUserIds: ['1'],
       recipientDeptIds: [],
       recipientRoleCodes: [],
       title: '测试标题',

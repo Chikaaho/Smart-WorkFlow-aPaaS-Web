@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * FormSelectDialog — 流程定义表单绑定选择弹窗。
  *
@@ -55,6 +58,7 @@ async function loadList() {
     list.value = published
     total.value = published.length
   } catch {
+    ElMessage.error(t('common.loadFailed'))
     list.value = []
     total.value = 0
   } finally {
@@ -105,12 +109,12 @@ function handleRowDblclick(row: FormDefListItem) {
 
 function confirmSelection() {
   if (!selectedFormKey.value) {
-    ElMessage.warning('请选择一个目标表单')
+    ElMessage.warning(t('form.selectTargetForm'))
     return
   }
   const row = list.value.find((it) => it.formKey === selectedFormKey.value)
   if (!row) {
-    ElMessage.warning('所选表单不在列表中')
+    ElMessage.warning(t('form.targetFormNotFound'))
     return
   }
   // 红线：回填 formKey，不是 id
@@ -141,7 +145,7 @@ watch(
 <template>
   <el-dialog
     :model-value="visible"
-    title="选择关联表单"
+    :title="t('workflow.selectLinkedFormTitle')"
     :close-on-click-modal="false"
     destroy-on-close
     width="720px"
@@ -150,21 +154,21 @@ watch(
     <div class="form-select">
       <!-- 提示条：只展示已发布表单 -->
       <el-alert type="info" :closable="false" show-icon style="margin-bottom: var(--sw-space-16)">
-        <template #title> 仅展示已发布的表单作为可选绑定目标（草稿表单不可用） </template>
+        <template #title> {{ t('workflow.publishedFormOnlyHint') }} </template>
       </el-alert>
 
       <!-- 搜索栏 -->
       <div class="form-select__search">
         <el-input
           v-model="keyword"
-          placeholder="搜索表单名称或 formKey"
+          :placeholder="t('workflow.searchFormNamePlaceholder')"
           clearable
           style="width: 260px"
           @keyup.enter="handleSearch"
           @clear="handleReset"
         />
-        <el-button type="primary" @click="handleSearch">搜索</el-button>
-        <el-button @click="handleReset">重置</el-button>
+        <el-button type="primary" @click="handleSearch">{{ t('common.search') }}</el-button>
+        <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
       </div>
 
       <!-- 表格 -->
@@ -178,9 +182,14 @@ watch(
         @row-click="handleRowClick"
         @row-dblclick="handleRowDblclick"
       >
-        <el-table-column prop="name" label="表单名称" min-width="160" show-overflow-tooltip />
+        <el-table-column
+          prop="name"
+          :label="t('common.formName')"
+          min-width="160"
+          show-overflow-tooltip
+        />
         <el-table-column prop="formKey" label="formKey" min-width="140" show-overflow-tooltip />
-        <el-table-column label="状态" width="90">
+        <el-table-column :label="t('common.status')" width="90">
           <template #default="{ row }">
             <el-tag :type="getFormDefStatusType(row.status)" size="small">
               {{ getFormDefStatusLabel(row.status) }}
@@ -189,13 +198,15 @@ watch(
         </el-table-column>
 
         <template #empty>
-          <span v-if="!loading" style="color: var(--sw-text-secondary)">暂无可选表单</span>
+          <span v-if="!loading" style="color: var(--sw-text-secondary)">{{
+            t('workflow.noSelectableForms')
+          }}</span>
         </template>
       </el-table>
 
       <!-- 分页 -->
       <div class="form-select__pagination">
-        <span class="form-select__pagination-total"> 共 {{ total }} 条记录 </span>
+        <span class="form-select__pagination-total">{{ t('common.totalRecords', { total }) }}</span>
         <el-pagination
           :current-page="pageNum"
           :page-size="pageSize"
@@ -211,9 +222,9 @@ watch(
     </div>
 
     <template #footer>
-      <el-button @click="close">取消</el-button>
+      <el-button @click="close">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :disabled="!selectedFormKey" @click="confirmSelection">
-        确认选择
+        {{ t('form.confirmSelection') }}
       </el-button>
     </template>
   </el-dialog>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * OaFieldConfig — v0.0.2 新控件（MULTISELECT/ATTACHMENT/IMAGE/LABEL）配置面板。
  * MULTISELECT 编辑候选选项（逗号分隔）；LABEL 编辑说明正文；
@@ -51,21 +54,21 @@ function textValue(): string {
   />
 
   <div v-if="field.type === 'MULTISELECT'" class="row">
-    <label class="row__label">候选选项</label>
+    <label class="row__label">{{ t('form.multiselectOptions') }}</label>
     <el-input
       :model-value="optionsText()"
-      placeholder="逗号分隔的选项，如：餐饮, 交通, 住宿"
+      :placeholder="t('form.multiselectOptionsPlaceholder')"
       @update:model-value="onOptionsText"
     />
   </div>
 
   <div v-if="field.type === 'LABEL'" class="row">
-    <label class="row__label">说明正文</label>
+    <label class="row__label">{{ t('form.labelBody') }}</label>
     <el-input
       :model-value="textValue()"
       type="textarea"
       :rows="3"
-      placeholder="展示给填报人的说明文字"
+      :placeholder="t('form.labelBodyPlaceholder')"
       @update:model-value="onText"
     />
   </div>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * FormulaConfig — I2 FORMULA 字段配置面板。
  * 编辑 expression（${field} 引用 + 四则 + 白名单函数 ABS/ROUND/MIN/MAX/DAYS）。
@@ -38,12 +41,12 @@ function onExpression(value: string) {
   />
 
   <div class="row">
-    <label class="row__label">公式表达式</label>
+    <label class="row__label">{{ t('form.formulaExpression') }}</label>
     <el-input
       :model-value="expressionValue()"
       type="textarea"
       :rows="3"
-      placeholder="如：ROUND(${price} * ${qty}, 2)；支持 + - * / 与 ABS/ROUND/MIN/MAX/DAYS"
+      :placeholder="t('form.formulaPlaceholder')"
       @update:model-value="onExpression"
     />
     <p class="row__hint">字段用 ${name} 引用；正式提交由服务端按发布版本重算，客户端值不消费。</p>

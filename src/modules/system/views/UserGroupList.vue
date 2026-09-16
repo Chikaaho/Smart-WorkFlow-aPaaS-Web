@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * UserGroupList — 用户组管理列表页（D112：P28/I36）。
  *
@@ -73,7 +76,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载用户组列表失败'
+      errorMsg.value = t('system.userGroupListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -123,6 +126,8 @@ async function loadCandidates() {
     const result = await getUserGroupCandidates({ pageNum: 1, pageSize: 200 })
     candidateOptions.value = result.list
   } catch {
+    ElMessage.error(t('common.loadFailed'))
+    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     candidateOptions.value = []
   }
 }
@@ -130,7 +135,9 @@ async function loadCandidates() {
 // ─── 弹窗状态 ──────────────────────────────────────────
 
 const dialogVisible = ref(false)
-const dialogTitle = computed(() => (editingId.value ? '编辑用户组' : '新建用户组'))
+const dialogTitle = computed(() =>
+  editingId.value ? t('system.editUserGroup') : t('system.newUserGroup'),
+)
 const editingId = ref<string | null>(null)
 const submitting = ref(false)
 const formError = ref('')
@@ -184,13 +191,18 @@ async function openEdit(row: SysUserGroup) {
         if (!visible.has(uid)) {
           const cand = candidateOptions.value.find((u) => u.id === uid)
           staleMembers.value.push(
-            cand ?? { id: uid, username: `用户#${uid}`, realName: '（已停用或不可见）', status: 1 },
+            cand ?? {
+              id: uid,
+              username: t('system.userFallbackName', { uid }),
+              realName: t('system.userDisabledOrHidden'),
+              status: 1,
+            },
           )
         }
       }
     }
   } catch {
-    formError.value = '加载用户组详情失败'
+    formError.value = t('system.userGroupDetailLoadFailed')
     return
   }
   dialogVisible.value = true
@@ -203,11 +215,11 @@ function closeDialog() {
 
 async function handleSubmit() {
   if (!form.groupCode.trim()) {
-    formError.value = '业务标识不能为空'
+    formError.value = t('system.businessKeyRequired')
     return
   }
   if (!form.groupName.trim()) {
-    formError.value = '组名称不能为空'
+    formError.value = t('system.groupNameRequired')
     return
   }
 
@@ -218,10 +230,10 @@ async function handleSubmit() {
       await updateUserGroup({ ...form, id: editingId.value })
       // 成员走整量替换端点（与主记录解耦但保持事务一致）
       await updateUserGroupMembers(editingId.value, memberIds.value)
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.updateSuccess'))
     } else {
       await createUserGroup({ ...form, memberIds: memberIds.value })
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.createSuccess'))
     }
     closeDialog()
     void loadList()
@@ -229,7 +241,7 @@ async function handleSubmit() {
     if (err instanceof ApiError) {
       formError.value = err.msg
     } else {
-      formError.value = '保存失败'
+      formError.value = t('common.saveFailed')
     }
   } finally {
     submitting.value = false
@@ -241,17 +253,17 @@ async function handleToggleStatus(row: SysUserGroup) {
   try {
     if (row.status === 1) {
       await enableUserGroup(id)
-      ElMessage.success('已启用')
+      ElMessage.success(t('common.statusEnabled'))
     } else {
       await disableUserGroup(id)
-      ElMessage.success('已停用（保留配置与成员）')
+      ElMessage.success(t('system.groupDisabledNotice'))
     }
     void loadList()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('操作失败')
+      ElMessage.error(t('common.operationFailed'))
     }
   }
 }
@@ -259,11 +271,15 @@ async function handleToggleStatus(row: SysUserGroup) {
 async function handleDelete(row: SysUserGroup) {
   try {
     await ElMessageBox.confirm(
-      `确定要删除用户组"${row.groupName}"吗？删除后成员关系一并移除。`,
-      '删除确认',
+      t('system.deleteUserGroupConfirm', { groupName: row.groupName }),
+      t('common.deleteConfirmTitle'),
       {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
+        get confirmButtonText() {
+          return t('common.confirm')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
         type: 'warning',
       },
     )
@@ -272,13 +288,13 @@ async function handleDelete(row: SysUserGroup) {
   }
   try {
     await deleteUserGroup(row.id!)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     void loadList()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('common.deleteFailed'))
     }
   }
 }
@@ -299,7 +315,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="用户组管理"
+    :title="t('system.userGroupManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -309,33 +325,40 @@ onMounted(loadList)
   >
     <!-- 工具栏：新建按钮（管理权限） -->
     <template #toolbar-actions>
-      <el-button v-if="canManage" type="primary" @click="openCreate">新建用户组</el-button>
+      <el-button v-if="canManage" type="primary" @click="openCreate">{{
+        t('system.newUserGroup')
+      }}</el-button>
     </template>
 
     <!-- 筛选区 -->
     <template #filter>
       <el-input
         v-model="filter.groupCode"
-        placeholder="业务标识"
+        :placeholder="t('common.businessKey')"
         clearable
         style="width: 140px"
         @keyup.enter="handleQuery"
       />
       <el-input
         v-model="filter.groupName"
-        placeholder="组名称"
+        :placeholder="t('system.groupName')"
         clearable
         style="width: 160px"
         @keyup.enter="handleQuery"
       />
-      <el-select v-model="filter.status" placeholder="状态" clearable style="width: 120px">
-        <el-option label="启用" :value="0" />
-        <el-option label="停用" :value="1" />
+      <el-select
+        v-model="filter.status"
+        :placeholder="t('common.status')"
+        clearable
+        style="width: 120px"
+      >
+        <el-option :label="t('common.enable')" :value="0" />
+        <el-option :label="t('common.disable')" :value="1" />
       </el-select>
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <!-- 表格区 -->
@@ -348,32 +371,41 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="groupCode" label="业务标识" min-width="110" />
-      <el-table-column prop="groupName" label="组名称" min-width="140" />
-      <el-table-column prop="remark" label="说明" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="status" label="状态" width="90">
+      <el-table-column prop="groupCode" :label="t('common.businessKey')" min-width="110" />
+      <el-table-column prop="groupName" :label="t('system.groupName')" min-width="140" />
+      <el-table-column
+        prop="remark"
+        :label="t('common.description')"
+        min-width="180"
+        show-overflow-tooltip
+      />
+      <el-table-column prop="status" :label="t('common.status')" width="90">
         <template #default="{ row }">
           <el-tag :type="row.status === 1 ? 'info' : 'success'" size="small">
-            {{ row.status === 1 ? '停用' : '启用' }}
+            {{ row.status === 1 ? t('common.disable') : t('common.enable') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="220" fixed="right">
+      <el-table-column :label="t('common.actions')" width="220" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editRow(row)">编辑</el-button>
+          <el-button size="small" link type="primary" @click="editRow(row)">{{
+            t('common.edit')
+          }}</el-button>
           <el-button v-if="canManage" size="small" link type="warning" @click="toggleRow(row)">
-            {{ row.status === 1 ? '启用' : '停用' }}
+            {{ row.status === 1 ? t('common.enable') : t('common.disable') }}
           </el-button>
-          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)"
-            >删除</el-button
-          >
+          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)">{{
+            t('common.delete')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <!-- 空态操作 -->
     <template #empty-action>
-      <el-button v-if="canManage" type="primary" @click="openCreate">新建用户组</el-button>
+      <el-button v-if="canManage" type="primary" @click="openCreate">{{
+        t('system.newUserGroup')
+      }}</el-button>
     </template>
   </StandardListTemplate>
 
@@ -391,38 +423,46 @@ onMounted(loadList)
         <el-alert :title="formError" type="error" :closable="false" show-icon />
       </template>
 
-      <FormSection title="基本信息">
+      <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
           <div class="form-field form-field--required">
-            <label class="form-field__label">业务标识</label>
+            <label class="form-field__label">{{ t('common.businessKey') }}</label>
             <el-input
               v-model="form.groupCode"
-              placeholder="请输入业务标识，租户内唯一"
+              :placeholder="t('system.businessKeyPlaceholder')"
               :disabled="!!editingId"
               maxlength="64"
             />
           </div>
           <div class="form-field form-field--required">
-            <label class="form-field__label">组名称</label>
-            <el-input v-model="form.groupName" placeholder="请输入组名称" maxlength="64" />
+            <label class="form-field__label">{{ t('system.groupName') }}</label>
+            <el-input
+              v-model="form.groupName"
+              :placeholder="t('system.groupNamePlaceholder')"
+              maxlength="64"
+            />
           </div>
           <div class="form-field">
-            <label class="form-field__label">状态</label>
+            <label class="form-field__label">{{ t('common.status') }}</label>
             <el-select v-model="form.status" style="width: 100%">
-              <el-option label="启用" :value="0" />
-              <el-option label="停用" :value="1" />
+              <el-option :label="t('common.enable')" :value="0" />
+              <el-option :label="t('common.disable')" :value="1" />
             </el-select>
           </div>
           <div class="form-field">
-            <label class="form-field__label">说明</label>
-            <el-input v-model="form.remark" placeholder="请输入说明" maxlength="255" />
+            <label class="form-field__label">{{ t('common.description') }}</label>
+            <el-input
+              v-model="form.remark"
+              :placeholder="t('system.descriptionPlaceholder')"
+              maxlength="255"
+            />
           </div>
         </FormGrid>
       </FormSection>
 
-      <FormSection title="成员">
+      <FormSection :title="t('system.members')">
         <div class="member-hint">
-          仅展示数据范围内且启用的用户；停用/不可见成员在回显时单独标记。
+          {{ t('system.memberCandidateNote') }}
         </div>
         <el-checkbox-group v-model="memberIds">
           <el-checkbox v-for="user in candidateOptions" :key="user.id" :value="user.id">
@@ -431,14 +471,16 @@ onMounted(loadList)
         </el-checkbox-group>
         <div v-if="staleMembers.length" class="stale-members">
           <el-tag v-for="u in staleMembers" :key="u.id" type="info" size="small" class="stale-tag">
-            {{ u.realName || u.username }}（已停用或不可见）
+            {{ t('system.memberDisabledSuffix', { name: u.realName || u.username }) }}
           </el-tag>
         </div>
       </FormSection>
 
       <template #actions>
-        <el-button @click="closeDialog">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+          t('common.save')
+        }}</el-button>
       </template>
     </StandardFormTemplate>
   </el-dialog>

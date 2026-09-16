@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { enumLabel } from '@/foundation/i18n/enum-label'
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /* global HTMLElement, SVGElement, SVGSVGElement, WheelEvent, PointerEvent, DragEvent, KeyboardEvent, MouseEvent, window, document */
 /**
  * ProcessDesigner — 第一方流程设计器页（I3 §4.1：节点拖入/移动/连线/选择/删除/
@@ -303,7 +307,7 @@ function applyProps() {
     }
   }
   model.updateNodeConfig(selectedNode.value.id, patch)
-  ElMessage.success('属性已更新（保存后生效）')
+  ElMessage.success(t('workflow.propsUpdated'))
 }
 
 function removeSelected() {
@@ -360,9 +364,9 @@ async function save() {
   errorMsg.value = ''
   try {
     await saveProcessDefGraph(defId.value, model.serialize())
-    ElMessage.success('草稿已保存')
+    ElMessage.success(t('common.draftSaved'))
   } catch (err) {
-    errorMsg.value = (err as { msg?: string }).msg ?? '保存失败'
+    errorMsg.value = (err as { msg?: string }).msg ?? t('common.saveFailed')
   } finally {
     saving.value = false
   }
@@ -377,10 +381,10 @@ async function validate() {
     await saveProcessDefGraph(defId.value, model.serialize())
     validationErrors.value = await validateProcessDefGraph(defId.value)
     if (validationErrors.value.length === 0) {
-      ElMessage.success('校验通过：可判定错误 0 条')
+      ElMessage.success(t('workflow.validationPassedNoErrors'))
     }
   } catch (err) {
-    errorMsg.value = (err as { msg?: string }).msg ?? '校验失败'
+    errorMsg.value = (err as { msg?: string }).msg ?? t('workflow.graphValidationFailed')
   } finally {
     validating.value = false
   }
@@ -390,9 +394,17 @@ async function publish() {
   if (!defId.value) return
   try {
     await ElMessageBox.confirm(
-      '发布将按服务端完整校验冻结当前草稿为新版本；任何校验错误都会零部署拒绝。继续？',
-      '发布确认',
-      { confirmButtonText: '确定发布', cancelButtonText: '取消', type: 'warning' },
+      t('workflow.publishConfirmMessage'),
+      t('common.publishConfirmTitle'),
+      {
+        get confirmButtonText() {
+          return t('workflow.confirmPublishButton')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+      },
     )
   } catch {
     return
@@ -400,10 +412,10 @@ async function publish() {
   publishing.value = true
   try {
     await publishProcessDef(defId.value)
-    ElMessage.success('发布成功：图、节点配置、表单与函数版本已冻结')
+    ElMessage.success(t('workflow.publishSucceeded'))
     await load()
   } catch (err) {
-    ElMessage.error((err as { msg?: string }).msg ?? '发布失败（零部署）')
+    ElMessage.error((err as { msg?: string }).msg ?? t('workflow.publishFailedZeroDeploy'))
   } finally {
     publishing.value = false
   }
@@ -464,7 +476,7 @@ async function load() {
     }
     await nextTick()
     if (!graph.value) {
-      errorMsg.value = '流程定义图数据为空'
+      errorMsg.value = t('workflow.graphDataEmpty')
       return
     }
     model = createDesignerModel(graph.value)
@@ -472,7 +484,7 @@ async function load() {
     snapshot()
     fitViewport()
   } catch (err) {
-    errorMsg.value = (err as { msg?: string }).msg ?? '加载流程定义失败'
+    errorMsg.value = (err as { msg?: string }).msg ?? t('workflow.processDefLoadFailed')
   } finally {
     loading.value = false
   }
@@ -506,22 +518,30 @@ function backToList() {
 <template>
   <div class="designer-page">
     <div class="designer-toolbar">
-      <el-button size="small" @click="backToList">返回定义列表</el-button>
+      <el-button size="small" @click="backToList">{{ t('workflow.backToDefList') }}</el-button>
       <el-divider direction="vertical" />
-      <span class="designer-title">{{ graph?.name ?? '流程设计器' }}</span>
+      <span class="designer-title">{{ graph?.name ?? t('router.processDesigner') }}</span>
       <span class="designer-key">{{ graph?.processKey ? `(${graph.processKey})` : '' }}</span>
-      <el-tag v-if="graph?.version" size="small" type="info" class="designer-version">
-        草稿版本 v{{ graph.version }}
-      </el-tag>
+      <el-tag v-if="graph?.version" size="small" type="info" class="designer-version">{{
+        t('workflow.draftVersionLabel', { version: graph.version })
+      }}</el-tag>
       <span class="spacer" />
-      <el-button size="small" :disabled="!canUndoFlag" @click="undoEdit">撤销</el-button>
+      <el-button size="small" :disabled="!canUndoFlag" @click="undoEdit">{{
+        t('common.revoke')
+      }}</el-button>
       <el-button size="small" type="warning" :disabled="!selectionId" @click="removeSelected">
-        删除所选
+        {{ t('workflow.deleteSelected') }}
       </el-button>
-      <el-button size="small" @click="fitViewport">适配</el-button>
-      <el-button size="small" :loading="validating" @click="validate">校验</el-button>
-      <el-button size="small" type="primary" :loading="saving" @click="save">保存草稿</el-button>
-      <el-button size="small" type="success" :loading="publishing" @click="publish">发布</el-button>
+      <el-button size="small" @click="fitViewport">{{ t('workflow.fitView') }}</el-button>
+      <el-button size="small" :loading="validating" @click="validate">{{
+        t('iot.validate')
+      }}</el-button>
+      <el-button size="small" type="primary" :loading="saving" @click="save">{{
+        t('common.saveDraft')
+      }}</el-button>
+      <el-button size="small" type="success" :loading="publishing" @click="publish">{{
+        t('common.publish')
+      }}</el-button>
     </div>
 
     <el-alert
@@ -536,7 +556,7 @@ function backToList() {
     <div class="designer-body">
       <!-- 节点面板：只展示统一能力端点声明为可设计的节点 -->
       <div class="designer-palette">
-        <div class="palette-title">节点（来自服务端能力契约）</div>
+        <div class="palette-title">{{ t('workflow.nodePaletteTitle') }}</div>
         <div
           v-for="cap in capabilities"
           :key="cap.type"
@@ -545,7 +565,7 @@ function backToList() {
           @dragstart="onPaletteDragStart($event, cap)"
         >
           <span class="palette-name">{{ cap.displayName }}</span>
-          <span class="palette-type">{{ cap.type }}</span>
+          <span class="palette-type">{{ enumLabel('WORKFLOW_NODE_TYPE', cap.type) }}</span>
         </div>
       </div>
 
@@ -633,7 +653,7 @@ function backToList() {
               text-anchor="middle"
               class="designer-node-type"
             >
-              {{ node.type }}
+              {{ enumLabel('WORKFLOW_NODE_TYPE', node.type) }}
             </text>
           </g>
         </svg>
@@ -642,16 +662,18 @@ function backToList() {
       <!-- 属性面板：字段由服务端能力 configFields + 参与人策略驱动 -->
       <div class="designer-props">
         <template v-if="selectedNode">
-          <div class="props-title">{{ selectedNode.label }}（{{ selectedNode.type }}）</div>
+          <div class="props-title">
+            {{ selectedNode.label }}（{{ enumLabel('WORKFLOW_NODE_TYPE', selectedNode.type) }}）
+          </div>
           <el-form label-position="top" size="small">
-            <el-form-item label="节点名称">
+            <el-form-item :label="t('workflow.nodeName')">
               <el-input v-model="propForm.name as string" @change="applyProps" />
             </el-form-item>
             <template v-for="field in selectedCapability?.configFields ?? []" :key="field.key">
               <el-form-item v-if="field.type === 'object'" :label="field.label">
                 <el-input
                   v-model="propForm[field.key] as string"
-                  placeholder="对象配置（JSON 文本）"
+                  :placeholder="t('workflow.objectConfigJsonPlaceholder')"
                   @change="applyProps"
                   @blur="applyProps"
                 />
@@ -673,7 +695,7 @@ function backToList() {
             </template>
             <el-form-item
               v-if="validationErrors.some((e) => e.nodeKey === selectionId)"
-              label="校验问题"
+              :label="t('workflow.validationIssues')"
             >
               <el-alert
                 v-for="err in validationErrors.filter((e) => e.nodeKey === selectionId)"
@@ -685,20 +707,22 @@ function backToList() {
             </el-form-item>
           </el-form>
         </template>
-        <el-empty v-else description="选择或拖入节点后配置属性" />
+        <el-empty v-else :description="t('workflow.selectNodeToConfigure')" />
       </div>
     </div>
 
     <!-- 校验错误面板（含 nodeKey/edgeKey 定位入口） -->
     <el-card v-if="validationErrors.length" class="designer-errors">
       <template #header
-        ><span>校验结果：{{ validationErrors.length }} 条可判定错误</span></template
+        ><span>{{
+          t('workflow.validationSummary', { count: validationErrors.length })
+        }}</span></template
       >
       <div v-for="(err, index) in validationErrors" :key="index" class="designer-error-row">
         <el-tag size="small" type="danger">{{ err.errorCode }}</el-tag>
         <span class="error-message">{{ err.message }}</span>
         <el-button size="small" link type="primary" @click="focusError(err)">
-          定位 {{ err.nodeKey ?? err.edgeKey ?? '-' }}
+          {{ t('workflow.validationLocateLabel', { target: err.nodeKey ?? err.edgeKey ?? '-' }) }}
         </el-button>
       </div>
     </el-card>

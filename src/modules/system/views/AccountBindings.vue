@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -22,7 +25,7 @@ async function reload(): Promise<void> {
     const data = await fetchSsoBindings()
     bindings.value = data.bindings
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '绑定状态加载失败')
+    ElMessage.error(error instanceof Error ? error.message : t('system.bindingLoadFailed'))
   } finally {
     loading.value = false
   }
@@ -36,10 +39,10 @@ async function onUnbind(provider: string): Promise<void> {
   unbinding.value = provider
   try {
     await unbindSso(provider as never)
-    ElMessage.success('已解绑')
+    ElMessage.success(t('system.unbound'))
     await reload()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '解绑失败')
+    ElMessage.error(error instanceof Error ? error.message : t('system.unbindFailed'))
   } finally {
     unbinding.value = ''
   }
@@ -56,7 +59,7 @@ async function onStartBind(provider: string): Promise<void> {
     // 服务端授权发起：整页跳转到 Provider 授权页（服务端回调后回跳）
     globalThis.location.href = data.authorizeUrl
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '授权发起失败')
+    ElMessage.error(error instanceof Error ? error.message : t('system.authorizeFailed'))
   }
 }
 
@@ -67,21 +70,20 @@ onMounted(() => {
 
 <template>
   <div class="account-bindings">
-    <h2>账号绑定</h2>
-    <p class="desc">
-      第三方企业身份（企业微信 / 飞书 /
-      钉钉）绑定后可经企业统一身份入口登录；绑定不改变本地角色与权限。
-    </p>
+    <h2>{{ t('auth.accountBindings') }}</h2>
+    <p class="desc">{{ t('auth.ssoBindingNote') }}</p>
     <div v-loading="loading" class="provider-list">
       <div v-for="p in SSO_PROVIDERS" :key="p.key" class="provider-row">
         <div class="provider-name">{{ p.label }}</div>
         <div class="provider-state">
           <template v-if="boundOf(p.key)">
-            <span class="bound-tag">已绑定</span>
-            <span class="digest">标识摘要 {{ boundOf(p.key)!.externalDigestPrefix }}…</span>
+            <span class="bound-tag">{{ t('system.bound') }}</span>
+            <span class="digest">{{
+              t('auth.digestPrefixLabel', { digest: boundOf(p.key)!.externalDigestPrefix })
+            }}</span>
           </template>
           <template v-else>
-            <span class="unbound-tag">未绑定</span>
+            <span class="unbound-tag">{{ t('system.notBound') }}</span>
           </template>
         </div>
         <div class="provider-actions">
@@ -91,9 +93,11 @@ onMounted(() => {
             :disabled="unbinding === p.key"
             @click="onUnbind(p.key)"
           >
-            {{ unbinding === p.key ? '解绑中…' : '解绑' }}
+            {{ unbinding === p.key ? t('system.unbinding') : t('system.unbind') }}
           </button>
-          <button v-else class="btn" @click="onStartBind(p.key)">绑定</button>
+          <button v-else class="btn" @click="onStartBind(p.key)">
+            {{ t('workflow.binding') }}
+          </button>
         </div>
       </div>
     </div>

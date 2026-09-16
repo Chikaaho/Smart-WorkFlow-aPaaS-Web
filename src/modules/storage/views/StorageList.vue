@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /* global File, Event, HTMLInputElement, URL, document */
 
 /**
@@ -49,7 +52,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载文件列表失败'
+      errorMsg.value = t('storage.fileListLoadFailed')
     }
   } finally {
     loading.value = false
@@ -108,21 +111,21 @@ function onFileChange(event: Event) {
 
 async function handleUpload() {
   if (!uploadFileRef.value) {
-    uploadError.value = '请选择文件'
+    uploadError.value = t('storage.selectFileRequired')
     return
   }
   uploading.value = true
   uploadError.value = ''
   try {
     const result = await uploadFile(uploadFileRef.value)
-    ElMessage.success(`上传成功：${result.storageName}`)
+    ElMessage.success(t('storage.uploadSucceeded', { storageName: result.storageName }))
     closeUpload()
     void loadList()
   } catch (err) {
     if (err instanceof ApiError) {
       uploadError.value = err.msg
     } else {
-      uploadError.value = '上传失败'
+      uploadError.value = t('common.uploadFailed')
     }
   } finally {
     uploading.value = false
@@ -146,7 +149,7 @@ async function handleDownload(row: StorageFile) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('下载失败')
+      ElMessage.error(t('storage.downloadFailed'))
     }
   }
 }
@@ -156,9 +159,17 @@ async function handleDownload(row: StorageFile) {
 async function handleDelete(row: StorageFile) {
   try {
     await ElMessageBox.confirm(
-      `确定要删除文件"${row.originalName}"吗？删除后不可恢复。`,
-      '删除确认',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' },
+      t('storage.confirmDeleteFile', { originalName: row.originalName }),
+      t('common.deleteConfirmTitle'),
+      {
+        get confirmButtonText() {
+          return t('common.confirm')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+      },
     )
   } catch {
     return // 用户取消
@@ -166,13 +177,13 @@ async function handleDelete(row: StorageFile) {
 
   try {
     await deleteFile(row.storageKey)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.deleteSuccess'))
     void loadList()
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(err.msg)
     } else {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('common.deleteFailed'))
     }
   }
 }
@@ -189,10 +200,14 @@ function deleteRow(r: unknown) {
 
 function providerLabel(type: string): string {
   const map: Record<string, string> = {
-    local: '本地',
+    get local() {
+      return t('storage.providerLocal')
+    },
     minio: 'MinIO',
     cos: 'COS',
-    qiniu: '七牛云',
+    get qiniu() {
+      return t('storage.providerQiniu')
+    },
   }
   return map[type] ?? type
 }
@@ -212,7 +227,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="文件管理"
+    :title="t('storage.fileManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -222,22 +237,22 @@ onMounted(loadList)
   >
     <!-- 工具栏：上传按钮 -->
     <template #toolbar-actions>
-      <el-button type="primary" @click="openUpload">上传文件</el-button>
+      <el-button type="primary" @click="openUpload">{{ t('common.uploadFile') }}</el-button>
     </template>
 
     <!-- 筛选区：文件名搜索 -->
     <template #filter>
       <el-input
         v-model="filter.originalName"
-        placeholder="文件名"
+        :placeholder="t('storage.fileName')"
         clearable
         style="width: 240px"
         @keyup.enter="handleQuery"
       />
     </template>
     <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <!-- 错误提示 -->
@@ -252,44 +267,53 @@ onMounted(loadList)
 
     <!-- 表格 -->
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="originalName" label="文件名" min-width="200" show-overflow-tooltip />
-      <el-table-column label="大小" width="100" align="right">
+      <el-table-column
+        prop="originalName"
+        :label="t('storage.fileName')"
+        min-width="200"
+        show-overflow-tooltip
+      />
+      <el-table-column :label="t('storage.fileSize')" width="100" align="right">
         <template #default="{ row }">
           {{ formatFileSize(row.fileSize) }}
         </template>
       </el-table-column>
-      <el-table-column prop="fileExt" label="类型" width="80" align="center">
+      <el-table-column prop="fileExt" :label="t('common.type')" width="80" align="center">
         <template #default="{ row }">
           <el-tag size="small" type="info">{{ row.fileExt.toUpperCase() }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="contentType" label="MIME" width="160" show-overflow-tooltip />
-      <el-table-column label="存储方式" width="90" align="center">
+      <el-table-column :label="t('storage.providerType')" width="90" align="center">
         <template #default="{ row }">
           <el-tag size="small" :type="providerTagType(row.providerType)">
             {{ providerLabel(row.providerType) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" label="上传时间" width="170" />
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column prop="createTime" :label="t('storage.uploadTime')" width="170" />
+      <el-table-column :label="t('common.actions')" width="160" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="downloadRow(row)">下载</el-button>
-          <el-button size="small" link type="danger" @click="deleteRow(row)">删除</el-button>
+          <el-button size="small" link type="primary" @click="downloadRow(row)">{{
+            t('common.download')
+          }}</el-button>
+          <el-button size="small" link type="danger" @click="deleteRow(row)">{{
+            t('common.delete')
+          }}</el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <!-- 空态操作 -->
     <template #empty-action>
-      <el-button type="primary" @click="openUpload">上传文件</el-button>
+      <el-button type="primary" @click="openUpload">{{ t('common.uploadFile') }}</el-button>
     </template>
   </StandardListTemplate>
 
   <!-- 上传弹窗 -->
   <el-dialog
     v-model="uploadDialogVisible"
-    title="上传文件"
+    :title="t('common.uploadFile')"
     :close-on-click-modal="false"
     destroy-on-close
     width="480px"
@@ -307,15 +331,14 @@ onMounted(loadList)
       <input type="file" style="display: block" @change="onFileChange" />
     </div>
     <template #footer>
-      <el-button @click="closeUpload">取消</el-button>
+      <el-button @click="closeUpload">{{ t('common.cancel') }}</el-button>
       <el-button
         type="primary"
         :loading="uploading"
         :disabled="!uploadFileRef"
         @click="handleUpload"
+        >{{ t('common.upload') }}</el-button
       >
-        上传
-      </el-button>
     </template>
   </el-dialog>
 </template>

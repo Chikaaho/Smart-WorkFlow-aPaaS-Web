@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/locales'
+
+const { t } = useI18n()
 /**
  * ProcessedList — 已办任务列表页（页型 B）。
  *
@@ -36,7 +39,7 @@ async function loadList() {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
     } else {
-      errorMsg.value = '加载已办任务失败'
+      errorMsg.value = t('workflow.processedTasksLoadFailed')
     }
   } finally {
     loading.value = false
@@ -63,7 +66,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    title="已办任务"
+    :title="t('workflow.processedTasks')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -73,7 +76,9 @@ onMounted(loadList)
   >
     <!-- 工具栏操作按钮 -->
     <template #toolbar-actions>
-      <el-button @click="router.push({ name: 'TodoList' })">待办任务</el-button>
+      <el-button @click="router.push({ name: 'TodoList' })">{{
+        t('workflow.todoTasks')
+      }}</el-button>
     </template>
 
     <!-- 空态 -->
@@ -100,16 +105,16 @@ onMounted(loadList)
       style="width: 100%"
       @row-click="handleRowClick"
     >
-      <el-table-column prop="taskName" label="任务名称" min-width="140" />
-      <el-table-column label="流程名称" min-width="140">
+      <el-table-column prop="taskName" :label="t('common.taskName')" min-width="140" />
+      <el-table-column :label="t('common.processName')" min-width="140">
         <template #default="{ row }">
           {{ row.processName ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="formKey" label="表单标识" min-width="140" />
-      <el-table-column prop="businessKey" label="业务单号" min-width="120" />
-      <el-table-column prop="createTime" label="创建时间" min-width="170" />
-      <el-table-column label="完成时间" min-width="170">
+      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="140" />
+      <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="120" />
+      <el-table-column prop="createTime" :label="t('common.createTime')" min-width="170" />
+      <el-table-column :label="t('workflow.completedAt')" min-width="170">
         <template #default="{ row }">
           {{ row.endTime ?? '-' }}
         </template>
