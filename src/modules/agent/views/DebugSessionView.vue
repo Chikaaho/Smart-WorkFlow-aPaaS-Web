@@ -620,9 +620,9 @@ onMounted(() => {
 }
 
 .tag-paused {
-  --el-tag-bg-color: #ecf5ff;
-  --el-tag-text-color: #409eff;
-  --el-tag-border-color: #d9ecff;
+  --el-tag-bg-color: var(--sw-color-primary-soft);
+  --el-tag-text-color: var(--sw-color-primary);
+  --el-tag-border-color: var(--sw-color-primary-soft);
 }
 
 .detail-section {

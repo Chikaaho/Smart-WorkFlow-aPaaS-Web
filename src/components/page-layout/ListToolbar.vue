@@ -6,14 +6,21 @@ const { t } = useI18n()
  * ListToolbar — 表格上方工具栏。
  * 左侧：标题 + 记录数；右侧：操作按钮区（#actions slot）。
  */
-defineProps<{ title?: string; total?: number }>()
+defineProps<{ title?: string; total?: number; description?: string; large?: boolean }>()
 </script>
 
 <template>
   <div class="list-toolbar">
     <div class="list-toolbar__left">
       <slot>
-        <h2 v-if="title" class="list-toolbar__title">{{ title }}</h2>
+        <h2
+          v-if="title"
+          class="list-toolbar__title"
+          :class="{ 'list-toolbar__title--large': large }"
+        >
+          {{ title }}
+        </h2>
+        <p v-if="description" class="list-toolbar__description">{{ description }}</p>
         <span v-if="total !== undefined" class="list-toolbar__total">{{
           t('common.totalRecords', { total })
         }}</span>
@@ -37,6 +44,7 @@ defineProps<{ title?: string; total?: number }>()
   display: flex;
   align-items: baseline;
   gap: var(--sw-space-12);
+  flex-wrap: wrap;
 }
 
 .list-toolbar__title {
@@ -44,6 +52,17 @@ defineProps<{ title?: string; total?: number }>()
   font-size: var(--sw-font-h2);
   font-weight: var(--sw-font-weight-h2);
   color: var(--sw-text-primary);
+}
+
+.list-toolbar__title--large {
+  font-size: var(--sw-font-h1);
+}
+
+.list-toolbar__description {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--sw-font-body);
+  color: var(--sw-text-secondary);
 }
 
 .list-toolbar__total {

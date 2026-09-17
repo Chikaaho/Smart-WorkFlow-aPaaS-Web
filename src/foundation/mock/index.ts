@@ -86,9 +86,12 @@ export async function dispatchMock<T>(
 
   if (!match) return undefined
 
-  // 将 params 值转为字符串（模拟真实 HTTP 查询参数行为）
+  // 将 params 值转为字符串（模拟真实 HTTP 查询参数行为）。
+  // 与 axios 语义对齐：undefined/null 参数不会被序列化进查询串，
+  // 此处跳过而非 String(undefined)，否则 handler 收到 "undefined" 字符串导致过滤失真。
   const stringParams: Record<string, string> = {}
   for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null) continue
     stringParams[k] = String(v)
   }
 

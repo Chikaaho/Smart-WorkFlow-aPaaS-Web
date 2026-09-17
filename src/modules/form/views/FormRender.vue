@@ -571,6 +571,13 @@ function backToDrafts() {
   void router.push('/workflow/my-drafts')
 }
 
+// ── P53 节点 27：右侧说明栏的模式标签（渲染期求值，避免语言固化） ──
+const modeLabel = computed(() => {
+  if (isViewMode.value) return t('formSide.modeView')
+  if (isDraftMode.value) return t('formSide.modeDraft')
+  return t('formSide.modeSubmit')
+})
+
 // ── 挂载 ──
 onMounted(loadSchema)
 </script>
@@ -604,72 +611,96 @@ onMounted(loadSchema)
         <h1 class="form-render-page__title">{{ pageTitle }}</h1>
         <p v-if="!isViewMode" class="form-render-page__hint">{{ t('form.requiredHint') }}</p>
 
-        <!-- 字段渲染区 -->
-        <div class="form-render-page__card">
-          <div class="form-render-page__group">
-            <div
-              v-for="field in visibleSchemaFields"
-              :key="field.name"
-              class="form-render-page__field"
-              :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
-              :data-col-span="getFormFieldColSpan(field)"
-              :data-grid-field-type="field.type"
-              :data-grid-field-name="field.name"
-            >
-              <DynamicField
-                :field="field"
-                :model-value="formData[field.name]"
-                :readonly="isViewMode"
-                :reference-label="referenceLabels[field.name] ?? ''"
-                @update:model-value="formData[field.name] = $event"
-              />
-              <p
-                v-if="validationErrors[field.name]"
-                class="form-render-page__field-error"
-                role="alert"
-                :data-validation-error-for="field.name"
-              >
-                {{ validationErrors[field.name] }}
-              </p>
+        <div class="form-render-page__layout">
+          <div class="form-render-page__main">
+            <!-- 字段渲染区 -->
+            <div class="form-render-page__card">
+              <div class="form-render-page__group">
+                <div
+                  v-for="field in visibleSchemaFields"
+                  :key="field.name"
+                  class="form-render-page__field"
+                  :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
+                  :data-col-span="getFormFieldColSpan(field)"
+                  :data-grid-field-type="field.type"
+                  :data-grid-field-name="field.name"
+                >
+                  <DynamicField
+                    :field="field"
+                    :model-value="formData[field.name]"
+                    :readonly="isViewMode"
+                    :reference-label="referenceLabels[field.name] ?? ''"
+                    @update:model-value="formData[field.name] = $event"
+                  />
+                  <p
+                    v-if="validationErrors[field.name]"
+                    class="form-render-page__field-error"
+                    role="alert"
+                    :data-validation-error-for="field.name"
+                  >
+                    {{ validationErrors[field.name] }}
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <!-- 操作按钮：草稿模式 -->
-        <template v-if="isDraftMode">
-          <div class="form-render-page__draft-bar">
-            <el-input
-              v-model="draftTitle"
-              :placeholder="t('form.draftTitleOptional')"
-              maxlength="100"
-              class="form-render-page__draft-title"
-            />
-            <span class="form-render-page__draft-process-hint">
-              {{ t('form.processResolvedByBinding') }}
-            </span>
-            <el-checkbox v-if="draftId" v-model="draftRefreshVersion">{{
-              t('form.rebindLatest')
-            }}</el-checkbox>
-            <el-button :loading="draftSaving" @click="handleSaveDraft">{{
-              t('common.saveDraft')
-            }}</el-button>
-            <el-button
-              v-if="draftId"
-              type="primary"
-              :loading="draftSaving"
-              @click="handleSubmitDraft"
-            >
-              {{ t('form.submitDraft') }}
-            </el-button>
-            <el-button link @click="backToDrafts">{{ t('form.backToMyDrafts') }}</el-button>
+            <!-- 操作按钮：草稿模式 -->
+            <template v-if="isDraftMode">
+              <div class="form-render-page__draft-bar">
+                <el-input
+                  v-model="draftTitle"
+                  :placeholder="t('form.draftTitleOptional')"
+                  maxlength="100"
+                  class="form-render-page__draft-title"
+                />
+                <span class="form-render-page__draft-process-hint">
+                  {{ t('form.processResolvedByBinding') }}
+                </span>
+                <el-checkbox v-if="draftId" v-model="draftRefreshVersion">{{
+                  t('form.rebindLatest')
+                }}</el-checkbox>
+                <el-button :loading="draftSaving" @click="handleSaveDraft">{{
+                  t('common.saveDraft')
+                }}</el-button>
+                <el-button
+                  v-if="draftId"
+                  type="primary"
+                  :loading="draftSaving"
+                  @click="handleSubmitDraft"
+                >
+                  {{ t('form.submitDraft') }}
+                </el-button>
+                <el-button link @click="backToDrafts">{{ t('form.backToMyDrafts') }}</el-button>
+              </div>
+            </template>
+            <!-- 操作按钮：表单数据模式（行为不变） -->
+            <template v-else-if="!isViewMode">
+              <el-button type="primary" :loading="submitting" @click="handleSubmit">
+                {{ recordId ? t('common.save') : t('common.submit') }}
+              </el-button>
+            </template>
           </div>
-        </template>
-        <!-- 操作按钮：表单数据模式（行为不变） -->
-        <template v-else-if="!isViewMode">
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">
-            {{ recordId ? t('common.save') : t('common.submit') }}
-          </el-button>
-        </template>
+
+          <!-- 流程说明（节点 27）：只展示真实可得信息，不虚构版本/发起范围 -->
+          <aside class="form-render-page__aside">
+            <div class="form-render-page__aside-card">
+              <h3 class="form-render-page__aside-title">{{ t('formSide.infoTitle') }}</h3>
+              <div class="form-render-page__aside-row">
+                <span>{{ t('formSide.formNameLabel') }}</span>
+                <strong>{{ schema.title }}</strong>
+              </div>
+              <div class="form-render-page__aside-row">
+                <span>{{ t('formSide.infoFormKey') }}</span>
+                <strong>{{ formKey }}</strong>
+              </div>
+              <div class="form-render-page__aside-row">
+                <span>{{ t('formSide.infoMode') }}</span>
+                <strong>{{ modeLabel }}</strong>
+              </div>
+              <p class="form-render-page__aside-hint">{{ t('form.processResolvedByBinding') }}</p>
+            </div>
+          </aside>
+        </div>
       </template>
     </template>
   </div>
@@ -677,9 +708,59 @@ onMounted(loadSchema)
 
 <style scoped>
 .form-render-page {
-  max-width: 920px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: var(--sw-space-24) var(--sw-space-24);
+}
+
+/* P53 节点 27：左表单右说明双栏；窄屏单列 */
+.form-render-page__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--sw-space-20);
+  align-items: start;
+}
+.form-render-page__main {
+  min-width: 0;
+}
+.form-render-page__aside-card {
+  padding: var(--sw-space-20);
+  background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  box-shadow: var(--sw-shadow-card);
+}
+.form-render-page__aside-title {
+  margin: 0 0 var(--sw-space-12);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+}
+.form-render-page__aside-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--sw-border-lighter);
+  font-size: 13px;
+}
+.form-render-page__aside-row span {
+  color: var(--sw-text-secondary);
+}
+.form-render-page__aside-row strong {
+  color: var(--sw-text-primary);
+  word-break: break-all;
+}
+.form-render-page__aside-hint {
+  margin: var(--sw-space-12) 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--sw-text-secondary);
+}
+@media (max-width: 991px) {
+  .form-render-page__layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .form-render-page__alert {

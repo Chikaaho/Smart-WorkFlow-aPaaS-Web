@@ -342,7 +342,7 @@ onMounted(loadList)
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: var(--el-color-primary, #7e306b);
+  background-color: var(--el-color-primary);
 }
 .content-preview {
   color: #909399;

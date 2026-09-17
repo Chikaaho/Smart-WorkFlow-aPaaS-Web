@@ -47,6 +47,8 @@ export default defineConfig({
     exclude: [
       ...configDefaults.exclude,
       'src/modules/agent/views/tool-production-menu-chain-live.spec.ts',
+      // Playwright 视觉回归（P53）独立于 vitest 运行，避免被单测拾取。
+      'e2e/**',
     ],
     // P61 R1：组件文案已进入 i18n 目录，统一为所有 mount() 注入 i18n 插件
     setupFiles: ['src/test-setup.ts'],

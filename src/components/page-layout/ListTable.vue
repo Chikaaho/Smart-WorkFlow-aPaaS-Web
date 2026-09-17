@@ -28,9 +28,9 @@ defineProps<{}>()
 }
 
 .list-table :deep(.el-table__header-wrapper th) {
-  background: var(--sw-fill-base);
+  background: #fafbfe;
   font-size: var(--sw-font-caption);
-  font-weight: var(--sw-font-weight-caption);
+  font-weight: 600;
   height: var(--sw-table-row-height-compact);
 }
 

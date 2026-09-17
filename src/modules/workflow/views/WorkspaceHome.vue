@@ -13,7 +13,8 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Setting, Star } from '@element-plus/icons-vue'
+import { Setting, Star, Clock, Promotion, CircleCheck, EditPen } from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/user'
 import {
   getWorkspaceLayout,
   saveWorkspaceLayout,
@@ -27,6 +28,7 @@ import type { WorkspaceComponent, WorkspaceComponentKey } from '@/contracts/cata
 import { ApiError } from '@/foundation/request'
 
 const router = useRouter()
+const userStore = useUserStore()
 
 // ─── 布局状态 ───
 const components = ref<WorkspaceComponent[]>([])
@@ -43,6 +45,36 @@ const initiatedList = ref<Array<Record<string, unknown>>>([])
 const ccList = ref<Array<Record<string, unknown>>>([])
 const draftsList = ref<Array<Record<string, unknown>>>([])
 const favoriteItems = ref<CatalogItem[]>([])
+
+// ─── 问候与真实统计（P53 设计 01：统计只使用真实分页 total，不伪造本周/超时维度） ───
+const todoTotal = ref(0)
+const initiatedTotal = ref(0)
+const processedTotal = ref(0)
+const draftsTotal = ref(0)
+
+const displayName = computed(() => userStore.user?.displayName ?? '')
+const greeting = computed(() => {
+  const hour = new Date().getHours()
+  if (hour < 12) return t('workspace.greetingMorning')
+  if (hour < 18) return t('workspace.greetingAfternoon')
+  return t('workspace.greetingEvening')
+})
+
+/** 统计条：全部来自当前用户真实分页 total（无时间维度/超时维度接口，不做伪统计）。 */
+/** 统计卡图标与底色（纯视觉装饰，取 P53 设计 01；数据仍全部为真实 total） */
+const STAT_ICONS: Record<string, { icon: unknown; bg: string; color: string }> = {
+  todo: { icon: Clock, bg: 'var(--sw-color-primary-soft)', color: 'var(--sw-color-primary)' },
+  initiated: { icon: Promotion, bg: 'var(--sw-info-bg)', color: 'var(--sw-info)' },
+  processed: { icon: CircleCheck, bg: 'var(--sw-success-bg)', color: 'var(--sw-success)' },
+  drafts: { icon: EditPen, bg: 'var(--sw-warning-bg)', color: 'var(--sw-warning)' },
+}
+
+const stats = computed(() => [
+  { key: 'todo', label: t('workspace.statMyTodo'), value: todoTotal.value },
+  { key: 'initiated', label: t('workspace.statInitiated'), value: initiatedTotal.value },
+  { key: 'processed', label: t('workspace.statProcessed'), value: processedTotal.value },
+  { key: 'drafts', label: t('workspace.statDrafts'), value: draftsTotal.value },
+])
 
 /**
  * 工作台卡片标题的**文案键**（不是求值结果）。
@@ -116,9 +148,11 @@ async function loadComponentData() {
       queryTodoTasks({ pageNum: 1, pageSize: 5 })
         .then((page) => {
           todoList.value = page.list as unknown as Array<Record<string, unknown>>
+          todoTotal.value = page.total
         })
         .catch(() => {
           todoList.value = []
+          todoTotal.value = 0
         }),
     )
   }
@@ -127,9 +161,11 @@ async function loadComponentData() {
       myProcessed({ pageNum: 1, pageSize: 5 })
         .then((page) => {
           processedList.value = page.list as unknown as Array<Record<string, unknown>>
+          processedTotal.value = page.total
         })
         .catch(() => {
           processedList.value = []
+          processedTotal.value = 0
         }),
     )
   }
@@ -138,9 +174,11 @@ async function loadComponentData() {
       myInstances({ pageNum: 1, pageSize: 5 })
         .then((page) => {
           initiatedList.value = page.list as unknown as Array<Record<string, unknown>>
+          initiatedTotal.value = page.total
         })
         .catch(() => {
           initiatedList.value = []
+          initiatedTotal.value = 0
         }),
     )
   }
@@ -149,9 +187,11 @@ async function loadComponentData() {
       myDrafts({ pageNum: 1, pageSize: 5 })
         .then((page) => {
           draftsList.value = page.list as unknown as Array<Record<string, unknown>>
+          draftsTotal.value = page.total
         })
         .catch(() => {
           draftsList.value = []
+          draftsTotal.value = 0
         }),
     )
   }
@@ -273,10 +313,30 @@ onMounted(loadLayout)
 
 <template>
   <div v-loading="loading" class="workspace">
-    <header class="workspace__header">
-      <h2 class="workspace__title">{{ t('common.workspace') }}</h2>
-      <el-button :icon="Setting" text @click="openConfig">{{ t('common.configure') }}</el-button>
+    <header class="workspace__hero">
+      <div>
+        <h2 class="workspace__greeting">
+          {{ greeting }}{{ displayName ? '，' : '' }}{{ displayName }}
+        </h2>
+        <p class="workspace__hero-sub">{{ t('workspace.todoSummary', { count: todoTotal }) }}</p>
+      </div>
+      <el-button :icon="Setting" @click="openConfig">{{ t('common.configure') }}</el-button>
     </header>
+
+    <div class="workspace__stats">
+      <div v-for="stat in stats" :key="stat.key" class="workspace-stat">
+        <div class="workspace-stat__body">
+          <span class="workspace-stat__label">{{ stat.label }}</span>
+          <span class="workspace-stat__value">{{ stat.value }}</span>
+        </div>
+        <span
+          class="workspace-stat__icon"
+          :style="{ background: STAT_ICONS[stat.key]?.bg, color: STAT_ICONS[stat.key]?.color }"
+        >
+          <el-icon :size="22"><component :is="STAT_ICONS[stat.key]?.icon" /></el-icon>
+        </span>
+      </div>
+    </div>
 
     <div class="workspace__grid">
       <section
@@ -435,19 +495,70 @@ onMounted(loadLayout)
 
 <style scoped>
 .workspace {
-  max-width: 1100px;
+  max-width: 1152px;
+  padding: 24px 32px 32px;
   margin: 0 auto;
 }
-.workspace__header {
+.workspace__hero {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 16px;
 }
-.workspace__title {
+.workspace__greeting {
+  margin: 0 0 4px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--sw-text-primary);
+}
+.workspace__hero-sub {
   margin: 0;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+.workspace__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.workspace-stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  text-align: left;
+  background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  box-shadow: var(--sw-shadow-card);
+}
+.workspace-stat__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.workspace-stat__icon {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--sw-radius-base);
+}
+.workspace-stat__label {
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+.workspace-stat__value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--sw-text-primary);
 }
 .workspace__grid {
   display: grid;
@@ -456,24 +567,24 @@ onMounted(loadLayout)
 }
 .workspace-card {
   padding: 16px 20px;
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 6px;
-  box-shadow: var(--sw-shadow-card, 0 1px 8px rgba(0, 0, 0, 0.04));
+  background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  box-shadow: var(--sw-shadow-card);
 }
 .workspace-card--wide {
   grid-column: 1 / -1;
 }
 .workspace-card__title {
   margin: 0 0 10px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
-  color: var(--sw-color-primary, #7e306b);
+  color: var(--sw-text-primary);
 }
 .workspace-card__empty {
   margin: 0;
   font-size: 13px;
-  color: var(--sw-color-text-secondary, #909399);
+  color: var(--sw-text-secondary);
 }
 .workspace-card__list {
   margin: 0;
@@ -487,14 +598,14 @@ onMounted(loadLayout)
   gap: 8px;
   padding: 6px 0;
   font-size: 13px;
-  border-bottom: 1px dashed var(--el-border-color-lighter);
+  border-bottom: 1px dashed var(--sw-border-lighter);
 }
 .workspace-card__row:last-child {
   border-bottom: none;
 }
 .workspace-card__time {
   font-size: 12px;
-  color: var(--sw-color-text-secondary, #909399);
+  color: var(--sw-text-secondary);
 }
 .workspace-card__favorites {
   display: flex;
@@ -507,17 +618,17 @@ onMounted(loadLayout)
   gap: 6px;
   padding: 6px 12px;
   font-size: 13px;
-  color: var(--sw-color-primary, #7e306b);
-  background: var(--sw-color-primary-light-5, #f2eaf0);
+  color: var(--sw-color-primary);
+  background: var(--sw-color-primary-soft);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--sw-radius-base);
   cursor: pointer;
 }
 .config-section {
   margin: 16px 0 8px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--sw-color-primary, #7e306b);
+  color: var(--sw-color-primary);
 }
 .config-list,
 .config-favorites {

@@ -37,6 +37,17 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // P53：企业门户（受限聚合页，节点 05）——只聚合真实可达能力，登录即可达。
+        path: 'portal',
+        name: 'portal-home',
+        component: () => import('@/views/PortalHome.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('portal.navLabel')
+          },
+        },
+      },
+      {
         // v0.0.2 P4 流程中心（前台普通视角）：按分类/关键词浏览本人可发起事项。
         // 独立命名（-static 后缀）：菜单动态路由同名 addRoute 会按名替换静态路由
         // （历史深链失效根因），静态与动态路由名必须错开。

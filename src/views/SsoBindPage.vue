@@ -117,7 +117,7 @@ async function onBind(): Promise<void> {
   color: #f56c6c;
 }
 .btn {
-  background: #7e306b;
+  background: var(--sw-color-primary);
   color: #fff;
   border: none;
   border-radius: 4px;
@@ -126,12 +126,12 @@ async function onBind(): Promise<void> {
   cursor: pointer;
 }
 .btn:disabled {
-  background: #bf98b5;
+  background: var(--sw-color-primary-light);
   cursor: not-allowed;
 }
 .link {
   font-size: 14px;
-  color: #7e306b;
+  color: var(--sw-color-primary);
   text-decoration: none;
 }
 </style>

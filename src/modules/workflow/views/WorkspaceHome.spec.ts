@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 
 const queryTodoTasks = vi.fn()
 const myInstances = vi.fn()
@@ -42,6 +43,8 @@ function layoutResp(
 const elStub = { template: '<div><slot/></div>', props: ['modelValue', 'title', 'size'] }
 
 const global = {
+  // P53 起工作台读取 userStore（问候语 displayName），测试装配补 pinia，断言不变。
+  plugins: [createPinia()],
   stubs: {
     'el-drawer': elStub,
     'el-button': {

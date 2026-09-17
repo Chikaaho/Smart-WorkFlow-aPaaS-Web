@@ -3,7 +3,7 @@
  *
  * 隔离方案（WYSIWYG 刀）：form-create 及其依赖的 Element Plus 组件**不再注册进主 app**，
  * 改为注册进 FormPreview 为每个渲染实例创建的**独立 createApp 子实例**。主 app 因此零污染
- * （main.ts 不再 app.component 那 19 个 EP 组件）。
+ * （main.ts 不再 app.component 这些 EP 组件）。
  *
  * @form-create/element-ui 内部通过 Vue resolveComponent() 按名解析 EP 组件，
  * 而 resolveComponent 只看「渲染所在 app」的全局组件（不走父链）——所以要让 form-create
@@ -18,6 +18,9 @@ import formCreate from '@form-create/element-ui'
 // -- Element Plus CSS（form-create 渲染的组件，unplugin-vue-components 扫不到 node_modules） --
 import 'element-plus/es/components/form/style/css'
 import 'element-plus/es/components/form-item/style/css'
+import 'element-plus/es/components/row/style/css'
+import 'element-plus/es/components/col/style/css'
+import 'element-plus/es/components/select/style/css'
 import 'element-plus/es/components/checkbox/style/css'
 import 'element-plus/es/components/checkbox-group/style/css'
 import 'element-plus/es/components/checkbox-button/style/css'
@@ -29,10 +32,13 @@ import 'element-plus/es/components/upload/style/css'
 import {
   ElForm,
   ElFormItem,
+  ElRow,
+  ElCol,
   ElInput,
   ElInputNumber,
   ElSelect,
   ElOption,
+  ElOptionGroup,
   ElSwitch,
   ElDatePicker,
   ElButton,
@@ -54,10 +60,13 @@ import AttachmentControl from '@/components/dynamic-field-controls/AttachmentCon
 const EP_COMPONENTS = [
   ElForm,
   ElFormItem,
+  ElRow,
+  ElCol,
   ElInput,
   ElInputNumber,
   ElSelect,
   ElOption,
+  ElOptionGroup,
   ElSwitch,
   ElDatePicker,
   ElButton,

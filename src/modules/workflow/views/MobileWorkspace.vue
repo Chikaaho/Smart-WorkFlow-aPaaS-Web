@@ -619,6 +619,11 @@ void (async () => {
   align-items: center;
   justify-content: space-between;
 }
+.m-header :deep(.el-button) {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 10px 12px;
+}
 .m-title {
   font-size: 20px;
   font-weight: 600;
@@ -646,11 +651,11 @@ void (async () => {
   justify-content: space-between;
   margin-top: 6px;
   font-size: 12px;
-  color: #909399;
+  color: var(--sw-text-secondary);
 }
 .m-empty {
   text-align: center;
-  color: #909399;
+  color: var(--sw-text-secondary);
 }
 .m-detail-title {
   font-size: 16px;
@@ -670,7 +675,7 @@ void (async () => {
   margin: 0 0 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #7e306b;
+  color: var(--sw-color-primary);
   border-bottom: 1px solid #ebeef5;
   padding-bottom: 6px;
 }
@@ -682,7 +687,7 @@ void (async () => {
   padding: 4px 0;
 }
 .m-kv span {
-  color: #909399;
+  color: var(--sw-text-secondary);
 }
 .m-kv b {
   color: #303133;
@@ -691,7 +696,7 @@ void (async () => {
   word-break: break-all;
 }
 .m-empty-line {
-  color: #909399;
+  color: var(--sw-text-secondary);
   font-size: 13px;
 }
 .m-att-list {
@@ -718,7 +723,7 @@ void (async () => {
   margin-bottom: 4px;
 }
 .m-required {
-  color: #f56c6c;
+  color: var(--sw-danger);
 }
 .m-input {
   border: 1px solid #dcdfe6;
@@ -730,7 +735,7 @@ void (async () => {
 }
 .m-opinion-note {
   font-size: 12px;
-  color: #909399;
+  color: var(--sw-text-secondary);
 }
 .m-opinion-options {
   display: flex;
@@ -746,5 +751,8 @@ void (async () => {
   justify-content: flex-end;
   gap: 8px;
   padding-top: 4px;
+}
+.m-actions :deep(.el-button) {
+  min-height: 40px;
 }
 </style>

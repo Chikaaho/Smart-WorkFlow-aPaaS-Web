@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { enumLabel } from '@/foundation/i18n/enum-label'
+import ApproverCandidatesDialog from './ApproverCandidatesDialog.vue'
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
@@ -22,8 +23,8 @@ import {
   publishProcessDef,
   validateProcessDefGraph,
 } from '@/modules/workflow/api'
-import type { GraphValidationError } from '@/modules/workflow/api'
-import type { BpmNodeCapability } from '@/contracts/bpm-node'
+import type { GraphValidationError, ApproverCandidate } from '@/modules/workflow/api'
+import type { BpmNodeCapability, BpmNodeConfigField } from '@/contracts/bpm-node'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import {
   createDesignerModel,
@@ -267,6 +268,41 @@ function selectEdge(event: PointerEvent, edgeId: string) {
 }
 
 /* ─────────── 面板/属性 ─────────── */
+
+// P53 节点 12：审批人候选选择（受限真实组件，候选来自服务端接口）。
+// 字段识别只依据服务端能力契约的 validation.approverTypes 标记：
+// 同时覆盖 mock 结构化 APPROVER 类型与真实契约的兼容 object 字段（审批人（兼容）），
+// 不在前端维护平行节点目录，也不硬编码候选用户。
+function isApproverSelectionField(field: Pick<BpmNodeConfigField, 'type' | 'validation'>): boolean {
+  const approverTypes = field.validation?.['approverTypes']
+  return field.type === 'APPROVER' || (Array.isArray(approverTypes) && approverTypes.length > 0)
+}
+
+const approverPickerVisible = ref(false)
+const approverTargetKey = ref('')
+function openApproverPicker(fieldKey: string) {
+  approverTargetKey.value = fieldKey
+  approverPickerVisible.value = true
+}
+function onApproverPicked(candidate: ApproverCandidate) {
+  const fieldKey = approverTargetKey.value
+  if (!fieldKey) return
+  const field = selectedCapability.value?.configFields.find((f) => f.key === fieldKey)
+  if (field && field.type === 'object') {
+    // 真实契约兼容 object 字段：回填服务端官方对象形状 {type: DESIGNATED, value: [userId]}
+    // （服务端发布校验与运行时解析均按该形状读取；approvalTypes 取自契约 validation）。
+    const approverTypes = field.validation?.['approverTypes']
+    const approverType =
+      Array.isArray(approverTypes) && approverTypes.length > 0
+        ? String(approverTypes[0])
+        : 'DESIGNATED'
+    propForm.value[fieldKey] = JSON.stringify({ type: approverType, value: [String(candidate.id)] })
+  } else {
+    // mock 结构化 APPROVER 字段保持既有「用户 ID 字符串」语义（隔离测试契约不变）。
+    propForm.value[fieldKey] = String(candidate.id)
+  }
+  applyProps()
+}
 
 const selectedNode = computed(() =>
   selectionId.value ? (canvasNodes.value.find((n) => n.id === selectionId.value) ?? null) : null,
@@ -670,7 +706,20 @@ function backToList() {
               <el-input v-model="propForm.name as string" @change="applyProps" />
             </el-form-item>
             <template v-for="field in selectedCapability?.configFields ?? []" :key="field.key">
-              <el-form-item v-if="field.type === 'object'" :label="field.label">
+              <el-form-item v-if="isApproverSelectionField(field)" :label="field.label">
+                <div class="approver-field">
+                  <el-input
+                    v-model="propForm[field.key] as string"
+                    :placeholder="t('workflow.targetUserIdPlaceholder')"
+                    @change="applyProps"
+                    @blur="applyProps"
+                  />
+                  <el-button @click="openApproverPicker(field.key)">
+                    {{ t('approverPicker.button') }}
+                  </el-button>
+                </div>
+              </el-form-item>
+              <el-form-item v-else-if="field.type === 'object'" :label="field.label">
                 <el-input
                   v-model="propForm[field.key] as string"
                   :placeholder="t('workflow.objectConfigJsonPlaceholder')"
@@ -711,6 +760,9 @@ function backToList() {
       </div>
     </div>
 
+    <!-- 审批人候选选择弹窗（节点 12 受限真实组件） -->
+    <ApproverCandidatesDialog v-model:visible="approverPickerVisible" @pick="onApproverPicked" />
+
     <!-- 校验错误面板（含 nodeKey/edgeKey 定位入口） -->
     <el-card v-if="validationErrors.length" class="designer-errors">
       <template #header
@@ -750,7 +802,7 @@ function backToList() {
 }
 .designer-key,
 .designer-version {
-  color: #909399;
+  color: var(--sw-text-secondary);
   font-size: 13px;
 }
 .spacer {
@@ -772,7 +824,7 @@ function backToList() {
 }
 .palette-title {
   font-size: 12px;
-  color: #909399;
+  color: var(--sw-text-secondary);
   margin-bottom: 8px;
 }
 .palette-item {
@@ -795,14 +847,15 @@ function backToList() {
 }
 .palette-type {
   font-size: 11px;
-  color: #909399;
+  color: var(--sw-text-secondary);
 }
 .designer-canvas-wrap {
   flex: 1;
   min-width: 0;
 }
 .pg-bg {
-  fill: #fafafa;
+  /* P53 设计（节点09）：画布浅蓝灰 #E8EDF6 */
+  fill: #e8edf6;
 }
 .designer-node .designer-node-rect {
   fill: #fff;
@@ -824,12 +877,12 @@ function backToList() {
 .designer-node-label {
   font-size: 13px;
   font-weight: 500;
-  fill: #303133;
+  fill: #344164;
   pointer-events: none;
 }
 .designer-node-type {
   font-size: 11px;
-  fill: #909399;
+  fill: #7e8799;
   pointer-events: none;
 }
 .designer-edge {

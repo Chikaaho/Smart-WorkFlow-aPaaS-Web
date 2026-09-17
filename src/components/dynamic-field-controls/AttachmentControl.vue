@@ -133,7 +133,7 @@ function removeItem(item: AttachmentItem) {
   margin-top: 4px;
   padding: 4px 10px;
   font-size: 13px;
-  color: var(--sw-color-primary, #7e306b);
+  color: var(--sw-color-primary);
   border: 1px dashed var(--el-border-color);
   border-radius: 4px;
   cursor: pointer;

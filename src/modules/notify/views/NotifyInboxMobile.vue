@@ -169,12 +169,23 @@ onMounted(() => void loadList(true))
   font-size: 18px;
   margin: 0;
 }
+.m-notify :deep(.el-button--small) {
+  min-height: 40px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.m-notify :deep(.el-button) {
+  min-height: 40px;
+}
 .m-notify-item {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 10px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--sw-border-lighter);
+  border-radius: var(--sw-radius-card);
+  background: var(--sw-surface-card);
 }
 .m-notify-item .dot {
   margin-top: 6px;
@@ -185,7 +196,7 @@ onMounted(() => void loadList(true))
   flex: none;
 }
 .m-notify-item.unread .dot {
-  background: var(--el-color-primary, #7e306b);
+  background: var(--el-color-primary, #6f2dff);
 }
 .m-notify-item .body {
   flex: 1;
@@ -194,22 +205,23 @@ onMounted(() => void loadList(true))
 .m-notify-item .title {
   margin: 0 0 4px;
   font-weight: 600;
+  color: var(--sw-text-primary);
 }
 .m-notify-item .content {
   margin: 0 0 4px;
-  color: #909399;
+  color: var(--sw-text-secondary);
   font-size: 13px;
 }
 .m-notify-item .time {
   margin: 0;
-  color: #c0c4cc;
+  color: var(--sw-text-secondary);
   font-size: 12px;
 }
 .m-notify-item .ops {
   flex: none;
 }
 .ops-hint {
-  color: #c0c4cc;
+  color: var(--sw-text-secondary);
   font-size: 12px;
 }
 </style>

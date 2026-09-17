@@ -46,7 +46,21 @@ const formKey = computed(() => String(route.params.formKey))
   font-size: 13px;
 }
 
+.mobile-form-page__render :deep(.form-render-page__hint) {
+  color: #626b7a;
+}
+
+.mobile-form-page__render :deep(.el-input__wrapper),
+.mobile-form-page__render :deep(.el-select__wrapper),
+.mobile-form-page__render :deep(.el-textarea__inner) {
+  min-height: 40px;
+}
+
 /* 操作按钮在窄屏下不横向溢出 */
+.mobile-form-page__render :deep(.el-button) {
+  min-height: 40px;
+}
+
 .mobile-form-page__render :deep(.el-button + .el-button) {
   margin-left: 8px;
 }

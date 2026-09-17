@@ -16,6 +16,7 @@ export type Area = 'portal' | 'admin'
 /** 前台菜单 path（相对布局根，无前导 /）。菜单树里的其余可见页面归后台。 */
 export const PORTAL_MENU_PATHS: ReadonlySet<string> = new Set([
   'workspace',
+  'portal',
   'workflow/catalog',
   'workflow/my-cc',
   'workflow/todo',

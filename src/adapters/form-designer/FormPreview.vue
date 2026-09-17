@@ -12,7 +12,7 @@
  *    外层壳的拖拽/点选事件——交互全交画布壳层。
  *  - mode='fill'（默认）：全屏预览填写态，真实可填写。
  *
- * 隔离：form-create + 19 个 EP 组件注册进**本实例自建的子 createApp**（setupFcApp），
+ * 隔离：form-create + 22 个 EP 组件注册进**本实例自建的子 createApp**（setupFcApp），
  * 主 app 零污染。子 app 挂载点在主 DOM 树内，--sw-* token 与 EP 全局样式天然级联继承。
  * 跨 app 响应式：内部 renderer 读取的 rules/mode 来自本组件 setup（主 app context）的
  * computed —— Vue 响应式系统是全局的（仅组件/指令/provide 按 app 隔离），故 schema 变更

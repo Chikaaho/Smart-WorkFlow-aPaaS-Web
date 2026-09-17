@@ -61,6 +61,12 @@ function handleQuery() {
   void loadList()
 }
 
+/** 展示层时间格式：ISO → YYYY-MM-DD HH:mm（仅显示，不改数据） */
+function formatDateTime(value: string | null): string {
+  if (!value) return '-'
+  return value.replace('T', ' ').slice(0, 16)
+}
+
 function handleReset() {
   keyword.value = ''
   currentKeyword.value = ''
@@ -170,6 +176,7 @@ onMounted(loadList)
 <template>
   <StandardListTemplate
     :title="t('form.managementTitle')"
+    large
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -216,7 +223,11 @@ onMounted(loadList)
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
+      <el-table-column prop="updateTime" :label="t('common.updateTime')" width="170">
+        <template #default="{ row }">
+          {{ formatDateTime(row.updateTime) }}
+        </template>
+      </el-table-column>
       <el-table-column :label="t('common.actions')" width="250" fixed="right">
         <template #default="{ row }">
           <el-button size="small" link type="primary" @click="editRow(row)">{{

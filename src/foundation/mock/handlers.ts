@@ -5293,6 +5293,17 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
+  // GET /api/workflow/catalog/categories — 普通视角分类列表（登录即可用，仅名称/排序）。
+  // 缺失时 dev:mock 会穿透真实后端，违反「mock 模式后端零参与」前提（P53 补证修复）。
+  {
+    method: 'GET',
+    pattern: '/api/workflow/catalog/categories',
+    handler: () => {
+      if (!MOCK_CURRENT_SESSION.user?.id) return { code: 401, message: '未认证', data: null }
+      return { code: 0, message: 'ok', data: MOCK_CATEGORIES }
+    },
+  },
+
   // GET /api/workflow/catalog/category-counts — 仅统计可见事项
   {
     method: 'GET',

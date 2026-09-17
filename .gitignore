@@ -25,3 +25,7 @@ dist-ssr
 
 # P61 取证临时目录
 .p61-tmp/
+
+# P53 Playwright 视觉回归运行产物（基线截图随源码提交，运行产物不入库）
+test-results/
+playwright-report/

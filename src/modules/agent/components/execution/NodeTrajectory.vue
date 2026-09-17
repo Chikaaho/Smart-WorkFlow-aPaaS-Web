@@ -296,14 +296,14 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
 }
 
 .node-item:hover {
-  border-color: #409eff;
+  border-color: var(--sw-color-primary);
   background: #f5f7fa;
 }
 
 .node-item.expanded {
-  border-color: #409eff;
-  background: #ecf5ff;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
+  border-color: var(--sw-color-primary);
+  background: var(--sw-color-primary-soft);
+  box-shadow: 0 2px 8px rgba(111, 45, 255, 0.15);
 }
 
 /* 状态样式覆盖 */

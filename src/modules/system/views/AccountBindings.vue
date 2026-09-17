@@ -159,8 +159,8 @@ h2 {
   font-size: 12px;
 }
 .btn {
-  border: 1px solid #7e306b;
-  color: #7e306b;
+  border: 1px solid var(--sw-color-primary);
+  color: var(--sw-color-primary);
   background: #fff;
   border-radius: 4px;
   padding: 6px 16px;

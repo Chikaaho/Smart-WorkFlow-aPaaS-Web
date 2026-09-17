@@ -221,7 +221,8 @@ defineExpose({ fitViewport, zoom })
   width: 100%;
   border: 1px solid var(--el-border-color-light);
   border-radius: 6px;
-  background: #fafafa;
+  /* P53 设计（节点10/19）：画布浅蓝灰 #E8EDF6 */
+  background: #e8edf6;
   overflow: hidden;
 }
 .pg-svg {
@@ -233,48 +234,48 @@ defineExpose({ fitViewport, zoom })
 }
 .pg-node .pg-node-rect {
   fill: #ffffff;
-  stroke: var(--el-border-color);
+  stroke: #c9d1e8;
   stroke-width: 1.5;
 }
 .pg-state-current .pg-node-rect {
-  fill: rgba(34, 197, 94, 0.12);
-  stroke: #22c55e;
+  fill: rgba(111, 45, 255, 0.08);
+  stroke: var(--sw-color-primary);
   stroke-width: 2.5;
 }
 .pg-state-completed .pg-node-rect {
-  fill: rgba(148, 163, 184, 0.12);
-  stroke: #94a3b8;
+  fill: rgba(22, 167, 123, 0.08);
+  stroke: #16a77b;
 }
 .pg-state-passed-over .pg-node-rect {
-  fill: #f5f7fa;
-  stroke: var(--el-border-color-lighter);
+  fill: #f4f6fb;
+  stroke: #a4adbe;
   stroke-dasharray: 4 3;
 }
 .pg-state-failed .pg-node-rect {
-  fill: rgba(245, 108, 108, 0.12);
-  stroke: #f56c6c;
+  fill: rgba(224, 75, 85, 0.08);
+  stroke: var(--sw-danger);
 }
 .pg-state-cancelled .pg-node-rect {
-  fill: rgba(144, 147, 153, 0.12);
-  stroke: #909399;
+  fill: rgba(126, 137, 161, 0.1);
+  stroke: #7e89a1;
 }
 .pg-node-label {
   font-size: 13px;
   font-weight: 500;
-  fill: #303133;
+  fill: #344164;
 }
 .pg-node-type {
   font-size: 11px;
-  fill: #909399;
+  fill: #7e8799;
 }
 .pg-edge {
-  stroke: var(--el-border-color);
+  stroke: #a4adbe;
 }
 .pg-edge-current {
-  stroke: #22c55e;
+  stroke: var(--sw-color-primary);
 }
 .pg-edge-completed {
-  stroke: #94a3b8;
+  stroke: #16a77b;
 }
 .pg-edge-passed-over {
   stroke: var(--el-border-color-lighter);
@@ -293,7 +294,7 @@ defineExpose({ fitViewport, zoom })
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: #606266;
+  color: #344164;
 }
 .pg-legend .dot {
   display: inline-block;
@@ -304,13 +305,13 @@ defineExpose({ fitViewport, zoom })
   vertical-align: middle;
 }
 .dot-current {
-  background: #22c55e;
+  background: var(--sw-color-primary);
 }
 .dot-completed {
-  background: #94a3b8;
+  background: #16a77b;
 }
 .dot-passed-over {
-  background: #dcdfe6;
+  background: #a4adbe;
 }
 .pg-zoom {
   position: absolute;
@@ -326,6 +327,6 @@ defineExpose({ fitViewport, zoom })
   right: 100px;
 }
 .pg-compat-tag {
-  color: #e6a23c;
+  color: var(--sw-warning);
 }
 </style>

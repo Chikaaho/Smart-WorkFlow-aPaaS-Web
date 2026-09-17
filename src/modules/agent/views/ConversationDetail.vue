@@ -302,7 +302,7 @@ onMounted(() => {
 
 .message-user {
   background: #f5f7fa;
-  border-left: 3px solid #409eff;
+  border-left: 3px solid var(--sw-color-primary);
 }
 
 .message-assistant {

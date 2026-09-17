@@ -85,7 +85,7 @@ onMounted(async () => {
 }
 .link {
   font-size: 14px;
-  color: #7e306b;
+  color: var(--sw-color-primary);
   text-decoration: none;
 }
 </style>

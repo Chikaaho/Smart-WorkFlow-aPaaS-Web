@@ -13,6 +13,8 @@ import ListPagination from './ListPagination.vue'
 
 defineProps<{
   title?: string
+  description?: string
+  large?: boolean
   total: number
   pageNum: number
   pageSize: number
@@ -28,7 +30,7 @@ const emit = defineEmits<{
 <template>
   <div class="standard-list">
     <!-- 工具栏：标题 + 记录数 + 操作 -->
-    <ListToolbar :title="title" :total="total">
+    <ListToolbar :title="title" :description="description" :large="large" :total="total">
       <template v-if="$slots['toolbar-actions']" #actions>
         <slot name="toolbar-actions" />
       </template>

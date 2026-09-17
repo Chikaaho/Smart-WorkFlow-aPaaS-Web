@@ -93,42 +93,43 @@ onMounted(loadCatalog)
     <div class="catalog-page__toolbar">
       <el-input
         v-model="keyword"
+        class="catalog-page__search"
         :placeholder="t('workflow.searchCatalogPlaceholder')"
         clearable
-        style="width: 260px"
         @keyup.enter="loadCatalog"
         @clear="loadCatalog"
       />
       <el-button type="primary" @click="loadCatalog">{{ t('common.search') }}</el-button>
+      <span class="catalog-page__count">{{ t('catalog.countHint', { count: total }) }}</span>
     </div>
 
-    <div class="catalog-page__categories">
-      <el-tag
-        class="catalog-page__category"
-        :type="activeCategory === '' ? 'primary' : 'info'"
-        :effect="activeCategory === '' ? 'dark' : 'plain'"
+    <div class="catalog-page__categories" role="tablist" :aria-label="t('workflow.processCenter')">
+      <button
+        type="button"
+        class="catalog-chip"
+        :class="{ 'is-active': activeCategory === '' }"
         @click="selectCategory('')"
       >
         {{ t('workflow.catalogAllWithCount', { count: itemCountOf('') }) }}
-      </el-tag>
-      <el-tag
+      </button>
+      <button
         v-for="category in categories"
         :key="category.id"
-        class="catalog-page__category"
-        :type="activeCategory === category.id ? 'primary' : 'info'"
-        :effect="activeCategory === category.id ? 'dark' : 'plain'"
+        type="button"
+        class="catalog-chip"
+        :class="{ 'is-active': activeCategory === category.id }"
         @click="selectCategory(category.id)"
       >
         {{ category.name }}（{{ itemCountOf(category.id) }}）
-      </el-tag>
-      <el-tag
-        class="catalog-page__category"
-        :type="activeCategory === 0 ? 'primary' : 'info'"
-        :effect="activeCategory === 0 ? 'dark' : 'plain'"
+      </button>
+      <button
+        type="button"
+        class="catalog-chip"
+        :class="{ 'is-active': activeCategory === 0 }"
         @click="selectCategory(0)"
       >
         {{ t('workflow.catalogUncategorizedWithCount', { count: itemCountOf(0) }) }}
-      </el-tag>
+      </button>
     </div>
 
     <el-alert
@@ -137,98 +138,188 @@ onMounted(loadCatalog)
       type="error"
       :closable="false"
       show-icon
-      style="margin-bottom: 12px"
+      class="catalog-page__alert"
     />
 
     <div v-loading="loading" class="catalog-page__grid">
       <el-empty v-if="isEmpty" :description="t('workflow.noCatalogItems')" />
-      <button
-        v-for="item in items"
-        :key="item.itemKey"
-        class="catalog-card"
-        type="button"
-        @click="openItem(item)"
-      >
-        <span class="catalog-card__name">{{ item.name }}</span>
+      <div v-for="(item, index) in items" :key="item.itemKey" class="catalog-card">
+        <div class="catalog-card__head">
+          <span
+            class="catalog-card__icon"
+            :class="{ 'catalog-card__icon--alt': index % 2 === 1 }"
+            aria-hidden="true"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
+              <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
+            </svg>
+          </span>
+          <span class="catalog-card__name">{{ item.name }}</span>
+        </div>
         <span class="catalog-card__meta">
-          <el-tag size="small" type="info">{{ categoryLabel(item.categoryId) }}</el-tag>
+          <span class="catalog-card__category">{{ categoryLabel(item.categoryId) }}</span>
           <span class="catalog-card__form">{{ item.formKey }}</span>
         </span>
-        <span class="catalog-card__action">{{ t('workflow.goToForm') }}</span>
-      </button>
+        <button type="button" class="catalog-card__launch" @click="openItem(item)">
+          {{ t('catalog.launch') }}
+        </button>
+      </div>
     </div>
+
+    <p class="catalog-page__note">{{ t('catalog.permissionNote') }}</p>
   </div>
 </template>
 
 <style scoped>
 .catalog-page {
-  max-width: 960px;
+  max-width: 1152px;
+  padding: 24px 32px 32px;
   margin: 0 auto;
 }
 .catalog-page__title {
   margin: 0 0 4px;
   font-size: 20px;
-  font-weight: 600;
-  color: var(--sw-color-text-primary, #303133);
+  font-weight: 700;
+  color: var(--sw-text-primary);
 }
 .catalog-page__subtitle {
   margin: 0 0 16px;
   font-size: 13px;
-  color: var(--sw-color-text-secondary, #909399);
+  color: var(--sw-text-secondary);
 }
 .catalog-page__toolbar {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 16px 20px;
+  background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  box-shadow: var(--sw-shadow-card);
+}
+.catalog-page__search {
+  max-width: 360px;
+}
+.catalog-page__count {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+  white-space: nowrap;
 }
 .catalog-page__categories {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: 10px;
+  margin-bottom: 18px;
 }
-.catalog-page__category {
+.catalog-chip {
+  padding: 7px 16px;
+  border: 1px solid var(--sw-border-base);
+  border-radius: 999px;
+  background: var(--sw-surface-card);
+  font-size: 13px;
+  color: var(--sw-text-regular);
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+.catalog-chip:hover {
+  border-color: var(--sw-color-primary);
+  color: var(--sw-color-primary);
+}
+.catalog-chip.is-active {
+  border-color: var(--sw-color-primary);
+  background: var(--sw-color-primary);
+  color: #ffffff;
+  font-weight: 500;
+}
+.catalog-page__alert {
+  margin-bottom: 12px;
 }
 .catalog-page__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
   min-height: 120px;
 }
 .catalog-card {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 16px 20px;
-  text-align: left;
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 6px;
-  box-shadow: var(--sw-shadow-card, 0 1px 8px rgba(0, 0, 0, 0.04));
-  cursor: pointer;
-  transition: border-color 0.2s ease;
+  gap: 10px;
+  padding: 20px;
+  background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  box-shadow: var(--sw-shadow-card);
+  transition: border-color 0.15s ease;
 }
 .catalog-card:hover {
-  border-color: var(--sw-color-primary, #7e306b);
+  border-color: var(--sw-color-primary);
+}
+.catalog-card__icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
+}
+.catalog-card__icon--alt {
+  background: var(--sw-info-bg);
+  color: var(--sw-info);
+}
+.catalog-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.catalog-card__icon svg {
+  width: 18px;
+  height: 18px;
 }
 .catalog-card__name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--sw-color-text-primary, #303133);
+  color: var(--sw-text-primary);
 }
 .catalog-card__meta {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+.catalog-card__category {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sw-fill-base);
 }
 .catalog-card__form {
-  font-size: 12px;
-  color: var(--sw-color-text-secondary, #909399);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.catalog-card__action {
+.catalog-card__launch {
+  align-self: flex-end;
+  margin-top: auto;
+  padding: 7px 18px;
+  border: none;
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-color-primary);
+  color: #ffffff;
   font-size: 13px;
-  color: var(--sw-color-primary, #7e306b);
+  font-weight: 500;
+  cursor: pointer;
+}
+.catalog-card__launch:hover {
+  background: var(--sw-color-primary-dark);
+}
+.catalog-page__note {
+  margin: 16px 0 0;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
 }
 </style>

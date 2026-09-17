@@ -66,6 +66,8 @@ const selectedId = ref<string | null>(null)
 /** 显隐联动规则（v0.0.2 P2）：按 target 存储每字段至多一条。 */
 const visibilityRules = ref<VisibilityRule[]>([])
 const previewVisible = ref(false)
+// P53 节点 11：字段属性清单（受限只读，数据来自真实 schema computed）
+const fieldsDialogVisible = ref(false)
 const loading = ref(false)
 
 /* ── 保存状态与脏标记 ── */
@@ -525,6 +527,7 @@ function backToList() {
         <el-tag :type="SAVE_STATE_TYPE[saveState]" size="small" class="designer__save-state">
           {{ t(saveStateKey(saveState)) }}
         </el-tag>
+        <el-button @click="fieldsDialogVisible = true">{{ t('fieldList.button') }}</el-button>
         <el-button @click="previewVisible = true">{{ t('common.preview') }}</el-button>
         <el-button :disabled="isPublished || saveState === 'saving'" @click="saveDraft">{{
           t('common.save')
@@ -600,6 +603,39 @@ function backToList() {
       :readonly="isPublished"
       @close="closeTableEditor"
     />
+
+    <!-- 字段属性清单（节点 11 受限只读组件）：仅展示真实 schema 可证明字段；
+         设计稿中的 SQL 类型/导出/兼容性校验无契约，不提供（方向 §5.11） -->
+    <el-dialog v-model="fieldsDialogVisible" :title="t('fieldList.title')" width="720px">
+      <p class="fields-dialog__sub">{{ t('fieldList.subtitle') }}</p>
+      <el-table :data="previewSchema.fields" size="small" max-height="420">
+        <el-table-column :label="t('fieldList.colName')" min-width="130">
+          <template #default="{ row }">{{ row.label || row.name }}</template>
+        </el-table-column>
+        <el-table-column :label="t('fieldList.colKey')" min-width="130">
+          <template #default="{ row }"
+            ><code class="fields-dialog__key">{{ row.name }}</code></template
+          >
+        </el-table-column>
+        <el-table-column :label="t('fieldList.colType')" width="110">
+          <template #default="{ row }">{{ row.type }}</template>
+        </el-table-column>
+        <el-table-column :label="t('fieldList.colRequired')" width="80">
+          <template #default="{ row }">{{ row.required ? '✓' : '—' }}</template>
+        </el-table-column>
+        <el-table-column :label="t('fieldList.colSpan')" width="100">
+          <template #default="{ row }">{{
+            t('fieldList.spanCell', { n: row.colSpan ?? 12 })
+          }}</template>
+        </el-table-column>
+      </el-table>
+      <p class="fields-dialog__note">{{ t('fieldList.note') }}</p>
+      <template #footer>
+        <el-button type="primary" @click="fieldsDialogVisible = false">{{
+          t('common.close')
+        }}</el-button>
+      </template>
+    </el-dialog>
 
     <PreviewModal v-model:visible="previewVisible" :schema="previewSchema" />
 
@@ -699,5 +735,19 @@ function backToList() {
   font-size: 13px;
   text-align: center;
   border-top: 1px solid var(--sw-border-light);
+}
+.fields-dialog__sub {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+.fields-dialog__key {
+  font-size: 12px;
+  color: var(--sw-color-primary);
+}
+.fields-dialog__note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
 }
 </style>

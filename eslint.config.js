@@ -57,6 +57,11 @@ export default tseslint.config(
       'src/types/auto-imports.d.ts',
       'src/types/components.d.ts',
       'coverage/**',
+      // Playwright 视觉回归运行产物（P53 底座）。
+      'test-results/**',
+      'playwright-report/**',
+      // P61 取证临时目录（运行产物，同 .gitignore）。
+      '.p61-tmp/**',
     ],
   },
   js.configs.recommended,

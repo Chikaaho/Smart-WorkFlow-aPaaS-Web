@@ -31,13 +31,13 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
 
 const STATUS_TAG: Record<
   string,
-  { label: string; type: 'warning' | 'success' | 'danger' | 'info' }
+  { label: string; type: 'primary' | 'warning' | 'success' | 'danger' | 'info' }
 > = {
   RUNNING: {
     get label() {
       return t('common.statusInProgress')
     },
-    type: 'warning',
+    type: 'primary',
   },
   APPROVED: {
     get label() {
@@ -107,7 +107,7 @@ function statusLabel(status: string): string {
   return STATUS_TAG[status]?.label ?? status
 }
 
-function statusTagType(status: string): 'warning' | 'success' | 'danger' | 'info' {
+function statusTagType(status: string): 'primary' | 'warning' | 'success' | 'danger' | 'info' {
   return STATUS_TAG[status]?.type ?? 'info'
 }
 
@@ -154,6 +154,12 @@ function handlePageSizeChange(s: number) {
   pageSize.value = s
   pageNum.value = 1
   void loadList()
+}
+
+/** 展示层时间格式：ISO → YYYY-MM-DD HH:mm（仅显示，不改数据） */
+function formatTime(value: string | null): string {
+  if (!value) return '-'
+  return value.replace('T', ' ').slice(0, 16)
 }
 
 // ─── 详情弹窗 ───
@@ -263,6 +269,8 @@ onMounted(loadList)
 <template>
   <StandardListTemplate
     :title="t('common.startedByMe')"
+    :description="t('workflow.myInstancesDescription')"
+    large
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -272,24 +280,30 @@ onMounted(loadList)
   >
     <!-- 筛选区 -->
     <template #filter>
-      <el-select
-        v-model="filter.status"
-        :placeholder="t('common.status')"
-        clearable
-        style="width: 140px"
-        @change="handleSearch"
-      >
-        <el-option :label="t('common.statusInProgress')" value="RUNNING" />
-        <el-option :label="t('common.statusApproved')" value="APPROVED" />
-        <el-option :label="t('common.statusRejected')" value="REJECTED" />
-      </el-select>
-      <el-input
-        v-model="filter.keyword"
-        :placeholder="t('workflow.searchProcessPlaceholder')"
-        clearable
-        style="width: 200px"
-        @keyup.enter="handleSearch"
-      />
+      <div class="my-instances-field">
+        <span class="my-instances-field__label">{{ t('common.status') }}</span>
+        <el-select
+          v-model="filter.status"
+          :placeholder="t('common.all')"
+          clearable
+          style="width: 160px"
+          @change="handleSearch"
+        >
+          <el-option :label="t('common.statusInProgress')" value="RUNNING" />
+          <el-option :label="t('common.statusApproved')" value="APPROVED" />
+          <el-option :label="t('common.statusRejected')" value="REJECTED" />
+        </el-select>
+      </div>
+      <div class="my-instances-field">
+        <span class="my-instances-field__label">{{ t('workflow.filterKeywordLabel') }}</span>
+        <el-input
+          v-model="filter.keyword"
+          :placeholder="t('workflow.searchProcessPlaceholder')"
+          clearable
+          style="width: 220px"
+          @keyup.enter="handleSearch"
+        />
+      </div>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleSearch">{{ t('common.query') }}</el-button>
@@ -318,9 +332,24 @@ onMounted(loadList)
           {{ row.processName ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="processDefKey" :label="t('common.processKey')" min-width="150" />
-      <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="120" />
-      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="130" />
+      <el-table-column
+        prop="processDefKey"
+        :label="t('common.processKey')"
+        min-width="150"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="businessKey"
+        :label="t('common.businessNo')"
+        min-width="120"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="formKey"
+        :label="t('common.formKey')"
+        min-width="130"
+        show-overflow-tooltip
+      />
       <el-table-column :label="t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">
@@ -328,10 +357,14 @@ onMounted(loadList)
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" :label="t('common.startTimeShort')" min-width="170" />
+      <el-table-column prop="createTime" :label="t('common.startTimeShort')" min-width="150">
+        <template #default="{ row }">
+          {{ formatTime(row.createTime) }}
+        </template>
+      </el-table-column>
       <el-table-column :label="t('common.actions')" width="190" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" type="primary" link @click="openDetailRow(row)">{{
+          <el-button size="small" plain round @click="openDetailRow(row)">{{
             t('common.detail')
           }}</el-button>
           <el-button
@@ -463,5 +496,15 @@ onMounted(loadList)
   color: var(--sw-color-primary);
   font-size: 13px;
   font-weight: 600;
+}
+.my-instances-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.my-instances-field__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sw-text-regular);
 }
 </style>

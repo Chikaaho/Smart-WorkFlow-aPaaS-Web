@@ -1,7 +1,9 @@
 {
   "_comment": "P61 locale 手工段（auth/errors/page/locale/app）。字典段由 p61-gen-locales.mjs 从 p61-copy-dictionary.json 合并为 common 段；两文件由同源生成，保证 zh/en 键集零差异。",
   "zh-CN": {
-    "app": { "name": "CH-aPaaS" },
+    "app": {
+      "name": "CH-aPaaS"
+    },
     "locale": {
       "label": "语言",
       "zh-CN": "中文",
@@ -47,10 +49,130 @@
       "oops": "出错了",
       "placeholder": "占位页面",
       "noData": "暂无数据"
+    },
+    "nav": {
+      "currentSpace": "当前空间",
+      "defaultWorkspace": "默认工作空间",
+      "currentView": "当前视图",
+      "adminConsole": "管理控制台",
+      "notifications": "通知",
+      "mainNav": "主导航",
+      "toggleSidebar": "收起或展开侧栏"
+    },
+    "login": {
+      "brandTagline": "企业智能流程与应用平台",
+      "brandBadge": "SMART WORKFLOW PLATFORM",
+      "brandHeadline": "让流程、数据与智能能力在一个平台高效协同",
+      "brandSub": "面向企业的一站式 aPaaS 工作空间，连接流程审批、数据服务、IoT 设备与智能 Agent，让业务构建和协作更简单。",
+      "brandPillFlow": "可视化流程 · 审批 / 会签 / 编排",
+      "brandPillData": "统一数据服务 · 表单 / 查询 / 接口",
+      "brandPillAgent": "智能能力 · Agent / IoT / 自动化",
+      "brandFootnote": "统一入口 · 多租户隔离 · 企业级权限",
+      "welcome": "欢迎登录",
+      "welcomeSub": "登录 CH-aPaaS，进入企业工作空间",
+      "secureBadge": "安全登录",
+      "ssoDivider": "SSO 单点登录",
+      "tenantHint": "SSO 授权需要租户标识；账号登录无需填写。"
+    },
+    "workspace": {
+      "greetingMorning": "早上好",
+      "greetingAfternoon": "下午好",
+      "greetingEvening": "晚上好",
+      "todoSummary": "{count} 项待办待处理",
+      "statMyTodo": "待我处理",
+      "statInitiated": "我发起的",
+      "statProcessed": "已办任务",
+      "statDrafts": "草稿"
+    },
+    "portal": {
+      "navLabel": "我的门户",
+      "heroTitle": "连接业务、流程与智能能力",
+      "heroSub": "一个入口办理事项、追踪流程、查看数据，并调用企业 Agent 与 IoT 能力。",
+      "heroStatProcesses": "业务流程",
+      "heroStatInstances": "本月实例",
+      "heroStatOnTime": "按时完成率",
+      "quickServices": "常用服务",
+      "svcProcess": "流程中心",
+      "svcProcessDesc": "发起与办理业务事项",
+      "svcForm": "表单中心",
+      "svcFormDesc": "填写与查询业务数据",
+      "svcAgent": "智能助手",
+      "svcAgentDesc": "企业知识与任务 Agent",
+      "svcIot": "设备中心",
+      "svcIotDesc": "IoT 设备状态与告警",
+      "svcNotify": "通知中心",
+      "svcNotifyDesc": "站内信与多渠道提醒",
+      "overview": "业务运行概览",
+      "myFocus": "我的关注",
+      "enter": "进入"
+    },
+    "catalog": {
+      "launch": "发起流程",
+      "countHint": "可发起 {count} 个流程",
+      "permissionNote": "分类与流程数量均基于当前账号权限；无权限或未启用流程不展示。"
+    },
+    "taskDetailUi": {
+      "dataForm": "数据表单",
+      "flowStatus": "流程状态",
+      "byFlowPath": "按当前流程路径展示",
+      "tabRecords": "流转记录",
+      "tabGraph": "流程图",
+      "tabPeople": "审批详情列表",
+      "viewDetail": "查看详情",
+      "viewDetailPending": "待提交",
+      "opinionDetailTitle": "审批意见详情",
+      "opinionEmpty": "该记录未填写结构化意见",
+      "formVersionLabel": "表单版本",
+      "signGroupTitle": "会签记录",
+      "signParticipants": "参与",
+      "signAgreed": "人已同意",
+      "signPending": "人待处理",
+      "prevDone": "已完成",
+      "current": "当前节点",
+      "graphUnavailable": "流程定义图不可用",
+      "nodeLabel": "节点",
+      "operatorLabel": "操作人"
+    },
+    "formSide": {
+      "formTitle": "填写申请表单",
+      "infoTitle": "流程说明",
+      "infoFormKey": "表单标识",
+      "infoMode": "模式",
+      "modeDraft": "草稿填报",
+      "modeSubmit": "填报",
+      "modeView": "只读查看",
+      "formNameLabel": "表单名称"
+    },
+    "fieldList": {
+      "button": "字段清单",
+      "title": "字段属性列表",
+      "subtitle": "当前事项的字段结构、数据类型与栅格宽度",
+      "colName": "组件名称",
+      "colKey": "字段标识",
+      "colType": "数据类型",
+      "colRequired": "必填",
+      "colSpan": "栅格宽度",
+      "spanCell": "{n} / 24",
+      "note": "清单来自当前草稿的真实 schema；导出与发布兼容性校验暂无契约，不提供。"
+    },
+    "approverPicker": {
+      "button": "查看候选",
+      "title": "选择审批人",
+      "searchPlaceholder": "搜索用户名或姓名",
+      "colUser": "用户",
+      "colUsername": "账号",
+      "colId": "用户 ID",
+      "pick": "选入",
+      "picked": "已选入输入框",
+      "empty": "无匹配候选",
+      "note": "候选来自服务端审批人候选接口；确认后写入节点审批人字段（用户 ID）。",
+      "deptTabHidden": "部门 / 角色 / 动态规则暂无服务端契约，不提供。"
     }
   },
   "en-US": {
-    "app": { "name": "CH-aPaaS" },
+    "app": {
+      "name": "CH-aPaaS"
+    },
     "locale": {
       "label": "Language",
       "zh-CN": "中文",
@@ -96,6 +218,124 @@
       "oops": "Something went wrong",
       "placeholder": "Placeholder page",
       "noData": "No data"
+    },
+    "nav": {
+      "currentSpace": "Current space",
+      "defaultWorkspace": "Default workspace",
+      "currentView": "Current view",
+      "adminConsole": "Admin console",
+      "notifications": "Notifications",
+      "mainNav": "Main navigation",
+      "toggleSidebar": "Toggle sidebar"
+    },
+    "login": {
+      "brandTagline": "Enterprise workflow & application platform",
+      "brandBadge": "SMART WORKFLOW PLATFORM",
+      "brandHeadline": "Run workflows, data and intelligence on one platform",
+      "brandSub": "One aPaaS workspace for your enterprise — connecting approvals, data services, IoT devices and AI agents so building and collaborating stays simple.",
+      "brandPillFlow": "Visual workflows · approvals / sign-off / orchestration",
+      "brandPillData": "Unified data services · forms / queries / APIs",
+      "brandPillAgent": "Intelligent agents · AI / IoT / automation",
+      "brandFootnote": "Single entry · multi-tenant isolation · enterprise-grade access",
+      "welcome": "Welcome back",
+      "welcomeSub": "Sign in to CH-aPaaS, your enterprise workspace",
+      "secureBadge": "Secure sign-in",
+      "ssoDivider": "SSO single sign-on",
+      "tenantHint": "SSO authorization needs a tenant ID; password sign-in does not."
+    },
+    "workspace": {
+      "greetingMorning": "Good morning",
+      "greetingAfternoon": "Good afternoon",
+      "greetingEvening": "Good evening",
+      "todoSummary": "{count} tasks awaiting your action",
+      "statMyTodo": "Assigned to me",
+      "statInitiated": "Started by me",
+      "statProcessed": "Completed",
+      "statDrafts": "Drafts"
+    },
+    "portal": {
+      "navLabel": "My portal",
+      "heroTitle": "Connect business, process and intelligence",
+      "heroSub": "One entry to handle tasks, track processes and read data — with enterprise agents and IoT at hand.",
+      "heroStatProcesses": "Processes",
+      "heroStatInstances": "Instances this month",
+      "heroStatOnTime": "On-time rate",
+      "quickServices": "Quick services",
+      "svcProcess": "Process center",
+      "svcProcessDesc": "Start and handle business tasks",
+      "svcForm": "Form center",
+      "svcFormDesc": "Fill in and query business data",
+      "svcAgent": "AI assistant",
+      "svcAgentDesc": "Enterprise knowledge and task agents",
+      "svcIot": "Device center",
+      "svcIotDesc": "IoT device status and alerts",
+      "svcNotify": "Notification center",
+      "svcNotifyDesc": "Inbox and multi-channel reminders",
+      "overview": "Operations overview",
+      "myFocus": "My focus",
+      "enter": "Open"
+    },
+    "catalog": {
+      "launch": "Start process",
+      "countHint": "{count} processes available to you",
+      "permissionNote": "Categories and counts reflect your account permissions; unauthorized or disabled processes are hidden."
+    },
+    "taskDetailUi": {
+      "dataForm": "Form data",
+      "flowStatus": "Flow status",
+      "byFlowPath": "Rendered along the current flow path",
+      "tabRecords": "Transition log",
+      "tabGraph": "Diagram",
+      "tabPeople": "Approval details",
+      "viewDetail": "View detail",
+      "viewDetailPending": "Not submitted",
+      "opinionDetailTitle": "Approval opinion detail",
+      "opinionEmpty": "No structured opinion recorded for this entry",
+      "formVersionLabel": "Form version",
+      "signGroupTitle": "Countersign records",
+      "signParticipants": "participants,",
+      "signAgreed": "agreed,",
+      "signPending": "pending",
+      "prevDone": "Completed",
+      "current": "Current node",
+      "graphUnavailable": "Process definition diagram unavailable",
+      "nodeLabel": "Node",
+      "operatorLabel": "Operator"
+    },
+    "formSide": {
+      "formTitle": "Application form",
+      "infoTitle": "Process notes",
+      "infoFormKey": "Form key",
+      "infoMode": "Mode",
+      "modeDraft": "Draft",
+      "modeSubmit": "Submit",
+      "modeView": "Read-only",
+      "formNameLabel": "Form name"
+    },
+    "fieldList": {
+      "button": "Field list",
+      "title": "Field properties",
+      "subtitle": "Structure, types and grid spans of the current schema",
+      "colName": "Label",
+      "colKey": "Field key",
+      "colType": "Type",
+      "colRequired": "Required",
+      "colSpan": "Grid span",
+      "spanCell": "{n} / 24",
+      "note": "List is rendered from the live draft schema; export and publish compatibility checks have no contract yet and are not offered."
+    },
+    "approverPicker": {
+      "button": "Candidates",
+      "title": "Pick an approver",
+      "searchPlaceholder": "Search username or name",
+      "colUser": "User",
+      "colUsername": "Username",
+      "colId": "User ID",
+      "pick": "Pick",
+      "picked": "Written to the field",
+      "empty": "No matching candidates",
+      "note": "Candidates come from the server approver-candidates API; picking writes the user ID into the node approver field.",
+      "deptTabHidden": "Department / role / dynamic rules have no server contract yet and are not offered."
     }
   }
 }

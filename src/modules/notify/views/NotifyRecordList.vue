@@ -302,7 +302,7 @@ onMounted(loadList)
 <style scoped>
 .log-section-title {
   margin: 16px 0 8px;
-  color: var(--sw-color-primary, #7e306b);
+  color: var(--sw-color-primary);
   font-size: 13px;
   font-weight: 600;
 }

@@ -182,7 +182,7 @@ onMounted(loadSummary)
 .stat-value {
   font-size: 24px;
   font-weight: 600;
-  color: #7e306b;
+  color: var(--sw-color-primary);
 }
 .stat-label {
   font-size: 13px;

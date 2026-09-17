@@ -26,6 +26,7 @@ import { ApiError } from '@/foundation/request'
 import type { ApprovalHistoryItem, TaskDetail } from '@/contracts/bpm'
 import type { ApprovalActionRequest, ApprovalOpinionConfig } from '@/contracts/bpm-node'
 import type { FormSchema } from '@/contracts/form-schema'
+import ProcessGraphView from './ProcessGraphView.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -565,15 +566,195 @@ function opinionInputType(field: NonNullable<ApprovalOpinionConfig['fields']>[nu
   return 'text'
 }
 
+// ═════════ P53 节点 03/10/15-18/20：详情重组（布局与只读弹窗，审批逻辑不变） ═════════
+
+// ─── 底部 tab ───
+const activeTab = ref<'records' | 'graph' | 'people'>('records')
+
+// ─── 流程图（节点 10/19）：定义图 + 真实轨迹高亮，切 tab 懒加载 ───
+const detailGraph = ref<import('@/contracts/process-graph').ProcessGraphDocument | null>(null)
+const detailTrace = ref<{ activeNodeIds: string[]; completedNodeIds: string[] } | null>(null)
+const graphLoading = ref(false)
+const graphError = ref('')
+
+async function loadGraph() {
+  if (detailGraph.value || graphLoading.value || !detail.value) return
+  graphLoading.value = true
+  graphError.value = ''
+  try {
+    const { getProcessDefDefinitionByKey } = await import('@/modules/workflow/api')
+    const definition = await getProcessDefDefinitionByKey(detail.value.processDefinitionKey)
+    detailGraph.value = {
+      processKey: definition.processKey,
+      name: definition.name ?? '',
+      formKey: definition.formKey ?? '',
+      version: definition.version,
+      contractVersion: (definition as { contractVersion?: number }).contractVersion,
+      elements: (definition.elements ??
+        []) as import('@/contracts/process-graph').ProcessGraphElement[],
+      canvas: definition.canvas ?? {},
+    }
+    // 轨迹高亮只使用真实可得数据：已完成=历史中已完结行的 nodeKey；活跃=当前任务节点
+    const completedNodeIds = [
+      ...new Set(
+        detail.value.approvalHistory
+          .filter((row) => row.endTime != null && typeof row.nodeKey === 'string' && row.nodeKey)
+          .map((row) => row.nodeKey as string),
+      ),
+    ]
+    detailTrace.value = {
+      activeNodeIds: detail.value.nodeKey ? [detail.value.nodeKey] : [],
+      completedNodeIds,
+    }
+  } catch (err) {
+    graphError.value = err instanceof ApiError ? err.msg : t('taskDetailUi.graphUnavailable')
+  } finally {
+    graphLoading.value = false
+  }
+}
+
+function onTabChange(tab: string | number) {
+  if (tab === 'graph') void loadGraph()
+}
+
+// ─── 流程状态卡（节点 03 右栏）：仅渲染真实可得的已完成/当前节点 ───
+interface FlowStatusEntry {
+  key: string
+  name: string
+  state: 'done' | 'current'
+  who: string
+  when: string
+  result: string | null
+}
+
+const flowStatus = computed<FlowStatusEntry[]>(() => {
+  const d = detail.value
+  if (!d) return []
+  const doneByKey = new Map<string, FlowStatusEntry>()
+  for (const row of d.approvalHistory) {
+    if (row.endTime == null || row.approvalResult == null) continue
+    const key = (typeof row.nodeKey === 'string' && row.nodeKey) || row.taskName
+    const entry: FlowStatusEntry = {
+      key,
+      name: row.taskName,
+      state: 'done',
+      who: row.assigneeName ?? row.assignee ?? '-',
+      when: row.endTime,
+      result: row.approvalResult,
+    }
+    const prev = doneByKey.get(key)
+    if (!prev || prev.when < entry.when) doneByKey.set(key, entry)
+  }
+  const entries = [...doneByKey.values()].sort((a, b) => (a.when < b.when ? -1 : 1))
+  if (d.nodeKey) {
+    entries.push({
+      key: d.nodeKey,
+      name: d.taskName,
+      state: 'current',
+      who: d.assigneeName ?? d.assignee ?? '-',
+      when: d.createTime,
+      result: null,
+    })
+  }
+  return entries
+})
+
+// ─── 意见详情弹窗（节点 15/17/18 状态变体）：展示该行真实可得字段 ───
+const opinionDetailVisible = ref(false)
+const opinionDetailRow = ref<ApprovalHistoryItem | null>(null)
+
+function openOpinionDetail(row: ApprovalHistoryItem) {
+  opinionDetailRow.value = row
+  opinionDetailVisible.value = true
+}
+
+// el-table row slot 的 DefaultRow 类型不兼容，桥接函数（对齐 MyInstances 写法）
+function openOpinionDetailRow(r: unknown) {
+  openOpinionDetail(r as ApprovalHistoryItem)
+}
+
+const opinionDetailEntries = computed(() => {
+  const row = opinionDetailRow.value
+  if (!row?.opinionData) return []
+  return Object.entries(row.opinionData)
+    .filter(([key]) => key !== 'comment')
+    .map(([key, value]) => ({ key, value: value == null ? '-' : String(value) }))
+})
+
+// ─── 会签聚合（节点 16）：同一节点的多条历史聚合为真实统计 ───
+const signGroupVisible = ref(false)
+const signGroupKey = ref('')
+
+const historyGroups = computed(() => {
+  const d = detail.value
+  if (!d) return []
+  const byNode = new Map<string, ApprovalHistoryItem[]>()
+  for (const row of d.approvalHistory) {
+    const key = (typeof row.nodeKey === 'string' && row.nodeKey) || row.taskName
+    const list = byNode.get(key) ?? []
+    list.push(row)
+    byNode.set(key, list)
+  }
+  return [...byNode.entries()]
+    .map(([nodeKey, rows]) => ({
+      nodeKey,
+      taskName: rows[0]?.taskName ?? nodeKey,
+      rows,
+      isSign: rows.length > 1,
+    }))
+    .sort((a, b) => ((a.rows[0]?.createTime ?? '') < (b.rows[0]?.createTime ?? '') ? -1 : 1))
+})
+
+const signGroupRows = computed(() => {
+  const d = detail.value
+  if (!d) return []
+  const key = signGroupKey.value
+  return d.approvalHistory.filter(
+    (row) => ((typeof row.nodeKey === 'string' && row.nodeKey) || row.taskName) === key,
+  )
+})
+
+const signGroupStats = computed(() => {
+  const rows = signGroupRows.value
+  const agreed = rows.filter((row) => row.approvalResult === 'APPROVED').length
+  const rejected = rows.filter((row) => row.approvalResult === 'REJECTED').length
+  const pending = rows.filter((row) => row.approvalResult == null).length
+  return { total: rows.length, agreed, rejected, pending }
+})
+
+function openSignGroup(nodeKey: string) {
+  signGroupKey.value = nodeKey
+  signGroupVisible.value = true
+}
+
 onMounted(loadDetail)
 </script>
 
 <template>
   <div v-loading="loading" class="task-detail">
-    <!-- 顶栏 -->
+    <!-- 页头（节点 03）：返回 + 标题 + 状态 + 元信息 -->
     <div class="detail-header">
       <el-button @click="goBack">{{ t('workflow.backToTodo') }}</el-button>
-      <h2>{{ t('workflow.taskDetail') }}</h2>
+      <div class="detail-header__body">
+        <div class="detail-header__title-row">
+          <h2 class="detail-header__title">
+            {{ detail?.processName ?? t('workflow.taskDetail') }}
+          </h2>
+          <el-tag
+            v-if="detail"
+            :type="detail.nodeKey ? 'primary' : 'success'"
+            size="small"
+            class="detail-header__status"
+          >
+            {{ detail.nodeKey ? t('common.statusInProgress') : t('common.statusApproved') }}
+          </el-tag>
+        </div>
+        <p v-if="detail" class="detail-header__meta">
+          {{ t('common.processKey') }} {{ detail.processDefinitionKey }} ·
+          {{ t('common.initiator') }} {{ detail.initiatorName ?? detail.initiatorId }} ·
+          {{ detail.createTime }}
+        </p>
+      </div>
     </div>
 
     <!-- 错误提示 -->
@@ -586,266 +767,448 @@ onMounted(loadDetail)
       style="margin-bottom: 16px"
     />
 
-    <!-- 任务信息 -->
-    <el-card v-if="detail" class="detail-card">
-      <template #header
-        ><span>{{ t('common.basicInfo') }}</span></template
-      >
-      <el-descriptions :column="2" border>
-        <el-descriptions-item :label="t('common.taskName')">{{
-          detail.taskName
-        }}</el-descriptions-item>
-        <el-descriptions-item :label="t('common.taskNo')">
-          <span :title="detail.taskId">{{ formatTaskId(detail.taskId) }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item :label="t('common.processName')">{{
-          detail.processName ?? '-'
-        }}</el-descriptions-item>
-        <el-descriptions-item :label="t('common.processKey')">{{
-          detail.processDefinitionKey
-        }}</el-descriptions-item>
-        <el-descriptions-item :label="t('common.formKey')">{{
-          detail.formKey
-        }}</el-descriptions-item>
-        <el-descriptions-item :label="t('common.businessNo')">{{
-          detail.businessKey
-        }}</el-descriptions-item>
-        <el-descriptions-item :label="t('workflow.currentApprover')">
-          {{ detail.assigneeName ?? detail.assignee }}
-        </el-descriptions-item>
-        <el-descriptions-item :label="t('common.initiator')">
-          {{ detail.initiatorName ?? detail.initiatorId }}
-        </el-descriptions-item>
-        <el-descriptions-item :label="t('common.createTime')">{{
-          detail.createTime
-        }}</el-descriptions-item>
-      </el-descriptions>
-    </el-card>
-
-    <!-- 本次提交的表单数据 -->
-    <el-card v-if="detail?.formKey && detail?.businessKey" class="detail-card">
-      <template #header
-        ><span>{{ t('workflow.formDataThisSubmission') }}</span></template
-      >
-      <div v-loading="formRecordLoading">
-        <el-alert
-          v-if="!formRecordLoading && !formRecord"
-          :title="t('workflow.formRecordUnavailable')"
-          type="warning"
-          :closable="false"
-          show-icon
-        />
-        <el-descriptions v-else-if="formFieldRows.length > 0" :column="2" border>
-          <el-descriptions-item v-for="row in formFieldRows" :key="row.key" :label="row.label">
-            {{ row.value }}
-          </el-descriptions-item>
-        </el-descriptions>
-        <el-descriptions v-else-if="formRecord" :column="2" border>
-          <el-descriptions-item :label="t('common.description')">{{
-            t('workflow.noDisplayableFields')
-          }}</el-descriptions-item>
-        </el-descriptions>
-      </div>
-    </el-card>
-
-    <!-- 流程变量 -->
-    <el-card v-if="detail && Object.keys(detail.processVariables).length > 0" class="detail-card">
-      <template #header
-        ><span>{{ t('common.processVariable') }}</span></template
-      >
-      <el-table :data="formatVariables(detail.processVariables)" stripe>
-        <el-table-column prop="0" :label="t('workflow.variableName')" min-width="180" />
-        <el-table-column prop="1" :label="t('workflow.variableValue')" min-width="280" />
-      </el-table>
-    </el-card>
-
-    <!-- 审批历史 -->
-    <el-card v-if="detail" class="detail-card">
-      <template #header
-        ><span>{{ t('workflow.approvalHistory') }}</span></template
-      >
-      <el-alert
-        v-if="detail.approvalHistory.length === 0"
-        :title="t('workflow.noApprovalHistory')"
-        type="info"
-        :closable="false"
-        show-icon
-      />
-      <el-table v-else :data="detail.approvalHistory" stripe>
-        <el-table-column :label="t('common.taskNo')" min-width="140">
-          <template #default="{ row }">
-            <span :title="row.taskId">{{ formatTaskId(row.taskId) }}</span>
+    <!-- 主区双栏：左=数据表单/流程变量；右=流程状态+审批操作（节点 03） -->
+    <div v-if="detail" class="task-main">
+      <div class="task-main__left">
+        <!-- 本次提交的表单数据 -->
+        <el-card v-if="detail.formKey && detail.businessKey" class="detail-card">
+          <template #header>
+            <span>{{ t('taskDetailUi.dataForm') }}</span>
           </template>
-        </el-table-column>
-        <el-table-column prop="taskName" :label="t('common.taskName')" min-width="120" />
-        <el-table-column :label="t('workflow.approver')" min-width="120">
+          <div v-loading="formRecordLoading">
+            <el-alert
+              v-if="!formRecordLoading && !formRecord"
+              :title="t('workflow.formRecordUnavailable')"
+              type="warning"
+              :closable="false"
+              show-icon
+            />
+            <div v-else-if="formFieldRows.length > 0" class="data-rows">
+              <div v-for="row in formFieldRows" :key="row.key" class="data-row">
+                <span class="data-row__label">{{ row.label }}</span>
+                <span class="data-row__value">{{ row.value }}</span>
+              </div>
+            </div>
+            <el-descriptions v-else-if="formRecord" :column="1" border>
+              <el-descriptions-item :label="t('common.description')">{{
+                t('workflow.noDisplayableFields')
+              }}</el-descriptions-item>
+            </el-descriptions>
+          </div>
+        </el-card>
+
+        <!-- 流程变量 -->
+        <el-card v-if="Object.keys(detail.processVariables).length > 0" class="detail-card">
+          <template #header>
+            <span>{{ t('common.processVariable') }}</span>
+          </template>
+          <el-table :data="formatVariables(detail.processVariables)" stripe>
+            <el-table-column prop="0" :label="t('workflow.variableName')" min-width="180" />
+            <el-table-column prop="1" :label="t('workflow.variableValue')" min-width="280" />
+          </el-table>
+        </el-card>
+      </div>
+
+      <div class="task-main__right">
+        <!-- 流程状态卡：仅渲染真实可得的已完成/当前节点 -->
+        <el-card class="detail-card">
+          <template #header>
+            <div class="card-head">
+              <span>{{ t('taskDetailUi.flowStatus') }}</span>
+              <span class="card-head__hint">{{ t('taskDetailUi.byFlowPath') }}</span>
+            </div>
+          </template>
+          <div class="flow-status">
+            <div
+              v-for="entry in flowStatus"
+              :key="entry.key + entry.state"
+              class="flow-node"
+              :class="{ 'flow-node--current': entry.state === 'current' }"
+            >
+              <div class="flow-node__head">
+                <span class="flow-node__name">{{ entry.name }}</span>
+                <el-tag
+                  size="small"
+                  :type="
+                    entry.state === 'current' ? 'primary' : getApprovalResultType(entry.result)
+                  "
+                >
+                  {{
+                    entry.state === 'current'
+                      ? t('taskDetailUi.current')
+                      : getApprovalResultLabel(entry.result)
+                  }}
+                </el-tag>
+              </div>
+              <p class="flow-node__meta">{{ entry.who }} · {{ entry.when }}</p>
+            </div>
+            <el-alert
+              v-if="flowStatus.length === 0"
+              :title="t('workflow.noApprovalHistory')"
+              type="info"
+              :closable="false"
+              show-icon
+            />
+          </div>
+        </el-card>
+
+        <!-- 操作区（原操作栏移入右栏，审批逻辑不变） -->
+        <el-card class="detail-card">
+          <template #header>
+            <span>{{ t('workflow.taskDetail') }}</span>
+          </template>
+          <div class="detail-actions">
+            <div v-if="returnTargets.length > 0" class="return-config">
+              <span>{{ t('workflow.returnToLabel') }}</span>
+              <el-select
+                v-model="returnTargetNodeId"
+                :placeholder="t('workflow.selectApprovedNode')"
+                style="width: 180px"
+              >
+                <el-option
+                  v-for="target in returnTargets"
+                  :key="target.nodeKey"
+                  :label="target.taskName"
+                  :value="target.nodeKey"
+                />
+              </el-select>
+              <el-button
+                type="warning"
+                :loading="acting === 'return'"
+                :disabled="acting !== null"
+                @click="handleReturn"
+                >{{ t('common.returnBack') }}</el-button
+              >
+            </div>
+            <div v-if="opinionFields.length > 0" class="opinion-form">
+              <div class="opinion-form__title">
+                审批意见{{
+                  detail.opinionForm?.formId
+                    ? t('workflow.opinionFormSuffix', {
+                        formId: detail.opinionForm.formId,
+                        version: detail.opinionForm.version,
+                      })
+                    : ''
+                }}
+              </div>
+              <div v-for="field in visibleOpinionFields" :key="field.key" class="opinion-field">
+                <template v-if="field.type === 'NOTE'">
+                  <span class="opinion-note">{{ field.label }}</span>
+                </template>
+                <template v-else>
+                  <label :for="`opinion-${field.key}`">
+                    {{ field.label || field.key
+                    }}<span v-if="field.required" class="required-mark"> *</span>
+                  </label>
+                  <textarea
+                    v-if="field.type === 'TEXTAREA'"
+                    :id="`opinion-${field.key}`"
+                    :value="opinionTextValue(field)"
+                    :maxlength="field.maxLength"
+                    rows="3"
+                    @input="
+                      setOpinionFieldValue(field.key, ($event.target as HTMLTextAreaElement).value)
+                    "
+                  />
+                  <select
+                    v-else-if="field.type === 'SELECT'"
+                    :id="`opinion-${field.key}`"
+                    :value="String(opinionFieldValue(field) ?? '')"
+                    @change="
+                      setOpinionFieldValue(field.key, ($event.target as HTMLSelectElement).value)
+                    "
+                  >
+                    <option value="">{{ t('common.pleaseSelect') }}</option>
+                    <option v-for="option in field.options ?? []" :key="option" :value="option">
+                      {{ option }}
+                    </option>
+                  </select>
+                  <div v-else-if="field.type === 'RADIO'" class="opinion-options">
+                    <label
+                      v-for="option in field.options ?? []"
+                      :key="option"
+                      class="opinion-option"
+                    >
+                      <input
+                        :name="`opinion-${field.key}`"
+                        type="radio"
+                        :value="option"
+                        :checked="opinionFieldValue(field) === option"
+                        @change="setOpinionFieldValue(field.key, option)"
+                      />
+                      {{ option }}
+                    </label>
+                  </div>
+                  <input
+                    v-else
+                    :id="`opinion-${field.key}`"
+                    :type="opinionInputType(field)"
+                    :value="opinionInputValue(field)"
+                    :min="field.min"
+                    :max="field.max"
+                    :maxlength="field.maxLength"
+                    @input="
+                      setOpinionFieldValue(
+                        field.key,
+                        field.type === 'NUMBER'
+                          ? Number(($event.target as HTMLInputElement).value)
+                          : ($event.target as HTMLInputElement).value,
+                      )
+                    "
+                  />
+                </template>
+              </div>
+            </div>
+            <textarea
+              v-if="opinionFields.length === 0"
+              v-model="opinionComment"
+              class="opinion-input"
+              rows="3"
+              :placeholder="t('workflow.remarkOptional')"
+            />
+            <div class="detail-actions__row">
+              <el-button
+                type="primary"
+                :loading="acting === 'approve'"
+                :disabled="acting !== null"
+                @click="handleApprove"
+              >
+                {{ t('common.statusApproved') }}
+              </el-button>
+              <el-button
+                type="danger"
+                :loading="acting === 'reject'"
+                :disabled="acting !== null"
+                @click="handleReject"
+                >{{ t('common.reject') }}</el-button
+              >
+            </div>
+            <div class="detail-actions__row detail-actions__row--lifecycle">
+              <el-button :disabled="acting !== null" @click="openLifecycle('TRANSFER')">
+                {{ t('workflow.transferOwnTask') }}
+              </el-button>
+              <el-button :disabled="acting !== null" @click="openLifecycle('DELEGATE')">
+                {{ t('workflow.delegateAction') }}
+              </el-button>
+              <el-button :disabled="acting !== null" @click="openLifecycle('COMMUNICATE')">
+                {{ t('workflow.consultTask') }}
+              </el-button>
+              <el-button :disabled="acting !== null" @click="openLifecycle('ADD_SIGN')">
+                {{ t('workflow.addSign') }}
+              </el-button>
+              <el-button :disabled="acting !== null" @click="openLifecycle('SUPPLEMENT_SIGN')">
+                {{ t('workflow.supplementSign') }}
+              </el-button>
+            </div>
+          </div>
+        </el-card>
+      </div>
+    </div>
+
+    <!-- 底部 tab（节点 03/10/15-20）：流转记录 / 流程图 / 审批详情列表 -->
+    <el-card v-if="detail" class="detail-card">
+      <el-tabs v-model="activeTab" @tab-change="onTabChange">
+        <!-- 流转记录：原审批历史表格，逻辑不变 -->
+        <el-tab-pane :label="t('taskDetailUi.tabRecords')" name="records">
+          <el-alert
+            v-if="detail.approvalHistory.length === 0"
+            :title="t('workflow.noApprovalHistory')"
+            type="info"
+            :closable="false"
+            show-icon
+          />
+          <el-table v-else :data="detail.approvalHistory" stripe>
+            <el-table-column :label="t('common.taskNo')" min-width="140">
+              <template #default="{ row }">
+                <span :title="row.taskId">{{ formatTaskId(row.taskId) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="taskName" :label="t('common.taskName')" min-width="120" />
+            <el-table-column :label="t('workflow.approver')" min-width="120">
+              <template #default="{ row }">
+                {{ row.assigneeName ?? row.assignee ?? '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('workflow.approvalResult')" min-width="100">
+              <template #default="{ row }">
+                <el-tag :type="getApprovalResultType(row.approvalResult)" size="small">
+                  {{ getApprovalResultLabel(row.approvalResult) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('workflow.actionOpinion')" min-width="180">
+              <template #default="{ row }">
+                {{ row.action ?? '-'
+                }}{{
+                  row.opinionData?.comment
+                    ? t('workflow.opinionCommentSuffix', { comment: row.opinionData.comment })
+                    : ''
+                }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="createTime" :label="t('common.createTime')" min-width="170" />
+            <el-table-column :label="t('workflow.completedAt')" min-width="170">
+              <template #default="{ row }">
+                {{ row.endTime ?? '-' }}
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <!-- 流程图：定义图 + 真实轨迹高亮（节点 10/19），切 tab 懒加载 -->
+        <el-tab-pane :label="t('taskDetailUi.tabGraph')" name="graph">
+          <div v-loading="graphLoading">
+            <el-alert
+              v-if="graphError"
+              :title="graphError"
+              type="warning"
+              :closable="false"
+              show-icon
+            />
+            <ProcessGraphView
+              v-else-if="detailGraph"
+              :graph="detailGraph"
+              :trace="detailTrace"
+              :height="480"
+            />
+          </div>
+        </el-tab-pane>
+
+        <!-- 审批详情列表（节点 20）：按节点分组；会签节点可开聚合记录（16）；
+             每行查看详情打开意见详情弹窗（15/17/18） -->
+        <el-tab-pane :label="t('taskDetailUi.tabPeople')" name="people">
+          <div v-for="group in historyGroups" :key="group.nodeKey" class="people-group">
+            <div class="people-group__head">
+              <span class="people-group__name">{{ group.taskName }}</span>
+              <el-button
+                v-if="group.isSign"
+                size="small"
+                link
+                type="primary"
+                @click="openSignGroup(group.nodeKey)"
+              >
+                {{ t('taskDetailUi.signGroupTitle') }}
+              </el-button>
+            </div>
+            <el-table :data="group.rows" size="small">
+              <el-table-column :label="t('workflow.approver')" min-width="120">
+                <template #default="{ row }">
+                  {{ row.assigneeName ?? row.assignee ?? '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('common.status')" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="getApprovalResultType(row.approvalResult)" size="small">
+                    {{ getApprovalResultLabel(row.approvalResult) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('workflow.actionOpinion')" min-width="200">
+                <template #default="{ row }">
+                  {{ row.opinionData?.comment ?? row.action ?? '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('common.actions')" width="110" fixed="right">
+                <template #default="{ row }">
+                  <el-button
+                    v-if="row.approvalResult != null"
+                    size="small"
+                    type="primary"
+                    link
+                    @click="openOpinionDetailRow(row)"
+                  >
+                    {{ t('taskDetailUi.viewDetail') }}
+                  </el-button>
+                  <span v-else class="people-group__pending">{{
+                    t('taskDetailUi.viewDetailPending')
+                  }}</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+    </el-card>
+
+    <!-- 意见详情弹窗（节点 15/17/18 状态变体）：仅真实可得字段；无快照版本数据时不虚构 -->
+    <el-dialog
+      v-model="opinionDetailVisible"
+      :title="t('taskDetailUi.opinionDetailTitle')"
+      width="560px"
+    >
+      <template v-if="opinionDetailRow">
+        <p class="opinion-detail__meta">
+          {{ opinionDetailRow.taskName }} ·
+          {{ opinionDetailRow.assigneeName ?? opinionDetailRow.assignee ?? '-' }} ·
+          {{ opinionDetailRow.endTime ?? opinionDetailRow.createTime }}
+          <template v-if="opinionDetailRow.opinionFormVersion">
+            · {{ t('taskDetailUi.formVersionLabel') }} v{{ opinionDetailRow.opinionFormVersion }}
+          </template>
+        </p>
+        <div class="opinion-detail__comment">
+          {{ opinionDetailRow.opinionData?.comment ?? t('taskDetailUi.opinionEmpty') }}
+        </div>
+        <div v-if="opinionDetailEntries.length > 0" class="opinion-detail__fields">
+          <div v-for="entry in opinionDetailEntries" :key="entry.key" class="data-row">
+            <span class="data-row__label">{{ entry.key }}</span>
+            <span class="data-row__value">{{ entry.value }}</span>
+          </div>
+        </div>
+      </template>
+      <template #footer>
+        <el-button type="primary" @click="opinionDetailVisible = false">{{
+          t('common.close')
+        }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 会签聚合弹窗（节点 16）：统计与逐人记录均来自当前实例真实历史 -->
+    <el-dialog v-model="signGroupVisible" :title="t('taskDetailUi.signGroupTitle')" width="720px">
+      <p class="sign-group__meta">
+        {{ t('taskDetailUi.nodeLabel') }} {{ signGroupKey }} · {{ signGroupStats.total }}
+        {{ t('taskDetailUi.signParticipants') }} {{ signGroupStats.agreed }}
+        {{ t('taskDetailUi.signAgreed') }} {{ signGroupStats.pending }}
+        {{ t('taskDetailUi.signPending') }}
+      </p>
+      <el-table :data="signGroupRows" size="small" stripe>
+        <el-table-column :label="t('workflow.approver')" min-width="110">
           <template #default="{ row }">
             {{ row.assigneeName ?? row.assignee ?? '-' }}
           </template>
         </el-table-column>
-        <el-table-column :label="t('workflow.approvalResult')" min-width="100">
+        <el-table-column :label="t('common.status')" width="90">
           <template #default="{ row }">
             <el-tag :type="getApprovalResultType(row.approvalResult)" size="small">
               {{ getApprovalResultLabel(row.approvalResult) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('workflow.actionOpinion')" min-width="180">
-          <template #default="{ row }">
-            {{ row.action ?? '-'
-            }}{{
-              row.opinionData?.comment
-                ? t('workflow.opinionCommentSuffix', { comment: row.opinionData.comment })
-                : ''
-            }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="createTime" :label="t('common.createTime')" min-width="170" />
-        <el-table-column :label="t('workflow.completedAt')" min-width="170">
+        <el-table-column prop="createTime" :label="t('workflow.arrivedAt')" min-width="150" />
+        <el-table-column :label="t('workflow.handledAt')" min-width="150">
           <template #default="{ row }">
             {{ row.endTime ?? '-' }}
           </template>
         </el-table-column>
-      </el-table>
-    </el-card>
-
-    <!-- 操作栏 -->
-    <div v-if="detail" class="detail-actions">
-      <div v-if="returnTargets.length > 0" class="return-config">
-        <span>{{ t('workflow.returnToLabel') }}</span>
-        <el-select
-          v-model="returnTargetNodeId"
-          :placeholder="t('workflow.selectApprovedNode')"
-          style="width: 180px"
-        >
-          <el-option
-            v-for="target in returnTargets"
-            :key="target.nodeKey"
-            :label="target.taskName"
-            :value="target.nodeKey"
-          />
-        </el-select>
-        <el-button
-          type="warning"
-          size="large"
-          :loading="acting === 'return'"
-          :disabled="acting !== null"
-          @click="handleReturn"
-          >{{ t('common.returnBack') }}</el-button
-        >
-      </div>
-      <div v-if="opinionFields.length > 0" class="opinion-form">
-        <div class="opinion-form__title">
-          审批意见{{
-            detail.opinionForm?.formId
-              ? t('workflow.opinionFormSuffix', {
-                  formId: detail.opinionForm.formId,
-                  version: detail.opinionForm.version,
-                })
-              : ''
-          }}
-        </div>
-        <div v-for="field in visibleOpinionFields" :key="field.key" class="opinion-field">
-          <template v-if="field.type === 'NOTE'">
-            <span class="opinion-note">{{ field.label }}</span>
-          </template>
-          <template v-else>
-            <label :for="`opinion-${field.key}`">
-              {{ field.label || field.key
-              }}<span v-if="field.required" class="required-mark"> *</span>
-            </label>
-            <textarea
-              v-if="field.type === 'TEXTAREA'"
-              :id="`opinion-${field.key}`"
-              :value="opinionTextValue(field)"
-              :maxlength="field.maxLength"
-              rows="3"
-              @input="setOpinionFieldValue(field.key, ($event.target as HTMLTextAreaElement).value)"
-            />
-            <select
-              v-else-if="field.type === 'SELECT'"
-              :id="`opinion-${field.key}`"
-              :value="String(opinionFieldValue(field) ?? '')"
-              @change="setOpinionFieldValue(field.key, ($event.target as HTMLSelectElement).value)"
+        <el-table-column :label="t('common.actions')" width="100" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.approvalResult != null"
+              size="small"
+              type="primary"
+              link
+              @click="openOpinionDetailRow(row)"
             >
-              <option value="">{{ t('common.pleaseSelect') }}</option>
-              <option v-for="option in field.options ?? []" :key="option" :value="option">
-                {{ option }}
-              </option>
-            </select>
-            <div v-else-if="field.type === 'RADIO'" class="opinion-options">
-              <label v-for="option in field.options ?? []" :key="option" class="opinion-option">
-                <input
-                  :name="`opinion-${field.key}`"
-                  type="radio"
-                  :value="option"
-                  :checked="opinionFieldValue(field) === option"
-                  @change="setOpinionFieldValue(field.key, option)"
-                />
-                {{ option }}
-              </label>
-            </div>
-            <input
-              v-else
-              :id="`opinion-${field.key}`"
-              :type="opinionInputType(field)"
-              :value="opinionInputValue(field)"
-              :min="field.min"
-              :max="field.max"
-              :maxlength="field.maxLength"
-              @input="
-                setOpinionFieldValue(
-                  field.key,
-                  field.type === 'NUMBER'
-                    ? Number(($event.target as HTMLInputElement).value)
-                    : ($event.target as HTMLInputElement).value,
-                )
-              "
-            />
+              {{ t('taskDetailUi.viewDetail') }}
+            </el-button>
           </template>
-        </div>
-      </div>
-      <textarea
-        v-if="opinionFields.length === 0"
-        v-model="opinionComment"
-        class="opinion-input"
-        rows="3"
-        :placeholder="t('workflow.remarkOptional')"
-      />
-      <el-button
-        type="primary"
-        size="large"
-        :loading="acting === 'approve'"
-        :disabled="acting !== null"
-        @click="handleApprove"
-      >
-        {{ t('common.statusApproved') }}
-      </el-button>
-      <el-button
-        type="danger"
-        size="large"
-        :loading="acting === 'reject'"
-        :disabled="acting !== null"
-        @click="handleReject"
-        >{{ t('common.reject') }}</el-button
-      >
-      <el-divider direction="vertical" />
-      <el-button size="large" :disabled="acting !== null" @click="openLifecycle('TRANSFER')">
-        {{ t('workflow.transferOwnTask') }}
-      </el-button>
-      <el-button size="large" :disabled="acting !== null" @click="openLifecycle('DELEGATE')">
-        {{ t('workflow.delegateAction') }}
-      </el-button>
-      <el-button size="large" :disabled="acting !== null" @click="openLifecycle('COMMUNICATE')">
-        {{ t('workflow.consultTask') }}
-      </el-button>
-      <el-button size="large" :disabled="acting !== null" @click="openLifecycle('ADD_SIGN')">
-        {{ t('workflow.addSign') }}
-      </el-button>
-      <el-button size="large" :disabled="acting !== null" @click="openLifecycle('SUPPLEMENT_SIGN')">
-        {{ t('workflow.supplementSign') }}
-      </el-button>
-    </div>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button type="primary" @click="signGroupVisible = false">{{
+          t('common.close')
+        }}</el-button>
+      </template>
+    </el-dialog>
 
     <!-- I3 生命周期动作弹窗 -->
     <el-dialog
@@ -931,42 +1294,150 @@ onMounted(loadDetail)
 }
 .detail-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
   margin-bottom: 16px;
 }
-.detail-header h2 {
+.detail-header__body {
+  min-width: 0;
+}
+.detail-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.detail-header__title {
   margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--sw-text-primary);
+}
+.detail-header__status {
+  flex: 0 0 auto;
+}
+.detail-header__meta {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+/* 主区双栏（节点 03）：左数据卡 / 右状态+操作 */
+.task-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+.task-main__left,
+.task-main__right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
 .detail-card {
-  margin-bottom: 16px;
+  margin-bottom: 0;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.card-head__hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--sw-text-secondary);
+}
+/* 数据表单行式展示（设计 03：横排 label/value） */
+.data-rows {
+  display: flex;
+  flex-direction: column;
+}
+.data-row {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--sw-border-lighter);
+  font-size: 13px;
+}
+.data-row:last-child {
+  border-bottom: none;
+}
+.data-row__label {
+  color: var(--sw-text-secondary);
+}
+.data-row__value {
+  color: var(--sw-text-primary);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+/* 流程状态卡（真实可得节点） */
+.flow-status {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.flow-node {
+  padding: 12px 14px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
+}
+.flow-node--current {
+  border-color: var(--sw-color-primary);
+  background: var(--sw-color-primary-soft);
+}
+.flow-node__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.flow-node__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+}
+.flow-node__meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
 }
 .detail-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 12px;
-  justify-content: center;
-  padding: 24px 0;
 }
-.return-config {
-  width: 100%;
+.detail-actions__row {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
+.detail-actions__row--lifecycle {
+  border-top: 1px dashed var(--sw-border-lighter);
+  padding-top: 10px;
+}
+.return-config {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--sw-text-regular);
+}
 .opinion-input {
-  width: min(520px, 100%);
+  box-sizing: border-box;
+  width: 100%;
   padding: 8px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 4px;
+  border: 1px solid var(--sw-border-base);
+  border-radius: var(--sw-radius-base);
   resize: vertical;
 }
 .opinion-form {
-  width: min(520px, 100%);
   padding: 12px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 4px;
+  border: 1px solid var(--sw-border-base);
+  border-radius: var(--sw-radius-base);
 }
 .opinion-form__title {
   margin-bottom: 12px;
@@ -984,8 +1455,8 @@ onMounted(loadDetail)
   box-sizing: border-box;
   width: 100%;
   padding: 8px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 4px;
+  border: 1px solid var(--sw-border-base);
+  border-radius: var(--sw-radius-base);
 }
 .opinion-options {
   display: flex;
@@ -1001,6 +1472,59 @@ onMounted(loadDetail)
   color: var(--el-color-danger);
 }
 .opinion-note {
-  color: var(--el-text-color-secondary);
+  color: var(--sw-text-secondary);
+}
+/* 审批详情列表（节点 20）：按节点分组 */
+.people-group {
+  margin-bottom: 18px;
+}
+.people-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-fill-base);
+}
+.people-group__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+}
+.people-group__pending {
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+/* 意见详情弹窗（15/17/18） */
+.opinion-detail__meta {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+.opinion-detail__comment {
+  padding: 14px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-fill-base);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--sw-text-primary);
+  white-space: pre-wrap;
+}
+.opinion-detail__fields {
+  margin-top: 12px;
+}
+.sign-group__meta {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+/* 窄屏双栏退化为单列（方向 §4.5：不留裁切） */
+@media (max-width: 991px) {
+  .task-main {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

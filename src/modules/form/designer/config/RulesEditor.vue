@@ -150,7 +150,7 @@ function needsValue(op: VisibilityCondition['op']): boolean {
 .rules-editor__title {
   font-size: var(--sw-font-emphasis, 14px);
   font-weight: 600;
-  color: var(--sw-color-primary, #7e306b);
+  color: var(--sw-color-primary);
 }
 .rules-editor__row {
   display: flex;

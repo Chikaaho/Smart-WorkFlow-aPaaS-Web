@@ -344,7 +344,7 @@ onMounted(() => {
 }
 .category-overview__title {
   margin: 0 0 8px;
-  color: var(--sw-color-primary, #7e306b);
+  color: var(--sw-color-primary);
   font-size: 13px;
   font-weight: 600;
 }

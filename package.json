@@ -13,6 +13,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:visual": "playwright test",
+    "test:visual:update": "playwright test --update-snapshots",
     "gen:api-types": "node scripts/gen-api-types.mjs"
   },
   "dependencies": {
@@ -34,6 +36,7 @@
     "@commitlint/cli": "^21.1.0",
     "@commitlint/config-conventional": "^21.1.0",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^24.13.2",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vitest/coverage-v8": "^4.1.9",
