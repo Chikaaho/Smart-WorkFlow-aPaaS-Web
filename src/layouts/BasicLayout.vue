@@ -58,27 +58,43 @@ const showAside = computed(() => route.path !== '/portal')
               }}</span>
             </div>
           </div>
-          <button
-            type="button"
-            class="basic-layout__collapse-btn"
-            :aria-label="t('nav.toggleSidebar')"
-            @click="appStore.toggleSidebar()"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              :style="collapsed ? 'transform: scaleX(-1)' : ''"
-              aria-hidden="true"
+          <div class="basic-layout__aside-controls">
+            <router-link to="/workspace" class="basic-layout__home-link" aria-label="home">
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+              >
+                <path d="M3 10.5 12 3l9 7.5" />
+                <path d="M5 9.5V21h14V9.5" />
+              </svg>
+            </router-link>
+            <button
+              type="button"
+              class="basic-layout__collapse-btn"
+              :aria-label="t('nav.toggleSidebar')"
+              @click="appStore.toggleSidebar()"
             >
-              <path
-                d="M11 7l-5 5 5 5M18 7l-5 5 5 5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                :style="collapsed ? 'transform: scaleX(-1)' : ''"
+                aria-hidden="true"
+              >
+                <path
+                  d="M11 7l-5 5 5 5M18 7l-5 5 5 5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </aside>
       <main class="basic-layout__content">
@@ -150,6 +166,26 @@ const showAside = computed(() => route.path !== '/portal')
   gap: 8px;
   padding: 12px;
   border-top: 1px solid var(--sw-nav-border);
+}
+/* 设计（节点01）：空间卡与底部控制行分两行，控制行贴底 */
+.basic-layout__aside-foot {
+  flex-direction: column;
+  align-items: stretch;
+  padding-bottom: 20px;
+}
+.basic-layout__aside-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 0 4px;
+}
+.basic-layout__home-link {
+  display: inline-flex;
+  color: var(--sw-nav-text-secondary);
+}
+.basic-layout__home-link:hover {
+  color: var(--sw-nav-text);
 }
 .basic-layout__area-card {
   display: flex;

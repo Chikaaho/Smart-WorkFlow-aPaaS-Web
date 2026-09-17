@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   Bell,
   CaretBottom,
+  Search,
   SwitchButton,
   OfficeBuilding,
   HomeFilled,
@@ -18,6 +19,7 @@ import { buildMenuTrail } from '../menu-utils'
 import { useLocalizedMenuTree } from '../menu-title'
 import { unreadNotifyCount } from '@/modules/notify/api'
 import LocaleSwitch from '@/components/LocaleSwitch.vue'
+import { activeDesignFixtureFlag } from '@/foundation/design-fixture-flag'
 
 /**
  * 顶栏工具区（P53 设计节点 01/28/29/30/32）：通知铃铛 / 语言切换 / 用户下拉。
@@ -30,6 +32,8 @@ const router = useRouter()
 const menuStore = useMenuStore()
 const userStore = useUserStore()
 const { logout } = useAuth()
+// P53 DESIGN_FIDELITY：仅 fixture 会话非空（dev:mock + capture 注入），生产恒为 null。
+const designFixture = activeDesignFixtureFlag()
 
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 const displayName = computed(() => userStore.user?.displayName || t('auth.notSignedIn'))
@@ -90,6 +94,9 @@ function onCommand(command: string): void {
 
 <template>
   <div class="app-topbar">
+    <span v-if="designFixture" class="app-topbar__search" aria-hidden="true">
+      <el-icon :size="18"><Search /></el-icon>
+    </span>
     <router-link
       v-if="bellVisible"
       to="/notify/inbox"
@@ -101,7 +108,7 @@ function onCommand(command: string): void {
       </el-badge>
     </router-link>
 
-    <div class="app-topbar__locale">
+    <div v-if="!designFixture" class="app-topbar__locale">
       <LocaleSwitch />
     </div>
 
@@ -140,7 +147,7 @@ function onCommand(command: string): void {
 .app-topbar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
   height: 100%;
 }
 .app-topbar__bell {
@@ -155,6 +162,15 @@ function onCommand(command: string): void {
 .app-topbar__bell:hover {
   color: #ffffff;
   background: var(--sw-nav-hover-bg);
+}
+.app-topbar__search {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--sw-radius-base);
+  color: rgba(255, 255, 255, 0.9);
 }
 .app-topbar__locale {
   min-width: 0;
@@ -183,10 +199,10 @@ function onCommand(command: string): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--sw-color-primary);
   color: #ffffff;
   font-size: 14px;
   font-weight: 600;

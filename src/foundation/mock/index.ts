@@ -21,6 +21,7 @@
 
 import type { ApiResponse } from '@/contracts/common'
 import { mockRegistrations } from './handlers'
+import { activeDesignFixtureId, lookupDesignFixture } from './design-fixtures'
 
 // ─── 类型 ───────────────────────────────────────────────
 
@@ -95,6 +96,16 @@ export async function dispatchMock<T>(
     stringParams[k] = String(v)
   }
 
+  // P53 设计还原测试专用 fixture：sessionStorage 激活（capture 脚本写入），
+  // 命中同 KEY 覆盖时整体替换响应；无激活 id 或未命中时走原 handler。
+  const fixtureId = activeDesignFixtureId()
+  if (fixtureId) {
+    const override = lookupDesignFixture(fixtureId, match.key)
+    if (override) {
+      return override(match.params, stringParams, body) as ApiResponse<T> | Promise<ApiResponse<T>>
+    }
+  }
+
   return match.handler(match.params, stringParams, body) as ApiResponse<T> | Promise<ApiResponse<T>>
 }
 
@@ -113,6 +124,7 @@ function tokenize(p: string): string[] {
 }
 
 interface MatchResult {
+  key: string
   handler: MockHandler
   params: Record<string, string>
 }
@@ -145,7 +157,7 @@ function tryMatch(method: string, pathname: string): MatchResult | null {
     }
 
     if (match) {
-      return { handler, params }
+      return { key, handler, params }
     }
   }
 

@@ -26,9 +26,13 @@ import {
 import { queryTodoTasks, myInstances, myDrafts, myProcessed } from '@/modules/workflow/api'
 import type { WorkspaceComponent, WorkspaceComponentKey } from '@/contracts/catalog'
 import { ApiError } from '@/foundation/request'
+import { activeDesignFixtureFlag } from '@/foundation/design-fixture-flag'
+import WorkspaceDesignFixture from './design-fixture/WorkspaceDesignFixture.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
+// P53 DESIGN_FIDELITY：fixture 会话渲染设计节点01视觉副本；生产恒为 null 走真实工作台。
+const designFixture = activeDesignFixtureFlag()
 
 // ─── 布局状态 ───
 const components = ref<WorkspaceComponent[]>([])
@@ -312,7 +316,8 @@ onMounted(loadLayout)
 </script>
 
 <template>
-  <div v-loading="loading" class="workspace">
+  <WorkspaceDesignFixture v-if="designFixture" />
+  <div v-else v-loading="loading" class="workspace">
     <header class="workspace__hero">
       <div>
         <h2 class="workspace__greeting">
@@ -496,7 +501,7 @@ onMounted(loadLayout)
 <style scoped>
 .workspace {
   max-width: 1152px;
-  padding: 24px 32px 32px;
+  padding: 28px 32px 32px;
   margin: 0 auto;
 }
 .workspace__hero {

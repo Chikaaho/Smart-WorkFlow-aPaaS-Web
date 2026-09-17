@@ -8,6 +8,7 @@ import { visibleMenuForArea, toFullPath, buildMenuTrail } from './menu-utils'
 import { useLocalizedMenuTree } from './menu-title'
 import { MenuType } from '@/contracts/menu'
 import type { MenuNode } from '@/contracts/menu'
+import { activeDesignFixtureFlag } from '@/foundation/design-fixture-flag'
 
 /**
  * 顶部主导航（P53 设计节点 01/04）。
@@ -31,6 +32,8 @@ const { t } = useI18n()
 
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 const area = computed(() => resolveArea(route.path))
+// P53 DESIGN_FIDELITY：fixture 会话按设计节点固定主导航条目；生产恒为 null 走真实菜单。
+const designFixture = activeDesignFixtureFlag()
 
 function collectPaths(nodes: MenuNode[], into: Set<string>): void {
   for (const node of nodes) {
@@ -40,6 +43,41 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
 }
 
 const items = computed<MainNavItem[]>(() => {
+  if (designFixture && area.value === 'portal') {
+    return [
+      {
+        key: 'workspace',
+        label: t('common.workspace'),
+        to: '/workspace',
+        active: route.path === '/workspace',
+      },
+      {
+        key: 'process-catalog',
+        label: t('workflow.processCenter'),
+        to: '/workflow/catalog',
+        active: route.path.startsWith('/workflow/catalog'),
+      },
+      {
+        key: 'portal',
+        label: t('portal.navLabel'),
+        to: '/portal',
+        active: route.path === '/portal',
+      },
+      { key: 'design-apps', label: '应用中心', to: '/portal', active: false },
+      {
+        key: 'design-data',
+        label: '数据中心',
+        to: '/workflow/my-instances',
+        active: route.path === '/workflow/my-instances',
+      },
+      {
+        key: 'design-assistant',
+        label: '智能助手',
+        to: '/agent',
+        active: route.path.startsWith('/agent'),
+      },
+    ]
+  }
   const visible = visibleMenuForArea(localizedMenu.value, area.value)
   if (area.value === 'portal') {
     const paths = new Set<string>()
@@ -156,9 +194,9 @@ const items = computed<MainNavItem[]>(() => {
 .app-main-nav__item.is-active::after {
   content: '';
   position: absolute;
-  left: calc(50% - 24px);
+  left: 0;
   bottom: 0;
-  width: 48px;
+  width: 100%;
   height: 3px;
   background: var(--sw-nav-topbar-active-indicator);
 }
