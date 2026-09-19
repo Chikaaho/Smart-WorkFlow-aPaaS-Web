@@ -874,11 +874,13 @@ export default {
     errFormMissingOrUnpublished: 'The form does not exist or is not published',
     errFieldUnknown: 'Field is unknown',
     errNotFilterable: 'This field cannot be filtered',
-    errOperatorTypeMismatch: 'The operator does not match the field type',
-    errOperatorUnsupported: 'Unsupported operator',
+    errOperatorTypeMismatch: 'The filter does not match the field type',
+    errOperatorUnsupported:
+      'That filter is not supported yet. Please adjust the filter and try again.',
     errRecordReferenced: 'The record is referenced by another form and cannot be deleted',
     errRecordNotFound: 'The record does not exist or was deleted',
-    errFieldTypeUnknown: 'Unknown field type',
+    errFieldTypeUnknown:
+      'This field uses an unsupported type. Please choose another type and try again.',
     errFieldTypeNotOpen: 'This field type is not available yet. Choose another type and try again.',
     errFieldAttributeMissing:
       'The field is missing required properties. Complete them in the designer and publish again.',
@@ -895,7 +897,8 @@ export default {
     errFormUnpublished: 'This form is not published; data cannot be submitted',
     errFieldNameInvalid: 'Invalid field name',
     errFieldNameDuplicate: 'Duplicate field name',
-    errDynamicTableExists: 'The dynamic wide table already exists',
+    errDynamicTableExists:
+      'The data table for this form already exists. Please refresh and try again.',
     errFormPublishFailed: 'Could not publish the form',
     errFormConfigNotFound: 'Form configuration not found',
     errFormVersionNotFound: 'The form version snapshot does not exist',
