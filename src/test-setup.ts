@@ -11,3 +11,13 @@ config.global.plugins = [...(config.global.plugins ?? []), i18n]
 
 // 用例默认语言固定为 zh-CN，保证断言稳定（语言切换用例自行 setLocale）
 setLocale('zh-CN')
+
+// jsdom 无 ResizeObserver：流程图/画布组件挂载时测量容器尺寸，测试环境提供空实现
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver
+}

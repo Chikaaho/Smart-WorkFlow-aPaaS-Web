@@ -112,6 +112,12 @@ function remove(id: string) {
         :data-field-name="item.field.name"
         @click="select(item.id)"
       >
+        <!-- 选中态：设计稿为右上角档位徽标；拖拽/删除条仅在 hover 悬浮态出现 -->
+        <span
+          v-if="item.id === selectedId && !readonly"
+          class="field-shell__span-badge"
+          >{{ t('form.spanBadge', { n: Math.round(getFormFieldColSpan(item.field) / 2) }) }}</span
+        >
         <div class="field-shell__bar">
           <span class="field-shell__handle" :title="t('form.dragToSort')">
             <el-icon><Rank /></el-icon>
@@ -171,7 +177,7 @@ function remove(id: string) {
   display: grid;
   grid-template-columns: repeat(24, minmax(0, 1fr));
   grid-auto-flow: row;
-  row-gap: var(--sw-space-12);
+  row-gap: 9px;
   min-height: 120px;
   max-width: 920px;
   margin: 0 auto;
@@ -179,37 +185,59 @@ function remove(id: string) {
 
 .field-shell {
   position: relative;
-  padding: var(--sw-space-8) var(--sw-space-16) var(--sw-space-12);
+  padding: 8px 11px 9px;
+  /* P53 设计（节点07）：字段格白底浅框行式，选中/hover 强化 */
   background: #fff;
-  border: 1px solid var(--sw-border-base);
+  border: 1px solid #e3e9f4;
   border-radius: var(--sw-radius-card);
-  box-shadow: var(--sw-shadow-card);
+  box-shadow: none;
   cursor: pointer;
   min-width: 0;
+  min-height: 80px;
+  box-sizing: border-box;
   transition: border-color 0.15s;
 }
 
 .field-shell:hover {
-  border-color: var(--sw-color-primary-light-1, var(--sw-color-primary));
+  border-color: #dde3ef;
 }
 
 .field-shell--active {
+  background: #ffffff;
   border-color: var(--sw-color-primary);
   box-shadow: 0 0 0 2px var(--el-color-primary-light-9);
 }
 
 .field-shell__bar {
+  /* 设计07：拖拽条不占布局空间（绝对定位），hover 时悬浮于字段格上 */
   display: flex;
+  position: absolute;
+  top: 4px;
+  right: 11px;
+  left: 11px;
   align-items: center;
   gap: var(--sw-space-8);
   height: 24px;
+  
   opacity: 0;
   transition: opacity 0.15s;
 }
 
-.field-shell:hover .field-shell__bar,
-.field-shell--active .field-shell__bar {
+.field-shell:hover .field-shell__bar {
   opacity: 1;
+}
+
+/* 选中态档位徽标（设计 07：右上角 6 / 12 档） */
+.field-shell__span-badge {
+  position: absolute;
+  top: -11px;
+  right: 12px;
+  z-index: 2;
+  padding: 1px 10px;
+  font-size: 12px;
+  color: var(--sw-color-primary);
+  background: #f0eaff;
+  border-radius: 9px;
 }
 
 .field-shell__handle {
@@ -258,6 +286,41 @@ function remove(id: string) {
 
 .field-shell__control {
   min-width: 0;
+  /* 设计07：控件贴字段格缘（输入文本 pad 12 与设计同位），标签补回缩进 */
+  margin: 0 1px 0 -11px;
+}
+
+.field-shell__control :deep(.el-form-item__label) {
+  margin-left: 11px;
+}
+
+.field-shell__control :deep(.el-input__inner) {
+  padding: 0;
+  text-indent: -12px;
+  line-height: 17px;
+}
+
+.field-shell__control :deep(.el-select__wrapper) {
+  padding-left: 0;
+  text-indent: -12px;
+}
+
+.field-shell__control :deep(.el-textarea__inner) {
+  padding-left: 0;
+  text-indent: -11px;
+  margin-left: 11px;
+}
+
+.field-shell__control :deep(.el-date-editor .el-input__prefix) {
+  display: none;
+}
+
+.field-shell__control :deep(.el-date-editor .el-input__wrapper) {
+  padding: 0 11px 0 0;
+}
+
+.field-shell__control :deep(.el-date-editor .el-input__wrapper) {
+  padding: 0 11px 0 11px;
 }
 
 .field-shell.sortable-ghost {

@@ -58,7 +58,12 @@ onMounted(() => {
       return () =>
         h(formCreate, {
           rule: rules.value,
-          option: { submitBtn: false, resetBtn: false },
+          // P53 节点07：标签在控件上方（设计稿画布行式布局），宽度交由外层栅格控制
+          option: {
+            submitBtn: false,
+            resetBtn: false,
+            form: { labelPosition: 'top', labelWidth: 'auto' },
+          },
         })
     },
   })
@@ -87,5 +92,15 @@ onBeforeUnmount(() => {
 .fc-host--design {
   pointer-events: none;
   user-select: none;
+}
+
+/* 设计（节点07）：必填星号在标签文字后、深色（EP 默认为前置红色）。 */
+.fc-host--design :deep(.el-form-item.is-required .el-form-item__label::before) {
+  display: none;
+}
+.fc-host--design :deep(.el-form-item.is-required .el-form-item__label::after) {
+  margin-left: 4px;
+  content: '*';
+  color: #344164;
 }
 </style>

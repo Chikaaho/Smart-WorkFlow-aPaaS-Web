@@ -72,6 +72,8 @@ interface BaseField {
   label?: string
   required?: boolean
   length?: number
+  /** 占位提示（P53）：填报态空值时展示，画布/预览/渲染三态同源。 */
+  placeholder?: string
   /** 24 列网格中的横向占用列数，合法值为 1—24。 */
   colSpan?: number
   /**
@@ -211,6 +213,8 @@ export type FormSchemaField =
 
 export interface FormSchema {
   title: string
+  /** 表单描述（P53）：设计器画布副标题展示；纯展示语义，不参与提交载荷。 */
+  description?: string
   fields: FormSchemaField[]
   /** 定义 schema 版本号,后端下发,前端承载但不消费。 */
   schemaVersion?: number

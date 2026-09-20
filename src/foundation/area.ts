@@ -100,7 +100,8 @@ export function filterMenuByArea(nodes: MenuNode[], area: Area, prefix = ''): Me
       continue
     }
     const nodeAreaValue = nodeArea(node, prefix)
-    if (nodeAreaValue === area) {
+    const projectedArea = (node as MenuNode & { topbarArea?: Area }).topbarArea
+    if ((projectedArea && node.topbar != null) ? projectedArea === area : nodeAreaValue === area) {
       result.push(node)
     }
   }

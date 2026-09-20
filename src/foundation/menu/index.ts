@@ -18,6 +18,8 @@ interface MenuNodeDTO {
   menuType: number
   permission?: string
   hidden?: boolean
+  topbar?: number
+  topbarArea?: 'portal' | 'admin'
   children?: MenuNodeDTO[]
 }
 
@@ -36,6 +38,8 @@ function mapMenuNode(dto: MenuNodeDTO): MenuNode {
     menuType: dto.menuType as MenuType,
     permission: dto.permission,
     hidden: dto.hidden,
+    topbar: dto.topbar,
+    topbarArea: dto.topbarArea,
     children: dto.children?.map(mapMenuNode),
   }
 }

@@ -13,6 +13,7 @@ defineEmits<{ 'update:modelValue': [value: unknown] }>()
   <el-input
     :size="subField ? 'small' : undefined"
     :model-value="String(modelValue ?? '')"
+    :placeholder="(field as { placeholder?: string }).placeholder"
     :readonly="readonly"
     @update:model-value="$emit('update:modelValue', $event)"
   />

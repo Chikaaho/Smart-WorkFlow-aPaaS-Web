@@ -34,6 +34,7 @@ interface RawSubFieldDef {
   label?: string
   required?: boolean
   length?: number
+  placeholder?: string
   dictType?: string
   renderAs?: string
   targetFormId?: string
@@ -56,6 +57,7 @@ interface RawFieldDef extends RawSubFieldDef {
 
 interface RawDefinition {
   title: string
+  description?: string
   fields: RawFieldDef[]
   schemaVersion?: number
   rules?: Record<string, unknown>
@@ -72,6 +74,7 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     ...(raw.label !== undefined ? { label: raw.label } : {}),
     required: raw.required ?? false,
     ...(raw.length !== undefined ? { length: raw.length } : {}),
+    ...(raw.placeholder !== undefined ? { placeholder: raw.placeholder } : {}),
     colSpan: normalizeFormFieldColSpan(raw.colSpan, raw.type),
     ...(raw.defaultValue !== undefined ? { defaultValue: raw.defaultValue } : {}),
   }
@@ -168,6 +171,7 @@ export function parseDefinition(rawJson: string): FormSchema {
 
   return {
     title: typeof raw.title === 'string' ? raw.title : '',
+    ...(typeof raw.description === 'string' ? { description: raw.description } : {}),
     fields,
     ...(raw.schemaVersion !== undefined ? { schemaVersion: raw.schemaVersion } : {}),
     ...(raw.rules !== undefined ? { rules: raw.rules } : {}),
@@ -243,24 +247,33 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
   switch (field.type) {
     case 'TEXT': {
       rule.type = 'input'
+      if (field.placeholder) rule.props = { placeholder: field.placeholder }
       break
     }
 
     case 'RICH_TEXT': {
       // TODO(rich-text): 接入富文本编辑器，当前降级为多行 textarea
       rule.type = 'input'
-      rule.props = { type: 'textarea', rows: 4 }
+      rule.props = {
+        type: 'textarea',
+        rows: 2,
+        ...(field.placeholder ? { placeholder: field.placeholder } : {}),
+      }
       break
     }
 
     case 'NUMBER': {
       rule.type = 'inputNumber'
+      if (field.placeholder) rule.props = { placeholder: field.placeholder }
       break
     }
 
     case 'DATE': {
       rule.type = 'datePicker'
-      rule.props = { valueFormat: 'YYYY-MM-DD' }
+      rule.props = {
+        valueFormat: 'YYYY-MM-DD',
+        ...(field.placeholder ? { placeholder: field.placeholder } : {}),
+      }
       // 提交值为 ISO 格式字符串（YYYY-MM-DD）以对齐后端
       break
     }
@@ -274,7 +287,7 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     case 'DICT': {
       rule.type = 'select'
       rule.options = []
-      rule.props = { clearable: true }
+      rule.props = { clearable: true, ...(field.placeholder ? { placeholder: field.placeholder } : {}) }
       // __dictType__ 标记供渲染层在运行时通过 useDict 加载字典项并填充 options
       ;(rule as Record<string, unknown>).__dictType__ = field.dictType
       break
@@ -304,9 +317,14 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     case 'ATTACHMENT':
     case 'IMAGE': {
       // 附件/图片：自定义控件经 form-create 注册（setup.ts），值为 [{storageKey,name}]
+      // AttachmentControl 契约要求 field（读 type 区分 image 模式），必须随 props 下发
       rule.type = 'AttachmentPicker'
       rule.value = []
-      rule.props = { mode: field.type === 'IMAGE' ? 'image' : 'attachment' }
+      rule.props = {
+        mode: field.type === 'IMAGE' ? 'image' : 'attachment',
+        field,
+        ...(field.placeholder ? { placeholder: field.placeholder } : {}),
+      }
       break
     }
 

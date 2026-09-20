@@ -80,6 +80,7 @@ const draftRefreshVersion = ref(false) // 保存时是否重绑表单最新已�
 const isViewMode = computed(() => !!recordId && mode === 'view')
 const pageTitle = computed(() => {
   if (!schema.value) return t('form.titleWithKey', { formKey })
+  if (!recordId && !isDraftMode.value) return t('form.initiateTitle', { title: schema.value.title })
   if (isDraftMode.value) return t('form.draftEntryTitle', { title: schema.value.title })
   const modeLabel = isViewMode.value
     ? t('form.titleSuffixView')
@@ -578,12 +579,17 @@ const modeLabel = computed(() => {
   return t('formSide.modeSubmit')
 })
 
+const processMeta = computed(() => {
+  const title = schema.value?.title ?? formKey
+  return `${t('workflow.processCenter')} / ${title} · ${formKey}`
+})
+
 // ── 挂载 ──
 onMounted(loadSchema)
 </script>
 
 <template>
-  <div class="form-render-page">
+  <div class="form-render-page form-render-page--design">
     <el-skeleton v-if="loading && !schema" :rows="4" animated />
     <template v-else>
       <!-- 提示条 -->
@@ -607,14 +613,21 @@ onMounted(loadSchema)
       <el-empty v-if="!schema && !errorMsg" :description="t('form.notFoundOrLoadFailed')" />
 
       <template v-else-if="schema">
+        <button class="form-render-page__back" type="button" @click="router.push('/workflow/catalog')">
+          <span aria-hidden="true">‹</span>
+          {{ t('form.backToProcessCenter') }}
+        </button>
+
         <!-- 页标题 -->
         <h1 class="form-render-page__title">{{ pageTitle }}</h1>
+        <p class="form-render-page__meta">{{ processMeta }}</p>
         <p v-if="!isViewMode" class="form-render-page__hint">{{ t('form.requiredHint') }}</p>
 
         <div class="form-render-page__layout">
           <div class="form-render-page__main">
             <!-- 字段渲染区 -->
             <div class="form-render-page__card">
+              <h2 class="form-render-page__card-title">{{ t('formSide.formTitle') }}</h2>
               <div class="form-render-page__group">
                 <div
                   v-for="field in visibleSchemaFields"
@@ -673,12 +686,6 @@ onMounted(loadSchema)
                 <el-button link @click="backToDrafts">{{ t('form.backToMyDrafts') }}</el-button>
               </div>
             </template>
-            <!-- 操作按钮：表单数据模式（行为不变） -->
-            <template v-else-if="!isViewMode">
-              <el-button type="primary" :loading="submitting" @click="handleSubmit">
-                {{ recordId ? t('common.save') : t('common.submit') }}
-              </el-button>
-            </template>
           </div>
 
           <!-- 流程说明（节点 27）：只展示真实可得信息，不虚构版本/发起范围 -->
@@ -700,6 +707,16 @@ onMounted(loadSchema)
               <p class="form-render-page__aside-hint">{{ t('form.processResolvedByBinding') }}</p>
             </div>
           </aside>
+        </div>
+
+        <!-- 新建填报的持久操作栏：保存草稿与正式提交均绑定真实接口。 -->
+        <div v-if="!isViewMode && !isDraftMode" class="form-render-page__action-bar">
+          <el-button :loading="draftSaving" @click="handleSaveDraft">
+            {{ t('common.saveDraft') }}
+          </el-button>
+          <el-button type="primary" :loading="submitting" @click="handleSubmit">
+            {{ t('form.launch') }}
+          </el-button>
         </div>
       </template>
     </template>
@@ -768,10 +785,65 @@ onMounted(loadSchema)
 }
 
 .form-render-page__title {
-  font-size: 20px;
+  font-size: 24px;
+  /* 固定 30px 高在长标题换行时会把第二行溢出到 meta 行上（375 重叠缺陷根因）；
+     单行场景 min-height 仍保持 30px，≥1280 设计栅格几何不变 */
+  min-height: 30px;
+  line-height: 24px;
+  box-sizing: border-box;
   font-weight: 600;
   color: var(--sw-text-primary);
   margin: 0 0 var(--sw-space-8);
+}
+
+/* 375 移动边界：返回入口整行 40px 触控目标，标题自然换行不再与 meta 叠压 */
+@media (max-width: 767px) {
+  .form-render-page {
+    padding: 16px 12px;
+  }
+  .form-render-page__back {
+    display: flex;
+    width: 100%;
+    height: 40px;
+    margin-bottom: 10px;
+  }
+  .form-render-page__title {
+    height: auto;
+    line-height: 1.3;
+  }
+}
+
+.form-render-page__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sw-space-4);
+  height: 24px;
+  width: 140px;
+  box-sizing: border-box;
+  padding: 0 var(--sw-space-16);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-surface-card);
+  color: var(--sw-text-primary);
+  font-size: var(--sw-font-secondary);
+  cursor: pointer;
+}
+
+.form-render-page__back:hover {
+  border-color: var(--sw-color-primary);
+  color: var(--sw-color-primary);
+}
+
+.form-render-page__back span {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.form-render-page__meta {
+  margin: 0 0 var(--sw-space-16);
+  color: var(--sw-text-secondary);
+  font-size: var(--sw-font-secondary);
 }
 
 .form-render-page__hint {
@@ -786,6 +858,14 @@ onMounted(loadSchema)
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.04);
   padding: 22px 28px;
   margin-bottom: var(--sw-space-20);
+}
+
+.form-render-page__card-title {
+  margin: 0 0 var(--sw-space-16);
+  color: var(--sw-text-primary);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
 }
 
 .form-render-page__group {
@@ -822,5 +902,172 @@ onMounted(loadSchema)
 .form-render-page__draft-process-hint {
   color: var(--sw-color-text-secondary);
   font-size: var(--sw-font-size-sm);
+}
+
+.form-render-page__action-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--sw-space-12);
+  min-height: 55px;
+  margin-top: var(--sw-space-24);
+  padding: 0 var(--sw-space-24);
+  box-sizing: border-box;
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  background: var(--sw-surface-card);
+}
+
+@media (min-width: 1280px) {
+  .form-render-page--design {
+    max-width: 1152px;
+    padding-top: 6px;
+  }
+  .form-render-page--design .form-render-page__title {
+    margin-top: 6px;
+    margin-bottom: 4px;
+  }
+  .form-render-page--design .form-render-page__meta {
+    margin-bottom: 25px;
+  }
+  .form-render-page--design .form-render-page__hint {
+    display: none;
+  }
+  .form-render-page--design .form-render-page__layout {
+    grid-template-columns: minmax(0, 1fr) 366px;
+    gap: 0;
+    align-items: stretch;
+    border: 1px solid var(--sw-border-light);
+    border-radius: var(--sw-radius-card);
+    overflow: hidden;
+  }
+  .form-render-page--design .form-render-page__card {
+    height: 474px;
+    min-height: 474px;
+    margin: 0;
+    padding: 27px 24px 16px;
+    box-sizing: border-box;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .form-render-page--design .form-render-page__card-title {
+    position: relative;
+    top: -7px;
+    line-height: 28px;
+    margin-bottom: 5px;
+  }
+  .form-render-page--design .form-render-page__back {
+    gap: 0;
+    font-size: 12px;
+  }
+  .form-render-page--design .form-render-page__group {
+    display: block;
+  }
+  .form-render-page--design .form-render-page__field {
+    display: grid;
+    grid-template-columns: 128px minmax(0, 1fr);
+    align-items: center;
+    min-height: 48px;
+    padding: 0 12px;
+    margin-bottom: 8px;
+    border: 1px solid #eef1f7;
+  }
+  .form-render-page--design .form-render-page__field:first-child {
+    border-top: 1px solid #eef1f7;
+  }
+  .form-render-page--design :deep(.dynamic-field) {
+    display: contents;
+  }
+  .form-render-page--design :deep(.dynamic-field__label) {
+    position: relative;
+    top: -4px;
+    margin: 0;
+  }
+  .form-render-page--design :deep(.dynamic-field__required) {
+    display: none;
+  }
+  .form-render-page--design :deep(.el-input),
+  .form-render-page--design :deep(.el-select),
+  .form-render-page--design :deep(.el-date-editor) {
+    width: 100%;
+  }
+  .form-render-page--design :deep(.el-input__wrapper),
+  .form-render-page--design :deep(.el-select__wrapper),
+  .form-render-page--design :deep(.el-date-editor .el-input__wrapper) {
+    min-height: 44px;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  .form-render-page--design :deep(.el-input__inner) {
+    position: relative;
+    left: -10px;
+    width: calc(100% + 10px);
+    height: 16px;
+    line-height: 16px;
+    padding: 0;
+    transform: translateY(4px);
+  }
+  .form-render-page--design :deep(.el-date-editor .el-input__inner) {
+    left: -10px;
+    width: calc(100% + 10px);
+    text-indent: 0;
+    height: 16px;
+    line-height: 16px;
+    transform: translateY(1px);
+  }
+  .form-render-page--design :deep(.el-select__selected-item),
+  .form-render-page--design :deep(.el-select__placeholder) {
+    height: 16px;
+    line-height: 16px;
+  }
+  .form-render-page--design :deep(.el-select__selected-item) {
+    color: #17213a !important;
+  }
+  .form-render-page--design :deep(.el-select__input.is-default) {
+    color: #a1aabe !important;
+  }
+  .form-render-page--design :deep(.el-date-editor .el-input__prefix) {
+    display: none;
+  }
+  .form-render-page--design .form-render-page__aside {
+    min-width: 0;
+    background: #fbfcff;
+  }
+  .form-render-page--design .form-render-page__aside-card {
+    height: 100%;
+    box-sizing: border-box;
+    padding: 24px;
+    border: 0;
+    border-left: 1px solid var(--sw-border-light);
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  .form-render-page--design .form-render-page__action-bar {
+    margin-top: 25px;
+  }
+  .form-render-page--design .form-render-page__action-bar .el-button {
+    width: 104px;
+    height: 34px;
+    padding: 0;
+    justify-content: center;
+    line-height: 14px;
+    letter-spacing: -2px;
+  }
+  .form-render-page--design .form-render-page__action-bar .el-button > span {
+    transform: none;
+  }
+  .form-render-page--design .form-render-page__action-bar .el-button:first-child {
+    padding: 0;
+  }
+  .form-render-page--design .form-render-page__action-bar .el-button:last-child {
+    padding: 0;
+  }
+  .form-render-page--design :deep(.form-render-page__action-bar .el-button:first-child > span) {
+    position: relative;
+    left: 12px;
+  }
 }
 </style>

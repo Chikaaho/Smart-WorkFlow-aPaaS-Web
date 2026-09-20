@@ -5,14 +5,15 @@ const { t } = useI18n()
 /**
  * 配置面板（设计器右栏）—— 宿主只按注册表动态挂载，禁写死类型 switch。
  *
- * 选中字段后，按注册表描述符的 configComponent 动态挂载该类型的配置面板：
- *  - 6 类简单字段（TEXT/RICH_TEXT/NUMBER/DATE/BOOL/DICT）有配置面板（第二刀填入）；
- *  - REFERENCE/TABLE 的 configComponent 仍为 null → 渲染「待接入」占位（后续刀填）。
+ * P53 节点07 三段结构：
+ *  - 基础信息：组件名称 / 宽度（12 栏）/ 占位提示 / 必填（全部走 FieldPatch 通用键）；
+ *  - 高级信息：字段标识 / 数据类型族 / 类型专属配置（configComponent 动态挂载）；
+ *  - 其他信息：扩展属性预留区。
  *
  * 配置面板改动经 @update 抛 FieldPatch，本宿主原样上交给设计器写回选中字段（单一数据源）。
  */
 import { computed } from 'vue'
-import { getFieldTypeDescriptor } from './field-types'
+import { getFieldTypeDescriptor, getFieldTypeStorage } from './field-types'
 import type { DesignerItem } from './types'
 import type { FieldPatch } from './field-config'
 import type { VisibilityRule } from '@/contracts/form-schema'
@@ -47,67 +48,126 @@ const colSpan = computed(() =>
   props.field ? normalizeFormFieldColSpan(props.field.field.colSpan, props.field.field.type) : 12,
 )
 
-function updateColSpan(value: number | null | undefined) {
-  if (!props.field) return
-  emit('update', {
-    colSpan: normalizeFormFieldColSpan(value, props.field.field.type),
-  })
+/** 12 栏展示值（24 栏语义的一半）。 */
+const span12 = computed(() => Math.max(1, Math.round(colSpan.value / 2)))
+
+const spanOptions = Array.from({ length: 12 }, (_, i) => i + 1)
+
+function onSpan12(value: number | undefined) {
+  if (!props.field || !value) return
+  emit('update', { colSpan: normalizeFormFieldColSpan(value * 2, props.field.field.type) })
 }
 </script>
 
 <template>
   <aside class="config">
-    <h2 class="config__title">{{ t('form.fieldSettingsTitle') }}</h2>
+    <div class="config__head">
+      <h2 class="config__title">{{ t('form.fieldSettingsTitle') }}</h2>
+      <span v-if="field" class="config__type">{{ descriptor?.label ?? field.field.type }}</span>
+    </div>
 
     <p v-if="!field" class="config__hint">{{ t('form.selectFieldHint') }}</p>
 
     <template v-else>
-      <div class="config__meta">
-        <span class="config__type">{{ descriptor?.label ?? field.field.type }}</span>
-        <span class="config__name">{{ field.field.name }}</span>
+      <!-- ═══ 基础信息 ═══ -->
+      <h3 class="config__section">{{ t('form.sectionBasicInfo') }}</h3>
+      <div class="config__row">
+        <label class="config__label">{{ t('fieldList.colName') }}</label>
+        <el-input
+          :model-value="field.field.label ?? ''"
+          :disabled="readonly"
+          @update:model-value="(v: string) => emit('update', { label: v })"
+        />
+      </div>
+      <div class="config__row">
+        <label class="config__label">{{ t('form.width12Label') }}</label>
+        <el-select :model-value="span12" :disabled="readonly" @update:model-value="onSpan12">
+          <el-option
+            v-for="n in spanOptions"
+            :key="n"
+            :value="n"
+            :label="t('form.span12Cell', { n, p: Math.round((n / 12) * 100) })"
+          />
+        </el-select>
+      </div>
+      <div class="config__row">
+        <label class="config__label">{{ t('form.placeholderHint') }}</label>
+        <el-input
+          :model-value="field.field.placeholder ?? ''"
+          :disabled="readonly"
+          @update:model-value="(v: string) => emit('update', { placeholder: v })"
+        />
+      </div>
+      <div class="config__row config__row--inline">
+        <label class="config__label">{{ t('form.required') }}</label>
+        <!-- 设计（节点07）：必填行用状态徽标呈现；点击徽标切换必填（保持真实读写） -->
+        <button
+          type="button"
+          class="config__required-chip"
+          :class="{ 'is-off': !(field.field.required ?? false) }"
+          :disabled="readonly"
+          @click="emit('update', { required: !(field.field.required ?? false) })"
+        >
+          {{ (field.field.required ?? false) ? t('form.requiredOn') : t('form.requiredOff') }}
+        </button>
       </div>
 
-      <div v-if="!readonly" class="config__layout">
-        <div class="config__layout-label">
-          <span>{{ t('form.columnWidth') }}</span>
-          <span class="config__layout-value">{{ t('form.colSpanLabel', { colSpan }) }}</span>
+      <!-- ═══ 高级信息 ═══ -->
+      <h3 class="config__section">{{ t('form.sectionAdvancedInfo') }}</h3>
+      <div class="config__row">
+        <label class="config__label">{{ t('form.fieldKeyLabel') }}</label>
+        <el-input :model-value="field.field.name" disabled />
+      </div>
+      <div v-if="field.field.type === 'TEXT'" class="config__type-pair">
+        <div class="config__row">
+          <label class="config__label">{{ t('fieldList.colType') }}</label>
+          <el-input :model-value="getFieldTypeStorage(field.field.type)" disabled />
         </div>
-        <el-input-number
-          :model-value="colSpan"
-          :min="1"
-          :max="24"
-          :step="1"
-          controls-position="right"
-          class="config__layout-control"
-          @update:model-value="updateColSpan"
-        />
-        <p class="config__layout-hint">{{ t('form.columnWidthHint') }}</p>
+        <div class="config__row">
+          <label class="config__label">{{ t('form.maxLength') }}</label>
+          <el-input-number
+            :model-value="field.field.length"
+            :min="1"
+            :controls="true"
+            :placeholder="t('form.unlimited')"
+            @update:model-value="(v: number | undefined) => emit('update', { length: v })"
+          />
+        </div>
+      </div>
+      <div v-else class="config__row">
+        <label class="config__label">{{ t('fieldList.colType') }}</label>
+        <el-input :model-value="getFieldTypeStorage(field.field.type)" disabled />
       </div>
 
-      <!-- 已发布：只读，不渲染可编辑配置面板 -->
-      <p v-if="readonly" class="config__readonly-hint">{{ t('form.publishedReadonly') }}</p>
+      <!-- 类型专属配置（注册表动态挂载；已发布只读时不出可编辑面板） -->
+      <component
+        :is="descriptor.configComponent"
+        v-if="descriptor?.configComponent && !readonly"
+        :field="field.field"
+        :other-names="otherNames"
+        :hide-length="field.field.type === 'TEXT'"
+        @update="(p: FieldPatch) => emit('update', p)"
+      />
+      <p v-else-if="!readonly" class="config__placeholder">
+        「{{ descriptor?.label ?? t('form.thisField') }}」配置项待接入（后续刀）
+      </p>
 
-      <!-- 配置内容挂载位：简单字段已填入面板；REF/TABLE 仍为 null → 占位。 -->
-      <template v-else>
-        <component
-          :is="descriptor.configComponent"
-          v-if="descriptor?.configComponent"
-          :field="field.field"
-          :other-names="otherNames"
-          @update="(p: FieldPatch) => emit('update', p)"
-        />
-        <p v-else class="config__placeholder">
-          「{{ descriptor?.label ?? t('form.thisField') }}」配置项待接入（后续刀）
-        </p>
+      <p class="config__note">{{ t('form.fieldKeyLockedNote') }}</p>
 
-        <!-- v0.0.2 P2：显隐联动规则（LABEL 非输入字段也可控显隐） -->
-        <RulesEditor
-          :target="field.field.name"
-          :field-names="ruleFieldNames"
-          :rule="rule"
-          @update-rule="(r) => emit('update-rule', r)"
-        />
-      </template>
+      <!-- ═══ 其他信息 ═══ -->
+      <h3 class="config__section">{{ t('form.sectionOtherInfo') }}</h3>
+      <div class="config__extension">
+        <p class="config__extension-title">{{ t('form.extensionAreaTitle') }}</p>
+        <p class="config__extension-hint">{{ t('form.extensionAreaHint') }}</p>
+      </div>
+
+      <!-- v0.0.2 P2：显隐联动规则（LABEL 非输入字段也可控显隐）；置于其他信息之后 -->
+      <RulesEditor
+        :target="field.field.name"
+        :field-names="ruleFieldNames"
+        :rule="rule"
+        @update-rule="(r) => emit('update-rule', r)"
+      />
     </template>
   </aside>
 </template>
@@ -117,12 +177,31 @@ function updateColSpan(value: number | null | undefined) {
   width: 280px;
   flex: 0 0 280px;
   border-left: 1px solid var(--sw-border-light);
-  padding: var(--sw-space-16);
+  padding: 18px 16px 16px;
   overflow-y: auto;
+  /* 设计 07：面板输入框 36px 高（文本在框内与设计同位）；文本行盒 17px */
+  --el-input-height: 36px;
+}
+
+.config :deep(.el-input__inner) {
+  padding-left: 0;
+  line-height: 17px;
+}
+
+.config :deep(.el-input__wrapper) {
+  padding-left: 0;
+}
+
+/* P53 节点07：头部标题 + 右侧类型徽标 */
+.config__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 8px;
 }
 
 .config__title {
-  margin: 0 0 var(--sw-space-12);
+  margin: 0;
   font-size: var(--sw-font-h2);
   font-weight: var(--sw-font-weight-h2);
   color: var(--sw-text-primary);
@@ -133,51 +212,107 @@ function updateColSpan(value: number | null | undefined) {
   font-size: var(--sw-font-body);
 }
 
-.config__meta {
-  display: flex;
-  align-items: center;
-  gap: var(--sw-space-8);
-  margin-bottom: var(--sw-space-16);
+/* 三段结构小节标题（设计07：基础信息 194 / 高级信息 522） */
+.config__section {
+  margin: 25px 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eceff7;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
 }
 
-.config__layout {
-  margin-bottom: var(--sw-space-16);
-  padding: var(--sw-space-12);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-base);
-  background: var(--sw-fill-base);
+/* 设计07：首段（基础信息）紧随面板头部 */
+.config__section:first-of-type {
+  margin-top: 19px;
 }
 
-.config__layout-label {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: var(--sw-space-8);
-  font-size: var(--sw-font-emphasis);
-  font-weight: var(--sw-font-weight-emphasis);
-  color: var(--sw-text-regular);
+.config__row {
+  margin-bottom: 25px;
 }
 
-.config__layout-value,
-.config__layout-hint {
-  font-size: var(--sw-font-caption);
-  font-weight: 400;
-  color: var(--sw-text-secondary);
+/* 设计07：输入框/选择器文本行盒 17px（与设计文本盒同高） */
+.config__row :deep(.el-input__inner),
+.config__row :deep(.el-select__selected-item),
+.config__row :deep(.el-select__placeholder) {
+  line-height: 17px;
 }
 
-.config__layout-control {
+.config__row--inline {
+  margin-top: -6px;
+  margin-bottom: 13px;
+}
+
+.config__type-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 24px;
+}
+
+.config__type-pair .config__row {
+  min-width: 0;
+}
+
+.config__type-pair :deep(.el-input-number) {
   width: 100%;
 }
 
-.config__layout-hint {
-  margin: var(--sw-space-8) 0 0;
-  line-height: 1.5;
+.config__row--inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sw-space-8);
 }
 
-.config__type {
-  padding: 0 var(--sw-space-8);
-  height: 22px;
-  line-height: 22px;
+.config__label {
+  display: block;
+  margin-bottom: var(--sw-space-4);
+  font-size: var(--sw-font-emphasis);
+  color: var(--sw-text-regular);
+}
+
+.config__row--inline .config__label {
+  margin-bottom: 0;
+}
+
+.config__row :deep(.el-select),
+.config__row :deep(.el-input-number) {
+  width: 100%;
+}
+
+.config__note {
+  margin: var(--sw-space-8) 0 33px;
   font-size: var(--sw-font-caption);
+  color: var(--sw-text-secondary);
+}
+
+.config__required-chip {
+  height: 24px;
+  padding: 2px 14px;
+  border: 0;
+  font-size: 12px;
+  line-height: 15px;
+  text-align: left;
+  color: var(--sw-color-primary);
+  background: var(--el-color-primary-light-9, #ece9ff);
+  border-radius: 6px;
+  cursor: pointer;
+}.config__required-chip.is-off {
+  color: #8a96ae;
+  background: #f1f4fa;
+}
+.config__required-chip:disabled {
+  cursor: not-allowed;
+}
+.config__type {
+  box-sizing: border-box;
+  width: 82px;
+  margin-right: -10px;
+  padding: 4.5px 9px;
+  height: 24px;
+  line-height: 15px;
+  font-size: var(--sw-font-caption);
+  text-align: left;
   color: var(--sw-color-primary);
   background: var(--el-color-primary-light-9);
   border-radius: var(--sw-radius-sm);
@@ -205,5 +340,25 @@ function updateColSpan(value: number | null | undefined) {
   color: var(--sw-text-placeholder);
   font-size: var(--sw-font-secondary);
   text-align: center;
+}
+
+/* 其他信息：扩展属性预留区 */
+.config__extension {
+  padding: 25px 16px 12px;
+  border: 1px solid #e3e8f4;
+  border-radius: 8px;
+  background: #f7f9fe;
+}
+
+.config__extension-title {
+  margin: 0 0 4px;
+  font-size: var(--sw-font-emphasis);
+  color: var(--sw-text-regular);
+}
+
+.config__extension-hint {
+  margin: 0;
+  font-size: var(--sw-font-caption);
+  color: var(--sw-text-secondary);
 }
 </style>

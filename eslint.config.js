@@ -94,6 +94,7 @@ export default tseslint.config(
       // 标准运行时全局（Node 18+ / 浏览器 / vitest 均内置），避免 no-undef 误报。
       globals: {
         globalThis: 'readonly',
+        sessionStorage: 'readonly',
       },
     },
     settings: {
@@ -168,6 +169,13 @@ export default tseslint.config(
     rules: {
       ...eslintConfigPrettier.rules,
       'prettier/prettier': 'warn',
+    },
+  },
+  // P53 设计夹具中的全角空白是画面文案间距的一部分，不属于源码缩进。
+  {
+    files: ['src/**/design-fixture/**/*.vue', 'src/views/design-fixture/**/*.vue'],
+    rules: {
+      'no-irregular-whitespace': 'off',
     },
   },
 )

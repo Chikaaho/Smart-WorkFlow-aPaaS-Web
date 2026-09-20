@@ -70,7 +70,8 @@ describe('createDesignerModel', () => {
     const model = createDesignerModel(baseGraph())
     model.moveNode('node_end', 700, 500)
     const edge = model.state().edges[0]
-    expect(edge.path).toBe('M 100 300 L 700 500')
+    // P53 设计（节点19）：边线连接节点边框端口（右缘中心 → 左缘中心），不再是中心连线
+    expect(edge.path).toBe('M 176 300 L 624 500')
   })
 
   it('节点与连线操作更新状态并标记脏', () => {

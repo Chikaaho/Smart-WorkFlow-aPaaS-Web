@@ -28,14 +28,14 @@ import HistoryVersionsDialog from './HistoryVersionsDialog.vue'
 /** el-dialog 在 jsdom 下 teleport/懒渲染，用最小桩展开插槽内容；el-table 用真组件。 */
 const overlayStubs = {
   'el-dialog': {
-    template: '<div><slot /></div>',
+    template: '<div><slot /><slot name="footer" /></div>',
     props: ['modelValue'],
   },
   PreviewModal: { template: '<div class="stub-preview" />' },
 }
 
 const snapshots = [
-  { formVersion: 3, createTime: '2026-07-01 16:20:00' },
+  { formVersion: 3, createTime: '2026-07-01 16:20:00', status: 'PUBLISHED' },
   { formVersion: 2, createTime: '2026-06-02 11:30:00' },
   { formVersion: 1, createTime: '2026-05-11 14:00:00' },
 ]
@@ -64,25 +64,30 @@ describe('HistoryVersionsDialog', () => {
     const wrapper = await mountOpen()
 
     expect(mockListFormSnapshots).toHaveBeenCalledWith('uuid-1')
-    expect(wrapper.text()).toContain('V3')
-    expect(wrapper.text()).toContain('2026-05-11 14:00:00')
-    expect(wrapper.text()).toContain('已发布')
+    // 卡片式重构后：时间截到分钟、徽标=已发布 v{N}
+    expect(wrapper.text()).toContain('2026-05-11 14:00')
+    expect(wrapper.text()).toContain('已发布 v3')
+    expect(wrapper.text()).toContain('当前草稿')
   })
 
   it('只读预览读取指定版本 definition，历史标识传给预览层', async () => {
     const wrapper = await mountOpen()
 
-    const previewBtn = wrapper.findAll('button').find((b) => b.text().includes('只读预览'))
-    expect(previewBtn).toBeTruthy()
-    // 点击列表首行（V3）
-    await previewBtn!.trigger('click')
+    // 选中历史卡后经『对比当前』打开只读预览
+    const card = wrapper.findAll('.history-card').find((c) => c.text().includes('2026-05-11 14:00'))
+    expect(card).toBeTruthy()
+    await card!.trigger('click')
+    await flushPromises()
+    const compareBtn = wrapper.findAll('button').find((b) => b.text().includes('对比当前'))
+    expect(compareBtn).toBeTruthy()
+    await compareBtn!.trigger('click')
     await flushPromises()
 
-    expect(mockGetFormSnapshotDefinition).toHaveBeenCalledWith('uuid-1', 3)
+    expect(mockGetFormSnapshotDefinition).toHaveBeenCalledWith('uuid-1', 1)
     // 历史版本标识经 badge 传给只读预览层
     const preview = wrapper.find('.stub-preview')
     expect(preview.exists()).toBe(true)
-    expect(preview.attributes('badge')).toBe('历史版本 V3 · 只读')
+    expect(preview.attributes('badge')).toBe('历史版本 V1 · 只读')
   })
 
   it('表单从未发布过 → 空态文案，不报错', async () => {

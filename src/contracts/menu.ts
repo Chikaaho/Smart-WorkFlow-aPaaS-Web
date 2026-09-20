@@ -24,5 +24,12 @@ export interface MenuNode {
   permission?: string
   /** 仅用于侧边栏渲染：隐藏项不出现在导航树（仍可被路由命中）。 */
   hidden?: boolean
+  /**
+   * P53 顶栏主导航投影：存在时该节点（任意层级、叶子或目录）按此升序进入顶栏；
+   * 叶子取自身路由，目录取首个可见叶子的路由。服务端不下发该字段时顶栏走默认派生。
+   */
+  topbar?: number
+  /** 顶栏投影所属区域；存在时覆盖页面真实路由区域。 */
+  topbarArea?: 'portal' | 'admin'
   children?: MenuNode[]
 }

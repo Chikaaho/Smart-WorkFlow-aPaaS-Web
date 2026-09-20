@@ -31,7 +31,8 @@ test.describe('P53 视觉基线', () => {
     const viewport = page.viewportSize()?.width ?? 1440
     test.skip(viewport < 768, '375 侧栏隐藏，区域分区不适用（移动承诺范围见方向 §4.5）')
     const regions = desktopRegions(page.viewportSize() ?? undefined)
-    await expect(page.locator('.workspace__greeting')).toBeVisible()
+    // review-04..07 设计还原后工作台问候语类名（family-a node01 锁定比较覆盖）
+    await expect(page.locator('.wsd-hero__greeting')).toBeVisible()
     await expectRegionMatches(page, regions.topbar, REGION_THRESHOLDS.topbar, 'shell-topbar.png')
     await expectRegionMatches(page, regions.sidebar, REGION_THRESHOLDS.sidebar, 'shell-sidebar.png')
     await expectRegionMatches(page, regions.main, REGION_THRESHOLDS.main, 'workspace-main.png')

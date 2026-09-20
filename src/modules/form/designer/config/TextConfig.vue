@@ -3,30 +3,20 @@ import { useI18n } from '@/locales'
 
 const { t } = useI18n()
 /**
- * 单行文本（TEXT）配置面板。
- * 契约键：label / name / required / length（最大长度）。
- * 占位提示、默认值无契约键 → seam（见 ConfigSeamNote）。
+ * 单行文本（TEXT）类型专属配置。
+ * P53：组件名称/宽度/占位/必填/字段标识已上收 FieldConfigPanel 通用三段，
+ * 本组件只保留类型专属的「最大长度」行。
  */
 import type { TextField } from '@/contracts/form-schema'
 import type { FieldPatch } from '../field-config'
-import CommonConfigRows from './CommonConfigRows.vue'
-import ConfigSeamNote from './ConfigSeamNote.vue'
 
-const props = defineProps<{ field: TextField; otherNames: string[] }>()
+const props = defineProps<{ field: TextField; otherNames: string[]; hideLength?: boolean }>()
 const emit = defineEmits<{ update: [patch: FieldPatch] }>()
 </script>
 
 <template>
   <div>
-    <CommonConfigRows
-      :label="props.field.label ?? ''"
-      :name="props.field.name"
-      :required="props.field.required ?? false"
-      :other-names="props.otherNames"
-      @update="(p) => emit('update', p)"
-    />
-
-    <div class="row">
+    <div v-if="!props.hideLength" class="row">
       <label class="row__label">{{ t('form.maxLength') }}</label>
       <el-input-number
         :model-value="props.field.length"
@@ -37,8 +27,14 @@ const emit = defineEmits<{ update: [patch: FieldPatch] }>()
         @update:model-value="(v: number | undefined) => emit('update', { length: v })"
       />
     </div>
-
-    <ConfigSeamNote :items="[t('form.placeholderHint'), t('form.defaultValue')]" />
+    <div class="row">
+      <label class="row__label">{{ t('form.defaultValue') }}</label>
+      <el-input
+        :model-value="typeof props.field.defaultValue === 'string' ? props.field.defaultValue : ''"
+        :placeholder="t('form.defaultValueExprPlaceholder')"
+        @update:model-value="(v: string) => emit('update', { defaultValue: v || undefined })"
+      />
+    </div>
   </div>
 </template>
 

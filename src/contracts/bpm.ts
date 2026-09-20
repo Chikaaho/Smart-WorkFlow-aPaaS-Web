@@ -37,6 +37,7 @@ export interface ApprovalHistoryItem {
   nodeKey?: string | null
   assignee: string
   assigneeName?: string | null // 审批人展示名（可读身份回显）
+  assigneeDept?: string | null // 审批人部门（意见详情副标题展示，可空）
   createTime: string
   endTime: string | null // 可能为 null
   action?: 'APPROVE' | 'RETURN' | 'REJECT' | null
@@ -65,9 +66,16 @@ export interface ProcessDef {
   name: string
   formKey: string
   defVersion: number
-  status: 'DRAFT' | 'PUBLISHED'
+  status: 'DRAFT' | 'PUBLISHED' | 'SUSPENDED' | 'DISABLED'
   createTime: string
   updateTime: string
+  /** Optional display metadata supplied by richer list responses; absent in legacy API responses. */
+  categoryName?: string | null
+  instanceCount?: number | null
+  updatedBy?: string | null
+  /** Optional display version supplied by list adapters that expose a revision label. */
+  versionLabel?: string | null
+  p53Stats?: { total: number; published: number; draft: number; disabled: number }
 }
 
 // ─── 创建流程定义请求 DTO（对齐后端 CreateProcessDefRequest） ───
@@ -94,6 +102,8 @@ export interface ProcessInstance {
   initiatorName?: string | null // 发起人展示名（可读身份回显）
   status: 'RUNNING' | 'APPROVED' | 'REJECTED' // 实例状态
   createTime: string // 发起时间（LocalDateTime → ISO-8601 string）
+  /** 当前处理节点（P53 展示补充；后端未下发时为 undefined，页面显示「—」） */
+  currentNode?: string
 }
 
 // ─── 活动节点 DTO（对齐后端 BpmActivityDTO） ───

@@ -12,10 +12,14 @@ const { t } = useI18n()
  * 与画布共享 SortableJS group 'designer-fields'，pull:'clone' + put:false + sort:false：
  * 控件库本身永不被改动，只作为克隆来源。
  */
-import { computed, type Component } from 'vue'
+import { computed, ref, type Component } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import {
   EditPen,
+  Edit,
+  ArrowDown,
+  Select,
+  User,
   Document,
   Histogram,
   Calendar,
@@ -27,6 +31,9 @@ import {
   Paperclip,
   Picture,
   InfoFilled,
+  Tickets,
+  Cpu,
+  Monitor,
 } from '@element-plus/icons-vue'
 import { FIELD_TYPE_REGISTRY, type FieldTypeDescriptor } from './field-types'
 import { generateColumnName } from './column-name'
@@ -60,6 +67,91 @@ const palette = computed<readonly FieldTypeDescriptor[]>(() =>
     : FIELD_TYPE_REGISTRY,
 )
 
+type PaletteEntry = {
+  type: string
+  label: string
+  icon: string
+  descriptor?: FieldTypeDescriptor
+  disabled?: boolean
+}
+
+const LABELS: Record<string, string> = {
+  TEXT: 'form.paletteSingleLine',
+  RICH_TEXT: 'form.paletteMultiLine',
+  NUMBER: 'form.paletteNumberInput',
+  DICT: 'form.paletteDropdown',
+  BOOL: 'form.paletteRadio',
+  MULTISELECT: 'form.paletteCheckbox',
+  DATE: 'form.paletteDateTime',
+  ATTACHMENT: 'form.paletteUpload',
+  USER: 'form.palettePerson',
+  DEPT: 'form.paletteDepartment',
+  SERIAL: 'form.paletteSerial',
+  DATASOURCE: 'form.paletteRelatedData',
+  GRID: 'form.paletteGrid',
+  GROUP: 'form.paletteGroupPanel',
+  DIVIDER: 'form.paletteDivider',
+  SUBTABLE: 'form.paletteSubTable',
+  FORMULA: 'form.paletteFormula',
+  IOT: 'form.paletteIot',
+  AGENT: 'form.paletteAgent',
+}
+
+const ENTRY_ICONS: Record<string, string> = {
+  TEXT: 'TextGlyph',
+  RICH_TEXT: 'TextGlyph',
+  NUMBER: 'HashGlyph',
+  DICT: 'ArrowDown',
+  BOOL: 'Select',
+  MULTISELECT: 'Select',
+  DATE: 'Calendar',
+  ATTACHMENT: 'Paperclip',
+  USER: 'User',
+  DEPT: 'Grid',
+  SERIAL: 'HashGlyph',
+  DATASOURCE: 'Document',
+  GRID: 'Grid',
+  GROUP: 'Grid',
+  DIVIDER: 'Tickets',
+  SUBTABLE: 'Grid',
+  FORMULA: 'HashGlyph',
+  IOT: 'Cpu',
+  AGENT: 'Monitor',
+}
+
+/** P53 设计（节点07）：组件库四组布局。
+ * 可用入口由 FIELD_TYPE_REGISTRY 提供；设计中已锁定但当前契约未启用的入口以 disabled
+ * 形式保留位置，既不伪造能力，也不让拖拽通道产生未定义字段。
+ */
+const paletteSearch = ref('')
+const PALETTE_GROUPS: Array<{ key: string; types: string[] }> = [
+  { key: 'form.paletteGroupBasic', types: ['TEXT', 'RICH_TEXT', 'NUMBER', 'DICT', 'BOOL', 'MULTISELECT', 'DATE', 'ATTACHMENT'] },
+  { key: 'form.paletteGroupBusiness', types: ['USER', 'DEPT', 'SERIAL', 'DATASOURCE'] },
+  { key: 'form.paletteGroupLayout', types: ['GRID', 'GROUP', 'DIVIDER', 'SUBTABLE'] },
+  { key: 'form.paletteGroupAdvanced', types: ['FORMULA', 'RICH_TEXT', 'IOT', 'AGENT'] },
+]
+
+const descriptorByType = computed(() => new Map(palette.value.map((d) => [d.type, d])))
+
+const paletteGrouped = computed(() => {
+  const keyword = paletteSearch.value.trim().toLowerCase()
+  const unavailable = new Set(['SERIAL', 'GRID', 'GROUP', 'DIVIDER', 'SUBTABLE', 'IOT', 'AGENT'])
+  const entries = (type: string, groupKey: string): PaletteEntry | null => {
+    const descriptor = descriptorByType.value.get(type as FieldType)
+    if (props.allowedTypes && (!descriptor || !props.allowedTypes.includes(descriptor.type))) return null
+    const labelKey = groupKey === 'form.paletteGroupAdvanced' && type === 'RICH_TEXT'
+      ? 'form.fieldTypeRichText'
+      : LABELS[type] ?? type
+    const label = t(labelKey)
+    if (keyword && !label.toLowerCase().includes(keyword) && !type.toLowerCase().includes(keyword)) return null
+    return { type, label, icon: ENTRY_ICONS[type] ?? 'InfoFilled', descriptor, disabled: unavailable.has(type) }
+  }
+  return PALETTE_GROUPS.map((group) => ({
+    key: group.key,
+    items: group.types.map((type) => entries(type, group.key)).filter((entry): entry is PaletteEntry => entry !== null),
+  })).filter((group) => group.items.length > 0)
+})
+
 const emit = defineEmits<{
   /** 键盘/点击添加时，把与拖入相同的默认画布项交给宿主。 */
   add: [item: DesignerItem]
@@ -67,6 +159,10 @@ const emit = defineEmits<{
 
 /** 图标白名单（本地解析，注册表只存字符串键，不直引图标组件）。 */
 const ICON_MAP: Record<string, Component> = {
+  Edit,
+  ArrowDown,
+  Select,
+  User,
   EditPen,
   Document,
   Histogram,
@@ -79,14 +175,23 @@ const ICON_MAP: Record<string, Component> = {
   Paperclip,
   Picture,
   InfoFilled,
+  Tickets,
+  Cpu,
+  Monitor,
+}
+
+const GLYPH_MAP: Record<string, string> = {
+  TextGlyph: 'T',
+  HashGlyph: '#',
 }
 
 /**
  * 克隆钩子：描述符 → 画布项。
  * SortableJS 在 pull:'clone' 时调用，返回值即插入画布 v-model 的对象。
  */
-function cloneToItem(descriptor: FieldTypeDescriptor): DesignerItem {
-  return createItem(descriptor)
+function cloneToItem(entry: PaletteEntry): DesignerItem {
+  if (!entry.descriptor) throw new Error(`Unavailable palette entry cannot be cloned: ${entry.type}`)
+  return createItem(entry.descriptor)
 }
 
 function createItem(descriptor: FieldTypeDescriptor): DesignerItem {
@@ -99,42 +204,57 @@ function createItem(descriptor: FieldTypeDescriptor): DesignerItem {
 }
 
 /** 保留拖拽入口，同时提供可访问的点击添加入口，二者使用同一默认装配逻辑。 */
-function addFromPalette(descriptor: FieldTypeDescriptor) {
-  if (props.disabled) return
-  emit('add', createItem(descriptor))
+function addFromPalette(entry: PaletteEntry) {
+  if (props.disabled || entry.disabled || !entry.descriptor) return
+  emit('add', createItem(entry.descriptor))
 }
 </script>
 
 <template>
   <aside class="palette" :class="{ 'palette--disabled': disabled }">
     <h2 class="palette__title">{{ t('form.controlPalette') }}</h2>
-    <VueDraggable
-      :model-value="[...palette]"
-      :group="{ name: group, pull: 'clone', put: false }"
-      :sort="false"
-      :clone="cloneToItem"
-      :animation="150"
-      :force-fallback="true"
-      :fallback-on-body="true"
-      :fallback-tolerance="4"
-      item-key="type"
-      class="palette__list"
-      :disabled="disabled"
-    >
-      <button
-        v-for="d in palette"
-        :key="d.type"
-        type="button"
-        class="palette__item"
-        :data-field-type="d.type"
-        @click="addFromPalette(d)"
+    <div class="palette__search">
+      <input
+        v-model="paletteSearch"
+        type="text"
+        class="palette__search-input"
+        :placeholder="t('form.paletteSearch')"
+        :aria-label="t('form.paletteSearch')"
+      />
+    </div>
+    <p v-if="paletteGrouped.length === 0" class="palette__empty">{{ t('form.paletteNoMatch') }}</p>
+    <section v-for="group in paletteGrouped" :key="group.key" class="palette-group">
+      <h3 class="palette-group__title">{{ t(group.key) }}</h3>
+      <VueDraggable
+        :model-value="[...group.items]"
+        :group="{ name: group.key, pull: 'clone', put: false }"
+        :sort="false"
+        :clone="cloneToItem"
+        :animation="150"
+        :force-fallback="true"
+        :fallback-on-body="true"
+        :fallback-tolerance="4"
+        item-key="type"
+        class="palette__list"
+        :disabled="disabled"
       >
-        <el-icon v-if="ICON_MAP[d.icon]" class="palette__icon">
-          <component :is="ICON_MAP[d.icon]" />
-        </el-icon>
-        <span class="palette__label">{{ d.label }}</span>
-      </button>
-    </VueDraggable>
+        <button
+          v-for="d in group.items"
+          :key="d.type"
+          type="button"
+          class="palette__item"
+          :data-field-type="d.type"
+          :disabled="d.disabled"
+          @click="addFromPalette(d)"
+        >
+          <span v-if="GLYPH_MAP[d.icon]" class="palette__icon palette__glyph">{{ GLYPH_MAP[d.icon] }}</span>
+          <el-icon v-else-if="ICON_MAP[d.icon]" class="palette__icon">
+            <component :is="ICON_MAP[d.icon]" />
+          </el-icon>
+          <span class="palette__label">{{ d.label }}</span>
+        </button>
+      </VueDraggable>
+    </section>
   </aside>
 </template>
 
@@ -154,23 +274,57 @@ function addFromPalette(descriptor: FieldTypeDescriptor) {
   color: var(--sw-text-primary);
 }
 
+.palette__search {
+  margin-bottom: var(--sw-space-12);
+}
+.palette__search-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e7;
+  border-radius: 6px;
+  background: #fbfcff;
+  font-size: 13px;
+  color: var(--sw-text-primary);
+  outline: none;
+}
+.palette__search-input::placeholder {
+  color: #99a5bb;
+}
+.palette__empty {
+  margin: 8px 0;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+.palette-group {
+  margin-bottom: 42px;
+}
+.palette-group__title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+  transform: translateY(-11px);
+}
 .palette__list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sw-space-8);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .palette__item {
   display: flex;
   align-items: center;
   gap: var(--sw-space-8);
-  height: var(--sw-control-height);
-  padding: 0 var(--sw-space-12);
-  border: 1px solid var(--sw-border-base);
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid #cbd5e7;
   border-radius: var(--sw-radius-base);
   background: #fff;
-  color: var(--sw-text-regular);
+  color: #19233b;
   font-size: var(--sw-font-body);
+  text-align: left;
   cursor: grab;
   user-select: none;
 }
@@ -179,9 +333,23 @@ function addFromPalette(descriptor: FieldTypeDescriptor) {
   border-color: var(--sw-color-primary);
   color: var(--sw-color-primary);
 }
+.palette__label {
+  color: #19233b;
+}
 
 .palette__icon {
   color: var(--sw-text-secondary);
+}
+.palette__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18px;
 }
 
 .palette__item:hover .palette__icon {

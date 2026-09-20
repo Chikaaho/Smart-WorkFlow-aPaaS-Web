@@ -11,15 +11,16 @@ import ListTable from './ListTable.vue'
 import ListEmpty from './ListEmpty.vue'
 import ListPagination from './ListPagination.vue'
 
-defineProps<{
+const props = withDefaults(defineProps<{
   title?: string
   description?: string
   large?: boolean
+  showToolbarTotal?: boolean
   total: number
   pageNum: number
   pageSize: number
   empty?: boolean
-}>()
+}>(), { showToolbarTotal: true })
 
 const emit = defineEmits<{
   'update:pageNum': [value: number]
@@ -30,7 +31,12 @@ const emit = defineEmits<{
 <template>
   <div class="standard-list">
     <!-- 工具栏：标题 + 记录数 + 操作 -->
-    <ListToolbar :title="title" :description="description" :large="large" :total="total">
+    <ListToolbar
+      :title="props.title"
+      :description="props.description"
+      :large="props.large"
+      :total="props.showToolbarTotal ? props.total : undefined"
+    >
       <template v-if="$slots['toolbar-actions']" #actions>
         <slot name="toolbar-actions" />
       </template>
@@ -44,8 +50,13 @@ const emit = defineEmits<{
       </template>
     </ListFilterBar>
 
+    <!-- 面板标题（可选）：数据表上方的小节标题行（如 P53 设计02「流程申请」） -->
+    <div v-if="$slots['table-title']" class="standard-list__panel-head">
+      <slot name="table-title" />
+    </div>
+
     <!-- 主体：空态 或 表格 -->
-    <ListEmpty v-if="empty" :description="undefined">
+    <ListEmpty v-if="props.empty" :description="undefined">
       <template v-if="$slots['empty-action']" #action>
         <slot name="empty-action" />
       </template>
@@ -56,9 +67,9 @@ const emit = defineEmits<{
 
     <!-- 分页 -->
     <ListPagination
-      :total="total"
-      :page-num="pageNum"
-      :page-size="pageSize"
+      :total="props.total"
+      :page-num="props.pageNum"
+      :page-size="props.pageSize"
       @update:page-num="emit('update:pageNum', $event)"
       @update:page-size="emit('update:pageSize', $event)"
     />
@@ -67,6 +78,12 @@ const emit = defineEmits<{
 
 <style scoped>
 .standard-list {
-  padding: var(--sw-space-24);
+  padding: 40px 32px 32px;
+}
+.standard-list__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 var(--sw-space-12);
 }
 </style>

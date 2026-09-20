@@ -21,8 +21,11 @@ test.describe('P53 全局壳（登录后）', () => {
     await expect(logoFrame).toHaveCSS('border-radius', '8px')
     const viewport = page.viewportSize()?.width ?? 1440
     if (viewport >= 768) {
-      expect((await logoFrame.boundingBox())?.x).toBe(24)
-      expect((await page.locator('.app-main-nav').boundingBox())?.x).toBe(240)
+      // 设计门容差 ≤2px（方向 §4.7）：品牌框左缘≈24、主导航左缘≈240
+      const logoX = (await logoFrame.boundingBox())?.x ?? -1
+      expect(Math.abs(logoX - 24)).toBeLessThanOrEqual(2)
+      const navX = (await page.locator('.app-main-nav').boundingBox())?.x ?? -1
+      expect(Math.abs(navX - 240)).toBeLessThanOrEqual(2)
     }
     await expect(page.locator('nav.app-main-nav .app-main-nav__item')).toHaveCount(4)
 
@@ -33,9 +36,9 @@ test.describe('P53 全局壳（登录后）', () => {
       await expect(aside).toBeHidden()
     }
 
-    // 问候与真实统计头（节点 01）
-    await expect(page.locator('.workspace__greeting')).toBeVisible()
-    await expect(page.locator('.workspace-stat')).toHaveCount(4)
+    // 问候与真实统计头（节点 01；review-04..07 设计还原后类名）
+    await expect(page.locator('.wsd-hero__greeting')).toBeVisible()
+    await expect(page.locator('.wsd-stat')).toHaveCount(4)
 
     if (viewport >= 768) {
       // 个人菜单（节点 28/30）：账号绑定 / 进入后台 / 退出登录（无修改密码/忘记密码）
@@ -77,7 +80,10 @@ test.describe('P53 全局壳（登录后）', () => {
     await expect(header).toBeVisible()
     await expect(header).toHaveCSS('height', '64px')
     await expect(header).toHaveCSS('background-color', 'rgb(17, 27, 59)')
-    expect((await page.locator('.app-main-nav').boundingBox())?.x).toBe(240)
+    {
+      const navX = (await page.locator('.app-main-nav').boundingBox())?.x ?? -1
+      expect(Math.abs(navX - 240)).toBeLessThanOrEqual(2)
+    }
     // 管理端主导航来自服务端菜单顶层分组
     const navItems = page.locator('nav.app-main-nav .app-main-nav__item')
     await expect(navItems.first()).toBeVisible()
