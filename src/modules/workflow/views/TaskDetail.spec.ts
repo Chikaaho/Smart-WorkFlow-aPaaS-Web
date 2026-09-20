@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { i18n } from '@/locales'
+import { createPinia } from 'pinia'
 
 const mockPush = vi.fn()
 vi.mock('vue-router', () => ({
@@ -101,14 +102,14 @@ describe('TaskDetail.vue', () => {
 
   it('calls queryTaskDetail with taskId on mount', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
-    mount(TaskDetailView, { global: { stubs } })
+    mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     expect(queryTaskDetail).toHaveBeenCalledWith('task-001')
   })
 
   it('renders task detail fields (12 fields)', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
-    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     await nextTick()
 
@@ -130,7 +131,7 @@ describe('TaskDetail.vue', () => {
   it('shows fallback for null processName', async () => {
     const detailNoName = { ...mockDetail, processName: null }
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(detailNoName)
-    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     await nextTick()
 
@@ -140,7 +141,7 @@ describe('TaskDetail.vue', () => {
 
   it('shows ApiError message on business error', async () => {
     vi.mocked(queryTaskDetail).mockRejectedValueOnce(new ApiError(2001, '任务不存在'))
-    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     await nextTick()
     expect(wrapper.vm).toHaveProperty('errorMsg', '任务不存在')
@@ -148,7 +149,7 @@ describe('TaskDetail.vue', () => {
 
   it('shows fallback error on non-ApiError', async () => {
     vi.mocked(queryTaskDetail).mockRejectedValueOnce(new Error('Network error'))
-    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     await nextTick()
     expect(wrapper.vm).toHaveProperty('errorMsg', '加载任务详情失败')
@@ -157,7 +158,7 @@ describe('TaskDetail.vue', () => {
   it('shows empty history message when approvalHistory is []', async () => {
     const detailEmptyHist = { ...mockDetail, approvalHistory: [] }
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(detailEmptyHist)
-    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     await nextTick()
 
@@ -171,7 +172,7 @@ describe('TaskDetail.vue', () => {
     vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
     vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
 
-    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     await nextTick()
 
@@ -191,7 +192,7 @@ describe('TaskDetail.vue', () => {
     vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
     vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
 
-    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     await nextTick()
 
@@ -214,7 +215,7 @@ describe('TaskDetail.vue', () => {
     })
     vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
 
-    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     await nextTick()
 
@@ -233,7 +234,7 @@ describe('TaskDetail.vue', () => {
     vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
     mockPush.mockRejectedValueOnce(new Error('navigation race'))
 
-    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     await nextTick()
 
@@ -245,7 +246,7 @@ describe('TaskDetail.vue', () => {
 
   it('navigates back to TodoList on back button click', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
-    const wrapper = mount(TaskDetailView, { global: { stubs } })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     await nextTick()
 

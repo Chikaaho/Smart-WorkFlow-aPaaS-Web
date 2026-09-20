@@ -17,8 +17,15 @@ import type {
 /* 常量                                                                 */
 /* ------------------------------------------------------------------ */
 
-export const NODE_WIDTH = 160
-export const NODE_HEIGHT = 56
+/** 设计（节点09）：流程设计器节点盒 152×46。 */
+export const DESIGNER_NODE_WIDTH = 152
+export const DESIGNER_NODE_HEIGHT = 46
+/** 设计（节点19）：只读图节点盒 158×48。 */
+export const GRAPH_NODE_WIDTH = 158
+export const GRAPH_NODE_HEIGHT = 48
+/** 兼容别名（历史调用方/测试沿用旧常量名）。 */
+export const NODE_WIDTH = DESIGNER_NODE_WIDTH
+export const NODE_HEIGHT = DESIGNER_NODE_HEIGHT
 export const EDGE_CURVE_HEIGHT = 40
 
 /* ------------------------------------------------------------------ */
@@ -111,7 +118,14 @@ function elementCoordinate(element: ProcessGraphElement): {
  * - 旧图 style.x/y 回读（legacy）；
  * - 全缺坐标的元素按节点 ID 确定性布局（同图同输入 → 同布局，不因数组顺序漂移）。
  */
-export function normalizeGraph(graph: ProcessGraphDocument): RenderSpec {
+export function normalizeGraph(
+  graph: ProcessGraphDocument,
+  nodeSize: { width: number; height: number } = {
+    width: DESIGNER_NODE_WIDTH,
+    height: DESIGNER_NODE_HEIGHT,
+  },
+  gatewayRadius: number = Math.min(nodeSize.width, nodeSize.height) / 2,
+): RenderSpec {
   const elements = graph.elements ?? []
   const nodes = elements.filter((e) => e.kind === 'node')
   const edges = elements.filter((e) => e.kind === 'edge')
@@ -166,13 +180,13 @@ export function normalizeGraph(graph: ProcessGraphDocument): RenderSpec {
   const nodeById = new Map(positionedNodes.map((n) => [n.id, n] as const))
 
   const positionedEdges: PositionedEdge[] = edges
-    .map((edge) => makePositionedEdge(edge, nodeById))
+    .map((edge) => makePositionedEdge(edge, nodeById, nodeSize, gatewayRadius))
     .filter((edge): edge is PositionedEdge => edge != null)
 
   return {
     nodes: positionedNodes,
     edges: positionedEdges,
-    bounds: graphBounds(positionedNodes),
+    bounds: graphBounds(positionedNodes, nodeSize.width, nodeSize.height),
     compatibilityLayout,
   }
 }
@@ -180,13 +194,16 @@ export function normalizeGraph(graph: ProcessGraphDocument): RenderSpec {
 function makePositionedEdge(
   edge: ProcessGraphElement,
   nodeById: Map<string, PositionedNode>,
+  nodeSize: { width: number; height: number },
+  gatewayRadius: number,
 ): PositionedEdge | null {
   if (!edge.source || !edge.target) return null
   const source = nodeById.get(edge.source)
   const target = nodeById.get(edge.target)
   if (!source || !target) return null
   const waypoints = edge.waypoints ?? []
-  const path = buildEdgePath(source, target, waypoints)
+  const [start, end] = resolveEdgeEnds(edge, source, target, nodeSize, gatewayRadius)
+  const path = buildEdgePath(start, end, waypoints)
   return {
     id: edge.id,
     sourceId: edge.source,
@@ -195,6 +212,72 @@ function makePositionedEdge(
     waypoints,
     config: edge.config ?? {},
   }
+}
+
+/** 读取 config 中的显式锚点 [x,y]（图内绝对坐标）；非法值返回 null。 */
+function configAnchor(value: unknown): { x: number; y: number } | null {
+  if (!Array.isArray(value) || value.length !== 2) return null
+  const x = numberOrUndefined(value[0])
+  const y = numberOrUndefined(value[1])
+  return x !== undefined && y !== undefined ? { x, y } : null
+}
+
+/**
+ * 边端点解析：config.sourceAnchor/targetAnchor 显式锚点优先（设计稿精确落点，
+ * 如网关扇出汇入节点左下角、汇聚边入底边中点），否则按端口规则计算。
+ */
+function resolveEdgeEnds(
+  edge: Pick<ProcessGraphElement, 'config'>,
+  source: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  target: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  nodeSize: { width: number; height: number },
+  gatewayRadius: number,
+): [{ x: number; y: number }, { x: number; y: number }] {
+  const config = (edge.config ?? {}) as Record<string, unknown>
+  const start = configAnchor(config.sourceAnchor)
+  const end = configAnchor(config.targetAnchor)
+  if (start && end) return [start, end]
+  return edgeEndpoints(source, target, nodeSize, gatewayRadius)
+}
+
+/** 端口坐标：水平边取左右缘中心，垂直边取上下缘中心；网关取菱形顶点（半径与渲染的菱形一致）。 */
+function portPoint(
+  node: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  side: 'left' | 'right' | 'top' | 'bottom',
+  nodeSize: { width: number; height: number },
+  gatewayRadius: number,
+): { x: number; y: number } {
+  if (node.type === 'GATEWAY') {
+    const r = gatewayRadius
+    if (side === 'left') return { x: node.x - r, y: node.y }
+    if (side === 'right') return { x: node.x + r, y: node.y }
+    if (side === 'top') return { x: node.x, y: node.y - r }
+    return { x: node.x, y: node.y + r }
+  }
+  if (side === 'left') return { x: node.x - nodeSize.width / 2, y: node.y }
+  if (side === 'right') return { x: node.x + nodeSize.width / 2, y: node.y }
+  if (side === 'top') return { x: node.x, y: node.y - nodeSize.height / 2 }
+  return { x: node.x, y: node.y + nodeSize.height / 2 }
+}
+
+function edgeEndpoints(
+  source: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  target: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  nodeSize: { width: number; height: number },
+  gatewayRadius = Math.min(nodeSize.width, nodeSize.height) / 2,
+): [{ x: number; y: number }, { x: number; y: number }] {
+  const dx = target.x - source.x
+  const dy = target.y - source.y
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return [
+      portPoint(source, dx >= 0 ? 'right' : 'left', nodeSize, gatewayRadius),
+      portPoint(target, dx >= 0 ? 'left' : 'right', nodeSize, gatewayRadius),
+    ]
+  }
+  return [
+    portPoint(source, dy >= 0 ? 'bottom' : 'top', nodeSize, gatewayRadius),
+    portPoint(target, dy >= 0 ? 'top' : 'bottom', nodeSize, gatewayRadius),
+  ]
 }
 
 /** 相邻/共用节点中心 → SVG path（M L 或先横后竖肘线）。 */
@@ -209,24 +292,28 @@ export function buildEdgePath(
 }
 
 /** 计算所有节点的外包盒（含节点尺寸），供 fitViewport 定位。 */
-export function graphBounds(nodes: PositionedNode[]): {
+export function graphBounds(
+  nodes: PositionedNode[],
+  nodeWidth: number = DESIGNER_NODE_WIDTH,
+  nodeHeight: number = DESIGNER_NODE_HEIGHT,
+): {
   minX: number
   minY: number
   maxX: number
   maxY: number
 } {
   if (nodes.length === 0) {
-    return { minX: 0, minY: 0, maxX: NODE_WIDTH, maxY: NODE_HEIGHT }
+    return { minX: 0, minY: 0, maxX: nodeWidth, maxY: nodeHeight }
   }
   let minX = Number.MAX_SAFE_INTEGER
   let minY = Number.MAX_SAFE_INTEGER
   let maxX = Number.MIN_SAFE_INTEGER
   let maxY = Number.MIN_SAFE_INTEGER
   for (const node of nodes) {
-    minX = Math.min(minX, node.x - NODE_WIDTH / 2)
-    maxX = Math.max(maxX, node.x + NODE_WIDTH / 2)
-    minY = Math.min(minY, node.y - NODE_HEIGHT / 2)
-    maxY = Math.max(maxY, node.y + NODE_HEIGHT / 2)
+    minX = Math.min(minX, node.x - nodeWidth / 2)
+    maxX = Math.max(maxX, node.x + nodeWidth / 2)
+    minY = Math.min(minY, node.y - nodeHeight / 2)
+    maxY = Math.max(maxY, node.y + nodeHeight / 2)
   }
   return { minX, minY, maxX, maxY }
 }
@@ -283,8 +370,16 @@ export interface DesignerModel {
   serialize(): ProcessGraphDocument
 }
 
-export function createDesignerModel(graph: ProcessGraphDocument): DesignerModel {
-  const normalized = normalizeGraph(graph)
+export function createDesignerModel(
+  graph: ProcessGraphDocument,
+  nodeSize: { width: number; height: number } = {
+    width: DESIGNER_NODE_WIDTH,
+    height: DESIGNER_NODE_HEIGHT,
+  },
+  gatewayRadius: number = Math.min(nodeSize.width, nodeSize.height) / 2,
+): DesignerModel {
+  const normalized = normalizeGraph(graph, nodeSize, gatewayRadius)
+  const designerNodeSize = nodeSize
   let current: DesignerState = {
     nodes: normalized.nodes.map((node) => ({ ...node, config: { ...node.config } })),
     edges: normalized.edges.map((edge) => ({ ...edge, config: { ...edge.config } })),
@@ -364,9 +459,9 @@ export function createDesignerModel(graph: ProcessGraphDocument): DesignerModel 
           if (!touches) return edge
           const source = byId.get(edge.sourceId)
           const target = byId.get(edge.targetId)
-          return source && target
-            ? { ...edge, path: buildEdgePath(source, target, edge.waypoints) }
-            : edge
+          if (!source || !target) return edge
+          const [start, end] = resolveEdgeEnds(edge, source, target, designerNodeSize, gatewayRadius)
+          return { ...edge, path: buildEdgePath(start, end, edge.waypoints) }
         })
         current = { ...current, nodes, edges, dirty: true }
       }
@@ -390,7 +485,10 @@ export function createDesignerModel(graph: ProcessGraphDocument): DesignerModel 
         id: edgeId,
         sourceId,
         targetId,
-        path: buildEdgePath(source, target, []),
+        path: (() => {
+          const [start, end] = edgeEndpoints(source, target, designerNodeSize, gatewayRadius)
+          return buildEdgePath(start, end, [])
+        })(),
         waypoints: [],
         config: {},
       }
@@ -445,7 +543,9 @@ export function createDesignerModel(graph: ProcessGraphDocument): DesignerModel 
                 path: (() => {
                   const source = byId.get(edge.sourceId)
                   const target = byId.get(edge.targetId)
-                  return source && target ? buildEdgePath(source, target, waypoints) : edge.path
+                  if (!source || !target) return edge.path
+                  const [start, end] = resolveEdgeEnds(edge, source, target, designerNodeSize, gatewayRadius)
+                  return buildEdgePath(start, end, waypoints)
                 })(),
               }
             : edge,

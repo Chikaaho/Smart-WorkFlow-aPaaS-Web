@@ -7,6 +7,7 @@
  * color-mix 现代浏览器（2023+）均支持；若某目标浏览器不支持，退路是用硬编码色值覆盖。
  */
 :root {
+  --el-overlay-color-lighter: rgba(16, 24, 47, 0.32);
   --sw-color-primary: #6f2dff; /* 唯一品牌色源（P53 设计包） */
   --sw-color-primary-dark: color-mix(in srgb, var(--sw-color-primary) 85%, black);
   --sw-color-primary-light: #bfa7ff; /* 设计确认的浅强调变体（登录页） */
@@ -19,15 +20,16 @@
    * 暗色模式将来通过 [data-theme='dark'] 覆盖。
    * ═══════════════════════════════════════════════════════ */
 
-  /* ── 字体（本地安全回退链，不引入外部字体文件；Inter 仅在系统已装时生效） ── */
+  /* ── 字体（本地安全回退链，不引入外部字体文件；Inter/PingFang 仅在系统已装时生效；
+       实测 Windows 下 Noto 与 YaHei 差异互有胜负，维持 YaHei 回退） ── */
   --sw-font-family:
-    Inter, 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+    'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 
   /* ── 中性色 ── */
   --sw-text-primary: #172033;
   --sw-text-regular: #303a55;
-  --sw-text-secondary: #697386;
-  --sw-text-placeholder: #9aa3b7;
+  --sw-text-secondary: #6b7280;
+  --sw-text-placeholder: #9aa1b2;
   --sw-border-base: #ccd5e5;
   --sw-border-light: #dde3ef;
   --sw-border-lighter: #e9edf5;
@@ -48,6 +50,12 @@
   --sw-nav-text-secondary: #7e89a1;
   --sw-nav-border: rgba(201, 209, 232, 0.16);
   --sw-nav-hover-bg: rgba(111, 45, 255, 0.28);
+  /* P53 设计（节点15-18）：弹窗蒙层为轻压暗（非 EP 默认 50% 黑） */
+  --el-overlay-color-lighter: rgba(16, 24, 47, 0.32);
+  /* P53 设计（节点02）：侧栏描边盒边框色 */
+  --sw-nav-box-border: #27345c;
+  /* P53 设计（节点01/02）：侧栏底部空间卡 */
+  --sw-nav-area-card-bg: #172447;
 
   /* ── 表面（页面底 / 卡片底） ── */
   --sw-surface-page: #f4f6fb;
@@ -58,7 +66,7 @@
   --sw-success-bg: #eafbf7;
   --sw-warning: #f59e0b;
   --sw-warning-bg: #fff7e8;
-  --sw-danger: #e04b55;
+  --sw-danger: #e5484d;
   --sw-danger-bg: #fff0f0;
   --sw-info: #20b8cd;
   --sw-info-bg: #e7f8fa;
@@ -219,15 +227,46 @@ html:root {
  */
 :where(html) .el-tag.el-tag--success {
   --el-tag-text-color: #12805c;
+  --el-tag-bg-color: #eafbf7;
+  --el-tag-border-color: #b8ead8;
+  color: #18a67a !important;
+  background-color: #eafbf7 !important;
+  border-color: #b8ead8 !important;
+}
+
+/* P53 button/tag paint is audited from the locked SVG stroke declarations. */
+:where(html) .el-button.el-button--primary {
+  border-color: #8552ff !important;
+}
+:where(html) .el-tag.el-tag--success .el-tag__content {
+  color: #18a67a !important;
 }
 :where(html) .el-tag.el-tag--warning {
   --el-tag-text-color: #945f00;
+  --el-tag-bg-color: #f0f3f9;
+  --el-tag-border-color: #d9e0ee;
+  color: #945f00 !important;
+  background-color: #f0f3f9 !important;
+  border-color: #d9e0ee !important;
 }
 :where(html) .el-tag.el-tag--danger {
   --el-tag-text-color: #c2303a;
 }
 :where(html) .el-tag.el-tag--info {
   --el-tag-text-color: #0e7a8a;
+  --el-tag-bg-color: #f0eaff;
+  --el-tag-border-color: #d8c9ff;
+  color: #0e7a8a !important;
+  background-color: #f0eaff !important;
+  border-color: #d8c9ff !important;
+}
+:where(html) .el-tag.el-tag--primary {
+  --el-tag-text-color: #6f2dff;
+  --el-tag-bg-color: #f6f1ff;
+  --el-tag-border-color: #d8c9ff;
+  color: #6f2dff !important;
+  background-color: #f6f1ff !important;
+  border-color: #d8c9ff !important;
 }
 
 /**
@@ -245,4 +284,20 @@ body {
 body {
   font-family: var(--sw-font-family);
   background-color: var(--sw-surface-page);
+}
+
+/* P53 设计弹窗遮罩：设计 SVG 三层 #10182F@0.116 叠加的等效合成 32%，全局统一弹层背板
+   （实测设计 11 白底经罩 rgb(174,176,184) 反解 α≈0.32；覆盖 Element 默认黑罩） */
+.el-overlay {
+  background-color: rgba(16, 24, 47, 0.32) !important;
+}
+
+/* 设计11/14 实测：表单设计器弹窗蒙层 35%（白底经罩 ≈ rgb(174,176,184)） */
+.p53-dialog-overlay-35 {
+  background-color: rgba(16, 24, 47, 0.32) !important;
+}
+
+/* 设计12/13 实测：流程设计器弹窗蒙层 37%（白底经罩 ≈ rgb(167,171,182)） */
+.p53-dialog-overlay-37 {
+  background-color: rgba(17, 26, 56, 0.37) !important;
 }

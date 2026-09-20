@@ -13,6 +13,10 @@ export interface CatalogItem {
   status: 'PUBLISHED' | 'DRAFT'
   formPublished: boolean
   bindingActive: boolean
+  /** 展示补充字段（P53）：服务端未下发时为 undefined，页面按缺失省略对应片段。 */
+  description?: string
+  version?: string
+  lastUsedAt?: string
 }
 
 /** 流程分类（单层）。 */

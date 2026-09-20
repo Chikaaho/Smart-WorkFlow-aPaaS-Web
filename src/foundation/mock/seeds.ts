@@ -938,6 +938,7 @@ export const MOCK_DICT_DATA: Record<string, { label: string; code: string }[]> =
   ],
   dept: [
     { label: '技术部', code: 'TECH' },
+    { label: '科技运营部', code: 'TECH_OPS' },
     { label: '产品部', code: 'PRODUCT' },
     { label: '设计部', code: 'DESIGN' },
     { label: '人事部', code: 'HR' },
@@ -949,6 +950,7 @@ export const MOCK_DICT_DATA: Record<string, { label: string; code: string }[]> =
     { label: '调休', code: 'COMPENSATORY' },
     { label: '婚假', code: 'MARRIAGE' },
   ],
+  risk_level: [{ label: 'P1 · 需多部门会签', code: 'P1' }],
 }
 
 /**

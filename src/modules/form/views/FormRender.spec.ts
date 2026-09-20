@@ -175,7 +175,7 @@ describe('FormRender', () => {
     const field = wrapper.find('[data-field-name="x"]')
     expect(field.attributes('data-readonly')).toBe('true')
     // 查看模式不显示提交/保存按钮
-    expect(wrapper.find('button').exists()).toBe(false)
+    expect(wrapper.find('.form-render-page__action-bar').exists()).toBe(false)
   })
 
   it('loads record and resolves REFERENCE display name in edit mode', async () => {
@@ -221,7 +221,7 @@ describe('FormRender', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('提交')
+    expect(wrapper.find('.form-render-page__action-bar').text()).toContain('发起流程')
   })
 
   it('shows required validation inline and keeps the next grid row below the error', async () => {
@@ -238,7 +238,11 @@ describe('FormRender', () => {
     })
 
     await flushPromises()
-    await wrapper.find('button').trigger('click')
+    const submitButton = wrapper
+      .findAll('.form-render-page__action-bar button')
+      .find((button) => button.text().includes('发起流程'))
+    expect(submitButton).toBeDefined()
+    await submitButton!.trigger('click')
     await flushPromises()
 
     expect(wrapper.find('[data-validation-error-for="required_name"]').text()).toBe(

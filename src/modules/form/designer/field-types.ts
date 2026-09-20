@@ -255,3 +255,32 @@ export const FIELD_TYPE_REGISTRY: readonly FieldTypeDescriptor[] = [
 export function getFieldTypeDescriptor(type: FieldType): FieldTypeDescriptor | undefined {
   return FIELD_TYPE_REGISTRY.find((d) => d.type === type)
 }
+
+/**
+ * 字段类型 → 存储列类型族（P53 展示语义，描述存储形态而非具体 DDL）。
+ * 配置面板与字段属性清单共用同一映射，禁止消费方各写一套。
+ */
+const FIELD_STORAGE_FAMILY: Record<string, string> = {
+  TEXT: 'VARCHAR',
+  NUMBER: 'NUMERIC',
+  DATE: 'DATETIME',
+  TIME: 'DATETIME',
+  BOOL: 'BOOLEAN',
+  DICT: 'VARCHAR',
+  USER: 'BIGINT',
+  DEPT: 'BIGINT',
+  REFERENCE: 'BIGINT',
+  RICH_TEXT: 'TEXT',
+  ATTACHMENT: 'JSON',
+  IMAGE: 'JSON',
+  TABLE: 'JSON',
+  FORMULA: 'COMPUTED',
+  DATASOURCE: 'VARCHAR',
+  LABEL: 'TEXT',
+  MULTISELECT: 'JSON',
+}
+
+/** 取存储类型族展示名；未知类型回落 VARCHAR。 */
+export function getFieldTypeStorage(type: string): string {
+  return FIELD_STORAGE_FAMILY[type] ?? 'VARCHAR'
+}

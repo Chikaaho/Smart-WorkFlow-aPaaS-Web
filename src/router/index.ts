@@ -139,6 +139,17 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // P53 管理后台流程定义列表：与流程设计器入口保持同一真实页面链路。
+        path: 'workflow/defs',
+        name: 'workflow-def-list',
+        component: () => import('@/modules/workflow/views/ProcessDefList.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('common.processDef')
+          },
+        },
+      },
+      {
         // I3 第一方流程设计器：统一节点能力端点构建面板与配置，ProcessGraph 单一图契约。
         path: 'workflow/defs/:defId/design',
         name: 'workflow-def-designer',
@@ -157,6 +168,16 @@ export const routes: RouteRecordRaw[] = [
         meta: {
           get title() {
             return i18n.global.t('workflow.taskDetail')
+          },
+        },
+      },
+      {
+        path: 'workflow/task/:taskId/graph',
+        name: 'TaskGraph',
+        component: () => import('@/modules/workflow/views/TaskGraphView.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.taskGraphTitle')
           },
         },
       },

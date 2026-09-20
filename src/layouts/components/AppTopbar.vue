@@ -1,15 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  Bell,
-  CaretBottom,
-  Search,
-  SwitchButton,
-  OfficeBuilding,
-  HomeFilled,
-} from '@element-plus/icons-vue'
+import { CaretBottom } from '@element-plus/icons-vue'
 import { useI18n } from '@/locales'
+import { SUPPORTED_LOCALES, setLocale, type AppLocale } from '@/locales'
 import { useMenuStore } from '@/stores/menu'
 import { useUserStore } from '@/stores/user'
 import { useAuth } from '@/foundation/auth'
@@ -18,22 +12,19 @@ import { canEnterAdminArea, firstAdminLeafPath, resolveArea } from '@/foundation
 import { buildMenuTrail } from '../menu-utils'
 import { useLocalizedMenuTree } from '../menu-title'
 import { unreadNotifyCount } from '@/modules/notify/api'
-import LocaleSwitch from '@/components/LocaleSwitch.vue'
-import { activeDesignFixtureFlag } from '@/foundation/design-fixture-flag'
 
 /**
- * 顶栏工具区（P53 设计节点 01/28/29/30/32）：通知铃铛 / 语言切换 / 用户下拉。
+ * 顶栏工具区（P53 设计节点 01/28/29/30/32）：搜索 / 通知铃铛 / 用户下拉。
  * 前后台切换移入用户下拉（「进入后台 / 返回前台」，语义与既有 area 机制一致）；
+ * 语言切换内聚在下拉摘要行（P61 §3.3 能力保持：切换同步 Web/Element/Server 消息语言）；
  * 菜单、权限仍为服务端下发单源，本组件不引入第二事实源。
  */
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const menuStore = useMenuStore()
 const userStore = useUserStore()
 const { logout } = useAuth()
-// P53 DESIGN_FIDELITY：仅 fixture 会话非空（dev:mock + capture 注入），生产恒为 null。
-const designFixture = activeDesignFixtureFlag()
 
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 const displayName = computed(() => userStore.user?.displayName || t('auth.notSignedIn'))
@@ -59,6 +50,12 @@ onMounted(() => {
 const currentArea = computed(() => resolveArea(route.path))
 const adminCapable = computed(() => canEnterAdminArea())
 const showEnterAdmin = computed(() => currentArea.value === 'portal' && adminCapable.value)
+
+const localeOptions = SUPPORTED_LOCALES.map((value) => ({ value, label: t(`locale.${value}`) }))
+const currentLocale = computed(() => locale.value)
+function onLocale(value: AppLocale): void {
+  setLocale(value)
+}
 
 function onEnterAdmin(): void {
   const target = firstAdminLeafPath()
@@ -94,8 +91,24 @@ function onCommand(command: string): void {
 
 <template>
   <div class="app-topbar">
-    <span v-if="designFixture" class="app-topbar__search" aria-hidden="true">
-      <el-icon :size="18"><Search /></el-icon>
+    <span class="app-topbar__search" aria-hidden="true">
+      <!-- P53 设计同源图标：路径取自锁定 SVG（1225,23 20×20 / 1263,23 20×20） -->
+      <svg viewBox="1225 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
+        <path
+          d="M1234.17 38.0002C1237.39 38.0002 1240 35.3885 1240 32.1668C1240 28.9452 1237.39 26.3335 1234.17 26.3335C1230.95 26.3335 1228.33 28.9452 1228.33 32.1668C1228.33 35.3885 1230.95 38.0002 1234.17 38.0002Z"
+          stroke="#ECE9FF"
+          stroke-width="1.41667"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M1238.33 36.3335L1241.67 39.6668"
+          stroke="#ECE9FF"
+          stroke-width="1.41667"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
     </span>
     <router-link
       v-if="bellVisible"
@@ -104,13 +117,24 @@ function onCommand(command: string): void {
       :aria-label="t('nav.notifications')"
     >
       <el-badge :value="unread" :hidden="unread <= 0" :max="99">
-        <el-icon :size="18"><Bell /></el-icon>
+        <svg viewBox="1263 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
+          <path
+            d="M1278 29.6665C1278 28.3404 1277.47 27.0687 1276.54 26.131C1275.6 25.1933 1274.33 24.6665 1273 24.6665C1271.67 24.6665 1270.4 25.1933 1269.46 26.131C1268.53 27.0687 1268 28.3404 1268 29.6665C1268 35.4998 1265.5 35.4998 1265.5 37.1665H1280.5C1280.5 35.4998 1278 35.4998 1278 29.6665Z"
+            stroke="#ECE9FF"
+            stroke-width="1.41667"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M1271.33 40.5H1274.67"
+            stroke="#ECE9FF"
+            stroke-width="1.41667"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
       </el-badge>
     </router-link>
-
-    <div v-if="!designFixture" class="app-topbar__locale">
-      <LocaleSwitch />
-    </div>
 
     <el-dropdown trigger="click" @command="onCommand">
       <span class="app-topbar__user">
@@ -120,21 +144,44 @@ function onCommand(command: string): void {
       </span>
       <template #dropdown>
         <el-dropdown-menu class="app-topbar__dropdown">
+          <el-dropdown-item disabled class="app-topbar__dropdown-summary">
+            <strong>
+              {{
+                `${displayName} · ${currentArea === 'admin' ? t('nav.adminConsole') : t('nav.currentSpace')}`
+              }}
+            </strong>
+            <small>
+              {{
+                currentArea === 'admin'
+                  ? t('auth.menuSpaceHintAdmin')
+                  : t('auth.menuSpaceHintPortal')
+              }}
+              <span class="app-topbar__locale-group">
+                <button
+                  v-for="option in localeOptions"
+                  :key="option.value"
+                  type="button"
+                  class="app-topbar__locale-option"
+                  :class="{ 'is-current': option.value === currentLocale }"
+                  :aria-pressed="option.value === currentLocale"
+                  :aria-label="`${t('locale.switch')}: ${option.label}`"
+                  @click.stop="onLocale(option.value)"
+                >
+                  {{ option.label }}
+                </button>
+              </span>
+            </small>
+          </el-dropdown-item>
           <el-dropdown-item command="account-bindings">{{
             t('auth.accountBindings')
           }}</el-dropdown-item>
-          <el-dropdown-item v-if="showEnterAdmin" command="enter-admin" :icon="OfficeBuilding">
+          <el-dropdown-item v-if="showEnterAdmin" command="enter-admin">
             {{ t('auth.enterBackend') }}
           </el-dropdown-item>
-          <el-dropdown-item v-if="currentArea === 'admin'" command="back-portal" :icon="HomeFilled">
+          <el-dropdown-item v-if="currentArea === 'admin'" command="back-portal">
             {{ t('auth.backToPortal') }}
           </el-dropdown-item>
-          <el-dropdown-item
-            command="logout"
-            :icon="SwitchButton"
-            divided
-            class="app-topbar__logout"
-          >
+          <el-dropdown-item command="logout" divided class="app-topbar__logout">
             {{ t('auth.signOut') }}
           </el-dropdown-item>
         </el-dropdown-menu>
@@ -147,17 +194,21 @@ function onCommand(command: string): void {
 .app-topbar {
   display: flex;
   align-items: center;
-  gap: 20px;
+  /* 设计（节点02）：搜索/铃铛/用户区间距 18px，个人区总宽 336 */
+  gap: 18px;
   height: 100%;
 }
 .app-topbar__bell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 20px;
+  height: 20px;
   border-radius: var(--sw-radius-base);
   color: rgba(255, 255, 255, 0.9);
+}
+.app-topbar__bell :deep(svg) {
+  transform: translateY(2px);
 }
 .app-topbar__bell:hover {
   color: #ffffff;
@@ -167,31 +218,16 @@ function onCommand(command: string): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 20px;
+  height: 20px;
   border-radius: var(--sw-radius-base);
   color: rgba(255, 255, 255, 0.9);
-}
-.app-topbar__locale {
-  min-width: 0;
-}
-.app-topbar__locale :deep(.el-select) {
-  --el-fill-color-blank: transparent;
-}
-.app-topbar__locale :deep(.el-select__wrapper) {
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
-  color: #ffffff;
-  min-height: 32px;
-}
-.app-topbar__locale :deep(.el-select__placeholder),
-.app-topbar__locale :deep(.el-select__selected-item) {
-  color: #ffffff;
 }
 .app-topbar__user {
   display: flex;
   align-items: center;
-  gap: 8px;
+  /* 设计（节点02）：头像 32 + 10px 文距（用户区总宽 116） */
+  gap: 10px;
   cursor: pointer;
   outline: none;
 }
@@ -199,13 +235,14 @@ function onCommand(command: string): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--sw-color-primary);
   color: #ffffff;
   font-size: 14px;
   font-weight: 600;
+  transform: translateY(1px);
 }
 .app-topbar__user-name {
   font-size: 14px;
@@ -216,6 +253,9 @@ function onCommand(command: string): void {
   text-overflow: ellipsis;
 }
 .app-topbar__caret {
+  /* 设计（节点02）：用户名后紧随 12px 下拉箭头 */
+  font-size: 12px;
+  margin-left: -6px;
   color: rgba(255, 255, 255, 0.9);
 }
 .app-topbar__logout {
@@ -223,5 +263,79 @@ function onCommand(command: string): void {
 }
 .app-topbar__logout :deep(.el-icon) {
   color: var(--sw-danger);
+}
+.app-topbar__locale-group {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: 10px;
+}
+.app-topbar__locale-option {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--sw-color-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.app-topbar__locale-option.is-current {
+  font-weight: 600;
+  text-decoration: underline;
+}
+</style>
+
+<style>
+.el-popper:has(.app-topbar__dropdown) .el-popper__arrow {
+  display: none !important;
+}
+.el-popper:has(.app-topbar__dropdown) {
+  position: fixed !important;
+  top: 74px !important;
+  right: 24px !important;
+  left: auto !important;
+  transform: none !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+/* P53 设计（节点28/29/30/32）：个人菜单卡片 260px 白卡、按钮行 34px 描边盒。 */
+.app-topbar__dropdown.el-dropdown-menu {
+  width: 260px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #dfe6f2;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.08);
+}
+.app-topbar__dropdown .el-dropdown-menu__item {
+  height: 34px;
+  line-height: 32px;
+  font-size: 12px;
+  margin: 10px 0 0;
+  padding: 0 12px;
+  border: 1px solid #d4deee;
+  border-radius: 6px;
+  justify-content: center;
+}
+.app-topbar__dropdown .app-topbar__dropdown-summary {
+  display: block;
+  height: 38px;
+  line-height: normal;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.app-topbar__dropdown .app-topbar__dropdown-summary strong,
+.app-topbar__dropdown .app-topbar__dropdown-summary small {
+  display: block;
+}
+.app-topbar__dropdown .app-topbar__dropdown-summary small {
+  margin-top: 8px;
+  color: #8795ad;
+  font-size: 12px;
+}
+.app-topbar__dropdown .app-topbar__logout {
+  color: #e04b55;
 }
 </style>

@@ -63,7 +63,7 @@ describe('RelatedProcessesPanel', () => {
 
     expect(mockPageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 }, 'leave-request')
     expect(wrapper.text()).toContain('请假审批流程')
-    expect(wrapper.text()).toContain('共 1 条')
+    expect(wrapper.text()).toContain('共 1 个流程 · 启用 1 个')
   })
 
   it('无 formKey（未保存草稿）不发起请求，显示保存引导', async () => {

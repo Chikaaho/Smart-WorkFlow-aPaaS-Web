@@ -9,6 +9,7 @@ const { t } = useI18n()
  * 实例信息、当前进度与流转记录（审批历史）。
  */
 import { ref, computed, onMounted, reactive } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { StandardListTemplate } from '@/components/page-layout'
 import { myInstances, myInstanceDetail, withdrawInstance } from '@/modules/workflow/api'
@@ -17,6 +18,8 @@ import type { ProcessInstance, MyInstanceDetail } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 
+const router = useRouter()
+
 // ─── 列表状态 ───
 const list = ref<ProcessInstance[]>([])
 const total = ref(0)
@@ -24,6 +27,7 @@ const pageNum = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
 const errorMsg = ref('')
+const dateRange = ref<[string, string] | null>(null)
 
 const filter = reactive<{ status: string; keyword: string }>({ status: '', keyword: '' })
 
@@ -119,6 +123,8 @@ async function loadList() {
     const result = await myInstances(pageQuery, {
       status: filter.status || undefined,
       keyword: filter.keyword.trim() || undefined,
+      timeFrom: dateRange.value?.[0] ? `${dateRange.value[0]} 00:00:00` : undefined,
+      timeTo: dateRange.value?.[1] ? `${dateRange.value[1]} 23:59:59` : undefined,
     })
     list.value = result.list
     total.value = result.total
@@ -141,6 +147,7 @@ function handleSearch() {
 function handleReset() {
   filter.status = ''
   filter.keyword = ''
+  dateRange.value = null
   pageNum.value = 1
   void loadList()
 }
@@ -156,10 +163,16 @@ function handlePageSizeChange(s: number) {
   void loadList()
 }
 
-/** 展示层时间格式：ISO → YYYY-MM-DD HH:mm（仅显示，不改数据） */
+/** 展示层时间格式：真实时间戳 → MM-DD HH:mm（设计02列宽内的显示格式，仅显示不改数据） */
 function formatTime(value: string | null): string {
   if (!value) return '-'
-  return value.replace('T', ' ').slice(0, 16)
+  const d = new Date(value.replace(' ', 'T'))
+  if (Number.isNaN(d.getTime())) return value.replace('T', ' ').slice(0, 16)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mi = String(d.getMinutes()).padStart(2, '0')
+  return `${mm}-${dd} ${hh}:${mi}`
 }
 
 // ─── 详情弹窗 ───
@@ -268,8 +281,9 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('common.startedByMe')"
+    :title="t('common.myInstancesPageTitle')"
     :description="t('workflow.myInstancesDescription')"
+    :show-toolbar-total="false"
     large
     :total="total"
     :page-num="pageNum"
@@ -278,15 +292,25 @@ onMounted(loadList)
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <!-- 筛选区 -->
+    <!-- 筛选区（关键字、状态、发起时间均进入列表查询参数） -->
     <template #filter>
+      <div class="my-instances-field">
+        <span class="my-instances-field__label">{{ t('workflow.filterKeywordLabel') }}</span>
+        <el-input
+          v-model="filter.keyword"
+          :placeholder="t('workflow.searchProcessPlaceholder')"
+          clearable
+          style="width: 250px"
+          @keyup.enter="handleSearch"
+        />
+      </div>
       <div class="my-instances-field">
         <span class="my-instances-field__label">{{ t('common.status') }}</span>
         <el-select
           v-model="filter.status"
           :placeholder="t('common.all')"
           clearable
-          style="width: 160px"
+          style="width: 130px"
           @change="handleSearch"
         >
           <el-option :label="t('common.statusInProgress')" value="RUNNING" />
@@ -295,22 +319,32 @@ onMounted(loadList)
         </el-select>
       </div>
       <div class="my-instances-field">
-        <span class="my-instances-field__label">{{ t('workflow.filterKeywordLabel') }}</span>
-        <el-input
-          v-model="filter.keyword"
-          :placeholder="t('workflow.searchProcessPlaceholder')"
-          clearable
+        <span class="my-instances-field__label">{{ t('common.startTimeShort') }}</span>
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          :start-placeholder="t('common.startTimeShort')"
+          :end-placeholder="t('common.endTime')"
+          range-separator="—"
           style="width: 220px"
-          @keyup.enter="handleSearch"
         />
       </div>
     </template>
+
     <template #filter-actions>
       <el-button type="primary" @click="handleSearch">{{ t('common.query') }}</el-button>
       <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
-    <!-- 空态 -->
+    <template #table-title>
+      <h3 class="my-instances-panel-title">{{ t('common.processApplyTitle') }}</h3>
+      <span class="my-instances-panel-count">{{ t('common.totalItems', { total }) }}</span>
+      <el-button class="my-instances-panel-create" type="primary" @click="router.push('/workflow/catalog')">
+        ＋ {{ t('common.create') }}
+      </el-button>
+    </template>
+
     <template #empty-action>
       <span />
     </template>
@@ -326,46 +360,45 @@ onMounted(loadList)
     />
 
     <!-- 表格 -->
-    <el-table v-loading="loading" :data="list" stripe style="width: 100%">
-      <el-table-column :label="t('common.processName')" min-width="150">
+    <el-table
+      v-loading="loading"
+      :data="list"
+      stripe
+      style="width: 100%"
+      class="my-instances-table"
+    >
+      <el-table-column :label="t('common.processName')" width="260">
         <template #default="{ row }">
           {{ row.processName ?? '-' }}
         </template>
       </el-table-column>
       <el-table-column
-        prop="processDefKey"
-        :label="t('common.processKey')"
-        min-width="150"
-        show-overflow-tooltip
-      />
-      <el-table-column
         prop="businessKey"
-        :label="t('common.businessNo')"
-        min-width="120"
+        :label="t('common.processNo')"
+        width="200"
         show-overflow-tooltip
       />
-      <el-table-column
-        prop="formKey"
-        :label="t('common.formKey')"
-        min-width="130"
-        show-overflow-tooltip
-      />
-      <el-table-column :label="t('common.status')" width="100">
+      <el-table-column :label="t('common.currentNode')" width="160">
+        <template #default="{ row }">
+          {{ row.currentNode ?? t('common.dash') }}
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('common.status')" width="120">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">
             {{ statusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" :label="t('common.startTimeShort')" min-width="150">
+      <el-table-column prop="createTime" :label="t('common.startTimeShort')" width="265">
         <template #default="{ row }">
           {{ formatTime(row.createTime) }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="190" fixed="right">
+      <el-table-column :label="t('common.actions')" width="147" fixed="right">
         <template #default="{ row }">
           <el-button size="small" plain round @click="openDetailRow(row)">{{
-            t('common.detail')
+            t('common.viewDetails')
           }}</el-button>
           <el-button
             v-if="row.status === 'RUNNING'"
@@ -490,6 +523,7 @@ onMounted(loadList)
   </el-dialog>
 </template>
 
+
 <style scoped>
 .detail-section-title {
   margin: 16px 0 8px;
@@ -497,14 +531,154 @@ onMounted(loadList)
   font-size: 13px;
   font-weight: 600;
 }
+.my-instances-panel-title {
+  margin: 0;
+  font-size: 17px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+  transform: translateY(-7px);
+}
+.my-instances-panel-count {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+  transform: translateY(-6px);
+}
 .my-instances-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 9px;
+}
+.standard-list :deep(.list-filter-bar__fields) {
+  flex: 0 0 784px;
+  display: grid;
+  grid-template-columns: 266px 146px 244px;
+  column-gap: 64px;
+  row-gap: 0;
+  align-items: start;
+  transform: translateY(3px);
+}
+.standard-list :deep(.list-filter-bar__actions) {
+  margin-left: 18px;
+  padding-top: 24px;
+  gap: 12px;
+  transform: translateY(5px);
+}
+.standard-list :deep(.list-filter-bar__actions .el-button) {
+  width: 86px;
+  height: 42px;
+  margin-left: 0;
+}
+.my-instances-field > :deep(.el-input),
+.my-instances-field > :deep(.el-select),
+.my-instances-field > :deep(.el-date-editor) {
+  margin-left: 16px;
+  width: 220px !important;
+  height: 42px;
+}
+.my-instances-field > :deep(.el-input),
+.my-instances-field > :deep(.el-select) {
+  height: 42px;
+}
+.my-instances-field:nth-child(1) > :deep(.el-input) {
+  width: 250px !important;
+}
+.my-instances-field:nth-child(2) > :deep(.el-select) {
+  width: 130px !important;
+}
+.my-instances-field__label {
+  line-height: 17px;
 }
 .my-instances-field__label {
   font-size: 13px;
   font-weight: 500;
   color: var(--sw-text-regular);
+}
+
+.standard-list :deep(.list-toolbar__title--large) {
+  font-size: 26px;
+  line-height: 28px;
+}
+.standard-list :deep(.list-filter-bar) {
+  min-height: 165px;
+  box-sizing: border-box;
+}
+.standard-list :deep(.standard-list__panel-head) {
+  padding: 0 24px;
+}
+.my-instances-panel-create {
+  position: relative;
+  width: 86px;
+  height: 38px;
+  transform: translateY(-8px);
+}
+.my-instances-panel-create :deep(span) {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 86px;
+  line-height: 38px;
+  text-align: left;
+}
+
+.my-instances-table :deep(th.el-table__cell),
+.my-instances-table :deep(td.el-table__cell) {
+  padding-left: 32px;
+  padding-right: 0;
+}
+.my-instances-table :deep(th.el-table_1_column_6),
+.my-instances-table :deep(td.el-table_1_column_6) {
+  padding-left: 32px;
+}
+.my-instances-table :deep(th.el-table_1_column_4),
+.my-instances-table :deep(td.el-table_1_column_4) {
+  padding-left: 24px;
+}
+.my-instances-table :deep(th.el-table_1_column_6),
+.my-instances-table :deep(td.el-table_1_column_6) {
+  padding-left: 26px;
+}
+.my-instances-table :deep(.el-tag) {
+  width: 72px;
+  height: 28px;
+  padding: 0;
+  line-height: 28px;
+}
+.my-instances-table :deep(.el-tag__content) {
+  display: block;
+  width: 72px;
+  line-height: 28px;
+}
+</style>
+
+<style scoped>
+/* 设计（节点02）：表格行距 68px（设计行 538→606→674 实测）、表头 44px。
+   td 显式定高：RUNNING 行的催办/撤回真实操作链接不得换行撑高行（列宽已放宽单行容纳）。 */
+.my-instances-table :deep(td.el-table__cell) {
+  height: 67px;
+  padding: 4px 0 4px 32px;
+}
+.my-instances-table :deep(th.el-table__cell) {
+  height: 32px;
+  padding-left: 32px;
+  padding-right: 0;
+}
+.my-instances-table :deep(th.el-table_1_column_6.el-table__cell),
+.my-instances-table :deep(td.el-table_1_column_6.el-table__cell) {
+  padding-left: 26px;
+}
+.my-instances-table :deep(th.el-table_1_column_6.el-table__cell) {
+  padding-left: 32px;
+}
+.my-instances-table :deep(.el-table__header-wrapper tr),
+.my-instances-table :deep(.el-table__header-wrapper th) {
+  height: 32px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+.my-instances-table :deep(.el-table__header-wrapper .cell) {
+  position: relative;
+  top: 6px;
 }
 </style>

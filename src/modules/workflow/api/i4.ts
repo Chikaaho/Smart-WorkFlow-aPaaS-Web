@@ -177,8 +177,14 @@ export interface AnalyticsSummary {
   p50DurationMs: number
   p90DurationMs: number
   durationSample: number
+  overdue?: number
+  deviceAlerts?: number
+  launchTrendPercent?: number
+  durationTrendPercent?: number
+  overdueTrendPercent?: number
   handlerWorkload: Record<string, number>
   nodeStats: Record<string, { count: number; avgStayMs: number; p90StayMs: number }>
+  dailyTrend?: Array<{ date: string; count: number }>
 }
 
 export async function queryAnalyticsSummary(

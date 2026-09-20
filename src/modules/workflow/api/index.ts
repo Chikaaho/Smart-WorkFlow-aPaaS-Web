@@ -30,6 +30,8 @@ interface BackendPageResult<T> {
 
 function adaptPage<T>(raw: BackendPageResult<T>): PageResult<T> {
   return {
+    // 透传后端扩展字段（如工作台统计徽标/临期计数），其余字段显式映射
+    ...raw,
     list: raw.records,
     total: raw.total,
     pageNum: raw.pageNum,
@@ -208,11 +210,12 @@ export async function getProcessDefDefinition(id: number | string): Promise<Proc
   })
 }
 
-/** 审批人候选项（脱敏：id/username/realName） */
+/** 审批人候选项（脱敏：id/username/realName；department 为可选展示维度）。 */
 export interface ApproverCandidate {
   id: number
   username: string
   realName: string | null
+  department?: string | null
 }
 
 /** GET /workflow/defs/approver-candidates?keyword= → 审批人候选列表 */
@@ -323,6 +326,8 @@ export async function getInstanceDetail(processInstanceId: string): Promise<Inst
 export interface MyInstanceFilter {
   status?: string // RUNNING / APPROVED / REJECTED
   keyword?: string // 流程名称/业务单号模糊匹配
+  timeFrom?: string
+  timeTo?: string
 }
 
 /** GET /workflow/my/instances?pageNum=&pageSize=&status=&keyword= → PageResult<ProcessInstance> */

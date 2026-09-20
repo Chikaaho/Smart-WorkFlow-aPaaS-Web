@@ -98,7 +98,8 @@ describe('FormDesigner 工作台（P52）', () => {
     expect(mockGetFormDefById).toHaveBeenCalledWith('uuid-1')
     expect(mockGetFormDefinitionById).toHaveBeenCalledWith('uuid-1')
     expect(wrapper.text()).toContain('leave-request')
-    expect(wrapper.text()).toContain('未修改')
+    // 工作台头部重构后：保存状态以『草稿已保存 HH:mm』呈现
+    expect(wrapper.text()).toContain('草稿已保存')
   })
 
   it('身份加载失败（不存在/无权）→ 拒绝态，不回退其他表单', async () => {

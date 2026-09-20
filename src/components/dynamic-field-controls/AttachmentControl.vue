@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { useI18n } from '@/locales'
+import { i18n } from '@/locales'
 
-const { t } = useI18n()
+// form-create 子 app（FormPreview WYSIWYG）未安装 vue-i18n 插件，
+// useI18n() 会在该上下文抛错；global 实例不依赖宿主 app 安装。
+const t = i18n.global.t
 /**
  * 附件/图片（ATTACHMENT/IMAGE）控件。
  * 值 = [{storageKey, name}]；上传走 /workflow/attachments/upload（登录态），
@@ -94,9 +96,8 @@ function removeItem(item: AttachmentItem) {
       <span>{{
         uploading
           ? t('common.uploading')
-          : isImage
-            ? t('common.uploadImage')
-            : t('common.uploadAttachment')
+          : (props.field as { placeholder?: string }).placeholder ||
+            (isImage ? t('common.uploadImage') : t('common.uploadAttachment'))
       }}</span>
       <input type="file" :disabled="uploading" @change="onFileChange" />
     </label>
@@ -104,6 +105,9 @@ function removeItem(item: AttachmentItem) {
 </template>
 
 <style scoped>
+.attachment-control {
+  width: 100%;
+}
 .attachment-control__list {
   margin: 0;
   padding: 0;
@@ -127,15 +131,17 @@ function removeItem(item: AttachmentItem) {
   border: 1px solid var(--el-border-color-light);
 }
 .attachment-control__upload {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
   margin-top: 4px;
-  padding: 4px 10px;
+  padding: 9px 14px;
   font-size: 13px;
-  color: var(--sw-color-primary);
-  border: 1px dashed var(--el-border-color);
-  border-radius: 4px;
+  color: #99a5bb;
+  border: 1px solid #e4eaf5;
+  border-radius: 6px;
   cursor: pointer;
 }
 .attachment-control__upload input[type='file'] {

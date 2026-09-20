@@ -26,6 +26,8 @@ export interface FormDefDTO {
   status: FormDefStatus
   /** 当前发布版本号（P52 工作台展示用；发布成功后服务端递增）。 */
   formVersion?: number
+  /** 服务端可选的展示版本标签（例如 3.3）；缺省时回退 formVersion。 */
+  versionLabel?: string | null
   visibilityScope?: string | null
 }
 
@@ -74,7 +76,15 @@ export interface FormConfigSaveReq {
 /** 表单历史版本快照（列表行，不含 definition）。 */
 export interface FormSnapshotDTO {
   formVersion: number
+  /** 可选的产品版本标签；历史列表未提供时回退数字版本。 */
+  versionLabel?: string | null
   createTime: string
+  /** 快照状态（P53 草稿历史）：PUBLISHED=已发布版本；DRAFT=草稿版本。缺省视为历史草稿。 */
+  status?: 'PUBLISHED' | 'DRAFT'
+  /** 快照作者展示名（演示元数据；服务端未下发时缺省）。 */
+  author?: string
+  /** 快照变更说明（演示元数据；服务端未下发时缺省）。 */
+  note?: string
 }
 
 /** 表单历史版本快照详情（只读预览用，含完整 definition）。 */

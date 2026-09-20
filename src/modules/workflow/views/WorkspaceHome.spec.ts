@@ -105,20 +105,23 @@ describe('WorkspaceHome 布局与查询收敛（R4）', () => {
     expect(html).toContain('在办事项')
   })
 
-  it('span=2 组件带整行样式类，随布局持久化值渲染', async () => {
+  it('P53 新版信息架构：todo 面板随布局渲染（span 值仅保留在持久化契约）', async () => {
     const wrapper = mount(WorkspaceHome, { global })
     await flushPromises()
-    const wide = wrapper.find('.workspace-card--wide')
-    expect(wide.exists()).toBe(true)
-    expect(wide.text()).toContain('我的待办')
+    // 新版（P53 设计01）：我的待办=固定设计面板（wsd-tasklist），span 不再驱动宽窄类
+    expect(wrapper.find('.wsd-tasklist, .wsd-panel').exists()).toBe(true)
+    expect(wrapper.text()).toContain('我的待办')
   })
 
-  it('失效收藏点击不会触发路由跳转（不存在该入口）', async () => {
+  it('快捷发起渲染有效收藏并路由发起页；失效收藏不渲染入口', async () => {
     const wrapper = mount(WorkspaceHome, { global })
     await flushPromises()
     mockPush.mockClear()
-    await wrapper.find('.favorite-item').trigger('click')
+    // gone_item 不在目录返回 → 快捷网格只有 live_item + 固定「更多事项」瓦片（P53 设计01）
+    const quicks = wrapper.findAll('.wsd-quick')
+    expect(quicks.length).toBe(2)
+    expect(quicks[1].text()).toContain('更多事项')
+    await quicks[0].trigger('click')
     expect(mockPush).toHaveBeenCalledWith('/form/form-render/f1')
-    expect(wrapper.html()).not.toContain('gone_item')
   })
 })

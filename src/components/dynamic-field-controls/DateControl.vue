@@ -14,6 +14,7 @@ defineEmits<{ 'update:modelValue': [value: unknown] }>()
     :size="subField ? 'small' : undefined"
     value-format="YYYY-MM-DD"
     :model-value="String(modelValue ?? '')"
+    :placeholder="(field as { placeholder?: string }).placeholder"
     :disabled="readonly"
     @update:model-value="$emit('update:modelValue', $event)"
   />

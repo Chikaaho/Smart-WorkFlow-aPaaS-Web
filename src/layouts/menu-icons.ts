@@ -9,6 +9,8 @@ import {
   Connection,
   Document,
   EditPen,
+  Tickets,
+  Files,
 } from '@element-plus/icons-vue'
 
 /**
@@ -25,6 +27,8 @@ const ICON_MAP: Record<string, Component> = {
   Connection,
   Document,
   EditPen,
+  Tickets,
+  Files,
 }
 
 export function menuIcon(name?: string): Component | undefined {

@@ -442,7 +442,7 @@ function renderMockCaptchaSvg(code: string): string {
       .split('')
       .map(
         (ch, i) =>
-          `<text x='${14 + i * 26}' y='27' font-family='monospace' font-size='22' font-weight='bold' fill='#4a3f8f' transform='rotate(${((i * 17) % 40) - 20} ${14 + i * 26} 27)'>${ch}</text>`,
+          `<text x='${14 + i * 26}' y='27' font-family='monospace' font-size='22' font-weight='bold' fill='#5631b4' transform='rotate(${((i * 17) % 40) - 20} ${14 + i * 26} 27)'>${ch}</text>`,
       )
       .join('') +
     `</svg>`
@@ -1027,6 +1027,14 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
+  // GET /api/form/data/:formKey/:recordId — 表单数据读取（mock 默认不备份数据，
+  // 返回 404 与既有网络回退行为一致；设计 fixture 会话经 OVERRIDES 命中演示数据）
+  {
+    method: 'GET',
+    pattern: '/api/form/data/:formKey/:recordId',
+    handler: () => ({ code: 404, message: '表单数据不存在', data: null }),
+  },
+
   // ── 表单提交 ──────────────────────────────────────────────
   // POST /api/form/data/:formKey
   // - 正常 ➤ code=0, data: recordId
@@ -1298,6 +1306,17 @@ export const mockRegistrations: MockRegistration[] = [
     pattern: '/api/form/data/:formKey/:recordId',
     handler: (params) => {
       const { formKey, recordId } = params as Record<string, string>
+      // Keep the generic detail route from shadowing the static template suffix
+      // when the mock registry evaluates registrations in declaration order.
+      if (recordId === 'template') {
+        const denied = p32AccessGate('form:data:template')
+        if (denied) return denied
+        return {
+          code: 0,
+          message: 'ok',
+          data: buildMockXlsxBlob(MOCK_IMPORT_EXPORT_HEADERS),
+        }
+      }
       const allRecords =
         formKey === DEMO_FORM_KEY ? MOCK_FORM_DATA_RECORDS : MOCK_GENERIC_FORM_RECORDS
       const record = allRecords.find((r) => String(r.id) === recordId)
@@ -1786,6 +1805,30 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
+  // ── 审批人候选（P53 节点12）：keyword 模糊匹配 username/displayName，脱敏三字段 ──
+  {
+    method: 'GET',
+    pattern: '/api/workflow/defs/approver-candidates',
+    handler: (_params, query) => {
+      const keyword = String(query.keyword ?? '').trim().toLowerCase()
+      const candidates = [
+        { id: 2, username: 'admin', realName: '陈曦' },
+        { id: 103, username: 'wanghai', realName: '王海' },
+        { id: 104, username: 'linyue', realName: '林悦' },
+        { id: 105, username: 'zhaochen', realName: '赵辰' },
+        { id: 106, username: 'zhouming', realName: '周明' },
+      ]
+      const filtered = keyword
+        ? candidates.filter(
+            (c) =>
+              c.username.toLowerCase().includes(keyword) ||
+              (c.realName ?? '').toLowerCase().includes(keyword),
+          )
+        : candidates
+      return { code: 0, message: 'ok', data: filtered }
+    },
+  },
+
   // ── 流程定义：分页列表 ─────────────────────────────────
   // formKey 查询参数可选：按持久化 form_key 精确过滤（P52 表单工作台"关联流程"）。
   {
@@ -1813,6 +1856,18 @@ export const mockRegistrations: MockRegistration[] = [
   {
     method: 'GET',
     pattern: '/api/workflow/defs/:id/graph-json',
+    handler: (params) => {
+      const defId = Number((params as Record<string, string>).id)
+      const def = MOCK_PROCESS_DEFS.find((d) => d.id === defId)
+      if (!def) return { code: 2010, message: '流程定义不存在', data: null }
+      return { code: 0, message: 'ok', data: demoGraph(def) }
+    },
+  },
+
+  // GET /api/workflow/defs/:id → ProcessGraph（设计器定义加载；供 fixture 覆盖的前置基础）
+  {
+    method: 'GET',
+    pattern: '/api/workflow/defs/:id',
     handler: (params) => {
       const defId = Number((params as Record<string, string>).id)
       const def = MOCK_PROCESS_DEFS.find((d) => d.id === defId)

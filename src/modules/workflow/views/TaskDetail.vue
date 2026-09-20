@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* global window */
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
@@ -11,6 +12,8 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Paperclip } from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/user'
 import {
   queryTaskDetail,
   acceptTaskAction,
@@ -27,6 +30,7 @@ import type { ApprovalHistoryItem, TaskDetail } from '@/contracts/bpm'
 import type { ApprovalActionRequest, ApprovalOpinionConfig } from '@/contracts/bpm-node'
 import type { FormSchema } from '@/contracts/form-schema'
 import ProcessGraphView from './ProcessGraphView.vue'
+import { deriveProcessTrace } from '../utils/process-trace'
 
 const router = useRouter()
 const route = useRoute()
@@ -91,10 +95,6 @@ const formFieldRows = computed(() => {
   return rows
 })
 
-function formatTaskId(id: string): string {
-  return id.length > 8 ? `...${id.slice(-8)}` : id
-}
-
 async function loadDetail() {
   loading.value = true
   errorMsg.value = ''
@@ -102,6 +102,7 @@ async function loadDetail() {
     detail.value = await queryTaskDetail(taskId)
     initializeOpinionData(detail.value)
     void loadFormRecord()
+    void loadGraph()
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
@@ -198,6 +199,7 @@ function actionPayload(
   }
 }
 
+const userStore = useUserStore()
 const opinionFields = computed(() => detail.value?.opinionForm?.fields ?? [])
 
 /** 前端只做显示/初始值计算，后端 ApprovalOpinionValidator 仍是最终权威。 */
@@ -538,7 +540,7 @@ const APPROVAL_RESULT_MAP: Record<string, { label: string; type: 'success' | 'da
   {
     APPROVED: {
       get label() {
-        return t('common.approve')
+        return t('common.resultAgreed')
       },
       type: 'success',
     },
@@ -551,7 +553,8 @@ const APPROVAL_RESULT_MAP: Record<string, { label: string; type: 'success' | 'da
   }
 
 function getApprovalResultLabel(result: string | null): string {
-  if (!result) return t('common.statusInProgress')
+  // 设计（节点20/16）：列表与详情中已同意/待处理作为结果词，进行中仅用于节点态
+  if (!result) return t('common.resultPending')
   return APPROVAL_RESULT_MAP[result]?.label ?? result
 }
 
@@ -560,18 +563,44 @@ function getApprovalResultType(result: string | null): 'success' | 'danger' | 'i
   return APPROVAL_RESULT_MAP[result]?.type ?? 'info'
 }
 
+/** 附件型表单值：常见文档扩展名按设计呈现为附件链接样式（图标+主色文字）。 */
+function isAttachmentValue(value: unknown): boolean {
+  return typeof value === 'string' && /\.(pdf|docx?|xlsx?|pptx?|png|jpe?g|zip|txt)$/i.test(value.trim())
+}
+
 function opinionInputType(field: NonNullable<ApprovalOpinionConfig['fields']>[number]): string {
   if (field.type === 'DATETIME') return 'datetime-local'
   if (field.type === 'NUMBER') return 'number'
   return 'text'
 }
 
-// ═════════ P53 节点 03/10/15-18/20：详情重组（布局与只读弹窗，审批逻辑不变） ═════════
+// ═════════ 详情页设计重组（布局与只读弹窗，审批逻辑不变） ═════════
 
 // ─── 底部 tab ───
 const activeTab = ref<'records' | 'graph' | 'people'>('records')
 
-// ─── 流程图（节点 10/19）：定义图 + 真实轨迹高亮，切 tab 懒加载 ───
+/** 流转记录四列视图（时间/流转节点/操作人/事件·结果）：行数据完全由真实审批历史派生。 */
+const flowRecordRows = computed(() => {
+  const d = detail.value
+  if (!d) return []
+  return d.approvalHistory.map((row) => ({
+    key: row.taskId,
+    time: row.createTime ? row.createTime.slice(5, 16).replace('T', ' ') : '-',
+    node: row.taskName,
+    operator: row.assigneeName ?? row.assignee ?? '-',
+    event:
+      [
+        row.approvalResult ? getApprovalResultLabel(row.approvalResult) : (row.action ?? null),
+        typeof row.opinionData?.comment === 'string' && row.opinionData.comment
+          ? row.opinionData.comment
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || '-',
+  }))
+})
+
+// ─── 流程图：定义图 + 真实轨迹高亮，切 tab 懒加载 ───
 const detailGraph = ref<import('@/contracts/process-graph').ProcessGraphDocument | null>(null)
 const detailTrace = ref<{ activeNodeIds: string[]; completedNodeIds: string[] } | null>(null)
 const graphLoading = ref(false)
@@ -594,18 +623,13 @@ async function loadGraph() {
         []) as import('@/contracts/process-graph').ProcessGraphElement[],
       canvas: definition.canvas ?? {},
     }
-    // 轨迹高亮只使用真实可得数据：已完成=历史中已完结行的 nodeKey；活跃=当前任务节点
-    const completedNodeIds = [
-      ...new Set(
-        detail.value.approvalHistory
-          .filter((row) => row.endTime != null && typeof row.nodeKey === 'string' && row.nodeKey)
-          .map((row) => row.nodeKey as string),
-      ),
-    ]
-    detailTrace.value = {
-      activeNodeIds: detail.value.nodeKey ? [detail.value.nodeKey] : [],
-      completedNodeIds,
-    }
+    // 轨迹高亮只使用真实可得数据（与 TaskGraphView 共用同一派生规则）。
+    detailTrace.value = deriveProcessTrace({
+      approvalHistory: detail.value.approvalHistory,
+      currentNodeKey: detail.value.nodeKey ?? '',
+      currentNodeName: currentRailEntry.value?.name ?? '',
+      elements: detailGraph.value?.elements ?? [],
+    })
   } catch (err) {
     graphError.value = err instanceof ApiError ? err.msg : t('taskDetailUi.graphUnavailable')
   } finally {
@@ -617,49 +641,149 @@ function onTabChange(tab: string | number) {
   if (tab === 'graph') void loadGraph()
 }
 
-// ─── 流程状态卡（节点 03 右栏）：仅渲染真实可得的已完成/当前节点 ───
-interface FlowStatusEntry {
+// ─── 流程状态卡（右栏）：仅渲染真实可得的已完成/当前节点 ───
+interface FlowRailEntry {
   key: string
   name: string
   state: 'done' | 'current'
+  kicker: string
   who: string
   when: string
   result: string | null
+  isSign: boolean
+  doneCount: number
+  total: number
+  pendingNames: string
+  row: ApprovalHistoryItem | null
 }
 
-const flowStatus = computed<FlowStatusEntry[]>(() => {
+/** 展示层时间格式：真实时间戳 → MM-DD HH:mm（设计15-18 右栏，仅显示不改数据） */
+function formatWhen(value: string | null): string {
+  if (!value) return ''
+  const d = new Date(String(value).replace(' ', 'T'))
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 16)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mi = String(d.getMinutes()).padStart(2, '0')
+  return `${mm}-${dd} ${hh}:${mi}`
+}
+
+const flowRail = computed<FlowRailEntry[]>(() => {
   const d = detail.value
   if (!d) return []
-  const doneByKey = new Map<string, FlowStatusEntry>()
+  const groups = new Map<
+    string,
+    { name: string; rows: ApprovalHistoryItem[]; createTime: string }
+  >()
   for (const row of d.approvalHistory) {
-    if (row.endTime == null || row.approvalResult == null) continue
-    const key = (typeof row.nodeKey === 'string' && row.nodeKey) || row.taskName
-    const entry: FlowStatusEntry = {
-      key,
+    // 提交动作不是审批节点（设计右栏不呈现），仅保留审批组
+    if (typeof row.nodeKey !== 'string' || !row.nodeKey) continue
+    const g = groups.get(row.nodeKey) ?? {
       name: row.taskName,
-      state: 'done',
-      who: row.assigneeName ?? row.assignee ?? '-',
-      when: row.endTime,
-      result: row.approvalResult,
+      rows: [],
+      createTime: row.createTime,
     }
-    const prev = doneByKey.get(key)
-    if (!prev || prev.when < entry.when) doneByKey.set(key, entry)
+    g.rows.push(row)
+    groups.set(row.nodeKey, g)
   }
-  const entries = [...doneByKey.values()].sort((a, b) => (a.when < b.when ? -1 : 1))
-  if (d.nodeKey) {
-    entries.push({
-      key: d.nodeKey,
-      name: d.taskName,
-      state: 'current',
-      who: d.assigneeName ?? d.assignee ?? '-',
-      when: d.createTime,
-      result: null,
-    })
+  const done: FlowRailEntry[] = []
+  const current: FlowRailEntry[] = []
+  for (const [key, g] of groups) {
+    // 派发通知行：无结果但有完成时间——不计入会签进度
+    const real = g.rows.filter((r) => !(r.approvalResult == null && r.endTime != null))
+    const approved = real.filter((r) => r.approvalResult === 'APPROVED')
+    const pending = real.filter((r) => r.approvalResult == null && r.endTime == null)
+    if (pending.length === 0 && approved.length > 0) {
+      const lastApproved = approved.at(-1) ?? g.rows[0]
+      done.push({
+        key,
+        name: g.name,
+        state: 'done',
+        kicker: '前一节点 · 已完成',
+        who: lastApproved.assigneeName ?? lastApproved.assignee ?? '-',
+        when: formatWhen(lastApproved.endTime ?? ''),
+        result: lastApproved.approvalResult ?? null,
+        isSign: real.length > 1,
+        doneCount: approved.length,
+        total: real.length,
+        pendingNames: '',
+        row: lastApproved,
+      })
+    } else if (pending.length > 0) {
+      current.push({
+        key,
+        name: g.name,
+        state: 'current',
+        kicker: `当前节点 · 进行中 · ${approved.length} / ${g.rows.length}`,
+        who: pending
+          .map((r) => r.assigneeName)
+          .filter(Boolean)
+          .join('、'),
+        when: formatWhen(g.rows[0]?.createTime ?? ''),
+        result: null,
+        isSign: real.length > 1,
+        doneCount: approved.length,
+        total: real.length,
+        pendingNames: pending
+          .map((r) => r.assigneeName)
+          .filter(Boolean)
+          .join('、'),
+        row: real[0] ?? g.rows[0] ?? null,
+      })
+    }
   }
-  return entries
+  const rail: FlowRailEntry[] = []
+  if (done.length > 0) rail.push(done.at(-1)!)
+  rail.push(...current)
+  return rail
 })
 
-// ─── 意见详情弹窗（节点 15/17/18 状态变体）：展示该行真实可得字段 ───
+/** 流程图右侧状态卡数据源：仅真实进行中的节点；无进行中节点时不渲染。 */
+const currentRailEntry = computed(() => flowRail.value.find((e) => e.state === 'current') ?? null)
+
+/** 业务流程变量：formKey 属页头元信息，其余变量才以表格呈现。 */
+const hasBusinessVariables = computed(() => {
+  const vars = detail.value?.processVariables
+  if (!vars) return false
+  return Object.keys(vars).some((k) => k !== 'formKey')
+})
+
+/** 图画布高度：默认 740；高视口（长页基线 1512）下 800。 */
+const graphCanvasHeight = computed(() => (typeof window !== 'undefined' && window.innerHeight >= 1100 ? 784 : 740))
+
+/** 流程状态卡脚部快捷审批：仅普通意见模式显示；自定义意见表单走底部完整操作卡。 */
+const quickActionsVisible = computed(() => detail.value != null && opinionFields.value.length === 0)
+
+/** 催办仅对流程发起人呈现（真实契约：POST /workflow/my/instances/{id}/urge）。 */
+const isInitiator = computed(() => {
+  const d = detail.value
+  const uid = userStore.user?.id
+  return d != null && uid != null && String(d.initiatorId ?? '') === String(uid)
+})
+
+async function onUrge(): Promise<void> {
+  const d = detail.value
+  if (!d?.processInstanceId) return
+  try {
+    const { urgeMyInstance } = await import('@/modules/workflow/api/oa')
+    const resp = await urgeMyInstance(Number(d.processInstanceId))
+    void resp
+    ElMessage.success(t('workflow.urgeSent'))
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.urgeFailed'))
+  }
+}
+
+/** 快捷同意/驳回：复用既有确认弹窗与 handler（真实审批链路不变）。 */
+async function quickApprove(): Promise<void> {
+  await handleApprove()
+}
+async function quickReject(): Promise<void> {
+  await handleReject()
+}
+
+// ─── 意见详情弹窗：展示该行真实可得字段 ───
 const opinionDetailVisible = ref(false)
 const opinionDetailRow = ref<ApprovalHistoryItem | null>(null)
 
@@ -673,44 +797,73 @@ function openOpinionDetailRow(r: unknown) {
   openOpinionDetail(r as ApprovalHistoryItem)
 }
 
+/** 附件类字段的键名约定：只有真实记录带这类键时才渲染附件区块，否则留白。 */
+const OPINION_ATTACHMENT_KEY = /^(attachments?|files?|附录|附件)/i
+
 const opinionDetailEntries = computed(() => {
   const row = opinionDetailRow.value
   if (!row?.opinionData) return []
   return Object.entries(row.opinionData)
-    .filter(([key]) => key !== 'comment')
-    .map(([key, value]) => ({ key, value: value == null ? '-' : String(value) }))
+    .filter(
+      ([key, value]) =>
+        key !== 'comment' &&
+        !Array.isArray(value) &&
+        !OPINION_ATTACHMENT_KEY.test(key) &&
+        value != null &&
+        value !== '',
+    )
+    .map(([key, value]) => ({ key, value: String(value) }))
 })
 
-// ─── 会签聚合（节点 16）：同一节点的多条历史聚合为真实统计 ───
+/** 设计（意见详情）的已确认检查项区块：仅当字段值为非空数组时按检查项芯片渲染。 */
+const opinionDetailCheckEntries = computed(() => {
+  const row = opinionDetailRow.value
+  if (!row?.opinionData) return []
+  return Object.entries(row.opinionData).filter(
+    ([key, value]) => key !== 'comment' && Array.isArray(value) && value.length > 0,
+  )
+})
+
+/** 设计（意见详情）的附件区块：仅当键名命中附件约定且值非空时渲染。 */
+const opinionDetailAttachmentEntries = computed(() => {
+  const row = opinionDetailRow.value
+  if (!row?.opinionData) return []
+  return Object.entries(row.opinionData).filter(
+    ([key]) => key !== 'comment' && OPINION_ATTACHMENT_KEY.test(key),
+  ).map(([key, value]) => ({
+    key,
+    value: Array.isArray(value) ? value.map((item) => String(item)).join('、') : String(value),
+  })).filter((entry) => entry.value !== '')
+})
+
+// ─── 会签聚合：同一节点的多条历史聚合为真实统计 ───
 const signGroupVisible = ref(false)
 const signGroupKey = ref('')
-
-const historyGroups = computed(() => {
-  const d = detail.value
-  if (!d) return []
-  const byNode = new Map<string, ApprovalHistoryItem[]>()
-  for (const row of d.approvalHistory) {
-    const key = (typeof row.nodeKey === 'string' && row.nodeKey) || row.taskName
-    const list = byNode.get(key) ?? []
-    list.push(row)
-    byNode.set(key, list)
-  }
-  return [...byNode.entries()]
-    .map(([nodeKey, rows]) => ({
-      nodeKey,
-      taskName: rows[0]?.taskName ?? nodeKey,
-      rows,
-      isSign: rows.length > 1,
-    }))
-    .sort((a, b) => ((a.rows[0]?.createTime ?? '') < (b.rows[0]?.createTime ?? '') ? -1 : 1))
-})
 
 const signGroupRows = computed(() => {
   const d = detail.value
   if (!d) return []
   const key = signGroupKey.value
   return d.approvalHistory.filter(
-    (row) => ((typeof row.nodeKey === 'string' && row.nodeKey) || row.taskName) === key,
+    (row) =>
+      ((typeof row.nodeKey === 'string' && row.nodeKey) || row.taskName) === key &&
+      // 会签派发通知行（无结果但有完成时间）不计入参与人
+      !(row.approvalResult == null && row.endTime != null),
+  )
+})
+
+/** 会签弹窗标题中的节点名：取该组真实历史的任务名，取不到回退分组键。 */
+const signGroupName = computed(() => signGroupRows.value[0]?.taskName ?? '')
+
+/** 审批详情列表：仅审批人行（排除提交动作与会签派发通知行） */
+const peopleRows = computed(() => {
+  const d = detail.value
+  if (!d) return []
+  return d.approvalHistory.filter(
+    (r) =>
+      typeof r.nodeKey === 'string' &&
+      !!r.nodeKey &&
+      !(r.approvalResult == null && r.endTime != null),
   )
 })
 
@@ -722,19 +875,66 @@ const signGroupStats = computed(() => {
   return { total: rows.length, agreed, rejected, pending }
 })
 
+function formatSignTime(value: string | null | undefined): string {
+  if (!value) return '-'
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/)
+  return match ? `${match[1]}\n${match[2]}` : value
+}
+
 function openSignGroup(nodeKey: string) {
   signGroupKey.value = nodeKey
   signGroupVisible.value = true
 }
 
 onMounted(loadDetail)
+
+/** 后继节点（设计右栏第三块）：由真实流程图推导；仅在图可达时呈现。 */
+const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
+  const g = detailGraph.value
+  const currentName = currentRailEntry.value?.name
+  if (!g || !currentName) return null
+  const byName = (n: { kind: string; type?: string; config?: { name?: string } }) =>
+    n.kind === 'node' && n.config?.name === currentName
+  const start = g.elements.find(byName)
+  if (!start) return null
+  const outgoing = (id: string) =>
+    g.elements.filter((e) => e.kind === 'edge' && e.source === id).map((e) => e.target)
+  let frontier = outgoing(String(start.id))
+  const seen = new Set<string>([String(start.id)])
+  // 穿过网关找首个后继节点；无后继审批节点时回退结束节点
+  let endFallback: { name: string; hint: string } | null = null
+  while (frontier.length > 0) {
+    const next = frontier.shift()!
+    if (seen.has(next)) continue
+    seen.add(next)
+    const el = g.elements.find((e) => e.kind === 'node' && String(e.id) === next)
+    if (!el) continue
+    if (el.type === 'GATEWAY') {
+      frontier.push(...outgoing(next))
+      continue
+    }
+    const nodeName = String((el.config as { name?: unknown } | undefined)?.name ?? '')
+    if (el.type === 'END') {
+      endFallback = { name: nodeName || t('taskDetailUi.endNode'), hint: t('taskDetailUi.nextNodeEndHint') }
+      continue
+    }
+    if (el.type === 'APPROVAL') {
+      return { name: nodeName, hint: t('taskDetailUi.nextNodeHint') }
+    }
+  }
+  return endFallback
+})
 </script>
 
 <template>
-  <div v-loading="loading" class="task-detail">
-    <!-- 页头（节点 03）：返回 + 标题 + 状态 + 元信息 -->
+  <div
+    v-loading="loading"
+    class="task-detail"
+    :class="{ 'task-detail--people-active': activeTab === 'people' }"
+  >
+    <!-- 页头：返回 + 标题 + 状态 + 元信息 -->
     <div class="detail-header">
-      <el-button @click="goBack">{{ t('workflow.backToTodo') }}</el-button>
+      <el-button class="detail-header__back" @click="goBack">{{ t('workflow.backToTodo') }}</el-button>
       <div class="detail-header__body">
         <div class="detail-header__title-row">
           <h2 class="detail-header__title">
@@ -750,9 +950,9 @@ onMounted(loadDetail)
           </el-tag>
         </div>
         <p v-if="detail" class="detail-header__meta">
-          {{ t('common.processKey') }} {{ detail.processDefinitionKey }} ·
-          {{ t('common.initiator') }} {{ detail.initiatorName ?? detail.initiatorId }} ·
-          {{ detail.createTime }}
+          {{ t('common.processNo') }} {{ detail.businessKey }} · {{ t('common.initiator') }}
+          {{ detail.initiatorName ?? detail.initiatorId }} ·
+          {{ detail.createTime?.slice(0, 16)?.replace('T', ' ') }}
         </p>
       </div>
     </div>
@@ -767,7 +967,7 @@ onMounted(loadDetail)
       style="margin-bottom: 16px"
     />
 
-    <!-- 主区双栏：左=数据表单/流程变量；右=流程状态+审批操作（节点 03） -->
+    <!-- 主区双栏：左=数据表单/流程变量；右=流程状态+审批操作 -->
     <div v-if="detail" class="task-main">
       <div class="task-main__left">
         <!-- 本次提交的表单数据 -->
@@ -786,7 +986,12 @@ onMounted(loadDetail)
             <div v-else-if="formFieldRows.length > 0" class="data-rows">
               <div v-for="row in formFieldRows" :key="row.key" class="data-row">
                 <span class="data-row__label">{{ row.label }}</span>
-                <span class="data-row__value">{{ row.value }}</span>
+                <span class="data-row__value">
+                  <span v-if="isAttachmentValue(row.value)" class="data-row__file">
+                    <el-icon :size="14"><Paperclip /></el-icon>{{ row.value }}
+                  </span>
+                  <template v-else>{{ row.value }}</template>
+                </span>
               </div>
             </div>
             <el-descriptions v-else-if="formRecord" :column="1" border>
@@ -798,7 +1003,7 @@ onMounted(loadDetail)
         </el-card>
 
         <!-- 流程变量 -->
-        <el-card v-if="Object.keys(detail.processVariables).length > 0" class="detail-card">
+        <el-card v-if="hasBusinessVariables" class="detail-card">
           <template #header>
             <span>{{ t('common.processVariable') }}</span>
           </template>
@@ -820,30 +1025,82 @@ onMounted(loadDetail)
           </template>
           <div class="flow-status">
             <div
-              v-for="entry in flowStatus"
-              :key="entry.key + entry.state"
+              v-for="entry in flowRail"
+              :key="entry.key"
               class="flow-node"
               :class="{ 'flow-node--current': entry.state === 'current' }"
             >
-              <div class="flow-node__head">
-                <span class="flow-node__name">{{ entry.name }}</span>
-                <el-tag
-                  size="small"
-                  :type="
-                    entry.state === 'current' ? 'primary' : getApprovalResultType(entry.result)
+              <p class="flow-node__kicker">
+                <span
+                  class="flow-node__state"
+                  :class="
+                    entry.state === 'current'
+                      ? 'flow-node__state--current'
+                      : 'flow-node__state--done'
                   "
                 >
                   {{
                     entry.state === 'current'
                       ? t('taskDetailUi.current')
-                      : getApprovalResultLabel(entry.result)
+                      : t('taskDetailUi.prevNodeDone')
                   }}
-                </el-tag>
+                </span>
+                <span v-if="entry.state === 'current'" class="flow-node__prog">
+                  {{ t('taskDetailUi.currentProgress', { done: entry.doneCount, total: entry.total }) }}
+                </span>
+              </p>
+              <div class="flow-node__head">
+                <span class="flow-node__name">{{ entry.name }}</span>
               </div>
-              <p class="flow-node__meta">{{ entry.who }} · {{ entry.when }}</p>
+              <p v-if="entry.isSign" class="flow-node__sub">
+                {{ t('taskDetailUi.parallelSignRule') }}
+              </p>
+              <p v-if="entry.state === 'current'" class="flow-node__sub">
+                {{ t('taskDetailUi.signDoneProgress', { done: entry.doneCount, total: entry.total })
+                }}<template v-if="entry.pendingNames">
+                  · {{ t('taskDetailUi.pendingNamesPrefix') }}{{ entry.pendingNames }}</template>
+              </p>
+              <div v-else class="flow-node__meta-row">
+                <p class="flow-node__meta">
+                  {{ entry.who }} · {{ getApprovalResultLabel(entry.result) }} · {{ entry.when }}
+                </p>
+                <el-button size="small" type="primary" plain @click="openOpinionDetailRow(entry.row)">
+                  {{ t('taskDetailUi.viewDetail') }}
+                </el-button>
+              </div>
+              <el-button
+                v-if="entry.state === 'current' && entry.isSign"
+                size="small"
+                class="flow-node__allbtn"
+                @click="openSignGroup(entry.key)"
+              >
+                {{ t('taskDetailUi.viewAllSignRecords') }}
+              </el-button>
+            </div>
+            <div v-if="nextRailNode" class="flow-node flow-node--next">
+              <p class="flow-node__kicker">
+                <span class="flow-node__state flow-node__state--next">
+                  {{ t('taskDetailUi.nextNodePending') }}
+                </span>
+              </p>
+              <div class="flow-node__head">
+                <span class="flow-node__name">{{ nextRailNode.name }}</span>
+              </div>
+              <p class="flow-node__sub">{{ nextRailNode.hint }}</p>
+            </div>
+            <div v-if="quickActionsVisible" class="flow-actions">
+              <el-button v-if="isInitiator" class="flow-actions__urge" :disabled="acting !== null" @click="onUrge">
+                {{ t('taskDetailUi.urgeAction') }}
+              </el-button>
+              <el-button type="success" :loading="acting === 'approve'" :disabled="acting !== null" @click="quickApprove">
+                {{ t('common.approve') }}
+              </el-button>
+              <el-button class="p53-reject-action" type="danger" plain :loading="acting === 'reject'" :disabled="acting !== null" @click="quickReject">
+                {{ t('common.reject') }}
+              </el-button>
             </div>
             <el-alert
-              v-if="flowStatus.length === 0"
+              v-if="flowRail.length === 0"
               :title="t('workflow.noApprovalHistory')"
               type="info"
               :closable="false"
@@ -852,8 +1109,148 @@ onMounted(loadDetail)
           </div>
         </el-card>
 
-        <!-- 操作区（原操作栏移入右栏，审批逻辑不变） -->
-        <el-card class="detail-card">
+      </div>
+    </div>
+
+    <!-- 底部 tab：流转记录 / 流程图 / 审批详情列表 -->
+    <el-card v-if="detail" class="detail-card detail-card--tabs">
+      <el-tabs v-model="activeTab" @tab-change="onTabChange">
+        <!-- 流转记录：四列设计版式，行数据来自真实审批历史 -->
+        <el-tab-pane name="records">
+          <template #label><span class="detail-tab-label">{{ t('taskDetailUi.tabRecords') }}</span></template>
+          <el-alert
+            v-if="detail.approvalHistory.length === 0"
+            :title="t('workflow.noApprovalHistory')"
+            type="info"
+            :closable="false"
+            show-icon
+          />
+          <div v-else class="p53-records-table">
+            <div class="p53-records-table__head">
+              <span>{{ t('taskDetailUi.recordTime') }}</span>
+              <span>{{ t('taskDetailUi.recordNode') }}</span>
+              <span>{{ t('taskDetailUi.operatorLabel') }}</span>
+              <span>{{ t('taskDetailUi.recordEvent') }}</span>
+            </div>
+            <div
+              v-for="row in flowRecordRows"
+              :key="row.key"
+              class="p53-records-table__row"
+            >
+              <span>{{ row.time }}</span>
+              <span>{{ row.node }}</span>
+              <span>{{ row.operator }}</span>
+              <span>{{ row.event }}</span>
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <!-- 流程图：定义图 + 真实轨迹高亮，切 tab 懒加载；图内容由 ProcessGraphView 内核输出 -->
+        <el-tab-pane name="graph">
+          <template #label><span class="detail-tab-label">{{ t('taskDetailUi.tabGraph') }}</span></template>
+          <div v-loading="graphLoading" class="p53-graph-shell">
+            <el-alert
+              v-if="graphError"
+              :title="graphError"
+              type="warning"
+              :closable="false"
+              show-icon
+            />
+            <div v-if="detailGraph" class="p53-graph-canvas">
+              <ProcessGraphView
+                :graph="detailGraph"
+                :trace="detailTrace"
+                :height="graphCanvasHeight"
+                :fit-margins="{ left: 135, top: 24, right: 241, bottom: -232 }"
+              />
+              <aside v-if="currentRailEntry" class="p53-graph-rail">
+                <div class="p53-graph-status">
+                  <small>{{ t('taskDetailUi.current') }}</small>
+                  <strong>{{ currentRailEntry.name }}</strong>
+                  <span v-if="currentRailEntry.total > 0">
+                    {{
+                      t('taskDetailUi.signDoneProgress', {
+                        done: currentRailEntry.doneCount,
+                        total: currentRailEntry.total,
+                      })
+                    }}
+                  </span>
+                  <span v-if="currentRailEntry.pendingNames">
+                    {{ t('taskDetailUi.pendingNamesPrefix') }}{{ currentRailEntry.pendingNames }}
+                  </span>
+                </div>
+                <div class="p53-graph-legend">
+                  <strong>{{ t('taskDetailUi.nodeStatus') }}</strong>
+                  <span class="p53-graph-legend__chip p53-graph-legend__chip--completed">{{
+                    t('common.statusCompleted')
+                  }}</span>
+                  <span class="p53-graph-legend__chip p53-graph-legend__chip--current">{{
+                    t('common.statusInProgress')
+                  }}</span>
+                  <span class="p53-graph-legend__chip p53-graph-legend__chip--pending">{{
+                    t('workflow.notArrived')
+                  }}</span>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <!-- 审批详情列表：按真实历史逐人一行；已处理行可打开意见详情弹窗，会签节点可开聚合记录 -->
+        <el-tab-pane name="people">
+          <template #label><span class="detail-tab-label">{{ t('taskDetailUi.tabPeople') }}</span></template>
+          <el-table :data="peopleRows" stripe>
+            <el-table-column prop="taskName" :label="t('workflow.approvalNode')" min-width="260" />
+            <el-table-column :label="t('workflow.approver')" width="120">
+              <template #default="{ row }">
+                {{ row.assigneeName ?? row.assignee ?? '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('common.status')" width="120">
+              <template #default="{ row }">
+                <span
+                  class="people-status"
+                  :class="`people-status--${getApprovalResultType(row.approvalResult)}`"
+                >
+                  {{ getApprovalResultLabel(row.approvalResult) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('workflow.actionOpinion')" min-width="432">
+              <template #default="{ row }">
+                {{
+                  row.opinionFormId
+                    ? t('taskDetailUi.customFormLabel')
+                    : (row.opinionData?.comment ?? row.action ?? '-')
+                }}
+                ·
+                {{ row.endTime ?? row.createTime }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('common.actions')" width="172" fixed="right">
+              <template #default="{ row }">
+                <el-button
+                  v-if="row.approvalResult != null"
+                  size="small"
+                  type="primary"
+                  plain
+                  round
+                  @click="openOpinionDetailRow(row)"
+                >
+                  {{ t('taskDetailUi.viewDetail') }}
+                </el-button>
+                <span v-else class="people-group__pending">{{
+                  t('taskDetailUi.viewDetailPending')
+                }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
+    </el-card>
+
+<!-- 操作区（原操作栏移入右栏，审批逻辑不变）：置于记录卡之后，主审批入口在流程状态卡脚部 -->
+        <el-card v-if="detail" class="detail-card detail-card--actions">
           <template #header>
             <span>{{ t('workflow.taskDetail') }}</span>
           </template>
@@ -966,23 +1363,6 @@ onMounted(loadDetail)
               rows="3"
               :placeholder="t('workflow.remarkOptional')"
             />
-            <div class="detail-actions__row">
-              <el-button
-                type="primary"
-                :loading="acting === 'approve'"
-                :disabled="acting !== null"
-                @click="handleApprove"
-              >
-                {{ t('common.statusApproved') }}
-              </el-button>
-              <el-button
-                type="danger"
-                :loading="acting === 'reject'"
-                :disabled="acting !== null"
-                @click="handleReject"
-                >{{ t('common.reject') }}</el-button
-              >
-            </div>
             <div class="detail-actions__row detail-actions__row--lifecycle">
               <el-button :disabled="acting !== null" @click="openLifecycle('TRANSFER')">
                 {{ t('workflow.transferOwnTask') }}
@@ -1002,211 +1382,147 @@ onMounted(loadDetail)
             </div>
           </div>
         </el-card>
-      </div>
-    </div>
 
-    <!-- 底部 tab（节点 03/10/15-20）：流转记录 / 流程图 / 审批详情列表 -->
-    <el-card v-if="detail" class="detail-card">
-      <el-tabs v-model="activeTab" @tab-change="onTabChange">
-        <!-- 流转记录：原审批历史表格，逻辑不变 -->
-        <el-tab-pane :label="t('taskDetailUi.tabRecords')" name="records">
-          <el-alert
-            v-if="detail.approvalHistory.length === 0"
-            :title="t('workflow.noApprovalHistory')"
-            type="info"
-            :closable="false"
-            show-icon
-          />
-          <el-table v-else :data="detail.approvalHistory" stripe>
-            <el-table-column :label="t('common.taskNo')" min-width="140">
-              <template #default="{ row }">
-                <span :title="row.taskId">{{ formatTaskId(row.taskId) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="taskName" :label="t('common.taskName')" min-width="120" />
-            <el-table-column :label="t('workflow.approver')" min-width="120">
-              <template #default="{ row }">
-                {{ row.assigneeName ?? row.assignee ?? '-' }}
-              </template>
-            </el-table-column>
-            <el-table-column :label="t('workflow.approvalResult')" min-width="100">
-              <template #default="{ row }">
-                <el-tag :type="getApprovalResultType(row.approvalResult)" size="small">
-                  {{ getApprovalResultLabel(row.approvalResult) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column :label="t('workflow.actionOpinion')" min-width="180">
-              <template #default="{ row }">
-                {{ row.action ?? '-'
-                }}{{
-                  row.opinionData?.comment
-                    ? t('workflow.opinionCommentSuffix', { comment: row.opinionData.comment })
-                    : ''
-                }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="createTime" :label="t('common.createTime')" min-width="170" />
-            <el-table-column :label="t('workflow.completedAt')" min-width="170">
-              <template #default="{ row }">
-                {{ row.endTime ?? '-' }}
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
 
-        <!-- 流程图：定义图 + 真实轨迹高亮（节点 10/19），切 tab 懒加载 -->
-        <el-tab-pane :label="t('taskDetailUi.tabGraph')" name="graph">
-          <div v-loading="graphLoading">
-            <el-alert
-              v-if="graphError"
-              :title="graphError"
-              type="warning"
-              :closable="false"
-              show-icon
-            />
-            <ProcessGraphView
-              v-else-if="detailGraph"
-              :graph="detailGraph"
-              :trace="detailTrace"
-              :height="480"
-            />
-          </div>
-        </el-tab-pane>
-
-        <!-- 审批详情列表（节点 20）：按节点分组；会签节点可开聚合记录（16）；
-             每行查看详情打开意见详情弹窗（15/17/18） -->
-        <el-tab-pane :label="t('taskDetailUi.tabPeople')" name="people">
-          <div v-for="group in historyGroups" :key="group.nodeKey" class="people-group">
-            <div class="people-group__head">
-              <span class="people-group__name">{{ group.taskName }}</span>
-              <el-button
-                v-if="group.isSign"
-                size="small"
-                link
-                type="primary"
-                @click="openSignGroup(group.nodeKey)"
-              >
-                {{ t('taskDetailUi.signGroupTitle') }}
-              </el-button>
-            </div>
-            <el-table :data="group.rows" size="small">
-              <el-table-column :label="t('workflow.approver')" min-width="120">
-                <template #default="{ row }">
-                  {{ row.assigneeName ?? row.assignee ?? '-' }}
-                </template>
-              </el-table-column>
-              <el-table-column :label="t('common.status')" width="100">
-                <template #default="{ row }">
-                  <el-tag :type="getApprovalResultType(row.approvalResult)" size="small">
-                    {{ getApprovalResultLabel(row.approvalResult) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column :label="t('workflow.actionOpinion')" min-width="200">
-                <template #default="{ row }">
-                  {{ row.opinionData?.comment ?? row.action ?? '-' }}
-                </template>
-              </el-table-column>
-              <el-table-column :label="t('common.actions')" width="110" fixed="right">
-                <template #default="{ row }">
-                  <el-button
-                    v-if="row.approvalResult != null"
-                    size="small"
-                    type="primary"
-                    link
-                    @click="openOpinionDetailRow(row)"
-                  >
-                    {{ t('taskDetailUi.viewDetail') }}
-                  </el-button>
-                  <span v-else class="people-group__pending">{{
-                    t('taskDetailUi.viewDetailPending')
-                  }}</span>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-        </el-tab-pane>
-      </el-tabs>
-    </el-card>
-
-    <!-- 意见详情弹窗（节点 15/17/18 状态变体）：仅真实可得字段；无快照版本数据时不虚构 -->
+    <!-- 意见详情弹窗：仅渲染该行真实可得字段；无对应数据时区块留白，不虚构 -->
     <el-dialog
       v-model="opinionDetailVisible"
-      :title="t('taskDetailUi.opinionDetailTitle')"
-      width="560px"
+      width="780px"
+      top="12vh"
+      class="p53-opinion-dialog"
     >
-      <template v-if="opinionDetailRow">
-        <p class="opinion-detail__meta">
-          {{ opinionDetailRow.taskName }} ·
-          {{ opinionDetailRow.assigneeName ?? opinionDetailRow.assignee ?? '-' }} ·
-          {{ opinionDetailRow.endTime ?? opinionDetailRow.createTime }}
-          <template v-if="opinionDetailRow.opinionFormVersion">
-            · {{ t('taskDetailUi.formVersionLabel') }} v{{ opinionDetailRow.opinionFormVersion }}
-          </template>
-        </p>
-        <div class="opinion-detail__comment">
-          {{ opinionDetailRow.opinionData?.comment ?? t('taskDetailUi.opinionEmpty') }}
-        </div>
-        <div v-if="opinionDetailEntries.length > 0" class="opinion-detail__fields">
-          <div v-for="entry in opinionDetailEntries" :key="entry.key" class="data-row">
-            <span class="data-row__label">{{ entry.key }}</span>
-            <span class="data-row__value">{{ entry.value }}</span>
-          </div>
+      <template #header>
+        <div v-if="opinionDetailRow" class="p53-opinion-dialog__head">
+          <h2>{{ t('taskDetailUi.opinionDetailTitle') }}</h2>
+          <b>
+            {{ opinionDetailRow.taskName }} ·
+            {{ opinionDetailRow.assigneeName ?? opinionDetailRow.assignee ?? '-'
+            }}<template v-if="opinionDetailRow.assigneeDept">
+              · {{ opinionDetailRow.assigneeDept }}
+            </template>
+          </b>
+          <p>
+            {{ getApprovalResultLabel(opinionDetailRow.approvalResult) }} ·
+            {{ opinionDetailRow.endTime ?? opinionDetailRow.createTime }}
+            <template v-if="opinionDetailRow.opinionFormVersion">
+              · {{ t('taskDetailUi.formVersionLabel') }} v{{
+                opinionDetailRow.opinionFormVersion
+              }}
+            </template>
+          </p>
         </div>
       </template>
+      <div v-if="opinionDetailRow" class="p53-opinion-panel">
+        <h3 v-if="opinionDetailRow.opinionFormId">
+          {{ opinionDetailRow.opinionFormId }}
+        </h3>
+        <div v-if="opinionDetailEntries.length > 0" class="p53-opinion-grid">
+          <div v-for="entry in opinionDetailEntries" :key="entry.key">
+            <label>{{ entry.key }}</label>
+            <b>{{ entry.value }}</b>
+          </div>
+        </div>
+        <label>{{ t('taskDetailUi.opinionCommentLabel') }}</label>
+        <div class="p53-opinion-comment">
+          {{ opinionDetailRow.opinionData?.comment ?? t('taskDetailUi.opinionEmpty') }}
+        </div>
+        <template v-for="entry in opinionDetailCheckEntries" :key="entry[0]">
+          <label>{{ entry[0] }}</label>
+          <div class="p53-opinion-checks">
+            <b v-for="item in entry[1]" :key="String(item)">✓ {{ item }}</b>
+          </div>
+        </template>
+        <template v-for="entry in opinionDetailAttachmentEntries" :key="entry.key">
+          <div class="p53-opinion-attachment-row">
+            <label>{{ entry.key }}</label>
+            <div class="p53-opinion-attachment">{{ entry.value }}</div>
+          </div>
+        </template>
+      </div>
       <template #footer>
-        <el-button type="primary" @click="opinionDetailVisible = false">{{
-          t('common.close')
-        }}</el-button>
+        <small class="p53-opinion-dialog__note">
+          {{ t('taskDetailUi.opinionReadonlyNote') }}
+        </small>
+        <el-button type="primary" class="p53-dialog-close" @click="opinionDetailVisible = false">
+          {{ t('common.close') }}
+        </el-button>
       </template>
     </el-dialog>
 
-    <!-- 会签聚合弹窗（节点 16）：统计与逐人记录均来自当前实例真实历史 -->
-    <el-dialog v-model="signGroupVisible" :title="t('taskDetailUi.signGroupTitle')" width="720px">
-      <p class="sign-group__meta">
-        {{ t('taskDetailUi.nodeLabel') }} {{ signGroupKey }} · {{ signGroupStats.total }}
-        {{ t('taskDetailUi.signParticipants') }} {{ signGroupStats.agreed }}
-        {{ t('taskDetailUi.signAgreed') }} {{ signGroupStats.pending }}
-        {{ t('taskDetailUi.signPending') }}
+    <!-- 会签聚合弹窗：统计与逐人记录均来自当前实例真实历史 -->
+    <el-dialog v-model="signGroupVisible" width="1018px" top="10vh" class="p53-sign-dialog">
+      <template #header>
+        <div class="p53-sign-dialog__head">
+          <h2>
+            <template v-if="signGroupName">{{ signGroupName }} · </template
+            >{{ t('taskDetailUi.signGroupTitle') }}
+          </h2>
+          <p v-if="signGroupKey && signGroupKey !== signGroupName">
+            {{ t('taskDetailUi.nodeKeyLabel') }} {{ signGroupKey }}
+          </p>
+        </div>
+      </template>
+      <p class="p53-sign-summary">
+        {{ signGroupStats.total }} {{ t('taskDetailUi.signParticipants') }}
+        {{ signGroupStats.agreed }} {{ t('taskDetailUi.signAgreed') }}
+        {{ signGroupStats.pending }} {{ t('taskDetailUi.signPending') }}
+        {{ signGroupStats.rejected }} {{ t('taskDetailUi.signRejected') }}
       </p>
-      <el-table :data="signGroupRows" size="small" stripe>
-        <el-table-column :label="t('workflow.approver')" min-width="110">
+      <el-table :data="signGroupRows" stripe class="p53-sign-table">
+        <el-table-column :label="t('workflow.approver')" width="112">
           <template #default="{ row }">
-            {{ row.assigneeName ?? row.assignee ?? '-' }}
+            <b>{{ row.assigneeName ?? row.assignee ?? '-' }}</b>
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.status')" width="90">
+        <el-table-column :label="t('taskDetailUi.deptLabel')" width="168">
           <template #default="{ row }">
-            <el-tag :type="getApprovalResultType(row.approvalResult)" size="small">
+            {{ row.assigneeDept ?? '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.status')" width="114">
+          <template #default="{ row }">
+            <span
+              class="people-status"
+              :class="`people-status--${getApprovalResultType(row.approvalResult)}`"
+            >
               {{ getApprovalResultLabel(row.approvalResult) }}
-            </el-tag>
+            </span>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" :label="t('workflow.arrivedAt')" min-width="150" />
-        <el-table-column :label="t('workflow.handledAt')" min-width="150">
+        <el-table-column width="198" :label="t('taskDetailUi.sentAt')">
           <template #default="{ row }">
-            {{ row.endTime ?? '-' }}
+            <span class="p53-sign-time">{{ formatSignTime(row.createTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.actions')" width="100" fixed="right">
+        <el-table-column width="198" :label="t('taskDetailUi.processedAt')">
+          <template #default="{ row }">
+            <span class="p53-sign-time">{{ formatSignTime(row.endTime) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('taskDetailUi.opinionCommentLabel')" width="174" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.approvalResult != null"
               size="small"
               type="primary"
-              link
+              plain
               @click="openOpinionDetailRow(row)"
             >
               {{ t('taskDetailUi.viewDetail') }}
             </el-button>
+            <span v-else class="people-group__pending">{{
+              t('taskDetailUi.viewDetailPending')
+            }}</span>
           </template>
         </el-table-column>
       </el-table>
+      <p v-if="signGroupStats.pending > 0" class="p53-sign-note">
+        {{ t('taskDetailUi.signGroupNote') }}
+      </p>
       <template #footer>
-        <el-button type="primary" @click="signGroupVisible = false">{{
-          t('common.close')
-        }}</el-button>
+        <el-button type="primary" class="p53-dialog-close" @click="signGroupVisible = false">
+          {{ t('common.close') }}
+        </el-button>
       </template>
     </el-dialog>
 
@@ -1290,13 +1606,23 @@ onMounted(loadDetail)
 
 <style scoped>
 .task-detail {
-  padding: 16px;
+  max-width: 1216px;
+  padding: 6px 32px 24px;
 }
 .detail-header {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  margin-bottom: 19px;
+}
+.detail-header__back {
+  align-self: flex-start;
+  box-sizing: border-box;
+  width: 140px;
+  height: 24px;
+  padding: 0 31px;
+  font-size: 12px;
 }
 .detail-header__body {
   min-width: 0;
@@ -1305,10 +1631,14 @@ onMounted(loadDetail)
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-top: 8px;
 }
 .detail-header__title {
   margin: 0;
-  font-size: 20px;
+  position: relative;
+  top: -6px;
+  font-size: 26px;
+  line-height: 30px;
   font-weight: 700;
   color: var(--sw-text-primary);
 }
@@ -1316,17 +1646,23 @@ onMounted(loadDetail)
   flex: 0 0 auto;
 }
 .detail-header__meta {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   font-size: 13px;
   color: var(--sw-text-secondary);
 }
-/* 主区双栏（节点 03）：左数据卡 / 右状态+操作 */
+/* 主区双栏：左数据卡 / 右状态+操作 */
+/* 设计（节点10）：短视口下流程图 tab 聚焦呈现——隐藏双栏区，图区全宽加高（方向 §5.10 真实组件改造） */
+@media (max-height: 1099px) {
+  .task-main--graph-focus {
+    display: none;
+  }
+}
 .task-main {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
-  gap: 16px;
+  grid-template-columns: 784px minmax(0, 1fr);
+  gap: 0;
   align-items: start;
-  margin-bottom: 16px;
+  margin-bottom: 15px;
 }
 .task-main__left,
 .task-main__right {
@@ -1338,28 +1674,53 @@ onMounted(loadDetail)
 .detail-card {
   margin-bottom: 0;
 }
+.detail-card :deep(.el-card__body) {
+  padding: 28px 24px 24px;
+}
+
+.task-main__left > .detail-card:first-child :deep(.el-card__header) {
+  box-sizing: border-box;
+  padding: 23px 24px 13px;
+}
+/* 设计（数据详情）：主区两卡基线高度；真实内容超出时自然伸展，不裁切 */
+.task-main__left > .detail-card:first-child,
+.task-main__right > .detail-card:first-child {
+  box-sizing: border-box;
+  min-height: 476px;
+}
+
+/* 节点19/03：数据表单卡底部 11px（设计实测 kv 卡底 645/646） */
+.task-main__left > .detail-card:first-child :deep(.el-card__body) {
+  padding-right: 22px;
+  padding-bottom: 11px;
+}
 .card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin-bottom: 0;
 }
 .card-head__hint {
   font-size: 12px;
   font-weight: 400;
   color: var(--sw-text-secondary);
 }
-/* 数据表单行式展示（设计 03：横排 label/value） */
+/* 数据表单行式展示（横排 label/value） */
 .data-rows {
+  margin-top: -26px;
   display: flex;
   flex-direction: column;
 }
 .data-row {
+  box-sizing: border-box;
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
-  gap: 12px;
-  padding: 10px 4px;
-  border-bottom: 1px solid var(--sw-border-lighter);
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: center;
+  min-height: 48px;
+  margin-bottom: 8px;
+  padding: 6px 12px 6px 12px;
+  border: 1px solid #eef1f7;
   font-size: 13px;
 }
 .data-row:last-child {
@@ -1373,20 +1734,110 @@ onMounted(loadDetail)
   word-break: break-all;
   white-space: pre-wrap;
 }
-/* 流程状态卡（真实可得节点） */
+/* 设计（节点20）：附件值呈现为图标+主色链接样式 */
+.data-row__file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sw-color-primary);
+}
+/* 设计（节点20）：标题行状态标签为品牌紫底 */
+.detail-header__status.el-tag {
+  --el-tag-bg-color: var(--sw-color-primary-soft);
+  --el-tag-border-color: transparent;
+  --el-tag-text-color: var(--sw-color-primary);
+}
+/* 流程状态卡（真实可得节点）；设计（节点20）：prev 90 / current 152 / next 80 / gap 16 */
 .flow-status {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 .flow-node {
-  padding: 12px 14px;
+  box-sizing: border-box;
+  padding: 9px 5px 6px 11px;
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-base);
+  background: #f7fafc;
+}
+.flow-status .flow-node:nth-of-type(1) {
+  min-height: 96px;
+}
+.flow-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: -6px;
+  height: 34px;
+}
+.flow-actions .el-button {
+  flex: 1;
+  height: 34px;
+  margin: 0;
+}
+.flow-actions__urge {
+  --el-button-bg-color: #fff6e7;
+  --el-button-border-color: #f5d38e;
+  --el-button-text-color: #e89a19;
+}
+.flow-status .flow-node--next {
+  min-height: 92px;
+}
+.flow-node--current .flow-node__head {
+  margin-bottom: 4px;
+}
+.flow-node:nth-of-type(1) .flow-node__meta-row {
+  transform: translateY(-1px);
+}
+.flow-node--current .flow-node__kicker {
+  transform: translateY(-1px);
+}
+.flow-node--current .flow-node__sub {
+  transform: translateY(2px);
+}
+.flow-node--current .flow-node__allbtn {
+  width: 180px;
+  transform: translateY(6px);
+}
+.flow-node--next .flow-node__head,
+.flow-node--next .flow-node__sub {
+  transform: translateY(-1px);
+}
+.flow-node__head {
+  margin-bottom: 8px;
+}
+.flow-node__sub + .flow-node__sub {
+  margin-top: 10px;
+}
+.flow-node--current .flow-node__allbtn {
+  margin-top: 10px;
+  width: 180px;
+  height: 24px;
+  padding: 0 12px;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--sw-color-primary);
+  background: #fff;
+  border-color: var(--sw-color-primary-soft, #ece9ff);
+  border-radius: 6px;
+}
+.flow-node__state--next {
+  color: var(--sw-text-secondary);
+  background: var(--sw-fill-base);
+}
+.flow-status .flow-node--current {
+  min-height: 150px;
+}
+/* 设计（节点20）：右栏卡头部 40 / 内容区 13..25 对位 */
+.task-main__right > .detail-card :deep(.el-card__header) {
+  box-sizing: border-box;
+  padding: 18px 22px 2px 24px;
+}
+.task-main__right > .detail-card :deep(.el-card__body) {
+  padding: 14px 22px 23px 24px;
 }
 .flow-node--current {
-  border-color: var(--sw-color-primary);
-  background: var(--sw-color-primary-soft);
+  border-color: #d9caff;
+  background: #fcfaff;
 }
 .flow-node__head {
   display: flex;
@@ -1397,7 +1848,45 @@ onMounted(loadDetail)
 .flow-node__name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--sw-text-primary);
+  color: #19233b;
+}
+.flow-node__kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 3px;
+  font-size: 12px;
+}
+.flow-node__state--done {
+  color: #12aa83;
+}
+.flow-node__state--current {
+  color: var(--sw-color-primary);
+  font-weight: 600;
+}
+.flow-node__meta-row .el-button {
+  box-sizing: border-box;
+  width: 76px;
+}
+.flow-node__prog {
+  color: var(--sw-color-primary);
+}
+.flow-node__sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+.flow-node__meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.flow-node__meta-row .flow-node__meta {
+  margin: 0;
+}
+.flow-node__allbtn {
+  margin: 8px 0 0;
 }
 .flow-node__meta {
   margin: 4px 0 0;
@@ -1407,7 +1896,7 @@ onMounted(loadDetail)
 .detail-actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 .detail-actions__row {
   display: flex;
@@ -1474,7 +1963,7 @@ onMounted(loadDetail)
 .opinion-note {
   color: var(--sw-text-secondary);
 }
-/* 审批详情列表（节点 20）：按节点分组 */
+/* 审批详情列表：按节点分组 */
 .people-group {
   margin-bottom: 18px;
 }
@@ -1495,31 +1984,514 @@ onMounted(loadDetail)
 }
 .people-group__pending {
   font-size: 12px;
-  color: var(--sw-text-secondary);
+  color: #a5adbe;
 }
-/* 意见详情弹窗（15/17/18） */
-.opinion-detail__meta {
+
+.p53-reject-action,
+.p53-reject-action :deep(span) {
+  color: #ef5d71 !important;
+  --el-button-text-color: #ef5d71;
+}
+.task-detail :deep(.el-dialog .people-group__pending) {
+  color: #a0a9bb;
+}
+/* ─── 意见详情弹窗：设计几何（780 宽 / 圆角 14 / 头部 meta / 意见面板 / 底部注脚） ─── */
+.task-detail :deep(.p53-opinion-dialog) {
+  margin-top: 182px !important;
+  margin-bottom: auto;
+}
+.task-detail :deep(.p53-opinion-dialog.el-dialog) {
+  height: 660px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.task-detail :deep(.p53-opinion-dialog .el-dialog__body) {
+  flex: 1 1 auto;
+  overflow: auto;
+}
+.task-detail :deep(.p53-opinion-dialog) {
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(19, 31, 58, 0.18);
+}
+.task-detail :deep(.p53-opinion-dialog .el-dialog__header) {
+  box-sizing: border-box;
+  height: 122px;
+  padding: 20px 28px;
+  margin-right: 0;
+  border-bottom: 1px solid var(--sw-border-light);
+}
+.p53-opinion-dialog__head h2 {
   margin: 0 0 12px;
+  font-size: 22px;
+  line-height: 1.2;
+  color: var(--sw-text-primary);
+}
+.p53-opinion-dialog__head b {
   font-size: 13px;
+  color: var(--sw-text-primary);
+}
+.p53-opinion-dialog__head p {
+  margin: 10px 0 0;
+  font-size: 12px;
   color: var(--sw-text-secondary);
 }
-.opinion-detail__comment {
+.task-detail :deep(.p53-opinion-dialog .el-dialog__body) {
+  max-height: 484px;
+  padding: 4px 28px 0;
+  overflow: auto;
+}
+.p53-opinion-panel {
+  box-sizing: border-box;
+  height: 438px;
+  padding: 15px 19px 10px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 10px;
+  background: var(--sw-fill-base);
+}
+.p53-opinion-panel h3 {
+  margin: 0 0 17px;
+  font-size: 16px;
+  color: var(--sw-text-primary);
+}
+.p53-opinion-grid {
+  row-gap: 25px;
+}
+.p53-opinion-panel > label {
+  display: block;
+  margin: 14px 0 8px;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+.p53-opinion-grid + label {
+  margin-top: 19px;
+  margin-bottom: 7px;
+}
+.p53-opinion-comment + label {
+  margin-top: 16px;
+  margin-bottom: 6px;
+}
+.p53-opinion-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 25px 80px;
+}
+.p53-opinion-grid label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+.p53-opinion-grid b {
+  font-size: 14px;
+  color: var(--sw-text-primary);
+}
+.p53-opinion-comment {
+  min-height: 46px;
   padding: 14px;
   border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-base);
-  background: var(--sw-fill-base);
-  font-size: 14px;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
   line-height: 1.7;
   color: var(--sw-text-primary);
   white-space: pre-wrap;
 }
-.opinion-detail__fields {
-  margin-top: 12px;
+.p53-opinion-checks {
+  display: grid;
+  grid-template-columns: repeat(3, 210px);
+  gap: 18px;
 }
-.sign-group__meta {
-  margin: 0 0 12px;
-  font-size: 13px;
+.p53-opinion-checks b {
+  box-sizing: border-box;
+  height: 24px;
+  padding: 4px 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #eaf8f2;
+  color: var(--sw-success, #08a879);
+  font-size: 12px;
+  font-weight: 400;
+  text-align: center;
+  word-break: break-all;
+}
+.p53-opinion-attachment-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  height: 36px;
+  margin-top: 17px;
+}
+.p53-opinion-attachment-row > label {
+  width: 58px;
+  margin-top: 6px;
+  font-size: 12px;
   color: var(--sw-text-secondary);
+}
+.p53-opinion-attachment {
+  display: inline-flex;
+  width: 280px;
+  height: 36px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border-radius: 7px;
+  background: #f0ecff;
+  color: var(--sw-color-primary, #6f2dff);
+  font-size: 12px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-detail :deep(.p53-opinion-dialog .el-dialog__footer) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 68px;
+  padding: 0 28px;
+  border-top: 1px solid var(--sw-border-light);
+}
+.task-detail :deep(.p53-opinion-dialog .el-dialog__footer > .p53-opinion-dialog__note),
+.task-detail :deep(.p53-opinion-dialog .el-dialog__footer > .p53-dialog-close) {
+  position: relative;
+  top: -16px;
+}
+.p53-opinion-dialog__note {
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+/* 弹窗关闭按钮（设计 108×42） */
+.task-detail :deep(.el-dialog__footer .p53-dialog-close) {
+  min-width: 108px;
+  height: 42px;
+  margin: 0;
+}
+/* ─── 会签记录弹窗：设计几何（1018 宽 / 头部 88 / 汇总行 / 行高 72 / 右对齐关闭） ─── */
+.task-detail :deep(.p53-sign-dialog) {
+  margin-top: 207px !important;
+  border-radius: 14px;
+}
+.task-detail :deep(.p53-sign-dialog.el-dialog) {
+  padding: 0;
+}
+.task-detail :deep(.p53-sign-dialog .el-dialog__header) {
+  box-sizing: border-box;
+  min-height: 88px;
+  padding: 22px 27px 12px;
+  margin-right: 0;
+  border-bottom: 1px solid var(--sw-border-light);
+}
+.p53-sign-dialog__head h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--sw-text-primary);
+}
+.p53-sign-dialog__head p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+.task-detail :deep(.p53-sign-dialog .el-dialog__body) {
+  max-height: 460px;
+  padding: 17px 27px 0;
+  overflow: auto;
+}
+.p53-sign-summary {
+  margin: 0 0 27px;
+  font-size: 15px;
+  color: var(--sw-color-primary);
+}
+.p53-sign-table :deep(.el-table__header-wrapper th) {
+  height: 50px;
+  background: var(--sw-fill-base);
+  color: var(--sw-text-secondary);
+  font-weight: 400;
+}
+.p53-sign-table :deep(.el-table__header-wrapper .cell) {
+  padding-left: 21px;
+  line-height: 20px;
+  transform: translateY(4px);
+}
+.p53-sign-table :deep(.el-table__body td) {
+  height: 74px;
+}
+.p53-sign-table :deep(.p53-sign-time) {
+  display: block;
+  white-space: pre-line;
+  line-height: 20px;
+}
+.p53-sign-table :deep(.el-button) {
+  width: 76px;
+  height: 26px;
+  padding: 0;
+}
+.task-detail :deep(.p53-sign-dialog .el-dialog__footer) {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 27px 23px;
+}
+.p53-sign-note {
+  margin: 27px 0 0;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+/* ─── 流程图 tab：设计壳层（网格底 / 圆角画布 / 右侧当前节点状态卡） ─── */
+.p53-graph-shell {
+  min-height: 320px;
+}
+.p53-graph-shell > .el-alert {
+  margin-bottom: 12px;
+}
+.p53-graph-canvas {
+  position: relative;
+}
+.p53-graph-canvas :deep(.pg-view) {
+  border-color: var(--sw-border-lighter);
+  border-radius: 10px;
+  background: #fbfdff;
+}
+.p53-graph-canvas :deep(.pg-view)::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: '';
+  background-image:
+    linear-gradient(#e8edf6 1px, transparent 1px),
+    linear-gradient(90deg, #e8edf6 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.p53-graph-canvas :deep(.pg-svg),
+.p53-graph-canvas :deep(.pg-legend),
+.p53-graph-canvas :deep(.pg-zoom),
+.p53-graph-canvas :deep(.pg-compat-alert) {
+  z-index: 1;
+}
+.p53-graph-canvas :deep(.pg-zoom) {
+  box-sizing: border-box;
+  width: 183px;
+  height: 78px;
+  right: 22px;
+  bottom: 38px;
+  padding: 11px 18px 15px;
+}
+.p53-graph-canvas :deep(.pg-zoom__row) {
+  width: 151px;
+  justify-content: flex-start;
+}
+.p53-graph-canvas :deep(.pg-zoom__row:last-child) {
+  transform: translateY(4px);
+}
+.p53-graph-canvas :deep(.pg-zoom__locate) {
+  padding-left: 0;
+  padding-right: 0;
+}
+.p53-graph-canvas :deep(.pg-node-label) {
+  transform: translateX(2.25px);
+}
+/* 设计（节点19）：画布右侧双卡（当前节点 / 节点状态） */
+.p53-graph-rail {
+  position: absolute;
+  top: 50px;
+  right: 23px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 44px;
+  width: 182px;
+}
+.p53-graph-status {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 10px;
+  background: #fff;
+}
+.p53-graph-status small {
+  display: block;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+.p53-graph-status strong {
+  display: block;
+  margin-top: 14px;
+  font-size: 16px;
+  color: var(--sw-color-primary);
+}
+.p53-graph-status span {
+  display: block;
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--sw-text-primary);
+}
+.p53-graph-status span + span {
+  color: var(--sw-text-secondary);
+}
+.p53-graph-legend {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 10px;
+  background: #fff;
+}
+.p53-graph-legend strong {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--sw-text-primary);
+}
+.p53-graph-legend__chip {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 104px;
+  padding: 4px 0;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: center;
+}
+.p53-graph-legend__chip + .p53-graph-legend__chip {
+  margin-top: 10px;
+}
+.p53-graph-legend__chip--completed {
+  background: #e6f8f2;
+  color: #15a77f;
+}
+.p53-graph-legend__chip--current {
+  background: #f0eaff;
+  color: #6f2dff;
+}
+.p53-graph-legend__chip--pending {
+  background: #f0f3f9;
+  color: #8a96ad;
+}
+/* ─── 底部记录卡页签几何（48px 页签 / 150px 页签宽） ─── */
+.detail-card--tabs {
+  box-sizing: border-box;
+  min-height: 332px;
+}
+.detail-card--tabs :deep(.el-card__body) {
+  padding: 0 0 24px;
+}
+.detail-card--tabs :deep(.el-tabs__header) {
+  height: 48px;
+  margin-bottom: 0;
+  background: #fafbfe;
+}
+.detail-card--tabs :deep(.el-tabs__nav-wrap),
+.detail-card--tabs :deep(.el-tabs__nav-scroll),
+.detail-card--tabs :deep(.el-tabs__nav) {
+  height: 48px;
+}
+.detail-card--tabs :deep(.el-tabs__nav) {
+  padding-left: 24px;
+}
+.detail-card--tabs :deep(.el-tabs__item) {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 150px;
+  height: 48px;
+  padding: 0;
+  line-height: 19px;
+  text-align: center;
+}
+.detail-card--tabs :deep(.detail-tab-label) {
+  display: inline-block;
+  line-height: 19px;
+}
+/* 审批详情列表页签（设计行高 24 表头 / 44 行；表格 270..1386） */
+.task-detail--people-active
+  > .detail-card--tabs
+  :deep(.el-tabs__content > .el-tab-pane[aria-hidden='false'] > .el-table) {
+  box-sizing: border-box;
+  width: calc(100% - 46px) !important;
+  margin: 12px 22px 0 24px;
+}
+.task-detail--people-active > .detail-card--tabs :deep(.el-table__header-wrapper tr),
+.task-detail--people-active > .detail-card--tabs :deep(.el-table__header-wrapper th) {
+  height: 32px !important;
+}
+.task-detail--people-active > .detail-card--tabs :deep(.el-table__body-wrapper tr),
+.task-detail--people-active > .detail-card--tabs :deep(.el-table__body-wrapper td) {
+  height: 44px;
+}
+.task-detail--people-active > .detail-card--tabs :deep(.el-table .cell) {
+  line-height: 20px;
+  padding-left: 1px;
+  padding-right: 0;
+}
+.task-detail--people-active > .detail-card--tabs
+  :deep(.el-table__header-wrapper .cell) {
+  transform: translateY(-2.5px);
+}
+.task-detail--people-active > .detail-card--tabs
+  :deep(.el-table__body-wrapper td:not(:last-child) .cell) {
+  transform: translateY(-6px);
+}
+.task-detail--people-active > .detail-card--tabs
+  :deep(.el-table__body-wrapper td:last-child .cell) {
+  transform: translateY(-1px);
+}
+/* 设计：状态列为彩色文字（非胶囊） */
+.people-status {
+  font-size: 13px;
+}
+.people-status--success {
+  color: #12aa83;
+}
+.people-status--danger {
+  color: #ef5d71;
+}
+.people-status--info {
+  color: var(--sw-text-secondary);
+}
+/* ─── 流转记录四列表（行数据来自真实审批历史） ─── */
+.p53-records-table {
+  box-sizing: border-box;
+  width: calc(100% - 46px);
+  margin: 12px 22px 0 24px;
+  border: 1px solid var(--sw-border-lighter);
+  color: var(--sw-text-primary);
+  font-size: 13px;
+}
+.p53-records-table__head,
+.p53-records-table__row {
+  display: grid;
+  grid-template-columns: 152px 252px 144px minmax(0, 1fr);
+  align-items: center;
+}
+.p53-records-table__head {
+  min-height: 32px;
+  background: var(--sw-fill-base);
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+}
+.p53-records-table__row {
+  box-sizing: border-box;
+  min-height: 44px;
+  border-top: 1px solid var(--sw-border-lighter);
+}
+.p53-records-table__head span,
+.p53-records-table__row span {
+  min-width: 0;
+  padding: 0 12px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.p53-records-table__head span {
+  transform: translateY(-4px);
+}
+.p53-records-table__row span {
+  transform: translateY(-8px);
 }
 /* 窄屏双栏退化为单列（方向 §4.5：不留裁切） */
 @media (max-width: 991px) {

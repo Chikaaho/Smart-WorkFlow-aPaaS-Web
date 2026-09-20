@@ -50,11 +50,11 @@ test.describe('P53 页面族矩阵（EV-03）', () => {
   test('01 工作台：默认态区域基线与关键交互阻断', async ({ page }) => {
     await loginPortal(page)
     skipMobile(page)
-    await expect(page.locator('.workspace__greeting')).toBeVisible()
-    await expect(page.locator('.workspace-stat')).toHaveCount(4)
-    await expectNotClipped(page, '.workspace__greeting')
+    await expect(page.locator('.wsd-hero__greeting')).toBeVisible()
+    await expect(page.locator('.wsd-stat')).toHaveCount(4)
+    await expectNotClipped(page, '.wsd-hero__greeting')
     // expectNotObscured 仅接受单元素定位：多统计卡取首个做遮挡阻断
-    await expectNotObscured(page, '.workspace-stat')
+    await expectNotObscured(page, '.wsd-stat')
     const regions = desktopRegions(page.viewportSize() ?? undefined)
     await expectRegionMatches(page, regions.topbar, REGION_THRESHOLDS.topbar, 'fam01-topbar.png')
     await expectRegionMatches(page, regions.sidebar, REGION_THRESHOLDS.sidebar, 'fam01-sidebar.png')
@@ -145,7 +145,8 @@ test.describe('P53 页面族矩阵（EV-03）', () => {
     await expect(page.locator('.pg-view .pg-node').first()).toBeVisible()
     await artifact(page, `fam-task-graph-${vw(page)}.png`)
     await page.getByRole('tab', { name: '审批详情列表' }).click()
-    await expect(page.locator('.el-table__row, .el-empty').first()).toBeVisible()
+    // 审批详情列表 = el-table（peopleRows）；mock 种子待办无历史时呈现表格空态文案
+    await expect(page.locator('.el-table__empty-text').first()).toBeVisible()
     await artifact(page, `fam-task-people-${vw(page)}.png`)
   })
 
@@ -191,7 +192,9 @@ test.describe('P53 页面族矩阵（EV-03）', () => {
     await page.goto('/form/designer/seed-def-001')
     await expect(page.locator('.designer').first()).toBeVisible()
     await expectNotClipped(page, '.designer__body')
-    await page.getByRole('button', { name: '字段清单' }).click()
+    // review-06/07 设计还原后字段清单入口 = 设置下拉菜单（FormDesigner onSettingsCommand 'field-list'）
+    await page.locator('.designer__settings').click()
+    await page.getByRole('menuitem', { name: '字段清单' }).click()
     const dialog = page.locator('.el-dialog').first()
     await expect(dialog).toBeVisible()
     await artifact(page, `fam-designer-fields-${vw(page)}.png`)

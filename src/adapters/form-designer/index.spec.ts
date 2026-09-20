@@ -204,7 +204,8 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     const r = rules[0] as Record<string, unknown>
     expect(r.type).toBe('input')
     expect((r.props as Record<string, unknown>).type).toBe('textarea')
-    expect((r.props as Record<string, unknown>).rows).toBe(4)
+    // 设计（节点07）：画布富文本降高为 2 行
+    expect((r.props as Record<string, unknown>).rows).toBe(2)
     expect(r.value).toBe('')
   })
 

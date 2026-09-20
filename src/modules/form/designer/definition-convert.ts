@@ -3,6 +3,7 @@ import type { FormSchema, FormSchemaField, VisibilityRule } from '@/contracts/fo
 import type { DesignerItem } from './types'
 import { nextDesignerItemId } from './types'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
+import { FIELD_TYPE_REGISTRY } from './field-types'
 
 /**
  * DesignerItem[] → FormSchema 单向导出（items → definition）。
@@ -14,9 +15,11 @@ export function itemsToDefinition(
   items: DesignerItem[],
   title: string,
   rules?: VisibilityRule[],
+  description?: string,
 ): FormSchema {
   return {
     title: title.trim() || i18n.global.t('common.untitledForm'),
+    ...(description ? { description } : {}),
     fields: items.map((it) => {
       const colSpan = normalizeFormFieldColSpan(it.field.colSpan, it.field.type)
       return it.field.colSpan === colSpan ? it.field : { ...it.field, colSpan }
@@ -34,20 +37,8 @@ export function itemsToDefinition(
  * 未知 type 的字段会被跳过（console.warn），不阻塞其他字段还原。
  */
 export function definitionToItems(schema: FormSchema): DesignerItem[] {
-  const knownTypes = new Set<string>([
-    'TEXT',
-    'RICH_TEXT',
-    'NUMBER',
-    'DATE',
-    'BOOL',
-    'DICT',
-    'REFERENCE',
-    'TABLE',
-    'MULTISELECT',
-    'ATTACHMENT',
-    'IMAGE',
-    'LABEL',
-  ])
+  // 已知类型与注册表同源：注册表新增类型后此处自动跟随，不再各自维护第二份清单
+  const knownTypes = new Set<string>(FIELD_TYPE_REGISTRY.map((d) => d.type))
 
   return schema.fields.flatMap<DesignerItem>((field) => {
     if (!knownTypes.has(field.type)) {
