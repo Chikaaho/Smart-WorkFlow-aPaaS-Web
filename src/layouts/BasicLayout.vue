@@ -55,7 +55,8 @@ const showAside = computed(
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  border-radius: 18px;
+  /* V011-BUG-022：整页应用外壳不放圆角（Owner 2026-09-22 裁决） */
+  border-radius: 0;
 }
 .basic-layout__topbar {
   box-sizing: border-box;
