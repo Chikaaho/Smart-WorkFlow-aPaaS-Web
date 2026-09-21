@@ -1828,6 +1828,9 @@ export default {
     ssoLoginIncomplete: 'Single sign-on not completed',
     backToPasswordLogin: 'Back to password sign-in',
     errorTitle: 'Something went wrong',
+    errorPageMissing: 'Page not found or has been moved',
+    errorGoBack: 'Go back',
+    errorBackToWorkspace: 'Back to workspace',
     ssoBindTicketMissing:
       'The binding ticket is missing. Please start again from the sign-in page.',
     ssoBindCandidateExpired: 'The binding candidate has expired. Please start again.',
