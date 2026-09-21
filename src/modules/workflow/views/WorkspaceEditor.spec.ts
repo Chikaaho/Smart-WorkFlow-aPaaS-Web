@@ -165,4 +165,15 @@ describe('WorkspaceEditor 独立全屏编辑页 —— 所见即所得（V011-BU
     await wrapper.find('.wsd-toolbar__actions .wsd-btn:last-child').trigger('click')
     expect(mockPush).toHaveBeenCalledWith('/workspace')
   })
+
+  it('点击卡片出现选中边框，点击空白画布取消选中', async () => {
+    const wrapper = mount(WorkspaceEditor, { global })
+    await flushPromises()
+    const nodes = wrapper.findAll('.wsd-canvas-item')
+    await nodes[0].find('.wsd-canvas-item__bar').trigger('pointerdown')
+    expect(nodes[0].classes()).toContain('is-selected')
+
+    await wrapper.find('.wsd-canvas').trigger('pointerdown')
+    expect(wrapper.findAll('.wsd-canvas-item')[0].classes()).not.toContain('is-selected')
+  })
 })

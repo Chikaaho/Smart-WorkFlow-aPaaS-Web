@@ -83,6 +83,7 @@ type CanvasDragState = {
   moved: boolean
 }
 const dragState = ref<CanvasDragState | null>(null)
+const selectedKey = ref<string | null>(null)
 
 // ─── 组件数据 ───
 type PageExtra = { badge?: string; urgentTotal?: number }
@@ -682,6 +683,7 @@ function addComponent(typeCode: string, at?: { x: number; y: number }) {
     w,
     h,
   }
+  selectedKey.value = typeCode
   dirty.value = true
 }
 
@@ -712,6 +714,7 @@ function startCardDrag(
   const target = event.target as globalThis.HTMLElement | null
   if (mode === 'move' && target?.closest('button, a, input, textarea, select, label')) return
   event.preventDefault()
+  selectedKey.value = key
   dragState.value = {
     key,
     mode,
@@ -723,6 +726,13 @@ function startCardDrag(
     moved: false,
   }
   canvasRef.value?.setPointerCapture?.(event.pointerId)
+}
+
+/** 点击空白画布取消选中。 */
+function onCanvasPointerDown(event: globalThis.PointerEvent) {
+  const target = event.target as globalThis.HTMLElement | null
+  if (target?.closest('.wsd-canvas-item')) return
+  selectedKey.value = null
 }
 
 function onCanvasPointerMove(event: globalThis.PointerEvent) {
@@ -804,6 +814,7 @@ async function resetConfig() {
     await resetWorkspaceLayout()
     ElMessage.success(t('workflow.layoutRestored'))
     dirty.value = false
+    selectedKey.value = null
     await loadLayout()
   } catch (err) {
     ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.layoutRestoreFailed'))
@@ -911,6 +922,7 @@ onMounted(async () => {
         :style="{ height: canvasHeight + 'px' }"
         @dragover.prevent
         @drop="dropPaletteCard($event)"
+        @pointerdown="onCanvasPointerDown"
         @pointermove="onCanvasPointerMove"
         @pointerup="onCanvasPointerUp"
         @pointercancel="onCanvasPointerUp"
@@ -940,6 +952,7 @@ onMounted(async () => {
           :class="{
             'is-hidden': !component.visible,
             'is-dragging': dragState?.key === component.key,
+            'is-selected': editing && selectedKey === component.key,
           }"
           :style="itemStyle(component.key)"
           @pointerdown="startCardDrag($event, component.key, 'move')"
@@ -1344,6 +1357,18 @@ onMounted(async () => {
 }
 .wsd-canvas-item.is-dragging {
   z-index: 40;
+}
+.wsd-canvas-item.is-selected {
+  border-color: var(--sw-color-primary);
+  box-shadow: 0 0 0 1px var(--sw-color-primary);
+}
+.wsd-canvas-item.is-selected.is-dragging {
+  box-shadow:
+    0 0 0 1px var(--sw-color-primary),
+    0 12px 30px rgb(31 42 68 / 18%);
+}
+.wsd-canvas-item.is-selected .wsd-canvas-item__bar {
+  background: #e9e0ff;
 }
 .wsd-canvas-item__bar {
   display: flex;
