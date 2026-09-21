@@ -10,8 +10,7 @@ const { t } = useI18n()
  * 快捷发起=常用事项；流程效能=/workflow/monitor/analytics/summary（无权限/失败时
  * 以「—」空值收敛，不伪造指标）。徽标/临期计数等设计密度字段仅当接口返回时渲染。
  * 隐藏组件不查询数据；组件配置（几何/显隐/常用事项）经既有布局契约持久化。
- * editable=false（/workspace 首页）只读渲染；editable=true（/workspace/edit 编辑页）
- * 提供整页自由画布：拖拽定位、悬停缩放、对齐吸附虚线。
+ * 页面为只读视图：编辑能力由独立页面 /workspace/edit（WorkspaceEditor）承载。
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
@@ -30,8 +29,6 @@ import {
 import { useUserStore } from '@/stores/user'
 import {
   getWorkspaceLayout,
-  saveWorkspaceLayout,
-  resetWorkspaceLayout,
   queryCatalogItems,
   queryMyCopies,
   type CatalogItem,
@@ -42,11 +39,6 @@ import type { WorkspaceCard, WorkspaceCardType, WorkspaceComponent } from '@/con
 import {
   WORKSPACE_MIN_H,
   WORKSPACE_MIN_W,
-  WORKSPACE_SNAP,
-  applyDragRect,
-  collectCandidates,
-  dragAxisOffsets,
-  snapDelta,
   type CardRect,
 } from '@/modules/workflow/utils/workspace-canvas'
 import { ApiError } from '@/foundation/request'
@@ -54,36 +46,14 @@ import { ApiError } from '@/foundation/request'
 const router = useRouter()
 const userStore = useUserStore()
 
-const props = defineProps<{ editable?: boolean }>()
-
-/** 编辑页传 editable；首页只读。 */
-const editing = computed(() => props.editable === true)
-
 // ─── 布局状态 ───
 const components = ref<WorkspaceComponent[]>([])
 const cardTypes = ref<WorkspaceCardType[]>([])
 const favoriteKeys = ref<string[]>([])
 const custom = ref(false)
 const loading = ref(false)
-const dirty = ref(false)
-const paletteVisible = ref(props.editable === true)
 const canvasRef = ref<globalThis.HTMLElement | null>(null)
 const geometryMap = ref<Record<string, CardRect>>({})
-const guides = ref<{ v: number[]; h: number[] }>({ v: [], h: [] })
-const draggingPayload = ref('')
-
-/** 自由画布拖拽会话：move=标题栏/卡片体拖动，resize=8 向手柄缩放。 */
-type CanvasDragState = {
-  key: string
-  mode: 'move' | 'resize'
-  handle: string
-  startX: number
-  startY: number
-  orig: CardRect
-  pointerId: number
-  moved: boolean
-}
-const dragState = ref<CanvasDragState | null>(null)
 
 // ─── 组件数据 ───
 type PageExtra = { badge?: string; urgentTotal?: number }
@@ -429,7 +399,6 @@ const DEFAULT_CARD_HEIGHTS: Record<string, number> = {
   drafts: 220,
   messages: 220,
 }
-const HANDLES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const
 
 function defaultCardHeight(key: string): number {
   return DEFAULT_CARD_HEIGHTS[rendererKeyOf(key)] ?? 320
@@ -479,14 +448,14 @@ function rectOf(key: string): CardRect {
 
 const canvasItems = computed(() =>
   components.value
-    .filter((c) => c.visible || editing.value)
+    .filter((c) => c.visible)
     .slice()
     .sort((a, b) => a.order - b.order),
 )
 
 const canvasHeight = computed(() => {
   const bottom = Object.values(geometryMap.value).reduce((max, r) => Math.max(max, r.y + r.h), 0)
-  return Math.round(Math.max(editing.value ? 720 : 520, bottom + 80))
+  return Math.round(Math.max(520, bottom + 80))
 })
 
 function itemStyle(key: string) {
@@ -496,7 +465,6 @@ function itemStyle(key: string) {
     top: `${rect.y}px`,
     width: `${rect.w}px`,
     height: `${rect.h}px`,
-    zIndex: dragState.value?.key === key ? 40 : 1,
   }
 }
 
@@ -615,204 +583,10 @@ function openForm(formKey: string) {
   void router.push(`/form/form-render/${formKey}`)
 }
 
-// ─── 配置模式 ───
-const catalogChoices = ref<CatalogItem[]>([])
-
-async function loadCatalogChoices() {
-  try {
-    const page = await queryCatalogItems({ pageNum: 1, pageSize: 100 })
-    catalogChoices.value = page.list
-  } catch {
-    ElMessage.error(t('common.loadFailed'))
-    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
-    catalogChoices.value = []
-  }
-}
-
-/** 管理常用事项入口：编辑页切换组件库面板；首页跳转编辑页。 */
-function openPalette() {
-  if (editing.value) {
-    paletteVisible.value = !paletteVisible.value
-    return
-  }
-  void router.push('/workspace/edit')
-}
-
-function setVisible(component: WorkspaceComponent, value: boolean) {
-  component.visible = value
-  dirty.value = true
-}
-
-function startPaletteDrag(typeCode: string, event: globalThis.DragEvent) {
-  draggingPayload.value = `palette:${typeCode}`
-  event.dataTransfer?.setData('text/plain', draggingPayload.value)
-  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy'
-}
-
-function isComponentIncluded(typeCode: string): boolean {
-  return components.value.some((component) => component.key === typeCode)
-}
-
-/** 组件库新增/重新启用卡片：默认半幅宽，落在画布最低端或指针释放处。 */
-function addComponent(typeCode: string, at?: { x: number; y: number }) {
-  const type = cardTypes.value.find((t) => t.typeCode === typeCode)
-  if (!type) return
-  const canvasW = canvasRef.value?.clientWidth || 1200
-  const w = Math.min(640, Math.max(WORKSPACE_MIN_W, Math.round(canvasW / 2)))
-  const h = defaultCardHeight(typeCode)
-  const bottom = Object.values(geometryMap.value).reduce((max, r) => Math.max(max, r.y + r.h), 0)
-  const pos = at ?? { x: 24, y: bottom + 20 }
-  const existing = components.value.find((c) => c.key === typeCode)
-  if (existing) {
-    existing.visible = true
-  } else {
-    components.value.push({
-      key: typeCode,
-      visible: true,
-      order: components.value.length + 1,
-      span: type.defaultSpan,
-      metadata: defaultMetadata(type),
-    })
-  }
-  geometryMap.value[typeCode] = {
-    x: Math.max(0, Math.round(pos.x)),
-    y: Math.max(0, Math.round(pos.y)),
-    w,
-    h,
-  }
-  dirty.value = true
-}
-
-function dropPaletteCard(event: globalThis.DragEvent) {
-  const payload = event.dataTransfer?.getData('text/plain') || draggingPayload.value
-  draggingPayload.value = ''
-  if (!payload.startsWith('palette:')) return
-  const typeCode = payload.slice('palette:'.length)
-  const rect = canvasRef.value?.getBoundingClientRect()
-  if (!rect) {
-    addComponent(typeCode)
-    return
-  }
-  addComponent(typeCode, {
-    x: event.clientX - rect.left - 180,
-    y: event.clientY - rect.top - 90,
-  })
-}
-
-/** 卡片体/标题栏按下进入移动；交互元素（按钮、链接等）不触发拖拽。 */
-function startCardDrag(
-  event: globalThis.PointerEvent,
-  key: string,
-  mode: 'move' | 'resize',
-  handle = '',
-) {
-  if (!editing.value || event.button !== 0) return
-  const target = event.target as globalThis.HTMLElement | null
-  if (mode === 'move' && target?.closest('button, a, input, textarea, select, label')) return
-  event.preventDefault()
-  dragState.value = {
-    key,
-    mode,
-    handle,
-    startX: event.clientX,
-    startY: event.clientY,
-    orig: { ...rectOf(key) },
-    pointerId: event.pointerId,
-    moved: false,
-  }
-  canvasRef.value?.setPointerCapture?.(event.pointerId)
-}
-
-function onCanvasPointerMove(event: globalThis.PointerEvent) {
-  const st = dragState.value
-  if (!st || st.pointerId !== event.pointerId) return
-  const dxRaw = event.clientX - st.startX
-  const dyRaw = event.clientY - st.startY
-  if (!st.moved && Math.hypot(dxRaw, dyRaw) > 2) {
-    st.moved = true
-    dirty.value = true
-  }
-  if (!st.moved) return
-  const handle = st.mode === 'resize' ? st.handle : ''
-  const raw = applyDragRect(st.orig, handle, dxRaw, dyRaw)
-  const canvasW = canvasRef.value?.clientWidth ?? 1200
-  const others = canvasItems.value.filter((c) => c.key !== st.key).map((c) => rectOf(c.key))
-  const offsets = dragAxisOffsets(handle, st.orig)
-  const snap = snapDelta(
-    raw,
-    collectCandidates(others, canvasW, canvasHeight.value),
-    offsets.xs,
-    offsets.ys,
-    WORKSPACE_SNAP,
-  )
-  geometryMap.value[st.key] = applyDragRect(st.orig, handle, dxRaw + snap.dx, dyRaw + snap.dy)
-  guides.value = {
-    v: snap.guideX == null ? [] : [snap.guideX],
-    h: snap.guideY == null ? [] : [snap.guideY],
-  }
-}
-
-function onCanvasPointerUp(event: globalThis.PointerEvent) {
-  const st = dragState.value
-  if (!st || st.pointerId !== event.pointerId) return
-  dragState.value = null
-  guides.value = { v: [], h: [] }
-  canvasRef.value?.releasePointerCapture?.(event.pointerId)
-}
-
-function toggleFavorite(key: string) {
-  const index = favoriteKeys.value.indexOf(key)
-  if (index >= 0) {
-    favoriteKeys.value.splice(index, 1)
-  } else if (favoriteKeys.value.length < 20) {
-    favoriteKeys.value.push(key)
-  } else {
-    ElMessage.warning(t('workflow.favoritesLimit'))
-    return
-  }
-  dirty.value = true
-}
-
-async function saveConfig() {
-  try {
-    await saveWorkspaceLayout({
-      cards: components.value.map((c) => ({
-        typeCode: c.key,
-        visible: c.visible,
-        order: c.order,
-        span: c.span === 2 ? 2 : 1,
-        metadata: {
-          ...(c.metadata ?? {}),
-          ...(geometryMap.value[c.key] ? { geometry: geometryMap.value[c.key] } : {}),
-        },
-      })),
-      favoriteItemKeys: [...favoriteKeys.value],
-    })
-    custom.value = true
-    dirty.value = false
-    ElMessage.success(t('workflow.workspaceSaved'))
-    await loadLayout()
-  } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.workspaceSaveFailed'))
-  }
-}
-
-async function resetConfig() {
-  try {
-    await resetWorkspaceLayout()
-    ElMessage.success(t('workflow.layoutRestored'))
-    dirty.value = false
-    await loadLayout()
-  } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.layoutRestoreFailed'))
-  }
-}
-
 onMounted(async () => {
   await loadLayout()
   await nextTick()
   ensureGeometry()
-  if (props.editable) void loadCatalogChoices()
 })
 </script>
 
@@ -826,7 +600,6 @@ onMounted(async () => {
         {{ t('workspace.todoSummary', { count: todoTotal, urgent: todoExtra.urgentTotal ?? 0 }) }}
       </p>
       <button
-        v-if="!editing"
         class="wsd-hero__config"
         type="button"
         :title="t('workspace.configureWorkspace')"
@@ -837,133 +610,14 @@ onMounted(async () => {
       </button>
     </header>
 
-    <div v-if="editing" class="wsd-toolbar">
-      <span v-if="!custom" class="wsd-toolbar__badge">{{ t('workspace.defaultLayout') }}</span>
-      <p class="wsd-toolbar__hint">{{ t('workspace.canvasHint') }}</p>
-      <div class="wsd-toolbar__actions">
-        <button class="wsd-btn" type="button" @click="paletteVisible = !paletteVisible">
-          {{ t('workspace.componentLibrary') }}
-        </button>
-        <button class="wsd-btn" type="button" @click="resetConfig">
-          {{ t('common.restoreDefault') }}
-        </button>
-        <button
-          class="wsd-btn wsd-btn--primary"
-          type="button"
-          :disabled="!dirty"
-          @click="saveConfig"
-        >
-          {{ t('workflow.saveWorkspaceConfig') }}
-        </button>
-        <button class="wsd-btn" type="button" @click="router.push('/workspace')">
-          {{ t('workspace.exitEdit') }}
-        </button>
-      </div>
-    </div>
-
     <div class="wsd-canvas-wrap">
-      <aside v-if="editing && paletteVisible" class="wsd-palette">
-        <div class="wsd-palette__head">
-          <h4>{{ t('workspace.componentLibrary') }}</h4>
-          <span>{{ t('workspace.basicComponent') }}</span>
-        </div>
-        <p class="wsd-palette__hint">{{ t('workspace.componentLibraryHint') }}</p>
-        <div class="wsd-palette-list">
-          <div
-            v-for="type in cardTypes"
-            :key="type.typeCode"
-            class="wsd-palette-item"
-            :class="{ 'is-used': isComponentIncluded(type.typeCode) }"
-            draggable="true"
-            @dragstart="startPaletteDrag(type.typeCode, $event)"
-            @dragend="draggingPayload = ''"
-            @click="addComponent(type.typeCode)"
-          >
-            <span class="wsd-palette-item__grip">⋮⋮</span>
-            <span class="wsd-palette-item__body">
-              <strong>{{ type.displayName }}</strong>
-              <small>{{ type.rendererKey }}</small>
-            </span>
-            <span class="wsd-palette-item__state">
-              {{
-                isComponentIncluded(type.typeCode)
-                  ? t('workspace.added')
-                  : t('workspace.dragToCanvas')
-              }}
-            </span>
-          </div>
-        </div>
-        <h4 class="config-section">{{ t('workflow.favoritesPickerHint') }}</h4>
-        <ul class="config-favorites">
-          <li v-for="item in catalogChoices" :key="item.itemKey" class="config-list__row">
-            <el-checkbox
-              :model-value="favoriteKeys.includes(item.itemKey)"
-              @change="toggleFavorite(item.itemKey)"
-            >
-              {{ item.name }}
-            </el-checkbox>
-          </li>
-        </ul>
-      </aside>
-
-      <div
-        ref="canvasRef"
-        class="wsd-canvas"
-        :class="{ 'is-editing': editing }"
-        :style="{ height: canvasHeight + 'px' }"
-        @dragover.prevent
-        @drop="dropPaletteCard($event)"
-        @pointermove="onCanvasPointerMove"
-        @pointerup="onCanvasPointerUp"
-        @pointercancel="onCanvasPointerUp"
-      >
-        <template v-if="editing">
-          <div
-            v-for="(x, index) in guides.v"
-            :key="`v${index}`"
-            class="wsd-guide wsd-guide--v"
-            :style="{ left: x + 'px' }"
-          />
-          <div
-            v-for="(y, index) in guides.h"
-            :key="`h${index}`"
-            class="wsd-guide wsd-guide--h"
-            :style="{ top: y + 'px' }"
-          />
-        </template>
-        <div v-if="canvasItems.length === 0" class="wsd-canvas__empty">
-          {{ t('workspace.dropComponentHere') }}
-        </div>
-
+      <div ref="canvasRef" class="wsd-canvas" :style="{ height: canvasHeight + 'px' }">
         <article
           v-for="component in canvasItems"
           :key="component.key"
           class="wsd-canvas-item"
-          :class="{
-            'is-hidden': !component.visible,
-            'is-dragging': dragState?.key === component.key,
-          }"
           :style="itemStyle(component.key)"
-          @pointerdown="startCardDrag($event, component.key, 'move')"
         >
-          <header
-            v-if="editing"
-            class="wsd-canvas-item__bar"
-            @pointerdown.stop="startCardDrag($event, component.key, 'move')"
-          >
-            <span class="wsd-canvas-item__grip">⠿</span>
-            <strong class="wsd-canvas-item__title">{{ componentTitle(component.key) }}</strong>
-            <span class="wsd-canvas-item__renderer">{{ rendererKeyOf(component.key) }}</span>
-            <button
-              class="wsd-canvas-item__btn"
-              type="button"
-              @pointerdown.stop
-              @click="setVisible(component, !component.visible)"
-            >
-              {{ component.visible ? t('workspace.visible') : t('workspace.hidden') }}
-            </button>
-          </header>
-
           <div class="wsd-canvas-item__body">
             <div v-if="rendererKeyOf(component.key) === 'stats'" class="wsd-stats">
               <div v-for="s in stats" :key="s.key" class="wsd-stat">
@@ -1031,7 +685,7 @@ onMounted(async () => {
             >
               <div class="wsd-panel__head">
                 <h3 class="wsd-panel__title">{{ t('workspace.quickLaunch') }}</h3>
-                <button class="wsd-pill" type="button" @click="openPalette">
+                <button class="wsd-pill" type="button" @click="router.push('/workspace/edit')">
                   {{ t('workspace.manageFavorites') }}
                 </button>
               </div>
@@ -1051,7 +705,7 @@ onMounted(async () => {
                   </span>
                   <span class="wsd-quick__label">{{ q.label }}</span>
                 </button>
-                <button class="wsd-quick" type="button" @click="openPalette">
+                <button class="wsd-quick" type="button" @click="router.push('/workspace/edit')">
                   <span class="wsd-quick__icon wsd-quick__icon--more">
                     <el-icon :size="22"><MoreFilled /></el-icon>
                   </span>
@@ -1168,16 +822,6 @@ onMounted(async () => {
               <p class="wsd-panel__empty">{{ t('workspace.basicComponent') }}</p>
             </section>
           </div>
-
-          <template v-if="editing">
-            <span
-              v-for="h in HANDLES"
-              :key="h"
-              class="wsd-handle"
-              :class="`wsd-handle--${h}`"
-              @pointerdown.stop="startCardDrag($event, component.key, 'resize', h)"
-            />
-          </template>
         </article>
       </div>
     </div>
@@ -1232,45 +876,6 @@ onMounted(async () => {
   border-color: var(--sw-color-primary);
   color: var(--sw-color-primary);
 }
-.wsd-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 16px;
-  padding: 10px 14px;
-  border: 1px solid var(--sw-border);
-  border-radius: 10px;
-  background: #ffffff;
-}
-.wsd-toolbar__badge {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #eee8ff;
-  color: var(--sw-color-primary);
-  font-size: 12px;
-}
-.wsd-toolbar__hint {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: 12px;
-  color: var(--sw-text-secondary);
-}
-.wsd-toolbar__actions {
-  display: flex;
-  flex: none;
-  gap: 8px;
-}
-.wsd-btn--primary {
-  border-color: var(--sw-color-primary);
-  background: var(--sw-color-primary);
-  color: #ffffff;
-}
-.wsd-btn--primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 .wsd-canvas-wrap {
   position: relative;
   margin-top: 12px;
@@ -1279,81 +884,11 @@ onMounted(async () => {
   position: relative;
   min-height: 520px;
 }
-.wsd-canvas.is-editing {
-  background-image: radial-gradient(circle, #d9deeb 1px, transparent 1px);
-  background-size: 24px 24px;
-  border: 1px dashed #c6cce0;
-  border-radius: 12px;
-}
-.wsd-canvas__empty {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--sw-text-secondary);
-  font-size: 13px;
-}
 .wsd-canvas-item {
   position: absolute;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-}
-.wsd-canvas-item.is-hidden {
-  opacity: 0.55;
-}
-.wsd-canvas-item.is-dragging {
-  z-index: 40;
-}
-.wsd-canvas-item__bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  flex: none;
-  padding: 0 10px;
-  border: 1px solid var(--sw-border);
-  border-bottom: none;
-  border-radius: 10px 10px 0 0;
-  background: #f2ecff;
-  cursor: grab;
-  user-select: none;
-}
-.wsd-canvas-item.is-dragging .wsd-canvas-item__bar {
-  cursor: grabbing;
-}
-.wsd-canvas-item__grip {
-  color: var(--sw-color-primary);
-  letter-spacing: -2px;
-}
-.wsd-canvas-item__title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sw-text-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wsd-canvas-item__renderer {
-  max-width: 90px;
-  overflow: hidden;
-  font-size: 11px;
-  color: var(--sw-text-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wsd-canvas-item__btn {
-  height: 22px;
-  flex: none;
-  padding: 0 8px;
-  border: 1px solid var(--sw-border);
-  border-radius: 6px;
-  background: #ffffff;
-  font-size: 11px;
-  color: var(--sw-text-secondary);
-  cursor: pointer;
 }
 .wsd-canvas-item__body {
   position: relative;
@@ -1366,116 +901,6 @@ onMounted(async () => {
 }
 .wsd-canvas-item__body > .wsd-stats {
   height: 100%;
-}
-.wsd-handle {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  background: #ffffff;
-  border: 1px solid var(--sw-color-primary);
-  border-radius: 2px;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-.wsd-canvas-item:hover .wsd-handle {
-  opacity: 1;
-}
-.wsd-handle--n {
-  top: -5px;
-  left: calc(50% - 5px);
-  cursor: ns-resize;
-}
-.wsd-handle--s {
-  bottom: -5px;
-  left: calc(50% - 5px);
-  cursor: ns-resize;
-}
-.wsd-handle--e {
-  right: -5px;
-  top: calc(50% - 5px);
-  cursor: ew-resize;
-}
-.wsd-handle--w {
-  left: -5px;
-  top: calc(50% - 5px);
-  cursor: ew-resize;
-}
-.wsd-handle--ne {
-  top: -5px;
-  right: -5px;
-  cursor: nesw-resize;
-}
-.wsd-handle--nw {
-  top: -5px;
-  left: -5px;
-  cursor: nwse-resize;
-}
-.wsd-handle--se {
-  bottom: -5px;
-  right: -5px;
-  cursor: nwse-resize;
-}
-.wsd-handle--sw {
-  bottom: -5px;
-  left: -5px;
-  cursor: nesw-resize;
-}
-.wsd-guide {
-  position: absolute;
-  z-index: 60;
-  pointer-events: none;
-}
-.wsd-guide--v {
-  top: 0;
-  bottom: 0;
-  width: 0;
-  border-left: 1px dashed var(--sw-color-primary);
-}
-.wsd-guide--h {
-  left: 0;
-  right: 0;
-  height: 0;
-  border-top: 1px dashed var(--sw-color-primary);
-}
-.wsd-palette {
-  position: absolute;
-  z-index: 70;
-  top: 12px;
-  bottom: 12px;
-  left: 12px;
-  width: 248px;
-  padding: 16px;
-  overflow: auto;
-  border: 1px solid var(--sw-border);
-  border-radius: 10px;
-  background: #ffffff;
-  box-shadow: 0 10px 30px rgb(31 42 68 / 12%);
-}
-.wsd-palette__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.wsd-palette__head h4 {
-  margin: 0;
-  font-size: 15px;
-  line-height: 20px;
-  color: var(--sw-text-primary);
-}
-.wsd-palette__head span {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #eee8ff;
-  color: var(--sw-color-primary);
-  font-size: 12px;
-}
-.wsd-palette__hint {
-  margin: 7px 0 14px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--sw-text-secondary);
 }
 .wsd-stats {
   display: grid;
@@ -1844,60 +1269,6 @@ onMounted(async () => {
   font-size: 20px;
   line-height: 24px;
   font-weight: 600;
-}
-.wsd-palette-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.wsd-palette-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 58px;
-  padding: 9px 10px;
-  border: 1px solid var(--sw-border);
-  border-radius: 8px;
-  background: #fff;
-  cursor: grab;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-.wsd-palette-item:hover,
-.wsd-palette-item:focus-visible {
-  border-color: var(--sw-color-primary);
-  box-shadow: 0 3px 12px rgb(74 43 175 / 10%);
-}
-.wsd-palette-item.is-used {
-  background: #fbfaff;
-}
-.wsd-palette-item__grip {
-  color: var(--sw-text-tertiary, #98a2b3);
-  letter-spacing: -3px;
-  user-select: none;
-}
-.wsd-palette-item__body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  gap: 2px;
-}
-.wsd-palette-item__body strong {
-  overflow: hidden;
-  color: var(--sw-text-primary);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wsd-palette-item__body small,
-.wsd-palette-item__state {
-  color: var(--sw-text-secondary);
-  font-size: 11px;
-}
-.wsd-palette-item__state {
-  flex: none;
 }
 .config-section {
   margin: 16px 0 8px;
