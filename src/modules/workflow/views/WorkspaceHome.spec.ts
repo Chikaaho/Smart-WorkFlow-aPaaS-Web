@@ -33,8 +33,30 @@ function layoutResp(
 ): WorkspaceLayoutResp {
   return {
     custom: true,
+    cardTypes: components.map((component, index) => ({
+      id: index + 1,
+      typeCode: component.key,
+      displayName: component.key,
+      rendererKey:
+        component.key === 'favoriteItems'
+          ? 'favorites'
+          : component.key === 'myProcessed' ||
+              component.key === 'myInitiated' ||
+              component.key === 'cc'
+            ? 'activity'
+            : (component.key as never),
+      metadataJson: '{}',
+      defaultSpan: 1,
+      defaultOrder: component.order,
+      status: 0,
+    })),
     layout: {
-      components: components as never,
+      cards: components.map((component) => ({
+        typeCode: component.key,
+        visible: component.visible,
+        order: component.order,
+        span: component.span === 2 ? 2 : 1,
+      })),
       favoriteItemKeys: ['gone_item', 'live_item'],
     },
   }

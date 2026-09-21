@@ -764,6 +764,81 @@ export const i4MockRegistrations: MockRegistration[] = [
   },
 ]
 
+function mockWorkspaceCardTypes() {
+  return [
+    {
+      id: 9401,
+      typeCode: 'todo',
+      displayName: '我的待办',
+      rendererKey: 'todo',
+      metadataJson: '{}',
+      defaultSpan: 1,
+      defaultOrder: 2,
+      status: 0,
+    },
+    {
+      id: 9402,
+      typeCode: 'stats',
+      displayName: '统计概览',
+      rendererKey: 'stats',
+      metadataJson: '{}',
+      defaultSpan: 2,
+      defaultOrder: 1,
+      status: 0,
+    },
+    {
+      id: 9403,
+      typeCode: 'favoriteItems',
+      displayName: '快捷发起',
+      rendererKey: 'favorites',
+      metadataJson: '{}',
+      defaultSpan: 1,
+      defaultOrder: 3,
+      status: 0,
+    },
+    {
+      id: 9404,
+      typeCode: 'activity',
+      displayName: '业务动态',
+      rendererKey: 'activity',
+      metadataJson: '{}',
+      defaultSpan: 1,
+      defaultOrder: 4,
+      status: 0,
+    },
+    {
+      id: 9405,
+      typeCode: 'efficiency',
+      displayName: '流程效能',
+      rendererKey: 'efficiency',
+      metadataJson: '{}',
+      defaultSpan: 1,
+      defaultOrder: 5,
+      status: 0,
+    },
+    {
+      id: 9406,
+      typeCode: 'drafts',
+      displayName: '草稿',
+      rendererKey: 'drafts',
+      metadataJson: '{}',
+      defaultSpan: 1,
+      defaultOrder: 6,
+      status: 0,
+    },
+    {
+      id: 9407,
+      typeCode: 'messages',
+      displayName: '消息',
+      rendererKey: 'messages',
+      metadataJson: '{}',
+      defaultSpan: 1,
+      defaultOrder: 7,
+      status: 0,
+    },
+  ]
+}
+
 export const mockRegistrations: MockRegistration[] = [
   // ── I4 编排/运营/工作台 mock（上方 i4MockRegistrations 展开） ──
   ...i4MockRegistrations,
@@ -1810,7 +1885,9 @@ export const mockRegistrations: MockRegistration[] = [
     method: 'GET',
     pattern: '/api/workflow/defs/approver-candidates',
     handler: (_params, query) => {
-      const keyword = String(query.keyword ?? '').trim().toLowerCase()
+      const keyword = String(query.keyword ?? '')
+        .trim()
+        .toLowerCase()
       const candidates = [
         { id: 2, username: 'admin', realName: '陈曦' },
         { id: 103, username: 'wanghai', realName: '王海' },
@@ -5607,22 +5684,49 @@ export const mockRegistrations: MockRegistration[] = [
           message: 'ok',
           data: {
             custom: false,
+            cardTypes: mockWorkspaceCardTypes(),
             layout: {
-              components: [
-                { key: 'todo', visible: true, order: 1 },
-                { key: 'myProcessed', visible: true, order: 2 },
-                { key: 'myInitiated', visible: true, order: 3 },
-                { key: 'cc', visible: true, order: 4 },
-                { key: 'favoriteItems', visible: true, order: 5 },
-                { key: 'drafts', visible: true, order: 6 },
-                { key: 'messages', visible: true, order: 7 },
+              cards: [
+                { typeCode: 'stats', visible: true, order: 1, span: 2 },
+                { typeCode: 'todo', visible: true, order: 2 },
+                { typeCode: 'favoriteItems', visible: true, order: 3 },
+                { typeCode: 'activity', visible: true, order: 4 },
+                { typeCode: 'efficiency', visible: true, order: 5 },
+                { typeCode: 'drafts', visible: true, order: 6 },
+                { typeCode: 'messages', visible: true, order: 7 },
               ],
               favoriteItemKeys: [],
             },
           },
         }
       }
-      return { code: 0, message: 'ok', data: { custom: true, layout: stored.layout } }
+      return {
+        code: 0,
+        message: 'ok',
+        data: { custom: true, cardTypes: mockWorkspaceCardTypes(), layout: stored.layout },
+      }
+    },
+  },
+
+  // GET /api/system/workspace/card-types
+  {
+    method: 'GET',
+    pattern: '/api/system/workspace/card-types',
+    handler: () => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      return { code: 0, message: 'ok', data: mockWorkspaceCardTypes() }
+    },
+  },
+
+  // GET /api/system/workspace/card-types/manage
+  {
+    method: 'GET',
+    pattern: '/api/system/workspace/card-types/manage',
+    handler: () => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      return { code: 0, message: 'ok', data: mockWorkspaceCardTypes() }
     },
   },
 
@@ -5633,23 +5737,26 @@ export const mockRegistrations: MockRegistration[] = [
     handler: (_params, _query, body) => {
       const uid = mockSessionUid()
       if (!uid) return { code: 401, message: '未认证', data: null }
-      const layout = body as { components?: Array<{ key?: string }> }
+      const layout = body as {
+        cards?: Array<{ typeCode?: string }>
+        components?: Array<{ key?: string }>
+      }
       const allowed = [
         'todo',
-        'myProcessed',
-        'myInitiated',
-        'cc',
+        'stats',
         'favoriteItems',
+        'activity',
+        'efficiency',
         'drafts',
         'messages',
       ]
-      if (!layout?.components?.length)
-        return { code: 400, message: '布局缺少 components', data: null }
-      for (const c of layout.components) {
-        if (!c.key || !allowed.includes(c.key))
-          return { code: 400, message: `未知组件: ${c.key}`, data: null }
+      const cards = layout?.cards ?? layout?.components?.map((c) => ({ typeCode: c.key }))
+      if (!cards?.length) return { code: 400, message: '布局缺少 cards', data: null }
+      for (const c of cards) {
+        if (!c.typeCode || !allowed.includes(c.typeCode))
+          return { code: 400, message: `未知卡片类型: ${c.typeCode}`, data: null }
       }
-      MOCK_WORKSPACE_LAYOUTS[uid] = { layout }
+      MOCK_WORKSPACE_LAYOUTS[uid] = { layout: { ...layout, cards } }
       return { code: 0, message: 'ok', data: null }
     },
   },

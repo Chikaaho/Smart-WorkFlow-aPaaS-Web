@@ -73,6 +73,18 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // V011-BUG-002：租户级低代码工作台卡片类型维护。
+        path: 'workflow/workspace-card-types',
+        name: 'workspace-card-types',
+        component: () => import('@/modules/workflow/views/WorkspaceCardTypeList.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.workspaceCardTypesTitle')
+          },
+          authority: ['workflow:workspace:manage'],
+        },
+      },
+      {
         // v0.0.2 P4 个人办理：抄送我的（只读，不含审批操作权）。命名对齐 menu -static 规避同名替换。
         path: 'workflow/my-cc',
         name: 'my-cc-static',

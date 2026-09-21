@@ -14,8 +14,12 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Setting, Clock, Promotion, CircleCheck, EditPen } from '@element-plus/icons-vue'
 import {
+  Setting,
+  Clock,
+  Promotion,
+  CircleCheck,
+  EditPen,
   ShoppingCart,
   Aim,
   Key,
@@ -32,7 +36,7 @@ import {
 } from '@/modules/workflow/api/oa'
 import { queryTodoTasks, myInstances, myDrafts, myProcessed } from '@/modules/workflow/api'
 import { queryAnalyticsSummary } from '@/modules/workflow/api/i4'
-import type { WorkspaceComponent, WorkspaceComponentKey } from '@/contracts/catalog'
+import type { WorkspaceCard, WorkspaceCardType, WorkspaceComponent } from '@/contracts/catalog'
 import { ApiError } from '@/foundation/request'
 
 const router = useRouter()
@@ -40,6 +44,7 @@ const userStore = useUserStore()
 
 // ─── 布局状态 ───
 const components = ref<WorkspaceComponent[]>([])
+const cardTypes = ref<WorkspaceCardType[]>([])
 const favoriteKeys = ref<string[]>([])
 const custom = ref(false)
 const loading = ref(false)
@@ -86,10 +91,30 @@ const STAT_ICONS: Record<string, { icon: unknown; bg: string; color: string }> =
 }
 
 const stats = computed(() => [
-  { key: 'todo', label: t('workspace.statMyTodo'), value: todoTotal.value, badge: todoExtra.value.badge },
-  { key: 'initiated', label: t('workspace.statInitiated'), value: initiatedTotal.value, badge: initiatedExtra.value.badge },
-  { key: 'processed', label: t('workspace.statProcessed'), value: processedTotal.value, badge: processedExtra.value.badge },
-  { key: 'drafts', label: t('workspace.statDrafts'), value: draftsTotal.value, badge: draftsExtra.value.badge },
+  {
+    key: 'todo',
+    label: t('workspace.statMyTodo'),
+    value: todoTotal.value,
+    badge: todoExtra.value.badge,
+  },
+  {
+    key: 'initiated',
+    label: t('workspace.statInitiated'),
+    value: initiatedTotal.value,
+    badge: initiatedExtra.value.badge,
+  },
+  {
+    key: 'processed',
+    label: t('workspace.statProcessed'),
+    value: processedTotal.value,
+    badge: processedExtra.value.badge,
+  },
+  {
+    key: 'drafts',
+    label: t('workspace.statDrafts'),
+    value: draftsTotal.value,
+    badge: draftsExtra.value.badge,
+  },
 ])
 
 /** 待办面板 tabs（设计01）：待办/已办/抄送/草稿 = 四个真实列表，文本 tab + 计数 + 下划线激活态。 */
@@ -116,7 +141,11 @@ const panelRows = computed(() => {
 
 /** 面板行两行式元信息（设计01）：来源 · 人 · 时间（不伪造字段，仅组合真实列） */
 function rowMeta(row: Record<string, unknown>): string {
-  const base = String(row.action ?? '') ? [String(row.action)] : [String(row.nodeName ?? row.currentNode ?? ''), String(row.assigneeName ?? '')].filter(Boolean)
+  const base = String(row.action ?? '')
+    ? [String(row.action)]
+    : [String(row.nodeName ?? row.currentNode ?? ''), String(row.assigneeName ?? '')].filter(
+        Boolean,
+      )
   const due = String(row.dueText ?? '')
   const meta = (base.length ? base.join(' · ') : '') + (due ? (base.length ? ' · ' : '') + due : '')
   return meta
@@ -140,11 +169,19 @@ function activityTime(v: unknown): string {
 type ActivitySource = 'approval' | 'initiated' | 'cc' | 'message'
 const activityFilter = ref<'all' | ActivitySource>('all')
 const activityRowsAll = computed(() => {
-  const rows: Array<{ title: string; meta: string; time: string; at: number; src: ActivitySource }> = []
-  const timeOf = (v: unknown): number => (typeof v === 'string' ? Date.parse(v.replace(' ', 'T')) || 0 : 0)
-  const visible = (key: WorkspaceComponentKey) =>
-    components.value.some((c) => c.key === key && c.visible)
-  if (visible('myProcessed')) {
+  const rows: Array<{
+    title: string
+    meta: string
+    time: string
+    at: number
+    src: ActivitySource
+  }> = []
+  const timeOf = (v: unknown): number =>
+    typeof v === 'string' ? Date.parse(v.replace(' ', 'T')) || 0 : 0
+  const activityVisible = components.value.some(
+    (c) => rendererKeyOf(c.key) === 'activity' && c.visible,
+  )
+  if (activityVisible) {
     for (const item of processedList.value) {
       rows.push({
         title: String(item.taskName ?? '-'),
@@ -155,7 +192,7 @@ const activityRowsAll = computed(() => {
       })
     }
   }
-  if (visible('myInitiated')) {
+  if (activityVisible) {
     for (const item of initiatedList.value) {
       rows.push({
         title: String(item.processName ?? item.processDefKey ?? '-'),
@@ -166,7 +203,7 @@ const activityRowsAll = computed(() => {
       })
     }
   }
-  if (visible('cc')) {
+  if (activityVisible) {
     for (const item of ccList.value) {
       rows.push({
         title: String(item.taskName ?? item.formKey ?? '-'),
@@ -180,7 +217,9 @@ const activityRowsAll = computed(() => {
   return rows.sort((a, b) => b.at - a.at).slice(0, 4)
 })
 const activityRows = computed(() =>
-  activityFilter.value === 'all' ? activityRowsAll.value : activityRowsAll.value.filter((r) => r.src === activityFilter.value),
+  activityFilter.value === 'all'
+    ? activityRowsAll.value
+    : activityRowsAll.value.filter((r) => r.src === activityFilter.value),
 )
 const activityChips = computed(() => [
   { key: 'all' as const, label: t('common.all') },
@@ -217,7 +256,9 @@ const avgDurationText = computed(() => {
 const avgWaitText = computed(() => {
   const stats = analytics.value?.nodeStats
   if (!stats) return null
-  const stays = Object.values(stats).map((s) => s.avgStayMs).filter((v) => typeof v === 'number' && Number.isFinite(v))
+  const stays = Object.values(stats)
+    .map((s) => s.avgStayMs)
+    .filter((v) => typeof v === 'number' && Number.isFinite(v))
   if (!stays.length) return null
   return (stays.reduce((a, b) => a + b, 0) / stays.length / 3600000).toFixed(1) + 'h'
 })
@@ -228,15 +269,23 @@ const completionPct = computed(() => {
   return Math.round((a.completed / a.launched) * 100)
 })
 const effBoxes = computed(() => [
-  { label: t('workspace.statProcessed'), value: processedTotal.value ? String(processedTotal.value) : '—', color: 'var(--sw-color-primary)' },
-  { label: t('workspace.upcomingDeadline'), value: todoExtra.value.urgentTotal != null ? String(todoExtra.value.urgentTotal) : '—', color: 'var(--sw-danger)' },
+  {
+    label: t('workspace.statProcessed'),
+    value: processedTotal.value ? String(processedTotal.value) : '—',
+    color: 'var(--sw-color-primary)',
+  },
+  {
+    label: t('workspace.upcomingDeadline'),
+    value: todoExtra.value.urgentTotal != null ? String(todoExtra.value.urgentTotal) : '—',
+    color: 'var(--sw-danger)',
+  },
   { label: t('workspace.avgWait'), value: avgWaitText.value ?? '—', color: 'var(--sw-success)' },
 ])
 
 /**
  * 工作台卡片标题的**文案键**（不是求值结果）：渲染期解析，保证语言切换后跟随。
  */
-const COMPONENT_TITLE_KEYS: Record<WorkspaceComponentKey, string> = {
+const COMPONENT_TITLE_KEYS: Record<string, string> = {
   todo: 'workflow.myTodoTitle',
   myProcessed: 'workflow.myProcessed',
   myInitiated: 'common.startedByMe',
@@ -247,8 +296,13 @@ const COMPONENT_TITLE_KEYS: Record<WorkspaceComponentKey, string> = {
 }
 
 /** 卡片标题显示名：渲染期按当前语言解析。 */
-function componentTitle(key: WorkspaceComponentKey): string {
-  return t(COMPONENT_TITLE_KEYS[key])
+function componentTitle(key: string): string {
+  const configured = cardTypes.value.find((type) => type.typeCode === key)
+  return configured?.displayName ?? (COMPONENT_TITLE_KEYS[key] ? t(COMPONENT_TITLE_KEYS[key]) : key)
+}
+
+function rendererKeyOf(key: string): string {
+  return cardTypes.value.find((type) => type.typeCode === key)?.rendererKey ?? key
 }
 
 const orderedVisible = computed(() =>
@@ -258,21 +312,39 @@ const orderedVisible = computed(() =>
     .sort((a, b) => a.order - b.order),
 )
 
+function cardStyle(rendererKey: string) {
+  const component = orderedVisible.value.find((item) => rendererKeyOf(item.key) === rendererKey)
+  if (!component) return {}
+  return {
+    order: component.order,
+    gridColumn: component.span === 2 ? 'span 2' : 'span 1',
+  }
+}
+
 /** 设计面板之外仍可见的旧卡片（草稿/消息等），按既有配置渲染在下方。 */
 const extraCards = computed(() =>
-  orderedVisible.value.filter((c) => ['drafts', 'messages'].includes(c.key)),
+  orderedVisible.value.filter((c) => ['drafts', 'messages'].includes(rendererKeyOf(c.key))),
 )
 
 const showTodoPanel = computed(() =>
-  components.value.some((c) => c.key === 'todo' && c.visible),
+  components.value.some((c) => rendererKeyOf(c.key) === 'todo' && c.visible),
 )
 const showFavorites = computed(() =>
-  components.value.some((c) => c.key === 'favoriteItems' && c.visible),
+  components.value.some((c) => rendererKeyOf(c.key) === 'favorites' && c.visible),
+)
+const showStats = computed(() =>
+  components.value.some((c) => rendererKeyOf(c.key) === 'stats' && c.visible),
 )
 const showActivity = computed(() =>
-  ['myProcessed', 'myInitiated', 'cc'].some((key) =>
-    components.value.some((c) => c.key === key && c.visible),
+  components.value.some(
+    (c) =>
+      (rendererKeyOf(c.key) === 'activity' ||
+        ['myProcessed', 'myInitiated', 'cc'].includes(c.key)) &&
+      c.visible,
   ),
+)
+const showEfficiency = computed(() =>
+  components.value.some((c) => rendererKeyOf(c.key) === 'efficiency' && c.visible),
 )
 
 async function loadLayout() {
@@ -280,7 +352,19 @@ async function loadLayout() {
   try {
     const resp = await getWorkspaceLayout()
     custom.value = resp.custom
-    components.value = withNewComponents(resp.layout.components)
+    cardTypes.value = resp.cardTypes ?? []
+    const rawCards = (resp.layout.cards ?? resp.layout.components ?? []) as Array<
+      WorkspaceCard | WorkspaceComponent
+    >
+    components.value = withNewComponents(
+      rawCards.map((card) => ({
+        key: 'typeCode' in card ? card.typeCode : card.key,
+        visible: card.visible,
+        order: card.order,
+        span: card.span,
+        metadata: card.metadata,
+      })),
+    )
     favoriteKeys.value = resp.layout.favoriteItemKeys
     await Promise.all([loadComponentData(), loadFavorites(), loadAnalytics()])
   } catch (err) {
@@ -299,15 +383,17 @@ async function loadAnalytics() {
   }
 }
 
-/** I4 §3.7：旧布局缺 drafts/messages/myProcessed 键时回落补默认，避免版本升级后组件丢失。 */
+/** 后端卡片类型变化后，用户布局缺失的新类型回落为默认卡片。 */
 function withNewComponents(list: WorkspaceComponent[]): WorkspaceComponent[] {
   const keys = new Set(list.map((c) => c.key))
   const merged = [...list]
-  const defaults: WorkspaceComponent[] = [
-    { key: 'drafts', visible: true, order: 5, span: 1 },
-    { key: 'messages', visible: true, order: 6, span: 1 },
-    { key: 'myProcessed', visible: true, order: 7, span: 1 },
-  ]
+  const defaults: WorkspaceComponent[] = cardTypes.value.map((type) => ({
+    key: type.typeCode,
+    visible: true,
+    order: type.defaultOrder,
+    span: type.defaultSpan,
+    metadata: {},
+  }))
   for (const d of defaults) {
     if (!keys.has(d.key)) merged.push(d)
   }
@@ -322,78 +408,95 @@ function openDraft(item: Record<string, unknown>) {
 
 async function loadComponentData() {
   const tasks: Array<Promise<void>> = []
-  // 设计01 信息架构：待办面板 tabs（待办/已办/抄送/草稿）与统计卡需要全部真实列表，
-  // 故四个列表无条件加载；草稿/抄送独立卡片仍按用户布局可见性渲染（extraCards）。
-  tasks.push(
-    queryTodoTasks({ pageNum: 1, pageSize: 5 })
-      .then((page) => {
-        todoList.value = page.list as unknown as Array<Record<string, unknown>>
-        todoTotal.value = page.total
-        const extra = page as unknown as PageExtra
-        todoExtra.value = { badge: extra.badge, urgentTotal: extra.urgentTotal }
-      })
-      .catch(() => {
-        todoList.value = []
-        todoTotal.value = 0
-        todoExtra.value = {}
-      }),
-  )
-  tasks.push(
-    myProcessed({ pageNum: 1, pageSize: 5 })
-      .then((page) => {
-        processedList.value = page.list as unknown as Array<Record<string, unknown>>
-        processedTotal.value = page.total
-        processedExtra.value = page as unknown as PageExtra
-      })
-      .catch(() => {
-        processedList.value = []
-        processedTotal.value = 0
-        processedExtra.value = {}
-      }),
-  )
-  tasks.push(
-    myInstances({ pageNum: 1, pageSize: 5 })
-      .then((page) => {
-        initiatedList.value = page.list as unknown as Array<Record<string, unknown>>
-        initiatedTotal.value = page.total
-        initiatedExtra.value = page as unknown as PageExtra
-      })
-      .catch(() => {
-        initiatedList.value = []
-        initiatedTotal.value = 0
-        initiatedExtra.value = {}
-      }),
-  )
-  tasks.push(
-    myDrafts({ pageNum: 1, pageSize: 5 })
-      .then((page) => {
-        draftsList.value = page.list as unknown as Array<Record<string, unknown>>
-        draftsTotal.value = page.total
-        draftsExtra.value = page as unknown as PageExtra
-      })
-      .catch(() => {
-        draftsList.value = []
-        draftsTotal.value = 0
-        draftsExtra.value = {}
-      }),
-  )
-  tasks.push(
-    queryMyCopies({ pageNum: 1, pageSize: 5 })
-      .then((page) => {
-        ccList.value = page.list as unknown as Array<Record<string, unknown>>
-        ccTotal.value = page.total
-      })
-      .catch(() => {
-        ccList.value = []
-        ccTotal.value = 0
-      }),
-  )
+  const needTodo = showTodoPanel.value || showStats.value
+  const needProcessed = showTodoPanel.value || showStats.value || showActivity.value
+  const needInitiated = showStats.value || showActivity.value
+  const needDrafts =
+    showTodoPanel.value ||
+    showStats.value ||
+    extraCards.value.some((c) => rendererKeyOf(c.key) === 'drafts')
+  const needCc = showTodoPanel.value || showActivity.value
+
+  if (needTodo) {
+    tasks.push(
+      queryTodoTasks({ pageNum: 1, pageSize: 5 })
+        .then((page) => {
+          todoList.value = page.list as unknown as Array<Record<string, unknown>>
+          todoTotal.value = page.total
+          const extra = page as unknown as PageExtra
+          todoExtra.value = { badge: extra.badge, urgentTotal: extra.urgentTotal }
+        })
+        .catch(() => {
+          todoList.value = []
+          todoTotal.value = 0
+          todoExtra.value = {}
+        }),
+    )
+  }
+  if (needProcessed) {
+    tasks.push(
+      myProcessed({ pageNum: 1, pageSize: 5 })
+        .then((page) => {
+          processedList.value = page.list as unknown as Array<Record<string, unknown>>
+          processedTotal.value = page.total
+          processedExtra.value = page as unknown as PageExtra
+        })
+        .catch(() => {
+          processedList.value = []
+          processedTotal.value = 0
+          processedExtra.value = {}
+        }),
+    )
+  }
+  if (needInitiated) {
+    tasks.push(
+      myInstances({ pageNum: 1, pageSize: 5 })
+        .then((page) => {
+          initiatedList.value = page.list as unknown as Array<Record<string, unknown>>
+          initiatedTotal.value = page.total
+          initiatedExtra.value = page as unknown as PageExtra
+        })
+        .catch(() => {
+          initiatedList.value = []
+          initiatedTotal.value = 0
+          initiatedExtra.value = {}
+        }),
+    )
+  }
+  if (needDrafts) {
+    tasks.push(
+      myDrafts({ pageNum: 1, pageSize: 5 })
+        .then((page) => {
+          draftsList.value = page.list as unknown as Array<Record<string, unknown>>
+          draftsTotal.value = page.total
+          draftsExtra.value = page as unknown as PageExtra
+        })
+        .catch(() => {
+          draftsList.value = []
+          draftsTotal.value = 0
+          draftsExtra.value = {}
+        }),
+    )
+  }
+  if (needCc) {
+    tasks.push(
+      queryMyCopies({ pageNum: 1, pageSize: 5 })
+        .then((page) => {
+          ccList.value = page.list as unknown as Array<Record<string, unknown>>
+          ccTotal.value = page.total
+        })
+        .catch(() => {
+          ccList.value = []
+          ccTotal.value = 0
+        }),
+    )
+  }
   await Promise.all(tasks)
 }
 
 /** 常用事项仅以当前可见目录解析：失效事项不渲染为入口。 */
 async function loadFavorites() {
-  if (!components.value.some((c) => c.key === 'favoriteItems' && c.visible)) {
+  if (!components.value.some((c) => rendererKeyOf(c.key) === 'favorites' && c.visible)) {
     favoriteItems.value = []
     return
   }
@@ -465,7 +568,13 @@ function toggleFavorite(key: string) {
 async function saveConfig() {
   try {
     await saveWorkspaceLayout({
-      components: components.value.map((c) => ({ ...c })),
+      cards: components.value.map((c) => ({
+        typeCode: c.key,
+        visible: c.visible,
+        order: c.order,
+        span: c.span === 2 ? 2 : 1,
+        metadata: c.metadata ?? {},
+      })),
       favoriteItemKeys: [...favoriteKeys.value],
     })
     custom.value = true
@@ -499,169 +608,191 @@ onMounted(loadLayout)
       <h2 class="wsd-hero__greeting">
         {{ greeting }}{{ displayName ? '，' : '' }}{{ displayName }}
       </h2>
-      <p class="wsd-hero__sub">{{ t('workspace.todoSummary', { count: todoTotal, urgent: todoExtra.urgentTotal ?? 0 }) }}</p>
+      <p class="wsd-hero__sub">
+        {{ t('workspace.todoSummary', { count: todoTotal, urgent: todoExtra.urgentTotal ?? 0 }) }}
+      </p>
       <button class="wsd-hero__config" type="button" @click="openConfig">
-        <span class="wsd-hero__gear"><el-icon :size="14"><Setting /></el-icon></span
+        <span class="wsd-hero__gear"
+          ><el-icon :size="14"><Setting /></el-icon></span
         >{{ t('workspace.configureWorkspace') }}
       </button>
     </header>
 
-    <div class="wsd-stats">
-      <div v-for="s in stats" :key="s.key" class="wsd-stat">
-        <span class="wsd-stat__label">{{ s.label }}</span>
-        <span class="wsd-stat__value">{{ s.value }}</span>
-        <span v-if="s.badge" class="wsd-stat__badge" :class="{ 'wsd-stat__badge--indent': s.key === 'drafts' }">{{ s.badge }}</span>
-        <span class="wsd-stat__iconbg" :style="{ background: STAT_ICONS[s.key]?.bg, color: STAT_ICONS[s.key]?.color }">
-          <el-icon :size="24"><component :is="STAT_ICONS[s.key]?.icon" /></el-icon>
-        </span>
-      </div>
-    </div>
-
-    <div class="wsd-mid">
-      <section v-if="showTodoPanel" class="wsd-panel wsd-panel--todo">
-        <div class="wsd-panel__head">
-          <h3 class="wsd-panel__title">{{ t('workflow.myTodoTitle') }}</h3>
-          <button class="wsd-btn" type="button" @click="router.push('/workflow/todo')">
-            {{ t('workspace.allTodos') }} →
-          </button>
-        </div>
-        <div class="wsd-tabrow" role="tablist">
-          <button
-            v-for="tab in panelTabs"
-            :key="tab.key"
-            class="wsd-tab"
-            :class="{ 'is-active': activeTodoTab === tab.key }"
-            type="button"
-            role="tab"
-            :aria-selected="activeTodoTab === tab.key"
-            @click="activeTodoTab = tab.key"
-          >
-            {{ tab.label }} <span class="wsd-tab__count">{{ tab.count }}</span>
-          </button>
-        </div>
-        <p v-if="panelRows.length === 0" class="wsd-panel__empty">{{ t('workflow.noTodoTasks') }}</p>
-        <ul v-else class="wsd-taskrows">
-          <li v-for="(row, index) in panelRows" :key="index" class="wsd-task">
-            <button
-              class="wsd-task__title"
-              type="button"
-              @click="router.push(`/workflow/task/${(row.taskId as string) ?? ''}`)"
-            >
-              {{ (row.name ?? row.taskName ?? row.title ?? row.formKey as string) ?? '-' }}
-            </button>
-            <span class="wsd-task__meta">{{ rowMeta(row) }}</span>
-          </li>
-        </ul>
-      </section>
-      <section v-if="showFavorites" class="wsd-panel wsd-panel--quick">
-        <div class="wsd-panel__head">
-          <h3 class="wsd-panel__title">{{ t('workspace.quickLaunch') }}</h3>
-          <button class="wsd-pill" type="button" @click="openConfig">
-            {{ t('workspace.manageFavorites') }}
-          </button>
-        </div>
-        <p v-if="quickActions.length === 0" class="wsd-panel__empty">
-          {{ t('workspace.noFavorites') }}
-        </p>
-        <div v-else class="wsd-quickgrid">
-          <button
-            v-for="q in quickActions"
-            :key="q.formKey"
-            class="wsd-quick"
-            type="button"
-            @click="openForm(q.formKey)"
-          >
-            <span class="wsd-quick__icon" :style="{ color: q.color }">
-              <el-icon :size="22"><component :is="q.icon" /></el-icon>
-            </span>
-            <span class="wsd-quick__label">{{ q.label }}</span>
-          </button>
-          <button class="wsd-quick" type="button" @click="openConfig">
-            <span class="wsd-quick__icon wsd-quick__icon--more">
-              <el-icon :size="22"><MoreFilled /></el-icon>
-            </span>
-            <span class="wsd-quick__label">{{ t('workspace.moreItems') }}</span>
-          </button>
-        </div>
-        <p class="wsd-quick__footer">{{ t('workspace.quickFooter') }}</p>
-      </section>
-    </div>
-
-    <div class="wsd-bottom">
-      <section v-if="showActivity" class="wsd-panel wsd-panel--activity">
-        <div class="wsd-panel__head">
-          <h3 class="wsd-panel__title">{{ t('workspace.activityTitle') }}</h3>
-          <span class="wsd-panel__hint">{{ t('workspace.activityHint') }}</span>
-        </div>
-        <div class="wsd-chiprow wsd-chiprow--activity">
-          <button
-            v-for="c in activityChips"
-            :key="c.key"
-            class="wsd-chip"
-            :class="{ 'is-active': activityFilter === c.key }"
-            type="button"
-            @click="activityFilter = c.key"
-          >
-            {{ c.label }}
-          </button>
-        </div>
-        <p v-if="activityRows.length === 0" class="wsd-panel__empty">
-          {{ t('workspace.noActivity') }}
-        </p>
-        <ul v-else class="wsd-actrows">
-          <li v-for="(row, index) in activityRows" :key="index" class="wsd-act">
-            <div class="wsd-act__main">
-              <span class="wsd-act__title">{{ row.title }}</span>
-              <span class="wsd-act__meta">{{ row.meta }}</span>
-            </div>
-            <span class="wsd-act__time">{{ row.time }}</span>
-          </li>
-        </ul>
-      </section>
-      <section class="wsd-panel wsd-panel--eff">
-        <div class="wsd-panel__head">
-          <h3 class="wsd-panel__title">{{ t('workspace.efficiencyTitle') }}</h3>
-          <span class="wsd-panel__hint">{{ t('workspace.effHint') }}</span>
-        </div>
-        <div class="wsd-eff-hero">
-          <div class="wsd-eff-hero__main">
-            <span class="wsd-eff-hero__label">{{ t('workspace.avgDuration') }}</span>
-            <span class="wsd-eff-hero__value">{{ avgDurationText }}</span>
-          </div>
-        </div>
-        <div class="wsd-eff-rate">
-          <div class="wsd-eff-rate__head">
-            <span>{{ t('workspace.completionRate') }}</span>
-            <span class="wsd-eff-rate__num">{{ completionPct != null ? completionPct + '%' : '—' }}</span>
-          </div>
-          <div class="wsd-eff-rate__bar">
+    <div class="wsd-lowcode-grid">
+      <div v-if="showStats" class="wsd-card-slot" :style="cardStyle('stats')">
+        <div class="wsd-stats">
+          <div v-for="s in stats" :key="s.key" class="wsd-stat">
+            <span class="wsd-stat__label">{{ s.label }}</span>
+            <span class="wsd-stat__value">{{ s.value }}</span>
             <span
-              v-if="completionPct != null"
-              class="wsd-eff-rate__fill"
-              :style="{ width: completionPct + '%' }"
-            />
+              v-if="s.badge"
+              class="wsd-stat__badge"
+              :class="{ 'wsd-stat__badge--indent': s.key === 'drafts' }"
+              >{{ s.badge }}</span
+            >
+            <span
+              class="wsd-stat__iconbg"
+              :style="{ background: STAT_ICONS[s.key]?.bg, color: STAT_ICONS[s.key]?.color }"
+            >
+              <el-icon :size="24"><component :is="STAT_ICONS[s.key]?.icon" /></el-icon>
+            </span>
           </div>
         </div>
-        <div class="wsd-eff-grid">
-          <div v-for="b in effBoxes" :key="b.label" class="wsd-eff-box">
-            <span class="wsd-eff-box__label">{{ b.label }}</span>
-            <span class="wsd-eff-box__value" :style="{ color: b.color }">{{ b.value }}</span>
-          </div>
-        </div>
-      </section>
-    </div>
+      </div>
 
-    <!-- 设计面板之外的既有卡片（草稿/消息等），按用户布局渲染 -->
-    <div v-if="extraCards.length" class="wsd-extra">
+      <div v-if="showTodoPanel" class="wsd-card-slot" :style="cardStyle('todo')">
+        <section class="wsd-panel wsd-panel--todo">
+          <div class="wsd-panel__head">
+            <h3 class="wsd-panel__title">{{ t('workflow.myTodoTitle') }}</h3>
+            <button class="wsd-btn" type="button" @click="router.push('/workflow/todo')">
+              {{ t('workspace.allTodos') }} →
+            </button>
+          </div>
+          <div class="wsd-tabrow" role="tablist">
+            <button
+              v-for="tab in panelTabs"
+              :key="tab.key"
+              class="wsd-tab"
+              :class="{ 'is-active': activeTodoTab === tab.key }"
+              type="button"
+              role="tab"
+              :aria-selected="activeTodoTab === tab.key"
+              @click="activeTodoTab = tab.key"
+            >
+              {{ tab.label }} <span class="wsd-tab__count">{{ tab.count }}</span>
+            </button>
+          </div>
+          <p v-if="panelRows.length === 0" class="wsd-panel__empty">
+            {{ t('workflow.noTodoTasks') }}
+          </p>
+          <ul v-else class="wsd-taskrows">
+            <li v-for="(row, index) in panelRows" :key="index" class="wsd-task">
+              <button
+                class="wsd-task__title"
+                type="button"
+                @click="router.push(`/workflow/task/${(row.taskId as string) ?? ''}`)"
+              >
+                {{ row.name ?? row.taskName ?? row.title ?? (row.formKey as string) ?? '-' }}
+              </button>
+              <span class="wsd-task__meta">{{ rowMeta(row) }}</span>
+            </li>
+          </ul>
+        </section>
+      </div>
+      <div v-if="showFavorites" class="wsd-card-slot" :style="cardStyle('favorites')">
+        <section class="wsd-panel wsd-panel--quick">
+          <div class="wsd-panel__head">
+            <h3 class="wsd-panel__title">{{ t('workspace.quickLaunch') }}</h3>
+            <button class="wsd-pill" type="button" @click="openConfig">
+              {{ t('workspace.manageFavorites') }}
+            </button>
+          </div>
+          <p v-if="quickActions.length === 0" class="wsd-panel__empty">
+            {{ t('workspace.noFavorites') }}
+          </p>
+          <div v-else class="wsd-quickgrid">
+            <button
+              v-for="q in quickActions"
+              :key="q.formKey"
+              class="wsd-quick"
+              type="button"
+              @click="openForm(q.formKey)"
+            >
+              <span class="wsd-quick__icon" :style="{ color: q.color }">
+                <el-icon :size="22"><component :is="q.icon" /></el-icon>
+              </span>
+              <span class="wsd-quick__label">{{ q.label }}</span>
+            </button>
+            <button class="wsd-quick" type="button" @click="openConfig">
+              <span class="wsd-quick__icon wsd-quick__icon--more">
+                <el-icon :size="22"><MoreFilled /></el-icon>
+              </span>
+              <span class="wsd-quick__label">{{ t('workspace.moreItems') }}</span>
+            </button>
+          </div>
+          <p class="wsd-quick__footer">{{ t('workspace.quickFooter') }}</p>
+        </section>
+      </div>
+
+      <div v-if="showActivity" class="wsd-card-slot" :style="cardStyle('activity')">
+        <section class="wsd-panel wsd-panel--activity">
+          <div class="wsd-panel__head">
+            <h3 class="wsd-panel__title">{{ t('workspace.activityTitle') }}</h3>
+            <span class="wsd-panel__hint">{{ t('workspace.activityHint') }}</span>
+          </div>
+          <div class="wsd-chiprow wsd-chiprow--activity">
+            <button
+              v-for="c in activityChips"
+              :key="c.key"
+              class="wsd-chip"
+              :class="{ 'is-active': activityFilter === c.key }"
+              type="button"
+              @click="activityFilter = c.key"
+            >
+              {{ c.label }}
+            </button>
+          </div>
+          <p v-if="activityRows.length === 0" class="wsd-panel__empty">
+            {{ t('workspace.noActivity') }}
+          </p>
+          <ul v-else class="wsd-actrows">
+            <li v-for="(row, index) in activityRows" :key="index" class="wsd-act">
+              <div class="wsd-act__main">
+                <span class="wsd-act__title">{{ row.title }}</span>
+                <span class="wsd-act__meta">{{ row.meta }}</span>
+              </div>
+              <span class="wsd-act__time">{{ row.time }}</span>
+            </li>
+          </ul>
+        </section>
+      </div>
+      <div v-if="showEfficiency" class="wsd-card-slot" :style="cardStyle('efficiency')">
+        <section class="wsd-panel wsd-panel--eff">
+          <div class="wsd-panel__head">
+            <h3 class="wsd-panel__title">{{ t('workspace.efficiencyTitle') }}</h3>
+            <span class="wsd-panel__hint">{{ t('workspace.effHint') }}</span>
+          </div>
+          <div class="wsd-eff-hero">
+            <div class="wsd-eff-hero__main">
+              <span class="wsd-eff-hero__label">{{ t('workspace.avgDuration') }}</span>
+              <span class="wsd-eff-hero__value">{{ avgDurationText }}</span>
+            </div>
+          </div>
+          <div class="wsd-eff-rate">
+            <div class="wsd-eff-rate__head">
+              <span>{{ t('workspace.completionRate') }}</span>
+              <span class="wsd-eff-rate__num">{{
+                completionPct != null ? completionPct + '%' : '—'
+              }}</span>
+            </div>
+            <div class="wsd-eff-rate__bar">
+              <span
+                v-if="completionPct != null"
+                class="wsd-eff-rate__fill"
+                :style="{ width: completionPct + '%' }"
+              />
+            </div>
+          </div>
+          <div class="wsd-eff-grid">
+            <div v-for="b in effBoxes" :key="b.label" class="wsd-eff-box">
+              <span class="wsd-eff-box__label">{{ b.label }}</span>
+              <span class="wsd-eff-box__value" :style="{ color: b.color }">{{ b.value }}</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- 设计面板之外的既有卡片（草稿/消息等），按用户布局渲染 -->
       <section
         v-for="component in extraCards"
         :key="component.key"
         class="wsd-panel wsd-extra__card"
+        :style="cardStyle(rendererKeyOf(component.key))"
       >
         <div class="wsd-panel__head">
           <h3 class="wsd-panel__title">{{ componentTitle(component.key) }}</h3>
         </div>
-        <template v-if="component.key === 'drafts'">
+        <template v-if="rendererKeyOf(component.key) === 'drafts'">
           <p v-if="draftsList.length === 0" class="wsd-panel__empty">
             {{ t('workflow.noDrafts') }}
           </p>
@@ -676,7 +807,7 @@ onMounted(loadLayout)
             </li>
           </ul>
         </template>
-        <template v-else-if="component.key === 'messages'">
+        <template v-else-if="rendererKeyOf(component.key) === 'messages'">
           <p class="wsd-panel__empty">{{ t('workflow.messagesEntryHint') }}</p>
           <button class="wsd-btn" type="button" @click="router.push('/notify/record')">
             {{ t('workflow.openMessages') }}
@@ -781,11 +912,26 @@ onMounted(loadLayout)
   color: var(--sw-color-primary);
   margin-right: 6px;
 }
+.wsd-lowcode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 16px;
+  align-items: stretch;
+}
+.wsd-card-slot {
+  min-width: 0;
+}
+.wsd-card-slot > .wsd-panel {
+  height: 100%;
+  min-height: 334px;
+  overflow: hidden;
+}
 .wsd-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 18px;
-  margin-top: 16px;
+  height: 100%;
 }
 .wsd-stat {
   position: relative;
@@ -832,27 +978,12 @@ onMounted(loadLayout)
   height: 48px;
   border-radius: 10px;
 }
-.wsd-mid,
-.wsd-bottom {
-  display: grid;
-  grid-template-columns: minmax(0, 740fr) minmax(0, 392fr);
-  gap: 20px;
-  margin-top: 20px;
-}
 .wsd-panel {
   box-sizing: border-box;
   padding: 20px 24px;
   background: #ffffff;
   border: 1px solid var(--sw-border);
   border-radius: 10px;
-}
-.wsd-mid .wsd-panel {
-  height: 334px;
-  overflow: hidden;
-}
-.wsd-bottom .wsd-panel {
-  height: 318px;
-  overflow: hidden;
 }
 .wsd-panel__head {
   display: flex;
@@ -1162,12 +1293,6 @@ onMounted(loadLayout)
   font-size: 20px;
   line-height: 24px;
   font-weight: 600;
-}
-.wsd-extra {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
-  margin-top: 20px;
 }
 .wsd-extra__card {
   min-height: 120px;

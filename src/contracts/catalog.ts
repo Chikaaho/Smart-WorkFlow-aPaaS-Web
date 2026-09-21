@@ -36,32 +36,56 @@ export interface CategorySaveReq {
 /** 分类聚合数量：categoryId → 可见事项数（未分类归入 key "0"）。 */
 export type CategoryCounts = Record<string, number>
 
-/** 工作台组件键（I4 §3.7：统一工作台七入口，含我的已办）。 */
-export type WorkspaceComponentKey =
+/** 工作台内置渲染器键；后端只能配置这些安全注册器，不能下发组件路径。 */
+export type WorkspaceRendererKey =
+  | 'stats'
   | 'todo'
-  | 'myProcessed'
-  | 'myInitiated'
-  | 'cc'
-  | 'favoriteItems'
+  | 'favorites'
+  | 'activity'
+  | 'efficiency'
   | 'drafts'
   | 'messages'
 
-/** 工作台组件配置项。span 为布局宽度：1=半宽（默认），2=整行。 */
-export interface WorkspaceComponent {
-  key: WorkspaceComponentKey
+/** 工作台卡片类型（租户级后台配置）。 */
+export interface WorkspaceCardType {
+  id: number
+  typeCode: string
+  displayName: string
+  rendererKey: WorkspaceRendererKey
+  metadataJson: string
+  defaultSpan: 1 | 2
+  defaultOrder: number
+  status: 0 | 1
+}
+
+/** 工作台卡片实例（用户级 JSON 元数据）。 */
+export interface WorkspaceCard {
+  typeCode: string
   visible: boolean
   order: number
-  span?: number
+  span?: 1 | 2
+  metadata?: Record<string, unknown>
+}
+
+/** 旧版组件配置兼容形状；读取时由后端归一为 cards。 */
+export interface WorkspaceComponent {
+  key: string
+  visible: boolean
+  order: number
+  span?: 1 | 2
+  metadata?: Record<string, unknown>
 }
 
 /** 工作台布局。 */
 export interface WorkspaceLayout {
-  components: WorkspaceComponent[]
+  cards: WorkspaceCard[]
   favoriteItemKeys: string[]
+  components?: WorkspaceComponent[]
 }
 
 /** 工作台布局读取响应。 */
 export interface WorkspaceLayoutResp {
   custom: boolean
+  cardTypes: WorkspaceCardType[]
   layout: WorkspaceLayout
 }
