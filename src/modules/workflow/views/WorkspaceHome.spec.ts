@@ -7,11 +7,13 @@ const myInstances = vi.fn()
 const queryMyCopies = vi.fn()
 const queryCatalogItems = vi.fn()
 const getWorkspaceLayout = vi.fn()
+const saveWorkspaceLayout = vi.fn()
+const resetWorkspaceLayout = vi.fn()
 
 vi.mock('@/modules/workflow/api/oa', () => ({
   getWorkspaceLayout: (...args: unknown[]) => getWorkspaceLayout(...args),
-  saveWorkspaceLayout: vi.fn(),
-  resetWorkspaceLayout: vi.fn(),
+  saveWorkspaceLayout: (...args: unknown[]) => saveWorkspaceLayout(...args),
+  resetWorkspaceLayout: (...args: unknown[]) => resetWorkspaceLayout(...args),
   queryCatalogItems: (...args: unknown[]) => queryCatalogItems(...args),
   queryMyCopies: (...args: unknown[]) => queryMyCopies(...args),
 }))
@@ -26,31 +28,45 @@ vi.mock('vue-router', () => ({
 }))
 
 import WorkspaceHome from './WorkspaceHome.vue'
-import type { WorkspaceLayoutResp } from '@/contracts/catalog'
+import type { WorkspaceCardType, WorkspaceLayoutResp } from '@/contracts/catalog'
 
 function layoutResp(
   components: Array<{ key: string; visible: boolean; order: number; span?: number }>,
   custom = true,
+  extraTypes: string[] = [],
 ): WorkspaceLayoutResp {
-  return {
-    custom,
-    cardTypes: components.map((component, index) => ({
-      id: index + 1,
-      typeCode: component.key,
-      displayName: component.key,
-      rendererKey:
-        component.key === 'favoriteItems'
-          ? 'favorites'
-          : component.key === 'myProcessed' ||
-              component.key === 'myInitiated' ||
-              component.key === 'cc'
-            ? 'activity'
-            : (component.key as never),
+  const cardTypes: WorkspaceCardType[] = components.map((component, index) => ({
+    id: index + 1,
+    typeCode: component.key,
+    displayName: component.key,
+    rendererKey:
+      component.key === 'favoriteItems'
+        ? 'favorites'
+        : component.key === 'myProcessed' ||
+            component.key === 'myInitiated' ||
+            component.key === 'cc'
+          ? 'activity'
+          : (component.key as never),
+    metadataJson: '{}',
+    defaultSpan: 1,
+    defaultOrder: component.order,
+    status: 0,
+  }))
+  for (const [index, code] of extraTypes.entries()) {
+    cardTypes.push({
+      id: 100 + index,
+      typeCode: code,
+      displayName: code,
+      rendererKey: 'messages' as never,
       metadataJson: '{}',
       defaultSpan: 1,
-      defaultOrder: component.order,
+      defaultOrder: 90 + index,
       status: 0,
-    })),
+    })
+  }
+  return {
+    custom,
+    cardTypes,
     layout: {
       cards: components.map((component) => ({
         typeCode: component.key,
@@ -63,21 +79,14 @@ function layoutResp(
   }
 }
 
-const elStub = {
-  template: '<div v-if="modelValue"><slot/></div>',
-  props: ['modelValue', 'title', 'size'],
-}
-
 const global = {
   // P53 起工作台读取 userStore（问候语 displayName），测试装配补 pinia，断言不变。
   plugins: [createPinia()],
   stubs: {
-    'el-drawer': elStub,
     'el-button': {
       template: '<button><slot/></button>',
       props: ['icon', 'text', 'size', 'link', 'type', 'disabled'],
     },
-    'el-switch': { template: '<input type="checkbox"/>', props: ['modelValue'] },
     'el-checkbox': { template: '<input type="checkbox"/>', props: ['modelValue'] },
     'el-tag': { template: '<span><slot/></span>' },
     'el-icon': { template: '<i><slot/></i>' },
@@ -151,7 +160,7 @@ describe('WorkspaceHome 布局与查询收敛（R4）', () => {
     expect(mockPush).toHaveBeenCalledWith('/form/form-render/f1')
   })
 
-  it('默认布局通过小齿轮进入基础组件画布', async () => {
+  it('默认布局通过小齿轮进入整页自由画布编辑', async () => {
     getWorkspaceLayout.mockResolvedValue(
       layoutResp(
         [
@@ -166,13 +175,58 @@ describe('WorkspaceHome 布局与查询收敛（R4）', () => {
 
     const gear = wrapper.find('.wsd-hero__config')
     expect(gear.attributes('aria-label')).toBe('配置工作台')
-    expect(wrapper.find('.wsd-editor__canvas').exists()).toBe(false)
+    expect(wrapper.find('.wsd-toolbar').exists()).toBe(false)
 
     await gear.trigger('click')
     await flushPromises()
-    expect(wrapper.find('.wsd-editor__palette').exists()).toBe(true)
-    expect(wrapper.find('.wsd-editor__canvas').exists()).toBe(true)
-    expect(wrapper.find('.wsd-editor__default-badge').text()).toContain('默认布局')
-    expect(wrapper.findAll('.wsd-palette-item')).toHaveLength(2)
+    expect(wrapper.find('.wsd-toolbar').exists()).toBe(true)
+    expect(wrapper.find('.wsd-palette').exists()).toBe(true)
+    expect(wrapper.find('.wsd-toolbar__badge').text()).toContain('默认布局')
+    expect(wrapper.findAll('.wsd-canvas-item')).toHaveLength(2)
+  })
+
+  it('组件库点击可重新启用隐藏卡片并标记待保存', async () => {
+    getWorkspaceLayout.mockResolvedValue(
+      layoutResp([
+        { key: 'todo', visible: true, order: 1, span: 2 },
+        { key: 'messages', visible: true, order: 2 },
+      ]),
+    )
+    const wrapper = mount(WorkspaceHome, { global })
+    await flushPromises()
+    await wrapper.find('.wsd-hero__config').trigger('click')
+    await flushPromises()
+    const paletteItems = wrapper.findAll('.wsd-palette-item')
+    expect(paletteItems).toHaveLength(2)
+    const cards = wrapper.findAll('.wsd-canvas-item')
+    expect(cards).toHaveLength(2)
+    await cards[1].find('.wsd-canvas-item__btn').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.wsd-canvas-item.is-hidden').exists()).toBe(true)
+
+    await paletteItems[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.wsd-canvas-item.is-hidden').exists()).toBe(false)
+    expect(
+      wrapper.find('.wsd-toolbar__actions .wsd-btn--primary').attributes('disabled'),
+    ).toBeUndefined()
+  })
+
+  it('保存布局时把画布几何写入卡片元数据', async () => {
+    saveWorkspaceLayout.mockResolvedValue(undefined)
+    getWorkspaceLayout.mockResolvedValue(
+      layoutResp([{ key: 'todo', visible: true, order: 1, span: 2 }]),
+    )
+    const wrapper = mount(WorkspaceHome, { global })
+    await flushPromises()
+    await wrapper.find('.wsd-hero__config').trigger('click')
+    await flushPromises()
+    await wrapper.find('.wsd-canvas-item__btn').trigger('click')
+    await wrapper.find('.wsd-toolbar__actions .wsd-btn--primary').trigger('click')
+    await flushPromises()
+
+    expect(saveWorkspaceLayout).toHaveBeenCalledTimes(1)
+    const payload = saveWorkspaceLayout.mock.calls[0][0]
+    expect(payload.cards[0].metadata.geometry).toEqual({ x: 0, y: 0, w: 1200, h: 360 })
   })
 })

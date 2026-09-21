@@ -11,7 +11,7 @@ const { t } = useI18n()
  * 以「—」空值收敛，不伪造指标）。徽标/临期计数等设计密度字段仅当接口返回时渲染。
  * 隐藏组件不查询数据；组件配置（显示/顺序/常用事项）经既有布局契约持久化。
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -37,6 +37,16 @@ import {
 import { queryTodoTasks, myInstances, myDrafts, myProcessed } from '@/modules/workflow/api'
 import { queryAnalyticsSummary } from '@/modules/workflow/api/i4'
 import type { WorkspaceCard, WorkspaceCardType, WorkspaceComponent } from '@/contracts/catalog'
+import {
+  WORKSPACE_MIN_H,
+  WORKSPACE_MIN_W,
+  WORKSPACE_SNAP,
+  applyDragRect,
+  collectCandidates,
+  dragAxisOffsets,
+  snapDelta,
+  type CardRect,
+} from '@/modules/workflow/utils/workspace-canvas'
 import { ApiError } from '@/foundation/request'
 
 const router = useRouter()
@@ -48,10 +58,26 @@ const cardTypes = ref<WorkspaceCardType[]>([])
 const favoriteKeys = ref<string[]>([])
 const custom = ref(false)
 const loading = ref(false)
-const configVisible = ref(false)
 const dirty = ref(false)
-const editorComponents = ref<WorkspaceComponent[]>([])
+const editing = ref(false)
+const paletteVisible = ref(false)
+const canvasRef = ref<globalThis.HTMLElement | null>(null)
+const geometryMap = ref<Record<string, CardRect>>({})
+const guides = ref<{ v: number[]; h: number[] }>({ v: [], h: [] })
 const draggingPayload = ref('')
+
+/** 自由画布拖拽会话：move=标题栏/卡片体拖动，resize=8 向手柄缩放。 */
+type CanvasDragState = {
+  key: string
+  mode: 'move' | 'resize'
+  handle: string
+  startX: number
+  startY: number
+  orig: CardRect
+  pointerId: number
+  moved: boolean
+}
+const dragState = ref<CanvasDragState | null>(null)
 
 // ─── 组件数据 ───
 type PageExtra = { badge?: string; urgentTotal?: number }
@@ -307,32 +333,8 @@ function rendererKeyOf(key: string): string {
   return cardTypes.value.find((type) => type.typeCode === key)?.rendererKey ?? key
 }
 
-const orderedVisible = computed(() =>
-  components.value
-    .filter((c) => c.visible)
-    .slice()
-    .sort((a, b) => a.order - b.order),
-)
-
-function cardStyle(rendererKey: string) {
-  const component = orderedVisible.value.find((item) => rendererKeyOf(item.key) === rendererKey)
-  if (!component) return {}
-  return {
-    order: component.order,
-    gridColumn: component.span === 2 ? 'span 2' : 'span 1',
-  }
-}
-
-/** 设计面板之外仍可见的旧卡片（草稿/消息等），按既有配置渲染在下方。 */
-const extraCards = computed(() =>
-  orderedVisible.value.filter((c) => ['drafts', 'messages'].includes(rendererKeyOf(c.key))),
-)
-
 const showTodoPanel = computed(() =>
   components.value.some((c) => rendererKeyOf(c.key) === 'todo' && c.visible),
-)
-const showFavorites = computed(() =>
-  components.value.some((c) => rendererKeyOf(c.key) === 'favorites' && c.visible),
 )
 const showStats = computed(() =>
   components.value.some((c) => rendererKeyOf(c.key) === 'stats' && c.visible),
@@ -345,10 +347,6 @@ const showActivity = computed(() =>
       c.visible,
   ),
 )
-const showEfficiency = computed(() =>
-  components.value.some((c) => rendererKeyOf(c.key) === 'efficiency' && c.visible),
-)
-
 async function loadLayout() {
   loading.value = true
   try {
@@ -367,6 +365,7 @@ async function loadLayout() {
         metadata: card.metadata,
       })),
     )
+    hydrateGeometry()
     favoriteKeys.value = resp.layout.favoriteItemKeys
     await Promise.all([loadComponentData(), loadFavorites(), loadAnalytics()])
   } catch (err) {
@@ -402,22 +401,6 @@ function withNewComponents(list: WorkspaceComponent[]): WorkspaceComponent[] {
   return merged
 }
 
-function cloneComponents(list: WorkspaceComponent[]): WorkspaceComponent[] {
-  return list
-    .slice()
-    .sort((a, b) => a.order - b.order)
-    .map((component) => ({
-      ...component,
-      metadata: component.metadata ? { ...component.metadata } : {},
-    }))
-}
-
-const editorOrdered = computed(() => cloneComponents(editorComponents.value))
-
-function isEditorIncluded(typeCode: string): boolean {
-  return editorComponents.value.some((component) => component.key === typeCode)
-}
-
 function defaultMetadata(type: WorkspaceCardType): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(type.metadataJson || '{}')
@@ -429,18 +412,86 @@ function defaultMetadata(type: WorkspaceCardType): Record<string, unknown> {
   }
 }
 
-function editorCardFor(type: WorkspaceCardType): WorkspaceComponent {
-  return {
-    key: type.typeCode,
-    visible: true,
-    order: editorComponents.value.length + 1,
-    span: type.defaultSpan,
-    metadata: defaultMetadata(type),
+// ─── 自由画布几何（整页编辑模式） ───
+/** 各渲染器的默认卡片高度；缺省 320 保证面板内容可见。 */
+const DEFAULT_CARD_HEIGHTS: Record<string, number> = {
+  stats: 168,
+  todo: 360,
+  favorites: 300,
+  activity: 320,
+  efficiency: 340,
+  drafts: 220,
+  messages: 220,
+}
+const HANDLES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const
+
+function defaultCardHeight(key: string): number {
+  return DEFAULT_CARD_HEIGHTS[rendererKeyOf(key)] ?? 320
+}
+
+/** 用户保存的 geometry 存于卡片 metadata.geometry；缺失/非法时回落自动布局。 */
+function rectFromMetadata(meta?: Record<string, unknown>): CardRect | null {
+  const g = meta?.geometry as Partial<CardRect> | undefined
+  if (!g) return null
+  const x = Number(g.x)
+  const y = Number(g.y)
+  const w = Number(g.w)
+  const h = Number(g.h)
+  if (![x, y, w, h].every((v) => Number.isFinite(v) && v >= 0)) return null
+  if (w < WORKSPACE_MIN_W || h < WORKSPACE_MIN_H) return null
+  return { x, y, w, h }
+}
+
+function hydrateGeometry() {
+  for (const component of components.value) {
+    const rect = rectFromMetadata(component.metadata)
+    if (rect) geometryMap.value[component.key] = rect
   }
 }
 
-function normalizeEditorOrder(list: WorkspaceComponent[]): WorkspaceComponent[] {
-  return list.map((component, index) => ({ ...component, order: index + 1 }))
+/** 首次渲染/恢复默认时按 order 生成整行堆叠的默认几何。 */
+function ensureGeometry() {
+  const width = canvasRef.value?.clientWidth || 1200
+  let bottom = 0
+  for (const component of [...components.value].sort((a, b) => a.order - b.order)) {
+    if (!geometryMap.value[component.key]) {
+      geometryMap.value[component.key] = {
+        x: 0,
+        y: bottom,
+        w: Math.max(WORKSPACE_MIN_W, Math.round(width)),
+        h: defaultCardHeight(component.key),
+      }
+    }
+    const rect = geometryMap.value[component.key]
+    bottom = Math.max(bottom, rect.y + rect.h + 20)
+  }
+}
+
+function rectOf(key: string): CardRect {
+  return geometryMap.value[key] ?? { x: 0, y: 0, w: 1200, h: defaultCardHeight(key) }
+}
+
+const canvasItems = computed(() =>
+  components.value
+    .filter((c) => c.visible || editing.value)
+    .slice()
+    .sort((a, b) => a.order - b.order),
+)
+
+const canvasHeight = computed(() => {
+  const bottom = Object.values(geometryMap.value).reduce((max, r) => Math.max(max, r.y + r.h), 0)
+  return Math.round(Math.max(editing.value ? 720 : 520, bottom + 80))
+})
+
+function itemStyle(key: string) {
+  const rect = rectOf(key)
+  return {
+    left: `${rect.x}px`,
+    top: `${rect.y}px`,
+    width: `${rect.w}px`,
+    height: `${rect.h}px`,
+    zIndex: dragState.value?.key === key ? 40 : 1,
+  }
 }
 
 function openDraft(item: Record<string, unknown>) {
@@ -457,7 +508,7 @@ async function loadComponentData() {
   const needDrafts =
     showTodoPanel.value ||
     showStats.value ||
-    extraCards.value.some((c) => rendererKeyOf(c.key) === 'drafts')
+    components.value.some((c) => rendererKeyOf(c.key) === 'drafts' && c.visible)
   const needCc = showTodoPanel.value || showActivity.value
 
   if (needTodo) {
@@ -561,10 +612,7 @@ function openForm(formKey: string) {
 // ─── 配置模式 ───
 const catalogChoices = ref<CatalogItem[]>([])
 
-async function openConfig() {
-  configVisible.value = true
-  editorComponents.value = cloneComponents(components.value)
-  dirty.value = false
+async function loadCatalogChoices() {
   try {
     const page = await queryCatalogItems({ pageNum: 1, pageSize: 100 })
     catalogChoices.value = page.list
@@ -573,6 +621,18 @@ async function openConfig() {
     // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     catalogChoices.value = []
   }
+}
+
+/** 小齿轮：未编辑时进入整页编辑并打开组件库；编辑中切换组件库面板。 */
+function onGearClick() {
+  if (editing.value) {
+    paletteVisible.value = !paletteVisible.value
+    return
+  }
+  editing.value = true
+  paletteVisible.value = true
+  void loadCatalogChoices()
+  void nextTick(ensureGeometry)
 }
 
 function setVisible(component: WorkspaceComponent, value: boolean) {
@@ -586,46 +646,115 @@ function startPaletteDrag(typeCode: string, event: globalThis.DragEvent) {
   if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy'
 }
 
-function startEditorDrag(typeCode: string, event: globalThis.DragEvent) {
-  draggingPayload.value = `card:${typeCode}`
-  event.dataTransfer?.setData('text/plain', draggingPayload.value)
-  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+function isComponentIncluded(typeCode: string): boolean {
+  return components.value.some((component) => component.key === typeCode)
 }
 
-function stopEditorDrag() {
-  draggingPayload.value = ''
+/** 组件库新增/重新启用卡片：默认半幅宽，落在画布最低端或指针释放处。 */
+function addComponent(typeCode: string, at?: { x: number; y: number }) {
+  const type = cardTypes.value.find((t) => t.typeCode === typeCode)
+  if (!type) return
+  const canvasW = canvasRef.value?.clientWidth || 1200
+  const w = Math.min(640, Math.max(WORKSPACE_MIN_W, Math.round(canvasW / 2)))
+  const h = defaultCardHeight(typeCode)
+  const bottom = Object.values(geometryMap.value).reduce((max, r) => Math.max(max, r.y + r.h), 0)
+  const pos = at ?? { x: 24, y: bottom + 20 }
+  const existing = components.value.find((c) => c.key === typeCode)
+  if (existing) {
+    existing.visible = true
+  } else {
+    components.value.push({
+      key: typeCode,
+      visible: true,
+      order: components.value.length + 1,
+      span: type.defaultSpan,
+      metadata: defaultMetadata(type),
+    })
+  }
+  geometryMap.value[typeCode] = {
+    x: Math.max(0, Math.round(pos.x)),
+    y: Math.max(0, Math.round(pos.y)),
+    w,
+    h,
+  }
+  dirty.value = true
 }
 
-function dropEditorCard(event: globalThis.DragEvent, targetKey?: string) {
-  event.preventDefault()
+function dropPaletteCard(event: globalThis.DragEvent) {
   const payload = event.dataTransfer?.getData('text/plain') || draggingPayload.value
   draggingPayload.value = ''
-  const [kind, typeCode] = payload.split(':')
-  if (!typeCode || !['palette', 'card'].includes(kind)) return
-
-  const next = editorComponents.value.slice()
-  const existingIndex = next.findIndex((component) => component.key === typeCode)
-  const existing = existingIndex >= 0 ? next.splice(existingIndex, 1)[0] : undefined
-  const card = existing ?? cardTypes.value.find((type) => type.typeCode === typeCode)
-  if (!card) return
-  const component = 'typeCode' in card ? editorCardFor(card) : card
-
-  if (targetKey && targetKey !== typeCode) {
-    const targetIndex = next.findIndex((item) => item.key === targetKey)
-    next.splice(targetIndex >= 0 ? targetIndex : next.length, 0, component)
-  } else if (existingIndex >= 0) {
-    next.splice(Math.min(existingIndex, next.length), 0, component)
-  } else {
-    next.push(component)
+  if (!payload.startsWith('palette:')) return
+  const typeCode = payload.slice('palette:'.length)
+  const rect = canvasRef.value?.getBoundingClientRect()
+  if (!rect) {
+    addComponent(typeCode)
+    return
   }
-  editorComponents.value = normalizeEditorOrder(next)
-  dirty.value = true
+  addComponent(typeCode, {
+    x: event.clientX - rect.left - 180,
+    y: event.clientY - rect.top - 90,
+  })
 }
 
-/** 布局宽度调整：半宽（1）↔ 整行（2），随布局持久化。 */
-function toggleSpan(component: WorkspaceComponent) {
-  component.span = component.span === 2 ? 1 : 2
-  dirty.value = true
+/** 卡片体/标题栏按下进入移动；交互元素（按钮、链接等）不触发拖拽。 */
+function startCardDrag(
+  event: globalThis.PointerEvent,
+  key: string,
+  mode: 'move' | 'resize',
+  handle = '',
+) {
+  if (!editing.value || event.button !== 0) return
+  const target = event.target as globalThis.HTMLElement | null
+  if (mode === 'move' && target?.closest('button, a, input, textarea, select, label')) return
+  event.preventDefault()
+  dragState.value = {
+    key,
+    mode,
+    handle,
+    startX: event.clientX,
+    startY: event.clientY,
+    orig: { ...rectOf(key) },
+    pointerId: event.pointerId,
+    moved: false,
+  }
+  canvasRef.value?.setPointerCapture?.(event.pointerId)
+}
+
+function onCanvasPointerMove(event: globalThis.PointerEvent) {
+  const st = dragState.value
+  if (!st || st.pointerId !== event.pointerId) return
+  const dxRaw = event.clientX - st.startX
+  const dyRaw = event.clientY - st.startY
+  if (!st.moved && Math.hypot(dxRaw, dyRaw) > 2) {
+    st.moved = true
+    dirty.value = true
+  }
+  if (!st.moved) return
+  const handle = st.mode === 'resize' ? st.handle : ''
+  const raw = applyDragRect(st.orig, handle, dxRaw, dyRaw)
+  const canvasW = canvasRef.value?.clientWidth ?? 1200
+  const others = canvasItems.value.filter((c) => c.key !== st.key).map((c) => rectOf(c.key))
+  const offsets = dragAxisOffsets(handle, st.orig)
+  const snap = snapDelta(
+    raw,
+    collectCandidates(others, canvasW, canvasHeight.value),
+    offsets.xs,
+    offsets.ys,
+    WORKSPACE_SNAP,
+  )
+  geometryMap.value[st.key] = applyDragRect(st.orig, handle, dxRaw + snap.dx, dyRaw + snap.dy)
+  guides.value = {
+    v: snap.guideX == null ? [] : [snap.guideX],
+    h: snap.guideY == null ? [] : [snap.guideY],
+  }
+}
+
+function onCanvasPointerUp(event: globalThis.PointerEvent) {
+  const st = dragState.value
+  if (!st || st.pointerId !== event.pointerId) return
+  dragState.value = null
+  guides.value = { v: [], h: [] }
+  canvasRef.value?.releasePointerCapture?.(event.pointerId)
 }
 
 function toggleFavorite(key: string) {
@@ -643,20 +772,21 @@ function toggleFavorite(key: string) {
 
 async function saveConfig() {
   try {
-    const nextComponents = normalizeEditorOrder(editorOrdered.value)
     await saveWorkspaceLayout({
-      cards: nextComponents.map((c) => ({
+      cards: components.value.map((c) => ({
         typeCode: c.key,
         visible: c.visible,
         order: c.order,
         span: c.span === 2 ? 2 : 1,
-        metadata: c.metadata ?? {},
+        metadata: {
+          ...(c.metadata ?? {}),
+          ...(geometryMap.value[c.key] ? { geometry: geometryMap.value[c.key] } : {}),
+        },
       })),
       favoriteItemKeys: [...favoriteKeys.value],
     })
     custom.value = true
     dirty.value = false
-    configVisible.value = false
     ElMessage.success(t('workflow.workspaceSaved'))
     await loadLayout()
   } catch (err) {
@@ -669,14 +799,17 @@ async function resetConfig() {
     await resetWorkspaceLayout()
     ElMessage.success(t('workflow.layoutRestored'))
     dirty.value = false
-    configVisible.value = false
     await loadLayout()
   } catch (err) {
     ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.layoutRestoreFailed'))
   }
 }
 
-onMounted(loadLayout)
+onMounted(async () => {
+  await loadLayout()
+  await nextTick()
+  ensureGeometry()
+})
 </script>
 
 <template>
@@ -693,323 +826,353 @@ onMounted(loadLayout)
         type="button"
         :title="t('workspace.configureWorkspace')"
         :aria-label="t('workspace.configureWorkspace')"
-        @click="openConfig"
+        @click="onGearClick"
       >
         <el-icon :size="16"><Setting /></el-icon>
       </button>
     </header>
 
-    <div class="wsd-lowcode-grid">
-      <div v-if="showStats" class="wsd-card-slot" :style="cardStyle('stats')">
-        <div class="wsd-stats">
-          <div v-for="s in stats" :key="s.key" class="wsd-stat">
-            <span class="wsd-stat__label">{{ s.label }}</span>
-            <span class="wsd-stat__value">{{ s.value }}</span>
-            <span
-              v-if="s.badge"
-              class="wsd-stat__badge"
-              :class="{ 'wsd-stat__badge--indent': s.key === 'drafts' }"
-              >{{ s.badge }}</span
-            >
-            <span
-              class="wsd-stat__iconbg"
-              :style="{ background: STAT_ICONS[s.key]?.bg, color: STAT_ICONS[s.key]?.color }"
-            >
-              <el-icon :size="24"><component :is="STAT_ICONS[s.key]?.icon" /></el-icon>
-            </span>
-          </div>
-        </div>
+    <div v-if="editing" class="wsd-toolbar">
+      <span v-if="!custom" class="wsd-toolbar__badge">{{ t('workspace.defaultLayout') }}</span>
+      <p class="wsd-toolbar__hint">{{ t('workspace.canvasHint') }}</p>
+      <div class="wsd-toolbar__actions">
+        <button class="wsd-btn" type="button" @click="resetConfig">
+          {{ t('common.restoreDefault') }}
+        </button>
+        <button
+          class="wsd-btn wsd-btn--primary"
+          type="button"
+          :disabled="!dirty"
+          @click="saveConfig"
+        >
+          {{ t('workflow.saveWorkspaceConfig') }}
+        </button>
+        <button class="wsd-btn" type="button" @click="editing = false">
+          {{ t('workspace.exitEdit') }}
+        </button>
       </div>
-
-      <div v-if="showTodoPanel" class="wsd-card-slot" :style="cardStyle('todo')">
-        <section class="wsd-panel wsd-panel--todo">
-          <div class="wsd-panel__head">
-            <h3 class="wsd-panel__title">{{ t('workflow.myTodoTitle') }}</h3>
-            <button class="wsd-btn" type="button" @click="router.push('/workflow/todo')">
-              {{ t('workspace.allTodos') }} →
-            </button>
-          </div>
-          <div class="wsd-tabrow" role="tablist">
-            <button
-              v-for="tab in panelTabs"
-              :key="tab.key"
-              class="wsd-tab"
-              :class="{ 'is-active': activeTodoTab === tab.key }"
-              type="button"
-              role="tab"
-              :aria-selected="activeTodoTab === tab.key"
-              @click="activeTodoTab = tab.key"
-            >
-              {{ tab.label }} <span class="wsd-tab__count">{{ tab.count }}</span>
-            </button>
-          </div>
-          <p v-if="panelRows.length === 0" class="wsd-panel__empty">
-            {{ t('workflow.noTodoTasks') }}
-          </p>
-          <ul v-else class="wsd-taskrows">
-            <li v-for="(row, index) in panelRows" :key="index" class="wsd-task">
-              <button
-                class="wsd-task__title"
-                type="button"
-                @click="router.push(`/workflow/task/${(row.taskId as string) ?? ''}`)"
-              >
-                {{ row.name ?? row.taskName ?? row.title ?? (row.formKey as string) ?? '-' }}
-              </button>
-              <span class="wsd-task__meta">{{ rowMeta(row) }}</span>
-            </li>
-          </ul>
-        </section>
-      </div>
-      <div v-if="showFavorites" class="wsd-card-slot" :style="cardStyle('favorites')">
-        <section class="wsd-panel wsd-panel--quick">
-          <div class="wsd-panel__head">
-            <h3 class="wsd-panel__title">{{ t('workspace.quickLaunch') }}</h3>
-            <button class="wsd-pill" type="button" @click="openConfig">
-              {{ t('workspace.manageFavorites') }}
-            </button>
-          </div>
-          <p v-if="quickActions.length === 0" class="wsd-panel__empty">
-            {{ t('workspace.noFavorites') }}
-          </p>
-          <div v-else class="wsd-quickgrid">
-            <button
-              v-for="q in quickActions"
-              :key="q.formKey"
-              class="wsd-quick"
-              type="button"
-              @click="openForm(q.formKey)"
-            >
-              <span class="wsd-quick__icon" :style="{ color: q.color }">
-                <el-icon :size="22"><component :is="q.icon" /></el-icon>
-              </span>
-              <span class="wsd-quick__label">{{ q.label }}</span>
-            </button>
-            <button class="wsd-quick" type="button" @click="openConfig">
-              <span class="wsd-quick__icon wsd-quick__icon--more">
-                <el-icon :size="22"><MoreFilled /></el-icon>
-              </span>
-              <span class="wsd-quick__label">{{ t('workspace.moreItems') }}</span>
-            </button>
-          </div>
-          <p class="wsd-quick__footer">{{ t('workspace.quickFooter') }}</p>
-        </section>
-      </div>
-
-      <div v-if="showActivity" class="wsd-card-slot" :style="cardStyle('activity')">
-        <section class="wsd-panel wsd-panel--activity">
-          <div class="wsd-panel__head">
-            <h3 class="wsd-panel__title">{{ t('workspace.activityTitle') }}</h3>
-            <span class="wsd-panel__hint">{{ t('workspace.activityHint') }}</span>
-          </div>
-          <div class="wsd-chiprow wsd-chiprow--activity">
-            <button
-              v-for="c in activityChips"
-              :key="c.key"
-              class="wsd-chip"
-              :class="{ 'is-active': activityFilter === c.key }"
-              type="button"
-              @click="activityFilter = c.key"
-            >
-              {{ c.label }}
-            </button>
-          </div>
-          <p v-if="activityRows.length === 0" class="wsd-panel__empty">
-            {{ t('workspace.noActivity') }}
-          </p>
-          <ul v-else class="wsd-actrows">
-            <li v-for="(row, index) in activityRows" :key="index" class="wsd-act">
-              <div class="wsd-act__main">
-                <span class="wsd-act__title">{{ row.title }}</span>
-                <span class="wsd-act__meta">{{ row.meta }}</span>
-              </div>
-              <span class="wsd-act__time">{{ row.time }}</span>
-            </li>
-          </ul>
-        </section>
-      </div>
-      <div v-if="showEfficiency" class="wsd-card-slot" :style="cardStyle('efficiency')">
-        <section class="wsd-panel wsd-panel--eff">
-          <div class="wsd-panel__head">
-            <h3 class="wsd-panel__title">{{ t('workspace.efficiencyTitle') }}</h3>
-            <span class="wsd-panel__hint">{{ t('workspace.effHint') }}</span>
-          </div>
-          <div class="wsd-eff-hero">
-            <div class="wsd-eff-hero__main">
-              <span class="wsd-eff-hero__label">{{ t('workspace.avgDuration') }}</span>
-              <span class="wsd-eff-hero__value">{{ avgDurationText }}</span>
-            </div>
-          </div>
-          <div class="wsd-eff-rate">
-            <div class="wsd-eff-rate__head">
-              <span>{{ t('workspace.completionRate') }}</span>
-              <span class="wsd-eff-rate__num">{{
-                completionPct != null ? completionPct + '%' : '—'
-              }}</span>
-            </div>
-            <div class="wsd-eff-rate__bar">
-              <span
-                v-if="completionPct != null"
-                class="wsd-eff-rate__fill"
-                :style="{ width: completionPct + '%' }"
-              />
-            </div>
-          </div>
-          <div class="wsd-eff-grid">
-            <div v-for="b in effBoxes" :key="b.label" class="wsd-eff-box">
-              <span class="wsd-eff-box__label">{{ b.label }}</span>
-              <span class="wsd-eff-box__value" :style="{ color: b.color }">{{ b.value }}</span>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <!-- 设计面板之外的既有卡片（草稿/消息等），按用户布局渲染 -->
-      <section
-        v-for="component in extraCards"
-        :key="component.key"
-        class="wsd-panel wsd-extra__card"
-        :style="cardStyle(rendererKeyOf(component.key))"
-      >
-        <div class="wsd-panel__head">
-          <h3 class="wsd-panel__title">{{ componentTitle(component.key) }}</h3>
-        </div>
-        <template v-if="rendererKeyOf(component.key) === 'drafts'">
-          <p v-if="draftsList.length === 0" class="wsd-panel__empty">
-            {{ t('workflow.noDrafts') }}
-          </p>
-          <ul v-else class="wsd-actrows">
-            <li v-for="(item, index) in draftsList" :key="index" class="wsd-act">
-              <div class="wsd-act__main">
-                <span class="wsd-act__title">{{ (item.formKey as string) ?? '-' }}</span>
-              </div>
-              <button class="wsd-btn" type="button" @click="openDraft(item)">
-                {{ t('workflow.continueEditing') }}
-              </button>
-            </li>
-          </ul>
-        </template>
-        <template v-else-if="rendererKeyOf(component.key) === 'messages'">
-          <p class="wsd-panel__empty">{{ t('workflow.messagesEntryHint') }}</p>
-          <button class="wsd-btn" type="button" @click="router.push('/notify/record')">
-            {{ t('workflow.openMessages') }}
-          </button>
-        </template>
-      </section>
     </div>
 
-    <!-- 低代码工作台编辑器：组件库 + 可拖拽画布 -->
-    <el-drawer
-      v-model="configVisible"
-      :title="t('workflow.workspaceConfig')"
-      size="min(960px, 92vw)"
-      class="wsd-editor-drawer"
-    >
-      <div class="wsd-editor">
-        <aside class="wsd-editor__palette">
-          <div class="wsd-editor__section-head">
-            <h4>{{ t('workspace.componentLibrary') }}</h4>
-            <span>{{ t('workspace.basicComponent') }}</span>
-          </div>
-          <p class="wsd-editor__hint">{{ t('workspace.componentLibraryHint') }}</p>
-          <div class="wsd-palette-list">
-            <div
-              v-for="type in cardTypes"
-              :key="type.typeCode"
-              class="wsd-palette-item"
-              :class="{ 'is-used': isEditorIncluded(type.typeCode) }"
-              draggable="true"
-              @dragstart="startPaletteDrag(type.typeCode, $event)"
-              @dragend="stopEditorDrag"
-            >
-              <span class="wsd-palette-item__grip">⋮⋮</span>
-              <span class="wsd-palette-item__body">
-                <strong>{{ type.displayName }}</strong>
-                <small>{{ type.rendererKey }}</small>
-              </span>
-              <span class="wsd-palette-item__state">
-                {{
-                  isEditorIncluded(type.typeCode)
-                    ? t('workspace.added')
-                    : t('workspace.dragToCanvas')
-                }}
-              </span>
-            </div>
-          </div>
-        </aside>
-
-        <section class="wsd-editor__canvas" @dragover.prevent @drop="dropEditorCard($event)">
-          <div class="wsd-editor__canvas-head">
-            <div>
-              <h4>{{ t('workspace.canvasTitle') }}</h4>
-              <p>{{ t('workspace.canvasHint') }}</p>
-            </div>
-            <span v-if="!custom" class="wsd-editor__default-badge">
-              {{ t('workspace.defaultLayout') }}
+    <div class="wsd-canvas-wrap">
+      <aside v-if="editing && paletteVisible" class="wsd-palette">
+        <div class="wsd-palette__head">
+          <h4>{{ t('workspace.componentLibrary') }}</h4>
+          <span>{{ t('workspace.basicComponent') }}</span>
+        </div>
+        <p class="wsd-palette__hint">{{ t('workspace.componentLibraryHint') }}</p>
+        <div class="wsd-palette-list">
+          <div
+            v-for="type in cardTypes"
+            :key="type.typeCode"
+            class="wsd-palette-item"
+            :class="{ 'is-used': isComponentIncluded(type.typeCode) }"
+            draggable="true"
+            @dragstart="startPaletteDrag(type.typeCode, $event)"
+            @dragend="draggingPayload = ''"
+            @click="addComponent(type.typeCode)"
+          >
+            <span class="wsd-palette-item__grip">⋮⋮</span>
+            <span class="wsd-palette-item__body">
+              <strong>{{ type.displayName }}</strong>
+              <small>{{ type.rendererKey }}</small>
+            </span>
+            <span class="wsd-palette-item__state">
+              {{
+                isComponentIncluded(type.typeCode)
+                  ? t('workspace.added')
+                  : t('workspace.dragToCanvas')
+              }}
             </span>
           </div>
-          <div v-if="editorOrdered.length" class="wsd-editor-grid">
-            <article
-              v-for="component in editorOrdered"
-              :key="component.key"
-              class="wsd-editor-card"
-              :class="{ 'is-hidden': !component.visible }"
-              :style="{ gridColumn: component.span === 2 ? 'span 2' : 'span 1' }"
-              draggable="true"
-              @dragstart="startEditorDrag(component.key, $event)"
-              @dragend="stopEditorDrag"
-              @dragover.prevent
-              @drop.stop="dropEditorCard($event, component.key)"
+        </div>
+        <h4 class="config-section">{{ t('workflow.favoritesPickerHint') }}</h4>
+        <ul class="config-favorites">
+          <li v-for="item in catalogChoices" :key="item.itemKey" class="config-list__row">
+            <el-checkbox
+              :model-value="favoriteKeys.includes(item.itemKey)"
+              @change="toggleFavorite(item.itemKey)"
             >
-              <div class="wsd-editor-card__head">
-                <span class="wsd-editor-card__grip">⠿</span>
-                <strong>{{ componentTitle(component.key) }}</strong>
-                <span class="wsd-editor-card__type">{{ rendererKeyOf(component.key) }}</span>
+              {{ item.name }}
+            </el-checkbox>
+          </li>
+        </ul>
+      </aside>
+
+      <div
+        ref="canvasRef"
+        class="wsd-canvas"
+        :class="{ 'is-editing': editing }"
+        :style="{ height: canvasHeight + 'px' }"
+        @dragover.prevent
+        @drop="dropPaletteCard($event)"
+        @pointermove="onCanvasPointerMove"
+        @pointerup="onCanvasPointerUp"
+        @pointercancel="onCanvasPointerUp"
+      >
+        <template v-if="editing">
+          <div
+            v-for="(x, index) in guides.v"
+            :key="`v${index}`"
+            class="wsd-guide wsd-guide--v"
+            :style="{ left: x + 'px' }"
+          />
+          <div
+            v-for="(y, index) in guides.h"
+            :key="`h${index}`"
+            class="wsd-guide wsd-guide--h"
+            :style="{ top: y + 'px' }"
+          />
+        </template>
+        <div v-if="canvasItems.length === 0" class="wsd-canvas__empty">
+          {{ t('workspace.dropComponentHere') }}
+        </div>
+
+        <article
+          v-for="component in canvasItems"
+          :key="component.key"
+          class="wsd-canvas-item"
+          :class="{
+            'is-hidden': !component.visible,
+            'is-dragging': dragState?.key === component.key,
+          }"
+          :style="itemStyle(component.key)"
+          @pointerdown="startCardDrag($event, component.key, 'move')"
+        >
+          <header
+            v-if="editing"
+            class="wsd-canvas-item__bar"
+            @pointerdown.stop="startCardDrag($event, component.key, 'move')"
+          >
+            <span class="wsd-canvas-item__grip">⠿</span>
+            <strong class="wsd-canvas-item__title">{{ componentTitle(component.key) }}</strong>
+            <span class="wsd-canvas-item__renderer">{{ rendererKeyOf(component.key) }}</span>
+            <button
+              class="wsd-canvas-item__btn"
+              type="button"
+              @pointerdown.stop
+              @click="setVisible(component, !component.visible)"
+            >
+              {{ component.visible ? t('workspace.visible') : t('workspace.hidden') }}
+            </button>
+          </header>
+
+          <div class="wsd-canvas-item__body">
+            <div v-if="rendererKeyOf(component.key) === 'stats'" class="wsd-stats">
+              <div v-for="s in stats" :key="s.key" class="wsd-stat">
+                <span class="wsd-stat__label">{{ s.label }}</span>
+                <span class="wsd-stat__value">{{ s.value }}</span>
+                <span
+                  v-if="s.badge"
+                  class="wsd-stat__badge"
+                  :class="{ 'wsd-stat__badge--indent': s.key === 'drafts' }"
+                  >{{ s.badge }}</span
+                >
+                <span
+                  class="wsd-stat__iconbg"
+                  :style="{ background: STAT_ICONS[s.key]?.bg, color: STAT_ICONS[s.key]?.color }"
+                >
+                  <el-icon :size="24"><component :is="STAT_ICONS[s.key]?.icon" /></el-icon>
+                </span>
               </div>
-              <div class="wsd-editor-card__body">
-                <span>{{ t('workspace.basicComponent') }}</span>
-                <span>{{
-                  component.span === 2 ? t('workflow.fullWidth') : t('workflow.halfWidth')
-                }}</span>
-              </div>
-              <div class="wsd-editor-card__actions">
-                <label class="wsd-editor-card__switch">
-                  <el-switch
-                    :model-value="component.visible"
-                    @change="setVisible(component, Boolean($event))"
-                  />
-                  <span>{{
-                    component.visible ? t('workspace.visible') : t('workspace.hidden')
-                  }}</span>
-                </label>
-                <button class="wsd-editor-card__width" type="button" @click="toggleSpan(component)">
-                  {{ component.span === 2 ? t('workflow.halfWidth') : t('workflow.fullWidth') }}
+            </div>
+
+            <section
+              v-else-if="rendererKeyOf(component.key) === 'todo'"
+              class="wsd-panel wsd-panel--todo"
+            >
+              <div class="wsd-panel__head">
+                <h3 class="wsd-panel__title">{{ t('workflow.myTodoTitle') }}</h3>
+                <button class="wsd-btn" type="button" @click="router.push('/workflow/todo')">
+                  {{ t('workspace.allTodos') }} →
                 </button>
               </div>
-            </article>
+              <div class="wsd-tabrow" role="tablist">
+                <button
+                  v-for="tab in panelTabs"
+                  :key="tab.key"
+                  class="wsd-tab"
+                  :class="{ 'is-active': activeTodoTab === tab.key }"
+                  type="button"
+                  role="tab"
+                  :aria-selected="activeTodoTab === tab.key"
+                  @click="activeTodoTab = tab.key"
+                >
+                  {{ tab.label }} <span class="wsd-tab__count">{{ tab.count }}</span>
+                </button>
+              </div>
+              <p v-if="panelRows.length === 0" class="wsd-panel__empty">
+                {{ t('workflow.noTodoTasks') }}
+              </p>
+              <ul v-else class="wsd-taskrows">
+                <li v-for="(row, index) in panelRows" :key="index" class="wsd-task">
+                  <button
+                    class="wsd-task__title"
+                    type="button"
+                    @click="router.push(`/workflow/task/${(row.taskId as string) ?? ''}`)"
+                  >
+                    {{ row.name ?? row.taskName ?? row.title ?? (row.formKey as string) ?? '-' }}
+                  </button>
+                  <span class="wsd-task__meta">{{ rowMeta(row) }}</span>
+                </li>
+              </ul>
+            </section>
+
+            <section
+              v-else-if="rendererKeyOf(component.key) === 'favorites'"
+              class="wsd-panel wsd-panel--quick"
+            >
+              <div class="wsd-panel__head">
+                <h3 class="wsd-panel__title">{{ t('workspace.quickLaunch') }}</h3>
+                <button class="wsd-pill" type="button" @click="onGearClick">
+                  {{ t('workspace.manageFavorites') }}
+                </button>
+              </div>
+              <p v-if="quickActions.length === 0" class="wsd-panel__empty">
+                {{ t('workspace.noFavorites') }}
+              </p>
+              <div v-else class="wsd-quickgrid">
+                <button
+                  v-for="q in quickActions"
+                  :key="q.formKey"
+                  class="wsd-quick"
+                  type="button"
+                  @click="openForm(q.formKey)"
+                >
+                  <span class="wsd-quick__icon" :style="{ color: q.color }">
+                    <el-icon :size="22"><component :is="q.icon" /></el-icon>
+                  </span>
+                  <span class="wsd-quick__label">{{ q.label }}</span>
+                </button>
+                <button class="wsd-quick" type="button" @click="onGearClick">
+                  <span class="wsd-quick__icon wsd-quick__icon--more">
+                    <el-icon :size="22"><MoreFilled /></el-icon>
+                  </span>
+                  <span class="wsd-quick__label">{{ t('workspace.moreItems') }}</span>
+                </button>
+              </div>
+              <p class="wsd-quick__footer">{{ t('workspace.quickFooter') }}</p>
+            </section>
+
+            <section
+              v-else-if="rendererKeyOf(component.key) === 'activity'"
+              class="wsd-panel wsd-panel--activity"
+            >
+              <div class="wsd-panel__head">
+                <h3 class="wsd-panel__title">{{ t('workspace.activityTitle') }}</h3>
+                <span class="wsd-panel__hint">{{ t('workspace.activityHint') }}</span>
+              </div>
+              <div class="wsd-chiprow wsd-chiprow--activity">
+                <button
+                  v-for="c in activityChips"
+                  :key="c.key"
+                  class="wsd-chip"
+                  :class="{ 'is-active': activityFilter === c.key }"
+                  type="button"
+                  @click="activityFilter = c.key"
+                >
+                  {{ c.label }}
+                </button>
+              </div>
+              <p v-if="activityRows.length === 0" class="wsd-panel__empty">
+                {{ t('workspace.noActivity') }}
+              </p>
+              <ul v-else class="wsd-actrows">
+                <li v-for="(row, index) in activityRows" :key="index" class="wsd-act">
+                  <div class="wsd-act__main">
+                    <span class="wsd-act__title">{{ row.title }}</span>
+                    <span class="wsd-act__meta">{{ row.meta }}</span>
+                  </div>
+                  <span class="wsd-act__time">{{ row.time }}</span>
+                </li>
+              </ul>
+            </section>
+
+            <section
+              v-else-if="rendererKeyOf(component.key) === 'efficiency'"
+              class="wsd-panel wsd-panel--eff"
+            >
+              <div class="wsd-panel__head">
+                <h3 class="wsd-panel__title">{{ t('workspace.efficiencyTitle') }}</h3>
+                <span class="wsd-panel__hint">{{ t('workspace.effHint') }}</span>
+              </div>
+              <div class="wsd-eff-hero">
+                <div class="wsd-eff-hero__main">
+                  <span class="wsd-eff-hero__label">{{ t('workspace.avgDuration') }}</span>
+                  <span class="wsd-eff-hero__value">{{ avgDurationText }}</span>
+                </div>
+              </div>
+              <div class="wsd-eff-rate">
+                <div class="wsd-eff-rate__head">
+                  <span>{{ t('workspace.completionRate') }}</span>
+                  <span class="wsd-eff-rate__num">{{
+                    completionPct != null ? completionPct + '%' : '—'
+                  }}</span>
+                </div>
+                <div class="wsd-eff-rate__bar">
+                  <span
+                    v-if="completionPct != null"
+                    class="wsd-eff-rate__fill"
+                    :style="{ width: completionPct + '%' }"
+                  />
+                </div>
+              </div>
+              <div class="wsd-eff-grid">
+                <div v-for="b in effBoxes" :key="b.label" class="wsd-eff-box">
+                  <span class="wsd-eff-box__label">{{ b.label }}</span>
+                  <span class="wsd-eff-box__value" :style="{ color: b.color }">{{ b.value }}</span>
+                </div>
+              </div>
+            </section>
+
+            <section v-else-if="rendererKeyOf(component.key) === 'drafts'" class="wsd-panel">
+              <div class="wsd-panel__head">
+                <h3 class="wsd-panel__title">{{ componentTitle(component.key) }}</h3>
+              </div>
+              <p v-if="draftsList.length === 0" class="wsd-panel__empty">
+                {{ t('workflow.noDrafts') }}
+              </p>
+              <ul v-else class="wsd-actrows">
+                <li v-for="(item, index) in draftsList" :key="index" class="wsd-act">
+                  <div class="wsd-act__main">
+                    <span class="wsd-act__title">{{ (item.formKey as string) ?? '-' }}</span>
+                  </div>
+                  <button class="wsd-btn" type="button" @click="openDraft(item)">
+                    {{ t('workflow.continueEditing') }}
+                  </button>
+                </li>
+              </ul>
+            </section>
+
+            <section v-else-if="rendererKeyOf(component.key) === 'messages'" class="wsd-panel">
+              <div class="wsd-panel__head">
+                <h3 class="wsd-panel__title">{{ componentTitle(component.key) }}</h3>
+              </div>
+              <p class="wsd-panel__empty">{{ t('workflow.messagesEntryHint') }}</p>
+              <button class="wsd-btn" type="button" @click="router.push('/notify/record')">
+                {{ t('workflow.openMessages') }}
+              </button>
+            </section>
+
+            <section v-else class="wsd-panel">
+              <div class="wsd-panel__head">
+                <h3 class="wsd-panel__title">{{ componentTitle(component.key) }}</h3>
+              </div>
+              <p class="wsd-panel__empty">{{ t('workspace.basicComponent') }}</p>
+            </section>
           </div>
-          <div v-else class="wsd-editor__empty">{{ t('workspace.dropComponentHere') }}</div>
-        </section>
+
+          <template v-if="editing">
+            <span
+              v-for="h in HANDLES"
+              :key="h"
+              class="wsd-handle"
+              :class="`wsd-handle--${h}`"
+              @pointerdown.stop="startCardDrag($event, component.key, 'resize', h)"
+            />
+          </template>
+        </article>
       </div>
-
-      <h4 class="config-section">{{ t('workflow.favoritesPickerHint') }}</h4>
-      <ul class="config-favorites">
-        <li v-for="item in catalogChoices" :key="item.itemKey" class="config-list__row">
-          <el-checkbox
-            :model-value="favoriteKeys.includes(item.itemKey)"
-            @change="toggleFavorite(item.itemKey)"
-          >
-            {{ item.name }}
-          </el-checkbox>
-        </li>
-      </ul>
-
-      <template #footer>
-        <el-button @click="resetConfig">{{ t('common.restoreDefault') }}</el-button>
-        <el-button type="primary" :disabled="!dirty" @click="saveConfig">{{
-          t('workflow.saveWorkspaceConfig')
-        }}</el-button>
-      </template>
-    </el-drawer>
+    </div>
   </div>
 </template>
 
@@ -1061,31 +1224,261 @@ onMounted(loadLayout)
   border-color: var(--sw-color-primary);
   color: var(--sw-color-primary);
 }
-.wsd-lowcode-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+.wsd-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   margin-top: 16px;
-  align-items: stretch;
+  padding: 10px 14px;
+  border: 1px solid var(--sw-border);
+  border-radius: 10px;
+  background: #ffffff;
 }
-.wsd-card-slot {
+.wsd-toolbar__badge {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eee8ff;
+  color: var(--sw-color-primary);
+  font-size: 12px;
+}
+.wsd-toolbar__hint {
+  flex: 1;
   min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  color: var(--sw-text-secondary);
 }
-.wsd-card-slot > .wsd-panel {
-  height: 100%;
-  min-height: 334px;
+.wsd-toolbar__actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+.wsd-btn--primary {
+  border-color: var(--sw-color-primary);
+  background: var(--sw-color-primary);
+  color: #ffffff;
+}
+.wsd-btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.wsd-canvas-wrap {
+  position: relative;
+  margin-top: 12px;
+}
+.wsd-canvas {
+  position: relative;
+  min-height: 520px;
+}
+.wsd-canvas.is-editing {
+  background-image: radial-gradient(circle, #d9deeb 1px, transparent 1px);
+  background-size: 24px 24px;
+  border: 1px dashed #c6cce0;
+  border-radius: 12px;
+}
+.wsd-canvas__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--sw-text-secondary);
+  font-size: 13px;
+}
+.wsd-canvas-item {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+.wsd-canvas-item.is-hidden {
+  opacity: 0.55;
+}
+.wsd-canvas-item.is-dragging {
+  z-index: 40;
+}
+.wsd-canvas-item__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  flex: none;
+  padding: 0 10px;
+  border: 1px solid var(--sw-border);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  background: #f2ecff;
+  cursor: grab;
+  user-select: none;
+}
+.wsd-canvas-item.is-dragging .wsd-canvas-item__bar {
+  cursor: grabbing;
+}
+.wsd-canvas-item__grip {
+  color: var(--sw-color-primary);
+  letter-spacing: -2px;
+}
+.wsd-canvas-item__title {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wsd-canvas-item__renderer {
+  max-width: 90px;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--sw-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wsd-canvas-item__btn {
+  height: 22px;
+  flex: none;
+  padding: 0 8px;
+  border: 1px solid var(--sw-border);
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 11px;
+  color: var(--sw-text-secondary);
+  cursor: pointer;
+}
+.wsd-canvas-item__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.wsd-canvas-item__body > .wsd-panel {
+  height: 100%;
+  overflow: auto;
+}
+.wsd-canvas-item__body > .wsd-stats {
+  height: 100%;
+}
+.wsd-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #ffffff;
+  border: 1px solid var(--sw-color-primary);
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.wsd-canvas-item:hover .wsd-handle {
+  opacity: 1;
+}
+.wsd-handle--n {
+  top: -5px;
+  left: calc(50% - 5px);
+  cursor: ns-resize;
+}
+.wsd-handle--s {
+  bottom: -5px;
+  left: calc(50% - 5px);
+  cursor: ns-resize;
+}
+.wsd-handle--e {
+  right: -5px;
+  top: calc(50% - 5px);
+  cursor: ew-resize;
+}
+.wsd-handle--w {
+  left: -5px;
+  top: calc(50% - 5px);
+  cursor: ew-resize;
+}
+.wsd-handle--ne {
+  top: -5px;
+  right: -5px;
+  cursor: nesw-resize;
+}
+.wsd-handle--nw {
+  top: -5px;
+  left: -5px;
+  cursor: nwse-resize;
+}
+.wsd-handle--se {
+  bottom: -5px;
+  right: -5px;
+  cursor: nwse-resize;
+}
+.wsd-handle--sw {
+  bottom: -5px;
+  left: -5px;
+  cursor: nesw-resize;
+}
+.wsd-guide {
+  position: absolute;
+  z-index: 60;
+  pointer-events: none;
+}
+.wsd-guide--v {
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed var(--sw-color-primary);
+}
+.wsd-guide--h {
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed var(--sw-color-primary);
+}
+.wsd-palette {
+  position: absolute;
+  z-index: 70;
+  top: 12px;
+  bottom: 12px;
+  left: 12px;
+  width: 248px;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid var(--sw-border);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgb(31 42 68 / 12%);
+}
+.wsd-palette__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.wsd-palette__head h4 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--sw-text-primary);
+}
+.wsd-palette__head span {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eee8ff;
+  color: var(--sw-color-primary);
+  font-size: 12px;
+}
+.wsd-palette__hint {
+  margin: 7px 0 14px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--sw-text-secondary);
 }
 .wsd-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
-  height: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+  align-content: start;
 }
 .wsd-stat {
   position: relative;
   box-sizing: border-box;
-  height: 108px;
+  min-height: 96px;
   padding: 18px 20px;
   background: #ffffff;
   border: 1px solid var(--sw-border);
@@ -1289,7 +1682,7 @@ onMounted(loadLayout)
 }
 .wsd-quickgrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px 12px;
   margin-top: 9px;
 }
@@ -1367,7 +1760,8 @@ onMounted(loadLayout)
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 98px;
+  flex-wrap: wrap;
+  gap: 24px;
   margin-top: 9px;
   padding: 16px 18px;
   background: var(--sw-surface-page);
@@ -1422,7 +1816,7 @@ onMounted(loadLayout)
 }
 .wsd-eff-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 9px;
   margin-top: 17px;
 }
@@ -1442,55 +1836,6 @@ onMounted(loadLayout)
   font-size: 20px;
   line-height: 24px;
   font-weight: 600;
-}
-.wsd-extra__card {
-  min-height: 120px;
-}
-.wsd-editor {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  gap: 20px;
-  min-height: 520px;
-}
-.wsd-editor__palette,
-.wsd-editor__canvas {
-  min-width: 0;
-  border: 1px solid var(--sw-border);
-  border-radius: 10px;
-  background: var(--sw-surface-page, #f7f8fc);
-}
-.wsd-editor__palette {
-  padding: 18px;
-}
-.wsd-editor__section-head,
-.wsd-editor__canvas-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.wsd-editor__section-head h4,
-.wsd-editor__canvas-head h4 {
-  margin: 0;
-  color: var(--sw-text-primary);
-  font-size: 16px;
-  line-height: 22px;
-}
-.wsd-editor__section-head span,
-.wsd-editor__default-badge {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #eee8ff;
-  color: var(--sw-color-primary);
-  font-size: 12px;
-}
-.wsd-editor__hint,
-.wsd-editor__canvas-head p {
-  margin: 7px 0 16px;
-  color: var(--sw-text-secondary);
-  font-size: 12px;
-  line-height: 18px;
 }
 .wsd-palette-list {
   display: flex;
@@ -1519,8 +1864,7 @@ onMounted(loadLayout)
 .wsd-palette-item.is-used {
   background: #fbfaff;
 }
-.wsd-palette-item__grip,
-.wsd-editor-card__grip {
+.wsd-palette-item__grip {
   color: var(--sw-text-tertiary, #98a2b3);
   letter-spacing: -3px;
   user-select: none;
@@ -1540,104 +1884,12 @@ onMounted(loadLayout)
   white-space: nowrap;
 }
 .wsd-palette-item__body small,
-.wsd-palette-item__state,
-.wsd-editor-card__type {
+.wsd-palette-item__state {
   color: var(--sw-text-secondary);
   font-size: 11px;
 }
 .wsd-palette-item__state {
   flex: none;
-}
-.wsd-editor__canvas {
-  padding: 18px;
-  background: #f5f6fa;
-}
-.wsd-editor__canvas-head p {
-  margin-bottom: 0;
-}
-.wsd-editor-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  min-height: 410px;
-  padding-top: 18px;
-  align-content: start;
-}
-.wsd-editor-card {
-  display: flex;
-  min-width: 0;
-  min-height: 126px;
-  flex-direction: column;
-  padding: 14px;
-  border: 1px solid #d8ddef;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 2px 7px rgb(31 42 68 / 4%);
-  cursor: grab;
-}
-.wsd-editor-card.is-hidden {
-  opacity: 0.58;
-}
-.wsd-editor-card:hover {
-  border-color: var(--sw-color-primary);
-}
-.wsd-editor-card__head,
-.wsd-editor-card__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.wsd-editor-card__head strong {
-  overflow: hidden;
-  flex: 1;
-  color: var(--sw-text-primary);
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wsd-editor-card__type {
-  flex: none;
-  max-width: 90px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wsd-editor-card__body {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 17px;
-  color: var(--sw-text-secondary);
-  font-size: 12px;
-}
-.wsd-editor-card__actions {
-  justify-content: space-between;
-  margin-top: 15px;
-  padding-top: 10px;
-  border-top: 1px solid var(--sw-border-light);
-}
-.wsd-editor-card__switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--sw-text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-}
-.wsd-editor-card__width {
-  border: 0;
-  background: transparent;
-  color: var(--sw-color-primary);
-  font-size: 12px;
-  cursor: pointer;
-}
-.wsd-editor__empty {
-  display: grid;
-  min-height: 410px;
-  place-items: center;
-  border: 1px dashed #c6cce0;
-  border-radius: 10px;
-  color: var(--sw-text-secondary);
-  font-size: 13px;
 }
 .config-section {
   margin: 16px 0 8px;
