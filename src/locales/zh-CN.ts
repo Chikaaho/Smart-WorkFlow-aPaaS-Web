@@ -2223,6 +2223,7 @@ export default {
     visible: '显示',
     hidden: '隐藏',
     exitEdit: '退出编辑',
+    editTitle: '编辑工作台',
     dropComponentHere: '从左侧拖入基础组件开始配置',
     moreItems: '更多事项',
     quickFooter: '拖拽排序 · 最多固定 20 个常用事项',

@@ -37,6 +37,17 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // V011-BUG-002：工作台编辑页（整页自由画布），从工作台齿轮进入。
+        path: 'workspace/edit',
+        name: 'workspace-edit',
+        component: () => import('@/modules/workflow/views/WorkspaceEditor.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workspace.editTitle')
+          },
+        },
+      },
+      {
         // P53：企业门户（受限聚合页，节点 05）——只聚合真实可达能力，登录即可达。
         path: 'portal',
         name: 'portal-home',

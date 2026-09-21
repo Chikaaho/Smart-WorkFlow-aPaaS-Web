@@ -2329,6 +2329,7 @@ export default {
     visible: 'Visible',
     hidden: 'Hidden',
     exitEdit: 'Exit editing',
+    editTitle: 'Edit workspace',
     dropComponentHere: 'Drag a basic component here to start configuring the layout.',
     moreItems: 'More items',
     quickFooter: 'Drag to reorder · Pin up to 20 favorite items',
