@@ -299,7 +299,9 @@ const avgWaitText = computed(() => {
 const completionPct = computed(() => {
   const a = analytics.value
   if (!a || !a.launched) return null
-  return Math.round((a.completed / a.launched) * 100)
+  const ratio = a.completed / a.launched
+  if (!Number.isFinite(ratio)) return null
+  return Math.round(ratio * 100)
 })
 const effBoxes = computed(() => [
   {
@@ -816,7 +818,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-loading="loading" class="wsd">
+  <div v-loading="loading" class="wsd" :class="{ 'is-editing': editing }">
     <header v-if="!editing" class="wsd-hero">
       <h2 class="wsd-hero__greeting">
         {{ greeting }}{{ displayName ? '，' : '' }}{{ displayName }}
@@ -1279,14 +1281,13 @@ onMounted(async () => {
   display: flex;
   flex: 1;
   gap: 14px;
-  align-items: flex-start;
+  align-items: stretch;
   min-height: 0;
 }
 .wsd.is-editing .wsd-palette {
   position: static;
   flex: 0 0 260px;
   width: 260px;
-  max-height: calc(100vh - 120px);
   box-shadow: none;
 }
 .wsd.is-editing .wsd-canvas {
