@@ -5,7 +5,11 @@ import {
   applyDragRect,
   collectCandidates,
   dragAxisOffsets,
+  isLegacyGeometry,
+  rescaleRects,
   snapDelta,
+  toAbsoluteRect,
+  toRelativeRect,
 } from './workspace-canvas'
 
 describe('workspace-canvas 几何工具', () => {
@@ -62,5 +66,84 @@ describe('workspace-canvas 几何工具', () => {
     expect(dragAxisOffsets('e', rect).xs).toEqual([200])
     expect(dragAxisOffsets('ne', rect)).toEqual({ xs: [200], ys: [0] })
     expect(dragAxisOffsets('s', rect).xs).toEqual([])
+  })
+})
+
+describe('workspace-canvas 相对几何（V011-BUG-003 分辨率自适应）', () => {
+  it('toRelativeRect 把像素几何归一为宽度分数，y/h 保持像素', () => {
+    expect(toRelativeRect({ x: 300, y: 12, w: 600, h: 320 }, 1200)).toEqual({
+      x: 0.25,
+      y: 12,
+      w: 0.5,
+      h: 320,
+    })
+    expect(toRelativeRect({ x: 0, y: 0, w: 1200, h: 360 }, 1200)).toEqual({
+      x: 0,
+      y: 0,
+      w: 1,
+      h: 360,
+    })
+  })
+
+  it('toRelativeRect 画布宽度非法时返回 null', () => {
+    expect(toRelativeRect({ x: 0, y: 0, w: 100, h: 200 }, 0)).toBeNull()
+  })
+
+  it('toAbsoluteRect 把分数几何按当前画布宽度展开', () => {
+    expect(toAbsoluteRect({ x: 0.25, y: 12, w: 0.5, h: 320 }, 800)).toEqual({
+      x: 200,
+      y: 12,
+      w: 400,
+      h: 320,
+    })
+  })
+
+  it('toAbsoluteRect 按 BUG-002 旧像素几何承接并钳制进当前画布（w>1 判别）', () => {
+    expect(toAbsoluteRect({ x: 24, y: 0, w: 640, h: 360 }, 800)).toEqual({
+      x: 24,
+      y: 0,
+      w: 640,
+      h: 360,
+    })
+    // 旧像素宽超出当前画布：钳制到右缘，不产生横向溢出
+    expect(toAbsoluteRect({ x: 24, y: 0, w: 900, h: 360 }, 800)).toEqual({
+      x: 24,
+      y: 0,
+      w: 776,
+      h: 360,
+    })
+    // 起点已在画布右缘之外：几何不可用，回落自动布局
+    expect(toAbsoluteRect({ x: 800, y: 0, w: 400, h: 360 }, 800)).toBeNull()
+  })
+
+  it('isLegacyGeometry 以 w>1/x>1 判别旧像素数据，分数数据不算旧', () => {
+    expect(isLegacyGeometry({ x: 0, y: 0, w: 1200, h: 360 })).toBe(true)
+    expect(isLegacyGeometry({ x: 300, y: 0, w: 0.5, h: 360 })).toBe(true)
+    expect(isLegacyGeometry({ x: 0, y: 0, w: 0.5, h: 360 })).toBe(false)
+    expect(isLegacyGeometry(undefined)).toBe(false)
+    expect(isLegacyGeometry('bad')).toBe(false)
+  })
+
+  it('toAbsoluteRect 拒绝非法或过小几何', () => {
+    expect(toAbsoluteRect(null, 800)).toBeNull()
+    expect(toAbsoluteRect({ x: -1, y: 0, w: 0.5, h: 320 }, 800)).toBeNull()
+    expect(toAbsoluteRect({ x: 0, y: 0, w: 0.5, h: 20 }, 800)).toBeNull()
+    expect(toAbsoluteRect({ x: 0, y: 0, w: 0.5, h: 320 }, 0)).toBeNull()
+  })
+
+  it('rescaleRects 等比缩放 x/w 并保持 y/h', () => {
+    const rescaled = rescaleRects(
+      { a: { x: 100, y: 10, w: 400, h: 200 }, b: { x: 0, y: 0, w: 1200, h: 360 } },
+      1200,
+      600,
+    )
+    expect(rescaled.a).toEqual({ x: 50, y: 10, w: 200, h: 200 })
+    expect(rescaled.b).toEqual({ x: 0, y: 0, w: 600, h: 360 })
+  })
+
+  it('rescaleRects 宽度非法或相等时原样返回', () => {
+    const rects = { a: { x: 1, y: 2, w: 3, h: 4 } }
+    expect(rescaleRects(rects, 0, 600)).toBe(rects)
+    expect(rescaleRects(rects, 600, 600)).toBe(rects)
   })
 })

@@ -13,7 +13,7 @@ const { t } = useI18n()
  * editable=false（/workspace 首页）只读渲染；editable=true（/workspace/edit 顶层独立
  * 编辑页）所见即所得：真实卡片 + 编辑 chrome（拖拽/缩放/对齐线），保存后主页一致。
  */
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -40,13 +40,17 @@ import { queryTodoTasks, myInstances, myDrafts, myProcessed } from '@/modules/wo
 import { queryAnalyticsSummary } from '@/modules/workflow/api/i4'
 import type { WorkspaceCard, WorkspaceCardType, WorkspaceComponent } from '@/contracts/catalog'
 import {
-  WORKSPACE_MIN_H,
   WORKSPACE_MIN_W,
+  WORKSPACE_NOMINAL_W,
   WORKSPACE_SNAP,
   applyDragRect,
   collectCandidates,
   dragAxisOffsets,
+  isLegacyGeometry,
+  rescaleRects,
   snapDelta,
+  toAbsoluteRect,
+  toRelativeRect,
   type CardRect,
 } from '@/modules/workflow/utils/workspace-canvas'
 import { ApiError } from '@/foundation/request'
@@ -67,6 +71,9 @@ const props = defineProps<{ editable?: boolean }>()
 const editing = computed(() => props.editable === true)
 const paletteVisible = ref(props.editable === true)
 const canvasRef = ref<globalThis.HTMLElement | null>(null)
+/** 响应式画布宽度（ResizeObserver 实测）；宽度变化时全部卡片 x/w 等比缩放。 */
+const canvasWidth = ref(0)
+let canvasResizeObserver: InstanceType<typeof globalThis.ResizeObserver> | null = null
 const geometryMap = ref<Record<string, CardRect>>({})
 const guides = ref<{ v: number[]; h: number[] }>({ v: [], h: [] })
 const draggingPayload = ref('')
@@ -438,29 +445,42 @@ function defaultCardHeight(key: string): number {
   return DEFAULT_CARD_HEIGHTS[rendererKeyOf(key)] ?? 320
 }
 
-/** 用户保存的 geometry 存于卡片 metadata.geometry；缺失/非法时回落自动布局。 */
-function rectFromMetadata(meta?: Record<string, unknown>): CardRect | null {
-  const g = meta?.geometry as Partial<CardRect> | undefined
-  if (!g) return null
-  const x = Number(g.x)
-  const y = Number(g.y)
-  const w = Number(g.w)
-  const h = Number(g.h)
-  if (![x, y, w, h].every((v) => Number.isFinite(v) && v >= 0)) return null
-  if (w < WORKSPACE_MIN_W || h < WORKSPACE_MIN_H) return null
-  return { x, y, w, h }
+/** 当前画布宽度：真实测量优先，无布局环境（单测）退回名义宽度。 */
+function currentCanvasWidth(): number {
+  return canvasRef.value?.clientWidth || canvasWidth.value || WORKSPACE_NOMINAL_W
 }
 
+/**
+ * 用户保存的 geometry 按分数契约（x/w=画布宽度分数，y/h 像素，BUG-003）展开为
+ * 当前画布像素；缺失/非法时回落自动布局。BUG-002 旧像素几何先按当前画布钳制，
+ * 再按其设计宽度（全部旧卡片最大右缘）等比展开到当前画布——旧布局同样随分辨率自适应。
+ */
 function hydrateGeometry() {
+  const width = currentCanvasWidth()
+  const legacyKeys: string[] = []
   for (const component of components.value) {
-    const rect = rectFromMetadata(component.metadata)
-    if (rect) geometryMap.value[component.key] = rect
+    const raw = component.metadata?.geometry
+    const rect = toAbsoluteRect(raw, width)
+    if (rect) {
+      geometryMap.value[component.key] = rect
+      if (isLegacyGeometry(raw)) legacyKeys.push(component.key)
+    }
   }
+  if (!legacyKeys.length) return
+  const designWidth = legacyKeys.reduce(
+    (max, key) => Math.max(max, geometryMap.value[key]!.x + geometryMap.value[key]!.w),
+    0,
+  )
+  if (designWidth < WORKSPACE_MIN_W) return
+  const legacyMap: Record<string, CardRect> = {}
+  for (const key of legacyKeys) legacyMap[key] = geometryMap.value[key]!
+  const scaled = rescaleRects(legacyMap, designWidth, width)
+  for (const key of legacyKeys) geometryMap.value[key] = scaled[key] ?? legacyMap[key]!
 }
 
 /** 首次渲染/恢复默认时按 order 生成整行堆叠的默认几何。 */
 function ensureGeometry() {
-  const width = canvasRef.value?.clientWidth || 1200
+  const width = currentCanvasWidth()
   let bottom = 0
   for (const component of [...components.value].sort((a, b) => a.order - b.order)) {
     if (!geometryMap.value[component.key]) {
@@ -477,7 +497,7 @@ function ensureGeometry() {
 }
 
 function rectOf(key: string): CardRect {
-  return geometryMap.value[key] ?? { x: 0, y: 0, w: 1200, h: defaultCardHeight(key) }
+  return geometryMap.value[key] ?? { x: 0, y: 0, w: WORKSPACE_NOMINAL_W, h: defaultCardHeight(key) }
 }
 
 const canvasItems = computed(() =>
@@ -660,7 +680,7 @@ function isComponentIncluded(typeCode: string): boolean {
 function addComponent(typeCode: string, at?: { x: number; y: number }) {
   const type = cardTypes.value.find((t) => t.typeCode === typeCode)
   if (!type) return
-  const canvasW = canvasRef.value?.clientWidth || 1200
+  const canvasW = currentCanvasWidth()
   const w = Math.min(640, Math.max(WORKSPACE_MIN_W, Math.round(canvasW / 2)))
   const h = defaultCardHeight(typeCode)
   const bottom = Object.values(geometryMap.value).reduce((max, r) => Math.max(max, r.y + r.h), 0)
@@ -786,18 +806,23 @@ function toggleFavorite(key: string) {
 }
 
 async function saveConfig() {
+  const canvasW = currentCanvasWidth()
   try {
     await saveWorkspaceLayout({
-      cards: components.value.map((c) => ({
-        typeCode: c.key,
-        visible: c.visible,
-        order: c.order,
-        span: c.span === 2 ? 2 : 1,
-        metadata: {
-          ...(c.metadata ?? {}),
-          ...(geometryMap.value[c.key] ? { geometry: geometryMap.value[c.key] } : {}),
-        },
-      })),
+      cards: components.value.map((c) => {
+        const rect = geometryMap.value[c.key]
+        const relative = rect ? toRelativeRect(rect, canvasW) : null
+        return {
+          typeCode: c.key,
+          visible: c.visible,
+          order: c.order,
+          span: c.span === 2 ? 2 : 1,
+          metadata: {
+            ...(c.metadata ?? {}),
+            ...(relative ? { geometry: relative } : {}),
+          },
+        }
+      }),
       favoriteItemKeys: [...favoriteKeys.value],
     })
     custom.value = true
@@ -822,10 +847,30 @@ async function resetConfig() {
 }
 
 onMounted(async () => {
+  attachCanvasObserver()
   await loadLayout()
   await nextTick()
   ensureGeometry()
   if (props.editable) void loadCatalogChoices()
+})
+
+/** 观察画布实际宽度：分辨率或编辑态组件栏开合变化时等比缩放全部卡片几何。 */
+function attachCanvasObserver() {
+  const Observer = globalThis.ResizeObserver
+  if (!Observer) return
+  canvasResizeObserver = new Observer((entries) => {
+    const next = Math.round(entries[0]?.contentRect.width ?? 0)
+    if (!next || next === canvasWidth.value) return
+    const prev = canvasWidth.value
+    canvasWidth.value = next
+    if (prev > 0) geometryMap.value = rescaleRects(geometryMap.value, prev, next)
+  })
+  if (canvasRef.value) canvasResizeObserver.observe(canvasRef.value)
+}
+
+onBeforeUnmount(() => {
+  canvasResizeObserver?.disconnect()
+  canvasResizeObserver = null
 })
 </script>
 
@@ -1211,13 +1256,23 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* 几何对齐设计节点01（figma 21:2）：内容宽 1152，垂直 0/80/208/562 */
+/* BUG-003：工作台随视口全宽呈现（移除 P53 的 1216px 定宽上限），卡片几何按
+   画布宽度分数自适应分辨率；窄屏压缩留白保持可读（≤767px 侧栏由壳层隐藏）。
+   Owner 2026-09-22 补充：工作台不允许左右滑动——横向溢出在此硬性收口，
+   仅组件较多时允许画布纵向滚动。 */
 .wsd {
   --sw-border: #e1e5ef;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  max-width: 1216px;
+  width: 100%;
   padding: 28px 32px 32px;
+  overflow-x: hidden;
+}
+@media (max-width: 767px) {
+  .wsd {
+    padding: 20px 16px 24px;
+  }
 }
 .wsd-hero {
   position: relative;
@@ -1593,13 +1648,15 @@ onMounted(async () => {
   position: relative;
   box-sizing: border-box;
   min-height: 96px;
-  padding: 18px 20px;
+  /* BUG-003：右侧预留图标位，窄屏（4:3）下标签/数值不与角标图标重叠 */
+  padding: 18px 76px 18px 20px;
   background: #ffffff;
   border: 1px solid var(--sw-border);
   border-radius: 10px;
 }
 .wsd-stat__label {
   display: block;
+  overflow-wrap: break-word;
   font-size: 13px;
   line-height: 18px;
   color: var(--sw-text-secondary);

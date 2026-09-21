@@ -52,6 +52,10 @@ export async function expectRegionMatches(
   threshold: number,
   snapshotName: string,
 ): Promise<void> {
+  // headed 会话中前序动作可能把指针留在卡片上，hover 描边过渡会让稳定帧生成超时：
+  // 截图前把指针移出页面并等过渡结束（V011-BUG-003 视觉回归在本机复跑时发现）。
+  await page.mouse.move(0, 0)
+  await page.waitForTimeout(200)
   await page.evaluate(() => window.scrollTo(0, 0))
   await expect(page).toHaveScreenshot(snapshotName, {
     clip: region,

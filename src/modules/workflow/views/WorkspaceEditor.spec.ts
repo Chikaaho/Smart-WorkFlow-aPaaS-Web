@@ -155,7 +155,9 @@ describe('WorkspaceEditor 独立全屏编辑页 —— 所见即所得（V011-BU
 
     expect(saveWorkspaceLayout).toHaveBeenCalledTimes(1)
     const payload = saveWorkspaceLayout.mock.calls[0][0]
-    expect(payload.cards[0].metadata.geometry).toEqual({ x: 0, y: 0, w: 1200, h: 360 })
+    // V011-BUG-003：几何按分数契约持久化（x/w=画布宽度分数，y/h 像素），
+    // jsdom 名义画布宽 1200 → 整行卡片 w=1200 存为 w:1。
+    expect(payload.cards[0].metadata.geometry).toEqual({ x: 0, y: 0, w: 1, h: 360 })
   })
 
   it('退出编辑返回工作台', async () => {
