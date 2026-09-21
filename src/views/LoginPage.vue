@@ -92,6 +92,12 @@ async function onSsoLogin(): Promise<void> {
     ssoBusy.value = false
   }
 }
+
+/** SSO Provider 选择：显式方法，避免模板内联多语句被格式化工具重排 */
+function onSsoProviderSelect(key: SsoProvider): void {
+  ssoProvider.value = key
+  void onSsoLogin()
+}
 </script>
 
 <template>
@@ -226,10 +232,7 @@ async function onSsoLogin(): Promise<void> {
               class="login-page__sso-provider"
               :class="`is-provider-${index + 1}`"
               :disabled="ssoBusy"
-              @click="
-                ssoProvider = provider.key
-                void onSsoLogin()
-              "
+              @click="onSsoProviderSelect(provider.key)"
             >
               <span class="login-page__sso-provider-mark" aria-hidden="true">{{
                 ['微', '飞', '钉'][index]
