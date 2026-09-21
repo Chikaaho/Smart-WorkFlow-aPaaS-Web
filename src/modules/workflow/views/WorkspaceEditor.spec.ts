@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 
+const queryTodoTasks = vi.fn()
+const myInstances = vi.fn()
+const queryMyCopies = vi.fn()
 const queryCatalogItems = vi.fn()
 const getWorkspaceLayout = vi.fn()
 const saveWorkspaceLayout = vi.fn()
@@ -12,7 +15,11 @@ vi.mock('@/modules/workflow/api/oa', () => ({
   saveWorkspaceLayout: (...args: unknown[]) => saveWorkspaceLayout(...args),
   resetWorkspaceLayout: (...args: unknown[]) => resetWorkspaceLayout(...args),
   queryCatalogItems: (...args: unknown[]) => queryCatalogItems(...args),
-  queryMyCopies: vi.fn(),
+  queryMyCopies: (...args: unknown[]) => queryMyCopies(...args),
+}))
+vi.mock('@/modules/workflow/api', () => ({
+  queryTodoTasks: (...args: unknown[]) => queryTodoTasks(...args),
+  myInstances: (...args: unknown[]) => myInstances(...args),
 }))
 
 const mockPush = vi.fn()
@@ -63,7 +70,7 @@ const global = {
   plugins: [createPinia()],
   stubs: {
     'el-button': {
-      template: '<button :disabled="disabled"><slot/></button>',
+      template: '<button><slot/></button>',
       props: ['icon', 'text', 'size', 'link', 'type', 'disabled'],
     },
     'el-checkbox': { template: '<input type="checkbox"/>', props: ['modelValue'] },
@@ -73,7 +80,7 @@ const global = {
   directives: { loading: {} },
 }
 
-describe('WorkspaceEditor 独立全屏编辑页（V011-BUG-002）', () => {
+describe('WorkspaceEditor 独立全屏编辑页 —— 所见即所得（V011-BUG-002）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getWorkspaceLayout.mockResolvedValue(
@@ -82,10 +89,11 @@ describe('WorkspaceEditor 独立全屏编辑页（V011-BUG-002）', () => {
         { key: 'favoriteItems', visible: true, order: 2 },
       ]),
     )
+    queryTodoTasks.mockResolvedValue({ list: [{ taskId: 't1', name: '任务一' }] })
     queryCatalogItems.mockResolvedValue({ list: [] })
   })
 
-  it('独立页面直接渲染编辑器顶栏、组件侧栏与空白画布', async () => {
+  it('编辑页渲染工具栏、组件侧栏与真实卡片画布（所见即所得）', async () => {
     getWorkspaceLayout.mockResolvedValue(
       layoutResp(
         [
@@ -97,15 +105,19 @@ describe('WorkspaceEditor 独立全屏编辑页（V011-BUG-002）', () => {
     )
     const wrapper = mount(WorkspaceEditor, { global })
     await flushPromises()
-    expect(wrapper.find('.we-topbar').exists()).toBe(true)
-    expect(wrapper.find('.we-topbar__badge').text()).toContain('默认布局')
-    expect(wrapper.find('.we-palette').exists()).toBe(true)
-    expect(wrapper.find('.we-canvas').exists()).toBe(true)
-    expect(wrapper.findAll('.we-node')).toHaveLength(2)
+    expect(wrapper.find('.wsd-toolbar').exists()).toBe(true)
+    expect(wrapper.find('.wsd-palette').exists()).toBe(true)
+    expect(wrapper.find('.wsd-toolbar__badge').text()).toContain('默认布局')
+    expect(wrapper.findAll('.wsd-canvas-item')).toHaveLength(2)
+    // WYSIWYG：画布内是与首页一致的真实卡片内容（我的待办面板 + 真实任务行）
+    expect(wrapper.find('.wsd-panel--todo').exists()).toBe(true)
+    expect(wrapper.find('.wsd-panel--todo').text()).toContain('我的待办')
+    expect(wrapper.find('.wsd-panel--todo').text()).toContain('任务一')
+    // 编辑页无首页欢迎区与齿轮
     expect(wrapper.find('.wsd-hero').exists()).toBe(false)
   })
 
-  it('组件库点击可重新启用隐藏块并标记待保存', async () => {
+  it('组件库点击可重新启用隐藏卡片并标记待保存', async () => {
     getWorkspaceLayout.mockResolvedValue(
       layoutResp([
         { key: 'todo', visible: true, order: 1, span: 2 },
@@ -114,19 +126,20 @@ describe('WorkspaceEditor 独立全屏编辑页（V011-BUG-002）', () => {
     )
     const wrapper = mount(WorkspaceEditor, { global })
     await flushPromises()
-    const paletteItems = wrapper.findAll('.we-palette-item')
+    const paletteItems = wrapper.findAll('.wsd-palette-item')
     expect(paletteItems).toHaveLength(2)
-    const nodes = wrapper.findAll('.we-node')
+    const nodes = wrapper.findAll('.wsd-canvas-item')
     expect(nodes).toHaveLength(2)
-    await nodes[1].find('.we-node__btn').trigger('click')
+    await nodes[1].find('.wsd-canvas-item__btn').trigger('click')
     await flushPromises()
-    expect(wrapper.find('.we-node.is-hidden').exists()).toBe(true)
+    expect(wrapper.find('.wsd-canvas-item.is-hidden').exists()).toBe(true)
 
     await paletteItems[1].trigger('click')
     await flushPromises()
-    expect(wrapper.find('.we-node.is-hidden').exists()).toBe(false)
-    const saveButton = wrapper.findAll('.we-topbar__actions button')[1]
-    expect(saveButton.attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('.wsd-canvas-item.is-hidden').exists()).toBe(false)
+    expect(
+      wrapper.find('.wsd-toolbar__actions .wsd-btn--primary').attributes('disabled'),
+    ).toBeUndefined()
   })
 
   it('保存布局时把画布几何写入卡片元数据', async () => {
@@ -136,8 +149,8 @@ describe('WorkspaceEditor 独立全屏编辑页（V011-BUG-002）', () => {
     )
     const wrapper = mount(WorkspaceEditor, { global })
     await flushPromises()
-    await wrapper.find('.we-node__btn').trigger('click')
-    await wrapper.findAll('.we-topbar__actions button')[1].trigger('click')
+    await wrapper.find('.wsd-canvas-item__btn').trigger('click')
+    await wrapper.find('.wsd-toolbar__actions .wsd-btn--primary').trigger('click')
     await flushPromises()
 
     expect(saveWorkspaceLayout).toHaveBeenCalledTimes(1)
@@ -149,7 +162,7 @@ describe('WorkspaceEditor 独立全屏编辑页（V011-BUG-002）', () => {
     const wrapper = mount(WorkspaceEditor, { global })
     await flushPromises()
     mockPush.mockClear()
-    await wrapper.findAll('.we-topbar__actions button')[2].trigger('click')
+    await wrapper.find('.wsd-toolbar__actions .wsd-btn:last-child').trigger('click')
     expect(mockPush).toHaveBeenCalledWith('/workspace')
   })
 })
