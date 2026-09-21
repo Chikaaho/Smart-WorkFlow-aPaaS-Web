@@ -430,7 +430,8 @@ const DEFAULT_CARD_HEIGHTS: Record<string, number> = {
   drafts: 220,
   messages: 220,
 }
-const HANDLES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const
+const EDGES = ['n', 's', 'e', 'w'] as const
+const CORNERS = ['ne', 'nw', 'se', 'sw'] as const
 
 function defaultCardHeight(key: string): number {
   return DEFAULT_CARD_HEIGHTS[rendererKeyOf(key)] ?? 320
@@ -1168,11 +1169,26 @@ onMounted(async () => {
 
           <template v-if="editing">
             <span
-              v-for="h in HANDLES"
-              :key="h"
-              class="wsd-handle"
-              :class="`wsd-handle--${h}`"
-              @pointerdown.stop="startCardDrag($event, component.key, 'resize', h)"
+              v-for="edge in EDGES"
+              :key="'edge-' + edge"
+              class="wsd-edge"
+              :class="[
+                `wsd-edge--${edge}`,
+                {
+                  'is-active':
+                    dragState?.key === component.key &&
+                    dragState?.mode === 'resize' &&
+                    dragState?.handle === edge,
+                },
+              ]"
+              @pointerdown.stop="startCardDrag($event, component.key, 'resize', edge)"
+            />
+            <span
+              v-for="corner in CORNERS"
+              :key="'corner-' + corner"
+              class="wsd-corner"
+              :class="`wsd-corner--${corner}`"
+              @pointerdown.stop="startCardDrag($event, component.key, 'resize', corner)"
             />
           </template>
         </article>
@@ -1391,57 +1407,98 @@ onMounted(async () => {
 .wsd-canvas-item__body > .wsd-stats {
   height: 100%;
 }
-.wsd-handle {
+.wsd-edge {
   position: absolute;
-  width: 10px;
-  height: 10px;
-  background: #ffffff;
-  border: 1px solid var(--sw-color-primary);
+  z-index: 6;
+}
+.wsd-edge--n {
+  top: -3px;
+  right: 6px;
+  left: 6px;
+  height: 7px;
+  cursor: ns-resize;
+}
+.wsd-edge--s {
+  right: 6px;
+  bottom: -3px;
+  left: 6px;
+  height: 7px;
+  cursor: ns-resize;
+}
+.wsd-edge--e {
+  top: 6px;
+  right: -3px;
+  bottom: 6px;
+  width: 7px;
+  cursor: ew-resize;
+}
+.wsd-edge--w {
+  top: 6px;
+  bottom: 6px;
+  left: -3px;
+  width: 7px;
+  cursor: ew-resize;
+}
+.wsd-edge::after {
+  content: '';
+  position: absolute;
   border-radius: 2px;
+  background: var(--sw-color-primary);
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-.wsd-canvas-item:hover .wsd-handle {
+.wsd-edge--n::after {
+  top: 2px;
+  right: 0;
+  left: 0;
+  height: 2px;
+}
+.wsd-edge--s::after {
+  right: 0;
+  bottom: 2px;
+  left: 0;
+  height: 2px;
+}
+.wsd-edge--e::after {
+  top: 0;
+  right: 2px;
+  bottom: 0;
+  width: 2px;
+}
+.wsd-edge--w::after {
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+}
+.wsd-edge:hover::after,
+.wsd-edge.is-active::after {
   opacity: 1;
 }
-.wsd-handle--n {
-  top: -5px;
-  left: calc(50% - 5px);
-  cursor: ns-resize;
+.wsd-corner {
+  position: absolute;
+  z-index: 7;
+  width: 14px;
+  height: 14px;
 }
-.wsd-handle--s {
-  bottom: -5px;
-  left: calc(50% - 5px);
-  cursor: ns-resize;
-}
-.wsd-handle--e {
-  right: -5px;
-  top: calc(50% - 5px);
-  cursor: ew-resize;
-}
-.wsd-handle--w {
-  left: -5px;
-  top: calc(50% - 5px);
-  cursor: ew-resize;
-}
-.wsd-handle--ne {
-  top: -5px;
-  right: -5px;
+.wsd-corner--ne {
+  top: -6px;
+  right: -6px;
   cursor: nesw-resize;
 }
-.wsd-handle--nw {
-  top: -5px;
-  left: -5px;
+.wsd-corner--nw {
+  top: -6px;
+  left: -6px;
   cursor: nwse-resize;
 }
-.wsd-handle--se {
-  bottom: -5px;
-  right: -5px;
+.wsd-corner--se {
+  right: -6px;
+  bottom: -6px;
   cursor: nwse-resize;
 }
-.wsd-handle--sw {
-  bottom: -5px;
-  left: -5px;
+.wsd-corner--sw {
+  bottom: -6px;
+  left: -6px;
   cursor: nesw-resize;
 }
 .wsd-guide {
