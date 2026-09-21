@@ -30,9 +30,10 @@ import type { WorkspaceLayoutResp } from '@/contracts/catalog'
 
 function layoutResp(
   components: Array<{ key: string; visible: boolean; order: number; span?: number }>,
+  custom = true,
 ): WorkspaceLayoutResp {
   return {
-    custom: true,
+    custom,
     cardTypes: components.map((component, index) => ({
       id: index + 1,
       typeCode: component.key,
@@ -62,7 +63,10 @@ function layoutResp(
   }
 }
 
-const elStub = { template: '<div><slot/></div>', props: ['modelValue', 'title', 'size'] }
+const elStub = {
+  template: '<div v-if="modelValue"><slot/></div>',
+  props: ['modelValue', 'title', 'size'],
+}
 
 const global = {
   // P53 起工作台读取 userStore（问候语 displayName），测试装配补 pinia，断言不变。
@@ -145,5 +149,30 @@ describe('WorkspaceHome 布局与查询收敛（R4）', () => {
     expect(quicks[1].text()).toContain('更多事项')
     await quicks[0].trigger('click')
     expect(mockPush).toHaveBeenCalledWith('/form/form-render/f1')
+  })
+
+  it('默认布局通过小齿轮进入基础组件画布', async () => {
+    getWorkspaceLayout.mockResolvedValue(
+      layoutResp(
+        [
+          { key: 'todo', visible: true, order: 1, span: 2 },
+          { key: 'favoriteItems', visible: true, order: 2 },
+        ],
+        false,
+      ),
+    )
+    const wrapper = mount(WorkspaceHome, { global })
+    await flushPromises()
+
+    const gear = wrapper.find('.wsd-hero__config')
+    expect(gear.attributes('aria-label')).toBe('配置工作台')
+    expect(wrapper.find('.wsd-editor__canvas').exists()).toBe(false)
+
+    await gear.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.wsd-editor__palette').exists()).toBe(true)
+    expect(wrapper.find('.wsd-editor__canvas').exists()).toBe(true)
+    expect(wrapper.find('.wsd-editor__default-badge').text()).toContain('默认布局')
+    expect(wrapper.findAll('.wsd-palette-item')).toHaveLength(2)
   })
 })

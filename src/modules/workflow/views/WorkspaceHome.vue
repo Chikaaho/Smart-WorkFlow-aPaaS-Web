@@ -50,6 +50,8 @@ const custom = ref(false)
 const loading = ref(false)
 const configVisible = ref(false)
 const dirty = ref(false)
+const editorComponents = ref<WorkspaceComponent[]>([])
+const draggingPayload = ref('')
 
 // ─── 组件数据 ───
 type PageExtra = { badge?: string; urgentTotal?: number }
@@ -392,12 +394,53 @@ function withNewComponents(list: WorkspaceComponent[]): WorkspaceComponent[] {
     visible: true,
     order: type.defaultOrder,
     span: type.defaultSpan,
-    metadata: {},
+    metadata: defaultMetadata(type),
   }))
   for (const d of defaults) {
     if (!keys.has(d.key)) merged.push(d)
   }
   return merged
+}
+
+function cloneComponents(list: WorkspaceComponent[]): WorkspaceComponent[] {
+  return list
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((component) => ({
+      ...component,
+      metadata: component.metadata ? { ...component.metadata } : {},
+    }))
+}
+
+const editorOrdered = computed(() => cloneComponents(editorComponents.value))
+
+function isEditorIncluded(typeCode: string): boolean {
+  return editorComponents.value.some((component) => component.key === typeCode)
+}
+
+function defaultMetadata(type: WorkspaceCardType): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(type.metadataJson || '{}')
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function editorCardFor(type: WorkspaceCardType): WorkspaceComponent {
+  return {
+    key: type.typeCode,
+    visible: true,
+    order: editorComponents.value.length + 1,
+    span: type.defaultSpan,
+    metadata: defaultMetadata(type),
+  }
+}
+
+function normalizeEditorOrder(list: WorkspaceComponent[]): WorkspaceComponent[] {
+  return list.map((component, index) => ({ ...component, order: index + 1 }))
 }
 
 function openDraft(item: Record<string, unknown>) {
@@ -520,6 +563,8 @@ const catalogChoices = ref<CatalogItem[]>([])
 
 async function openConfig() {
   configVisible.value = true
+  editorComponents.value = cloneComponents(components.value)
+  dirty.value = false
   try {
     const page = await queryCatalogItems({ pageNum: 1, pageSize: 100 })
     catalogChoices.value = page.list
@@ -529,20 +574,51 @@ async function openConfig() {
     catalogChoices.value = []
   }
 }
-function toggleVisible(component: WorkspaceComponent) {
-  component.visible = !component.visible
+
+function setVisible(component: WorkspaceComponent, value: boolean) {
+  component.visible = value
   dirty.value = true
 }
 
-function move(component: WorkspaceComponent, delta: -1 | 1) {
-  const sorted = components.value.slice().sort((a, b) => a.order - b.order)
-  const index = sorted.indexOf(component)
-  const target = index + delta
-  if (target < 0 || target >= sorted.length) return
-  const other = sorted[target]
-  const tmp = component.order
-  component.order = other.order
-  other.order = tmp
+function startPaletteDrag(typeCode: string, event: globalThis.DragEvent) {
+  draggingPayload.value = `palette:${typeCode}`
+  event.dataTransfer?.setData('text/plain', draggingPayload.value)
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy'
+}
+
+function startEditorDrag(typeCode: string, event: globalThis.DragEvent) {
+  draggingPayload.value = `card:${typeCode}`
+  event.dataTransfer?.setData('text/plain', draggingPayload.value)
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+
+function stopEditorDrag() {
+  draggingPayload.value = ''
+}
+
+function dropEditorCard(event: globalThis.DragEvent, targetKey?: string) {
+  event.preventDefault()
+  const payload = event.dataTransfer?.getData('text/plain') || draggingPayload.value
+  draggingPayload.value = ''
+  const [kind, typeCode] = payload.split(':')
+  if (!typeCode || !['palette', 'card'].includes(kind)) return
+
+  const next = editorComponents.value.slice()
+  const existingIndex = next.findIndex((component) => component.key === typeCode)
+  const existing = existingIndex >= 0 ? next.splice(existingIndex, 1)[0] : undefined
+  const card = existing ?? cardTypes.value.find((type) => type.typeCode === typeCode)
+  if (!card) return
+  const component = 'typeCode' in card ? editorCardFor(card) : card
+
+  if (targetKey && targetKey !== typeCode) {
+    const targetIndex = next.findIndex((item) => item.key === targetKey)
+    next.splice(targetIndex >= 0 ? targetIndex : next.length, 0, component)
+  } else if (existingIndex >= 0) {
+    next.splice(Math.min(existingIndex, next.length), 0, component)
+  } else {
+    next.push(component)
+  }
+  editorComponents.value = normalizeEditorOrder(next)
   dirty.value = true
 }
 
@@ -567,8 +643,9 @@ function toggleFavorite(key: string) {
 
 async function saveConfig() {
   try {
+    const nextComponents = normalizeEditorOrder(editorOrdered.value)
     await saveWorkspaceLayout({
-      cards: components.value.map((c) => ({
+      cards: nextComponents.map((c) => ({
         typeCode: c.key,
         visible: c.visible,
         order: c.order,
@@ -611,10 +688,14 @@ onMounted(loadLayout)
       <p class="wsd-hero__sub">
         {{ t('workspace.todoSummary', { count: todoTotal, urgent: todoExtra.urgentTotal ?? 0 }) }}
       </p>
-      <button class="wsd-hero__config" type="button" @click="openConfig">
-        <span class="wsd-hero__gear"
-          ><el-icon :size="14"><Setting /></el-icon></span
-        >{{ t('workspace.configureWorkspace') }}
+      <button
+        class="wsd-hero__config"
+        type="button"
+        :title="t('workspace.configureWorkspace')"
+        :aria-label="t('workspace.configureWorkspace')"
+        @click="openConfig"
+      >
+        <el-icon :size="16"><Setting /></el-icon>
       </button>
     </header>
 
@@ -816,31 +897,99 @@ onMounted(loadLayout)
       </section>
     </div>
 
-    <!-- 配置抽屉 -->
-    <el-drawer v-model="configVisible" :title="t('workflow.workspaceConfig')" size="420px">
-      <h4 class="config-section">{{ t('workflow.widgetVisibilityOrder') }}</h4>
-      <ul class="config-list">
-        <li
-          v-for="component in components.slice().sort((a, b) => a.order - b.order)"
-          :key="component.key"
-          class="config-list__row"
-        >
-          <el-switch v-model="component.visible" @change="toggleVisible(component)" />
-          <span class="config-list__name">{{ componentTitle(component.key) }}</span>
-          <el-button size="small" @click="toggleSpan(component)">
-            {{ component.span === 2 ? t('workflow.halfWidth') : t('workflow.fullWidth') }}
-          </el-button>
-          <el-button size="small" :disabled="component.order <= 1" @click="move(component, -1)">{{
-            t('common.moveUp')
-          }}</el-button>
-          <el-button
-            size="small"
-            :disabled="component.order >= components.length"
-            @click="move(component, 1)"
-            >{{ t('common.moveDown') }}</el-button
-          >
-        </li>
-      </ul>
+    <!-- 低代码工作台编辑器：组件库 + 可拖拽画布 -->
+    <el-drawer
+      v-model="configVisible"
+      :title="t('workflow.workspaceConfig')"
+      size="min(960px, 92vw)"
+      class="wsd-editor-drawer"
+    >
+      <div class="wsd-editor">
+        <aside class="wsd-editor__palette">
+          <div class="wsd-editor__section-head">
+            <h4>{{ t('workspace.componentLibrary') }}</h4>
+            <span>{{ t('workspace.basicComponent') }}</span>
+          </div>
+          <p class="wsd-editor__hint">{{ t('workspace.componentLibraryHint') }}</p>
+          <div class="wsd-palette-list">
+            <div
+              v-for="type in cardTypes"
+              :key="type.typeCode"
+              class="wsd-palette-item"
+              :class="{ 'is-used': isEditorIncluded(type.typeCode) }"
+              draggable="true"
+              @dragstart="startPaletteDrag(type.typeCode, $event)"
+              @dragend="stopEditorDrag"
+            >
+              <span class="wsd-palette-item__grip">⋮⋮</span>
+              <span class="wsd-palette-item__body">
+                <strong>{{ type.displayName }}</strong>
+                <small>{{ type.rendererKey }}</small>
+              </span>
+              <span class="wsd-palette-item__state">
+                {{
+                  isEditorIncluded(type.typeCode)
+                    ? t('workspace.added')
+                    : t('workspace.dragToCanvas')
+                }}
+              </span>
+            </div>
+          </div>
+        </aside>
+
+        <section class="wsd-editor__canvas" @dragover.prevent @drop="dropEditorCard($event)">
+          <div class="wsd-editor__canvas-head">
+            <div>
+              <h4>{{ t('workspace.canvasTitle') }}</h4>
+              <p>{{ t('workspace.canvasHint') }}</p>
+            </div>
+            <span v-if="!custom" class="wsd-editor__default-badge">
+              {{ t('workspace.defaultLayout') }}
+            </span>
+          </div>
+          <div v-if="editorOrdered.length" class="wsd-editor-grid">
+            <article
+              v-for="component in editorOrdered"
+              :key="component.key"
+              class="wsd-editor-card"
+              :class="{ 'is-hidden': !component.visible }"
+              :style="{ gridColumn: component.span === 2 ? 'span 2' : 'span 1' }"
+              draggable="true"
+              @dragstart="startEditorDrag(component.key, $event)"
+              @dragend="stopEditorDrag"
+              @dragover.prevent
+              @drop.stop="dropEditorCard($event, component.key)"
+            >
+              <div class="wsd-editor-card__head">
+                <span class="wsd-editor-card__grip">⠿</span>
+                <strong>{{ componentTitle(component.key) }}</strong>
+                <span class="wsd-editor-card__type">{{ rendererKeyOf(component.key) }}</span>
+              </div>
+              <div class="wsd-editor-card__body">
+                <span>{{ t('workspace.basicComponent') }}</span>
+                <span>{{
+                  component.span === 2 ? t('workflow.fullWidth') : t('workflow.halfWidth')
+                }}</span>
+              </div>
+              <div class="wsd-editor-card__actions">
+                <label class="wsd-editor-card__switch">
+                  <el-switch
+                    :model-value="component.visible"
+                    @change="setVisible(component, Boolean($event))"
+                  />
+                  <span>{{
+                    component.visible ? t('workspace.visible') : t('workspace.hidden')
+                  }}</span>
+                </label>
+                <button class="wsd-editor-card__width" type="button" @click="toggleSpan(component)">
+                  {{ component.span === 2 ? t('workflow.halfWidth') : t('workflow.fullWidth') }}
+                </button>
+              </div>
+            </article>
+          </div>
+          <div v-else class="wsd-editor__empty">{{ t('workspace.dropComponentHere') }}</div>
+        </section>
+      </div>
 
       <h4 class="config-section">{{ t('workflow.favoritesPickerHint') }}</h4>
       <ul class="config-favorites">
@@ -896,21 +1045,21 @@ onMounted(loadLayout)
   top: 10px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   box-sizing: border-box;
-  width: 148px;
-  height: 42px;
-  padding: 0 31px;
-  border: 1px solid #ccd5e5;
-  border-radius: 6px;
-  background: #ffffff;
-  color: var(--sw-text-primary);
-  font-size: 14px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--sw-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sw-text-secondary);
   cursor: pointer;
 }
-.wsd-hero__gear {
-  display: inline-flex;
+.wsd-hero__config:hover,
+.wsd-hero__config:focus-visible {
+  border-color: var(--sw-color-primary);
   color: var(--sw-color-primary);
-  margin-right: 6px;
 }
 .wsd-lowcode-grid {
   display: grid;
@@ -1296,6 +1445,199 @@ onMounted(loadLayout)
 }
 .wsd-extra__card {
   min-height: 120px;
+}
+.wsd-editor {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 20px;
+  min-height: 520px;
+}
+.wsd-editor__palette,
+.wsd-editor__canvas {
+  min-width: 0;
+  border: 1px solid var(--sw-border);
+  border-radius: 10px;
+  background: var(--sw-surface-page, #f7f8fc);
+}
+.wsd-editor__palette {
+  padding: 18px;
+}
+.wsd-editor__section-head,
+.wsd-editor__canvas-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wsd-editor__section-head h4,
+.wsd-editor__canvas-head h4 {
+  margin: 0;
+  color: var(--sw-text-primary);
+  font-size: 16px;
+  line-height: 22px;
+}
+.wsd-editor__section-head span,
+.wsd-editor__default-badge {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eee8ff;
+  color: var(--sw-color-primary);
+  font-size: 12px;
+}
+.wsd-editor__hint,
+.wsd-editor__canvas-head p {
+  margin: 7px 0 16px;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.wsd-palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wsd-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 58px;
+  padding: 9px 10px;
+  border: 1px solid var(--sw-border);
+  border-radius: 8px;
+  background: #fff;
+  cursor: grab;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.wsd-palette-item:hover,
+.wsd-palette-item:focus-visible {
+  border-color: var(--sw-color-primary);
+  box-shadow: 0 3px 12px rgb(74 43 175 / 10%);
+}
+.wsd-palette-item.is-used {
+  background: #fbfaff;
+}
+.wsd-palette-item__grip,
+.wsd-editor-card__grip {
+  color: var(--sw-text-tertiary, #98a2b3);
+  letter-spacing: -3px;
+  user-select: none;
+}
+.wsd-palette-item__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.wsd-palette-item__body strong {
+  overflow: hidden;
+  color: var(--sw-text-primary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wsd-palette-item__body small,
+.wsd-palette-item__state,
+.wsd-editor-card__type {
+  color: var(--sw-text-secondary);
+  font-size: 11px;
+}
+.wsd-palette-item__state {
+  flex: none;
+}
+.wsd-editor__canvas {
+  padding: 18px;
+  background: #f5f6fa;
+}
+.wsd-editor__canvas-head p {
+  margin-bottom: 0;
+}
+.wsd-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-height: 410px;
+  padding-top: 18px;
+  align-content: start;
+}
+.wsd-editor-card {
+  display: flex;
+  min-width: 0;
+  min-height: 126px;
+  flex-direction: column;
+  padding: 14px;
+  border: 1px solid #d8ddef;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 2px 7px rgb(31 42 68 / 4%);
+  cursor: grab;
+}
+.wsd-editor-card.is-hidden {
+  opacity: 0.58;
+}
+.wsd-editor-card:hover {
+  border-color: var(--sw-color-primary);
+}
+.wsd-editor-card__head,
+.wsd-editor-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wsd-editor-card__head strong {
+  overflow: hidden;
+  flex: 1;
+  color: var(--sw-text-primary);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wsd-editor-card__type {
+  flex: none;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wsd-editor-card__body {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 17px;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+}
+.wsd-editor-card__actions {
+  justify-content: space-between;
+  margin-top: 15px;
+  padding-top: 10px;
+  border-top: 1px solid var(--sw-border-light);
+}
+.wsd-editor-card__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.wsd-editor-card__width {
+  border: 0;
+  background: transparent;
+  color: var(--sw-color-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.wsd-editor__empty {
+  display: grid;
+  min-height: 410px;
+  place-items: center;
+  border: 1px dashed #c6cce0;
+  border-radius: 10px;
+  color: var(--sw-text-secondary);
+  font-size: 13px;
 }
 .config-section {
   margin: 16px 0 8px;
