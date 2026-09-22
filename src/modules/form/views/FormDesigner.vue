@@ -39,6 +39,7 @@ import PreviewModal from '../designer/PreviewModal.vue'
 import HistoryVersionsDialog from '../designer/HistoryVersionsDialog.vue'
 import RelatedProcessesPanel from '../designer/RelatedProcessesPanel.vue'
 import { saveDraftDefinition, publishDefinition as publishDef } from '../designer/draft-actions'
+import { publishNewFormVersion } from '../api/form-def'
 import { listCategories, queryCatalogItems } from '@/modules/workflow/api/oa'
 import {
   resolveSaveState,
@@ -322,6 +323,28 @@ onBeforeUnmount(() => {
  */
 async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
   if (!isDirty.value) return 'proceed'
+  // V011-BUG-015：已发布表单无草稿可存——离开只问「丢弃/留下」
+  if (isPublished.value) {
+    try {
+      await ElMessageBox.confirm(
+        t('form.unsavedPublishedLeaveWarning'),
+        t('form.unsavedChangesTitle'),
+        {
+          type: 'warning',
+          confirmButtonText: t('form.discardAndContinue'),
+          cancelButtonText: t('common.cancel'),
+        },
+      )
+      // 放弃修改：以基线还原，再放行导航
+      const baseline = JSON.parse(baselineJson.value) as FormSchema
+      items.value = definitionToItems(baseline)
+      if (baseline.title) title.value = baseline.title
+      baselineJson.value = currentJson.value
+      return 'proceed'
+    } catch {
+      return 'abort'
+    }
+  }
   let action: 'save' | 'discard' | 'cancel'
   try {
     await ElMessageBox.confirm(t(LEAVE_GUARD_MESSAGE_KEY), t('form.unsavedChangesTitle'), {
@@ -440,6 +463,40 @@ async function saveDraft() {
   await doSave()
 }
 
+/* ── V011-BUG-015：已发布表单发布新版本（原子落库，不经草稿） ── */
+
+async function publishNewVersion() {
+  if (rejected.value || !formId.value) return
+  if (savePhase.value === 'saving') return
+  const preCheckError = preValidateBeforePublish(items.value)
+  if (preCheckError) {
+    ElMessage.warning(preCheckError)
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      t('form.publishNewVersionConfirm'),
+      t('common.publishConfirmTitle'),
+      {
+        confirmButtonText: t('form.publishNewVersion'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+  savePhase.value = 'saving'
+  try {
+    await publishNewFormVersion(formId.value, JSON.stringify(buildDefinition()))
+    savePhase.value = 'idle'
+    ElMessage.success(t('form.publishNewVersionSuccess'))
+    loadForm(formId.value)
+  } catch {
+    savePhase.value = 'error'
+  }
+}
+
 /* ── 发布（只针对最近一次成功保存的当前草稿） ── */
 
 async function publish() {
@@ -500,8 +557,7 @@ const filteredFields = computed(() => {
   const kw = fieldSearch.value.trim().toLowerCase()
   if (!kw) return previewSchema.value.fields
   return previewSchema.value.fields.filter(
-    (f) =>
-      (f.label ?? '').toLowerCase().includes(kw) || f.name.toLowerCase().includes(kw),
+    (f) => (f.label ?? '').toLowerCase().includes(kw) || f.name.toLowerCase().includes(kw),
   )
 })
 
@@ -515,7 +571,8 @@ function constraintOf(field: FormSchemaField): string {
   if (field.type === 'DICT') return t('fieldList.constraintDict')
   if (field.type === 'DATE' || field.type === 'TIME') return t('fieldList.constraintDate')
   if (field.type === 'DEPT') return t('fieldList.constraintDept')
-  if (field.type === 'ATTACHMENT' || field.type === 'IMAGE') return t('fieldList.constraintAttachment')
+  if (field.type === 'ATTACHMENT' || field.type === 'IMAGE')
+    return t('fieldList.constraintAttachment')
   if (field.type === 'REFERENCE') return t('fieldList.constraintReference')
   if (field.type === 'FORMULA') return t('fieldList.constraintFormula')
   if (field.required) return t('fieldList.constraintRequired')
@@ -539,12 +596,10 @@ function exportFields() {
 /* ── 关联流程 ── */
 
 function enterProcess(def: ProcessDef) {
-  // 进入现有流程管理/编辑入口（workflow 流程定义列表），带回跳上下文
-  router.push({
-    path: '/workflow/defs',
-    query: { from: 'form-workbench', formId: formId.value ?? '', formKey: formKey.value },
-  })
-  void def
+  // V011-BUG-019：编辑=当前页直接进入该流程的网格设计器（不再跳流程总列表页）
+  router.push(
+    `/workflow/defs/${def.id}/design?from=form-workbench&formId=${formId.value ?? ''}&formKey=${formKey.value}`,
+  )
 }
 
 /* ── 辅助函数 ── */
@@ -675,16 +730,22 @@ async function loadBreadcrumbCategory() {
         <el-button :disabled="!formId" @click="historyVisible = true">{{
           t('form.draftHistoryEntry')
         }}</el-button>
-        <el-button :disabled="isPublished || saveState === 'saving'" @click="saveDraft">{{
-          t('common.save')
-        }}</el-button>
+        <!-- V011-BUG-015：已发布表单以「发布新版本」替代 保存/发布（原子落库，不经草稿） -->
         <el-button
+          v-if="isPublished"
           type="primary"
-          :disabled="isPublished || saveState === 'saving'"
-          :title="isPublished ? t('form.publishedNoRepublish') : undefined"
-          @click="publish"
-          >{{ t('common.publish') }}</el-button
+          :disabled="saveState === 'saving'"
+          @click="publishNewVersion"
+          >{{ t('form.publishNewVersion') }}</el-button
         >
+        <template v-else>
+          <el-button :disabled="saveState === 'saving'" @click="saveDraft">{{
+            t('common.save')
+          }}</el-button>
+          <el-button type="primary" :disabled="saveState === 'saving'" @click="publish">{{
+            t('common.publish')
+          }}</el-button>
+        </template>
       </div>
     </header>
 
@@ -700,13 +761,14 @@ async function loadBreadcrumbCategory() {
         <span>{{ t('common.loading') }}</span>
       </div>
 
-      <!-- ═══ 工作区：表单设计（节点 07 三栏几何：252 组件库 / 弹性画布 / 336 属性面板） ═══ -->
+      <!-- ═══ 工作区：表单设计（节点 07 三栏几何：252 组件库 / 弹性画布 / 336 属性面板） ═══
+           V011-BUG-015：已发布表单解锁编辑（编辑 → 「发布新版本」原子落库，
+           服务端 publish-version 增量 DDL + 版本递增），不再整体灰置 -->
       <div v-else-if="activeTab === 'design'" class="designer__body">
         <div class="designer__palettecol">
           <FieldPalette
             class="designer-main-palette"
             :existing-names="existingNames"
-            :disabled="isPublished"
             @add="addPaletteItem"
           />
           <p class="designer__palette-note">{{ t('form.paletteDragHint') }}</p>
@@ -762,7 +824,6 @@ async function loadBreadcrumbCategory() {
         :form-key="formKey"
         @enter-process="enterProcess"
       />
-
     </template>
 
     <!-- 子表盖层子画布：盖在主画布之上，独立状态编辑该子表的内部字段 -->
@@ -770,7 +831,6 @@ async function loadBreadcrumbCategory() {
       v-if="editingTableField && activeTab === 'design'"
       :table-label="editingTableField.label || editingTableField.name"
       :sub-fields="editingTableField.subFields"
-      :readonly="isPublished"
       @close="closeTableEditor"
     />
 
@@ -823,11 +883,10 @@ async function loadBreadcrumbCategory() {
       </el-table>
       <p class="fields-dialog__note">{{ t('fieldList.note') }}</p>
       <template #footer>
-        <el-button
-          type="primary"
-          class="fields-dialog__close"
-          @click="fieldsDialogVisible = false"
-          >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ t('fieldList.backToDesigner') }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</el-button
+        <el-button type="primary" class="fields-dialog__close" @click="fieldsDialogVisible = false"
+          >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{
+            t('fieldList.backToDesigner')
+          }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</el-button
         >
       </template>
     </el-dialog>

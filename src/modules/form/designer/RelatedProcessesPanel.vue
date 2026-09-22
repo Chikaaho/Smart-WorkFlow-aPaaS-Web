@@ -15,9 +15,9 @@ const { t } = useI18n()
  *     本轮后端无挂起/激活能力，不提供对应按钮（不伪装支持）。
  */
 import { ref, computed, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { createProcessDef, pageProcessDefs } from '@/modules/workflow/api'
+import { createProcessDef, pageProcessDefs, deleteProcessDef } from '@/modules/workflow/api'
 import type { ProcessDef } from '@/contracts/bpm'
 
 const props = defineProps<{ formId: string; formKey: string }>()
@@ -113,6 +113,41 @@ function handlePageChange(page: number) {
 
 function displayVersion(row: ProcessDef) {
   return row.versionLabel ? `v${row.versionLabel}` : `v${row.defVersion}`
+}
+
+/* ── V011-BUG-019：操作列三个独立按钮（编辑 / 版本 / 更多） ── */
+
+/** 版本信息弹窗（真实行数据，不做假能力）。 */
+const versionVisible = ref(false)
+const versionRow = ref<ProcessDef | null>(null)
+
+function openVersion(row: ProcessDef) {
+  versionRow.value = row
+  versionVisible.value = true
+}
+
+/** 更多：删除关联流程（既有真实能力；发布中的流程是否可删由后端校验兜底）。 */
+async function removeProcess(row: ProcessDef) {
+  try {
+    await ElMessageBox.confirm(
+      t('form.relatedProcessDeleteConfirm', { name: row.name }),
+      t('common.warningTitle'),
+      {
+        type: 'warning',
+        confirmButtonText: t('common.delete'),
+        cancelButtonText: t('common.cancel'),
+      },
+    )
+  } catch {
+    return
+  }
+  try {
+    await deleteProcessDef(row.id)
+    ElMessage.success(t('form.relatedProcessDeleted'))
+    await load()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.deleteFailed'))
+  }
 }
 
 function statusLabel(status: ProcessDef['status']) {
