@@ -233,30 +233,71 @@ function statusTagType(status: ProcessDef['status']) {
           <el-table-column
             prop="createTime"
             :label="t('form.relatedProcessCreatedAtColumn')"
-            width="215"
+            min-width="180"
           />
-          <el-table-column :label="t('form.relatedProcessCreatorColumn')" width="190">
+          <el-table-column :label="t('form.relatedProcessCreatorColumn')" min-width="120">
             <template #default="{ row }">{{ procRow(row).updatedBy || '—' }}</template>
           </el-table-column>
-          <el-table-column
-            :label="t('form.relatedProcessActionColumn')"
-            width="140"
-          >
+          <el-table-column :label="t('form.relatedProcessActionColumn')" min-width="200">
             <template #default="{ row }">
-              <el-button
-                class="related-processes__action"
-                link
-                type="primary"
-                @click="emit('enter-process', procRow(row))"
-              >
-                {{ t('form.relatedProcessEditAction') }}
-              </el-button>
+              <!-- V011-BUG-019：编辑=当前页进入网格设计器；版本/更多为独立按钮 -->
+              <div class="related-processes__actions">
+                <el-button
+                  class="related-processes__action"
+                  size="small"
+                  type="primary"
+                  plain
+                  @click="emit('enter-process', procRow(row))"
+                >
+                  {{ t('form.relatedProcessEditAction') }}
+                </el-button>
+                <el-button
+                  class="related-processes__action"
+                  size="small"
+                  @click="openVersion(procRow(row))"
+                >
+                  {{ t('common.version') }}
+                </el-button>
+                <el-button
+                  class="related-processes__action"
+                  size="small"
+                  @click="removeProcess(procRow(row))"
+                >
+                  {{ t('common.delete') }}
+                </el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
 
         <p class="related-processes__footnote">{{ t('form.relatedProcessFootnote') }}</p>
       </section>
+
+      <!-- V011-BUG-019：版本信息弹窗（当前行真实版本数据） -->
+      <el-dialog
+        v-model="versionVisible"
+        :title="t('form.relatedProcessVersionTitle')"
+        width="420px"
+        append-to-body
+      >
+        <el-descriptions v-if="versionRow" :column="1" border>
+          <el-descriptions-item :label="t('common.processName')">
+            {{ versionRow.name }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('common.version')">
+            {{ displayVersion(versionRow) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('form.relatedProcessEnabledColumn')">
+            {{ statusLabel(versionRow.status) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('form.relatedProcessCreatedAtColumn')">
+            {{ versionRow.createTime }}
+          </el-descriptions-item>
+        </el-descriptions>
+        <template #footer>
+          <el-button @click="versionVisible = false">{{ t('common.close') }}</el-button>
+        </template>
+      </el-dialog>
 
       <div v-if="total > pageSize" class="related-processes__pager">
         <el-pagination
@@ -457,12 +498,19 @@ function statusTagType(status: ProcessDef['status']) {
   border-color: #b8ead8 !important;
 }
 
+.related-processes__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.related-processes__actions .related-processes__action {
+  margin: 0;
+}
+
 .related-processes__action {
-  width: 120px;
-  height: 30px;
+  height: 28px;
   padding: 0 12px;
   font-size: 12px;
-  border: 1px solid var(--sw-border-light, #dfe5ee);
   border-radius: 4px;
   line-height: 16px;
 }
