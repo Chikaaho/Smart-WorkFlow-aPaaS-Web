@@ -46,4 +46,3 @@ describe('FieldConfigPanel 字段标识（V011-BUG-016）', () => {
     expect(wrapper.text()).toContain('字段标识发布后不可直接修改')
   })
 })
-
