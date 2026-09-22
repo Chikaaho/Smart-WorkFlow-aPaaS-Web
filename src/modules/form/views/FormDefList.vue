@@ -12,9 +12,14 @@ const { t } = useI18n()
  */
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { pageFormDefs, updateFormVisibility } from '@/modules/form/api/form-def'
+import {
+  pageFormDefs,
+  updateFormVisibility,
+  createFormDef,
+  saveFormConfig,
+} from '@/modules/form/api/form-def'
 import { disableFormDef, enableFormDef } from '@/modules/form/api/i2-choices'
 import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/utils/form-def-status'
 import type { FormDefListItem } from '@/modules/form/api/form-def'
@@ -89,10 +94,36 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
 
 // ─── 操作 ───
 
-function goCreate() {
-  // P52：用 path 而非 name —— 菜单动态路由与工作台静态路由不同名，
-  // path 直达带 :id 的工作台路由，避免同名替换导致的参数丢失。
-  void router.push('/form/designer')
+/**
+ * V011-BUG-014：新建表单先输入表单名称——
+ * 弹窗必填校验 → createFormDef（名称随建单落库）→ 立即写入空定义（设计器
+ * GET /definition 对无定义草稿返回 CONFIG_NOT_FOUND，需先落一份空 schema）→
+ * 进入设计器。取消/关闭不产生任何数据。
+ */
+async function goCreate() {
+  let name: string
+  try {
+    const { value } = await ElMessageBox.prompt(t('common.formName'), t('form.newFormTitle'), {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      inputPlaceholder: t('common.formName'),
+      inputValidator: (v: string) => (v && v.trim() ? true : t('form.newFormNameRequired')),
+    })
+    name = value.trim()
+  } catch {
+    return // 用户取消/关闭
+  }
+  try {
+    // formKey 是关联流程/目录绑定的稳定标识，建单时即生成（对齐设计器保存链路）
+    const created = await createFormDef({ formKey: 'form_' + Date.now().toString(36), name })
+    await saveFormConfig(created.id, JSON.stringify({ title: name, fields: [] }))
+    ElMessage.success(t('common.draftSaved'))
+    // P52：用 path 而非 name —— 菜单动态路由与工作台静态路由不同名，
+    // path 直达带 :id 的工作台路由，避免同名替换导致的参数丢失。
+    void router.push(`/form/designer/${created.id}`)
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : t('common.saveFailed'))
+  }
 }
 
 function goEdit(row: FormDefListItem) {
