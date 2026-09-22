@@ -168,8 +168,9 @@ function remove(id: string) {
   grid-auto-flow: row;
   row-gap: 9px;
   min-height: 120px;
-  max-width: 920px;
-  margin: 0 auto;
+  /* V011-BUG-009：画布字段栅格随中栏全宽（不再限宽 920px 居中） */
+  width: 100%;
+  margin: 0;
 }
 
 .field-shell {

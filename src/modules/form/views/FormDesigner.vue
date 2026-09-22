@@ -1047,7 +1047,7 @@ function onSettingsCommand(command: string) {
   color: #9aa6bd;
 }
 
-/* ── 中栏：画布（meta 条 + 白底表单卡 + 12 栏标尺 + 字段栅格 + 底部状态行） ── */
+/* ── 中栏：画布（meta 条 + 白底表单卡 + 字段栅格 + 底部状态行）；V011-BUG-009 画布随中栏填满 ── */
 .designer__canvascol {
   flex: 1 1 auto;
   min-width: 0;
@@ -1063,7 +1063,7 @@ function onSettingsCommand(command: string) {
   flex: 0 0 36px;
   display: flex;
   align-items: center;
-  gap: 70px;
+  gap: 40px;
   color: #8794ae;
   font-size: 12px;
 }
