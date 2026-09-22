@@ -359,6 +359,8 @@ export interface DesignerModel {
   /** 事件订阅（每次变更后触发；轻量订阅者基于快照渲染）。 */
   subscribe(listener: () => void): () => void
   addNode(type: string, label: string, x: number, y: number): string
+  /** V011-BUG-020：在既有连线中间插入节点（原连线拆除，换为 源→新节点→目标 两条）。 */
+  insertNodeOnEdge(edgeId: string, type: string, label: string, x: number, y: number): string | null
   moveNode(id: string, x: number, y: number): void
   connect(sourceId: string, targetId: string): string | null
   removeSelection(): void
@@ -460,12 +462,59 @@ export function createDesignerModel(
           const source = byId.get(edge.sourceId)
           const target = byId.get(edge.targetId)
           if (!source || !target) return edge
-          const [start, end] = resolveEdgeEnds(edge, source, target, designerNodeSize, gatewayRadius)
+          const [start, end] = resolveEdgeEnds(
+            edge,
+            source,
+            target,
+            designerNodeSize,
+            gatewayRadius,
+          )
           return { ...edge, path: buildEdgePath(start, end, edge.waypoints) }
         })
         current = { ...current, nodes, edges, dirty: true }
       }
       emit()
+    },
+    insertNodeOnEdge(edgeId, type, label, x, y) {
+      const edge = current.edges.find((candidate) => candidate.id === edgeId)
+      if (!edge) return null
+      const source = current.nodes.find((node) => node.id === edge.sourceId)
+      const target = current.nodes.find((node) => node.id === edge.targetId)
+      if (!source || !target) return null
+      pushHistory()
+      const nodeId = nextId('node')
+      const inserted: PositionedNode = {
+        id: nodeId,
+        type,
+        label,
+        x,
+        y,
+        coordinateSource: 'explicit',
+        config: { name: label },
+      }
+      const chainEdge = (from: PositionedNode, to: PositionedNode): PositionedEdge => {
+        const [start, end] = edgeEndpoints(from, to, designerNodeSize, gatewayRadius)
+        return {
+          id: nextId('edge'),
+          sourceId: from.id,
+          targetId: to.id,
+          path: buildEdgePath(start, end, []),
+          waypoints: [],
+          config: {},
+        }
+      }
+      current = {
+        ...current,
+        nodes: [...current.nodes, inserted],
+        edges: [
+          ...current.edges.filter((candidate) => candidate.id !== edgeId),
+          chainEdge(source, inserted),
+          chainEdge(inserted, target),
+        ],
+        dirty: true,
+      }
+      emit()
+      return nodeId
     },
     connect(sourceId, targetId) {
       if (!sourceId || !targetId || sourceId === targetId) return null
@@ -544,7 +593,13 @@ export function createDesignerModel(
                   const source = byId.get(edge.sourceId)
                   const target = byId.get(edge.targetId)
                   if (!source || !target) return edge.path
-                  const [start, end] = resolveEdgeEnds(edge, source, target, designerNodeSize, gatewayRadius)
+                  const [start, end] = resolveEdgeEnds(
+                    edge,
+                    source,
+                    target,
+                    designerNodeSize,
+                    gatewayRadius,
+                  )
                   return buildEdgePath(start, end, waypoints)
                 })(),
               }

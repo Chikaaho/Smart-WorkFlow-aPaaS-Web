@@ -27,10 +27,7 @@ import {
 import type { GraphValidationError, ApproverCandidate } from '@/modules/workflow/api'
 import type { BpmNodeCapability, BpmNodeConfigField } from '@/contracts/bpm-node'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
-import {
-  createDesignerModel,
-  buildEdgePath,
-} from '@/adapters/process-graph'
+import { createDesignerModel, buildEdgePath } from '@/adapters/process-graph'
 import type { DesignerModel, PositionedNode } from '@/adapters/process-graph'
 
 const route = useRoute()
@@ -183,20 +180,21 @@ interface NodeListenerMeta {
   bean: string
   note: string
 }
-const nodeMeta = computed<{ nodeKey: string; approveMode: string; approverName: string; listeners: NodeListenerMeta[] }>(
-  () => {
-    const config = (selectedNode.value?.config ?? {}) as Record<string, unknown>
-    const listeners = Array.isArray(config.listeners)
-      ? (config.listeners as NodeListenerMeta[])
-      : []
-    return {
-      nodeKey: typeof config.nodeKey === 'string' ? config.nodeKey : '',
-      approveMode: typeof config.approveMode === 'string' ? config.approveMode : '',
-      approverName: typeof config.approverName === 'string' ? config.approverName : '',
-      listeners,
-    }
-  },
-)
+const nodeMeta = computed<{
+  nodeKey: string
+  approveMode: string
+  approverName: string
+  listeners: NodeListenerMeta[]
+}>(() => {
+  const config = (selectedNode.value?.config ?? {}) as Record<string, unknown>
+  const listeners = Array.isArray(config.listeners) ? (config.listeners as NodeListenerMeta[]) : []
+  return {
+    nodeKey: typeof config.nodeKey === 'string' ? config.nodeKey : '',
+    approveMode: typeof config.approveMode === 'string' ? config.approveMode : '',
+    approverName: typeof config.approverName === 'string' ? config.approverName : '',
+    listeners,
+  }
+})
 
 /* ─────────── 节点/连线交互状态 ─────────── */
 
@@ -375,7 +373,8 @@ function openApproverPicker(fieldKey: string) {
   approverTargetKey.value = fieldKey
   approverPickerVisible.value = true
 }
-function onApproverPicked(candidates: ApproverCandidate[]) {  const fieldKey = approverTargetKey.value
+function onApproverPicked(candidates: ApproverCandidate[]) {
+  const fieldKey = approverTargetKey.value
   if (!fieldKey || candidates.length === 0) return
   const field = selectedCapability.value?.configFields.find((f) => f.key === fieldKey)
   if (field && field.type === 'object') {
@@ -415,7 +414,10 @@ const currentApproverIds = computed<number[]>(() => {
     }
   }
   if (typeof value === 'string') {
-    value = value.split(',').map((part) => part.trim()).filter(Boolean)
+    value = value
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
   }
   if (Array.isArray(value)) {
     return value.map((v) => Number(v)).filter((n) => Number.isFinite(n))
@@ -506,7 +508,23 @@ function onCanvasDrop(event: DragEvent) {
   const point = screenToGraph(event)
   const x = Math.round(point.x / SNAP_X) * SNAP_X
   const y = Math.round(point.y / SNAP_Y) * SNAP_Y
-  const id = model.addNode(capability.type, capability.displayName, x, y)
+  // V011-BUG-020：拖放到连线上 = 在该连线中间插入节点（初始 START→END 线可直接
+  // 「拖入节点」建流程，无需先选中节点再连线）
+  const element = document.elementFromPoint(event.clientX, event.clientY)
+  const edgeId = element?.closest('path[data-edge-id]')?.getAttribute('data-edge-id') ?? null
+  const nodeId = edgeId
+    ? model.insertNodeOnEdge(edgeId, capability.type, capability.displayName, x, y)
+    : model.addNode(capability.type, capability.displayName, x, y)
+  if (nodeId) selectNode(nodeId)
+  snapshot()
+}
+
+/** V011-BUG-020：组件库点击添加（拖拽之外的可见创建路径），落点为画布中心。 */
+function onWorkbarClick(cap: BpmNodeCapability) {
+  if (!cap.supports.design || !model) return
+  const x = Math.round((viewBox.value.x + viewBox.value.w / 2) / SNAP_X) * SNAP_X
+  const y = Math.round((viewBox.value.y + viewBox.value.h / 2) / SNAP_Y) * SNAP_Y
+  const id = model.addNode(cap.type, cap.displayName, x, y)
   selectNode(id)
   snapshot()
 }
@@ -705,7 +723,8 @@ function nodeLabelLines(label: string) {
       </el-button>
       <span class="designer-crumb">
         / {{ graph?.formName || graph?.name || t('router.processDesigner') }} /
-        {{ graph?.name || t('router.processDesigner') }}{{ graph?.version ? ` v${graph.version}` : '' }}
+        {{ graph?.name || t('router.processDesigner')
+        }}{{ graph?.version ? ` v${graph.version}` : '' }}
       </span>
       <nav class="designer-tabs" aria-label="工作区切换">
         <button type="button" class="designer-tab" @click="goBoundFormDesigner">
@@ -718,9 +737,7 @@ function nodeLabelLines(label: string) {
       <!-- 设计09：右侧操作组 = 草稿历史 + 保存 + 发布（撤销/删除/适配保留在画布缩放控件与快捷键） -->
       <div class="toolbar-actions">
         <el-button size="small" class="toolbar-drafts">{{ t('form.draftHistory') }}</el-button>
-        <el-button size="small" :loading="saving" @click="save">{{
-          t('common.save')
-        }}</el-button>
+        <el-button size="small" :loading="saving" @click="save">{{ t('common.save') }}</el-button>
         <el-button size="small" type="primary" :loading="publishing" @click="publish">{{
           t('common.publish')
         }}</el-button>
@@ -745,21 +762,32 @@ function nodeLabelLines(label: string) {
         :class="{ 'workbar-item--disabled': !cap.supports.design }"
         :draggable="cap.supports.design"
         @dragstart="onPaletteDragStart($event, cap)"
+        @click="onWorkbarClick(cap)"
       >
         <svg class="workbar-icon" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
           <template v-if="cap.type === 'START'">
             <path d="M6.667 3.333L16.667 10L6.667 16.667V3.333Z" />
           </template>
           <template v-else-if="cap.type === 'DRAFT'">
-            <path d="M11.667 2.5H3.333V17.5H16.667V7.5H11.667V2.5ZM9.167 13.333L15.833 6.667L17.5 8.333L10.833 15L8.333 15.833L9.167 13.333Z" />
+            <path
+              d="M11.667 2.5H3.333V17.5H16.667V7.5H11.667V2.5ZM9.167 13.333L15.833 6.667L17.5 8.333L10.833 15L8.333 15.833L9.167 13.333Z"
+            />
           </template>
           <template v-else-if="cap.type === 'APPROVAL'">
-            <path d="M17.5 11.667C18.881 11.667 20 10.547 20 9.167C20 7.786 18.881 6.667 17.5 6.667C16.119 6.667 15 7.786 15 9.167C15 10.547 16.119 11.667 17.5 11.667Z" />
-            <path d="M10.833 18.333C10.833 17.228 11.272 16.168 12.054 15.387C12.835 14.606 13.895 14.167 15 14.167C16.105 14.167 17.165 14.606 17.946 15.387C18.728 16.168 19.167 17.228 19.167 18.333" />
+            <path
+              d="M17.5 11.667C18.881 11.667 20 10.547 20 9.167C20 7.786 18.881 6.667 17.5 6.667C16.119 6.667 15 7.786 15 9.167C15 10.547 16.119 11.667 17.5 11.667Z"
+            />
+            <path
+              d="M10.833 18.333C10.833 17.228 11.272 16.168 12.054 15.387C12.835 14.606 13.895 14.167 15 14.167C16.105 14.167 17.165 14.606 17.946 15.387C18.728 16.168 19.167 17.228 19.167 18.333"
+            />
           </template>
           <template v-else-if="cap.type === 'CONSENSUS'">
-            <path d="M12.5 9.167C14.341 9.167 15.833 7.674 15.833 5.833C15.833 3.992 14.341 2.5 12.5 2.5C10.659 2.5 9.167 3.992 9.167 5.833C9.167 7.674 10.659 9.167 12.5 9.167Z" />
-            <path d="M3.333 17.5C3.333 15.732 4.036 14.036 5.286 12.786C6.536 11.536 8.232 10.833 10 10.833C11.768 10.833 13.464 11.536 14.714 12.786C15.964 14.036 16.667 15.732 16.667 17.5" />
+            <path
+              d="M12.5 9.167C14.341 9.167 15.833 7.674 15.833 5.833C15.833 3.992 14.341 2.5 12.5 2.5C10.659 2.5 9.167 3.992 9.167 5.833C9.167 7.674 10.659 9.167 12.5 9.167Z"
+            />
+            <path
+              d="M3.333 17.5C3.333 15.732 4.036 14.036 5.286 12.786C6.536 11.536 8.232 10.833 10 10.833C11.768 10.833 13.464 11.536 14.714 12.786C15.964 14.036 16.667 15.732 16.667 17.5"
+            />
           </template>
           <template v-else-if="cap.type === 'CONDITION'">
             <path d="M12 1.667L20.333 10L12 18.333L3.667 10L12 1.667Z" />
@@ -768,15 +796,23 @@ function nodeLabelLines(label: string) {
             <path d="M11.667 1.667H4.167V18.333H15.833V5.833L11.667 1.667V1.667Z" />
           </template>
           <template v-else-if="cap.type === 'IOT_COMMAND'">
-            <path d="M13.333 5H6.667C5.746 5 5 5.746 5 6.667V13.333C5 14.254 5.746 15 6.667 15H13.333C14.254 15 15 14.254 15 13.333V6.667C15 5.746 14.254 5 13.333 5Z" />
-            <path d="M7.5 1.667V5M12.5 1.667V5M7.5 15V18.333M12.5 15V18.333M1.667 7.5H5M1.667 12.5H5M15 7.5H18.333M15 12.5H18.333" />
+            <path
+              d="M13.333 5H6.667C5.746 5 5 5.746 5 6.667V13.333C5 14.254 5.746 15 6.667 15H13.333C14.254 15 15 14.254 15 13.333V6.667C15 5.746 14.254 5 13.333 5Z"
+            />
+            <path
+              d="M7.5 1.667V5M12.5 1.667V5M7.5 15V18.333M12.5 15V18.333M1.667 7.5H5M1.667 12.5H5M15 7.5H18.333M15 12.5H18.333"
+            />
           </template>
           <template v-else-if="cap.type === 'AGENT'">
-            <path d="M15 4.167H5C3.619 4.167 2.5 5.286 2.5 6.667V14.167C2.5 15.547 3.619 16.667 5 16.667H15C16.381 16.667 17.5 15.547 17.5 14.167V6.667C17.5 5.286 16.381 4.167 15 4.167Z" />
+            <path
+              d="M15 4.167H5C3.619 4.167 2.5 5.286 2.5 6.667V14.167C2.5 15.547 3.619 16.667 5 16.667H15C16.381 16.667 17.5 15.547 17.5 14.167V6.667C17.5 5.286 16.381 4.167 15 4.167Z"
+            />
             <path d="M10 1.667V4.167M6.667 8.333H6.75M13.333 8.333H13.417M6.667 12.5H13.333" />
           </template>
           <template v-else>
-            <path d="M15 3.333H5C4.079 3.333 3.333 4.08 3.333 5V15.833C3.333 16.754 4.079 17.5 5 17.5H15C15.92 17.5 16.667 16.754 16.667 15.833V5C16.667 4.08 15.92 3.333 15 3.333Z" />
+            <path
+              d="M15 3.333H5C4.079 3.333 3.333 4.08 3.333 5V15.833C3.333 16.754 4.079 17.5 5 17.5H15C15.92 17.5 16.667 16.754 16.667 15.833V5C16.667 4.08 15.92 3.333 15 3.333Z"
+            />
             <path d="M6.667 10L9.167 12.5L13.333 7.5M7.5 1.667H12.5V5H7.5V1.667Z" />
           </template>
         </svg>
@@ -790,8 +826,12 @@ function nodeLabelLines(label: string) {
         t('workflow.validateFlow')
       }}</el-button>
       <svg class="workbar-gear" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-        <path d="M10 13.833C11.841 13.833 13.333 12.341 13.333 10.5C13.333 8.659 11.841 7.167 10 7.167C8.159 7.167 6.667 8.659 6.667 10.5C6.667 12.341 8.159 13.833 10 13.833Z" />
-        <path d="M10 2.167V4.667M10 16.333V18.833M1.667 10.5H4.167M15.833 10.5H18.333M4.167 4.667L5.833 6.333M14.167 14.667L15.833 16.333M4.167 16.333L5.833 14.667M14.167 6.333L15.833 4.667" />
+        <path
+          d="M10 13.833C11.841 13.833 13.333 12.341 13.333 10.5C13.333 8.659 11.841 7.167 10 7.167C8.159 7.167 6.667 8.659 6.667 10.5C6.667 12.341 8.159 13.833 10 13.833Z"
+        />
+        <path
+          d="M10 2.167V4.667M10 16.333V18.833M1.667 10.5H4.167M15.833 10.5H18.333M4.167 4.667L5.833 6.333M14.167 14.667L15.833 16.333M4.167 16.333L5.833 14.667M14.167 6.333L15.833 4.667"
+        />
       </svg>
     </div>
 
@@ -845,6 +885,7 @@ function nodeLabelLines(label: string) {
               :class="{ 'designer-edge-selected': selectionId === edge.id }"
               stroke-width="10"
               stroke="transparent"
+              :data-edge-id="edge.id"
               @pointerdown.stop="selectEdge($event, edge.id)"
             />
             <path
@@ -931,17 +972,27 @@ function nodeLabelLines(label: string) {
                 <path d="M7.333 3.667L18.333 11L7.333 18.333V3.667Z" />
               </template>
               <template v-else-if="node.type === 'END'">
-                <path d="M16.5 3.667H5.5C4.488 3.667 3.667 4.488 3.667 5.5V17.417C3.667 18.429 4.488 19.25 5.5 19.25H16.5C17.513 19.25 18.333 18.429 18.333 17.417V5.5C18.333 4.488 17.513 3.667 16.5 3.667Z" />
+                <path
+                  d="M16.5 3.667H5.5C4.488 3.667 3.667 4.488 3.667 5.5V17.417C3.667 18.429 4.488 19.25 5.5 19.25H16.5C17.513 19.25 18.333 18.429 18.333 17.417V5.5C18.333 4.488 17.513 3.667 16.5 3.667Z"
+                />
                 <path d="M7.333 11L10.083 13.75L14.667 8.25M8.25 1.833H13.75V5.5H8.25V1.833Z" />
               </template>
               <template v-else-if="node.config?.nodeClass === 'draft'">
-                <path d="M12.833 2.75H3.667V19.25H18.333V8.25H12.833V2.75ZM10.083 14.667L17.417 7.333L19.25 9.167L11.917 16.5L9.167 17.417L10.083 14.667Z" />
+                <path
+                  d="M12.833 2.75H3.667V19.25H18.333V8.25H12.833V2.75ZM10.083 14.667L17.417 7.333L19.25 9.167L11.917 16.5L9.167 17.417L10.083 14.667Z"
+                />
               </template>
               <template v-else>
-                <path d="M15.583 2.75H3.667C3.16 2.75 2.75 3.16 2.75 3.667V18.333C2.75 18.84 3.16 19.25 3.667 19.25H15.583C16.09 19.25 16.5 18.84 16.5 18.333V3.667C16.5 3.16 16.09 2.75 15.583 2.75Z" />
+                <path
+                  d="M15.583 2.75H3.667C3.16 2.75 2.75 3.16 2.75 3.667V18.333C2.75 18.84 3.16 19.25 3.667 19.25H15.583C16.09 19.25 16.5 18.84 16.5 18.333V3.667C16.5 3.16 16.09 2.75 15.583 2.75Z"
+                />
                 <path d="M5.5 6.417H12.833M5.5 10.083H11M5.5 13.75H9.167" />
-                <path d="M16.5 15.583C18.019 15.583 19.25 14.352 19.25 12.833C19.25 11.315 18.019 10.083 16.5 10.083C14.981 10.083 13.75 11.315 13.75 12.833C13.75 14.352 14.981 15.583 16.5 15.583Z" />
-                <path d="M11.917 20.167C11.917 18.951 12.4 17.785 13.259 16.926C14.119 16.066 15.285 15.583 16.5 15.583C17.716 15.583 18.881 16.066 19.741 16.926C20.601 17.785 21.083 18.951 21.083 20.167" />
+                <path
+                  d="M16.5 15.583C18.019 15.583 19.25 14.352 19.25 12.833C19.25 11.315 18.019 10.083 16.5 10.083C14.981 10.083 13.75 11.315 13.75 12.833C13.75 14.352 14.981 15.583 16.5 15.583Z"
+                />
+                <path
+                  d="M11.917 20.167C11.917 18.951 12.4 17.785 13.259 16.926C14.119 16.066 15.285 15.583 16.5 15.583C17.716 15.583 18.881 16.066 19.741 16.926C20.601 17.785 21.083 18.951 21.083 20.167"
+                />
               </template>
             </g>
             <text
@@ -951,14 +1002,19 @@ function nodeLabelLines(label: string) {
               text-anchor="start"
               class="designer-node-label"
             >
-              <tspan v-for="(line, lineIndex) in nodeLabelLines(node.label)" :key="lineIndex" :x="42" :dy="lineIndex === 0 ? 0 : 17">
+              <tspan
+                v-for="(line, lineIndex) in nodeLabelLines(node.label)"
+                :key="lineIndex"
+                :x="42"
+                :dy="lineIndex === 0 ? 0 : 17"
+              >
                 {{ line }}
               </tspan>
             </text>
-              <text
-                v-else
-                x="54"
-                y="41.5"
+            <text
+              v-else
+              x="54"
+              y="41.5"
               text-anchor="start"
               class="designer-node-label designer-node-label--gateway"
             >
@@ -998,14 +1054,23 @@ function nodeLabelLines(label: string) {
             <el-form-item v-if="nodeMeta.approveMode" :label="t('workflow.approveModeLabel')">
               <el-input :model-value="nodeMeta.approveMode" disabled />
             </el-form-item>
-            <template v-for="field in (selectedCapability?.configFields ?? []).filter((f) => f.key !== 'name')" :key="field.key">
+            <template
+              v-for="field in (selectedCapability?.configFields ?? []).filter(
+                (f) => f.key !== 'name',
+              )"
+              :key="field.key"
+            >
               <!-- name 已由顶部「节点名称」编辑项承载，能力注册表同名项不再重复渲染 -->
               <el-form-item v-if="isApproverSelectionField(field)" :label="field.label">
                 <!-- 设计09：已解析审批人（config.approverName）以 chip+按钮呈现；未解析回退输入框 -->
                 <div v-if="nodeMeta.approverName" class="approver-card">
                   <div class="approver-card__row">
                     <span class="approver-card__chip">{{ nodeMeta.approverName }}</span>
-                    <el-button size="small" class="approver-card__pick" @click="openApproverPicker(field.key)">
+                    <el-button
+                      size="small"
+                      class="approver-card__pick"
+                      @click="openApproverPicker(field.key)"
+                    >
                       {{ t('workflow.selectApprover') }}
                     </el-button>
                   </div>
@@ -1071,7 +1136,11 @@ function nodeLabelLines(label: string) {
               class="listener-row"
             >
               <span class="listener-row__phase" :class="'listener-row__phase--' + listener.phase">
-                {{ listener.phase === 'before' ? t('workflow.listenerBefore') : t('workflow.listenerAfter') }}
+                {{
+                  listener.phase === 'before'
+                    ? t('workflow.listenerBefore')
+                    : t('workflow.listenerAfter')
+                }}
               </span>
               <span class="listener-row__desc">{{ listener.label }}</span>
               <span v-if="listener.bean" class="listener-row__bean">{{ listener.bean }}</span>
@@ -1169,7 +1238,9 @@ function nodeLabelLines(label: string) {
       <template #footer>
         <div class="advanced-config-footer">
           <el-button size="small" @click="advancedConfigVisible = false"
-            >&nbsp;&nbsp;&nbsp;&nbsp;{{ t('common.cancel') }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</el-button
+            >&nbsp;&nbsp;&nbsp;&nbsp;{{
+              t('common.cancel')
+            }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</el-button
           >
           <el-button
             size="small"
@@ -1177,7 +1248,9 @@ function nodeLabelLines(label: string) {
             class="advanced-config-save"
             :loading="saving"
             @click="onSaveAdvancedConfig"
-            >&nbsp;&nbsp;&nbsp;&nbsp;{{ t('workflow.advSaveConfig') }}&nbsp;&nbsp;&nbsp;&nbsp;</el-button
+            >&nbsp;&nbsp;&nbsp;&nbsp;{{
+              t('workflow.advSaveConfig')
+            }}&nbsp;&nbsp;&nbsp;&nbsp;</el-button
           >
         </div>
       </template>
