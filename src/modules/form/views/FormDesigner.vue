@@ -23,9 +23,14 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
-import { Setting } from '@element-plus/icons-vue'
+import { Back, Setting } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormSchema, FormSchemaField, TableSubField, VisibilityRule } from '@/contracts/form-schema'
+import type {
+  FormSchema,
+  FormSchemaField,
+  TableSubField,
+  VisibilityRule,
+} from '@/contracts/form-schema'
 import FieldPalette from '../designer/FieldPalette.vue'
 import DesignerCanvas from '../designer/DesignerCanvas.vue'
 import FieldConfigPanel from '../designer/FieldConfigPanel.vue'
@@ -34,6 +39,7 @@ import PreviewModal from '../designer/PreviewModal.vue'
 import HistoryVersionsDialog from '../designer/HistoryVersionsDialog.vue'
 import RelatedProcessesPanel from '../designer/RelatedProcessesPanel.vue'
 import { saveDraftDefinition, publishDefinition as publishDef } from '../designer/draft-actions'
+import { listCategories, queryCatalogItems } from '@/modules/workflow/api/oa'
 import {
   resolveSaveState,
   saveStateKey,
@@ -160,6 +166,11 @@ function renameInRule(rule: VisibilityRule, from: string, to: string): Visibilit
   }
 }
 
+/** 面包屑文本（V011-BUG-011）：所属分类 → 表单名；未分类/未绑定目录项时仅表单名。 */
+const breadcrumbText = computed(() => {
+  const name = title.value || t('common.untitledForm')
+  return categoryName.value ? `${categoryName.value} / ${name}` : name
+})
 
 /** 选中字段显隐规则（null=未配置），供配置面板回显。 */
 const selectedRule = computed<VisibilityRule | null>(() => {
@@ -226,6 +237,7 @@ async function loadForm(id: string) {
     items.value = definitionToItems(schema)
     visibilityRules.value = schema.rules?.visibility ? [...schema.rules.visibility] : []
     rejected.value = false
+    void loadBreadcrumbCategory()
     await nextTick()
     baselineJson.value = JSON.stringify(buildDefinition())
     savedAtText.value = formatClock(new Date())
@@ -581,9 +593,28 @@ function backToList() {
 function onSettingsCommand(command: string) {
   if (command === 'field-list') {
     fieldsDialogVisible.value = true
-    return
   }
-  backToList()
+}
+
+/* ── V011-BUG-011：面包屑分类（可发起事项目录反查 formKey 所属分类） ── */
+const categoryName = ref<string | null>(null)
+const breadcrumbLoadedFor = ref('')
+
+async function loadBreadcrumbCategory() {
+  if (!formKey.value || breadcrumbLoadedFor.value === formKey.value) return
+  breadcrumbLoadedFor.value = formKey.value
+  try {
+    const [categories, itemsPage] = await Promise.all([
+      listCategories(),
+      queryCatalogItems({ pageNum: 1, pageSize: 200 }),
+    ])
+    const item = itemsPage.list.find((it) => it.formKey === formKey.value)
+    categoryName.value = item?.categoryId
+      ? (categories.find((c) => c.id === item.categoryId)?.name ?? null)
+      : null
+  } catch {
+    categoryName.value = null
+  }
 }
 </script>
 
@@ -593,6 +624,11 @@ function onSettingsCommand(command: string) {
          P53 节点07：左「设置 + 面包屑」/ 中工作区页签 / 右保存状态与操作组 -->
     <header v-if="!rejected" class="designer__workbench">
       <div class="designer__crumb">
+        <!-- V011-BUG-017：返回表单列表放为显式入口，不再藏在设置下拉里 -->
+        <el-button class="designer__back" @click="backToList">
+          <el-icon><Back /></el-icon>
+          <span>{{ t('form.backToList') }}</span>
+        </el-button>
         <el-dropdown class="designer__settings-menu" trigger="click" @command="onSettingsCommand">
           <el-button class="designer__settings">
             <el-icon><Setting /></el-icon>
@@ -601,11 +637,19 @@ function onSettingsCommand(command: string) {
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="field-list">{{ t('fieldList.button') }}</el-dropdown-item>
-              <el-dropdown-item command="back-to-list">{{ t('form.backToList') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <span class="designer__crumb-path">/ {{ title }} / {{ t('form.breadcrumbEdit') }}</span>
+        <!-- V011-BUG-010：保存状态从动作组移到左侧信息簇，动作组只留可点按钮 -->
+        <span class="designer__save-state" :class="'designer__save-state--' + saveState">
+          {{
+            saveState === 'unchanged'
+              ? t('form.draftSavedAt', { time: savedAtText })
+              : t(saveStateKey(saveState))
+          }}
+        </span>
+        <!-- V011-BUG-011：面包屑=所属分类（可发起事项目录反查）→ 表单名 -->
+        <span class="designer__crumb-path">/ {{ breadcrumbText }}</span>
       </div>
 
       <nav class="designer__tabs" aria-label="工作区切换">
@@ -628,13 +672,6 @@ function onSettingsCommand(command: string) {
       </nav>
 
       <div class="designer__actions">
-        <span class="designer__save-state" :class="'designer__save-state--' + saveState">
-          {{
-            saveState === 'unchanged'
-              ? t('form.draftSavedAt', { time: savedAtText })
-              : t(saveStateKey(saveState))
-          }}
-        </span>
         <el-button :disabled="!formId" @click="historyVisible = true">{{
           t('form.draftHistoryEntry')
         }}</el-button>
@@ -818,25 +855,38 @@ function onSettingsCommand(command: string) {
   position: relative;
 }
 
-/* ═══ 顶部工具条（节点 07：56px 白底，左设置+面包屑 / 中 tab / 右操作组） ═══ */
+/* ═══ 顶部工具条（节点 07：56px 白底；V011-BUG-010/012 重排：左信息簇 / 中居中 tab / 右动作组） ═══ */
 .designer__workbench {
   box-sizing: border-box;
   height: 56px;
   flex: 0 0 56px;
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 20px;
   padding: 0 20px;
   border-bottom: 1px solid #dde3ef;
   background: #fff;
+  position: relative;
 }
 
-/* 左侧：设置按钮 + 面包屑（事项编辑上下文） */
+/* 左侧：返回 + 设置 + 保存状态 + 面包屑（V011-BUG-010 信息簇） */
 .designer__crumb {
   display: flex;
   align-items: center;
-  gap: 33px;
+  gap: 14px;
   min-width: 0;
+}
+
+/* V011-BUG-017：返回表单列表为显式入口 */
+.designer__back {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #303a55;
+}
+.designer__back :deep(.el-icon) {
+  margin-right: 4px;
 }
 
 .designer__settings {
@@ -865,13 +915,15 @@ function onSettingsCommand(command: string) {
   text-overflow: ellipsis;
 }
 
-/* 表单设计 / 流程设计 tab：设计稿为纯文字态，激活项品牌色 + 2px 下划线（节点 07/08） */
+/* 表单设计 / 流程设计 tab：V011-BUG-012 在工具条内水平居中 */
 .designer__tabs {
-  flex: 0 0 auto;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   height: 48px;
-  margin-left: 234px;
   gap: 24px;
 }
 
