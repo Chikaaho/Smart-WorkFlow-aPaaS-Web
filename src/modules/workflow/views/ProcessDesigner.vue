@@ -1558,6 +1558,7 @@ function nodeLabelLines(label: string) {
 
 /* ── 顶栏（fixture workbar：56px 白底 + 紧凑操作组） ── */
 .designer-toolbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1645,7 +1646,14 @@ function nodeLabelLines(label: string) {
 .spacer {
   flex: 1;
 }
-/* 设计09：工作区页签（纯文字 + active 下划线，与表单设计器页签同款） */
+/* 设计09：工作区页签以整条顶栏为基准水平居中（纯文字 + active 下划线） */
+.designer-tabs {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  display: flex;
+  transform: translateX(-50%);
+}
 .designer-tab {
   height: 56px;
   padding: 0 34px;
