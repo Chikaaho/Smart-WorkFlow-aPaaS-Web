@@ -121,6 +121,23 @@ describe('createDesignerModel', () => {
     expect(model.insertNodeOnEdge('edge_missing', 'APPROVAL', '审批', 400, 300)).toBeNull()
   })
 
+  it('V011-BUG-025：setEdgeEndpoint 改接端点重算 path；自环/重复边拒绝', () => {
+    const model = createDesignerModel(baseGraph())
+    const extraId = model.addNode('APPROVAL', '审批', 400, 500)
+    expect(model.setEdgeEndpoint('edge_1', 'target', extraId)).toBe('edge_1')
+    const state = model.state()
+    const edge = state.edges.find((candidate) => candidate.id === 'edge_1')
+    expect(edge?.sourceId).toBe('node_start')
+    expect(edge?.targetId).toBe(extraId)
+    expect(edge?.path.startsWith('M ')).toBe(true)
+    // 自环禁止：源改接为目标同节点
+    expect(model.setEdgeEndpoint('edge_1', 'source', extraId)).toBeNull()
+    // 改回原对（此时无重复）合法，用于构造重复场景
+    expect(model.setEdgeEndpoint('edge_1', 'target', 'node_end')).toBe('edge_1')
+    expect(model.connect('node_start', extraId)).not.toBeNull()
+    expect(model.setEdgeEndpoint('edge_1', 'target', extraId)).toBeNull()
+  })
+
   it('删除节点连带删除相连边；undo 恢复', () => {
     const model = createDesignerModel(baseGraph())
     const approvalId = model.addNode('APPROVAL', '第二审批', 400, 300)

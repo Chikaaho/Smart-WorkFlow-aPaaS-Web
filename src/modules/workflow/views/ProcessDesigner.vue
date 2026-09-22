@@ -28,7 +28,8 @@ import type { GraphValidationError, ApproverCandidate } from '@/modules/workflow
 import type { BpmNodeCapability, BpmNodeConfigField } from '@/contracts/bpm-node'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import { createDesignerModel, buildEdgePath } from '@/adapters/process-graph'
-import type { DesignerModel, PositionedNode } from '@/adapters/process-graph'
+import type { DesignerModel, PositionedEdge, PositionedNode } from '@/adapters/process-graph'
+import type { ProcessGraphWaypoint } from '@/contracts/process-graph'
 
 const route = useRoute()
 const router = useRouter()
@@ -208,7 +209,23 @@ const pendingConnectStartScreen = ref<{ x: number; y: number } | null>(null)
 
 function onWheel(event: WheelEvent) {
   event.preventDefault()
-  zoomView(event.deltaY > 0 ? 1.1 : 1 / 1.1)
+  // V011-BUG-024：滚轮/触控板滑动=平移画布（Shift=横向、deltaX 跟随触控板）；
+  // Ctrl/Cmd+滚轮（触控板捏合合成 ctrlKey）=缩放，与缩放控件/适应画布并存。
+  if (event.ctrlKey || event.metaKey) {
+    zoomView(event.deltaY > 0 ? 1.1 : 1 / 1.1)
+    return
+  }
+  const svgEl = svgRef.value
+  if (!svgEl) return
+  const rect = svgEl.getBoundingClientRect()
+  const ratio = viewBox.value.w / rect.width
+  const dx = event.shiftKey ? event.deltaY : event.deltaX
+  const dy = event.shiftKey ? 0 : event.deltaY
+  viewBox.value = {
+    ...viewBox.value,
+    x: viewBox.value.x - dx * ratio,
+    y: viewBox.value.y - dy * ratio,
+  }
 }
 
 function onBgPointerDown(event: PointerEvent) {
@@ -250,6 +267,22 @@ function onPointerMove(event: PointerEvent) {
   if (pendingConnectNode.value) {
     pendingConnectTarget.value = screenToGraph(event)
   }
+  // V011-BUG-025 连线编辑：端点拖拽预览 / 拐点拖动实时改形
+  if (edgeEdit.value && model) {
+    const edit = edgeEdit.value
+    const p = screenToGraph(event)
+    if (edit.kind === 'waypoint') {
+      const edge = model.state().edges.find((candidate) => candidate.id === edit.edgeId)
+      if (edge) {
+        const next = [...edge.waypoints]
+        next[edit.activeIndex] = p
+        model.setEdgeWaypoints(edge.id, next)
+        snapshot()
+      }
+      return
+    }
+    edgeEditPoint.value = p
+  }
 }
 
 function clickedOnSourcePort(start: { x: number; y: number } | null, event: PointerEvent): boolean {
@@ -282,6 +315,24 @@ function resolveConnectDropTarget(event: PointerEvent): string | null {
 }
 
 function onPointerUp(event: PointerEvent) {
+  // V011-BUG-025：连线编辑收尾——端点落点改接（自环/重复边/空放均还原），拐点已实时落模型
+  if (edgeEdit.value && model) {
+    const edit = edgeEdit.value
+    if (edit.kind === 'endpoint') {
+      const targetId = resolveConnectDropTarget(event)
+      const applied =
+        targetId && targetId !== edit.otherEndId
+          ? model.setEdgeEndpoint(edit.edgeId, edit.which ?? 'target', targetId)
+          : null
+      if (applied) snapshot()
+    }
+    edgeEdit.value = null
+    edgeEditFrom.value = null
+    edgeEditPoint.value = null
+    panSession.value = null
+    dragState.value = null
+    return
+  }
   // 连线落点统一判定（拖放与 sticky 点选共用）：
   // 命中其他节点 → 建立连线；仍点在源锚上 → sticky 挂起；其余 → 取消
   if (pendingConnectNode.value && model) {
@@ -338,13 +389,32 @@ function onNodePointerUp(event: PointerEvent, node: PositionedNode) {
   void event
 }
 
-/** 从节点右侧连接锚发起连线（§4.1 连线建立）。
- * 双模式：拖到目标节点放下，或点击锚后（sticky）再点击目标节点完成连接。 */
-function startConnect(event: PointerEvent, node: PositionedNode) {
+/** 节点四向锚点坐标（V011-BUG-023）：上下左右缘中点。 */
+function sidePoint(node: PositionedNode, side: 'left' | 'right' | 'top' | 'bottom') {
+  switch (side) {
+    case 'left':
+      return { x: node.x - P53_NODE_WIDTH / 2, y: node.y }
+    case 'right':
+      return { x: node.x + P53_NODE_WIDTH / 2, y: node.y }
+    case 'top':
+      return { x: node.x, y: node.y - P53_NODE_HEIGHT / 2 }
+    default:
+      return { x: node.x, y: node.y + P53_NODE_HEIGHT / 2 }
+  }
+}
+
+/** 从节点四向锚点发起连线（V011-BUG-023，ProcessOn 口径）。
+ * 双模式：拖到目标节点放下，或点击锚后（sticky）再点击目标节点完成连接；
+ * 预览/连线端点侧由 edgeEndpoints 按几何方向自动选择。 */
+function startConnect(
+  event: PointerEvent,
+  node: PositionedNode,
+  side: 'left' | 'right' | 'top' | 'bottom',
+) {
   event.stopPropagation()
   const point = screenToGraph(event)
   pendingConnectNode.value = node.id
-  pendingConnectPos.value = { x: node.x, y: node.y }
+  pendingConnectPos.value = sidePoint(node, side)
   pendingConnectTarget.value = point
   pendingConnectStartScreen.value = { x: event.clientX, y: event.clientY }
 }
@@ -355,6 +425,126 @@ function selectEdge(event: PointerEvent, edgeId: string) {
   selectionId.value = edgeId
   model?.select(edgeId)
 }
+
+/* ── V011-BUG-025 连线编辑：端点拖拽改接 / 线上按住拖动插入·移动拐点 ── */
+
+type PathPoint = { x: number; y: number }
+
+/** 解析折线 path d（M/L 序列）为点序列。 */
+function pathPoints(d: string): PathPoint[] {
+  const points: PathPoint[] = []
+  const re = /[ML]\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g
+  let match = re.exec(d)
+  while (match) {
+    points.push({ x: Number(match[1]), y: Number(match[2]) })
+    match = re.exec(d)
+  }
+  return points
+}
+
+function pointDist(a: PathPoint, b: PathPoint) {
+  return Math.hypot(a.x - b.x, a.y - b.y)
+}
+
+/** 点到线段距离与所在段下标（points[i]→points[i+1] 为第 i 段）。 */
+function nearestSegment(points: PathPoint[], p: PathPoint) {
+  let best = Number.MAX_SAFE_INTEGER
+  let idx = 0
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i]
+    const b = points[i + 1]
+    const abx = b.x - a.x
+    const aby = b.y - a.y
+    const len2 = abx * abx + aby * aby
+    const t = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2))
+    const d = Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + t * aby))
+    if (d < best) {
+      best = d
+      idx = i
+    }
+  }
+  return idx
+}
+
+const edgeEdit = ref<null | {
+  edgeId: string
+  kind: 'endpoint' | 'waypoint'
+  which?: 'source' | 'target'
+  otherEndId: string
+  originalWaypoints: ProcessGraphWaypoint[]
+  activeIndex: number
+}>(null)
+/** 端点拖拽预览：起点（对端固定点）与指针跟随点。 */
+const edgeEditFrom = ref<PathPoint | null>(null)
+const edgeEditPoint = ref<PathPoint | null>(null)
+
+function beginEndpointDrag(event: PointerEvent, edge: PositionedEdge, which: 'source' | 'target') {
+  const points = pathPoints(edge.path)
+  if (points.length < 2) return
+  edgeEdit.value = {
+    edgeId: edge.id,
+    kind: 'endpoint',
+    which,
+    otherEndId: which === 'source' ? edge.targetId : edge.sourceId,
+    originalWaypoints: [...edge.waypoints],
+    activeIndex: -1,
+  }
+  edgeEditFrom.value = which === 'source' ? points[points.length - 1] : points[0]
+  edgeEditPoint.value = screenToGraph(event)
+}
+
+function beginWaypointDragFrom(edge: PositionedEdge, index: number) {
+  edgeEdit.value = {
+    edgeId: edge.id,
+    kind: 'waypoint',
+    otherEndId: '',
+    originalWaypoints: edge.waypoints.map((point) => ({ ...point })),
+    activeIndex: index,
+  }
+}
+
+// （模板拐点手柄与线内命中复用 beginWaypointDragFrom；originalWaypoints 供空放还原）
+
+/** 选中连线按下：端点命中→改接拖拽；拐点命中→移动；否则最近线段插入拐点
+ * （插入点在线上，形状先不变，拖动才变形）。 */
+function onEdgePointerDown(event: PointerEvent, edge: PositionedEdge) {
+  const alreadySelected = selectionId.value === edge.id
+  selectEdge(event, edge.id)
+  if (!alreadySelected) return
+  if (!model) return
+  const p = screenToGraph(event)
+  const points = pathPoints(edge.path)
+  if (points.length < 2) return
+  if (pointDist(p, points[0]) < 12) {
+    beginEndpointDrag(event, edge, 'source')
+    return
+  }
+  if (pointDist(p, points[points.length - 1]) < 12) {
+    beginEndpointDrag(event, edge, 'target')
+    return
+  }
+  for (let i = 0; i < edge.waypoints.length; i++) {
+    if (pointDist(p, edge.waypoints[i]) < 10) {
+      beginWaypointDragFrom(edge, i)
+      return
+    }
+  }
+  const segIdx = nearestSegment(points, p)
+  const next = [...edge.waypoints]
+  next.splice(segIdx, 0, p)
+  const originalWaypoints = edge.waypoints.map((point) => ({ ...point }))
+  model.setEdgeWaypoints(edge.id, next)
+  edgeEdit.value = {
+    edgeId: edge.id,
+    kind: 'waypoint',
+    otherEndId: '',
+    originalWaypoints,
+    activeIndex: segIdx,
+  }
+  snapshot()
+}
+
+// （命中既有拐点直接复用 beginWaypointDragFrom：保留 originalWaypoints 供空放还原）
 
 /* ─────────── 面板/属性 ─────────── */
 
@@ -886,7 +1076,7 @@ function nodeLabelLines(label: string) {
               stroke-width="10"
               stroke="transparent"
               :data-edge-id="edge.id"
-              @pointerdown.stop="selectEdge($event, edge.id)"
+              @pointerdown.stop="onEdgePointerDown($event, edge)"
             />
             <path
               :d="edge.path"
@@ -906,6 +1096,14 @@ function nodeLabelLines(label: string) {
                 [],
               )
             "
+            fill="none"
+            class="designer-edge-pending"
+            stroke-dasharray="6 4"
+          />
+          <!-- V011-BUG-025：端点拖拽预览（对端固定 → 指针） -->
+          <path
+            v-if="edgeEdit?.kind === 'endpoint' && edgeEditFrom && edgeEditPoint"
+            :d="buildEdgePath(edgeEditFrom, edgeEditPoint, [])"
             fill="none"
             class="designer-edge-pending"
             stroke-dasharray="6 4"
@@ -945,14 +1143,14 @@ function nodeLabelLines(label: string) {
               />
               <path d="M22 10 V34 M10 22 H34" class="designer-node-gateway-plus" />
             </template>
-            <!-- 设计09：连接点仅选中节点呈现（左右缘空心锚点；右侧为拖拽连线入口） -->
+            <!-- V011-BUG-023：四向锚点（上下左右缘中点）均可拖拽/点选拉线（ProcessOn 口径） -->
             <circle
               v-if="selectionId === node.id && node.type !== 'GATEWAY'"
               cx="0"
               :cy="P53_NODE_HEIGHT / 2"
               r="3"
               class="designer-node-port"
-              pointer-events="none"
+              @pointerdown.stop="startConnect($event, node, 'left')"
             />
             <circle
               v-if="selectionId === node.id && node.type !== 'GATEWAY'"
@@ -960,7 +1158,23 @@ function nodeLabelLines(label: string) {
               :cy="P53_NODE_HEIGHT / 2"
               r="3"
               class="designer-node-port"
-              @pointerdown.stop="startConnect($event, node)"
+              @pointerdown.stop="startConnect($event, node, 'right')"
+            />
+            <circle
+              v-if="selectionId === node.id && node.type !== 'GATEWAY'"
+              :cx="P53_NODE_WIDTH / 2"
+              cy="0"
+              r="3"
+              class="designer-node-port"
+              @pointerdown.stop="startConnect($event, node, 'top')"
+            />
+            <circle
+              v-if="selectionId === node.id && node.type !== 'GATEWAY'"
+              :cx="P53_NODE_WIDTH / 2"
+              :cy="P53_NODE_HEIGHT"
+              r="3"
+              class="designer-node-port"
+              @pointerdown.stop="startConnect($event, node, 'bottom')"
             />
             <!-- 设计09：节点图标为锁定 SVG 矢量字形（22×22，起点 (12,14)） -->
             <g
@@ -1021,6 +1235,34 @@ function nodeLabelLines(label: string) {
               {{ node.label }}
             </text>
           </g>
+          <!-- V011-BUG-025：把连线编辑手柄放在节点之后，确保端点不被节点盒遮挡。 -->
+          <template v-for="edge in canvasEdges" :key="'handles-' + edge.id">
+            <template v-if="selectionId === edge.id">
+              <circle
+                v-for="(wp, wpIndex) in edge.waypoints"
+                :key="'wp-' + edge.id + '-' + wpIndex"
+                :cx="wp.x"
+                :cy="wp.y"
+                r="4.5"
+                class="designer-edge-waypoint"
+                @pointerdown.stop="beginWaypointDragFrom(edge, wpIndex)"
+              />
+              <circle
+                :cx="pathPoints(edge.path)[0]?.x ?? 0"
+                :cy="pathPoints(edge.path)[0]?.y ?? 0"
+                r="5"
+                class="designer-edge-endpoint"
+                @pointerdown.stop="beginEndpointDrag($event, edge, 'source')"
+              />
+              <circle
+                :cx="pathPoints(edge.path)[pathPoints(edge.path).length - 1]?.x ?? 0"
+                :cy="pathPoints(edge.path)[pathPoints(edge.path).length - 1]?.y ?? 0"
+                r="5"
+                class="designer-edge-endpoint"
+                @pointerdown.stop="beginEndpointDrag($event, edge, 'target')"
+              />
+            </template>
+          </template>
         </svg>
         <div class="canvas-zoom">
           <button type="button" class="zoom-btn" @click="zoomView(1 / 1.1)">−</button>
@@ -1664,6 +1906,22 @@ function nodeLabelLines(label: string) {
   stroke: #6f2dff;
   stroke-width: 1.5;
   cursor: crosshair;
+}
+.designer-edge-waypoint,
+.designer-edge-endpoint {
+  fill: #fff;
+  stroke: #6f2dff;
+  stroke-width: 1.8;
+  pointer-events: all;
+  cursor: grab;
+}
+.designer-edge-waypoint:active,
+.designer-edge-endpoint:active {
+  cursor: grabbing;
+}
+.designer-edge-endpoint {
+  fill: #f7f2ff;
+  stroke-width: 2;
 }
 
 /* ── 连线（fixture：#A4ADBE 1.6 + 同色箭头） ── */

@@ -2255,7 +2255,7 @@ export default {
     listenerAfter: 'after',
     listenerAdd: 'Add listener',
     canvasInteractionHint:
-      "Click or drag to place nodes · drop onto a connection to insert · drag a selected node's anchor to connect · Delete removes",
+      'Click or drag to place nodes · drop onto a connection to insert · drag any of the four anchors to connect · drag an endpoint to re-attach · hold a line to bend · Delete removes',
     design: 'Design',
     deleteSelected: 'Delete selected',
     activeNode: 'Active nodes',

@@ -2158,7 +2158,7 @@ export default {
     listenerAfter: 'after',
     listenerAdd: '添加监听器',
     canvasInteractionHint:
-      '点击或拖入节点添加 · 拖到连线中间直接插入 · 选中节点拖右侧锚点连线 · Delete 删除',
+      '点击或拖入节点添加 · 拖到连线中间直接插入 · 选中节点四向锚点拉线 · 拖连线端点改接 · 按住连线拖动拐弯 · Delete 删除',
     design: '设计',
     deleteSelected: '删除所选',
     activeNode: '活跃节点',

@@ -367,6 +367,8 @@ export interface DesignerModel {
   select(id: string | null): void
   updateNodeConfig(id: string, patch: Record<string, unknown>): void
   setEdgeWaypoints(id: string, waypoints: ProcessGraphWaypoint[]): void
+  /** V011-BUG-025：拖动端点改接其他节点（自环/重复边校验；空放回退由调用方处理）。 */
+  setEdgeEndpoint(id: string, which: 'source' | 'target', nodeId: string): string | null
   undo(): void
   canUndo(): boolean
   serialize(): ProcessGraphDocument
@@ -608,6 +610,60 @@ export function createDesignerModel(
         dirty: true,
       }
       emit()
+    },
+    /** V011-BUG-025：端点改接。校验：目标存在、不接向对端（自环禁止）、
+     * 改接后不得与既有边重复（双向判定）；改接侧显式锚点失效（config 清除，
+     * 走几何端口规则重算）；既有 waypoints 保留。 */
+    setEdgeEndpoint(edgeId, which, nodeId) {
+      const edge = current.edges.find((candidate) => candidate.id === edgeId)
+      if (!edge) return null
+      const otherEnd = which === 'source' ? edge.targetId : edge.sourceId
+      if (nodeId === otherEnd) return null
+      const byId = new Map(current.nodes.map((node) => [node.id, node] as const))
+      const node = byId.get(nodeId)
+      if (!node) return null
+      const exists = current.edges.some(
+        (candidate) =>
+          candidate.id !== edgeId &&
+          ((candidate.sourceId === nodeId && candidate.targetId === otherEnd) ||
+            (candidate.sourceId === otherEnd && candidate.targetId === nodeId)),
+      )
+      if (exists) return null
+      pushHistory()
+      const config = { ...edge.config }
+      delete config[which === 'source' ? 'sourceAnchor' : 'targetAnchor']
+      const nextEdge = {
+        ...edge,
+        sourceId: which === 'source' ? nodeId : edge.sourceId,
+        targetId: which === 'target' ? nodeId : edge.targetId,
+        config,
+      }
+      const source = byId.get(nextEdge.sourceId)
+      const target = byId.get(nextEdge.targetId)
+      current = {
+        ...current,
+        edges: current.edges.map((candidate) =>
+          candidate.id === edgeId
+            ? {
+                ...nextEdge,
+                path: (() => {
+                  if (!source || !target) return candidate.path
+                  const [start, end] = resolveEdgeEnds(
+                    nextEdge,
+                    source,
+                    target,
+                    designerNodeSize,
+                    gatewayRadius,
+                  )
+                  return buildEdgePath(start, end, nextEdge.waypoints)
+                })(),
+              }
+            : candidate,
+        ),
+        dirty: true,
+      }
+      emit()
+      return edgeId
     },
     undo() {
       const previous = history.pop()
