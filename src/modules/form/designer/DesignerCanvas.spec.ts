@@ -48,14 +48,15 @@ function mountCanvas(items: DesignerItem[], selectedId: string | null = null) {
 }
 
 describe('DesignerCanvas (WYSIWYG)', () => {
-  it('renders one shell + type badge per item', () => {
+  it('renders one shell per item without hover type/name badges（V011-BUG-007）', () => {
     const wrapper = mountCanvas([
       item('di_1', 'username', { type: 'TEXT' }),
       item('di_2', 'age', { type: 'NUMBER' }),
     ])
     expect(wrapper.findAll('.field-shell')).toHaveLength(2)
-    const badges = wrapper.findAll('.field-shell__type').map((b) => b.text())
-    expect(badges).toEqual(['单行文本', '数字'])
+    // V011-BUG-007：类型/字段标识文本不再悬浮展示
+    expect(wrapper.findAll('.field-shell__type')).toHaveLength(0)
+    expect(wrapper.findAll('.field-shell__name')).toHaveLength(0)
   })
 
   it('feeds each FormPreview a single-field design schema', () => {

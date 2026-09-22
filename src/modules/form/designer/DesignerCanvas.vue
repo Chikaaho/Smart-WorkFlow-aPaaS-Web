@@ -13,11 +13,10 @@ const { t } = useI18n()
  *
  * 红线：真控件渲染只调 adapters 暴露的 FormPreview（design 态），modules/ 侧画布只管
  * 拖拽/排序/选中/删除的壳，**零 import @form-create/***。
- * 类型徽标读注册表派生（getFieldTypeDescriptor），不写死 8 类。
+ * V011-BUG-007：hover 条不再展示类型/字段标识文本，仅保留拖拽手柄与删除。
  */
 import { VueDraggable } from 'vue-draggable-plus'
 import { Delete, Rank } from '@element-plus/icons-vue'
-import { getFieldTypeDescriptor } from './field-types'
 import type { DesignerItem } from './types'
 import type { FormSchema } from '@/contracts/form-schema'
 import FormPreview from '@/adapters/form-designer/FormPreview.vue'
@@ -53,10 +52,6 @@ function subFieldCount(item: DesignerItem): number {
 function editTable(id: string) {
   if (props.readonly) return
   emit('editTable', id)
-}
-
-function typeLabel(item: DesignerItem): string {
-  return getFieldTypeDescriptor(item.field.type)?.label ?? item.field.type
 }
 
 /**
@@ -112,18 +107,12 @@ function remove(id: string) {
         :data-field-name="item.field.name"
         @click="select(item.id)"
       >
-        <!-- 选中态：设计稿为右上角档位徽标；拖拽/删除条仅在 hover 悬浮态出现 -->
-        <span
-          v-if="item.id === selectedId && !readonly"
-          class="field-shell__span-badge"
-          >{{ t('form.spanBadge', { n: Math.round(getFormFieldColSpan(item.field) / 2) }) }}</span
-        >
+        <!-- V011-BUG-007：hover 条只保留拖拽手柄与删除；类型/字段标识文本不再悬浮展示
+            （V011-BUG-008：选中档位徽标同步移除，宽度在右侧属性面板查看） -->
         <div class="field-shell__bar">
           <span class="field-shell__handle" :title="t('form.dragToSort')">
             <el-icon><Rank /></el-icon>
           </span>
-          <span class="field-shell__type">{{ typeLabel(item) }}</span>
-          <span class="field-shell__name">{{ item.field.name }}</span>
           <el-button
             v-if="!readonly"
             class="field-shell__del"
@@ -216,28 +205,16 @@ function remove(id: string) {
   right: 11px;
   left: 11px;
   align-items: center;
+  justify-content: space-between;
   gap: var(--sw-space-8);
   height: 24px;
-  
+
   opacity: 0;
   transition: opacity 0.15s;
 }
 
 .field-shell:hover .field-shell__bar {
   opacity: 1;
-}
-
-/* 选中态档位徽标（设计 07：右上角 6 / 12 档） */
-.field-shell__span-badge {
-  position: absolute;
-  top: -11px;
-  right: 12px;
-  z-index: 2;
-  padding: 1px 10px;
-  font-size: 12px;
-  color: var(--sw-color-primary);
-  background: #f0eaff;
-  border-radius: 9px;
 }
 
 .field-shell__handle {
@@ -249,24 +226,6 @@ function remove(id: string) {
 
 .field-shell__handle:active {
   cursor: grabbing;
-}
-
-.field-shell__type {
-  padding: 0 var(--sw-space-8);
-  height: 20px;
-  line-height: 20px;
-  font-size: var(--sw-font-caption);
-  color: var(--sw-color-primary);
-  background: var(--el-color-primary-light-9);
-  border-radius: var(--sw-radius-sm);
-}
-
-.field-shell__name {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: var(--sw-font-caption);
-  color: var(--sw-text-secondary);
-  font-family: var(--el-font-family-mono, monospace);
 }
 
 .field-shell__del {
