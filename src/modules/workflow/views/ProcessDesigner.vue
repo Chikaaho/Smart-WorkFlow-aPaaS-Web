@@ -16,7 +16,7 @@ const { t } = useI18n()
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
+import { ArrowLeft, Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
 import {
   getProcessDefDefinition,
   getProcessNodeCapabilities,
@@ -26,14 +26,19 @@ import {
 } from '@/modules/workflow/api'
 import type { GraphValidationError, ApproverCandidate } from '@/modules/workflow/api'
 import type { BpmNodeCapability, BpmNodeConfigField } from '@/contracts/bpm-node'
-import type { ProcessGraphDocument } from '@/contracts/process-graph'
+import type { ProcessGraphDocument, ProcessGraphWaypoint } from '@/contracts/process-graph'
 import { createDesignerModel, buildEdgePath } from '@/adapters/process-graph'
 import type { DesignerModel, PositionedEdge, PositionedNode } from '@/adapters/process-graph'
-import type { ProcessGraphWaypoint } from '@/contracts/process-graph'
 
 const route = useRoute()
 const router = useRouter()
 const defId = computed(() => String(route.params.defId))
+/** 从表单工作台进入时，左上角返回该表单的「关联流程」页签。 */
+const returnFormId = computed(() =>
+  route.query?.from === 'form-workbench' && typeof route.query?.formId === 'string'
+    ? route.query.formId
+    : '',
+)
 
 const loading = ref(false)
 const errorMsg = ref('')
@@ -100,26 +105,25 @@ function fitViewport() {
     viewBox.value = { x: -40, y: -40, w: CANVAS_W, h: CANVAS_H }
     return
   }
-  // P53 设计（节点09）：像素实测锚定适配——左上锚点 + ratio≤1，图内容按设计位渲染
+  // 适应画布 = 内容包围盒在视口内等比缩放并居中；避免左侧固定锚位在大画布上偏右。
   const svgEl = svgRef.value
   const elW = svgEl ? svgEl.clientWidth || CANVAS_W : CANVAS_W
   const elH = svgEl ? svgEl.clientHeight || CANVAS_H : CANVAS_H
-  // The locked 09 design uses a 777px graph span inside the 1104px canvas:
-  // 135px left inset and 192px right inset keep the 160px cards at 1:1 CSS px.
-  // top=24 把节点端口（中心±25）锚定在设计卡缘（实测锁定 SVG 端点）。
-  const m = { left: 135, top: 24, right: 192, bottom: 20 }
+  const margin = 40
   const minX = Math.min(...xs) - P53_NODE_WIDTH / 2
   const minY = Math.min(...ys) - P53_NODE_HEIGHT / 2
   const bw = Math.max(Math.max(...xs) - Math.min(...xs) + P53_NODE_WIDTH, 1)
   const bh = Math.max(Math.max(...ys) - Math.min(...ys) + P53_NODE_HEIGHT, 1)
-  const ratio = Math.min(1, (elW - m.left - m.right) / bw, (elH - m.top - m.bottom) / bh)
+  const ratio = Math.min(1, (elW - margin * 2) / bw, (elH - margin * 2) / bh)
   const zoom = Math.max(ratio, 0.2)
+  const viewportW = elW / zoom
+  const viewportH = elH / zoom
   fitZoom.value = zoom
   viewBox.value = {
-    x: minX - m.left / zoom,
-    y: minY - m.top / zoom,
-    w: elW / zoom,
-    h: elH / zoom,
+    x: minX - (viewportW - bw) / 2,
+    y: minY - (viewportH - bh) / 2,
+    w: viewportW,
+    h: viewportH,
   }
 }
 
@@ -223,8 +227,8 @@ function onWheel(event: WheelEvent) {
   const dy = event.shiftKey ? 0 : event.deltaY
   viewBox.value = {
     ...viewBox.value,
-    x: viewBox.value.x - dx * ratio,
-    y: viewBox.value.y - dy * ratio,
+    x: viewBox.value.x + dx * ratio,
+    y: viewBox.value.y + dy * ratio,
   }
 }
 
@@ -456,7 +460,8 @@ function nearestSegment(points: PathPoint[], p: PathPoint) {
     const abx = b.x - a.x
     const aby = b.y - a.y
     const len2 = abx * abx + aby * aby
-    const t = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2))
+    const t =
+      len2 === 0 ? 0 : Math.min(1, Math.max(0, ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2))
     const d = Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + t * aby))
     if (d < best) {
       best = d
@@ -896,7 +901,11 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 function backToList() {
-  router.push('/workflow/defs')
+  if (returnFormId.value) {
+    void router.push({ path: `/form/designer/${returnFormId.value}`, query: { tab: 'processes' } })
+    return
+  }
+  void router.push('/workflow/defs')
 }
 
 function nodeLabelLines(label: string) {
@@ -908,8 +917,10 @@ function nodeLabelLines(label: string) {
   <div class="designer-page">
     <div class="designer-toolbar">
       <el-button class="toolbar-settings" @click="backToList">
-        <el-icon><Setting /></el-icon>
-        <span>{{ t('form.workbenchSettings') }}</span>
+        <el-icon><ArrowLeft /></el-icon>
+        <span>
+          {{ returnFormId ? t('workflow.backToProcessList') : t('form.workbenchSettings') }}
+        </span>
       </el-button>
       <span class="designer-crumb">
         / {{ graph?.formName || graph?.name || t('router.processDesigner') }} /
@@ -1043,6 +1054,9 @@ function nodeLabelLines(label: string) {
           @drop="onCanvasDrop"
         >
           <defs>
+            <pattern id="designer-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+              <path d="M24 0H0V24" fill="none" stroke="#e8edf6" stroke-width="1" />
+            </pattern>
             <marker
               id="designer-edge-arrow"
               markerUnits="userSpaceOnUse"
@@ -1066,7 +1080,7 @@ function nodeLabelLines(label: string) {
               <path d="M0,0 L8.5,3.5 L0,7 z" class="designer-edge-arrow-selected" />
             </marker>
           </defs>
-          <rect class="pg-bg" x="0" y="0" width="100000" height="100000" />
+          <rect class="pg-bg" x="-100000" y="-100000" width="200000" height="200000" />
           <template v-for="edge in canvasEdges" :key="edge.id">
             <path
               :d="edge.path"
@@ -1751,16 +1765,10 @@ function nodeLabelLines(label: string) {
   min-width: 0;
   overflow: hidden;
   /* P53 节点09：画布底 #F8FAFE + 24px 网格线 #E8EDF6 */
-  background:
-    linear-gradient(#e8edf6 1px, transparent 1px),
-    linear-gradient(90deg, #e8edf6 1px, transparent 1px), #f8fafe;
-  background-size:
-    24px 24px,
-    24px 24px,
-    auto;
+  background: #f8fafe;
 }
 .pg-bg {
-  fill: transparent;
+  fill: url(#designer-grid);
 }
 .canvas-zoom {
   position: absolute;

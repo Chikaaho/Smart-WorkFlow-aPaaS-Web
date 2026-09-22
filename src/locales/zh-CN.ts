@@ -2102,6 +2102,7 @@ export default {
     processGraphLoadFailed: '流程图加载失败',
     onlyDraftDeletable: '只有草稿状态的流程定义可以删除',
     backToFormWorkbench: '返回表单工作台',
+    backToProcessList: '返回流程列表',
     runtimeStateCancelled: '已取消',
     runtimeStateIdle: '未运行',
     processedTasksLoadFailed: '加载已办任务失败',

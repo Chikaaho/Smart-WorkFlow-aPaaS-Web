@@ -2197,6 +2197,7 @@ export default {
     processGraphLoadFailed: 'Could not load the process diagram',
     onlyDraftDeletable: 'Only draft process definitions can be deleted',
     backToFormWorkbench: 'Back to the form workbench',
+    backToProcessList: 'Back to process list',
     runtimeStateCancelled: 'Cancelled',
     runtimeStateIdle: 'Not started',
     processedTasksLoadFailed: 'Could not load the completed tasks',
