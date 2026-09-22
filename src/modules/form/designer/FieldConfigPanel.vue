@@ -183,13 +183,13 @@ function onSpan12(value: number | undefined) {
   --el-input-height: 36px;
 }
 
+/* V011-BUG-013：恢复输入框常规内边距——文本不再贴边/被裁切（此前 padding 被清零） */
 .config :deep(.el-input__inner) {
-  padding-left: 0;
   line-height: 17px;
 }
 
 .config :deep(.el-input__wrapper) {
-  padding-left: 0;
+  padding: 1px 11px;
 }
 
 /* P53 节点07：头部标题 + 右侧类型徽标 */
@@ -297,7 +297,8 @@ function onSpan12(value: number | undefined) {
   background: var(--el-color-primary-light-9, #ece9ff);
   border-radius: 6px;
   cursor: pointer;
-}.config__required-chip.is-off {
+}
+.config__required-chip.is-off {
   color: #8a96ae;
   background: #f1f4fa;
 }
@@ -307,7 +308,6 @@ function onSpan12(value: number | undefined) {
 .config__type {
   box-sizing: border-box;
   width: 82px;
-  margin-right: -10px;
   padding: 4.5px 9px;
   height: 24px;
   line-height: 15px;
