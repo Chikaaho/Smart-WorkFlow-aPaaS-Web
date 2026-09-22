@@ -171,8 +171,9 @@ function statusTagType(status: ProcessDef['status']) {
       </div>
 
       <section class="related-processes__table-card" aria-label="关联流程列表">
+        <!-- V011-BUG-018：列宽改为 min-width 弹性伸展，表格随容器宽度填满 -->
         <el-table v-loading="loading" :data="records" class="related-processes__table">
-          <el-table-column :label="t('form.relatedProcessNameColumn')" width="411">
+          <el-table-column :label="t('form.relatedProcessNameColumn')" min-width="300">
             <template #default="{ row }">
               <div class="related-processes__name-cell">
                 <strong>{{ procRow(row).name }}</strong>
@@ -180,10 +181,10 @@ function statusTagType(status: ProcessDef['status']) {
               </div>
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.version')" width="172">
+          <el-table-column :label="t('common.version')" min-width="100">
             <template #default="{ row }">{{ displayVersion(procRow(row)) }}</template>
           </el-table-column>
-          <el-table-column :label="t('form.relatedProcessEnabledColumn')" width="168">
+          <el-table-column :label="t('form.relatedProcessEnabledColumn')" min-width="110">
             <template #default="{ row }">
               <el-tag
                 class="related-processes__status-tag"
