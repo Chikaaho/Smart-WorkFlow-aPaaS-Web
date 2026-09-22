@@ -660,42 +660,30 @@ function onSettingsCommand(command: string) {
         <div class="designer__canvascol">
           <div class="designer__canvas-meta">
             <b class="designer__canvas-device">{{ t('form.canvasDeviceLabel') }}</b>
-            <span>{{ t('form.canvasGridMeta') }}</span>
-            <el-button link type="primary" class="designer__canvas-fields" @click="fieldsDialogVisible = true">{{
-              t('fieldList.button')
-            }}</el-button>
+            <el-button
+              link
+              type="primary"
+              class="designer__canvas-fields"
+              @click="fieldsDialogVisible = true"
+              >{{ t('fieldList.button') }}</el-button
+            >
             <el-button class="designer__canvas-preview" @click="previewVisible = true">{{
               t('common.preview')
             }}</el-button>
           </div>
+          <!-- V011-BUG-006：画布内不再渲染「未命名表单」标题块与 12 栏标尺（Owner 2026-09-22）；
+               表单名称在新建时输入（V011-BUG-014），设计态名称见面包屑 -->
           <div class="designer__sheet">
-            <el-input
-              v-if="!isPublished"
-              v-model="title"
-              class="designer__sheet-title"
-              :placeholder="t('common.formName')"
-            />
-            <h1 v-else class="designer__sheet-title designer__sheet-title--locked">
-              {{ title || t('common.untitledForm') }}
-            </h1>
-            <p class="designer__sheet-sub">{{ description || formKey }}</p>
-            <!-- 12 栏标尺：设计稿的视觉刻度；字段栅格保持 24 列语义（1 栏 = 2 列） -->
-            <div class="designer__ruler" aria-hidden="true">
-              <i v-for="n in 12" :key="n">{{ n }}</i>
-            </div>
             <DesignerCanvas
               class="designer-main-canvas"
               v-model:items="items"
               v-model:selected-id="selectedId"
-              :readonly="isPublished"
               @edit-table="openTableEditor"
             />
           </div>
           <p class="designer__canvas-foot">
             {{
-              selectedFoot
-                ? t('form.canvasFootSelected', selectedFoot)
-                : t('form.canvasFootEmpty')
+              selectedFoot ? t('form.canvasFootSelected', selectedFoot) : t('form.canvasFootEmpty')
             }}
           </p>
         </div>
@@ -1100,88 +1088,18 @@ function onSettingsCommand(command: string) {
   width: 88px;
 }
 
-.designer__sheet-title {
-  margin: 0 0 8px;
-}
-
-.designer__sheet-title :deep(.el-input__wrapper) {
-  padding: 0;
-  box-shadow: none;
-  background: transparent;
-}
-
-.designer__sheet-title :deep(.el-input__inner) {
-  height: 35px;
-  font-size: 26px;
-  font-weight: 600;
-  line-height: 35px;
-  color: #1f2a44;
-}
-
+/* V011-BUG-009：画布白卡随中栏剩余高度填满（不再固定 740px） */
 .designer__sheet {
-  flex: 0 0 740px;
-  height: 740px;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 520px;
   overflow-y: auto;
   box-sizing: border-box;
-  margin-top: 22px;
+  margin-top: 12px;
   padding: 21px 23px 20px;
   background: #fff;
   border: 1px solid #dde3ef;
   border-radius: 12px;
   box-shadow: 0 2px 9px rgba(58, 75, 110, 0.08);
-}
-
-.designer__sheet-title {
-  margin: 0 0 8px;
-  font-size: 26px;
-  line-height: 32px;
-  color: #1f2a44;
-}
-
-.designer__sheet-title :deep(.el-input__wrapper) {
-  padding: 0;
-  box-shadow: none;
-  background: transparent;
-}
-
-.designer__sheet-title :deep(.el-input__inner) {
-  height: 32px;
-  font-size: 26px;
-  font-weight: 600;
-  line-height: 30px;
-  color: #1f2a44;
-}
-
-.designer__sheet-sub {
-  margin: 0 0 26px;
-  font-size: 13px;
-  color: #8693ad;
-}
-
-.designer__ruler {
-  height: 30px;
-  width: 756px;
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  background: #f8f5ff;
-  color: #9b83d3;
-  border-radius: 2px;
-  border-left: 1px solid #e9e1ff;
-  overflow: hidden;
-}
-
-.designer__ruler i {
-  font-style: normal;
-  text-align: left;
-  padding-left: 22px;
-  font-size: 10px;
-  padding-top: 5px;
-  border-right: 1px solid #dde3ef;
-}
-
-.designer__ruler i:last-child {
-  border-right: 0;
 }
 
 /* 画布内嵌：去掉独立底色/内边距，滚动交给白底表单卡 */
