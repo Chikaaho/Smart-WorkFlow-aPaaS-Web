@@ -13,12 +13,17 @@ const { t } = useI18n()
  * 配置面板改动经 @update 抛 FieldPatch，本宿主原样上交给设计器写回选中字段（单一数据源）。
  */
 import { computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { getFieldTypeDescriptor, getFieldTypeStorage } from './field-types'
+import { isColumnNameUnique } from './column-name'
 import type { DesignerItem } from './types'
 import type { FieldPatch } from './field-config'
 import type { VisibilityRule } from '@/contracts/form-schema'
 import RulesEditor from './config/RulesEditor.vue'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
+
+/** 系统固定前缀：字段标识仅暴露后缀编辑（V011-BUG-016）。 */
+const FIELD_KEY_PREFIX = 'field_'
 
 const props = withDefaults(
   defineProps<{
@@ -27,12 +32,14 @@ const props = withDefaults(
     otherNames: string[]
     /** 已发布表单：禁止编辑配置。 */
     readonly?: boolean
+    /** V011-BUG-016：字段标识锁定（已发布表单），与面板整体编辑解锁解耦。 */
+    keyLocked?: boolean
     /** 选中字段当前的显隐规则（null=未配置）。 */
     rule?: VisibilityRule | null
     /** 同表单全部字段名（规则条件候选，含选中字段以外的字段）。 */
     ruleFieldNames?: string[]
   }>(),
-  { readonly: false, rule: null, ruleFieldNames: () => [] },
+  { readonly: false, keyLocked: false, rule: null, ruleFieldNames: () => [] },
 )
 
 const emit = defineEmits<{
@@ -56,6 +63,29 @@ const spanOptions = Array.from({ length: 12 }, (_, i) => i + 1)
 function onSpan12(value: number | undefined) {
   if (!props.field || !value) return
   emit('update', { colSpan: normalizeFormFieldColSpan(value * 2, props.field.field.type) })
+}
+
+/** 字段标识后缀展示：field_ 前缀被系统吃掉，用户只见后缀（V011-BUG-016）。 */
+const fieldKeySuffix = computed(() => {
+  const name = props.field?.field.name ?? ''
+  return name.startsWith(FIELD_KEY_PREFIX) ? name.slice(FIELD_KEY_PREFIX.length) : name
+})
+
+/**
+ * 后缀编辑 → 全名 = field_ + 后缀（小写化、剔除非法字符）。
+ * 空后缀不回写；与其它字段重名时提示并放弃本次输入。列名校验复用 column-name 纯函数。
+ */
+function onFieldKeySuffix(raw: string) {
+  if (!props.field) return
+  const suffix = raw.toLowerCase().replace(/[^a-z0-9_]/g, '')
+  if (!suffix) return
+  const next = FIELD_KEY_PREFIX + suffix
+  if (next === props.field.field.name) return
+  if (!isColumnNameUnique(next, props.otherNames)) {
+    ElMessage.warning(t('form.fieldKeyDuplicate'))
+    return
+  }
+  emit('update', { name: next })
 }
 </script>
 
@@ -116,7 +146,16 @@ function onSpan12(value: number | undefined) {
       <h3 class="config__section">{{ t('form.sectionAdvancedInfo') }}</h3>
       <div class="config__row">
         <label class="config__label">{{ t('form.fieldKeyLabel') }}</label>
-        <el-input :model-value="field.field.name" disabled />
+        <!-- V011-BUG-016：未发布表单的字段标识可编辑——用户只输入后缀，系统前缀固定 field_；
+             已发布（keyLocked）仍锁定并提示不可直接修改 -->
+        <el-input
+          :model-value="fieldKeySuffix"
+          :disabled="keyLocked"
+          :maxlength="58"
+          @update:model-value="onFieldKeySuffix"
+        >
+          <template #prepend>field_</template>
+        </el-input>
       </div>
       <div v-if="field.field.type === 'TEXT'" class="config__type-pair">
         <div class="config__row">
@@ -152,7 +191,9 @@ function onSpan12(value: number | undefined) {
         「{{ descriptor?.label ?? t('form.thisField') }}」配置项待接入（后续刀）
       </p>
 
-      <p class="config__note">{{ t('form.fieldKeyLockedNote') }}</p>
+      <p class="config__note">
+        {{ keyLocked ? t('form.fieldKeyLockedNote') : t('form.fieldKeySuffixHint') }}
+      </p>
 
       <!-- ═══ 其他信息 ═══ -->
       <h3 class="config__section">{{ t('form.sectionOtherInfo') }}</h3>

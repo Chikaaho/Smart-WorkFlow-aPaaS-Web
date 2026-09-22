@@ -137,11 +137,29 @@ function addPaletteItem(item: DesignerItem) {
   selectedId.value = item.id
 }
 
-/** 配置面板回写：就地把补丁合并进选中字段。 */
+/** 配置面板回写：就地把补丁合并进选中字段；字段标识改名时显隐规则同步跟随。 */
 function patchSelectedField(patch: FieldPatch) {
   const item = items.value.find((it) => it.id === selectedId.value)
-  if (item) applyFieldPatch(item.field, patch)
+  if (!item) return
+  const oldName = item.field.name
+  applyFieldPatch(item.field, patch)
+  if (patch.name && patch.name !== oldName) {
+    // V011-BUG-016：改名后规则 target 与条件字段引用同步更新，避免规则悬空
+    visibilityRules.value = visibilityRules.value.map((rule) =>
+      renameInRule(rule, oldName, patch.name!),
+    )
+  }
 }
+
+/** 显隐规则内的字段名替换（target + 全部条件字段）。 */
+function renameInRule(rule: VisibilityRule, from: string, to: string): VisibilityRule {
+  return {
+    ...rule,
+    target: rule.target === from ? to : rule.target,
+    conditions: rule.conditions.map((c) => (c.field === from ? { ...c, field: to } : c)),
+  }
+}
+
 
 /** 选中字段显隐规则（null=未配置），供配置面板回显。 */
 const selectedRule = computed<VisibilityRule | null>(() => {
