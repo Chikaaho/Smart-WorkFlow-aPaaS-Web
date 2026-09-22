@@ -85,11 +85,12 @@ const showAside = computed(
 }
 .basic-layout__actions {
   box-sizing: border-box;
-  flex: 0 0 336px;
-  width: 336px;
-  /* 设计（节点02）：个人区 1105 起，搜索锚点 1225 */
+  /* V011-BUG-005：个人区加入顶栏语言入口，宽度 336→400，左内距相应收敛 */
+  flex: 0 0 400px;
+  width: 400px;
+  /* 设计（节点02）：搜索锚点原 1225；加语言入口后整体左移保持右缘对齐 */
   justify-content: flex-start;
-  padding-left: 122px;
+  padding-left: 96px;
 }
 .basic-layout__body {
   display: flex;
