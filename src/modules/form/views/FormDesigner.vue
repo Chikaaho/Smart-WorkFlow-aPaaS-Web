@@ -747,7 +747,7 @@ async function loadBreadcrumbCategory() {
           class="designer-main-config"
           :field="selectedItem"
           :other-names="otherNames"
-          :readonly="isPublished"
+          :key-locked="isPublished"
           :rule="selectedRule"
           :rule-field-names="ruleFieldNames"
           @update="patchSelectedField"
