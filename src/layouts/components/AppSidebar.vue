@@ -19,12 +19,26 @@ const menuStore = useMenuStore()
 void props
 
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
-const items = computed(() => visibleMenuForArea(localizedMenu.value, resolveArea(route.path)))
+
+/**
+ * 后台侧栏按**顶部导航分区**收敛：只渲染当前分区（与顶栏同一份菜单数据）。
+ * 顶栏进入「系统管理」时，侧栏不应再出现「流程管理」等其它分区的页面。
+ * 前台（portal）保持原有派生（工作台 + 流程中心 + 收件箱等跨入口），不做分区收敛。
+ */
+const items = computed(() => {
+  const scoped = visibleMenuForArea(localizedMenu.value, resolveArea(route.path))
+  if (resolveArea(route.path) !== 'admin') return scoped
+  const segment = route.path.split('/').filter(Boolean)[0] ?? ''
+  const group = scoped.find((node) => toFullPath(node) === `/${segment}`)
+  if (!group) return scoped
+  return group.children?.length ? group.children : [group]
+})
 // 深链上下文激活映射（设计节点03/27）：表单渲染→流程中心；任务详情→我的待办
 const activePath = computed(() => {
   if (route.path.startsWith('/form/form-render/')) return '/workflow/catalog'
   if (route.path.startsWith('/workflow/task/')) return '/workflow/todo'
-  return route.path
+  // 详情页高亮到所属菜单项（如 /form/designer/:id → 表单设计）
+  return resolveAdminActive(route.path) || route.path
 })
 // 任务/数据详情帧（设计02/03/19/20）：二级激活描边为暗调 #344164，非品牌紫
 const detailFrame = computed(
@@ -48,6 +62,22 @@ const openeds = computed(() => {
   walk(items.value)
   return keys
 })
+
+/** 详情页（如 /form/designer/:id、/workflow/defs/:id/design）高亮到所属菜单项。 */
+function resolveAdminActive(path: string): string {
+  let matched = ''
+  const walk = (nodes: ReturnType<typeof visibleMenuForArea>): void => {
+    for (const node of nodes) {
+      const full = toFullPath(node)
+      if (node.menuType === MenuType.MENU && (path === full || path.startsWith(`${full}/`))) {
+        if (full.length > matched.length) matched = full
+      }
+      if (node.children?.length) walk(node.children as ReturnType<typeof visibleMenuForArea>)
+    }
+  }
+  walk(items.value)
+  return matched
+}
 </script>
 
 <template>
