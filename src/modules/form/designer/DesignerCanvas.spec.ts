@@ -159,3 +159,104 @@ describe('DesignerCanvas (WYSIWYG)', () => {
     expect(wrapper.findAll('.field-shell')).toHaveLength(0)
   })
 })
+
+/* ═══════════════════════════════════════════════════
+ * 控件库拖入：整块画布可放置 + 落点渲染真实预览
+ * ═══════════════════════════════════════════════════ */
+
+/** jsdom 无 DragEvent：用 MouseEvent 派发（处理器只读 clientX/clientY/relatedTarget）。 */
+function dragEvent(
+  wrapper: ReturnType<typeof mountCanvas>,
+  type: string,
+  init: MouseEventInit = {},
+) {
+  const el = wrapper.find('.canvas').element
+  el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, ...init }))
+}
+
+const pendingItem = {
+  id: 'di_pending',
+  field: { name: 'field_note', type: 'LABEL', label: '文字', colSpan: 24 },
+} as DesignerItem
+
+function mountWithPending(items: DesignerItem[], pending: DesignerItem | null = pendingItem) {
+  return mount(DesignerCanvas, {
+    props: { items, selectedId: null, pendingItem: pending },
+    global: { stubs },
+  })
+}
+
+describe('DesignerCanvas 拖入落点', () => {
+  it('未拖拽时不渲染预览格', () => {
+    const wrapper = mountWithPending([item('di_1', 'a')], null)
+    expect(wrapper.findAll('.field-shell--pending')).toHaveLength(0)
+  })
+
+  it('指针在画布上时按落点插入预览格，并用同一个 FormPreview 渲染真实长相', async () => {
+    const wrapper = mountWithPending([item('di_1', 'a')])
+    dragEvent(wrapper, 'dragover', { clientX: 0, clientY: 0 })
+    await wrapper.vm.$nextTick()
+
+    const shells = wrapper.findAll('.field-shell')
+    expect(shells).toHaveLength(2)
+    const preview = shells[0]
+    expect(preview.classes()).toContain('field-shell--pending')
+    expect(preview.attributes('data-field-name')).toBe('field_note')
+    expect(preview.attributes('data-field-type')).toBe('LABEL')
+    const previews = preview.findAll('[data-testid="fc"]')
+    expect(previews).toHaveLength(1)
+    expect(previews[0].attributes('data-mode')).toBe('design')
+  })
+
+  it('预览格不可选中、无删除动作', async () => {
+    const wrapper = mountWithPending([])
+    dragEvent(wrapper, 'dragover', { clientX: 0, clientY: 0 })
+    await wrapper.vm.$nextTick()
+
+    const preview = wrapper.find('.field-shell--pending')
+    expect(preview.exists()).toBe(true)
+    await preview.trigger('click')
+    expect(wrapper.emitted('update:selectedId')).toBeUndefined()
+    expect(preview.find('.field-shell__del').exists()).toBe(false)
+  })
+
+  it('放置时按落点 emit add(item, index) 并收起预览', async () => {
+    const wrapper = mountWithPending([item('di_1', 'a')])
+    dragEvent(wrapper, 'dragover', { clientX: 0, clientY: 0 })
+    await wrapper.vm.$nextTick()
+    dragEvent(wrapper, 'drop', { clientX: 0, clientY: 0 })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('add')?.at(-1)).toEqual([pendingItem, 0])
+    expect(wrapper.findAll('.field-shell--pending')).toHaveLength(0)
+  })
+
+  it('空画布同样可放置：预览落在 0 号位（整块画布都是放置区）', async () => {
+    const wrapper = mountWithPending([])
+    dragEvent(wrapper, 'dragover', { clientX: 10, clientY: 400 })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.field-shell--pending').exists()).toBe(true)
+
+    dragEvent(wrapper, 'drop', { clientX: 10, clientY: 400 })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('add')?.at(-1)).toEqual([pendingItem, 0])
+  })
+
+  it('指针移出画布才收起预览，未离开则保留', async () => {
+    const wrapper = mountWithPending([item('di_1', 'a')])
+    dragEvent(wrapper, 'dragover', { clientX: 0, clientY: 0 })
+    await wrapper.vm.$nextTick()
+
+    // 在画布内部移动（relatedTarget 仍在画布内）→ 保留预览
+    dragEvent(wrapper, 'dragleave', {
+      relatedTarget: wrapper.find('.canvas__list').element,
+    })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('.field-shell--pending')).toHaveLength(1)
+
+    // 真正离开画布 → 收起预览
+    dragEvent(wrapper, 'dragleave', { relatedTarget: document.body })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('.field-shell--pending')).toHaveLength(0)
+  })
+})

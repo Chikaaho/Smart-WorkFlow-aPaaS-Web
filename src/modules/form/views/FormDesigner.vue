@@ -144,6 +144,23 @@ function addPaletteItem(item: DesignerItem) {
   selectedId.value = item.id
 }
 
+/** 组件库拖拽中的待插入字段：画布据此在有落点的位置渲染真实预览。 */
+const draggingItem = ref<DesignerItem | null>(null)
+
+function startPaletteDrag(item: DesignerItem) {
+  if (isPublished.value) return
+  draggingItem.value = item
+}
+
+/** 放置落点确认：把候选字段插到画布算出的下标（24 栅格流式顺序，不做自由定位）。 */
+function addDroppedItem(item: DesignerItem, index: number) {
+  draggingItem.value = null
+  if (isPublished.value) return
+  const at = Math.min(Math.max(index, 0), items.value.length)
+  items.value.splice(at, 0, item)
+  selectedId.value = item.id
+}
+
 /** 配置面板回写：就地把补丁合并进选中字段；字段标识改名时显隐规则同步跟随。 */
 function patchSelectedField(patch: FieldPatch) {
   const item = items.value.find((it) => it.id === selectedId.value)
@@ -770,6 +787,8 @@ async function loadBreadcrumbCategory() {
             class="designer-main-palette"
             :existing-names="existingNames"
             @add="addPaletteItem"
+            @drag-start="startPaletteDrag"
+            @drag-end="draggingItem = null"
           />
           <p class="designer__palette-note">{{ t('form.paletteDragHint') }}</p>
         </div>
@@ -792,9 +811,11 @@ async function loadBreadcrumbCategory() {
                表单名称在新建时输入（V011-BUG-014），设计态名称见面包屑 -->
           <div class="designer__sheet">
             <DesignerCanvas
-              class="designer-main-canvas"
               v-model:items="items"
               v-model:selected-id="selectedId"
+              class="designer-main-canvas"
+              :pending-item="draggingItem"
+              @add="addDroppedItem"
               @edit-table="openTableEditor"
             />
           </div>
@@ -1234,6 +1255,8 @@ async function loadBreadcrumbCategory() {
 /* 画布内嵌：去掉独立底色/内边距，滚动交给白底表单卡 */
 .designer__canvascol .designer-main-canvas {
   flex: 0 1 auto;
+  /* 画布铺满白板：整块白板（含末尾空白）都是组件放置区 */
+  min-height: 100%;
   padding: 0;
   background: transparent;
   overflow: visible;
