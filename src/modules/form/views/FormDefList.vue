@@ -25,6 +25,12 @@ import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/util
 import type { FormDefListItem } from '@/modules/form/api/form-def'
 import type { PageQuery } from '@/contracts/common'
 import { StandardListTemplate } from '@/components/page-layout'
+import {
+  listCategories,
+  queryAdminCatalogItems,
+  type CatalogCategory,
+  type CatalogItem,
+} from '@/modules/workflow/api/oa'
 
 const router = useRouter()
 
@@ -40,6 +46,130 @@ const errorMsg = ref('')
 // 搜索
 const keyword = ref('')
 const currentKeyword = ref('')
+
+/* ── 左侧分类树：分类（多级）→ 表单 ──
+ * 分类沿用流程中心事项目录（分类/事项归属在「流程归属管理」维护），
+ * 表单与分类的绑定关系由事项的 formKey 反查，未绑定任何事项的表单归入「未分类」。
+ * 树只做导航与过滤，不新增后端模型，不改动列表分页契约。*/
+const categories = ref<CatalogCategory[]>([])
+const catalogItems = ref<CatalogItem[]>([])
+const allForms = ref<FormDefListItem[]>([])
+/** null=全部；0=未分类；其余=分类 id。 */
+const selectedCategoryId = ref<number | null>(null)
+
+interface FormTreeLeaf {
+  key: string
+  label: string
+  formId: string
+}
+interface CategoryTreeNode {
+  key: string
+  label: string
+  categoryId: number | null
+  count: number
+  leaves: FormTreeLeaf[]
+}
+
+/** 表单 formKey → 分类 id（同一 formKey 取首个绑定项）。 */
+const formCategoryMap = computed(() => {
+  const map = new Map<string, number | null>()
+  for (const item of catalogItems.value) {
+    if (item.formKey && !map.has(item.formKey)) map.set(item.formKey, item.categoryId ?? 0)
+  }
+  return map
+})
+
+const categoryTree = computed<CategoryTreeNode[]>(() => {
+  const leavesOf = (predicate: (def: FormDefListItem) => boolean): FormTreeLeaf[] =>
+    allForms.value
+      .filter(predicate)
+      .map((def) => ({ key: `form:${def.id}`, label: def.name || def.formKey, formId: def.id }))
+
+  const unclassified = leavesOf((def) => !formCategoryMap.value.has(def.formKey))
+  const nodes: CategoryTreeNode[] = [
+    {
+      key: 'all',
+      label: t('form.categoryAll'),
+      categoryId: null,
+      count: allForms.value.length,
+      leaves: leavesOf(() => true),
+    },
+  ]
+  for (const category of categories.value) {
+    const leaves = leavesOf((def) => formCategoryMap.value.get(def.formKey) === category.id)
+    nodes.push({
+      key: `cat:${category.id}`,
+      label: category.name,
+      categoryId: category.id,
+      count: leaves.length,
+      leaves,
+    })
+  }
+  nodes.push({
+    key: 'cat:0',
+    label: t('form.categoryUnclassified'),
+    categoryId: 0,
+    count: unclassified.length,
+    leaves: unclassified,
+  })
+  return nodes
+})
+
+/** 当前分类选中的表单集合：null=不过滤（走服务端分页）。 */
+const categoryFormIds = computed<Set<string> | null>(() => {
+  const selected = selectedCategoryId.value
+  if (selected === null) return null
+  const node = categoryTree.value.find(
+    (item) => item.key === (selected === 0 ? 'cat:0' : `cat:${selected}`),
+  )
+  return new Set((node?.leaves ?? []).map((leaf) => leaf.formId))
+})
+
+/** 表格数据：分类过滤时用本地集合（不改变服务端分页语义）。 */
+const displayList = computed(() => {
+  const ids = categoryFormIds.value
+  if (!ids) return list.value
+  return allForms.value.filter((def) => ids.has(def.id)).slice(0, 200)
+})
+
+const displayTotal = computed(() =>
+  categoryFormIds.value ? displayList.value.length : total.value,
+)
+
+async function loadCategoryTree() {
+  try {
+    const [cats, items, defs] = await Promise.all([
+      listCategories(),
+      queryAdminCatalogItems({ pageNum: 1, pageSize: 500 }),
+      pageFormDefs({ pageNum: 1, pageSize: 500 }),
+    ])
+    categories.value = cats
+    catalogItems.value = items.list
+    allForms.value = defs.list
+  } catch {
+    // 分类目录不可用时不阻塞表单列表（列表仍按服务端分页展示全部表单）
+  }
+}
+
+function onCategorySelect(node: CategoryTreeNode) {
+  selectedCategoryId.value = node.categoryId
+  pageNum.value = 1
+}
+
+function onFormLeafOpen(leaf: FormTreeLeaf) {
+  void router.push(`/form/designer/${leaf.formId}`)
+}
+
+/** 树节点点击：分类节点 = 过滤列表；表单叶子 = 打开设计器。 */
+function onTreeNodeClick(node: CategoryTreeNode | FormTreeLeaf) {
+  if ('leaves' in node) {
+    onCategorySelect(node)
+    return
+  }
+  onFormLeafOpen(node)
+}
+
+void loadCategoryTree()
 
 async function loadList() {
   loading.value = true
@@ -205,94 +335,118 @@ onMounted(loadList)
 </script>
 
 <template>
-  <StandardListTemplate
-    :title="t('form.managementTitle')"
-    large
-    :total="total"
-    :page-num="pageNum"
-    :page-size="pageSize"
-    :empty="isEmpty"
-    @update:page-num="handlePageNumChange"
-    @update:page-size="handlePageSizeChange"
-  >
-    <!-- 工具栏：新建按钮 -->
-    <template #toolbar-actions>
-      <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
-    </template>
+  <div class="form-def-page">
+    <!-- 左侧分类树（分类 → 表单，多级）：点分类过滤右侧列表，点表单直接进设计器 -->
+    <aside class="form-def-page__tree">
+      <p class="form-def-page__tree-title">{{ t('form.categoryTreeTitle') }}</p>
+      <el-tree
+        :data="categoryTree"
+        node-key="key"
+        :props="{ label: 'label', children: 'leaves' }"
+        :expand-on-click-node="false"
+        :default-expanded-keys="['all']"
+        highlight-current
+        @node-click="onTreeNodeClick"
+      >
+        <template #default="{ data }">
+          <span class="form-def-page__node">
+            <span class="form-def-page__node-label">{{ data.label }}</span>
+            <span v-if="data.count !== undefined" class="form-def-page__node-count">{{
+              data.count
+            }}</span>
+          </span>
+        </template>
+      </el-tree>
+    </aside>
+    <StandardListTemplate
+      :title="t('form.managementTitle')"
+      large
+      :total="displayTotal"
+      :page-num="pageNum"
+      :page-size="pageSize"
+      :empty="isEmpty"
+      @update:page-num="handlePageNumChange"
+      @update:page-size="handlePageSizeChange"
+    >
+      <!-- 工具栏：新建按钮 -->
+      <template #toolbar-actions>
+        <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
+      </template>
 
-    <!-- 筛选区：名称搜索 -->
-    <template #filter>
-      <el-input
-        v-model="keyword"
-        :placeholder="t('form.searchFormPlaceholder')"
-        clearable
-        style="width: 240px"
-        @keyup.enter="handleQuery"
+      <!-- 筛选区：名称搜索 -->
+      <template #filter>
+        <el-input
+          v-model="keyword"
+          :placeholder="t('form.searchFormPlaceholder')"
+          clearable
+          style="width: 240px"
+          @keyup.enter="handleQuery"
+        />
+      </template>
+      <template #filter-actions>
+        <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+        <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+      </template>
+
+      <!-- 表格 -->
+      <el-alert
+        v-if="errorMsg"
+        :title="errorMsg"
+        type="error"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
       />
-    </template>
-    <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
-      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
-    </template>
+      <el-table v-loading="loading" :data="displayList" stripe>
+        <el-table-column prop="name" :label="t('common.formName')" min-width="160" />
+        <el-table-column prop="formKey" :label="t('common.businessKey')" min-width="140" />
+        <el-table-column prop="status" :label="t('common.status')" width="100">
+          <template #default="{ row }">
+            <el-tag :type="getFormDefStatusType(row.status)" size="small">
+              {{ getFormDefStatusLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="updateTime" :label="t('common.updateTime')" width="170">
+          <template #default="{ row }">
+            {{ formatDateTime(row.updateTime) }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.actions')" width="250" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" link type="primary" @click="editRow(row)">{{
+              t('common.edit')
+            }}</el-button>
+            <el-button size="small" link type="primary" @click="openVisibilityRow(row)">
+              {{ t('form.initiationScope') }}
+            </el-button>
+            <!-- I2 生命周期：停用/启用（服务端审计；前端按钮不替代服务端状态检查） -->
+            <el-button
+              v-if="row.status === 'PUBLISHED'"
+              size="small"
+              link
+              type="danger"
+              @click="toggleLifecycleRow(row, 'disable')"
+              >{{ t('common.disable') }}</el-button
+            >
+            <el-button
+              v-if="row.status === 'DISABLED'"
+              size="small"
+              link
+              type="success"
+              @click="toggleLifecycleRow(row, 'enable')"
+              >{{ t('common.enable') }}</el-button
+            >
+          </template>
+        </el-table-column>
+      </el-table>
 
-    <!-- 表格 -->
-    <el-alert
-      v-if="errorMsg"
-      :title="errorMsg"
-      type="error"
-      :closable="false"
-      show-icon
-      style="margin-bottom: 12px"
-    />
-    <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="name" :label="t('common.formName')" min-width="160" />
-      <el-table-column prop="formKey" :label="t('common.businessKey')" min-width="140" />
-      <el-table-column prop="status" :label="t('common.status')" width="100">
-        <template #default="{ row }">
-          <el-tag :type="getFormDefStatusType(row.status)" size="small">
-            {{ getFormDefStatusLabel(row.status) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="updateTime" :label="t('common.updateTime')" width="170">
-        <template #default="{ row }">
-          {{ formatDateTime(row.updateTime) }}
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('common.actions')" width="250" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editRow(row)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button size="small" link type="primary" @click="openVisibilityRow(row)">
-            {{ t('form.initiationScope') }}
-          </el-button>
-          <!-- I2 生命周期：停用/启用（服务端审计；前端按钮不替代服务端状态检查） -->
-          <el-button
-            v-if="row.status === 'PUBLISHED'"
-            size="small"
-            link
-            type="danger"
-            @click="toggleLifecycleRow(row, 'disable')"
-            >{{ t('common.disable') }}</el-button
-          >
-          <el-button
-            v-if="row.status === 'DISABLED'"
-            size="small"
-            link
-            type="success"
-            @click="toggleLifecycleRow(row, 'enable')"
-            >{{ t('common.enable') }}</el-button
-          >
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <!-- 空态 -->
-    <template #empty-action>
-      <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
-    </template>
-  </StandardListTemplate>
+      <!-- 空态 -->
+      <template #empty-action>
+        <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
+      </template>
+    </StandardListTemplate>
+  </div>
 
   <el-dialog
     v-model="visibilityDialogVisible"
@@ -320,6 +474,46 @@ onMounted(loadList)
 </template>
 
 <style scoped>
+.form-def-page {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.form-def-page__tree {
+  flex: 0 0 220px;
+  max-height: 100%;
+  padding: 12px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  background: #fff;
+  overflow: auto;
+}
+
+.form-def-page__tree-title {
+  margin: 0 0 8px;
+  font-size: var(--sw-font-emphasis);
+  font-weight: var(--sw-font-weight-emphasis);
+  color: var(--sw-text-primary);
+}
+
+.form-def-page > :deep(.page-layout) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.form-def-page__node {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.form-def-page__node-count {
+  color: var(--sw-text-placeholder);
+  font-size: var(--sw-font-caption);
+}
 .visibility-form__hint {
   color: var(--sw-color-text-secondary);
   font-size: var(--sw-font-size-sm);
