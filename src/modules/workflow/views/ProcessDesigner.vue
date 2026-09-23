@@ -145,12 +145,6 @@ function formatClock(d: Date): string {
   return pad(d.getHours()) + ':' + pad(d.getMinutes())
 }
 
-/** 表单设计页签：进入绑定表单的设计器（fixture 提供 formDefId；真实后端同形）。 */
-function goBoundFormDesigner(): void {
-  const formDefId = (graph.value as { formDefId?: string } | null)?.formDefId
-  if (formDefId) void router.push(`/form/designer/${formDefId}`)
-}
-
 /** 高级配置元数据（定义 payload 的 advancedConfig 扩展；缺省展示占位符）。 */
 interface GraphAdvancedConfig {
   startListener?: string
@@ -927,12 +921,6 @@ function nodeLabelLines(label: string) {
         {{ graph?.name || t('router.processDesigner')
         }}{{ graph?.version ? ` v${graph.version}` : '' }}
       </span>
-      <nav class="designer-tabs" aria-label="工作区切换">
-        <button type="button" class="designer-tab" @click="goBoundFormDesigner">
-          {{ t('form.tabDesign') }}
-        </button>
-        <button type="button" class="designer-tab is-active">{{ t('form.tabProcesses') }}</button>
-      </nav>
       <span class="spacer" />
       <span class="designer-saved">{{ t('form.draftSavedAt', { time: savedAtText }) }}</span>
       <!-- 设计09：右侧操作组 = 草稿历史 + 保存 + 发布（撤销/删除/适配保留在画布缩放控件与快捷键） -->
@@ -1645,29 +1633,6 @@ function nodeLabelLines(label: string) {
 }
 .spacer {
   flex: 1;
-}
-/* 设计09：工作区页签以整条顶栏为基准水平居中（纯文字 + active 下划线） */
-.designer-tabs {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  display: flex;
-  transform: translateX(-50%);
-}
-.designer-tab {
-  height: 56px;
-  padding: 0 34px;
-  border: 0;
-  background: transparent;
-  font-size: 14px;
-  color: #8a96ad;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-}
-.designer-tab.is-active {
-  color: var(--sw-color-primary);
-  font-weight: 600;
-  border-bottom-color: var(--sw-color-primary);
 }
 .designer-alert {
   margin: 8px 12px;
