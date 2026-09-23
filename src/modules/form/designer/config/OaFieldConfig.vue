@@ -4,12 +4,18 @@ import { useI18n } from '@/locales'
 const { t } = useI18n()
 /**
  * OaFieldConfig — v0.0.2 新控件（MULTISELECT/ATTACHMENT/IMAGE/LABEL）配置面板。
- * MULTISELECT 编辑候选选项（逗号分隔）；LABEL 编辑文字正文与颜色/字号/粗细；
+ * MULTISELECT 编辑候选选项（逗号分隔）；LABEL 编辑文字正文与颜色/字号/粗细/对齐；
  * 通用行（标签/列名/必填/默认值）复用 CommonConfigRows。
  */
 import type { FieldPatch } from '../field-config'
 import CommonConfigRows from './CommonConfigRows.vue'
-import type { MultiSelectField, LabelField, FormSchemaField } from '@/contracts/form-schema'
+import {
+  DEFAULT_FIELD_TEXT_ALIGN,
+  type FieldTextAlign,
+  type MultiSelectField,
+  type LabelField,
+  type FormSchemaField,
+} from '@/contracts/form-schema'
 
 const props = defineProps<{
   field: FormSchemaField
@@ -67,6 +73,16 @@ function fontWeightValue(): 'normal' | 'bold' {
 
 function onFontWeight(value: string | number | boolean) {
   emit('update', { fontWeight: value === 'bold' ? 'bold' : 'normal' })
+}
+
+function textAlignValue(): FieldTextAlign {
+  return ((props.field as LabelField).textAlign ?? DEFAULT_FIELD_TEXT_ALIGN) as FieldTextAlign
+}
+
+function onTextAlign(value: string | number | boolean | undefined) {
+  const align: FieldTextAlign =
+    value === 'center' || value === 'right' ? value : DEFAULT_FIELD_TEXT_ALIGN
+  emit('update', { textAlign: align })
 }
 </script>
 
@@ -144,6 +160,19 @@ function onFontWeight(value: string | number | boolean) {
         <el-option :label="t('form.fontWeightBold')" value="bold" />
       </el-select>
     </div>
+
+    <div class="row">
+      <label class="row__label">{{ t('form.labelTextAlign') }}</label>
+      <el-radio-group
+        :model-value="textAlignValue()"
+        class="row__align"
+        @update:model-value="onTextAlign"
+      >
+        <el-radio-button value="left">{{ t('form.textAlignLeft') }}</el-radio-button>
+        <el-radio-button value="center">{{ t('form.textAlignCenter') }}</el-radio-button>
+        <el-radio-button value="right">{{ t('form.textAlignRight') }}</el-radio-button>
+      </el-radio-group>
+    </div>
   </template>
 </template>
 
@@ -168,6 +197,20 @@ function onFontWeight(value: string | number | boolean) {
 
 .row__select {
   width: 120px;
+}
+
+/* 对齐方式：三等分按钮，左右铺满面板 */
+.row__align {
+  display: flex;
+  width: 100%;
+}
+
+.row__align :deep(.el-radio-button) {
+  flex: 1 1 0;
+}
+
+.row__align :deep(.el-radio-button__inner) {
+  width: 100%;
 }
 .row__label {
   display: block;

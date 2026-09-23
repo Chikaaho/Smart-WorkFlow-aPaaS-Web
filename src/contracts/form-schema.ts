@@ -56,6 +56,15 @@ export function fieldLabelPositionClass(position?: FieldLabelPosition | null): s
   return `sw-label-pos--${position ?? DEFAULT_FIELD_LABEL_POSITION}`
 }
 
+/** 文字组件正文的水平对齐方式。 */
+export type FieldTextAlign = 'left' | 'center' | 'right'
+
+export const DEFAULT_FIELD_TEXT_ALIGN: FieldTextAlign = 'left'
+
+export function isFieldTextAlign(value: unknown): value is FieldTextAlign {
+  return value === 'left' || value === 'center' || value === 'right'
+}
+
 /** 附件/图片字段值条目：storageKey 关联存储对象，name 为展示名。 */
 export interface AttachmentItem {
   storageKey: string
@@ -171,6 +180,8 @@ export interface LabelField extends BaseField {
   fontSize?: number
   /** 文字粗细。 */
   fontWeight?: 'normal' | 'bold'
+  /** 正文水平对齐（左 / 居中 / 右）；缺省左对齐。 */
+  textAlign?: FieldTextAlign
 }
 
 /* ══════ I2 低代码表单收口 ══════ */

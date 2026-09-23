@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_FIELD_LABEL_POSITION,
+  DEFAULT_FIELD_TEXT_ALIGN,
   fieldLabelPositionClass,
   isFieldLabelPosition,
+  isFieldTextAlign,
 } from './form-schema'
 
 /**
@@ -34,6 +36,24 @@ describe('form-schema 字段标题位置', () => {
     }
     for (const illegal of ['top', 'center', 'LEFT', '', 1, null, undefined, {}]) {
       expect(isFieldLabelPosition(illegal)).toBe(false)
+    }
+  })
+})
+
+/**
+ * 文字组件正文对齐：三种合法取值 + 缺省左对齐。
+ */
+describe('form-schema 文字对齐', () => {
+  it('缺省左对齐', () => {
+    expect(DEFAULT_FIELD_TEXT_ALIGN).toBe('left')
+  })
+
+  it('枚举守卫只接受左 / 居中 / 右', () => {
+    for (const align of ['left', 'center', 'right']) {
+      expect(isFieldTextAlign(align)).toBe(true)
+    }
+    for (const illegal of ['justify', 'CENTER', '', 1, null, undefined, {}]) {
+      expect(isFieldTextAlign(illegal)).toBe(false)
     }
   })
 })

@@ -180,7 +180,9 @@ describe('adapters/form-designer/parseDefinition', () => {
           color: '#d93026',
           fontSize: 18,
           fontWeight: 'bold',
+          textAlign: 'center',
         },
+        { name: 'd', type: 'LABEL', text: '正文', textAlign: 'justify' },
       ],
     })
     const schema = parseDefinition(raw)
@@ -193,7 +195,9 @@ describe('adapters/form-designer/parseDefinition', () => {
       color: '#d93026',
       fontSize: 18,
       fontWeight: 'bold',
+      textAlign: 'center',
     })
+    expect((schema.fields[4] as { textAlign?: string }).textAlign).toBeUndefined()
   })
 })
 
@@ -395,6 +399,7 @@ describe('adapters/form-designer/toFormCreateRule', () => {
           color: '#d93026',
           fontSize: 18,
           fontWeight: 'bold' as const,
+          textAlign: 'center' as const,
         },
       ],
     }
@@ -408,6 +413,7 @@ describe('adapters/form-designer/toFormCreateRule', () => {
       color: '#d93026',
       fontSize: 18,
       fontWeight: 'bold',
+      textAlign: 'center',
     })
   })
 

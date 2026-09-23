@@ -82,6 +82,7 @@ describe('FIELD_TYPE_REGISTRY', () => {
       color: '',
       fontSize: 14,
       fontWeight: 'normal',
+      textAlign: 'left',
     })
     expect(getFieldTypeDescriptor('TEXT')!.createDefault('a')).not.toHaveProperty('fontSize')
   })

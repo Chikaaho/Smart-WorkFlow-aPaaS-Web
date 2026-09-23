@@ -142,6 +142,7 @@ describe('definition-convert / itemsToDefinition', () => {
           color: '#d93026',
           fontSize: 18,
           fontWeight: 'bold',
+          textAlign: 'center',
         },
       },
     ]
@@ -153,6 +154,7 @@ describe('definition-convert / itemsToDefinition', () => {
       color: '#d93026',
       fontSize: 18,
       fontWeight: 'bold',
+      textAlign: 'center',
     })
   })
 })
@@ -250,6 +252,7 @@ describe('definition-convert / definitionToItems', () => {
           color: '#2563eb',
           fontSize: 20,
           fontWeight: 'bold',
+          textAlign: 'right',
         },
       ],
     }
@@ -261,6 +264,7 @@ describe('definition-convert / definitionToItems', () => {
       color: '#2563eb',
       fontSize: 20,
       fontWeight: 'bold',
+      textAlign: 'right',
     })
   })
 

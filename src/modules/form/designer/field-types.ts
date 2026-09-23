@@ -194,6 +194,7 @@ export const FIELD_TYPE_REGISTRY: readonly FieldTypeDescriptor[] = [
         color: '',
         fontSize: 14,
         fontWeight: 'normal',
+        textAlign: 'left',
       }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },

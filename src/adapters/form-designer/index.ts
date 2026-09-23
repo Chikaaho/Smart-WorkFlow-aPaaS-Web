@@ -2,6 +2,7 @@ import { i18n } from '@/locales'
 import {
   fieldLabelPositionClass,
   isFieldLabelPosition,
+  isFieldTextAlign,
   type FormSchema,
   type FormSchemaField,
   type FieldType,
@@ -51,6 +52,7 @@ interface RawSubFieldDef {
   color?: string
   fontSize?: number
   fontWeight?: string
+  textAlign?: string
   expression?: string
   dsBinding?: {
     queryKey: string
@@ -129,6 +131,7 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
       ...(raw.fontWeight === 'normal' || raw.fontWeight === 'bold'
         ? { fontWeight: raw.fontWeight }
         : {}),
+      ...(isFieldTextAlign(raw.textAlign) ? { textAlign: raw.textAlign } : {}),
     }
   }
 

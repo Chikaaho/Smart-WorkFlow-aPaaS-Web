@@ -458,4 +458,18 @@ describe('DynamicField — 文字组件（LABEL）', () => {
     const el = wrapper.find('.label-control').element as HTMLElement
     expect(el.getAttribute('style') ?? '').toBe('')
   })
+
+  it('左 / 居中 / 右对齐落到正文内联样式', () => {
+    for (const align of ['left', 'center', 'right'] as const) {
+      const wrapper = mountField({
+        name: 'note',
+        type: 'LABEL',
+        label: '文字',
+        text: '正文',
+        textAlign: align,
+      })
+      const el = wrapper.find('.label-control').element as HTMLElement
+      expect(el.style.textAlign).toBe(align)
+    }
+  })
 })
