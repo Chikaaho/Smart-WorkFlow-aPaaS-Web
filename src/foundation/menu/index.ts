@@ -111,7 +111,10 @@ function buildRoutesFromNodes(nodes: MenuNode[]): RouteRecordRaw[] {
         if (firstLeaf) {
           routes.push({
             path: node.path,
-            redirect: firstLeaf,
+            // 叶子 path 是「相对布局根的完整路径」（如 system/dict）。这里必须是**绝对**重定向：
+            // 若是相对串，Vue Router 会按当前路由再拼一次（/system/system/dict 之类），
+            // 目标路径并不存在 → 点目录必 404（历史 404 根因）。
+            redirect: firstLeaf.startsWith('/') ? firstLeaf : `/${firstLeaf}`,
             meta: {
               title: node.title,
               menuName: node.name,

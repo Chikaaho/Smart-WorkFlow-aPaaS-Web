@@ -23,9 +23,14 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
-import { Setting } from '@element-plus/icons-vue'
+import { Back, Setting } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormSchema, FormSchemaField, TableSubField, VisibilityRule } from '@/contracts/form-schema'
+import type {
+  FormSchema,
+  FormSchemaField,
+  TableSubField,
+  VisibilityRule,
+} from '@/contracts/form-schema'
 import FieldPalette from '../designer/FieldPalette.vue'
 import DesignerCanvas from '../designer/DesignerCanvas.vue'
 import FieldConfigPanel from '../designer/FieldConfigPanel.vue'
@@ -34,6 +39,8 @@ import PreviewModal from '../designer/PreviewModal.vue'
 import HistoryVersionsDialog from '../designer/HistoryVersionsDialog.vue'
 import RelatedProcessesPanel from '../designer/RelatedProcessesPanel.vue'
 import { saveDraftDefinition, publishDefinition as publishDef } from '../designer/draft-actions'
+import { publishNewFormVersion } from '../api/form-def'
+import { listCategories, queryCatalogItems } from '@/modules/workflow/api/oa'
 import {
   resolveSaveState,
   saveStateKey,
@@ -137,11 +144,51 @@ function addPaletteItem(item: DesignerItem) {
   selectedId.value = item.id
 }
 
-/** 配置面板回写：就地把补丁合并进选中字段。 */
+/** 组件库拖拽中的待插入字段：画布据此在有落点的位置渲染真实预览。 */
+const draggingItem = ref<DesignerItem | null>(null)
+
+function startPaletteDrag(item: DesignerItem) {
+  if (isPublished.value) return
+  draggingItem.value = item
+}
+
+/** 放置落点确认：把候选字段插到画布算出的下标（24 栅格流式顺序，不做自由定位）。 */
+function addDroppedItem(item: DesignerItem, index: number) {
+  draggingItem.value = null
+  if (isPublished.value) return
+  const at = Math.min(Math.max(index, 0), items.value.length)
+  items.value.splice(at, 0, item)
+  selectedId.value = item.id
+}
+
+/** 配置面板回写：就地把补丁合并进选中字段；字段标识改名时显隐规则同步跟随。 */
 function patchSelectedField(patch: FieldPatch) {
   const item = items.value.find((it) => it.id === selectedId.value)
-  if (item) applyFieldPatch(item.field, patch)
+  if (!item) return
+  const oldName = item.field.name
+  applyFieldPatch(item.field, patch)
+  if (patch.name && patch.name !== oldName) {
+    // V011-BUG-016：改名后规则 target 与条件字段引用同步更新，避免规则悬空
+    visibilityRules.value = visibilityRules.value.map((rule) =>
+      renameInRule(rule, oldName, patch.name!),
+    )
+  }
 }
+
+/** 显隐规则内的字段名替换（target + 全部条件字段）。 */
+function renameInRule(rule: VisibilityRule, from: string, to: string): VisibilityRule {
+  return {
+    ...rule,
+    target: rule.target === from ? to : rule.target,
+    conditions: rule.conditions.map((c) => (c.field === from ? { ...c, field: to } : c)),
+  }
+}
+
+/** 面包屑文本（V011-BUG-011）：所属分类 → 表单名；未分类/未绑定目录项时仅表单名。 */
+const breadcrumbText = computed(() => {
+  const name = title.value || t('common.untitledForm')
+  return categoryName.value ? `${categoryName.value} / ${name}` : name
+})
 
 /** 选中字段显隐规则（null=未配置），供配置面板回显。 */
 const selectedRule = computed<VisibilityRule | null>(() => {
@@ -208,6 +255,7 @@ async function loadForm(id: string) {
     items.value = definitionToItems(schema)
     visibilityRules.value = schema.rules?.visibility ? [...schema.rules.visibility] : []
     rejected.value = false
+    void loadBreadcrumbCategory()
     await nextTick()
     baselineJson.value = JSON.stringify(buildDefinition())
     savedAtText.value = formatClock(new Date())
@@ -292,6 +340,28 @@ onBeforeUnmount(() => {
  */
 async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
   if (!isDirty.value) return 'proceed'
+  // V011-BUG-015：已发布表单无草稿可存——离开只问「丢弃/留下」
+  if (isPublished.value) {
+    try {
+      await ElMessageBox.confirm(
+        t('form.unsavedPublishedLeaveWarning'),
+        t('form.unsavedChangesTitle'),
+        {
+          type: 'warning',
+          confirmButtonText: t('form.discardAndContinue'),
+          cancelButtonText: t('common.cancel'),
+        },
+      )
+      // 放弃修改：以基线还原，再放行导航
+      const baseline = JSON.parse(baselineJson.value) as FormSchema
+      items.value = definitionToItems(baseline)
+      if (baseline.title) title.value = baseline.title
+      baselineJson.value = currentJson.value
+      return 'proceed'
+    } catch {
+      return 'abort'
+    }
+  }
   let action: 'save' | 'discard' | 'cancel'
   try {
     await ElMessageBox.confirm(t(LEAVE_GUARD_MESSAGE_KEY), t('form.unsavedChangesTitle'), {
@@ -410,6 +480,40 @@ async function saveDraft() {
   await doSave()
 }
 
+/* ── V011-BUG-015：已发布表单发布新版本（原子落库，不经草稿） ── */
+
+async function publishNewVersion() {
+  if (rejected.value || !formId.value) return
+  if (savePhase.value === 'saving') return
+  const preCheckError = preValidateBeforePublish(items.value)
+  if (preCheckError) {
+    ElMessage.warning(preCheckError)
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      t('form.publishNewVersionConfirm'),
+      t('common.publishConfirmTitle'),
+      {
+        confirmButtonText: t('form.publishNewVersion'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+  savePhase.value = 'saving'
+  try {
+    await publishNewFormVersion(formId.value, JSON.stringify(buildDefinition()))
+    savePhase.value = 'idle'
+    ElMessage.success(t('form.publishNewVersionSuccess'))
+    loadForm(formId.value)
+  } catch {
+    savePhase.value = 'error'
+  }
+}
+
 /* ── 发布（只针对最近一次成功保存的当前草稿） ── */
 
 async function publish() {
@@ -470,8 +574,7 @@ const filteredFields = computed(() => {
   const kw = fieldSearch.value.trim().toLowerCase()
   if (!kw) return previewSchema.value.fields
   return previewSchema.value.fields.filter(
-    (f) =>
-      (f.label ?? '').toLowerCase().includes(kw) || f.name.toLowerCase().includes(kw),
+    (f) => (f.label ?? '').toLowerCase().includes(kw) || f.name.toLowerCase().includes(kw),
   )
 })
 
@@ -485,7 +588,8 @@ function constraintOf(field: FormSchemaField): string {
   if (field.type === 'DICT') return t('fieldList.constraintDict')
   if (field.type === 'DATE' || field.type === 'TIME') return t('fieldList.constraintDate')
   if (field.type === 'DEPT') return t('fieldList.constraintDept')
-  if (field.type === 'ATTACHMENT' || field.type === 'IMAGE') return t('fieldList.constraintAttachment')
+  if (field.type === 'ATTACHMENT' || field.type === 'IMAGE')
+    return t('fieldList.constraintAttachment')
   if (field.type === 'REFERENCE') return t('fieldList.constraintReference')
   if (field.type === 'FORMULA') return t('fieldList.constraintFormula')
   if (field.required) return t('fieldList.constraintRequired')
@@ -509,12 +613,10 @@ function exportFields() {
 /* ── 关联流程 ── */
 
 function enterProcess(def: ProcessDef) {
-  // 进入现有流程管理/编辑入口（workflow 流程定义列表），带回跳上下文
-  router.push({
-    path: '/workflow/defs',
-    query: { from: 'form-workbench', formId: formId.value ?? '', formKey: formKey.value },
-  })
-  void def
+  // V011-BUG-019：编辑=当前页直接进入该流程的网格设计器（不再跳流程总列表页）
+  router.push(
+    `/workflow/defs/${def.id}/design?from=form-workbench&formId=${formId.value ?? ''}&formKey=${formKey.value}`,
+  )
 }
 
 /* ── 辅助函数 ── */
@@ -563,9 +665,28 @@ function backToList() {
 function onSettingsCommand(command: string) {
   if (command === 'field-list') {
     fieldsDialogVisible.value = true
-    return
   }
-  backToList()
+}
+
+/* ── V011-BUG-011：面包屑分类（可发起事项目录反查 formKey 所属分类） ── */
+const categoryName = ref<string | null>(null)
+const breadcrumbLoadedFor = ref('')
+
+async function loadBreadcrumbCategory() {
+  if (!formKey.value || breadcrumbLoadedFor.value === formKey.value) return
+  breadcrumbLoadedFor.value = formKey.value
+  try {
+    const [categories, itemsPage] = await Promise.all([
+      listCategories(),
+      queryCatalogItems({ pageNum: 1, pageSize: 200 }),
+    ])
+    const item = itemsPage.list.find((it) => it.formKey === formKey.value)
+    categoryName.value = item?.categoryId
+      ? (categories.find((c) => c.id === item.categoryId)?.name ?? null)
+      : null
+  } catch {
+    categoryName.value = null
+  }
 }
 </script>
 
@@ -575,6 +696,11 @@ function onSettingsCommand(command: string) {
          P53 节点07：左「设置 + 面包屑」/ 中工作区页签 / 右保存状态与操作组 -->
     <header v-if="!rejected" class="designer__workbench">
       <div class="designer__crumb">
+        <!-- V011-BUG-017：返回表单列表放为显式入口，不再藏在设置下拉里 -->
+        <el-button class="designer__back" @click="backToList">
+          <el-icon><Back /></el-icon>
+          <span>{{ t('form.backToList') }}</span>
+        </el-button>
         <el-dropdown class="designer__settings-menu" trigger="click" @command="onSettingsCommand">
           <el-button class="designer__settings">
             <el-icon><Setting /></el-icon>
@@ -583,11 +709,19 @@ function onSettingsCommand(command: string) {
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="field-list">{{ t('fieldList.button') }}</el-dropdown-item>
-              <el-dropdown-item command="back-to-list">{{ t('form.backToList') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <span class="designer__crumb-path">/ {{ title }} / {{ t('form.breadcrumbEdit') }}</span>
+        <!-- V011-BUG-010：保存状态从动作组移到左侧信息簇，动作组只留可点按钮 -->
+        <span class="designer__save-state" :class="'designer__save-state--' + saveState">
+          {{
+            saveState === 'unchanged'
+              ? t('form.draftSavedAt', { time: savedAtText })
+              : t(saveStateKey(saveState))
+          }}
+        </span>
+        <!-- V011-BUG-011：面包屑=所属分类（可发起事项目录反查）→ 表单名 -->
+        <span class="designer__crumb-path">/ {{ breadcrumbText }}</span>
       </div>
 
       <nav class="designer__tabs" aria-label="工作区切换">
@@ -610,26 +744,25 @@ function onSettingsCommand(command: string) {
       </nav>
 
       <div class="designer__actions">
-        <span class="designer__save-state" :class="'designer__save-state--' + saveState">
-          {{
-            saveState === 'unchanged'
-              ? t('form.draftSavedAt', { time: savedAtText })
-              : t(saveStateKey(saveState))
-          }}
-        </span>
         <el-button :disabled="!formId" @click="historyVisible = true">{{
           t('form.draftHistoryEntry')
         }}</el-button>
-        <el-button :disabled="isPublished || saveState === 'saving'" @click="saveDraft">{{
-          t('common.save')
-        }}</el-button>
+        <!-- V011-BUG-015：已发布表单以「发布新版本」替代 保存/发布（原子落库，不经草稿） -->
         <el-button
+          v-if="isPublished"
           type="primary"
-          :disabled="isPublished || saveState === 'saving'"
-          :title="isPublished ? t('form.publishedNoRepublish') : undefined"
-          @click="publish"
-          >{{ t('common.publish') }}</el-button
+          :disabled="saveState === 'saving'"
+          @click="publishNewVersion"
+          >{{ t('form.publishNewVersion') }}</el-button
         >
+        <template v-else>
+          <el-button :disabled="saveState === 'saving'" @click="saveDraft">{{
+            t('common.save')
+          }}</el-button>
+          <el-button type="primary" :disabled="saveState === 'saving'" @click="publish">{{
+            t('common.publish')
+          }}</el-button>
+        </template>
       </div>
     </header>
 
@@ -645,14 +778,17 @@ function onSettingsCommand(command: string) {
         <span>{{ t('common.loading') }}</span>
       </div>
 
-      <!-- ═══ 工作区：表单设计（节点 07 三栏几何：252 组件库 / 弹性画布 / 336 属性面板） ═══ -->
+      <!-- ═══ 工作区：表单设计（节点 07 三栏几何：252 组件库 / 弹性画布 / 336 属性面板） ═══
+           V011-BUG-015：已发布表单解锁编辑（编辑 → 「发布新版本」原子落库，
+           服务端 publish-version 增量 DDL + 版本递增），不再整体灰置 -->
       <div v-else-if="activeTab === 'design'" class="designer__body">
         <div class="designer__palettecol">
           <FieldPalette
             class="designer-main-palette"
             :existing-names="existingNames"
-            :disabled="isPublished"
             @add="addPaletteItem"
+            @drag-start="startPaletteDrag"
+            @drag-end="draggingItem = null"
           />
           <p class="designer__palette-note">{{ t('form.paletteDragHint') }}</p>
         </div>
@@ -660,42 +796,32 @@ function onSettingsCommand(command: string) {
         <div class="designer__canvascol">
           <div class="designer__canvas-meta">
             <b class="designer__canvas-device">{{ t('form.canvasDeviceLabel') }}</b>
-            <span>{{ t('form.canvasGridMeta') }}</span>
-            <el-button link type="primary" class="designer__canvas-fields" @click="fieldsDialogVisible = true">{{
-              t('fieldList.button')
-            }}</el-button>
+            <el-button
+              link
+              type="primary"
+              class="designer__canvas-fields"
+              @click="fieldsDialogVisible = true"
+              >{{ t('fieldList.button') }}</el-button
+            >
             <el-button class="designer__canvas-preview" @click="previewVisible = true">{{
               t('common.preview')
             }}</el-button>
           </div>
+          <!-- V011-BUG-006：画布内不再渲染「未命名表单」标题块与 12 栏标尺（Owner 2026-09-22）；
+               表单名称在新建时输入（V011-BUG-014），设计态名称见面包屑 -->
           <div class="designer__sheet">
-            <el-input
-              v-if="!isPublished"
-              v-model="title"
-              class="designer__sheet-title"
-              :placeholder="t('common.formName')"
-            />
-            <h1 v-else class="designer__sheet-title designer__sheet-title--locked">
-              {{ title || t('common.untitledForm') }}
-            </h1>
-            <p class="designer__sheet-sub">{{ description || formKey }}</p>
-            <!-- 12 栏标尺：设计稿的视觉刻度；字段栅格保持 24 列语义（1 栏 = 2 列） -->
-            <div class="designer__ruler" aria-hidden="true">
-              <i v-for="n in 12" :key="n">{{ n }}</i>
-            </div>
             <DesignerCanvas
-              class="designer-main-canvas"
               v-model:items="items"
               v-model:selected-id="selectedId"
-              :readonly="isPublished"
+              class="designer-main-canvas"
+              :pending-item="draggingItem"
+              @add="addDroppedItem"
               @edit-table="openTableEditor"
             />
           </div>
           <p class="designer__canvas-foot">
             {{
-              selectedFoot
-                ? t('form.canvasFootSelected', selectedFoot)
-                : t('form.canvasFootEmpty')
+              selectedFoot ? t('form.canvasFootSelected', selectedFoot) : t('form.canvasFootEmpty')
             }}
           </p>
         </div>
@@ -704,7 +830,7 @@ function onSettingsCommand(command: string) {
           class="designer-main-config"
           :field="selectedItem"
           :other-names="otherNames"
-          :readonly="isPublished"
+          :key-locked="isPublished"
           :rule="selectedRule"
           :rule-field-names="ruleFieldNames"
           @update="patchSelectedField"
@@ -719,7 +845,6 @@ function onSettingsCommand(command: string) {
         :form-key="formKey"
         @enter-process="enterProcess"
       />
-
     </template>
 
     <!-- 子表盖层子画布：盖在主画布之上，独立状态编辑该子表的内部字段 -->
@@ -727,7 +852,6 @@ function onSettingsCommand(command: string) {
       v-if="editingTableField && activeTab === 'design'"
       :table-label="editingTableField.label || editingTableField.name"
       :sub-fields="editingTableField.subFields"
-      :readonly="isPublished"
       @close="closeTableEditor"
     />
 
@@ -780,11 +904,10 @@ function onSettingsCommand(command: string) {
       </el-table>
       <p class="fields-dialog__note">{{ t('fieldList.note') }}</p>
       <template #footer>
-        <el-button
-          type="primary"
-          class="fields-dialog__close"
-          @click="fieldsDialogVisible = false"
-          >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ t('fieldList.backToDesigner') }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</el-button
+        <el-button type="primary" class="fields-dialog__close" @click="fieldsDialogVisible = false"
+          >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{
+            t('fieldList.backToDesigner')
+          }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</el-button
         >
       </template>
     </el-dialog>
@@ -812,25 +935,38 @@ function onSettingsCommand(command: string) {
   position: relative;
 }
 
-/* ═══ 顶部工具条（节点 07：56px 白底，左设置+面包屑 / 中 tab / 右操作组） ═══ */
+/* ═══ 顶部工具条（节点 07：56px 白底；V011-BUG-010/012 重排：左信息簇 / 中居中 tab / 右动作组） ═══ */
 .designer__workbench {
   box-sizing: border-box;
   height: 56px;
   flex: 0 0 56px;
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 20px;
   padding: 0 20px;
   border-bottom: 1px solid #dde3ef;
   background: #fff;
+  position: relative;
 }
 
-/* 左侧：设置按钮 + 面包屑（事项编辑上下文） */
+/* 左侧：返回 + 设置 + 保存状态 + 面包屑（V011-BUG-010 信息簇） */
 .designer__crumb {
   display: flex;
   align-items: center;
-  gap: 33px;
+  gap: 14px;
   min-width: 0;
+}
+
+/* V011-BUG-017：返回表单列表为显式入口 */
+.designer__back {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #303a55;
+}
+.designer__back :deep(.el-icon) {
+  margin-right: 4px;
 }
 
 .designer__settings {
@@ -859,13 +995,15 @@ function onSettingsCommand(command: string) {
   text-overflow: ellipsis;
 }
 
-/* 表单设计 / 流程设计 tab：设计稿为纯文字态，激活项品牌色 + 2px 下划线（节点 07/08） */
+/* 表单设计 / 流程设计 tab：V011-BUG-012 在工具条内水平居中 */
 .designer__tabs {
-  flex: 0 0 auto;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   height: 48px;
-  margin-left: 234px;
   gap: 24px;
 }
 
@@ -1047,7 +1185,7 @@ function onSettingsCommand(command: string) {
   color: #9aa6bd;
 }
 
-/* ── 中栏：画布（meta 条 + 白底表单卡 + 12 栏标尺 + 字段栅格 + 底部状态行） ── */
+/* ── 中栏：画布（meta 条 + 白底表单卡 + 字段栅格 + 底部状态行）；V011-BUG-009 画布随中栏填满 ── */
 .designer__canvascol {
   flex: 1 1 auto;
   min-width: 0;
@@ -1063,7 +1201,7 @@ function onSettingsCommand(command: string) {
   flex: 0 0 36px;
   display: flex;
   align-items: center;
-  gap: 70px;
+  gap: 40px;
   color: #8794ae;
   font-size: 12px;
 }
@@ -1100,31 +1238,13 @@ function onSettingsCommand(command: string) {
   width: 88px;
 }
 
-.designer__sheet-title {
-  margin: 0 0 8px;
-}
-
-.designer__sheet-title :deep(.el-input__wrapper) {
-  padding: 0;
-  box-shadow: none;
-  background: transparent;
-}
-
-.designer__sheet-title :deep(.el-input__inner) {
-  height: 35px;
-  font-size: 26px;
-  font-weight: 600;
-  line-height: 35px;
-  color: #1f2a44;
-}
-
+/* V011-BUG-009：画布白卡随中栏剩余高度填满（不再固定 740px） */
 .designer__sheet {
-  flex: 0 0 740px;
-  height: 740px;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 520px;
   overflow-y: auto;
   box-sizing: border-box;
-  margin-top: 22px;
+  margin-top: 12px;
   padding: 21px 23px 20px;
   background: #fff;
   border: 1px solid #dde3ef;
@@ -1132,61 +1252,11 @@ function onSettingsCommand(command: string) {
   box-shadow: 0 2px 9px rgba(58, 75, 110, 0.08);
 }
 
-.designer__sheet-title {
-  margin: 0 0 8px;
-  font-size: 26px;
-  line-height: 32px;
-  color: #1f2a44;
-}
-
-.designer__sheet-title :deep(.el-input__wrapper) {
-  padding: 0;
-  box-shadow: none;
-  background: transparent;
-}
-
-.designer__sheet-title :deep(.el-input__inner) {
-  height: 32px;
-  font-size: 26px;
-  font-weight: 600;
-  line-height: 30px;
-  color: #1f2a44;
-}
-
-.designer__sheet-sub {
-  margin: 0 0 26px;
-  font-size: 13px;
-  color: #8693ad;
-}
-
-.designer__ruler {
-  height: 30px;
-  width: 756px;
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  background: #f8f5ff;
-  color: #9b83d3;
-  border-radius: 2px;
-  border-left: 1px solid #e9e1ff;
-  overflow: hidden;
-}
-
-.designer__ruler i {
-  font-style: normal;
-  text-align: left;
-  padding-left: 22px;
-  font-size: 10px;
-  padding-top: 5px;
-  border-right: 1px solid #dde3ef;
-}
-
-.designer__ruler i:last-child {
-  border-right: 0;
-}
-
 /* 画布内嵌：去掉独立底色/内边距，滚动交给白底表单卡 */
 .designer__canvascol .designer-main-canvas {
   flex: 0 1 auto;
+  /* 画布铺满白板：整块白板（含末尾空白）都是组件放置区 */
+  min-height: 100%;
   padding: 0;
   background: transparent;
   overflow: visible;

@@ -103,4 +103,78 @@ onBeforeUnmount(() => {
   content: '*';
   color: #344164;
 }
+
+/* ── 字段标题位置（每字段独立，缺省上方左对齐）
+      规则一律带 .el-form 前缀，保证优先级高于设计器画布的行式标签覆盖。 ── */
+.fc-host :deep(.el-form .sw-label-pos--top-left),
+.fc-host :deep(.el-form .sw-label-pos--top-center),
+.fc-host :deep(.el-form .sw-label-pos--top-right) {
+  display: block;
+}
+
+.fc-host :deep(.el-form .sw-label-pos--left),
+.fc-host :deep(.el-form .sw-label-pos--right) {
+  display: flex;
+  align-items: center;
+}
+
+.fc-host :deep(.el-form .sw-label-pos--right) {
+  flex-direction: row-reverse;
+}
+
+.fc-host :deep(.el-form .sw-label-pos--top-left > .el-form-item__label),
+.fc-host :deep(.el-form .sw-label-pos--top-center > .el-form-item__label),
+.fc-host :deep(.el-form .sw-label-pos--top-right > .el-form-item__label) {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-bottom: 7px;
+  padding-right: 0;
+  line-height: 20px;
+}
+
+.fc-host :deep(.el-form .sw-label-pos--top-left > .el-form-item__label) {
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.fc-host :deep(.el-form .sw-label-pos--top-center > .el-form-item__label) {
+  text-align: center;
+  justify-content: center;
+}
+
+.fc-host :deep(.el-form .sw-label-pos--top-right > .el-form-item__label) {
+  text-align: right;
+  justify-content: flex-end;
+}
+
+.fc-host :deep(.el-form .sw-label-pos--left > .el-form-item__label) {
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  margin-bottom: 0;
+  padding-right: 12px;
+  line-height: 20px;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.fc-host :deep(.el-form .sw-label-pos--right > .el-form-item__label) {
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  margin-bottom: 0;
+  padding-right: 0;
+  padding-left: 12px;
+  line-height: 20px;
+  text-align: right;
+  justify-content: flex-end;
+}
+
+.fc-host :deep(.el-form .sw-label-pos--left > .el-form-item__content),
+.fc-host :deep(.el-form .sw-label-pos--right > .el-form-item__content) {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 0;
+}
 </style>

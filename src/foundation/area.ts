@@ -92,7 +92,10 @@ export function filterMenuByArea(nodes: MenuNode[], area: Area, prefix = ''): Me
       continue
     }
     const composed = prefix ? `${prefix}/${node.path}` : node.path
-    if (node.children?.length) {
+    // 只有目录才按子节点递归裁剪；页面（MENU）自身的可见性只看区域归属。
+    // 页面同样会挂按钮子节点（menu_type=2），若把它当目录递归，按钮被过滤后
+    // children 为空 → 整个页面被丢弃：这正是「有权限按钮的页面全都不出现在菜单」的根因。
+    if (node.menuType === MenuType.DIRECTORY && node.children?.length) {
       const children = filterMenuByArea(node.children, area, composed)
       if (children.length) {
         result.push({ ...node, children })
@@ -101,7 +104,7 @@ export function filterMenuByArea(nodes: MenuNode[], area: Area, prefix = ''): Me
     }
     const nodeAreaValue = nodeArea(node, prefix)
     const projectedArea = (node as MenuNode & { topbarArea?: Area }).topbarArea
-    if ((projectedArea && node.topbar != null) ? projectedArea === area : nodeAreaValue === area) {
+    if (projectedArea && node.topbar != null ? projectedArea === area : nodeAreaValue === area) {
       result.push(node)
     }
   }

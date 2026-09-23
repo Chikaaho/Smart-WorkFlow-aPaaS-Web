@@ -74,6 +74,19 @@ describe('FIELD_TYPE_REGISTRY', () => {
     expect(table).toMatchObject({ type: 'TABLE', subFields: [] })
   })
 
+  it('LABEL 默认携带文字样式键，其它类型不引入样式键', () => {
+    const label = getFieldTypeDescriptor('LABEL')!.createDefault('note')
+    expect(label).toMatchObject({
+      type: 'LABEL',
+      text: '',
+      color: '',
+      fontSize: 14,
+      fontWeight: 'normal',
+      textAlign: 'left',
+    })
+    expect(getFieldTypeDescriptor('TEXT')!.createDefault('a')).not.toHaveProperty('fontSize')
+  })
+
   it('getFieldTypeDescriptor looks up by type / misses gracefully', () => {
     expect(getFieldTypeDescriptor('TEXT')?.type).toBe('TEXT')
     // v0.0.2 起 IMAGE 已启用注册；占位类型 EMAIL 仍应 graceful miss

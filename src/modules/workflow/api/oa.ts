@@ -5,11 +5,19 @@ import type {
   CatalogCategory,
   CategoryCounts,
   CategorySaveReq,
+  WorkspaceCardType,
   WorkspaceLayout,
   WorkspaceLayoutResp,
 } from '@/contracts/catalog'
 
-export type { CatalogItem, CatalogCategory, CategoryCounts, WorkspaceLayout, WorkspaceLayoutResp }
+export type {
+  CatalogItem,
+  CatalogCategory,
+  CategoryCounts,
+  WorkspaceCardType,
+  WorkspaceLayout,
+  WorkspaceLayoutResp,
+}
 
 // ─── 后端分页原始形状 ───
 interface BackendPageResult<T> {
@@ -206,4 +214,42 @@ export async function saveWorkspaceLayout(layout: WorkspaceLayout): Promise<void
 /** DELETE /system/workspace/layout — 恢复默认布局。 */
 export async function resetWorkspaceLayout(): Promise<void> {
   await request<void>({ method: 'DELETE', url: '/system/workspace/layout' })
+}
+
+/** GET /system/workspace/card-types — 当前租户启用的工作台卡片类型。 */
+export async function listWorkspaceCardTypes(): Promise<WorkspaceCardType[]> {
+  return request<WorkspaceCardType[]>({ method: 'GET', url: '/system/workspace/card-types' })
+}
+
+/** GET /system/workspace/card-types/manage — 后台卡片类型维护列表。 */
+export async function listWorkspaceCardTypesForManage(): Promise<WorkspaceCardType[]> {
+  return request<WorkspaceCardType[]>({ method: 'GET', url: '/system/workspace/card-types/manage' })
+}
+
+export interface WorkspaceCardTypeSaveReq {
+  typeCode: string
+  displayName: string
+  rendererKey: WorkspaceCardType['rendererKey']
+  metadataJson: string
+  defaultSpan: 1 | 2
+  defaultOrder: number
+  status: 0 | 1
+}
+
+/** POST /system/workspace/card-types — 新建卡片类型。 */
+export async function createWorkspaceCardType(req: WorkspaceCardTypeSaveReq): Promise<number> {
+  return request<number>({ method: 'POST', url: '/system/workspace/card-types', data: req })
+}
+
+/** PUT /system/workspace/card-types/{id} — 更新卡片类型。 */
+export async function updateWorkspaceCardType(
+  id: number,
+  req: WorkspaceCardTypeSaveReq,
+): Promise<void> {
+  await request<void>({ method: 'PUT', url: `/system/workspace/card-types/${id}`, data: req })
+}
+
+/** DELETE /system/workspace/card-types/{id} — 逻辑删除卡片类型。 */
+export async function deleteWorkspaceCardType(id: number): Promise<void> {
+  await request<void>({ method: 'DELETE', url: `/system/workspace/card-types/${id}` })
 }

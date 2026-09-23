@@ -6,7 +6,7 @@ import type { TableSubField } from '@/contracts/form-schema'
 
 /**
  * SubFieldDesigner（盖层子画布）：
- *  ① 控件库只露六种（allowed-types = ALLOWED_SUBFIELD_TYPES）、独立 group
+ *  ① 控件库只露六种（allowed-types = ALLOWED_SUBFIELD_TYPES）；画布内排序 group 独立
  *  ② 子画布从 subFields 播种为 items；列名集（查重范围）取自子画布、限子表内部
  *  ③ 「返回」把子画布 items 转回 subFields 抛 close（写回宿主）
  *  ④ readonly 透传给控件库/画布/配置面板
@@ -26,7 +26,7 @@ const PaletteStub = {
   },
 }
 const CanvasStub = {
-  props: ['items', 'selectedId', 'group', 'readonly'],
+  props: ['items', 'selectedId', 'group', 'readonly', 'pendingItem'],
   setup(p: Record<string, unknown>) {
     canvasProps = p
     return () => null
@@ -54,11 +54,28 @@ function mountEditor(subFields: TableSubField[], readonly = false) {
 }
 
 describe('SubFieldDesigner (盖层子画布)', () => {
-  it('palette exposes only the six allowed types with an isolated group', () => {
+  it('palette exposes only the six allowed types; canvas keeps an isolated sort group', () => {
     mountEditor([{ name: 'c1', type: 'TEXT' }])
     expect(paletteProps.allowedTypes).toEqual(ALLOWED_SUBFIELD_TYPES)
-    expect(paletteProps.group).toBe('designer-subfields')
+    // 组件库改走原生 DnD：不再声明 SortableJS group（group 只属于画布内排序）
+    expect(paletteProps.group).toBeUndefined()
     expect(canvasProps.group).toBe('designer-subfields')
+  })
+
+  it('拖拽接线：drag-start 进入落点预览，add 按落点插入子字段并清预览', async () => {
+    const wrapper = mountEditor([{ name: 'c1', type: 'TEXT' }])
+    const pending = { id: 'di_pending', field: { name: 'c2', type: 'NUMBER' } }
+
+    wrapper.findComponent(PaletteStub).vm.$emit('drag-start', pending)
+    await wrapper.vm.$nextTick()
+    expect(canvasProps.pendingItem).toEqual(pending)
+
+    wrapper.findComponent(CanvasStub).vm.$emit('add', pending, 1)
+    await wrapper.vm.$nextTick()
+    expect((canvasProps.items as { field: { name: string } }[]).map((it) => it.field.name)).toEqual(
+      ['c1', 'c2'],
+    )
+    expect(canvasProps.pendingItem).toBeNull()
   })
 
   it('seeds canvas items from subFields; dedup name set scoped to sub-table fields', () => {

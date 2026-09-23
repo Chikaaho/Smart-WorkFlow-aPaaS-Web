@@ -10,8 +10,6 @@ const getWorkspaceLayout = vi.fn()
 
 vi.mock('@/modules/workflow/api/oa', () => ({
   getWorkspaceLayout: (...args: unknown[]) => getWorkspaceLayout(...args),
-  saveWorkspaceLayout: vi.fn(),
-  resetWorkspaceLayout: vi.fn(),
   queryCatalogItems: (...args: unknown[]) => queryCatalogItems(...args),
   queryMyCopies: (...args: unknown[]) => queryMyCopies(...args),
 }))
@@ -30,28 +28,47 @@ import type { WorkspaceLayoutResp } from '@/contracts/catalog'
 
 function layoutResp(
   components: Array<{ key: string; visible: boolean; order: number; span?: number }>,
+  custom = true,
 ): WorkspaceLayoutResp {
   return {
-    custom: true,
+    custom,
+    cardTypes: components.map((component, index) => ({
+      id: index + 1,
+      typeCode: component.key,
+      displayName: component.key,
+      rendererKey:
+        component.key === 'favoriteItems'
+          ? 'favorites'
+          : component.key === 'myProcessed' ||
+              component.key === 'myInitiated' ||
+              component.key === 'cc'
+            ? 'activity'
+            : (component.key as never),
+      metadataJson: '{}',
+      defaultSpan: 1,
+      defaultOrder: component.order,
+      status: 0,
+    })),
     layout: {
-      components: components as never,
+      cards: components.map((component) => ({
+        typeCode: component.key,
+        visible: component.visible,
+        order: component.order,
+        span: component.span === 2 ? 2 : 1,
+      })),
       favoriteItemKeys: ['gone_item', 'live_item'],
     },
   }
 }
 
-const elStub = { template: '<div><slot/></div>', props: ['modelValue', 'title', 'size'] }
-
 const global = {
   // P53 起工作台读取 userStore（问候语 displayName），测试装配补 pinia，断言不变。
   plugins: [createPinia()],
   stubs: {
-    'el-drawer': elStub,
     'el-button': {
       template: '<button><slot/></button>',
       props: ['icon', 'text', 'size', 'link', 'type', 'disabled'],
     },
-    'el-switch': { template: '<input type="checkbox"/>', props: ['modelValue'] },
     'el-checkbox': { template: '<input type="checkbox"/>', props: ['modelValue'] },
     'el-tag': { template: '<span><slot/></span>' },
     'el-icon': { template: '<i><slot/></i>' },
@@ -123,5 +140,67 @@ describe('WorkspaceHome 布局与查询收敛（R4）', () => {
     expect(quicks[1].text()).toContain('更多事项')
     await quicks[0].trigger('click')
     expect(mockPush).toHaveBeenCalledWith('/form/form-render/f1')
+  })
+
+  it('齿轮跳转独立编辑页', async () => {
+    const wrapper = mount(WorkspaceHome, { global })
+    await flushPromises()
+    mockPush.mockClear()
+    const gear = wrapper.find('.wsd-hero__config')
+    expect(gear.attributes('aria-label')).toBe('配置工作台')
+    await gear.trigger('click')
+    expect(mockPush).toHaveBeenCalledWith('/workspace/edit')
+  })
+
+  it('V011-BUG-003：保存的分数几何按当前画布宽度展开为像素渲染', async () => {
+    const base = layoutResp([{ key: 'todo', visible: true, order: 1, span: 2 }])
+    getWorkspaceLayout.mockResolvedValue({
+      ...base,
+      layout: {
+        ...base.layout,
+        cards: [
+          {
+            typeCode: 'todo',
+            visible: true,
+            order: 1,
+            span: 1,
+            metadata: { geometry: { x: 0.5, y: 0, w: 0.5, h: 360 } },
+          },
+        ],
+      },
+    })
+    const wrapper = mount(WorkspaceHome, { global })
+    await flushPromises()
+    // jsdom 无布局 → 名义画布宽 1200：分数 x/w=0.5 展开为 left/width 600px
+    const style = wrapper.find('.wsd-canvas-item').attributes('style')
+    expect(style).toContain('left: 600px')
+    expect(style).toContain('width: 600px')
+    expect(style).toContain('height: 360px')
+  })
+
+  it('V011-BUG-003：BUG-002 旧像素布局按设计宽度等比展开到当前画布', async () => {
+    const base = layoutResp([{ key: 'todo', visible: true, order: 1, span: 2 }])
+    getWorkspaceLayout.mockResolvedValue({
+      ...base,
+      layout: {
+        ...base.layout,
+        cards: [
+          {
+            typeCode: 'todo',
+            visible: true,
+            order: 1,
+            span: 1,
+            // 旧像素布局：设计宽度=600（单卡右缘），当前画布名义宽 1200 → 等比 ×2
+            metadata: { geometry: { x: 0, y: 0, w: 600, h: 360 } },
+          },
+        ],
+      },
+    })
+    const wrapper = mount(WorkspaceHome, { global })
+    await flushPromises()
+    const style = wrapper.find('.wsd-canvas-item').attributes('style')
+    expect(style).toContain('left: 0px')
+    expect(style).toContain('width: 1200px')
+    expect(style).toContain('height: 360px')
   })
 })

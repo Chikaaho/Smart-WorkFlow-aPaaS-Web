@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from '@/locales'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { resolveArea } from '@/foundation/area'
@@ -8,21 +7,17 @@ import AppLogo from './components/AppLogo.vue'
 import AppMainNav from './AppMainNav.vue'
 import AppTopbar from './components/AppTopbar.vue'
 import AppSidebar from './components/AppSidebar.vue'
-import badgeSpaceUrl from '@/assets/brand/badge-space.png'
 
 /**
  * 根布局（常量路由 app-root）：顶部主导航条 + 深色侧栏 + 内容区（P53 设计节点 01/04）。
  * 用户端与管理端顶栏使用 Figma 页面级表面色，主操作继续使用品牌主色；侧栏恒为深色导航阶。
  * 动态业务路由由 router/guard 挂为本布局子路由；菜单数据保持单一数据源。
+ * V011-BUG-003：移除侧栏底部空间提醒卡（Owner 裁决，用户端/管理端一致）。
  */
-const { t } = useI18n()
 const appStore = useAppStore()
 const route = useRoute()
 const collapsed = computed(() => appStore.sidebarCollapsed)
 const area = computed(() => resolveArea(route.path))
-const areaValue = computed(() =>
-  area.value === 'admin' ? t('nav.adminConsole') : t('nav.defaultWorkspace'),
-)
 /** 企业门户（节点05）为顶栏全宽；表单/流程设计器（节点07-14）为全宽三栏画布——均不渲染深色侧栏 */
 const showAside = computed(
   () =>
@@ -43,23 +38,9 @@ const showAside = computed(
       <aside
         v-if="showAside"
         class="basic-layout__aside"
-        :class="[
-          { 'basic-layout__aside--collapsed': collapsed },
-          `basic-layout__aside--${area}`,
-        ]"
+        :class="[{ 'basic-layout__aside--collapsed': collapsed }, `basic-layout__aside--${area}`]"
       >
         <AppSidebar :collapse="collapsed" class="basic-layout__menu" />
-        <div class="basic-layout__aside-foot">
-          <div class="basic-layout__area-card">
-            <img class="basic-layout__area-icon" :src="badgeSpaceUrl" alt="" aria-hidden="true" />
-            <div class="basic-layout__area-text">
-              <span class="basic-layout__area-label">{{
-                area === 'admin' ? t('nav.currentView') : t('nav.currentSpace')
-              }}</span>
-              <span class="basic-layout__area-value">{{ areaValue }}</span>
-            </div>
-          </div>
-        </div>
       </aside>
       <main class="basic-layout__content">
         <router-view />
@@ -74,7 +55,8 @@ const showAside = computed(
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  border-radius: 18px;
+  /* V011-BUG-022：整页应用外壳不放圆角（Owner 2026-09-22 裁决） */
+  border-radius: 0;
 }
 .basic-layout__topbar {
   box-sizing: border-box;
@@ -103,11 +85,12 @@ const showAside = computed(
 }
 .basic-layout__actions {
   box-sizing: border-box;
-  flex: 0 0 336px;
-  width: 336px;
-  /* 设计（节点02）：个人区 1105 起，搜索锚点 1225 */
+  /* V011-BUG-005：个人区加入顶栏语言入口，宽度 336→400，左内距相应收敛 */
+  flex: 0 0 400px;
+  width: 400px;
+  /* 设计（节点02）：搜索锚点原 1225；加语言入口后整体左移保持右缘对齐 */
   justify-content: flex-start;
-  padding-left: 122px;
+  padding-left: 96px;
 }
 .basic-layout__body {
   display: flex;
@@ -136,55 +119,6 @@ const showAside = computed(
 .basic-layout__aside--admin:not(.basic-layout__aside--collapsed) {
   flex-basis: 236px;
   width: 236px;
-}
-.basic-layout__aside-foot {
-  /* 设计（节点01/02）：底部仅空间切换卡（200×66），卡底距参考视口（1024）下缘 98px。
-     高于参考视口的屏幕/采集视口只延伸内容区，壳层卡片仍锚在 1024 参考帧内（节点19 长页基线同规）。 */
-  display: flex;
-  flex-direction: column;
-  margin-top: auto;
-  padding: 0 12px 0;
-  margin-bottom: max(98px, calc(100vh - 926px));
-}
-.basic-layout__area-card {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-  height: 66px;
-  padding: 0 12px 0 11px;
-  border: 1px solid #344164;
-  border-radius: 8px;
-  background: var(--sw-nav-area-card-bg);
-}
-.basic-layout__area-icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: #29235c;
-}
-.basic-layout__area-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  margin-top: -3px;
-}
-.basic-layout__area-label {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--sw-nav-text-secondary);
-}
-.basic-layout__area-value {
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 500;
-  color: var(--sw-nav-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .basic-layout__content {
   flex: 1;

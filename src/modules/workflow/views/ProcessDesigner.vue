@@ -16,7 +16,7 @@ const { t } = useI18n()
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
+import { ArrowLeft, Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
 import {
   getProcessDefDefinition,
   getProcessNodeCapabilities,
@@ -26,16 +26,19 @@ import {
 } from '@/modules/workflow/api'
 import type { GraphValidationError, ApproverCandidate } from '@/modules/workflow/api'
 import type { BpmNodeCapability, BpmNodeConfigField } from '@/contracts/bpm-node'
-import type { ProcessGraphDocument } from '@/contracts/process-graph'
-import {
-  createDesignerModel,
-  buildEdgePath,
-} from '@/adapters/process-graph'
-import type { DesignerModel, PositionedNode } from '@/adapters/process-graph'
+import type { ProcessGraphDocument, ProcessGraphWaypoint } from '@/contracts/process-graph'
+import { createDesignerModel, buildEdgePath } from '@/adapters/process-graph'
+import type { DesignerModel, PositionedEdge, PositionedNode } from '@/adapters/process-graph'
 
 const route = useRoute()
 const router = useRouter()
 const defId = computed(() => String(route.params.defId))
+/** 从表单工作台进入时，左上角返回该表单的「关联流程」页签。 */
+const returnFormId = computed(() =>
+  route.query?.from === 'form-workbench' && typeof route.query?.formId === 'string'
+    ? route.query.formId
+    : '',
+)
 
 const loading = ref(false)
 const errorMsg = ref('')
@@ -102,26 +105,25 @@ function fitViewport() {
     viewBox.value = { x: -40, y: -40, w: CANVAS_W, h: CANVAS_H }
     return
   }
-  // P53 设计（节点09）：像素实测锚定适配——左上锚点 + ratio≤1，图内容按设计位渲染
+  // 适应画布 = 内容包围盒在视口内等比缩放并居中；避免左侧固定锚位在大画布上偏右。
   const svgEl = svgRef.value
   const elW = svgEl ? svgEl.clientWidth || CANVAS_W : CANVAS_W
   const elH = svgEl ? svgEl.clientHeight || CANVAS_H : CANVAS_H
-  // The locked 09 design uses a 777px graph span inside the 1104px canvas:
-  // 135px left inset and 192px right inset keep the 160px cards at 1:1 CSS px.
-  // top=24 把节点端口（中心±25）锚定在设计卡缘（实测锁定 SVG 端点）。
-  const m = { left: 135, top: 24, right: 192, bottom: 20 }
+  const margin = 40
   const minX = Math.min(...xs) - P53_NODE_WIDTH / 2
   const minY = Math.min(...ys) - P53_NODE_HEIGHT / 2
   const bw = Math.max(Math.max(...xs) - Math.min(...xs) + P53_NODE_WIDTH, 1)
   const bh = Math.max(Math.max(...ys) - Math.min(...ys) + P53_NODE_HEIGHT, 1)
-  const ratio = Math.min(1, (elW - m.left - m.right) / bw, (elH - m.top - m.bottom) / bh)
+  const ratio = Math.min(1, (elW - margin * 2) / bw, (elH - margin * 2) / bh)
   const zoom = Math.max(ratio, 0.2)
+  const viewportW = elW / zoom
+  const viewportH = elH / zoom
   fitZoom.value = zoom
   viewBox.value = {
-    x: minX - m.left / zoom,
-    y: minY - m.top / zoom,
-    w: elW / zoom,
-    h: elH / zoom,
+    x: minX - (viewportW - bw) / 2,
+    y: minY - (viewportH - bh) / 2,
+    w: viewportW,
+    h: viewportH,
   }
 }
 
@@ -141,12 +143,6 @@ const savedAtText = ref('')
 function formatClock(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return pad(d.getHours()) + ':' + pad(d.getMinutes())
-}
-
-/** 表单设计页签：进入绑定表单的设计器（fixture 提供 formDefId；真实后端同形）。 */
-function goBoundFormDesigner(): void {
-  const formDefId = (graph.value as { formDefId?: string } | null)?.formDefId
-  if (formDefId) void router.push(`/form/designer/${formDefId}`)
 }
 
 /** 高级配置元数据（定义 payload 的 advancedConfig 扩展；缺省展示占位符）。 */
@@ -183,20 +179,21 @@ interface NodeListenerMeta {
   bean: string
   note: string
 }
-const nodeMeta = computed<{ nodeKey: string; approveMode: string; approverName: string; listeners: NodeListenerMeta[] }>(
-  () => {
-    const config = (selectedNode.value?.config ?? {}) as Record<string, unknown>
-    const listeners = Array.isArray(config.listeners)
-      ? (config.listeners as NodeListenerMeta[])
-      : []
-    return {
-      nodeKey: typeof config.nodeKey === 'string' ? config.nodeKey : '',
-      approveMode: typeof config.approveMode === 'string' ? config.approveMode : '',
-      approverName: typeof config.approverName === 'string' ? config.approverName : '',
-      listeners,
-    }
-  },
-)
+const nodeMeta = computed<{
+  nodeKey: string
+  approveMode: string
+  approverName: string
+  listeners: NodeListenerMeta[]
+}>(() => {
+  const config = (selectedNode.value?.config ?? {}) as Record<string, unknown>
+  const listeners = Array.isArray(config.listeners) ? (config.listeners as NodeListenerMeta[]) : []
+  return {
+    nodeKey: typeof config.nodeKey === 'string' ? config.nodeKey : '',
+    approveMode: typeof config.approveMode === 'string' ? config.approveMode : '',
+    approverName: typeof config.approverName === 'string' ? config.approverName : '',
+    listeners,
+  }
+})
 
 /* ─────────── 节点/连线交互状态 ─────────── */
 
@@ -210,7 +207,23 @@ const pendingConnectStartScreen = ref<{ x: number; y: number } | null>(null)
 
 function onWheel(event: WheelEvent) {
   event.preventDefault()
-  zoomView(event.deltaY > 0 ? 1.1 : 1 / 1.1)
+  // V011-BUG-024：滚轮/触控板滑动=平移画布（Shift=横向、deltaX 跟随触控板）；
+  // Ctrl/Cmd+滚轮（触控板捏合合成 ctrlKey）=缩放，与缩放控件/适应画布并存。
+  if (event.ctrlKey || event.metaKey) {
+    zoomView(event.deltaY > 0 ? 1.1 : 1 / 1.1)
+    return
+  }
+  const svgEl = svgRef.value
+  if (!svgEl) return
+  const rect = svgEl.getBoundingClientRect()
+  const ratio = viewBox.value.w / rect.width
+  const dx = event.shiftKey ? event.deltaY : event.deltaX
+  const dy = event.shiftKey ? 0 : event.deltaY
+  viewBox.value = {
+    ...viewBox.value,
+    x: viewBox.value.x + dx * ratio,
+    y: viewBox.value.y + dy * ratio,
+  }
 }
 
 function onBgPointerDown(event: PointerEvent) {
@@ -252,6 +265,22 @@ function onPointerMove(event: PointerEvent) {
   if (pendingConnectNode.value) {
     pendingConnectTarget.value = screenToGraph(event)
   }
+  // V011-BUG-025 连线编辑：端点拖拽预览 / 拐点拖动实时改形
+  if (edgeEdit.value && model) {
+    const edit = edgeEdit.value
+    const p = screenToGraph(event)
+    if (edit.kind === 'waypoint') {
+      const edge = model.state().edges.find((candidate) => candidate.id === edit.edgeId)
+      if (edge) {
+        const next = [...edge.waypoints]
+        next[edit.activeIndex] = p
+        model.setEdgeWaypoints(edge.id, next)
+        snapshot()
+      }
+      return
+    }
+    edgeEditPoint.value = p
+  }
 }
 
 function clickedOnSourcePort(start: { x: number; y: number } | null, event: PointerEvent): boolean {
@@ -284,6 +313,24 @@ function resolveConnectDropTarget(event: PointerEvent): string | null {
 }
 
 function onPointerUp(event: PointerEvent) {
+  // V011-BUG-025：连线编辑收尾——端点落点改接（自环/重复边/空放均还原），拐点已实时落模型
+  if (edgeEdit.value && model) {
+    const edit = edgeEdit.value
+    if (edit.kind === 'endpoint') {
+      const targetId = resolveConnectDropTarget(event)
+      const applied =
+        targetId && targetId !== edit.otherEndId
+          ? model.setEdgeEndpoint(edit.edgeId, edit.which ?? 'target', targetId)
+          : null
+      if (applied) snapshot()
+    }
+    edgeEdit.value = null
+    edgeEditFrom.value = null
+    edgeEditPoint.value = null
+    panSession.value = null
+    dragState.value = null
+    return
+  }
   // 连线落点统一判定（拖放与 sticky 点选共用）：
   // 命中其他节点 → 建立连线；仍点在源锚上 → sticky 挂起；其余 → 取消
   if (pendingConnectNode.value && model) {
@@ -340,13 +387,32 @@ function onNodePointerUp(event: PointerEvent, node: PositionedNode) {
   void event
 }
 
-/** 从节点右侧连接锚发起连线（§4.1 连线建立）。
- * 双模式：拖到目标节点放下，或点击锚后（sticky）再点击目标节点完成连接。 */
-function startConnect(event: PointerEvent, node: PositionedNode) {
+/** 节点四向锚点坐标（V011-BUG-023）：上下左右缘中点。 */
+function sidePoint(node: PositionedNode, side: 'left' | 'right' | 'top' | 'bottom') {
+  switch (side) {
+    case 'left':
+      return { x: node.x - P53_NODE_WIDTH / 2, y: node.y }
+    case 'right':
+      return { x: node.x + P53_NODE_WIDTH / 2, y: node.y }
+    case 'top':
+      return { x: node.x, y: node.y - P53_NODE_HEIGHT / 2 }
+    default:
+      return { x: node.x, y: node.y + P53_NODE_HEIGHT / 2 }
+  }
+}
+
+/** 从节点四向锚点发起连线（V011-BUG-023，ProcessOn 口径）。
+ * 双模式：拖到目标节点放下，或点击锚后（sticky）再点击目标节点完成连接；
+ * 预览/连线端点侧由 edgeEndpoints 按几何方向自动选择。 */
+function startConnect(
+  event: PointerEvent,
+  node: PositionedNode,
+  side: 'left' | 'right' | 'top' | 'bottom',
+) {
   event.stopPropagation()
   const point = screenToGraph(event)
   pendingConnectNode.value = node.id
-  pendingConnectPos.value = { x: node.x, y: node.y }
+  pendingConnectPos.value = sidePoint(node, side)
   pendingConnectTarget.value = point
   pendingConnectStartScreen.value = { x: event.clientX, y: event.clientY }
 }
@@ -357,6 +423,127 @@ function selectEdge(event: PointerEvent, edgeId: string) {
   selectionId.value = edgeId
   model?.select(edgeId)
 }
+
+/* ── V011-BUG-025 连线编辑：端点拖拽改接 / 线上按住拖动插入·移动拐点 ── */
+
+type PathPoint = { x: number; y: number }
+
+/** 解析折线 path d（M/L 序列）为点序列。 */
+function pathPoints(d: string): PathPoint[] {
+  const points: PathPoint[] = []
+  const re = /[ML]\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g
+  let match = re.exec(d)
+  while (match) {
+    points.push({ x: Number(match[1]), y: Number(match[2]) })
+    match = re.exec(d)
+  }
+  return points
+}
+
+function pointDist(a: PathPoint, b: PathPoint) {
+  return Math.hypot(a.x - b.x, a.y - b.y)
+}
+
+/** 点到线段距离与所在段下标（points[i]→points[i+1] 为第 i 段）。 */
+function nearestSegment(points: PathPoint[], p: PathPoint) {
+  let best = Number.MAX_SAFE_INTEGER
+  let idx = 0
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i]
+    const b = points[i + 1]
+    const abx = b.x - a.x
+    const aby = b.y - a.y
+    const len2 = abx * abx + aby * aby
+    const t =
+      len2 === 0 ? 0 : Math.min(1, Math.max(0, ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2))
+    const d = Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + t * aby))
+    if (d < best) {
+      best = d
+      idx = i
+    }
+  }
+  return idx
+}
+
+const edgeEdit = ref<null | {
+  edgeId: string
+  kind: 'endpoint' | 'waypoint'
+  which?: 'source' | 'target'
+  otherEndId: string
+  originalWaypoints: ProcessGraphWaypoint[]
+  activeIndex: number
+}>(null)
+/** 端点拖拽预览：起点（对端固定点）与指针跟随点。 */
+const edgeEditFrom = ref<PathPoint | null>(null)
+const edgeEditPoint = ref<PathPoint | null>(null)
+
+function beginEndpointDrag(event: PointerEvent, edge: PositionedEdge, which: 'source' | 'target') {
+  const points = pathPoints(edge.path)
+  if (points.length < 2) return
+  edgeEdit.value = {
+    edgeId: edge.id,
+    kind: 'endpoint',
+    which,
+    otherEndId: which === 'source' ? edge.targetId : edge.sourceId,
+    originalWaypoints: [...edge.waypoints],
+    activeIndex: -1,
+  }
+  edgeEditFrom.value = which === 'source' ? points[points.length - 1] : points[0]
+  edgeEditPoint.value = screenToGraph(event)
+}
+
+function beginWaypointDragFrom(edge: PositionedEdge, index: number) {
+  edgeEdit.value = {
+    edgeId: edge.id,
+    kind: 'waypoint',
+    otherEndId: '',
+    originalWaypoints: edge.waypoints.map((point) => ({ ...point })),
+    activeIndex: index,
+  }
+}
+
+// （模板拐点手柄与线内命中复用 beginWaypointDragFrom；originalWaypoints 供空放还原）
+
+/** 选中连线按下：端点命中→改接拖拽；拐点命中→移动；否则最近线段插入拐点
+ * （插入点在线上，形状先不变，拖动才变形）。 */
+function onEdgePointerDown(event: PointerEvent, edge: PositionedEdge) {
+  const alreadySelected = selectionId.value === edge.id
+  selectEdge(event, edge.id)
+  if (!alreadySelected) return
+  if (!model) return
+  const p = screenToGraph(event)
+  const points = pathPoints(edge.path)
+  if (points.length < 2) return
+  if (pointDist(p, points[0]) < 12) {
+    beginEndpointDrag(event, edge, 'source')
+    return
+  }
+  if (pointDist(p, points[points.length - 1]) < 12) {
+    beginEndpointDrag(event, edge, 'target')
+    return
+  }
+  for (let i = 0; i < edge.waypoints.length; i++) {
+    if (pointDist(p, edge.waypoints[i]) < 10) {
+      beginWaypointDragFrom(edge, i)
+      return
+    }
+  }
+  const segIdx = nearestSegment(points, p)
+  const next = [...edge.waypoints]
+  next.splice(segIdx, 0, p)
+  const originalWaypoints = edge.waypoints.map((point) => ({ ...point }))
+  model.setEdgeWaypoints(edge.id, next)
+  edgeEdit.value = {
+    edgeId: edge.id,
+    kind: 'waypoint',
+    otherEndId: '',
+    originalWaypoints,
+    activeIndex: segIdx,
+  }
+  snapshot()
+}
+
+// （命中既有拐点直接复用 beginWaypointDragFrom：保留 originalWaypoints 供空放还原）
 
 /* ─────────── 面板/属性 ─────────── */
 
@@ -375,7 +562,8 @@ function openApproverPicker(fieldKey: string) {
   approverTargetKey.value = fieldKey
   approverPickerVisible.value = true
 }
-function onApproverPicked(candidates: ApproverCandidate[]) {  const fieldKey = approverTargetKey.value
+function onApproverPicked(candidates: ApproverCandidate[]) {
+  const fieldKey = approverTargetKey.value
   if (!fieldKey || candidates.length === 0) return
   const field = selectedCapability.value?.configFields.find((f) => f.key === fieldKey)
   if (field && field.type === 'object') {
@@ -415,7 +603,10 @@ const currentApproverIds = computed<number[]>(() => {
     }
   }
   if (typeof value === 'string') {
-    value = value.split(',').map((part) => part.trim()).filter(Boolean)
+    value = value
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
   }
   if (Array.isArray(value)) {
     return value.map((v) => Number(v)).filter((n) => Number.isFinite(n))
@@ -506,7 +697,23 @@ function onCanvasDrop(event: DragEvent) {
   const point = screenToGraph(event)
   const x = Math.round(point.x / SNAP_X) * SNAP_X
   const y = Math.round(point.y / SNAP_Y) * SNAP_Y
-  const id = model.addNode(capability.type, capability.displayName, x, y)
+  // V011-BUG-020：拖放到连线上 = 在该连线中间插入节点（初始 START→END 线可直接
+  // 「拖入节点」建流程，无需先选中节点再连线）
+  const element = document.elementFromPoint(event.clientX, event.clientY)
+  const edgeId = element?.closest('path[data-edge-id]')?.getAttribute('data-edge-id') ?? null
+  const nodeId = edgeId
+    ? model.insertNodeOnEdge(edgeId, capability.type, capability.displayName, x, y)
+    : model.addNode(capability.type, capability.displayName, x, y)
+  if (nodeId) selectNode(nodeId)
+  snapshot()
+}
+
+/** V011-BUG-020：组件库点击添加（拖拽之外的可见创建路径），落点为画布中心。 */
+function onWorkbarClick(cap: BpmNodeCapability) {
+  if (!cap.supports.design || !model) return
+  const x = Math.round((viewBox.value.x + viewBox.value.w / 2) / SNAP_X) * SNAP_X
+  const y = Math.round((viewBox.value.y + viewBox.value.h / 2) / SNAP_Y) * SNAP_Y
+  const id = model.addNode(cap.type, cap.displayName, x, y)
   selectNode(id)
   snapshot()
 }
@@ -688,7 +895,11 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 function backToList() {
-  router.push('/workflow/defs')
+  if (returnFormId.value) {
+    void router.push({ path: `/form/designer/${returnFormId.value}`, query: { tab: 'processes' } })
+    return
+  }
+  void router.push('/workflow/defs')
 }
 
 function nodeLabelLines(label: string) {
@@ -700,27 +911,22 @@ function nodeLabelLines(label: string) {
   <div class="designer-page">
     <div class="designer-toolbar">
       <el-button class="toolbar-settings" @click="backToList">
-        <el-icon><Setting /></el-icon>
-        <span>{{ t('form.workbenchSettings') }}</span>
+        <el-icon><ArrowLeft /></el-icon>
+        <span>
+          {{ returnFormId ? t('workflow.backToProcessList') : t('form.workbenchSettings') }}
+        </span>
       </el-button>
       <span class="designer-crumb">
         / {{ graph?.formName || graph?.name || t('router.processDesigner') }} /
-        {{ graph?.name || t('router.processDesigner') }}{{ graph?.version ? ` v${graph.version}` : '' }}
+        {{ graph?.name || t('router.processDesigner')
+        }}{{ graph?.version ? ` v${graph.version}` : '' }}
       </span>
-      <nav class="designer-tabs" aria-label="工作区切换">
-        <button type="button" class="designer-tab" @click="goBoundFormDesigner">
-          {{ t('form.tabDesign') }}
-        </button>
-        <button type="button" class="designer-tab is-active">{{ t('form.tabProcesses') }}</button>
-      </nav>
       <span class="spacer" />
       <span class="designer-saved">{{ t('form.draftSavedAt', { time: savedAtText }) }}</span>
       <!-- 设计09：右侧操作组 = 草稿历史 + 保存 + 发布（撤销/删除/适配保留在画布缩放控件与快捷键） -->
       <div class="toolbar-actions">
         <el-button size="small" class="toolbar-drafts">{{ t('form.draftHistory') }}</el-button>
-        <el-button size="small" :loading="saving" @click="save">{{
-          t('common.save')
-        }}</el-button>
+        <el-button size="small" :loading="saving" @click="save">{{ t('common.save') }}</el-button>
         <el-button size="small" type="primary" :loading="publishing" @click="publish">{{
           t('common.publish')
         }}</el-button>
@@ -745,21 +951,32 @@ function nodeLabelLines(label: string) {
         :class="{ 'workbar-item--disabled': !cap.supports.design }"
         :draggable="cap.supports.design"
         @dragstart="onPaletteDragStart($event, cap)"
+        @click="onWorkbarClick(cap)"
       >
         <svg class="workbar-icon" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
           <template v-if="cap.type === 'START'">
             <path d="M6.667 3.333L16.667 10L6.667 16.667V3.333Z" />
           </template>
           <template v-else-if="cap.type === 'DRAFT'">
-            <path d="M11.667 2.5H3.333V17.5H16.667V7.5H11.667V2.5ZM9.167 13.333L15.833 6.667L17.5 8.333L10.833 15L8.333 15.833L9.167 13.333Z" />
+            <path
+              d="M11.667 2.5H3.333V17.5H16.667V7.5H11.667V2.5ZM9.167 13.333L15.833 6.667L17.5 8.333L10.833 15L8.333 15.833L9.167 13.333Z"
+            />
           </template>
           <template v-else-if="cap.type === 'APPROVAL'">
-            <path d="M17.5 11.667C18.881 11.667 20 10.547 20 9.167C20 7.786 18.881 6.667 17.5 6.667C16.119 6.667 15 7.786 15 9.167C15 10.547 16.119 11.667 17.5 11.667Z" />
-            <path d="M10.833 18.333C10.833 17.228 11.272 16.168 12.054 15.387C12.835 14.606 13.895 14.167 15 14.167C16.105 14.167 17.165 14.606 17.946 15.387C18.728 16.168 19.167 17.228 19.167 18.333" />
+            <path
+              d="M17.5 11.667C18.881 11.667 20 10.547 20 9.167C20 7.786 18.881 6.667 17.5 6.667C16.119 6.667 15 7.786 15 9.167C15 10.547 16.119 11.667 17.5 11.667Z"
+            />
+            <path
+              d="M10.833 18.333C10.833 17.228 11.272 16.168 12.054 15.387C12.835 14.606 13.895 14.167 15 14.167C16.105 14.167 17.165 14.606 17.946 15.387C18.728 16.168 19.167 17.228 19.167 18.333"
+            />
           </template>
           <template v-else-if="cap.type === 'CONSENSUS'">
-            <path d="M12.5 9.167C14.341 9.167 15.833 7.674 15.833 5.833C15.833 3.992 14.341 2.5 12.5 2.5C10.659 2.5 9.167 3.992 9.167 5.833C9.167 7.674 10.659 9.167 12.5 9.167Z" />
-            <path d="M3.333 17.5C3.333 15.732 4.036 14.036 5.286 12.786C6.536 11.536 8.232 10.833 10 10.833C11.768 10.833 13.464 11.536 14.714 12.786C15.964 14.036 16.667 15.732 16.667 17.5" />
+            <path
+              d="M12.5 9.167C14.341 9.167 15.833 7.674 15.833 5.833C15.833 3.992 14.341 2.5 12.5 2.5C10.659 2.5 9.167 3.992 9.167 5.833C9.167 7.674 10.659 9.167 12.5 9.167Z"
+            />
+            <path
+              d="M3.333 17.5C3.333 15.732 4.036 14.036 5.286 12.786C6.536 11.536 8.232 10.833 10 10.833C11.768 10.833 13.464 11.536 14.714 12.786C15.964 14.036 16.667 15.732 16.667 17.5"
+            />
           </template>
           <template v-else-if="cap.type === 'CONDITION'">
             <path d="M12 1.667L20.333 10L12 18.333L3.667 10L12 1.667Z" />
@@ -768,15 +985,23 @@ function nodeLabelLines(label: string) {
             <path d="M11.667 1.667H4.167V18.333H15.833V5.833L11.667 1.667V1.667Z" />
           </template>
           <template v-else-if="cap.type === 'IOT_COMMAND'">
-            <path d="M13.333 5H6.667C5.746 5 5 5.746 5 6.667V13.333C5 14.254 5.746 15 6.667 15H13.333C14.254 15 15 14.254 15 13.333V6.667C15 5.746 14.254 5 13.333 5Z" />
-            <path d="M7.5 1.667V5M12.5 1.667V5M7.5 15V18.333M12.5 15V18.333M1.667 7.5H5M1.667 12.5H5M15 7.5H18.333M15 12.5H18.333" />
+            <path
+              d="M13.333 5H6.667C5.746 5 5 5.746 5 6.667V13.333C5 14.254 5.746 15 6.667 15H13.333C14.254 15 15 14.254 15 13.333V6.667C15 5.746 14.254 5 13.333 5Z"
+            />
+            <path
+              d="M7.5 1.667V5M12.5 1.667V5M7.5 15V18.333M12.5 15V18.333M1.667 7.5H5M1.667 12.5H5M15 7.5H18.333M15 12.5H18.333"
+            />
           </template>
           <template v-else-if="cap.type === 'AGENT'">
-            <path d="M15 4.167H5C3.619 4.167 2.5 5.286 2.5 6.667V14.167C2.5 15.547 3.619 16.667 5 16.667H15C16.381 16.667 17.5 15.547 17.5 14.167V6.667C17.5 5.286 16.381 4.167 15 4.167Z" />
+            <path
+              d="M15 4.167H5C3.619 4.167 2.5 5.286 2.5 6.667V14.167C2.5 15.547 3.619 16.667 5 16.667H15C16.381 16.667 17.5 15.547 17.5 14.167V6.667C17.5 5.286 16.381 4.167 15 4.167Z"
+            />
             <path d="M10 1.667V4.167M6.667 8.333H6.75M13.333 8.333H13.417M6.667 12.5H13.333" />
           </template>
           <template v-else>
-            <path d="M15 3.333H5C4.079 3.333 3.333 4.08 3.333 5V15.833C3.333 16.754 4.079 17.5 5 17.5H15C15.92 17.5 16.667 16.754 16.667 15.833V5C16.667 4.08 15.92 3.333 15 3.333Z" />
+            <path
+              d="M15 3.333H5C4.079 3.333 3.333 4.08 3.333 5V15.833C3.333 16.754 4.079 17.5 5 17.5H15C15.92 17.5 16.667 16.754 16.667 15.833V5C16.667 4.08 15.92 3.333 15 3.333Z"
+            />
             <path d="M6.667 10L9.167 12.5L13.333 7.5M7.5 1.667H12.5V5H7.5V1.667Z" />
           </template>
         </svg>
@@ -790,8 +1015,12 @@ function nodeLabelLines(label: string) {
         t('workflow.validateFlow')
       }}</el-button>
       <svg class="workbar-gear" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-        <path d="M10 13.833C11.841 13.833 13.333 12.341 13.333 10.5C13.333 8.659 11.841 7.167 10 7.167C8.159 7.167 6.667 8.659 6.667 10.5C6.667 12.341 8.159 13.833 10 13.833Z" />
-        <path d="M10 2.167V4.667M10 16.333V18.833M1.667 10.5H4.167M15.833 10.5H18.333M4.167 4.667L5.833 6.333M14.167 14.667L15.833 16.333M4.167 16.333L5.833 14.667M14.167 6.333L15.833 4.667" />
+        <path
+          d="M10 13.833C11.841 13.833 13.333 12.341 13.333 10.5C13.333 8.659 11.841 7.167 10 7.167C8.159 7.167 6.667 8.659 6.667 10.5C6.667 12.341 8.159 13.833 10 13.833Z"
+        />
+        <path
+          d="M10 2.167V4.667M10 16.333V18.833M1.667 10.5H4.167M15.833 10.5H18.333M4.167 4.667L5.833 6.333M14.167 14.667L15.833 16.333M4.167 16.333L5.833 14.667M14.167 6.333L15.833 4.667"
+        />
       </svg>
     </div>
 
@@ -813,6 +1042,9 @@ function nodeLabelLines(label: string) {
           @drop="onCanvasDrop"
         >
           <defs>
+            <pattern id="designer-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+              <path d="M24 0H0V24" fill="none" stroke="#e8edf6" stroke-width="1" />
+            </pattern>
             <marker
               id="designer-edge-arrow"
               markerUnits="userSpaceOnUse"
@@ -836,7 +1068,7 @@ function nodeLabelLines(label: string) {
               <path d="M0,0 L8.5,3.5 L0,7 z" class="designer-edge-arrow-selected" />
             </marker>
           </defs>
-          <rect class="pg-bg" x="0" y="0" width="100000" height="100000" />
+          <rect class="pg-bg" x="-100000" y="-100000" width="200000" height="200000" />
           <template v-for="edge in canvasEdges" :key="edge.id">
             <path
               :d="edge.path"
@@ -845,7 +1077,8 @@ function nodeLabelLines(label: string) {
               :class="{ 'designer-edge-selected': selectionId === edge.id }"
               stroke-width="10"
               stroke="transparent"
-              @pointerdown.stop="selectEdge($event, edge.id)"
+              :data-edge-id="edge.id"
+              @pointerdown.stop="onEdgePointerDown($event, edge)"
             />
             <path
               :d="edge.path"
@@ -865,6 +1098,14 @@ function nodeLabelLines(label: string) {
                 [],
               )
             "
+            fill="none"
+            class="designer-edge-pending"
+            stroke-dasharray="6 4"
+          />
+          <!-- V011-BUG-025：端点拖拽预览（对端固定 → 指针） -->
+          <path
+            v-if="edgeEdit?.kind === 'endpoint' && edgeEditFrom && edgeEditPoint"
+            :d="buildEdgePath(edgeEditFrom, edgeEditPoint, [])"
             fill="none"
             class="designer-edge-pending"
             stroke-dasharray="6 4"
@@ -904,14 +1145,14 @@ function nodeLabelLines(label: string) {
               />
               <path d="M22 10 V34 M10 22 H34" class="designer-node-gateway-plus" />
             </template>
-            <!-- 设计09：连接点仅选中节点呈现（左右缘空心锚点；右侧为拖拽连线入口） -->
+            <!-- V011-BUG-023：四向锚点（上下左右缘中点）均可拖拽/点选拉线（ProcessOn 口径） -->
             <circle
               v-if="selectionId === node.id && node.type !== 'GATEWAY'"
               cx="0"
               :cy="P53_NODE_HEIGHT / 2"
               r="3"
               class="designer-node-port"
-              pointer-events="none"
+              @pointerdown.stop="startConnect($event, node, 'left')"
             />
             <circle
               v-if="selectionId === node.id && node.type !== 'GATEWAY'"
@@ -919,7 +1160,23 @@ function nodeLabelLines(label: string) {
               :cy="P53_NODE_HEIGHT / 2"
               r="3"
               class="designer-node-port"
-              @pointerdown.stop="startConnect($event, node)"
+              @pointerdown.stop="startConnect($event, node, 'right')"
+            />
+            <circle
+              v-if="selectionId === node.id && node.type !== 'GATEWAY'"
+              :cx="P53_NODE_WIDTH / 2"
+              cy="0"
+              r="3"
+              class="designer-node-port"
+              @pointerdown.stop="startConnect($event, node, 'top')"
+            />
+            <circle
+              v-if="selectionId === node.id && node.type !== 'GATEWAY'"
+              :cx="P53_NODE_WIDTH / 2"
+              :cy="P53_NODE_HEIGHT"
+              r="3"
+              class="designer-node-port"
+              @pointerdown.stop="startConnect($event, node, 'bottom')"
             />
             <!-- 设计09：节点图标为锁定 SVG 矢量字形（22×22，起点 (12,14)） -->
             <g
@@ -931,17 +1188,27 @@ function nodeLabelLines(label: string) {
                 <path d="M7.333 3.667L18.333 11L7.333 18.333V3.667Z" />
               </template>
               <template v-else-if="node.type === 'END'">
-                <path d="M16.5 3.667H5.5C4.488 3.667 3.667 4.488 3.667 5.5V17.417C3.667 18.429 4.488 19.25 5.5 19.25H16.5C17.513 19.25 18.333 18.429 18.333 17.417V5.5C18.333 4.488 17.513 3.667 16.5 3.667Z" />
+                <path
+                  d="M16.5 3.667H5.5C4.488 3.667 3.667 4.488 3.667 5.5V17.417C3.667 18.429 4.488 19.25 5.5 19.25H16.5C17.513 19.25 18.333 18.429 18.333 17.417V5.5C18.333 4.488 17.513 3.667 16.5 3.667Z"
+                />
                 <path d="M7.333 11L10.083 13.75L14.667 8.25M8.25 1.833H13.75V5.5H8.25V1.833Z" />
               </template>
               <template v-else-if="node.config?.nodeClass === 'draft'">
-                <path d="M12.833 2.75H3.667V19.25H18.333V8.25H12.833V2.75ZM10.083 14.667L17.417 7.333L19.25 9.167L11.917 16.5L9.167 17.417L10.083 14.667Z" />
+                <path
+                  d="M12.833 2.75H3.667V19.25H18.333V8.25H12.833V2.75ZM10.083 14.667L17.417 7.333L19.25 9.167L11.917 16.5L9.167 17.417L10.083 14.667Z"
+                />
               </template>
               <template v-else>
-                <path d="M15.583 2.75H3.667C3.16 2.75 2.75 3.16 2.75 3.667V18.333C2.75 18.84 3.16 19.25 3.667 19.25H15.583C16.09 19.25 16.5 18.84 16.5 18.333V3.667C16.5 3.16 16.09 2.75 15.583 2.75Z" />
+                <path
+                  d="M15.583 2.75H3.667C3.16 2.75 2.75 3.16 2.75 3.667V18.333C2.75 18.84 3.16 19.25 3.667 19.25H15.583C16.09 19.25 16.5 18.84 16.5 18.333V3.667C16.5 3.16 16.09 2.75 15.583 2.75Z"
+                />
                 <path d="M5.5 6.417H12.833M5.5 10.083H11M5.5 13.75H9.167" />
-                <path d="M16.5 15.583C18.019 15.583 19.25 14.352 19.25 12.833C19.25 11.315 18.019 10.083 16.5 10.083C14.981 10.083 13.75 11.315 13.75 12.833C13.75 14.352 14.981 15.583 16.5 15.583Z" />
-                <path d="M11.917 20.167C11.917 18.951 12.4 17.785 13.259 16.926C14.119 16.066 15.285 15.583 16.5 15.583C17.716 15.583 18.881 16.066 19.741 16.926C20.601 17.785 21.083 18.951 21.083 20.167" />
+                <path
+                  d="M16.5 15.583C18.019 15.583 19.25 14.352 19.25 12.833C19.25 11.315 18.019 10.083 16.5 10.083C14.981 10.083 13.75 11.315 13.75 12.833C13.75 14.352 14.981 15.583 16.5 15.583Z"
+                />
+                <path
+                  d="M11.917 20.167C11.917 18.951 12.4 17.785 13.259 16.926C14.119 16.066 15.285 15.583 16.5 15.583C17.716 15.583 18.881 16.066 19.741 16.926C20.601 17.785 21.083 18.951 21.083 20.167"
+                />
               </template>
             </g>
             <text
@@ -951,20 +1218,53 @@ function nodeLabelLines(label: string) {
               text-anchor="start"
               class="designer-node-label"
             >
-              <tspan v-for="(line, lineIndex) in nodeLabelLines(node.label)" :key="lineIndex" :x="42" :dy="lineIndex === 0 ? 0 : 17">
+              <tspan
+                v-for="(line, lineIndex) in nodeLabelLines(node.label)"
+                :key="lineIndex"
+                :x="42"
+                :dy="lineIndex === 0 ? 0 : 17"
+              >
                 {{ line }}
               </tspan>
             </text>
-              <text
-                v-else
-                x="54"
-                y="41.5"
+            <text
+              v-else
+              x="54"
+              y="41.5"
               text-anchor="start"
               class="designer-node-label designer-node-label--gateway"
             >
               {{ node.label }}
             </text>
           </g>
+          <!-- V011-BUG-025：把连线编辑手柄放在节点之后，确保端点不被节点盒遮挡。 -->
+          <template v-for="edge in canvasEdges" :key="'handles-' + edge.id">
+            <template v-if="selectionId === edge.id">
+              <circle
+                v-for="(wp, wpIndex) in edge.waypoints"
+                :key="'wp-' + edge.id + '-' + wpIndex"
+                :cx="wp.x"
+                :cy="wp.y"
+                r="4.5"
+                class="designer-edge-waypoint"
+                @pointerdown.stop="beginWaypointDragFrom(edge, wpIndex)"
+              />
+              <circle
+                :cx="pathPoints(edge.path)[0]?.x ?? 0"
+                :cy="pathPoints(edge.path)[0]?.y ?? 0"
+                r="5"
+                class="designer-edge-endpoint"
+                @pointerdown.stop="beginEndpointDrag($event, edge, 'source')"
+              />
+              <circle
+                :cx="pathPoints(edge.path)[pathPoints(edge.path).length - 1]?.x ?? 0"
+                :cy="pathPoints(edge.path)[pathPoints(edge.path).length - 1]?.y ?? 0"
+                r="5"
+                class="designer-edge-endpoint"
+                @pointerdown.stop="beginEndpointDrag($event, edge, 'target')"
+              />
+            </template>
+          </template>
         </svg>
         <div class="canvas-zoom">
           <button type="button" class="zoom-btn" @click="zoomView(1 / 1.1)">−</button>
@@ -998,14 +1298,23 @@ function nodeLabelLines(label: string) {
             <el-form-item v-if="nodeMeta.approveMode" :label="t('workflow.approveModeLabel')">
               <el-input :model-value="nodeMeta.approveMode" disabled />
             </el-form-item>
-            <template v-for="field in (selectedCapability?.configFields ?? []).filter((f) => f.key !== 'name')" :key="field.key">
+            <template
+              v-for="field in (selectedCapability?.configFields ?? []).filter(
+                (f) => f.key !== 'name',
+              )"
+              :key="field.key"
+            >
               <!-- name 已由顶部「节点名称」编辑项承载，能力注册表同名项不再重复渲染 -->
               <el-form-item v-if="isApproverSelectionField(field)" :label="field.label">
                 <!-- 设计09：已解析审批人（config.approverName）以 chip+按钮呈现；未解析回退输入框 -->
                 <div v-if="nodeMeta.approverName" class="approver-card">
                   <div class="approver-card__row">
                     <span class="approver-card__chip">{{ nodeMeta.approverName }}</span>
-                    <el-button size="small" class="approver-card__pick" @click="openApproverPicker(field.key)">
+                    <el-button
+                      size="small"
+                      class="approver-card__pick"
+                      @click="openApproverPicker(field.key)"
+                    >
                       {{ t('workflow.selectApprover') }}
                     </el-button>
                   </div>
@@ -1071,7 +1380,11 @@ function nodeLabelLines(label: string) {
               class="listener-row"
             >
               <span class="listener-row__phase" :class="'listener-row__phase--' + listener.phase">
-                {{ listener.phase === 'before' ? t('workflow.listenerBefore') : t('workflow.listenerAfter') }}
+                {{
+                  listener.phase === 'before'
+                    ? t('workflow.listenerBefore')
+                    : t('workflow.listenerAfter')
+                }}
               </span>
               <span class="listener-row__desc">{{ listener.label }}</span>
               <span v-if="listener.bean" class="listener-row__bean">{{ listener.bean }}</span>
@@ -1169,7 +1482,9 @@ function nodeLabelLines(label: string) {
       <template #footer>
         <div class="advanced-config-footer">
           <el-button size="small" @click="advancedConfigVisible = false"
-            >&nbsp;&nbsp;&nbsp;&nbsp;{{ t('common.cancel') }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</el-button
+            >&nbsp;&nbsp;&nbsp;&nbsp;{{
+              t('common.cancel')
+            }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</el-button
           >
           <el-button
             size="small"
@@ -1177,7 +1492,9 @@ function nodeLabelLines(label: string) {
             class="advanced-config-save"
             :loading="saving"
             @click="onSaveAdvancedConfig"
-            >&nbsp;&nbsp;&nbsp;&nbsp;{{ t('workflow.advSaveConfig') }}&nbsp;&nbsp;&nbsp;&nbsp;</el-button
+            >&nbsp;&nbsp;&nbsp;&nbsp;{{
+              t('workflow.advSaveConfig')
+            }}&nbsp;&nbsp;&nbsp;&nbsp;</el-button
           >
         </div>
       </template>
@@ -1229,6 +1546,7 @@ function nodeLabelLines(label: string) {
 
 /* ── 顶栏（fixture workbar：56px 白底 + 紧凑操作组） ── */
 .designer-toolbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1315,22 +1633,6 @@ function nodeLabelLines(label: string) {
 }
 .spacer {
   flex: 1;
-}
-/* 设计09：工作区页签（纯文字 + active 下划线，与表单设计器页签同款） */
-.designer-tab {
-  height: 56px;
-  padding: 0 34px;
-  border: 0;
-  background: transparent;
-  font-size: 14px;
-  color: #8a96ad;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-}
-.designer-tab.is-active {
-  color: var(--sw-color-primary);
-  font-weight: 600;
-  border-bottom-color: var(--sw-color-primary);
 }
 .designer-alert {
   margin: 8px 12px;
@@ -1436,16 +1738,10 @@ function nodeLabelLines(label: string) {
   min-width: 0;
   overflow: hidden;
   /* P53 节点09：画布底 #F8FAFE + 24px 网格线 #E8EDF6 */
-  background:
-    linear-gradient(#e8edf6 1px, transparent 1px),
-    linear-gradient(90deg, #e8edf6 1px, transparent 1px), #f8fafe;
-  background-size:
-    24px 24px,
-    24px 24px,
-    auto;
+  background: #f8fafe;
 }
 .pg-bg {
-  fill: transparent;
+  fill: url(#designer-grid);
 }
 .canvas-zoom {
   position: absolute;
@@ -1591,6 +1887,22 @@ function nodeLabelLines(label: string) {
   stroke: #6f2dff;
   stroke-width: 1.5;
   cursor: crosshair;
+}
+.designer-edge-waypoint,
+.designer-edge-endpoint {
+  fill: #fff;
+  stroke: #6f2dff;
+  stroke-width: 1.8;
+  pointer-events: all;
+  cursor: grab;
+}
+.designer-edge-waypoint:active,
+.designer-edge-endpoint:active {
+  cursor: grabbing;
+}
+.designer-edge-endpoint {
+  fill: #f7f2ff;
+  stroke-width: 2;
 }
 
 /* ── 连线（fixture：#A4ADBE 1.6 + 同色箭头） ── */

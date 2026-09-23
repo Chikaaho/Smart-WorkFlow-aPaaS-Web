@@ -77,7 +77,11 @@ function collectTopbarItems(nodes: MenuNode[], into: MainNavItem[]): void {
 
 /** 顶栏激活态：当前路由落在条目子树内；流程中心额外覆盖任务/发起深链。 */
 function isActive(to: string): boolean {
-  if (to === '/workflow/defs' && route.path.startsWith('/form/designer/') && route.query.tab === 'processes') {
+  if (
+    to === '/workflow/defs' &&
+    route.path.startsWith('/form/designer/') &&
+    route.query.tab === 'processes'
+  ) {
     return true
   }
   if (to === '/workflow/catalog') {
@@ -100,7 +104,11 @@ function isActive(to: string): boolean {
     )
   }
   if (to === '/workflow/analytics') {
-    return route.path === to || route.path.startsWith(`${to}/`) || route.path.startsWith('/workflow/my-instances')
+    return (
+      route.path === to ||
+      route.path.startsWith(`${to}/`) ||
+      route.path.startsWith('/workflow/my-instances')
+    )
   }
   if (to === '/') return route.path === '/'
   return route.path === to || route.path.startsWith(`${to}/`)
@@ -150,17 +158,30 @@ const items = computed<MainNavItem[]>(() => {
   const before: MainNavItem[] = []
   collectTopbarItems(areaMenu.value, before)
   if (before.length) return before
-  // 默认派生：管理端顶层分组，点击进入该分组注册的首叶 redirect。
+  // 默认派生：管理端顶层分组 → **该分组内首个后台可见叶子**（绝对路径）。
+  // 不指向分组自身 path：目录只注册了 redirect，且分组里可能混有前台叶子
+  // （如「流程管理」下的待办任务），点分组会落到前台页或不存在的位置。
   const trail = buildMenuTrail(visible, route.path)
-  return visible
-    .filter((node) => node.menuType !== MenuType.BUTTON)
-    .map((node) => ({
+  const navItems: MainNavItem[] = []
+  for (const node of visible) {
+    if (node.menuType === MenuType.BUTTON) continue
+    const to = node.menuType === MenuType.DIRECTORY ? firstVisibleLeaf(node) : toFullPath(node)
+    if (!to) continue
+    navItems.push({
       key: node.id,
       label: node.title,
-      to: toFullPath(node),
+      to,
       active: trail.length > 0 && trail[0]!.id === node.id,
-    }))
+    })
+  }
+  return navItems
 })
+
+/** 目录 → 首个后台可见叶子的绝对路径（无可用叶子返回 null）。 */
+function firstVisibleLeaf(node: MenuNode): string | null {
+  const leaf = visibleMenuNode(node)
+  return leaf ? toFullPath(leaf) : null
+}
 
 function collectPaths(nodes: MenuNode[], into: Set<string>): void {
   for (const node of nodes) {

@@ -56,6 +56,7 @@ import {
 
 import type { App } from 'vue'
 import AttachmentControl from '@/components/dynamic-field-controls/AttachmentControl.vue'
+import LabelControl from '@/components/dynamic-field-controls/LabelControl.vue'
 
 const EP_COMPONENTS = [
   ElForm,
@@ -101,4 +102,8 @@ export function setupFcApp(app: App): void {
   // v0.0.2 P2：附件/图片自定义控件（ATTACHMENT/IMAGE 规则 type='AttachmentPicker'）。
   formCreate.component('AttachmentPicker', AttachmentControl)
   app.component('AttachmentPicker', AttachmentControl)
+
+  // 文字组件（LABEL）复用同一份 LabelControl，设计态预览与填报态样式同源。
+  formCreate.component('TextDisplay', LabelControl)
+  app.component('TextDisplay', LabelControl)
 }

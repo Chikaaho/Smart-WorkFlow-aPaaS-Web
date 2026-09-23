@@ -47,7 +47,7 @@ test.describe('P53 视觉基线', () => {
     test.skip(viewport < 768, '375 不承担管理端完整导航（方向 §4.5），区域分区不适用')
     const regions = desktopRegions(page.viewportSize() ?? undefined)
     await page.locator('.app-topbar__user').click()
-    const dropdown = page.locator('.el-dropdown-menu').first()
+    const dropdown = page.locator('.app-topbar__dropdown')
     await dropdown.getByText('进入后台').click()
     await expect(dropdown).toBeHidden()
     await expect(page.locator('header.basic-layout__topbar--admin')).toBeVisible()
