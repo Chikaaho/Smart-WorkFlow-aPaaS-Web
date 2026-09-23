@@ -394,9 +394,11 @@ async function handleSubmit() {
         duration: 3000,
       })
       // 跳转到发起人可查看实例状态与流转记录的真实页面
+      // 注意：必须是**前台**页面（/workflow/my-instances = 我发起的）。
+      // 曾指向 /workflow/instances（后台「流程实例」管理页），前台发起完会被扔进管理后台。
       // eslint-disable-next-line no-undef
       window.setTimeout(() => {
-        router.push('/workflow/instances')
+        router.push('/workflow/my-instances')
       }, 1500)
     } else {
       // 未绑定流程/发起失败：如实提示仅保存数据，不声称流程已发起
@@ -613,7 +615,11 @@ onMounted(loadSchema)
       <el-empty v-if="!schema && !errorMsg" :description="t('form.notFoundOrLoadFailed')" />
 
       <template v-else-if="schema">
-        <button class="form-render-page__back" type="button" @click="router.push('/workflow/catalog')">
+        <button
+          class="form-render-page__back"
+          type="button"
+          @click="router.push('/workflow/catalog')"
+        >
           <span aria-hidden="true">‹</span>
           {{ t('form.backToProcessCenter') }}
         </button>
