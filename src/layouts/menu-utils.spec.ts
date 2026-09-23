@@ -1,6 +1,65 @@
 import { describe, it, expect } from 'vitest'
 import { MenuType, type MenuNode } from '@/contracts/menu'
-import { toFullPath, buildMenuTrail, openedMenuKeys, visibleMenu } from './menu-utils'
+import {
+  toFullPath,
+  buildMenuTrail,
+  openedMenuKeys,
+  visibleMenu,
+  visibleMenuForArea,
+} from './menu-utils'
+
+/**
+ * v0.1.1 回归：页面节点同样会挂按钮子节点（menu_type=2）。
+ * 区域过滤若把「有子节点的页面」当目录递归裁剪，按钮被过滤后整页会被丢弃 ——
+ * 这正是「有权限按钮的页面（用户/角色/部门/岗位、流程定义、模板…）在侧栏全部消失」的根因。
+ */
+describe('visibleMenuForArea 页面与按钮子节点', () => {
+  const tree: MenuNode[] = [
+    {
+      id: '1',
+      parentId: null,
+      name: 'System',
+      title: '系统管理',
+      path: 'system',
+      component: null,
+      sort: 10,
+      menuType: MenuType.DIRECTORY,
+      children: [
+        {
+          id: '11',
+          parentId: '1',
+          name: 'User',
+          title: '用户管理',
+          path: 'system/user',
+          component: 'system/views/UserList',
+          sort: 10,
+          menuType: MenuType.MENU,
+          children: [
+            {
+              id: '100',
+              parentId: '11',
+              name: 'UserCreate',
+              title: '用户新增',
+              path: '',
+              component: null,
+              sort: 1,
+              menuType: MenuType.BUTTON,
+              permission: 'system:user:create',
+            },
+          ],
+        },
+      ],
+    },
+  ]
+
+  it('挂按钮的页面仍出现在后台侧栏，按钮自身不下发', () => {
+    const visible = visibleMenuForArea(tree, 'admin')
+    expect(visible).toHaveLength(1)
+    const children = visible[0].children ?? []
+    expect(children.map((n) => n.title)).toEqual(['用户管理'])
+    expect(children[0].menuType).toBe(MenuType.MENU)
+  })
+})
 
 const MENU: MenuNode[] = [
   {
