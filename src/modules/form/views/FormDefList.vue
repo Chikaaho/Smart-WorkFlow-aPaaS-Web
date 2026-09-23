@@ -475,13 +475,15 @@ onMounted(loadList)
 
 <style scoped>
 .form-def-page {
-  display: flex;
+  /* 用 grid 而不是 flex：右侧列表模板根元素类名不受本文件控制，
+     用列轨道定位更稳（flex 下曾出现模板被挤到下方、页面看起来“崩了”）。 */
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 16px;
   align-items: flex-start;
 }
 
 .form-def-page__tree {
-  flex: 0 0 220px;
   max-height: 100%;
   padding: 12px;
   border: 1px solid var(--sw-border-light);
@@ -497,8 +499,7 @@ onMounted(loadList)
   color: var(--sw-text-primary);
 }
 
-.form-def-page > :deep(.page-layout) {
-  flex: 1 1 auto;
+.form-def-page > * {
   min-width: 0;
 }
 
