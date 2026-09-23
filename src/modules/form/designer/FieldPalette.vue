@@ -84,6 +84,7 @@ const LABELS: Record<string, string> = {
   MULTISELECT: 'form.paletteCheckbox',
   DATE: 'form.paletteDateTime',
   ATTACHMENT: 'form.paletteUpload',
+  LABEL: 'form.paletteText',
   USER: 'form.palettePerson',
   DEPT: 'form.paletteDepartment',
   SERIAL: 'form.paletteSerial',
@@ -106,6 +107,7 @@ const ENTRY_ICONS: Record<string, string> = {
   MULTISELECT: 'Select',
   DATE: 'Calendar',
   ATTACHMENT: 'Paperclip',
+  LABEL: 'TextGlyph',
   USER: 'User',
   DEPT: 'Grid',
   SERIAL: 'HashGlyph',
@@ -125,7 +127,20 @@ const ENTRY_ICONS: Record<string, string> = {
  */
 const paletteSearch = ref('')
 const PALETTE_GROUPS: Array<{ key: string; types: string[] }> = [
-  { key: 'form.paletteGroupBasic', types: ['TEXT', 'RICH_TEXT', 'NUMBER', 'DICT', 'BOOL', 'MULTISELECT', 'DATE', 'ATTACHMENT'] },
+  {
+    key: 'form.paletteGroupBasic',
+    types: [
+      'TEXT',
+      'RICH_TEXT',
+      'NUMBER',
+      'DICT',
+      'BOOL',
+      'MULTISELECT',
+      'DATE',
+      'ATTACHMENT',
+      'LABEL',
+    ],
+  },
   { key: 'form.paletteGroupBusiness', types: ['USER', 'DEPT', 'SERIAL', 'DATASOURCE'] },
   { key: 'form.paletteGroupLayout', types: ['GRID', 'GROUP', 'DIVIDER', 'SUBTABLE'] },
   { key: 'form.paletteGroupAdvanced', types: ['FORMULA', 'RICH_TEXT', 'IOT', 'AGENT'] },
@@ -138,17 +153,28 @@ const paletteGrouped = computed(() => {
   const unavailable = new Set(['SERIAL', 'GRID', 'GROUP', 'DIVIDER', 'SUBTABLE', 'IOT', 'AGENT'])
   const entries = (type: string, groupKey: string): PaletteEntry | null => {
     const descriptor = descriptorByType.value.get(type as FieldType)
-    if (props.allowedTypes && (!descriptor || !props.allowedTypes.includes(descriptor.type))) return null
-    const labelKey = groupKey === 'form.paletteGroupAdvanced' && type === 'RICH_TEXT'
-      ? 'form.fieldTypeRichText'
-      : LABELS[type] ?? type
+    if (props.allowedTypes && (!descriptor || !props.allowedTypes.includes(descriptor.type)))
+      return null
+    const labelKey =
+      groupKey === 'form.paletteGroupAdvanced' && type === 'RICH_TEXT'
+        ? 'form.fieldTypeRichText'
+        : (LABELS[type] ?? type)
     const label = t(labelKey)
-    if (keyword && !label.toLowerCase().includes(keyword) && !type.toLowerCase().includes(keyword)) return null
-    return { type, label, icon: ENTRY_ICONS[type] ?? 'InfoFilled', descriptor, disabled: unavailable.has(type) }
+    if (keyword && !label.toLowerCase().includes(keyword) && !type.toLowerCase().includes(keyword))
+      return null
+    return {
+      type,
+      label,
+      icon: ENTRY_ICONS[type] ?? 'InfoFilled',
+      descriptor,
+      disabled: unavailable.has(type),
+    }
   }
   return PALETTE_GROUPS.map((group) => ({
     key: group.key,
-    items: group.types.map((type) => entries(type, group.key)).filter((entry): entry is PaletteEntry => entry !== null),
+    items: group.types
+      .map((type) => entries(type, group.key))
+      .filter((entry): entry is PaletteEntry => entry !== null),
   })).filter((group) => group.items.length > 0)
 })
 
@@ -190,7 +216,8 @@ const GLYPH_MAP: Record<string, string> = {
  * SortableJS 在 pull:'clone' 时调用，返回值即插入画布 v-model 的对象。
  */
 function cloneToItem(entry: PaletteEntry): DesignerItem {
-  if (!entry.descriptor) throw new Error(`Unavailable palette entry cannot be cloned: ${entry.type}`)
+  if (!entry.descriptor)
+    throw new Error(`Unavailable palette entry cannot be cloned: ${entry.type}`)
   return createItem(entry.descriptor)
 }
 
@@ -247,7 +274,9 @@ function addFromPalette(entry: PaletteEntry) {
           :disabled="d.disabled"
           @click="addFromPalette(d)"
         >
-          <span v-if="GLYPH_MAP[d.icon]" class="palette__icon palette__glyph">{{ GLYPH_MAP[d.icon] }}</span>
+          <span v-if="GLYPH_MAP[d.icon]" class="palette__icon palette__glyph">{{
+            GLYPH_MAP[d.icon]
+          }}</span>
           <el-icon v-else-if="ICON_MAP[d.icon]" class="palette__icon">
             <component :is="ICON_MAP[d.icon]" />
           </el-icon>

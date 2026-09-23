@@ -7,7 +7,7 @@
  * 数据外部进（modelValue），更新通过 emit 出——零 onMounted 拉数据。
  */
 import { computed } from 'vue'
-import type { FormSchemaField } from '@/contracts/form-schema'
+import { fieldLabelPositionClass, type FormSchemaField } from '@/contracts/form-schema'
 import { getDynamicFieldDescriptor } from './dynamic-field-registry'
 
 const props = withDefaults(
@@ -45,6 +45,12 @@ const controlComponent = computed(
   () => getDynamicFieldDescriptor(props.field.type)?.component ?? null,
 )
 
+/** 字段标题位置（缺省上方左对齐）。 */
+const labelPositionClass = computed(() => fieldLabelPositionClass(props.field.labelPosition))
+
+/** 文字组件不带独立标题：正文即内容，避免标题与正文重复。 */
+const showLabel = computed(() => props.field.type !== 'LABEL')
+
 /** 动态挂载控件的事件负载无静态类型（<component :is>），显式声明为 unknown。 */
 function onControlUpdate(value: unknown) {
   emit('update:modelValue', value)
@@ -52,9 +58,9 @@ function onControlUpdate(value: unknown) {
 </script>
 
 <template>
-  <div class="dynamic-field">
+  <div class="dynamic-field" :class="labelPositionClass">
     <!-- 标签 + 必填红星（页型A 规范） -->
-    <label class="dynamic-field__label">
+    <label v-if="showLabel" class="dynamic-field__label">
       <span v-if="field.required" class="dynamic-field__required">*</span>
       {{ field.label ?? field.name }}
     </label>
@@ -89,6 +95,32 @@ function onControlUpdate(value: unknown) {
 .dynamic-field__required {
   color: var(--sw-danger);
   margin-right: var(--sw-space-4);
+}
+
+/* ── 字段标题位置（每个字段独立） ── */
+.dynamic-field.sw-label-pos--left,
+.dynamic-field.sw-label-pos--right {
+  display: flex;
+  align-items: center;
+  gap: var(--sw-space-8);
+}
+
+.dynamic-field.sw-label-pos--right {
+  flex-direction: row-reverse;
+}
+
+.dynamic-field.sw-label-pos--left > .dynamic-field__label,
+.dynamic-field.sw-label-pos--right > .dynamic-field__label {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
+.dynamic-field.sw-label-pos--top-center > .dynamic-field__label {
+  text-align: center;
+}
+
+.dynamic-field.sw-label-pos--top-right > .dynamic-field__label {
+  text-align: right;
 }
 
 /* 控件高度统一（:deep 穿透到注册表挂载的子控件） */

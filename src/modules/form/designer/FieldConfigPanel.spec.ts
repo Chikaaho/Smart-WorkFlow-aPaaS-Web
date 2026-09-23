@@ -52,3 +52,39 @@ describe('FieldConfigPanel 字段标识（V011-BUG-016）', () => {
     expect(wrapper.text()).toContain('字段标识发布后不可直接修改')
   })
 })
+
+describe('FieldConfigPanel 字段标题位置', () => {
+  function mountWithField(field: DesignerItem['field']) {
+    return mount(FieldConfigPanel, {
+      props: { field: { id: 'f1', field }, otherNames: [] },
+      global: { stubs: { RulesEditor: { template: '<div />' } } },
+    })
+  }
+
+  it('未配置时回显上方左对齐，选择后回写 labelPosition', async () => {
+    const wrapper = mountWithField({
+      name: 'field_name',
+      type: 'TEXT',
+      label: '姓名',
+      colSpan: 24,
+    })
+    const select = wrapper
+      .findAllComponents({ name: 'ElSelect' })
+      .find((s) => s.props('modelValue') === 'top-left')
+    expect(select).toBeTruthy()
+
+    await select!.vm.$emit('update:modelValue', 'top-center')
+    const patches = wrapper.emitted('update') as unknown as Array<[{ labelPosition?: string }]>
+    expect(patches?.at(-1)?.[0].labelPosition).toBe('top-center')
+  })
+
+  it('文字组件无独立标题，不展示标题位置行', () => {
+    const wrapper = mountWithField({
+      name: 'field_note',
+      type: 'LABEL',
+      label: '文字',
+      colSpan: 24,
+    })
+    expect(wrapper.text()).not.toContain('标题位置')
+  })
+})

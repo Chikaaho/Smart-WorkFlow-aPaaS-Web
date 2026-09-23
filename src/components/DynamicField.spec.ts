@@ -398,3 +398,64 @@ describe('DynamicField — 标签与必填', () => {
     expect(wrapper.find('label').exists()).toBe(true)
   })
 })
+
+/* ═══════════════════════════════════════════════════
+ * 字段标题位置（五档）+ 文字组件
+ * ═══════════════════════════════════════════════════ */
+
+describe('DynamicField — 字段标题位置', () => {
+  it('未配置时为上方左对齐', () => {
+    const wrapper = mountField({ name: 'x', label: '用户名', type: 'TEXT' })
+    expect(wrapper.classes()).toContain('sw-label-pos--top-left')
+  })
+
+  it('五种位置各渲染对应类名，标签与控件始终同层', () => {
+    const positions = ['left', 'right', 'top-left', 'top-right', 'top-center'] as const
+    for (const position of positions) {
+      const wrapper = mountField({
+        name: 'x',
+        label: '用户名',
+        type: 'TEXT',
+        labelPosition: position,
+      })
+      expect(wrapper.classes()).toContain(`sw-label-pos--${position}`)
+      expect(wrapper.find('.dynamic-field__label').text()).toContain('用户名')
+      expect(wrapper.findComponent({ name: 'ElInput' }).exists()).toBe(true)
+    }
+  })
+})
+
+describe('DynamicField — 文字组件（LABEL）', () => {
+  it('只渲染正文，不渲染独立字段标题', () => {
+    const wrapper = mountField({ name: 'note', type: 'LABEL', label: '文字', text: '请如实填写' })
+    expect(wrapper.find('.dynamic-field__label').exists()).toBe(false)
+    expect(wrapper.find('.label-control').text()).toBe('请如实填写')
+  })
+
+  it('正文为空时回退字段标签', () => {
+    const wrapper = mountField({ name: 'note', type: 'LABEL', label: '文字' })
+    expect(wrapper.find('.label-control').text()).toBe('文字')
+  })
+
+  it('颜色 / 字号 / 粗细落到正文内联样式', () => {
+    const wrapper = mountField({
+      name: 'note',
+      type: 'LABEL',
+      label: '文字',
+      text: '请如实填写',
+      color: '#d93026',
+      fontSize: 18,
+      fontWeight: 'bold',
+    })
+    const el = wrapper.find('.label-control').element as HTMLElement
+    expect(el.style.fontSize).toBe('18px')
+    expect(el.style.fontWeight).toBe('bold')
+    expect(el.style.color).not.toBe('')
+  })
+
+  it('未配置样式时不注入内联样式', () => {
+    const wrapper = mountField({ name: 'note', type: 'LABEL', label: '文字', text: '正文' })
+    const el = wrapper.find('.label-control').element as HTMLElement
+    expect(el.getAttribute('style') ?? '').toBe('')
+  })
+})

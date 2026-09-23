@@ -18,9 +18,13 @@ import { getFieldTypeDescriptor, getFieldTypeStorage } from './field-types'
 import { isColumnNameUnique } from './column-name'
 import type { DesignerItem } from './types'
 import type { FieldPatch } from './field-config'
-import type { VisibilityRule } from '@/contracts/form-schema'
 import RulesEditor from './config/RulesEditor.vue'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
+import {
+  DEFAULT_FIELD_LABEL_POSITION,
+  type FieldLabelPosition,
+  type VisibilityRule,
+} from '@/contracts/form-schema'
 
 /** 系统固定前缀：字段标识仅暴露后缀编辑（V011-BUG-016）。 */
 const FIELD_KEY_PREFIX = 'field_'
@@ -59,6 +63,26 @@ const colSpan = computed(() =>
 const span12 = computed(() => Math.max(1, Math.round(colSpan.value / 2)))
 
 const spanOptions = Array.from({ length: 12 }, (_, i) => i + 1)
+
+/** 标题位置选项（枚举顺序 = Owner 指定的五种位置）。 */
+const LABEL_POSITION_OPTIONS: ReadonlyArray<{ value: FieldLabelPosition; key: string }> = [
+  { value: 'left', key: 'form.labelPositionLeft' },
+  { value: 'right', key: 'form.labelPositionRight' },
+  { value: 'top-left', key: 'form.labelPositionTopLeft' },
+  { value: 'top-right', key: 'form.labelPositionTopRight' },
+  { value: 'top-center', key: 'form.labelPositionTopCenter' },
+]
+
+/** 当前字段标题位置（缺省上方左对齐）。文字组件无独立标题，不展示该行。 */
+const labelPosition = computed<FieldLabelPosition>(
+  () => props.field?.field.labelPosition ?? DEFAULT_FIELD_LABEL_POSITION,
+)
+
+const showLabelPosition = computed(() => props.field?.field.type !== 'LABEL')
+
+function onLabelPosition(value: FieldLabelPosition) {
+  emit('update', { labelPosition: value })
+}
 
 function onSpan12(value: number | undefined) {
   if (!props.field || !value) return
@@ -117,6 +141,21 @@ function onFieldKeySuffix(raw: string) {
             :key="n"
             :value="n"
             :label="t('form.span12Cell', { n, p: Math.round((n / 12) * 100) })"
+          />
+        </el-select>
+      </div>
+      <div v-if="showLabelPosition" class="config__row">
+        <label class="config__label">{{ t('form.labelPositionLabel') }}</label>
+        <el-select
+          :model-value="labelPosition"
+          :disabled="readonly"
+          @update:model-value="onLabelPosition"
+        >
+          <el-option
+            v-for="option in LABEL_POSITION_OPTIONS"
+            :key="option.value"
+            :value="option.value"
+            :label="t(option.key)"
           />
         </el-select>
       </div>

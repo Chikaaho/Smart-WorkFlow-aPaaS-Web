@@ -186,8 +186,15 @@ export const FIELD_TYPE_REGISTRY: readonly FieldTypeDescriptor[] = [
       return i18n.global.t('form.fieldTypeLabel')
     },
     icon: 'InfoFilled',
+    // 文字组件：正文 + 颜色/字号/粗细三项样式属性（契约 LabelField）。
     createDefault: (name) =>
-      ({ ...baseField('LABEL', name, i18n.global.t('form.fieldTypeLabel')) }) as FormSchemaField,
+      ({
+        ...baseField('LABEL', name, i18n.global.t('form.fieldTypeLabel')),
+        text: '',
+        color: '',
+        fontSize: 14,
+        fontWeight: 'normal',
+      }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },
   // ══════ I2 低代码表单收口 ══════
