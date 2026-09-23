@@ -8,15 +8,15 @@ const { t } = useI18n()
  * 每个字段渲染成它的**真控件长相**（经 adapters/FormPreview 的 design 态），外面套一层
  * 「壳」承担全部交互：
  *  - 整块壳是选中热区：点控件任意位置 = 选中该字段（真控件 pointer-events:none，事件穿透到壳）；
- *  - hover 出顶栏：拖拽手柄（.field-shell__handle，仅此处可拖）+ 类型徽标 + 删除按钮；
+ *  - hover 出顶栏：删除按钮；字段壳本身支持拖拽排序；
  *  - 从控件库拖入、画布内拖拽排序，均由壳层接管，真控件不吞事件。
  *
  * 红线：真控件渲染只调 adapters 暴露的 FormPreview（design 态），modules/ 侧画布只管
  * 拖拽/排序/选中/删除的壳，**零 import @form-create/***。
- * V011-BUG-007：hover 条不再展示类型/字段标识文本，仅保留拖拽手柄与删除。
+ * V011-BUG-007：hover 条不再展示类型/字段标识文本；保留删除动作。
  */
 import { VueDraggable } from 'vue-draggable-plus'
-import { Delete, Rank } from '@element-plus/icons-vue'
+import { Delete } from '@element-plus/icons-vue'
 import type { DesignerItem } from './types'
 import type { FormSchema } from '@/contracts/form-schema'
 import FormPreview from '@/adapters/form-designer/FormPreview.vue'
@@ -92,7 +92,6 @@ function remove(id: string) {
       :fallback-on-body="true"
       :fallback-tolerance="4"
       item-key="id"
-      handle=".field-shell__handle"
       class="canvas__list"
       :disabled="readonly"
     >
@@ -107,12 +106,9 @@ function remove(id: string) {
         :data-field-name="item.field.name"
         @click="select(item.id)"
       >
-        <!-- V011-BUG-007：hover 条只保留拖拽手柄与删除；类型/字段标识文本不再悬浮展示
+        <!-- V011-BUG-007：hover 条只保留删除动作；类型/字段标识文本不再悬浮展示
             （V011-BUG-008：选中档位徽标同步移除，宽度在右侧属性面板查看） -->
         <div class="field-shell__bar">
-          <span class="field-shell__handle" :title="t('form.dragToSort')">
-            <el-icon><Rank /></el-icon>
-          </span>
           <el-button
             v-if="!readonly"
             class="field-shell__del"
@@ -199,14 +195,14 @@ function remove(id: string) {
 }
 
 .field-shell__bar {
-  /* 设计07：拖拽条不占布局空间（绝对定位），hover 时悬浮于字段格上 */
+  /* 设计07：操作条不占布局空间（绝对定位），hover 时仅显示删除动作 */
   display: flex;
   position: absolute;
   top: 4px;
   right: 11px;
   left: 11px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--sw-space-8);
   height: 24px;
 
@@ -216,17 +212,6 @@ function remove(id: string) {
 
 .field-shell:hover .field-shell__bar {
   opacity: 1;
-}
-
-.field-shell__handle {
-  display: inline-flex;
-  align-items: center;
-  color: var(--sw-text-secondary);
-  cursor: grab;
-}
-
-.field-shell__handle:active {
-  cursor: grabbing;
 }
 
 .field-shell__del {
