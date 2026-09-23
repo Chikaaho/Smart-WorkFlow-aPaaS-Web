@@ -5,7 +5,7 @@ import { useMenuStore } from '@/stores/menu'
 import { resolveArea } from '@/foundation/area'
 import { visibleMenuForArea, toFullPath } from '../menu-utils'
 import { useLocalizedMenuTree } from '../menu-title'
-import { MenuType } from '@/contracts/menu'
+import { MenuType, type MenuNode } from '@/contracts/menu'
 import AppSidebarItem from './AppSidebarItem.vue'
 import iconWorkspace from '@/assets/brand/icon-workspace.png'
 import iconIntelligence from '@/assets/brand/icon-intelligence.png'
@@ -26,13 +26,23 @@ const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
  * 前台（portal）保持原有派生（工作台 + 流程中心 + 收件箱等跨入口），不做分区收敛。
  */
 const items = computed(() => {
-  const scoped = visibleMenuForArea(localizedMenu.value, resolveArea(route.path))
-  if (resolveArea(route.path) !== 'admin') return scoped
-  const segment = route.path.split('/').filter(Boolean)[0] ?? ''
-  const group = scoped.find((node) => toFullPath(node) === `/${segment}`)
+  const current = resolveArea(route.path)
+  const scoped = visibleMenuForArea(localizedMenu.value, current)
+  if (current !== 'admin') return scoped
+  // 按「子树是否覆盖当前路由」定位分区：不能只看首段路径——
+  // 开放接口(/openapi)、文件管理(/storage) 等已并入系统管理，首段与分组路径不一致，
+  // 按首段匹配会找不到分组而回退成整棵树（表现为「点开放接口后所有分组又都展开了」）。
+  const group = scoped.find((node) => subtreeContains(node, route.path))
   if (!group) return scoped
   return group.children?.length ? group.children : [group]
 })
+
+/** 节点自身或其任一后代页面路径是否覆盖当前路由（相等或为其前缀）。 */
+function subtreeContains(node: MenuNode, path: string): boolean {
+  const full = toFullPath(node)
+  if (path === full || path.startsWith(`${full}/`)) return true
+  return (node.children ?? []).some((child) => subtreeContains(child, path))
+}
 // 深链上下文激活映射（设计节点03/27）：表单渲染→流程中心；任务详情→我的待办
 const activePath = computed(() => {
   if (route.path.startsWith('/form/form-render/')) return '/workflow/catalog'

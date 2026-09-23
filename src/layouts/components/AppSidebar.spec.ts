@@ -118,6 +118,73 @@ describe('layouts/AppSidebar', () => {
     expect(wrapper.findAll('.stub-item')).toHaveLength(2)
   })
 
+  it('二级路径页面（开放接口/文件管理）仍锁定在所属分区，不回退成整棵树', () => {
+    // 回归：曾按「首段路径 == 分组路径」定位分区，/openapi 首段与分组路径 system 不一致，
+    // 结果回退成整棵后台树（点开放接口后所有分组又都展开）。
+    useMenuStore().setMenu([
+      {
+        id: '1',
+        parentId: null,
+        name: 'system',
+        title: '系统管理',
+        path: 'system',
+        component: null,
+        sort: 1,
+        menuType: MenuType.DIRECTORY,
+        children: [
+          {
+            id: '10',
+            parentId: '1',
+            name: 'dict',
+            title: '字典管理',
+            path: 'system/dict',
+            component: 'system/views/DictTypeList',
+            sort: 1,
+            menuType: MenuType.MENU,
+          },
+          {
+            id: '9',
+            parentId: '1',
+            name: 'openapi',
+            title: '开放接口',
+            path: 'openapi',
+            component: 'openapi/views/OpenapiHome',
+            sort: 2,
+            menuType: MenuType.MENU,
+          },
+        ],
+      },
+      {
+        id: '2',
+        parentId: null,
+        name: 'form',
+        title: '表单管理',
+        path: 'form',
+        component: null,
+        sort: 2,
+        menuType: MenuType.DIRECTORY,
+        children: [
+          {
+            id: '3',
+            parentId: '2',
+            name: 'form-list',
+            title: '表单列表',
+            path: 'form/form-def-list',
+            component: 'form/views/FormDefList',
+            sort: 1,
+            menuType: MenuType.MENU,
+          },
+        ],
+      },
+    ])
+    mockPath = '/openapi'
+    const wrapper = mountSidebar()
+    expect(wrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))).toEqual([
+      '/system/dict',
+      '/openapi',
+    ])
+  })
+
   it('binds el-menu active index to the current route path (selection follows route)', () => {
     mockPath = '/form/form'
     const wrapper = mountSidebar()
