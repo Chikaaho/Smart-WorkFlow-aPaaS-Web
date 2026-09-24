@@ -23,6 +23,7 @@ describe('form-layout', () => {
     expect(normalizeFormFieldColSpan(1, 'TEXT')).toBe(1)
     expect(getFormFieldColSpan(field('TEXT'))).toBe(12)
     expect(getFormFieldColSpan(field('RICH_TEXT'))).toBe(24)
+    expect(getFormFieldColSpan(field('LABEL'))).toBe(24)
     expect(getFormFieldColSpan(field('TABLE', 0))).toBe(24)
   })
 

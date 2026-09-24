@@ -210,7 +210,7 @@ describe('G2-2: 通知目录 redirect 到第一个叶子 path', () => {
     const routes = buildRoutesFromMenu(V38_NOTIFY_MENU)
     const dir = routes.find((r) => r.path === 'notify')
     expect(dir).toBeDefined()
-    expect(dir!.redirect).toBe('notify/inbox')
+    expect(dir!.redirect).toBe('/notify/inbox')
     expect(dir!.component).toBeUndefined()
     expect(dir!.meta?.permission).toBe('notify:view')
   })
@@ -226,7 +226,7 @@ describe('G2-2: 通知目录 redirect 到第一个叶子 path', () => {
       },
     ]
     const dir = buildRoutesFromMenu(reordered).find((r) => r.path === 'notify')
-    expect(dir!.redirect).toBe('notify/template')
+    expect(dir!.redirect).toBe('/notify/template')
   })
 })
 

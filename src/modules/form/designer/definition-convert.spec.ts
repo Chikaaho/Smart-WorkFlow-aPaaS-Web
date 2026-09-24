@@ -125,6 +125,38 @@ describe('definition-convert / itemsToDefinition', () => {
     const schema = itemsToDefinition([], '')
     expect(schema.title).toBe('未命名表单')
   })
+
+  it('导出保留标题位置与文字组件样式键', () => {
+    const items: DesignerItem[] = [
+      {
+        id: 'di_1',
+        field: { name: 'f1', type: 'TEXT', label: '姓名', labelPosition: 'top-center' },
+      },
+      {
+        id: 'di_2',
+        field: {
+          name: 'note',
+          type: 'LABEL',
+          label: '文字',
+          text: '请如实填写',
+          color: '#d93026',
+          fontSize: 18,
+          fontWeight: 'bold',
+          textAlign: 'center',
+        },
+      },
+    ]
+    const schema = itemsToDefinition(items, 'F')
+    expect(schema.fields[0].labelPosition).toBe('top-center')
+    expect(schema.fields[1]).toMatchObject({
+      type: 'LABEL',
+      text: '请如实填写',
+      color: '#d93026',
+      fontSize: 18,
+      fontWeight: 'bold',
+      textAlign: 'center',
+    })
+  })
 })
 
 /* ------------------------------------------------------------------ */
@@ -206,6 +238,34 @@ describe('definition-convert / definitionToItems', () => {
     if (field.type === 'REFERENCE') {
       expect(field.targetFormId).toBe('other-form')
     }
+  })
+
+  it('回显保留标题位置与文字样式（definition → items）', () => {
+    const schema: FormSchema = {
+      title: 'F',
+      fields: [
+        { name: 'f1', type: 'TEXT', labelPosition: 'left' },
+        {
+          name: 'note',
+          type: 'LABEL',
+          text: '正文',
+          color: '#2563eb',
+          fontSize: 20,
+          fontWeight: 'bold',
+          textAlign: 'right',
+        },
+      ],
+    }
+    const items = definitionToItems(schema)
+    expect(items[0].field.labelPosition).toBe('left')
+    expect(items[1].field).toMatchObject({
+      type: 'LABEL',
+      text: '正文',
+      color: '#2563eb',
+      fontSize: 20,
+      fontWeight: 'bold',
+      textAlign: 'right',
+    })
   })
 
   it('preserves TABLE subFields on roundtrip', () => {

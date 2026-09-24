@@ -8,9 +8,11 @@
 export const FORM_GRID_COLUMNS = 24 as const
 export const DEFAULT_FORM_FIELD_COL_SPAN = 12 as const
 
-/** 富文本与子表默认占满一行，保持 P52 的可读性。 */
+/** 富文本、文字与子表默认占满一行，保持 P52 的可读性。 */
 export function defaultFormFieldColSpan(type: string): number {
-  return type === 'RICH_TEXT' || type === 'TABLE' ? FORM_GRID_COLUMNS : DEFAULT_FORM_FIELD_COL_SPAN
+  return type === 'RICH_TEXT' || type === 'TABLE' || type === 'LABEL'
+    ? FORM_GRID_COLUMNS
+    : DEFAULT_FORM_FIELD_COL_SPAN
 }
 
 /** 只有 1—24 的整数才是可持久化的列宽。 */

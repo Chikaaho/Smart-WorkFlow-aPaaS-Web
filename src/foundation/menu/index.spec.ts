@@ -39,7 +39,7 @@ describe('foundation/menu', () => {
     // 验证目录 redirect 指向首叶
     const systemRoute = routes.find((r) => r.path === 'system')
     expect(systemRoute).toBeDefined()
-    expect(systemRoute!.redirect).toBe('system/dict')
+    expect(systemRoute!.redirect).toBe('/system/dict')
     expect(systemRoute!.component).toBeUndefined()
   })
 
@@ -81,7 +81,7 @@ describe('foundation/menu', () => {
     const dirRoute = routes.find((r) => r.path === 'testdir')
     expect(dirRoute).toBeDefined()
     // sort=1 的 first 应在 sort=2 的 second 之前
-    expect(dirRoute!.redirect).toBe('testdir/first')
+    expect(dirRoute!.redirect).toBe('/testdir/first')
   })
 
   it('nested directories: redirect chains through to the deepest first leaf', () => {
@@ -124,12 +124,12 @@ describe('foundation/menu', () => {
     // 外层目录 redirect 穿透内层目录到叶子
     const aRoute = routes.find((r) => r.path === 'a')
     expect(aRoute).toBeDefined()
-    expect(aRoute!.redirect).toBe('a/b/c')
+    expect(aRoute!.redirect).toBe('/a/b/c')
 
     // 内层目录也有 redirect
     const bRoute = routes.find((r) => r.path === 'a/b')
     expect(bRoute).toBeDefined()
-    expect(bRoute!.redirect).toBe('a/b/c')
+    expect(bRoute!.redirect).toBe('/a/b/c')
 
     // 叶子路由存在
     const leaf = routes.find((r) => r.path === 'a/b/c')
@@ -166,7 +166,7 @@ describe('foundation/menu', () => {
     // component 字段有值 → findFirstLeafPath 视其为可落地 → 目录 redirect 创建
     const dirRoute = routes.find((r) => r.path === 'empty-dir')
     expect(dirRoute).toBeDefined()
-    expect(dirRoute!.redirect).toBe('empty-dir/unknown')
+    expect(dirRoute!.redirect).toBe('/empty-dir/unknown')
     // 但子节点 component 解析失败 → MENU route 被跳过并 warn
     const menuRoute = routes.find((r) => r.path === 'empty-dir/unknown' && r.component)
     expect(menuRoute).toBeUndefined()

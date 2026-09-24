@@ -11,6 +11,8 @@ import type { FormSchemaField } from '@/contracts/form-schema'
  */
 export interface FieldPatch {
   label?: string
+  /** 字段标题位置（契约 BaseField.labelPosition）。 */
+  labelPosition?: import('@/contracts/form-schema').FieldLabelPosition
   name?: string
   required?: boolean
   length?: number
@@ -28,6 +30,14 @@ export interface FieldPatch {
   options?: string[]
   /** LABEL 说明正文（v0.0.2 契约已落 LabelField.text）。 */
   text?: string
+  /** LABEL 文字颜色（契约 LabelField.color）。 */
+  color?: string
+  /** LABEL 字号 px（契约 LabelField.fontSize）。 */
+  fontSize?: number
+  /** LABEL 字重（契约 LabelField.fontWeight）。 */
+  fontWeight?: 'normal' | 'bold'
+  /** LABEL 正文对齐（契约 LabelField.textAlign）。 */
+  textAlign?: import('@/contracts/form-schema').FieldTextAlign
   /** I2 FORMULA 表达式（服务端重算，客户端值不消费）。 */
   expression?: string
   /** I2 DATASOURCE 稳定绑定标识（SQL/密钥只存服务端契约注册表）。 */

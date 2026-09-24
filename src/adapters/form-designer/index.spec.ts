@@ -165,6 +165,40 @@ describe('adapters/form-designer/parseDefinition', () => {
     const schema = parseDefinition(raw)
     expect(schema.fields.map((field) => field.colSpan)).toEqual([1, 24, 12, 12])
   })
+
+  it('保留合法标题位置与文字样式，非法位置一律丢弃', () => {
+    const raw = JSON.stringify({
+      title: 'F',
+      fields: [
+        { name: 'a', type: 'TEXT', labelPosition: 'left' },
+        { name: 'b', type: 'TEXT', labelPosition: 'top-right' },
+        { name: 'c', type: 'TEXT', labelPosition: 'middle' },
+        {
+          name: 'note',
+          type: 'LABEL',
+          text: '请如实填写',
+          color: '#d93026',
+          fontSize: 18,
+          fontWeight: 'bold',
+          textAlign: 'center',
+        },
+        { name: 'd', type: 'LABEL', text: '正文', textAlign: 'justify' },
+      ],
+    })
+    const schema = parseDefinition(raw)
+    expect(schema.fields[0].labelPosition).toBe('left')
+    expect(schema.fields[1].labelPosition).toBe('top-right')
+    expect(schema.fields[2].labelPosition).toBeUndefined()
+    expect(schema.fields[3]).toMatchObject({
+      type: 'LABEL',
+      text: '请如实填写',
+      color: '#d93026',
+      fontSize: 18,
+      fontWeight: 'bold',
+      textAlign: 'center',
+    })
+    expect((schema.fields[4] as { textAlign?: string }).textAlign).toBeUndefined()
+  })
 })
 
 /* ------------------------------------------------------------------ */
@@ -332,6 +366,55 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     const rules = toFormCreateRule(schema)
     const r = rules[0] as Record<string, unknown>
     expect(r.title).toBe('no_label')
+  })
+
+  /* ---- 标题位置：规则包装层 ---- */
+
+  it('每条规则携带标题位置类名，缺省上方左对齐', () => {
+    const schema = {
+      title: 'F',
+      fields: [
+        { name: 'plain', type: 'TEXT' as const },
+        { name: 'centered', type: 'TEXT' as const, labelPosition: 'top-center' as const },
+        { name: 'righted', type: 'NUMBER' as const, labelPosition: 'right' as const },
+      ],
+    }
+    const rules = toFormCreateRule(schema) as Record<string, unknown>[]
+    const wrapClass = (rule: Record<string, unknown>) => (rule.wrap as { class: string }).class
+    expect(wrapClass(rules[0])).toBe('sw-label-pos--top-left')
+    expect(wrapClass(rules[1])).toBe('sw-label-pos--top-center')
+    expect(wrapClass(rules[2])).toBe('sw-label-pos--right')
+  })
+
+  /* ---- 文字组件：纯文本渲染 + 不渲染独立标题 ---- */
+
+  it('LABEL 映射为 TextDisplay 并把文字样式随字段下发', () => {
+    const schema = {
+      title: 'F',
+      fields: [
+        {
+          name: 'note',
+          type: 'LABEL' as const,
+          text: '请如实填写',
+          color: '#d93026',
+          fontSize: 18,
+          fontWeight: 'bold' as const,
+          textAlign: 'center' as const,
+        },
+      ],
+    }
+    const rules = toFormCreateRule(schema) as Record<string, unknown>[]
+    const rule = rules[0]
+    expect(rule.type).toBe('TextDisplay')
+    expect((rule.title as { show: boolean }).show).toBe(false)
+    expect(rule.value).toBe('')
+    expect((rule.props as { field: Record<string, unknown> }).field).toMatchObject({
+      text: '请如实填写',
+      color: '#d93026',
+      fontSize: 18,
+      fontWeight: 'bold',
+      textAlign: 'center',
+    })
   })
 
   /* ---- DICT 通道：规则携带 dictType ---- */

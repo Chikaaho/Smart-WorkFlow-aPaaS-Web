@@ -40,7 +40,7 @@ async function loginPortal(page: Page): Promise<void> {
 
 async function enterAdmin(page: Page): Promise<void> {
   await page.locator('.app-topbar__user').click()
-  const dropdown = page.locator('.el-dropdown-menu').first()
+  const dropdown = page.locator('.app-topbar__dropdown')
   await dropdown.getByText('进入后台').click()
   await expect(dropdown).toBeHidden()
   await expect(page.locator('header.basic-layout__topbar--admin')).toBeVisible()
@@ -229,7 +229,7 @@ test.describe('P53 页面族矩阵（EV-03）', () => {
     await loginPortal(page)
     skipMobile(page)
     await page.locator('.app-topbar__user').click()
-    const dropdown = page.locator('.el-dropdown-menu').first()
+    const dropdown = page.locator('.app-topbar__dropdown')
     await expect(dropdown).toBeVisible()
     await expectNotObscured(page, '.app-topbar__user')
     await artifact(page, `fam-usermenu-portal-${vw(page)}.png`)
@@ -237,7 +237,7 @@ test.describe('P53 页面族矩阵（EV-03）', () => {
     await expect(dropdown).toBeHidden({ timeout: 8000 })
     await enterAdmin(page)
     // 下拉经区域切换重挂载后可能吞掉首次 click，重试至可见（触发器为 click）
-    const adminDropdown = page.locator('.el-dropdown-menu').first()
+    const adminDropdown = page.locator('.app-topbar__dropdown')
     for (let i = 0; i < 3 && !(await adminDropdown.isVisible()); i += 1) {
       await page.locator('.app-topbar__user').click()
       await page.waitForTimeout(300)

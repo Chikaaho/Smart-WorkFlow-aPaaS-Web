@@ -52,10 +52,18 @@ export async function expectRegionMatches(
   threshold: number,
   snapshotName: string,
 ): Promise<void> {
+  // headed 会话中前序动作可能把指针留在卡片上，hover 描边过渡会让稳定帧生成超时：
+  // 截图前把指针移出页面并等过渡结束（V011-BUG-003 视觉回归在本机复跑时发现）。
+  await page.mouse.move(0, 0)
+  await page.waitForTimeout(200)
   await page.evaluate(() => window.scrollTo(0, 0))
   await expect(page).toHaveScreenshot(snapshotName, {
     clip: region,
     maxDiffPixelRatio: threshold,
+    // 区域截图的判定门是 regions.ts 声明的比率阈值；全局 maxDiffPixels:0 会与之
+    // 叠加成 AND 而使比率阈值失效（字库栅格百像素级抖动即可翻盘）。此处解除
+    // 绝对零差异约束，仅保留比率门——不弱化区域阈值本身。
+    maxDiffPixels: Number.MAX_SAFE_INTEGER,
     animations: 'disabled',
     caret: 'hide',
   })

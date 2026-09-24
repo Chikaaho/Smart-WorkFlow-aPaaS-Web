@@ -33,6 +33,38 @@ export type FieldType =
   | 'RATE'
   | 'SLIDER'
 
+/** 字段标题相对于控件的布局位置。 */
+export type FieldLabelPosition = 'left' | 'right' | 'top-left' | 'top-right' | 'top-center'
+
+export const DEFAULT_FIELD_LABEL_POSITION: FieldLabelPosition = 'top-left'
+
+export function isFieldLabelPosition(value: unknown): value is FieldLabelPosition {
+  return (
+    value === 'left' ||
+    value === 'right' ||
+    value === 'top-left' ||
+    value === 'top-right' ||
+    value === 'top-center'
+  )
+}
+
+/**
+ * 标题位置 → DOM 类名。设计态（form-create 包装层）与填报态（DynamicField）
+ * 共用这一份命名，避免两处各写一套导致样式漂移。
+ */
+export function fieldLabelPositionClass(position?: FieldLabelPosition | null): string {
+  return `sw-label-pos--${position ?? DEFAULT_FIELD_LABEL_POSITION}`
+}
+
+/** 文字组件正文的水平对齐方式。 */
+export type FieldTextAlign = 'left' | 'center' | 'right'
+
+export const DEFAULT_FIELD_TEXT_ALIGN: FieldTextAlign = 'left'
+
+export function isFieldTextAlign(value: unknown): value is FieldTextAlign {
+  return value === 'left' || value === 'center' || value === 'right'
+}
+
 /** 附件/图片字段值条目：storageKey 关联存储对象，name 为展示名。 */
 export interface AttachmentItem {
   storageKey: string
@@ -70,6 +102,8 @@ export interface TableSubField {
 interface BaseField {
   name: string
   label?: string
+  /** 字段标题位置；缺省为上方左对齐。 */
+  labelPosition?: FieldLabelPosition
   required?: boolean
   length?: number
   /** 占位提示（P53）：填报态空值时展示，画布/预览/渲染三态同源。 */
@@ -140,6 +174,14 @@ export interface LabelField extends BaseField {
   type: 'LABEL'
   /** 说明正文（默认复用 label）。 */
   text?: string
+  /** 文字颜色。 */
+  color?: string
+  /** 文字字号（px）。 */
+  fontSize?: number
+  /** 文字粗细。 */
+  fontWeight?: 'normal' | 'bold'
+  /** 正文水平对齐（左 / 居中 / 右）；缺省左对齐。 */
+  textAlign?: FieldTextAlign
 }
 
 /* ══════ I2 低代码表单收口 ══════ */

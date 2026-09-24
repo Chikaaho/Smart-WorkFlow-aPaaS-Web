@@ -65,6 +65,23 @@ function addPaletteItem(item: DesignerItem) {
   subSelectedId.value = item.id
 }
 
+/** 组件库拖拽中的待插入子字段：盖层画布据此渲染落点真实预览。 */
+const draggingSubItem = ref<DesignerItem | null>(null)
+
+function startPaletteDrag(item: DesignerItem) {
+  if (props.readonly) return
+  draggingSubItem.value = item
+}
+
+/** 放置落点确认：把候选子字段插到画布算出的下标（流式顺序，不做自由定位）。 */
+function addDroppedItem(item: DesignerItem, index: number) {
+  draggingSubItem.value = null
+  if (props.readonly) return
+  const at = Math.min(Math.max(index, 0), subItems.value.length)
+  subItems.value.splice(at, 0, item)
+  subSelectedId.value = item.id
+}
+
 /** 配置面板回写：就地把补丁合并进选中子字段（单一数据源，复用主画布同一条路径）。 */
 function patchSelected(patch: FieldPatch) {
   const item = subItems.value.find((it) => it.id === subSelectedId.value)
@@ -90,15 +107,18 @@ function back() {
       <FieldPalette
         :existing-names="existingNames"
         :allowed-types="ALLOWED_SUBFIELD_TYPES"
-        group="designer-subfields"
         :disabled="readonly"
         @add="addPaletteItem"
+        @drag-start="startPaletteDrag"
+        @drag-end="draggingSubItem = null"
       />
       <DesignerCanvas
         v-model:items="subItems"
         v-model:selected-id="subSelectedId"
         group="designer-subfields"
         :readonly="readonly"
+        :pending-item="draggingSubItem"
+        @add="addDroppedItem"
       />
       <FieldConfigPanel
         :field="selectedItem"

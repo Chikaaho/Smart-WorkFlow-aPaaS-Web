@@ -13,12 +13,21 @@ const { t } = useI18n()
  * 配置面板改动经 @update 抛 FieldPatch，本宿主原样上交给设计器写回选中字段（单一数据源）。
  */
 import { computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { getFieldTypeDescriptor, getFieldTypeStorage } from './field-types'
+import { isColumnNameUnique } from './column-name'
 import type { DesignerItem } from './types'
 import type { FieldPatch } from './field-config'
-import type { VisibilityRule } from '@/contracts/form-schema'
 import RulesEditor from './config/RulesEditor.vue'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
+import {
+  DEFAULT_FIELD_LABEL_POSITION,
+  type FieldLabelPosition,
+  type VisibilityRule,
+} from '@/contracts/form-schema'
+
+/** 系统固定前缀：字段标识仅暴露后缀编辑（V011-BUG-016）。 */
+const FIELD_KEY_PREFIX = 'field_'
 
 const props = withDefaults(
   defineProps<{
@@ -27,12 +36,14 @@ const props = withDefaults(
     otherNames: string[]
     /** 已发布表单：禁止编辑配置。 */
     readonly?: boolean
+    /** V011-BUG-016：字段标识锁定（已发布表单），与面板整体编辑解锁解耦。 */
+    keyLocked?: boolean
     /** 选中字段当前的显隐规则（null=未配置）。 */
     rule?: VisibilityRule | null
     /** 同表单全部字段名（规则条件候选，含选中字段以外的字段）。 */
     ruleFieldNames?: string[]
   }>(),
-  { readonly: false, rule: null, ruleFieldNames: () => [] },
+  { readonly: false, keyLocked: false, rule: null, ruleFieldNames: () => [] },
 )
 
 const emit = defineEmits<{
@@ -53,9 +64,52 @@ const span12 = computed(() => Math.max(1, Math.round(colSpan.value / 2)))
 
 const spanOptions = Array.from({ length: 12 }, (_, i) => i + 1)
 
+/** 标题位置选项（枚举顺序 = Owner 指定的五种位置）。 */
+const LABEL_POSITION_OPTIONS: ReadonlyArray<{ value: FieldLabelPosition; key: string }> = [
+  { value: 'left', key: 'form.labelPositionLeft' },
+  { value: 'right', key: 'form.labelPositionRight' },
+  { value: 'top-left', key: 'form.labelPositionTopLeft' },
+  { value: 'top-right', key: 'form.labelPositionTopRight' },
+  { value: 'top-center', key: 'form.labelPositionTopCenter' },
+]
+
+/** 当前字段标题位置（缺省上方左对齐）。文字组件无独立标题，不展示该行。 */
+const labelPosition = computed<FieldLabelPosition>(
+  () => props.field?.field.labelPosition ?? DEFAULT_FIELD_LABEL_POSITION,
+)
+
+const showLabelPosition = computed(() => props.field?.field.type !== 'LABEL')
+
+function onLabelPosition(value: FieldLabelPosition) {
+  emit('update', { labelPosition: value })
+}
+
 function onSpan12(value: number | undefined) {
   if (!props.field || !value) return
   emit('update', { colSpan: normalizeFormFieldColSpan(value * 2, props.field.field.type) })
+}
+
+/** 字段标识后缀展示：field_ 前缀被系统吃掉，用户只见后缀（V011-BUG-016）。 */
+const fieldKeySuffix = computed(() => {
+  const name = props.field?.field.name ?? ''
+  return name.startsWith(FIELD_KEY_PREFIX) ? name.slice(FIELD_KEY_PREFIX.length) : name
+})
+
+/**
+ * 后缀编辑 → 全名 = field_ + 后缀（小写化、剔除非法字符）。
+ * 空后缀不回写；与其它字段重名时提示并放弃本次输入。列名校验复用 column-name 纯函数。
+ */
+function onFieldKeySuffix(raw: string) {
+  if (!props.field) return
+  const suffix = raw.toLowerCase().replace(/[^a-z0-9_]/g, '')
+  if (!suffix) return
+  const next = FIELD_KEY_PREFIX + suffix
+  if (next === props.field.field.name) return
+  if (!isColumnNameUnique(next, props.otherNames)) {
+    ElMessage.warning(t('form.fieldKeyDuplicate'))
+    return
+  }
+  emit('update', { name: next })
 }
 </script>
 
@@ -90,6 +144,21 @@ function onSpan12(value: number | undefined) {
           />
         </el-select>
       </div>
+      <div v-if="showLabelPosition" class="config__row">
+        <label class="config__label">{{ t('form.labelPositionLabel') }}</label>
+        <el-select
+          :model-value="labelPosition"
+          :disabled="readonly"
+          @update:model-value="onLabelPosition"
+        >
+          <el-option
+            v-for="option in LABEL_POSITION_OPTIONS"
+            :key="option.value"
+            :value="option.value"
+            :label="t(option.key)"
+          />
+        </el-select>
+      </div>
       <div class="config__row">
         <label class="config__label">{{ t('form.placeholderHint') }}</label>
         <el-input
@@ -116,7 +185,16 @@ function onSpan12(value: number | undefined) {
       <h3 class="config__section">{{ t('form.sectionAdvancedInfo') }}</h3>
       <div class="config__row">
         <label class="config__label">{{ t('form.fieldKeyLabel') }}</label>
-        <el-input :model-value="field.field.name" disabled />
+        <!-- V011-BUG-016：未发布表单的字段标识可编辑——用户只输入后缀，系统前缀固定 field_；
+             已发布（keyLocked）仍锁定并提示不可直接修改 -->
+        <el-input
+          :model-value="fieldKeySuffix"
+          :disabled="keyLocked"
+          :maxlength="58"
+          @update:model-value="onFieldKeySuffix"
+        >
+          <template #prepend>field_</template>
+        </el-input>
       </div>
       <div v-if="field.field.type === 'TEXT'" class="config__type-pair">
         <div class="config__row">
@@ -152,7 +230,9 @@ function onSpan12(value: number | undefined) {
         「{{ descriptor?.label ?? t('form.thisField') }}」配置项待接入（后续刀）
       </p>
 
-      <p class="config__note">{{ t('form.fieldKeyLockedNote') }}</p>
+      <p class="config__note">
+        {{ keyLocked ? t('form.fieldKeyLockedNote') : t('form.fieldKeySuffixHint') }}
+      </p>
 
       <!-- ═══ 其他信息 ═══ -->
       <h3 class="config__section">{{ t('form.sectionOtherInfo') }}</h3>
@@ -183,13 +263,13 @@ function onSpan12(value: number | undefined) {
   --el-input-height: 36px;
 }
 
+/* V011-BUG-013：恢复输入框常规内边距——文本不再贴边/被裁切（此前 padding 被清零） */
 .config :deep(.el-input__inner) {
-  padding-left: 0;
   line-height: 17px;
 }
 
 .config :deep(.el-input__wrapper) {
-  padding-left: 0;
+  padding: 1px 11px;
 }
 
 /* P53 节点07：头部标题 + 右侧类型徽标 */
@@ -297,7 +377,8 @@ function onSpan12(value: number | undefined) {
   background: var(--el-color-primary-light-9, #ece9ff);
   border-radius: 6px;
   cursor: pointer;
-}.config__required-chip.is-off {
+}
+.config__required-chip.is-off {
   color: #8a96ae;
   background: #f1f4fa;
 }
@@ -307,7 +388,6 @@ function onSpan12(value: number | undefined) {
 .config__type {
   box-sizing: border-box;
   width: 82px;
-  margin-right: -10px;
   padding: 4.5px 9px;
   height: 24px;
   line-height: 15px;

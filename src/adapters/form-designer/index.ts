@@ -1,5 +1,13 @@
 import { i18n } from '@/locales'
-import type { FormSchema, FormSchemaField, FieldType, TableSubField } from '@/contracts/form-schema'
+import {
+  fieldLabelPositionClass,
+  isFieldLabelPosition,
+  isFieldTextAlign,
+  type FormSchema,
+  type FormSchemaField,
+  type FieldType,
+  type TableSubField,
+} from '@/contracts/form-schema'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 
 /**
@@ -41,6 +49,10 @@ interface RawSubFieldDef {
   defaultValue?: unknown
   options?: string[]
   text?: string
+  color?: string
+  fontSize?: number
+  fontWeight?: string
+  textAlign?: string
   expression?: string
   dsBinding?: {
     queryKey: string
@@ -53,6 +65,8 @@ interface RawSubFieldDef {
 interface RawFieldDef extends RawSubFieldDef {
   subFields?: RawSubFieldDef[]
   colSpan?: unknown
+  /** 字段标题位置（主字段专属；子表列头不适用）。 */
+  labelPosition?: string
 }
 
 interface RawDefinition {
@@ -72,6 +86,7 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
   const base = {
     name: raw.name,
     ...(raw.label !== undefined ? { label: raw.label } : {}),
+    ...(isFieldLabelPosition(raw.labelPosition) ? { labelPosition: raw.labelPosition } : {}),
     required: raw.required ?? false,
     ...(raw.length !== undefined ? { length: raw.length } : {}),
     ...(raw.placeholder !== undefined ? { placeholder: raw.placeholder } : {}),
@@ -111,6 +126,12 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
       ...base,
       type,
       ...(raw.text !== undefined ? { text: raw.text } : {}),
+      ...(raw.color !== undefined ? { color: raw.color } : {}),
+      ...(raw.fontSize !== undefined ? { fontSize: raw.fontSize } : {}),
+      ...(raw.fontWeight === 'normal' || raw.fontWeight === 'bold'
+        ? { fontWeight: raw.fontWeight }
+        : {}),
+      ...(isFieldTextAlign(raw.textAlign) ? { textAlign: raw.textAlign } : {}),
     }
   }
 
@@ -237,6 +258,7 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     title: label,
     field: field.name,
     value: '',
+    wrap: { class: fieldLabelPositionClass(field.labelPosition) },
   }
 
   if (field.required) {
@@ -287,7 +309,10 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     case 'DICT': {
       rule.type = 'select'
       rule.options = []
-      rule.props = { clearable: true, ...(field.placeholder ? { placeholder: field.placeholder } : {}) }
+      rule.props = {
+        clearable: true,
+        ...(field.placeholder ? { placeholder: field.placeholder } : {}),
+      }
       // __dictType__ 标记供渲染层在运行时通过 useDict 加载字典项并填充 options
       ;(rule as Record<string, unknown>).__dictType__ = field.dictType
       break
@@ -329,11 +354,12 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     }
 
     case 'LABEL': {
-      // 说明文字：纯展示（非输入），不产生业务载荷
+      // 文字：纯展示（非输入），不产生业务载荷；不额外渲染字段标题。
       const labelField = field as import('@/contracts/form-schema').LabelField
-      rule.type = 'elAlert'
+      rule.type = 'TextDisplay'
+      rule.title = { show: false }
       rule.value = ''
-      rule.props = { title: labelField.text || label, type: 'info', closable: false }
+      rule.props = { field: labelField }
       break
     }
 

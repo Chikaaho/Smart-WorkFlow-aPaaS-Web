@@ -6,14 +6,14 @@ const { t } = useI18n()
  * 控件库（设计器左栏）。
  *
  * 渲染字段类型注册表（FIELD_TYPE_REGISTRY），每条 = 一个可拖拽/可点击添加的控件。
- * 拖入画布时经 :clone 把「描述符」转成「画布项」（DesignerItem），完成默认字段装配
- * 与列名生成。**这里禁止写死 8 类**——加类型只动注册表。
+ * 拖入画布时把「描述符」转成「画布项」（DesignerItem），完成默认字段装配与列名生成。
+ * **这里禁止写死 8 类**——加类型只动注册表。
  *
- * 与画布共享 SortableJS group 'designer-fields'，pull:'clone' + put:false + sort:false：
- * 控件库本身永不被改动，只作为克隆来源。
+ * 拖拽用**原生 HTML5 DnD**（不用 SortableJS）：SortableJS 拖拽只能给定制的 DOM 克隆，
+ * 画布无法据此渲染真实组件预览；原生 DnD 下画布按指针位置算插入下标，并在落点直接把
+ * 组件渲染出来（所见即所得）。控件库自身永不被改动，只作为拖拽来源。
  */
 import { computed, ref, type Component } from 'vue'
-import { VueDraggable } from 'vue-draggable-plus'
 import {
   EditPen,
   Edit,
@@ -38,6 +38,7 @@ import {
 import { FIELD_TYPE_REGISTRY, type FieldTypeDescriptor } from './field-types'
 import { generateColumnName } from './column-name'
 import { nextDesignerItemId, type DesignerItem } from './types'
+import type { PaletteDragEvent } from './dnd'
 import type { FieldType } from '@/contracts/form-schema'
 
 const props = withDefaults(
@@ -51,13 +52,8 @@ const props = withDefaults(
      * 盖层子画布传六种通用字段，硬挡 REFERENCE/TABLE 进子表。
      */
     allowedTypes?: readonly FieldType[]
-    /**
-     * SortableJS group 名。缺省 'designer-fields'（主画布上下文）。
-     * 盖层子画布传独立 group（如 'designer-subfields'），与主画布拖放严格隔离、互不串。
-     */
-    group?: string
   }>(),
-  { disabled: false, allowedTypes: undefined, group: 'designer-fields' },
+  { disabled: false, allowedTypes: undefined },
 )
 
 /** 按 allowedTypes 过滤后的控件列表（缺省=全量）。model-value 与 v-for 同源，保证克隆按序对齐。 */
@@ -84,6 +80,7 @@ const LABELS: Record<string, string> = {
   MULTISELECT: 'form.paletteCheckbox',
   DATE: 'form.paletteDateTime',
   ATTACHMENT: 'form.paletteUpload',
+  LABEL: 'form.paletteText',
   USER: 'form.palettePerson',
   DEPT: 'form.paletteDepartment',
   SERIAL: 'form.paletteSerial',
@@ -106,6 +103,7 @@ const ENTRY_ICONS: Record<string, string> = {
   MULTISELECT: 'Select',
   DATE: 'Calendar',
   ATTACHMENT: 'Paperclip',
+  LABEL: 'TextGlyph',
   USER: 'User',
   DEPT: 'Grid',
   SERIAL: 'HashGlyph',
@@ -125,7 +123,20 @@ const ENTRY_ICONS: Record<string, string> = {
  */
 const paletteSearch = ref('')
 const PALETTE_GROUPS: Array<{ key: string; types: string[] }> = [
-  { key: 'form.paletteGroupBasic', types: ['TEXT', 'RICH_TEXT', 'NUMBER', 'DICT', 'BOOL', 'MULTISELECT', 'DATE', 'ATTACHMENT'] },
+  {
+    key: 'form.paletteGroupBasic',
+    types: [
+      'TEXT',
+      'RICH_TEXT',
+      'NUMBER',
+      'DICT',
+      'BOOL',
+      'MULTISELECT',
+      'DATE',
+      'ATTACHMENT',
+      'LABEL',
+    ],
+  },
   { key: 'form.paletteGroupBusiness', types: ['USER', 'DEPT', 'SERIAL', 'DATASOURCE'] },
   { key: 'form.paletteGroupLayout', types: ['GRID', 'GROUP', 'DIVIDER', 'SUBTABLE'] },
   { key: 'form.paletteGroupAdvanced', types: ['FORMULA', 'RICH_TEXT', 'IOT', 'AGENT'] },
@@ -138,23 +149,38 @@ const paletteGrouped = computed(() => {
   const unavailable = new Set(['SERIAL', 'GRID', 'GROUP', 'DIVIDER', 'SUBTABLE', 'IOT', 'AGENT'])
   const entries = (type: string, groupKey: string): PaletteEntry | null => {
     const descriptor = descriptorByType.value.get(type as FieldType)
-    if (props.allowedTypes && (!descriptor || !props.allowedTypes.includes(descriptor.type))) return null
-    const labelKey = groupKey === 'form.paletteGroupAdvanced' && type === 'RICH_TEXT'
-      ? 'form.fieldTypeRichText'
-      : LABELS[type] ?? type
+    if (props.allowedTypes && (!descriptor || !props.allowedTypes.includes(descriptor.type)))
+      return null
+    const labelKey =
+      groupKey === 'form.paletteGroupAdvanced' && type === 'RICH_TEXT'
+        ? 'form.fieldTypeRichText'
+        : (LABELS[type] ?? type)
     const label = t(labelKey)
-    if (keyword && !label.toLowerCase().includes(keyword) && !type.toLowerCase().includes(keyword)) return null
-    return { type, label, icon: ENTRY_ICONS[type] ?? 'InfoFilled', descriptor, disabled: unavailable.has(type) }
+    if (keyword && !label.toLowerCase().includes(keyword) && !type.toLowerCase().includes(keyword))
+      return null
+    return {
+      type,
+      label,
+      icon: ENTRY_ICONS[type] ?? 'InfoFilled',
+      descriptor,
+      disabled: unavailable.has(type),
+    }
   }
   return PALETTE_GROUPS.map((group) => ({
     key: group.key,
-    items: group.types.map((type) => entries(type, group.key)).filter((entry): entry is PaletteEntry => entry !== null),
+    items: group.types
+      .map((type) => entries(type, group.key))
+      .filter((entry): entry is PaletteEntry => entry !== null),
   })).filter((group) => group.items.length > 0)
 })
 
 const emit = defineEmits<{
   /** 键盘/点击添加时，把与拖入相同的默认画布项交给宿主。 */
   add: [item: DesignerItem]
+  /** 原生拖拽开始：宿主据此让画布渲染落点预览（同一 createItem 产物）。 */
+  'drag-start': [item: DesignerItem]
+  /** 原生拖拽结束（含取消）：宿主据此清空预览。 */
+  'drag-end': []
 }>()
 
 /** 图标白名单（本地解析，注册表只存字符串键，不直引图标组件）。 */
@@ -185,15 +211,6 @@ const GLYPH_MAP: Record<string, string> = {
   HashGlyph: '#',
 }
 
-/**
- * 克隆钩子：描述符 → 画布项。
- * SortableJS 在 pull:'clone' 时调用，返回值即插入画布 v-model 的对象。
- */
-function cloneToItem(entry: PaletteEntry): DesignerItem {
-  if (!entry.descriptor) throw new Error(`Unavailable palette entry cannot be cloned: ${entry.type}`)
-  return createItem(entry.descriptor)
-}
-
 function createItem(descriptor: FieldTypeDescriptor): DesignerItem {
   const name = generateColumnName(
     descriptor.label,
@@ -207,6 +224,29 @@ function createItem(descriptor: FieldTypeDescriptor): DesignerItem {
 function addFromPalette(entry: PaletteEntry) {
   if (props.disabled || entry.disabled || !entry.descriptor) return
   emit('add', createItem(entry.descriptor))
+}
+
+/**
+ * 拖拽开始：把「将要插入的画布项」交给宿主 → 宿主转交画布做落点预览。
+ * 预览项与点击添加/最终落库使用同一 createItem，保证「预览 = 落库结果」。
+ * 不可用条目一律阻止拖拽，不产生任何悬空状态。
+ */
+function onDragStart(event: PaletteDragEvent, entry: PaletteEntry) {
+  if (props.disabled || entry.disabled || !entry.descriptor) {
+    event.preventDefault()
+    return
+  }
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'copy'
+    // 仅用于宿主/浏览器识别，画布不依赖它读取字段类型（dragover 阶段数据是受保护的）。
+    event.dataTransfer.setData('text/plain', entry.type)
+  }
+  emit('drag-start', createItem(entry.descriptor))
+}
+
+/** 拖拽结束（含取消）：通知宿主清掉落点预览。 */
+function onDragEnd() {
+  emit('drag-end')
 }
 </script>
 
@@ -225,35 +265,28 @@ function addFromPalette(entry: PaletteEntry) {
     <p v-if="paletteGrouped.length === 0" class="palette__empty">{{ t('form.paletteNoMatch') }}</p>
     <section v-for="group in paletteGrouped" :key="group.key" class="palette-group">
       <h3 class="palette-group__title">{{ t(group.key) }}</h3>
-      <VueDraggable
-        :model-value="[...group.items]"
-        :group="{ name: group.key, pull: 'clone', put: false }"
-        :sort="false"
-        :clone="cloneToItem"
-        :animation="150"
-        :force-fallback="true"
-        :fallback-on-body="true"
-        :fallback-tolerance="4"
-        item-key="type"
-        class="palette__list"
-        :disabled="disabled"
-      >
+      <div class="palette__list">
         <button
           v-for="d in group.items"
           :key="d.type"
           type="button"
           class="palette__item"
           :data-field-type="d.type"
-          :disabled="d.disabled"
+          :disabled="d.disabled || disabled"
+          :draggable="!d.disabled && !disabled"
+          @dragstart="onDragStart($event, d)"
+          @dragend="onDragEnd"
           @click="addFromPalette(d)"
         >
-          <span v-if="GLYPH_MAP[d.icon]" class="palette__icon palette__glyph">{{ GLYPH_MAP[d.icon] }}</span>
+          <span v-if="GLYPH_MAP[d.icon]" class="palette__icon palette__glyph">{{
+            GLYPH_MAP[d.icon]
+          }}</span>
           <el-icon v-else-if="ICON_MAP[d.icon]" class="palette__icon">
             <component :is="ICON_MAP[d.icon]" />
           </el-icon>
           <span class="palette__label">{{ d.label }}</span>
         </button>
-      </VueDraggable>
+      </div>
     </section>
   </aside>
 </template>
@@ -327,6 +360,10 @@ function addFromPalette(entry: PaletteEntry) {
   text-align: left;
   cursor: grab;
   user-select: none;
+}
+
+.palette__item:active {
+  cursor: grabbing;
 }
 
 .palette__item:hover {

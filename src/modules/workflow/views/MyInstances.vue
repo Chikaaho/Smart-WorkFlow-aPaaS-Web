@@ -340,7 +340,11 @@ onMounted(loadList)
     <template #table-title>
       <h3 class="my-instances-panel-title">{{ t('common.processApplyTitle') }}</h3>
       <span class="my-instances-panel-count">{{ t('common.totalItems', { total }) }}</span>
-      <el-button class="my-instances-panel-create" type="primary" @click="router.push('/workflow/catalog')">
+      <el-button
+        class="my-instances-panel-create"
+        type="primary"
+        @click="router.push('/workflow/catalog')"
+      >
         ＋ {{ t('common.create') }}
       </el-button>
     </template>
@@ -367,7 +371,7 @@ onMounted(loadList)
       style="width: 100%"
       class="my-instances-table"
     >
-      <el-table-column :label="t('common.processName')" width="260">
+      <el-table-column :label="t('common.processName')" min-width="260">
         <template #default="{ row }">
           {{ row.processName ?? '-' }}
         </template>
@@ -375,22 +379,22 @@ onMounted(loadList)
       <el-table-column
         prop="businessKey"
         :label="t('common.processNo')"
-        width="200"
+        min-width="200"
         show-overflow-tooltip
       />
-      <el-table-column :label="t('common.currentNode')" width="160">
+      <el-table-column :label="t('common.currentNode')" min-width="160">
         <template #default="{ row }">
           {{ row.currentNode ?? t('common.dash') }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.status')" width="120">
+      <el-table-column :label="t('common.status')" min-width="120">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">
             {{ statusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" :label="t('common.startTimeShort')" width="265">
+      <el-table-column prop="createTime" :label="t('common.startTimeShort')" min-width="200">
         <template #default="{ row }">
           {{ formatTime(row.createTime) }}
         </template>
@@ -523,7 +527,6 @@ onMounted(loadList)
   </el-dialog>
 </template>
 
-
 <style scoped>
 .detail-section-title {
   margin: 16px 0 8px;
@@ -551,19 +554,26 @@ onMounted(loadList)
   gap: 9px;
 }
 .standard-list :deep(.list-filter-bar__fields) {
-  flex: 0 0 784px;
+  /* 不再写死 784px：宽屏下三列按比例吃掉整行剩余宽度（窄屏回落到各自 min，不挤压） */
+  /* flex-basis 取原固定宽度：空间不足时先收缩字段块，按钮不会被挤到第二行 */
+  flex: 1 1 784px;
+  /* 与按钮组的间距由字段侧给：按钮组用 margin-left:auto 才能在被换到第二行时靠右 */
+  margin-right: 18px;
+  min-width: 0;
   display: grid;
-  grid-template-columns: 266px 146px 244px;
+  grid-template-columns: minmax(220px, 1.6fr) minmax(140px, 1fr) minmax(220px, 1.4fr);
   column-gap: 64px;
   row-gap: 0;
   align-items: start;
   transform: translateY(3px);
 }
 .standard-list :deep(.list-filter-bar__actions) {
-  margin-left: 18px;
+  margin-left: auto;
   padding-top: 24px;
   gap: 12px;
   transform: translateY(5px);
+  /* 不参与换行收缩，保证与字段块同行 */
+  flex: 0 0 auto;
 }
 .standard-list :deep(.list-filter-bar__actions .el-button) {
   width: 86px;

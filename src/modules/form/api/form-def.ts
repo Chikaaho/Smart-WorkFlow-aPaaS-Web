@@ -147,6 +147,20 @@ export async function publishFormDef(id: string): Promise<FormDefDTO> {
 }
 
 /**
+ * 已发布/已停用表单在同一物理表上发布新版本（V011-BUG-015）。
+ * POST /api/form/def/{id}/publish-version
+ * definition 随请求体直达服务端（校验 → 增量 DDL → 版本递增 → 存快照），
+ * 无需也不能先走草稿 saveConfig（草稿态 definition 即线上渲染契约）。
+ */
+export async function publishNewFormVersion(id: string, definition: string): Promise<void> {
+  await request<void>({
+    method: 'POST',
+    url: `/form/def/${id}/publish-version`,
+    data: { definition } satisfies FormConfigSaveReq,
+  })
+}
+
+/**
  * 分页查询表单定义列表。
  * GET /api/form/def/page?pageNum=&pageSize=&keyword=
  * 返 PageResult<FormDefListItem>，排序 update_time DESC。

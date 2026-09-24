@@ -20,6 +20,7 @@ vi.mock('@/modules/form/api/form-def', () => ({
   getFormDefinitionById: (...args: unknown[]) => mockGetFormDefinitionById(...args),
   listFormSnapshots: vi.fn(),
   getFormSnapshotDefinition: vi.fn(),
+  publishNewFormVersion: vi.fn(),
 }))
 
 const mockSaveDraftDefinition = vi.fn()
@@ -60,7 +61,12 @@ vi.mock('vue-router', () => ({
 import FormDesigner from './FormDesigner.vue'
 
 const designerStubs = {
-  FieldPalette: { template: '<div class="stub-palette" />' },
+  // V011-BUG-006/014 起画布标题输入已移除：以「组件库添加字段」作为制造脏态的真实入口
+  FieldPalette: {
+    template:
+      '<button class="stub-palette-add" @click="$emit(\'add\', { id: \'f1\', field: { name: \'field_1\', type: \'TEXT\', label: \'单行文本\', colSpan: 24, subFields: [] } })" />',
+    emits: ['add'],
+  },
   DesignerCanvas: { template: '<div class="stub-canvas" />' },
   FieldConfigPanel: { template: '<div class="stub-config" />' },
   SubFieldDesigner: { template: '<div class="stub-subfield" />' },
@@ -97,7 +103,8 @@ describe('FormDesigner 工作台（P52）', () => {
 
     expect(mockGetFormDefById).toHaveBeenCalledWith('uuid-1')
     expect(mockGetFormDefinitionById).toHaveBeenCalledWith('uuid-1')
-    expect(wrapper.text()).toContain('leave-request')
+    // V011-BUG-006：formKey 不再入画布；身份见面包屑表单名
+    expect(wrapper.text()).toContain('请假申请单')
     // 工作台头部重构后：保存状态以『草稿已保存 HH:mm』呈现
     expect(wrapper.text()).toContain('草稿已保存')
   })
@@ -139,10 +146,8 @@ describe('FormDesigner 工作台（P52）', () => {
     mockSaveDraftDefinition.mockRejectedValueOnce(new Error('网络错误'))
     const wrapper = await mountDesigner()
 
-    // 先制造修改（改标题）再保存失败
-    const titleInput = wrapper.find('input[placeholder="表单名称"]')
-    ;(titleInput.element as HTMLInputElement).value = '改过的名称'
-    await titleInput.trigger('input')
+    // 先制造修改（组件库加字段）再保存失败
+    await wrapper.find('.stub-palette-add').trigger('click')
     expect(wrapper.text()).toContain('未保存')
 
     const saveBtn = wrapper.findAll('button').find((b) => b.text() === '保存')!
@@ -160,9 +165,7 @@ describe('FormDesigner 工作台（P52）', () => {
     mockSaveDraftDefinition.mockRejectedValueOnce(new Error('保存失败'))
     const wrapper = await mountDesigner()
 
-    const titleInput = wrapper.find('input[placeholder="表单名称"]')
-    ;(titleInput.element as HTMLInputElement).value = '未保存的名称'
-    await titleInput.trigger('input')
+    await wrapper.find('.stub-palette-add').trigger('click')
 
     const publishBtn = wrapper.findAll('button').find((b) => b.text() === '发布')!
     await publishBtn.trigger('click')

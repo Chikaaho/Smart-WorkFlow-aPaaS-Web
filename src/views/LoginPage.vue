@@ -92,6 +92,12 @@ async function onSsoLogin(): Promise<void> {
     ssoBusy.value = false
   }
 }
+
+/** SSO Provider 选择：显式方法，避免模板内联多语句被格式化工具重排 */
+function onSsoProviderSelect(key: SsoProvider): void {
+  ssoProvider.value = key
+  void onSsoLogin()
+}
 </script>
 
 <template>
@@ -142,14 +148,26 @@ async function onSsoLogin(): Promise<void> {
           账号
           <span class="login-page__input-wrap">
             <el-icon class="login-page__input-icon"><User /></el-icon>
-            <input v-model="username" type="text" autocomplete="username" placeholder="请输入账号" required />
+            <input
+              v-model="username"
+              type="text"
+              autocomplete="username"
+              placeholder="请输入账号"
+              required
+            />
           </span>
         </label>
         <label>
           {{ t('common.password') }}
           <span class="login-page__input-wrap">
             <el-icon class="login-page__input-icon"><Lock /></el-icon>
-            <input v-model="password" type="password" autocomplete="current-password" placeholder="请输入密码" required />
+            <input
+              v-model="password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="请输入密码"
+              required
+            />
             <el-icon class="login-page__input-action"><View /></el-icon>
           </span>
         </label>
@@ -158,7 +176,14 @@ async function onSsoLogin(): Promise<void> {
           <div class="login-page__captcha-row">
             <span class="login-page__input-wrap">
               <el-icon class="login-page__input-icon"><Lock /></el-icon>
-              <input v-model="captcha" type="text" autocomplete="off" :placeholder="t('auth.captcha')" required maxlength="8" />
+              <input
+                v-model="captcha"
+                type="text"
+                autocomplete="off"
+                :placeholder="t('auth.captcha')"
+                required
+                maxlength="8"
+              />
             </span>
             <img
               v-if="challenge"
@@ -207,9 +232,11 @@ async function onSsoLogin(): Promise<void> {
               class="login-page__sso-provider"
               :class="`is-provider-${index + 1}`"
               :disabled="ssoBusy"
-              @click="ssoProvider = provider.key; void onSsoLogin()"
+              @click="onSsoProviderSelect(provider.key)"
             >
-              <span class="login-page__sso-provider-mark" aria-hidden="true">{{ ['微', '飞', '钉'][index] }}</span>
+              <span class="login-page__sso-provider-mark" aria-hidden="true">{{
+                ['微', '飞', '钉'][index]
+              }}</span>
               {{ ['微信', '飞书', '钉钉'][index] }}
             </button>
           </div>
@@ -644,13 +671,15 @@ img.login-page__captcha {
   }
 }
 
-/* ── P53 设计（节点06）像素网格：≥1280px 视口按锁定坐标对齐（840/600 分栏、卡 80,92 440×840） ── */
+/* ── ≥1280px 宽屏自适应（V011-BUG-001）：流式布局替代 P53 节点06 锁定坐标（Owner 2026-09-21 指令优先） ── */
 @media (min-width: 1280px) {
+  /* 品牌区填满 600px 表单面板之外的剩余宽度；overflow 仅用于裁切装饰圆出血 */
   .login-page__brand {
     position: relative;
-    display: block;
-    flex: 0 0 840px;
-    padding: 0;
+    overflow: hidden;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 64px 80px;
   }
   /* 装饰：品牌区右上紫圆 / 左下青圆（设计稿色值） */
   .login-page__brand::before {
@@ -676,13 +705,8 @@ img.login-page__captcha {
   .login-page__brand > * {
     position: relative;
   }
-  /* 品牌区锁定坐标：head(112,96 徽标 78×82 白底 radius 10)、badge(254, 高 36)、
-     headline(337, 34px)、sub(470)、pills(640, 3×194 高 117 radius 12)、foot(802, 高 34) */
+  /* 内容进入流式排布，仅保留宽屏放大的视觉 token */
   .login-page__brand-head {
-    position: absolute;
-    top: 112px;
-    left: 96px;
-    margin: 0;
     gap: 22px;
   }
   .login-page__brand-logo {
@@ -701,45 +725,13 @@ img.login-page__captcha {
     font-size: 14px;
   }
   .login-page__badge {
-    position: absolute;
-    top: 254px;
-    left: 96px;
-    box-sizing: border-box;
-    height: 36px;
-    padding: 8px 16px;
-    letter-spacing: 1px;
     color: #dcd4ff;
   }
-  .login-page__headline {
-    position: absolute;
-    top: 337px;
-    left: 96px;
-    margin: 0;
-    letter-spacing: 0.2px;
-  }
-  .login-page__brand-sub {
-    position: absolute;
-    top: 470px;
-    left: 96px;
-  }
-  .login-page__trustline {
-    position: absolute;
-    top: 570px;
-    left: 96px;
-    margin: 0;
-    color: #99a6cb;
-  }
   .login-page__pills {
-    position: absolute;
-    top: 640px;
-    left: 96px;
-    grid-template-columns: repeat(3, 194px);
     gap: 14px;
-    max-width: none;
   }
   .login-page__pills > span {
     box-sizing: border-box;
-    height: 117px;
     border-color: rgba(255, 255, 255, 0.02);
     border-radius: 12px;
     background: rgba(111, 45, 255, 0.058);
@@ -756,63 +748,21 @@ img.login-page__captcha {
   .login-page__pill-icon {
     color: #bfa7ff;
   }
-  .login-page__footnote {
-    position: absolute;
-    top: 802px;
-    left: 96px;
-    box-sizing: border-box;
-    height: 34px;
-    margin: 0;
-    padding: 9px 16px;
-    color: #b8c2e2;
-  }
   .login-page__footnote-dot {
     background: #3dd6a5;
   }
+  /* 表单面板 600px 定宽并居中；表单卡流式布局，高度随内容自适应（矮视口不再裁切） */
   .login-page__panel {
-    display: block;
-    position: relative;
     flex: 0 0 600px;
-    padding: 0;
+    padding: 48px 40px;
     background: #f5f7fc;
   }
-  /* 表单卡：(80,92) 440×840 radius 22 border #e0e5ef shadow 0 16px 32px rgba(32,44,72,.12) */
   .login-page__form {
-    position: absolute;
-    top: 92px;
-    left: 80px;
-    width: 440px;
-    height: 840px;
-    max-width: none;
-    margin: 0;
+    max-width: 440px;
     padding: 40px;
     border-color: #e6e8f0;
     border-radius: 22px;
     box-shadow: 0 16px 32px rgba(32, 44, 72, 0.12);
-  }
-  .login-page__form::after {
-    content: '';
-    position: absolute;
-    left: 281px;
-    top: 403px;
-    width: 108px;
-    height: 1px;
-    background: rgba(32, 174, 191, 0.423);
-    transform: rotate(12deg);
-    transform-origin: left center;
-    pointer-events: none;
-  }
-  /* 语言切换保留功能：置于卡内右上角（安全徽章 top 42 之上留出间距） */
-  .login-page__form .login-page__locale {
-    display: none;
-  }
-  /* head(42)：welcome 28px + 安全徽章（底 #f0e8ff 字 #6f2dff radius 999）右对齐 */
-  .login-page__top {
-    position: absolute;
-    top: 42px;
-    left: 40px;
-    right: 40px;
-    justify-content: space-between;
   }
   .login-page__welcome {
     color: #182037;
@@ -822,24 +772,12 @@ img.login-page__captcha {
     background: #f0ecff;
     color: #6f2dff;
   }
-  .login-page__welcome-sub {
-    position: absolute;
-    top: 91px;
-    left: 40px;
-    margin: 0;
-    color: #7a849e;
-  }
-  /* 字段 label：账号 247 / 密码 345 / 验证码 444；输入 360×52 radius 9 border #d2dbea bg #fbfcff */
   .login-page__form > label {
-    position: absolute;
-    left: 40px;
-    width: 360px;
     gap: 7px;
     color: #344164;
   }
   .login-page__form label input {
     height: 52px;
-    padding: 0 14px;
     border-color: #dce1ec;
     border-radius: 9px;
     background: #fbfcff;
@@ -847,23 +785,8 @@ img.login-page__captcha {
   .login-page__form label input::placeholder {
     color: #9aa3b7;
   }
-  /* 安全口径（方向 §4.4 / EV-06）：删除设计稿中的租户/记住/忘记三处未授权能力后，
-     保留原 98px 字段节奏整体上移：账号 147 / 密码 245 / 验证码 343 */
-  .login-page__form > label:nth-of-type(1) {
-    top: 147px;
-  }
-  .login-page__form > label:nth-of-type(2) {
-    top: 245px;
-  }
-  .login-page__form > label:nth-of-type(3) {
-    top: 343px;
-  }
   .login-page__captcha-row {
     gap: 10px;
-  }
-  .login-page__captcha-row input {
-    flex: 1 1 0;
-    min-width: 0;
   }
   .login-page__captcha {
     min-width: 128px;
@@ -877,12 +800,8 @@ img.login-page__captcha {
     min-width: 128px;
     object-fit: fill;
   }
-  /* 提交(584) 360×52 底 #7132ff radius 9 */
   .login-page__submit {
-    position: absolute;
-    top: 480px;
-    left: 40px;
-    width: 360px;
+    width: 100%;
     height: 52px;
     background: #7132ff;
     border-radius: 9px;
@@ -890,32 +809,8 @@ img.login-page__captcha {
   .login-page__submit:hover {
     background: color-mix(in srgb, #7132ff 85%, black);
   }
-  /* 表单错误提示落在验证码（止于 420）与提交（480）之间，双行错误也不叠压 */
-  .login-page__form > .login-page__error {
-    position: absolute;
-    top: 424px;
-    left: 40px;
-    width: 360px;
-    margin: 0;
-  }
-  /* SSO 区块整体上移 104：分隔线(595)、SSO 租户输入、Provider 行；租户提示占安全说明位(546 居中) */
-  .login-page__sso {
-    position: absolute;
-    top: 595px;
-    left: 40px;
-    width: 360px;
-    margin: 0;
-  }
   .login-page__sso-title {
-    justify-content: center;
-    line-height: 18px;
     color: #8a93a8;
-  }
-  .login-page__sso-title::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: #e1e5ee;
   }
   .login-page__sso-rule {
     background: #16a47a;
@@ -928,17 +823,16 @@ img.login-page__captcha {
     background: #ffffff;
     color: #354260;
   }
+  .login-page__sso-row input::placeholder {
+    color: #9aa3b7;
+  }
   .login-page__sso-row .login-page__sso-provider {
-    flex: 1 1 0;
     height: 52px;
     padding: 0 8px;
     border-color: #ccd5e5 !important;
     border-radius: 9px;
     background: #ffffff;
     color: #303a55;
-  }
-  .login-page__sso-row input::placeholder {
-    color: #9aa3b7;
   }
   .login-page__sso-row button {
     height: 52px;
@@ -950,21 +844,6 @@ img.login-page__captcha {
   }
   .login-page__sso-row button:hover {
     background: var(--sw-fill-base);
-  }
-  .login-page__sso-hint {
-    position: absolute;
-    top: 546px;
-    left: 40px;
-    width: 360px;
-    margin: 0;
-    text-align: center;
-    color: #7f8da8;
-  }
-  .login-page__legal {
-    position: absolute;
-    right: 40px;
-    bottom: 16px;
-    left: 40px;
   }
 }
 </style>

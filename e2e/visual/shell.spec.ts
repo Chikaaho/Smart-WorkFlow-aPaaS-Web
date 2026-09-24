@@ -43,7 +43,7 @@ test.describe('P53 全局壳（登录后）', () => {
     if (viewport >= 768) {
       // 个人菜单（节点 28/30）：账号绑定 / 进入后台 / 退出登录（无修改密码/忘记密码）
       await page.locator('.app-topbar__user').click()
-      const dropdown = page.locator('.el-dropdown-menu').first()
+      const dropdown = page.locator('.app-topbar__dropdown')
       await expect(dropdown).toBeVisible()
       await expect(dropdown).not.toContainText(/修改密码|忘记密码|remember/i)
       await expect(dropdown).toContainText('进入后台')
@@ -75,7 +75,7 @@ test.describe('P53 全局壳（登录后）', () => {
     const viewport = page.viewportSize()?.width ?? 1440
     test.skip(viewport < 768, '复杂管理页在小屏不承担完整导航（方向 §4.5），区域切换冒烟仅桌面')
     await page.locator('.app-topbar__user').click()
-    await page.locator('.el-dropdown-menu').first().getByText('进入后台').click()
+    await page.locator('.app-topbar__dropdown').getByText('进入后台').click()
     const header = page.locator('header.basic-layout__topbar--admin')
     await expect(header).toBeVisible()
     await expect(header).toHaveCSS('height', '64px')

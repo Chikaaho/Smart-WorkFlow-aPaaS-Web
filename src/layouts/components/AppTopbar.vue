@@ -14,9 +14,11 @@ import { useLocalizedMenuTree } from '../menu-title'
 import { unreadNotifyCount } from '@/modules/notify/api'
 
 /**
- * 顶栏工具区（P53 设计节点 01/28/29/30/32）：搜索 / 通知铃铛 / 用户下拉。
- * 前后台切换移入用户下拉（「进入后台 / 返回前台」，语义与既有 area 机制一致）；
- * 语言切换内聚在下拉摘要行（P61 §3.3 能力保持：切换同步 Web/Element/Server 消息语言）；
+ * 顶栏工具区（P53 设计节点 01/28/29/30/32）：语言切换 / 搜索 / 通知铃铛 / 用户下拉。
+ * V011-BUG-005：多语言入口上移到顶栏（主导航与搜索之间），不再内聚在下拉摘要行
+ * （P61 §3.3 能力保持：setLocale 继续同步 Web/Element/Server 消息语言）。
+ * V011-BUG-004：用户下拉去掉身份/空间摘要头与大按钮盒，仅保留三个小菜单项
+ * （账号绑定 / 进入后台或返回前台 / 退出登录）。
  * 菜单、权限仍为服务端下发单源，本组件不引入第二事实源。
  */
 const { t, locale } = useI18n()
@@ -53,6 +55,9 @@ const showEnterAdmin = computed(() => currentArea.value === 'portal' && adminCap
 
 const localeOptions = SUPPORTED_LOCALES.map((value) => ({ value, label: t(`locale.${value}`) }))
 const currentLocale = computed(() => locale.value)
+const currentLocaleLabel = computed(
+  () => localeOptions.find((option) => option.value === currentLocale.value)?.label ?? '',
+)
 function onLocale(value: AppLocale): void {
   setLocale(value)
 }
@@ -91,6 +96,25 @@ function onCommand(command: string): void {
 
 <template>
   <div class="app-topbar">
+    <!-- V011-BUG-005：多语言切换（主导航与搜索之间，Owner 2026-09-22 指定位置） -->
+    <el-dropdown trigger="click" @command="onLocale">
+      <button class="app-topbar__locale" type="button" :aria-label="t('locale.switch')">
+        <span class="app-topbar__locale-current">{{ currentLocaleLabel }}</span>
+        <el-icon class="app-topbar__locale-caret"><CaretBottom /></el-icon>
+      </button>
+      <template #dropdown>
+        <el-dropdown-menu class="app-topbar__locale-menu">
+          <el-dropdown-item
+            v-for="option in localeOptions"
+            :key="option.value"
+            :command="option.value"
+            :class="{ 'is-current': option.value === currentLocale }"
+          >
+            {{ option.label }}
+          </el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
     <span class="app-topbar__search" aria-hidden="true">
       <!-- P53 设计同源图标：路径取自锁定 SVG（1225,23 20×20 / 1263,23 20×20） -->
       <svg viewBox="1225 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
@@ -143,35 +167,8 @@ function onCommand(command: string): void {
         <el-icon class="app-topbar__caret"><CaretBottom /></el-icon>
       </span>
       <template #dropdown>
+        <!-- V011-BUG-004：仅三个小菜单项，无摘要头 -->
         <el-dropdown-menu class="app-topbar__dropdown">
-          <el-dropdown-item disabled class="app-topbar__dropdown-summary">
-            <strong>
-              {{
-                `${displayName} · ${currentArea === 'admin' ? t('nav.adminConsole') : t('nav.currentSpace')}`
-              }}
-            </strong>
-            <small>
-              {{
-                currentArea === 'admin'
-                  ? t('auth.menuSpaceHintAdmin')
-                  : t('auth.menuSpaceHintPortal')
-              }}
-              <span class="app-topbar__locale-group">
-                <button
-                  v-for="option in localeOptions"
-                  :key="option.value"
-                  type="button"
-                  class="app-topbar__locale-option"
-                  :class="{ 'is-current': option.value === currentLocale }"
-                  :aria-pressed="option.value === currentLocale"
-                  :aria-label="`${t('locale.switch')}: ${option.label}`"
-                  @click.stop="onLocale(option.value)"
-                >
-                  {{ option.label }}
-                </button>
-              </span>
-            </small>
-          </el-dropdown-item>
           <el-dropdown-item command="account-bindings">{{
             t('auth.accountBindings')
           }}</el-dropdown-item>
@@ -264,23 +261,37 @@ function onCommand(command: string): void {
 .app-topbar__logout :deep(.el-icon) {
   color: var(--sw-danger);
 }
-.app-topbar__locale-group {
+/* V011-BUG-005：顶栏语言切换（主导航与搜索之间，深色顶栏上的白色文字控件） */
+.app-topbar__locale {
   display: inline-flex;
-  gap: 8px;
-  margin-left: 10px;
-}
-.app-topbar__locale-option {
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
   border: none;
-  background: none;
-  padding: 0;
-  color: var(--sw-color-primary);
-  font: inherit;
-  font-size: 12px;
+  border-radius: var(--sw-radius-base);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
   cursor: pointer;
 }
-.app-topbar__locale-option.is-current {
+.app-topbar__locale:hover {
+  background: var(--sw-nav-hover-bg);
+  color: #ffffff;
+}
+.app-topbar__locale-caret {
+  font-size: 12px;
+}
+</style>
+
+<style>
+.el-popper:has(.app-topbar__locale-menu) .el-popper__arrow {
+  display: none !important;
+}
+.app-topbar__locale-menu .el-dropdown-menu__item.is-current {
+  color: var(--sw-color-primary);
   font-weight: 600;
-  text-decoration: underline;
+  background: var(--sw-color-primary-light-5, #f2eaf0);
 }
 </style>
 
@@ -298,42 +309,28 @@ function onCommand(command: string): void {
   border: 0 !important;
   box-shadow: none !important;
 }
-/* P53 设计（节点28/29/30/32）：个人菜单卡片 260px 白卡、按钮行 34px 描边盒。 */
+/* V011-BUG-004：个人菜单收敛为白卡内三个小菜单项（无摘要头、无描边按钮盒）。 */
 .app-topbar__dropdown.el-dropdown-menu {
-  width: 260px;
+  width: 200px;
   box-sizing: border-box;
-  padding: 14px 16px;
+  padding: 8px;
   border-radius: 10px;
   background: #ffffff;
   border: 1px solid #dfe6f2;
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.08);
 }
 .app-topbar__dropdown .el-dropdown-menu__item {
-  height: 34px;
+  height: 32px;
   line-height: 32px;
-  font-size: 12px;
-  margin: 10px 0 0;
-  padding: 0 12px;
-  border: 1px solid #d4deee;
-  border-radius: 6px;
-  justify-content: center;
-}
-.app-topbar__dropdown .app-topbar__dropdown-summary {
-  display: block;
-  height: 38px;
-  line-height: normal;
-  margin: 0;
-  padding: 0;
+  margin: 2px 0 0;
+  padding: 0 10px;
   border: 0;
+  border-radius: 6px;
+  font-size: 13px;
+  justify-content: flex-start;
 }
-.app-topbar__dropdown .app-topbar__dropdown-summary strong,
-.app-topbar__dropdown .app-topbar__dropdown-summary small {
-  display: block;
-}
-.app-topbar__dropdown .app-topbar__dropdown-summary small {
-  margin-top: 8px;
-  color: #8795ad;
-  font-size: 12px;
+.app-topbar__dropdown .el-dropdown-menu__item:not(.is-disabled):hover {
+  background: var(--sw-color-primary-light-5, #f2eaf0);
 }
 .app-topbar__dropdown .app-topbar__logout {
   color: #e04b55;
