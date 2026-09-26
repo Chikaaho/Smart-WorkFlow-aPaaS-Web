@@ -1626,6 +1626,8 @@ export const mockRegistrations: MockRegistration[] = [
         description: '',
         createTime: now,
         updateTime: now,
+        // V012-BUG-015：创建人展示名（mock 固定占位，直连模式由后端解析下发）
+        createByName: '管理员',
       }))
 
       // keyword 过滤

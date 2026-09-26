@@ -147,6 +147,24 @@ describe('modules/form/api/form-def', () => {
     expect(result.list[0].formKey).toBe('fk')
   })
 
+  it('V012-BUG-015: pageFormDefs passes createByName through to list rows', async () => {
+    const pageResult = {
+      records: [
+        { id: '1', formKey: 'fk1', name: 'F1', status: 'PUBLISHED' as const, createByName: '张三' },
+        { id: '2', formKey: 'fk2', name: 'F2', status: 'DRAFT' as const, createByName: null },
+      ],
+      total: 2,
+      pageNum: 1,
+      pageSize: 10,
+    }
+    mockRequest.mockResolvedValueOnce(pageResult)
+
+    const result = await formDefApi.pageFormDefs({ pageNum: 1, pageSize: 10 })
+
+    expect(result.list[0].createByName).toBe('张三')
+    expect(result.list[1].createByName).toBeNull()
+  })
+
   it('pageFormDefs adapts records→list from backend response', async () => {
     const records = [
       { id: 'd1', formKey: 'f1', name: 'F1', status: 'DRAFT' as const },

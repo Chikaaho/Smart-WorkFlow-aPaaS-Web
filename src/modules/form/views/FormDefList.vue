@@ -421,7 +421,12 @@ onMounted(loadList)
       />
       <el-table v-loading="loading" :data="displayList" stripe>
         <el-table-column prop="name" :label="t('common.formName')" min-width="180" />
-        <!-- V012-BUG-015：列为 表单名称/创建时间/更新时间/发布状态（创建人待后端列表字段下发后补） -->
+        <!-- V012-BUG-015：列为 表单名称/创建人/创建时间/更新时间/发布状态 -->
+        <el-table-column prop="createByName" :label="t('common.creator')" width="120">
+          <template #default="{ row }">
+            {{ row.createByName || '—' }}
+          </template>
+        </el-table-column>
         <el-table-column prop="createTime" :label="t('common.createTime')" width="170">
           <template #default="{ row }">
             {{ formatDateTime(row.createTime) }}

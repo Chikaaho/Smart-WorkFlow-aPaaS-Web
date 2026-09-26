@@ -435,6 +435,7 @@ export default {
     emptyData: 'No data',
     loading: 'Loading...',
     createTime: 'Created at',
+    creator: 'Created by',
     updateTime: 'Updated at',
     startTime: 'Start time',
     endTime: 'End time',

@@ -47,6 +47,8 @@ export interface FormDefListItem {
   visibilityScope?: string | null
   createTime: string
   updateTime: string
+  /** 创建人展示名；后端解析失败/缺失时为 null（V012-BUG-015）。 */
+  createByName?: string | null
 }
 
 /**
