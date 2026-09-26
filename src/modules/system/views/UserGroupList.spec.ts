@@ -181,25 +181,14 @@ describe('UserGroupList', () => {
     expect(disableUserGroup).toHaveBeenCalledWith('1')
   })
 
-  it('删除：确认后调用 deleteUserGroup（删除按钮收纳进「更多」下拉）', async () => {
+  it('删除：确认后调用 deleteUserGroup（V012-BUG-015 直显 3 个，删除直显）', async () => {
     const wrapper = mount(UserGroupList)
     await nextTick()
     await nextTick()
 
-    // V012-BUG-002 统一操作列：第 3 个操作进「更多」下拉，展开后点击菜单项。
-    // 菜单经 teleport 渲染且各行/占位菜单均预渲染于文档中，用触发按钮的
-    // aria-controls 精确定位当前行菜单，避免点到位 hidden-columns 占位菜单。
-    const moreButton = findRealButton(wrapper, '更多')
-    await moreButton?.trigger('click')
-    await nextTick()
-    await nextTick()
-
-    const menuId = moreButton?.element.getAttribute('aria-controls')
-    const menu = menuId ? document.getElementById(menuId) : null
-    const deleteItem = [...(menu?.querySelectorAll('.el-dropdown-menu__item') ?? [])].find((el) =>
-      el.textContent?.includes('删除'),
-    )
-    deleteItem?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    // V012-BUG-015 直显上限 2→3：编辑/启停/删除 三个操作全部直显，无「更多」收纳。
+    const deleteButton = findRealButton(wrapper, '删除')
+    await deleteButton?.trigger('click')
     await nextTick()
     expect(deleteUserGroup).toHaveBeenCalledWith('1')
   })

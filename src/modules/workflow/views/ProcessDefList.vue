@@ -477,7 +477,7 @@ onMounted(loadList)
           <el-table-column
             prop="name"
             :label="t('common.processName')"
-            width="268"
+            min-width="268"
             class-name="defs-table__col-name"
           />
           <el-table-column :label="t('workflow.categoryName')" width="130">
@@ -520,7 +520,6 @@ onMounted(loadList)
           @update:page-size="handlePageSizeChange"
         />
       </template>
-      <p class="defs-table__note">{{ t('workflow.processDefCapabilityNote') }}</p>
     </div>
   </section>
 
@@ -597,7 +596,7 @@ onMounted(loadList)
 /* ── 统计条：四张统计卡 ── */
 .p53-admin-defs__metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 258px));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 24px;
   min-height: 94px;
   margin-top: 24px;

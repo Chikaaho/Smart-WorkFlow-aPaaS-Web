@@ -111,9 +111,6 @@ const completedStatus: WorkflowCommandStatus = {
 describe('MyDrafts.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(publishedFormDefs).mockResolvedValue([
-      { formKey: 'leave-request', name: '请假申请单', formVersion: 2 },
-    ])
   })
 
   it('mounts and calls myDrafts with pagination', async () => {
@@ -123,20 +120,13 @@ describe('MyDrafts.vue', () => {
     expect(myDrafts).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 })
   })
 
-  it('loads form candidates from publishedFormDefs', async () => {
+  it('V012-BUG-014: 草稿页仅为普通草稿列表，不再加载发起入口', async () => {
     vi.mocked(myDrafts).mockResolvedValueOnce(mockPage)
-    mount(MyDrafts, { global: { stubs } })
-    await nextTick()
-    await nextTick()
-    expect(publishedFormDefs).toHaveBeenCalled()
-  })
-
-  it('keeps initiate entry visible in empty state (A2: 0 草稿也可发起)', async () => {
-    vi.mocked(myDrafts).mockResolvedValueOnce({ list: [], total: 0, pageNum: 1, pageSize: 10 })
     const wrapper = mount(MyDrafts, { global: { stubs } })
     await nextTick()
     await nextTick()
-    expect(wrapper.find('[data-testid="initiate-forms"]').exists()).toBe(true)
+    expect(publishedFormDefs).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="initiate-forms"]').exists()).toBe(false)
   })
 
   it('shows ApiError message when list fails', async () => {
@@ -145,21 +135,6 @@ describe('MyDrafts.vue', () => {
     await nextTick()
     await nextTick()
     expect(wrapper.vm).toHaveProperty('errorMsg', '加载失败')
-  })
-
-  it('发起：从已发布表单列表进入该表单真实填报页（不选择流程）', async () => {
-    vi.mocked(myDrafts).mockResolvedValueOnce(mockPage)
-    const wrapper = mount(MyDrafts, { global: { stubs } })
-    await nextTick()
-    await nextTick()
-
-    // 发起列表来自 GET /form/def/published，且不再有"新建草稿"弹窗
-    const vm = wrapper.vm as unknown as { initiateForms: { formKey: string; name: string }[] }
-    expect(vm.initiateForms).toEqual([{ formKey: 'leave-request', name: '请假申请单' }])
-    ;(wrapper.vm as unknown as { startFromForm: (formKey: string) => void }).startFromForm(
-      'leave-request',
-    )
-    expect(pushSpy).toHaveBeenCalledWith('/form/form-render/leave-request?mode=draft')
   })
 
   it('navigates to form-render with draftId on edit', async () => {

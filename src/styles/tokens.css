@@ -234,8 +234,9 @@ html:root {
   border-color: #b8ead8 !important;
 }
 
-/* P53 button/tag paint is audited from the locked SVG stroke declarations. */
-:where(html) .el-button.el-button--primary {
+/* P53 button/tag paint is audited from the locked SVG stroke declarations.
+ * V012-BUG-015：操作列 link 按钮为纯文字（无底色/无描边），描边仅作用于实心/描边主按钮。 */
+:where(html) .el-button.el-button--primary:not(.is-link) {
   border-color: #8552ff !important;
 }
 :where(html) .el-tag.el-tag--success .el-tag__content {

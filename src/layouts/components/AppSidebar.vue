@@ -190,9 +190,6 @@ function resolveAdminActive(path: string): string {
         {{ $t('nav.intelligenceSuite') }}
       </span>
     </div>
-    <div v-else-if="area === 'admin'" class="app-sidebar__design-note" aria-hidden="true">
-      {{ $t('nav.permissionFootnote') }}
-    </div>
   </el-menu>
 </template>
 

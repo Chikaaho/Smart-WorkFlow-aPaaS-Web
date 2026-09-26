@@ -5,10 +5,9 @@ const { t } = useI18n()
 /**
  * MyDrafts — 我的草稿列表页（页型 B）。
  *
- * 发起入口（D3/P4 业务纠正）：页内展示本人可见的已发布表单列表，点"发起"进入
- * 该表单的真实填报页；流程由服务端按绑定解析，用户不选择/填写流程标识。
+ * V012-BUG-014：草稿页只保留普通草稿列表，原页内「可发起的已发布表单」
+ * 发起入口已移除（流程发起统一走流程中心）。
  * 列表增删 + 提交走异步命令通道：submit 受理 → 轮询命令状态。
- * - 发起：/form/form-render/{formKey}?mode=draft（无 draftId：保存时 createDraft）
  * - 编辑：/form/form-render/{formKey}?mode=draft&draftId={id}
  */
 import { ref, computed, onMounted } from 'vue'
@@ -16,13 +15,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
-import {
-  myDrafts,
-  deleteDraft,
-  submitDraft,
-  pollCommandStatus,
-  publishedFormDefs,
-} from '@/modules/workflow/api'
+import { myDrafts, deleteDraft, submitDraft, pollCommandStatus } from '@/modules/workflow/api'
 import type { BpmDraft, BpmDraftStatus } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
@@ -70,24 +63,6 @@ const STATUS_TAG: Record<
   },
 }
 
-// 可发起的已发布表单：GET /form/def/published（服务端按可见范围过滤，仅 PUBLISHED）
-interface FormOption {
-  formKey: string
-  name: string
-}
-const initiateForms = ref<FormOption[]>([])
-
-async function loadOptions(): Promise<void> {
-  try {
-    const forms = await publishedFormDefs()
-    initiateForms.value = forms.map((f) => ({ formKey: f.formKey, name: f.name }))
-  } catch {
-    ElMessage.error(t('common.loadFailed'))
-    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
-    // 发起列表加载失败不阻断草稿页；不提供任意流程标识输入。
-  }
-}
-
 async function loadList() {
   loading.value = true
   errorMsg.value = ''
@@ -116,16 +91,6 @@ function handlePageSizeChange(s: number) {
   pageSize.value = s
   pageNum.value = 1
   void loadList()
-}
-
-// ─── 发起：从已发布表单列表进入真实填报页 ───
-function fillDraftUrl(formKey: string): string {
-  return `/form/form-render/${formKey}?mode=draft`
-}
-
-/** 点击"发起"：进入该已发布表单的真实填报（无 draftId：保存时 createDraft） */
-function startFromForm(formKey: string) {
-  void router.push(fillDraftUrl(formKey))
 }
 
 /** 编辑：跳转表单填报页 draft 模式并携带 draftId（挂载后读草稿反填控件） */
@@ -221,40 +186,10 @@ function draftActions(row: unknown): ListAction[] {
   ]
 }
 
-/** 发起入口表格：单按钮「发起」（进入该表单真实填报） */
-function startActions(row: unknown): ListAction[] {
-  const item = row as FormOption
-  return [
-    {
-      key: 'start',
-      label: t('common.start'),
-      type: 'primary',
-      onClick: () => startFromForm(item.formKey),
-    },
-  ]
-}
-
-onMounted(() => {
-  void loadList()
-  void loadOptions()
-})
+onMounted(loadList)
 </script>
 
 <template>
-  <!-- 发起入口：可见的已发布表单 → 发起 → 填报（流程由服务端解析）。
-       置于列表模板之外：0 草稿的空态下发起入口仍可见（A2 首次发起可用）。 -->
-  <el-card shadow="never" class="initiate-card" data-testid="initiate-forms">
-    <template #header>
-      <span>{{ t('workflow.startableForms') }}</span>
-    </template>
-    <el-table :data="initiateForms" size="small" :empty-text="t('workflow.noStartableForms')">
-      <el-table-column prop="name" :label="t('common.formName')" min-width="160" />
-      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="160" />
-      <ListActionsColumn :actions="startActions" :width="90" />
-    </el-table>
-    <p class="draft-flow-hint">{{ t('workflow.autoResolveProcessHint') }}</p>
-  </el-card>
-
   <StandardListTemplate
     :title="t('workflow.myDrafts')"
     :total="total"
@@ -266,7 +201,7 @@ onMounted(() => {
   >
     <!-- 空态 -->
     <template #empty-action>
-      <span class="draft-flow-hint">{{ t('workflow.startFromListHint') }}</span>
+      <span />
     </template>
 
     <!-- 错误提示 -->
@@ -309,14 +244,3 @@ onMounted(() => {
     </el-table>
   </StandardListTemplate>
 </template>
-
-<style scoped>
-.initiate-card {
-  margin-bottom: 12px;
-}
-.draft-flow-hint {
-  margin: 8px 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-</style>

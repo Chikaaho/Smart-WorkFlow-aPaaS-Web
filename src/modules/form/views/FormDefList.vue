@@ -420,13 +420,11 @@ onMounted(loadList)
         style="margin-bottom: 12px"
       />
       <el-table v-loading="loading" :data="displayList" stripe>
-        <el-table-column prop="name" :label="t('common.formName')" min-width="160" />
-        <el-table-column prop="formKey" :label="t('common.businessKey')" min-width="140" />
-        <el-table-column prop="status" :label="t('common.status')" width="100">
+        <el-table-column prop="name" :label="t('common.formName')" min-width="180" />
+        <!-- V012-BUG-015：列为 表单名称/创建时间/更新时间/发布状态（创建人待后端列表字段下发后补） -->
+        <el-table-column prop="createTime" :label="t('common.createTime')" width="170">
           <template #default="{ row }">
-            <el-tag :type="getFormDefStatusType(row.status)" size="small">
-              {{ getFormDefStatusLabel(row.status) }}
-            </el-tag>
+            {{ formatDateTime(row.createTime) }}
           </template>
         </el-table-column>
         <el-table-column prop="updateTime" :label="t('common.updateTime')" width="170">
@@ -434,7 +432,14 @@ onMounted(loadList)
             {{ formatDateTime(row.updateTime) }}
           </template>
         </el-table-column>
-        <ListActionsColumn :actions="rowActions" :width="150" />
+        <el-table-column prop="status" :label="t('form.publishStatus')" width="110">
+          <template #default="{ row }">
+            <el-tag :type="getFormDefStatusType(row.status)" size="small">
+              {{ getFormDefStatusLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <ListActionsColumn :actions="rowActions" :width="190" />
       </el-table>
 
       <!-- 空态 -->
