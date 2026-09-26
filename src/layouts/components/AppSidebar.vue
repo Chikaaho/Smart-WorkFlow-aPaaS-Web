@@ -20,6 +20,32 @@ void props
 
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 
+const area = computed(() => resolveArea(route.path))
+
+/**
+ * 工作台页轻量导航（V012-BUG-004）：/workspace 下侧栏仅保留 待办/已办/草稿
+ * 三个直达项（工作台固定项另渲染）。仍只读菜单单一数据源——从当前区域树中
+ * 按路径平铺挑出目标页面节点，不二次拉取、不另设菜单源。
+ */
+const WORKSPACE_SLIM_PATHS: ReadonlySet<string> = new Set([
+  '/workflow/todo',
+  '/workflow/processed',
+  '/workflow/my-drafts',
+])
+const workspaceSlim = computed(() => area.value === 'portal' && route.path.startsWith('/workspace'))
+
+function flattenByPaths(nodes: MenuNode[], paths: ReadonlySet<string>): MenuNode[] {
+  const picked: MenuNode[] = []
+  const walk = (list: MenuNode[]): void => {
+    for (const node of list) {
+      if (node.menuType === MenuType.MENU && paths.has(toFullPath(node))) picked.push(node)
+      if (node.children?.length) walk(node.children as MenuNode[])
+    }
+  }
+  walk(nodes)
+  return picked
+}
+
 /**
  * 后台侧栏按**顶部导航分区**收敛：只渲染当前分区（与顶栏同一份菜单数据）。
  * 顶栏进入「系统管理」时，侧栏不应再出现「流程管理」等其它分区的页面。
@@ -28,7 +54,11 @@ const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 const items = computed(() => {
   const current = resolveArea(route.path)
   const scoped = visibleMenuForArea(localizedMenu.value, current)
-  if (current !== 'admin') return scoped
+  if (current !== 'admin') {
+    // 工作台页轻量导航（V012-BUG-004）
+    if (workspaceSlim.value) return flattenByPaths(scoped, WORKSPACE_SLIM_PATHS)
+    return scoped
+  }
   // 按「子树是否覆盖当前路由」定位分区：不能只看首段路径——
   // 开放接口(/openapi)、文件管理(/storage) 等已并入系统管理，首段与分组路径不一致，
   // 按首段匹配会找不到分组而回退成整棵树（表现为「点开放接口后所有分组又都展开了」）。
@@ -59,7 +89,6 @@ const detailFrame = computed(
     route.path.startsWith('/workflow/my-cc'),
 )
 const taskDetailFrame = computed(() => route.path.startsWith('/workflow/task/'))
-const area = computed(() => resolveArea(route.path))
 // 设计（节点01/02/04）：导航分组默认全展开，保持完整可达路径可见。
 const openeds = computed(() => {
   const keys: string[] = []
@@ -116,7 +145,11 @@ function resolveAdminActive(path: string): string {
       :node="node"
       :task-detail="taskDetailFrame"
     />
-    <div v-if="area === 'portal'" class="app-sidebar__design-extra" aria-hidden="true">
+    <div
+      v-if="area === 'portal' && !workspaceSlim"
+      class="app-sidebar__design-extra"
+      aria-hidden="true"
+    >
       <img class="app-sidebar__design-icon" :src="iconIntelligence" alt="" aria-hidden="true" />
       <span class="app-sidebar__design-extra-label" style="margin-left: 2px">
         {{ $t('nav.intelligenceSuite') }}
@@ -165,13 +198,13 @@ function resolveAdminActive(path: string): string {
 .app-sidebar:not(.el-menu--collapse) {
   width: 100%;
 }
-/* 设计（节点02/04）：一级项与组标题 200×40，左右 12px 边距；描边盒 #27345C；图标 20 + 12px 文距 */
+/* 一级项与组标题：整行可选区（V012-BUG-005 去边框），左右 12px 边距；图标 20 + 12px 文距 */
 .app-sidebar :deep(> .el-menu-item),
 .app-sidebar :deep(> .el-sub-menu > .el-sub-menu__title) {
   height: 40px;
   line-height: 18px;
   margin: 0 12px;
-  border: 1px solid var(--sw-nav-box-border);
+  border: none;
   border-radius: var(--sw-radius-base);
 }
 .app-sidebar :deep(> .el-menu-item .el-icon),
@@ -218,18 +251,12 @@ function resolveAdminActive(path: string): string {
 }
 .app-sidebar :deep(.el-menu-item.is-active) {
   background: var(--sw-color-primary);
-  border-color: #8552ff;
   color: #ffffff;
   font-weight: 500;
 }
-/* 设计（节点04）：二级子项激活块为深紫蓝 #29235C + 品牌紫描边，顶级激活保持品牌紫 */
+/* 设计（节点04）：二级子项激活块为深紫蓝 #29235C，顶级激活保持品牌紫（V012-BUG-005 去描边） */
 .app-sidebar :deep(.el-menu--inline .el-menu-item.is-active) {
   background: var(--sw-nav-subitem-active-bg);
-  border-color: var(--sw-color-primary);
-  box-shadow: inset 0 0 0 1px var(--sw-color-primary);
-}
-.app-sidebar--detail :deep(.el-menu--inline .el-menu-item.is-active) {
-  border-color: #344164;
 }
 .app-sidebar--task-detail :deep(.el-menu--inline .el-menu-item > span) {
   top: -1.5px;
@@ -237,7 +264,7 @@ function resolveAdminActive(path: string): string {
 .app-sidebar--task-detail :deep(.el-menu--inline .el-menu-item) {
   line-height: 17px !important;
 }
-/* 设计（节点02）：二级子项为描边盒子（36px 高、左 48/右 12 对齐、2px 间隔、无图标） */
+/* 设计（节点02）：二级子项为整行可选区（36px 高、左 48/右 12 对齐、2px 间隔、无图标；V012-BUG-005 去描边） */
 .app-sidebar :deep(.el-menu--inline) {
   position: relative;
   background: transparent;
@@ -258,8 +285,6 @@ function resolveAdminActive(path: string): string {
   line-height: 17px;
   margin: 1px 12px 1px 48px;
   padding-left: 17px;
-  /* 设计帧描边为亚像素软化（0.5px 渲染），box-shadow 复现同款柔边 */
-  box-shadow: inset 0 0 0 1px #344164;
   border-radius: var(--sw-radius-base);
 }
 .app-sidebar :deep(.el-menu--inline .el-menu-item .el-icon) {
@@ -269,7 +294,7 @@ function resolveAdminActive(path: string): string {
 .app-sidebar :deep(.el-sub-menu__title:hover) {
   background: var(--sw-nav-hover-bg);
 }
-/* 设计（节点02）：智能能力折叠组占位（前台常驻标脚，非交互装饰） */
+/* 设计（节点02）：智能能力折叠组占位（前台常驻标脚，非交互装饰；V012-BUG-005 去边框） */
 .app-sidebar__design-extra {
   display: flex;
   align-items: center;
@@ -278,7 +303,6 @@ function resolveAdminActive(path: string): string {
   transform: translateY(3px);
   margin: 0 12px;
   padding: 0 0 0 13px;
-  border: 1px solid #344164;
   border-radius: var(--sw-radius-base);
   color: #c9d1e8;
   font-size: 14px;
@@ -304,14 +328,10 @@ function resolveAdminActive(path: string): string {
   color: var(--sw-nav-text-secondary);
   font-size: 12px;
 }
-/* 设计（节点04）：管理端侧栏变体——组/子项贴右缘 224，子项 176×36 连排，组间 12 */
+/* 设计（节点04）：管理端侧栏变体——组/子项贴右缘 224，子项 176×36 连排，组间 12（V012-BUG-005 去边框） */
 .app-sidebar--admin :deep(> .el-sub-menu > .el-sub-menu__title) {
   width: 212px;
   margin: 0 0 0 12px;
-  border-color: #344164;
-}
-.app-sidebar--admin :deep(> .el-sub-menu > .el-sub-menu__title)::after {
-  right: 12px;
 }
 
 .app-sidebar--admin :deep(.el-menu--inline) {
@@ -320,6 +340,5 @@ function resolveAdminActive(path: string): string {
 .app-sidebar--admin :deep(.el-menu--inline .el-menu-item) {
   width: 176px;
   margin: 0 0 0 48px;
-  box-shadow: inset 0 0 0 1px #344164;
 }
 </style>
