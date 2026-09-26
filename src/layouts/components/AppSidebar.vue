@@ -34,6 +34,18 @@ const WORKSPACE_SLIM_PATHS: ReadonlySet<string> = new Set([
 ])
 const workspaceSlim = computed(() => area.value === 'portal' && route.path.startsWith('/workspace'))
 
+/**
+ * 流程中心上下文（V012-BUG-006）：/workflow/*（portal 区）侧栏只渲染「流程管理」
+ * 分组的子项，不再出现工作台固定项、通知分组与智能能力占位——与顶部导航分区一致。
+ */
+const catalogSlim = computed(() => area.value === 'portal' && route.path.startsWith('/workflow'))
+
+/**
+ * 收件箱上下文（V012-BUG-008）：/notify/*（portal 区）侧栏只渲染 全部/已读/未读
+ * 三个分类直达项（固定项，见模板），不渲染菜单树。
+ */
+const inboxSlim = computed(() => area.value === 'portal' && route.path.startsWith('/notify'))
+
 function flattenByPaths(nodes: MenuNode[], paths: ReadonlySet<string>): MenuNode[] {
   const picked: MenuNode[] = []
   const walk = (list: MenuNode[]): void => {
@@ -49,7 +61,8 @@ function flattenByPaths(nodes: MenuNode[], paths: ReadonlySet<string>): MenuNode
 /**
  * 后台侧栏按**顶部导航分区**收敛：只渲染当前分区（与顶栏同一份菜单数据）。
  * 顶栏进入「系统管理」时，侧栏不应再出现「流程管理」等其它分区的页面。
- * 前台（portal）保持原有派生（工作台 + 流程中心 + 收件箱等跨入口），不做分区收敛。
+ * 前台（portal）按页面上下文收敛：工作台页三直达项、流程中心仅流程管理分组
+ * （V012-BUG-006）、收件箱仅分类项（V012-BUG-008）；其余保持原有派生。
  */
 const items = computed(() => {
   const current = resolveArea(route.path)
@@ -57,6 +70,13 @@ const items = computed(() => {
   if (current !== 'admin') {
     // 工作台页轻量导航（V012-BUG-004）
     if (workspaceSlim.value) return flattenByPaths(scoped, WORKSPACE_SLIM_PATHS)
+    // 收件箱上下文不渲染菜单树（分类项在模板固定渲染，V012-BUG-008）
+    if (inboxSlim.value) return []
+    // 流程中心上下文仅流程管理分组（V012-BUG-006）
+    if (catalogSlim.value) {
+      const group = scoped.find((node) => toFullPath(node) === '/workflow')
+      return group?.children?.length ? group.children : scoped
+    }
     return scoped
   }
   // 按「子树是否覆盖当前路由」定位分区：不能只看首段路径——
@@ -75,6 +95,8 @@ function subtreeContains(node: MenuNode, path: string): boolean {
 }
 // 深链上下文激活映射（设计节点03/27）：表单渲染→流程中心；任务详情→我的待办
 const activePath = computed(() => {
+  // 收件箱分类项的 index 含 query（全部/已读/未读），激活态需按 fullPath 匹配（V012-BUG-008）
+  if (inboxSlim.value) return route.fullPath ?? route.path
   if (route.path.startsWith('/form/form-render/')) return '/workflow/catalog'
   if (route.path.startsWith('/workflow/task/')) return '/workflow/todo'
   // 详情页高亮到所属菜单项（如 /form/designer/:id → 表单设计）
@@ -135,10 +157,23 @@ function resolveAdminActive(path: string): string {
     :default-active="activePath"
     :default-openeds="openeds"
   >
-    <el-menu-item v-if="area === 'portal'" index="/workspace">
+    <!-- 工作台固定项：流程中心/收件箱上下文不渲染（V012-BUG-006/008） -->
+    <el-menu-item v-if="area === 'portal' && !catalogSlim && !inboxSlim" index="/workspace">
       <img class="app-sidebar__design-icon" :src="iconWorkspace" alt="" aria-hidden="true" />
       <template #title>{{ $t('common.workspace') }}</template>
     </el-menu-item>
+    <!-- 收件箱分类直达（V012-BUG-008）：全部/已读/未读，query 驱动列表过滤 -->
+    <template v-if="inboxSlim">
+      <el-menu-item index="/notify/inbox">
+        <template #title>{{ $t('common.all') }}</template>
+      </el-menu-item>
+      <el-menu-item index="/notify/inbox?read=true">
+        <template #title>{{ $t('notify.read') }}</template>
+      </el-menu-item>
+      <el-menu-item index="/notify/inbox?read=false">
+        <template #title>{{ $t('notify.unread') }}</template>
+      </el-menu-item>
+    </template>
     <AppSidebarItem
       v-for="node in items"
       :key="node.id"
@@ -146,7 +181,7 @@ function resolveAdminActive(path: string): string {
       :task-detail="taskDetailFrame"
     />
     <div
-      v-if="area === 'portal' && !workspaceSlim"
+      v-if="area === 'portal' && !workspaceSlim && !catalogSlim && !inboxSlim"
       class="app-sidebar__design-extra"
       aria-hidden="true"
     >

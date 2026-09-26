@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CaretBottom } from '@element-plus/icons-vue'
 import { useI18n } from '@/locales'
@@ -11,7 +11,12 @@ import { clearDynamicRoutes } from '@/router/guard'
 import { canEnterAdminArea, firstAdminLeafPath, resolveArea } from '@/foundation/area'
 import { buildMenuTrail } from '../menu-utils'
 import { useLocalizedMenuTree } from '../menu-title'
-import { unreadNotifyCount } from '@/modules/notify/api'
+import {
+  unreadNotifyCount,
+  pageNotifyInbox,
+  markAsRead,
+  openNotifyLink,
+} from '@/modules/notify/api'
 
 /**
  * 顶栏工具区（P53 设计节点 01/28/29/30/32）：语言切换 / 搜索 / 通知铃铛 / 用户下拉。
@@ -38,16 +43,72 @@ const bellVisible = computed(() => {
   return trail.length > 0
 })
 const unread = ref(0)
-onMounted(() => {
-  if (!bellVisible.value) return
-  unreadNotifyCount()
-    .then((count) => {
-      unread.value = count
-    })
-    .catch(() => {
-      unread.value = 0
-    })
-})
+
+// ─── 铃铛通知面板（V012-BUG-007）：未读红点列表，最多 5 条，右下角查看全部 ───
+interface BellItem {
+  id: number
+  title: string
+  createTime: string
+  read: boolean
+}
+const panelVisible = ref(false)
+const panelLoading = ref(false)
+const panelItems = ref<BellItem[]>([])
+
+async function loadPanel(): Promise<void> {
+  panelLoading.value = true
+  try {
+    const page = await pageNotifyInbox({ pageNum: 1, pageSize: 5 })
+    panelItems.value = page.list.map((m) => ({
+      id: m.id,
+      title: m.title,
+      createTime: m.createTime,
+      read: m.read,
+    }))
+  } catch {
+    panelItems.value = []
+  } finally {
+    panelLoading.value = false
+  }
+}
+
+async function refreshUnread(): Promise<void> {
+  try {
+    unread.value = await unreadNotifyCount()
+  } catch {
+    /* 未读数失败静默（顶栏韧性，不变更既有语义） */
+  }
+}
+
+function onPanelShow(): void {
+  void loadPanel()
+  void refreshUnread()
+}
+
+/** 面板条目点击：跳转受控深链；未读行先标记已读并即时刷新红点与未读数。 */
+async function openPanelItem(item: BellItem): Promise<void> {
+  panelVisible.value = false
+  try {
+    const target = await openNotifyLink(item.id)
+    if (!item.read) {
+      item.read = true
+      void refreshUnread()
+    }
+    if (target.linkType === 'WF_TASK' || target.linkType === 'WF_PROCESS') {
+      await router.push({ path: '/workflow/instances', query: { focus: target.linkId } })
+      return
+    }
+    // 无受控深链的消息：点击即视为已读，停留在当前页
+    if (!item.read) await markAsRead(item.id)
+  } catch {
+    /* 深链鉴权失败等：面板已关闭，不打断当前页 */
+  }
+}
+
+function onViewAll(): void {
+  panelVisible.value = false
+  void router.push('/notify/inbox')
+}
 
 const currentArea = computed(() => resolveArea(route.path))
 const adminCapable = computed(() => canEnterAdminArea())
@@ -134,31 +195,67 @@ function onCommand(command: string): void {
         />
       </svg>
     </span>
-    <router-link
+    <!-- 铃铛通知面板（V012-BUG-007）：未读红点列表最多 5 条，右下角查看全部 -->
+    <el-popover
       v-if="bellVisible"
-      to="/notify/inbox"
-      class="app-topbar__bell"
-      :aria-label="t('nav.notifications')"
+      v-model:visible="panelVisible"
+      trigger="click"
+      placement="bottom-end"
+      :width="340"
+      popper-class="app-bell-popover"
+      @show="onPanelShow"
     >
-      <el-badge :value="unread" :hidden="unread <= 0" :max="99">
-        <svg viewBox="1263 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
-          <path
-            d="M1278 29.6665C1278 28.3404 1277.47 27.0687 1276.54 26.131C1275.6 25.1933 1274.33 24.6665 1273 24.6665C1271.67 24.6665 1270.4 25.1933 1269.46 26.131C1268.53 27.0687 1268 28.3404 1268 29.6665C1268 35.4998 1265.5 35.4998 1265.5 37.1665H1280.5C1280.5 35.4998 1278 35.4998 1278 29.6665Z"
-            stroke="#ECE9FF"
-            stroke-width="1.41667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M1271.33 40.5H1274.67"
-            stroke="#ECE9FF"
-            stroke-width="1.41667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </el-badge>
-    </router-link>
+      <template #reference>
+        <button class="app-topbar__bell" type="button" :aria-label="t('nav.notifications')">
+          <el-badge :value="unread" :hidden="unread <= 0" :max="99">
+            <svg viewBox="1263 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
+              <path
+                d="M1278 29.6665C1278 28.3404 1277.47 27.0687 1276.54 26.131C1275.6 25.1933 1274.33 24.6665 1273 24.6665C1271.67 24.6665 1270.4 25.1933 1269.46 26.131C1268.53 27.0687 1268 28.3404 1268 29.6665C1268 35.4998 1265.5 35.4998 1265.5 37.1665H1280.5C1280.5 35.4998 1278 35.4998 1278 29.6665Z"
+                stroke="#ECE9FF"
+                stroke-width="1.41667"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M1271.33 40.5H1274.67"
+                stroke="#ECE9FF"
+                stroke-width="1.41667"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </el-badge>
+        </button>
+      </template>
+      <div class="app-bell-panel">
+        <p class="app-bell-panel__title">{{ t('nav.notifications') }}</p>
+        <div v-loading="panelLoading" class="app-bell-panel__body">
+          <p v-if="!panelLoading && panelItems.length === 0" class="app-bell-panel__empty">
+            {{ t('notify.noUnreadNotifications') }}
+          </p>
+          <button
+            v-for="item in panelItems"
+            :key="item.id"
+            class="app-bell-panel__item"
+            type="button"
+            @click="openPanelItem(item)"
+          >
+            <span
+              class="app-bell-panel__dot"
+              :class="{ 'is-read': item.read }"
+              aria-hidden="true"
+            />
+            <span class="app-bell-panel__item-main">
+              <span class="app-bell-panel__item-title">{{ item.title }}</span>
+              <span class="app-bell-panel__item-time">{{ item.createTime }}</span>
+            </span>
+          </button>
+        </div>
+        <div class="app-bell-panel__footer">
+          <el-button link type="primary" @click="onViewAll">{{ t('common.viewAll') }}</el-button>
+        </div>
+      </div>
+    </el-popover>
 
     <el-dropdown trigger="click" @command="onCommand">
       <span class="app-topbar__user">
@@ -201,8 +298,15 @@ function onCommand(command: string): void {
   justify-content: center;
   width: 20px;
   height: 20px;
+  border: none;
   border-radius: var(--sw-radius-base);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
   color: rgba(255, 255, 255, 0.9);
+}
+.app-topbar__bell:focus-visible {
+  outline: 2px solid var(--sw-color-primary-light-3, #a56e97);
 }
 .app-topbar__bell :deep(svg) {
   transform: translateY(2px);
@@ -210,6 +314,84 @@ function onCommand(command: string): void {
 .app-topbar__bell:hover {
   color: #ffffff;
   background: var(--sw-nav-hover-bg);
+}
+/* ── 铃铛通知面板（V012-BUG-007） ── */
+.app-bell-panel {
+  display: flex;
+  flex-direction: column;
+}
+.app-bell-panel__title {
+  margin: 0;
+  padding: 4px 4px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+  border-bottom: 1px solid var(--sw-border-light, #ebeef5);
+}
+.app-bell-panel__body {
+  min-height: 64px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.app-bell-panel__empty {
+  margin: 0;
+  padding: 20px 4px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+.app-bell-panel__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 4px;
+  border: none;
+  border-bottom: 1px solid var(--sw-border-extra-light, #f5f7fa);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.app-bell-panel__item:last-child {
+  border-bottom: none;
+}
+.app-bell-panel__item:hover {
+  background: var(--sw-color-primary-light-5, #f2eaf0);
+}
+.app-bell-panel__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--el-color-primary, #7e306b);
+}
+.app-bell-panel__dot.is-read {
+  background: transparent;
+}
+.app-bell-panel__item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.app-bell-panel__item-title {
+  font-size: 13px;
+  color: var(--sw-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-bell-panel__item-time {
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+.app-bell-panel__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 4px 0;
+  border-top: 1px solid var(--sw-border-light, #ebeef5);
 }
 .app-topbar__search {
   display: inline-flex;
@@ -292,6 +474,16 @@ function onCommand(command: string): void {
   color: var(--sw-color-primary);
   font-weight: 600;
   background: var(--sw-color-primary-light-5, #f2eaf0);
+}
+/* 铃铛通知面板 popper（V012-BUG-007）：白卡 + 无箭头 */
+.el-popper.app-bell-popover {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #dfe6f2;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+.el-popper.app-bell-popover .el-popper__arrow {
+  display: none !important;
 }
 </style>
 

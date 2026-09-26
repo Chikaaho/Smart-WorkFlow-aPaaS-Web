@@ -281,7 +281,7 @@ describe('layouts/AppSidebar', () => {
     expect(wrapper.findAll('.stub-sub')).toHaveLength(0)
   })
 
-  it('V012-BUG-004: 其它 portal 页面保持完整菜单树（仅 /workspace 精简）', () => {
+  it('V012-BUG-006: 流程中心上下文仅流程管理分组子项（无工作台固定项/通知/门户）', () => {
     useMenuStore().setMenu([
       {
         id: 'w',
@@ -315,13 +315,93 @@ describe('layouts/AppSidebar', () => {
           },
         ],
       },
+      {
+        id: 'n',
+        parentId: null,
+        name: 'notify',
+        title: '通知',
+        path: 'notify',
+        component: null,
+        sort: 2,
+        menuType: MenuType.DIRECTORY,
+        children: [
+          {
+            id: 'n1',
+            parentId: 'n',
+            name: 'inbox',
+            title: '收件箱',
+            path: 'notify/inbox',
+            component: 'x',
+            sort: 1,
+            menuType: MenuType.MENU,
+          },
+        ],
+      },
+      {
+        id: 'p',
+        parentId: null,
+        name: 'portal',
+        title: '我的门户',
+        path: 'portal',
+        component: 'x',
+        sort: 3,
+        menuType: MenuType.MENU,
+      },
     ])
     mockPath = '/workflow/todo'
     const wrapper = mountSidebar()
 
     const indexes = wrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))
-    // 工作台固定项常驻 + 完整菜单树（非 /workspace 不精简）
-    expect(indexes).toEqual(['/workspace', '/workflow/todo', '/workflow/catalog'])
+    // 仅流程管理分组子项：无工作台固定项、无收件箱、无我的门户（V012-BUG-006）
+    expect(indexes).toEqual(['/workflow/todo', '/workflow/catalog'])
+    expect(wrapper.findAll('.stub-sub')).toHaveLength(0)
+  })
+
+  it('V012-BUG-008: 收件箱上下文侧栏仅 全部/已读/未读 分类项', () => {
+    useMenuStore().setMenu([
+      {
+        id: 'w',
+        parentId: null,
+        name: 'workflow',
+        title: '流程管理',
+        path: 'workflow',
+        component: null,
+        sort: 1,
+        menuType: MenuType.DIRECTORY,
+        children: [
+          {
+            id: 'w1',
+            parentId: 'w',
+            name: 'todo',
+            title: '待办任务',
+            path: 'workflow/todo',
+            component: 'x',
+            sort: 1,
+            menuType: MenuType.MENU,
+          },
+        ],
+      },
+      {
+        id: 'n',
+        parentId: null,
+        name: 'inbox',
+        title: '收件箱',
+        path: 'notify/inbox',
+        component: 'x',
+        sort: 2,
+        menuType: MenuType.MENU,
+      },
+    ])
+    mockPath = '/notify/inbox'
+    const wrapper = mountSidebar()
+
+    const indexes = wrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))
+    // 分类固定项（query 驱动），菜单树节点不渲染
+    expect(indexes).toEqual([
+      '/notify/inbox',
+      '/notify/inbox?read=true',
+      '/notify/inbox?read=false',
+    ])
   })
 
   it('forwards the collapse flag to el-menu (collapsible is a first-class capability)', () => {

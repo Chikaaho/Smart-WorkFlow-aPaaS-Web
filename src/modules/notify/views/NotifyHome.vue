@@ -8,7 +8,7 @@ const { t } = useI18n()
  * 展示当前用户的通知消息，支持标记已读、删除和查询过滤。
  * 后端返回平铺数组（不分页），前端直接渲染。
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
@@ -23,7 +23,7 @@ import {
 } from '@/modules/notify/api'
 import type { NotifyQueryParams } from '@/modules/notify/api'
 import { ApiError } from '@/foundation/request'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import type { NotifyMessage } from '@/contracts/notify'
 
 // ─── 列表状态 ───
@@ -44,8 +44,32 @@ const pageSize = ref(10)
 
 // ─── 查询过滤 ───
 
-const filterRead = ref<boolean | ''>('') // '' = 全部，true = 已读，false = 未读
+/**
+ * 已读状态筛选（V012-BUG-008）：由侧栏「全部/已读/未读」分类经 query 驱动
+ * （?read=true / ?read=false / 无 = 全部），页面内不再重复已读状态下拉。
+ */
+const route = useRoute()
+
+function readFilterFromQuery(): boolean | '' {
+  const value = route.query?.read
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return ''
+}
+
+const filterRead = ref<boolean | ''>(readFilterFromQuery()) // '' = 全部，true = 已读，false = 未读
 const filterKeyword = ref('')
+
+watch(
+  () => route.query?.read,
+  () => {
+    const next = readFilterFromQuery()
+    if (next !== filterRead.value) {
+      filterRead.value = next
+      handleFilterChange()
+    }
+  },
+)
 
 /** bizType → { label, type } 映射 */
 const BIZ_TYPE_MAP: Record<
@@ -276,24 +300,13 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
 
-    <!-- 过滤栏 -->
+    <!-- 过滤栏：已读状态由侧栏分类（query）驱动，页内仅保留关键词搜索（V012-BUG-008） -->
     <div class="filter-bar">
-      <el-select
-        v-model="filterRead"
-        :placeholder="t('notify.readStatus')"
-        clearable
-        style="width: 140px"
-        @change="handleFilterChange"
-      >
-        <el-option :label="t('common.all')" value="" />
-        <el-option :label="t('notify.unread')" :value="false" />
-        <el-option :label="t('notify.read')" :value="true" />
-      </el-select>
       <el-input
         v-model="filterKeyword"
         :placeholder="t('notify.searchPlaceholder')"
         clearable
-        style="width: 220px; margin-left: 12px"
+        style="width: 220px"
         @keyup.enter="handleKeywordSearch"
         @clear="handleKeywordSearch"
       />

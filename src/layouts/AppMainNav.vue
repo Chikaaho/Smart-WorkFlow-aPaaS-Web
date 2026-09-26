@@ -127,7 +127,11 @@ const items = computed<MainNavItem[]>(() => {
     ]
     const before = result.length
     collectTopbarItems(areaMenu.value, result)
-    if (result.length > before) return result
+    if (result.length > before) {
+      // 顶栏不再放收件箱入口（V012-BUG-008）：铃铛面板「查看全部」是唯一列表入口，
+      // 无论服务端是否下发收件箱 topbar 投影，统一收敛。
+      return result.filter((item) => item.to !== '/notify/inbox')
+    }
     // 默认派生（服务端未下发顶栏投影时）：门户常量 + 菜单树真实入口。
     result.push({
       key: 'portal',
@@ -145,14 +149,7 @@ const items = computed<MainNavItem[]>(() => {
         active: isActive('/workflow/catalog'),
       })
     }
-    if (paths.has('/notify/inbox')) {
-      result.push({
-        key: 'notify-inbox',
-        label: t('menu.notifyInbox'),
-        to: '/notify/inbox',
-        active: route.path === '/notify/inbox',
-      })
-    }
+    // 收件箱项不再进入顶栏（V012-BUG-008）：铃铛面板「查看全部」直达通知列表。
     return result
   }
   const before: MainNavItem[] = []
