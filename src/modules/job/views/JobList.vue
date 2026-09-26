@@ -11,7 +11,8 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   pageJobInfos,
   createJobInfo,
@@ -318,6 +319,48 @@ function triggerRow(r: unknown) {
   handleTrigger(r as JobInfo)
 }
 
+/** 统一操作列（V012-BUG-002）：暂停/恢复按任务状态互斥显隐；执行期间 loading+禁用防重复 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as JobInfo
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => editRow(row),
+    },
+    {
+      key: 'pause',
+      label: t('job.pause'),
+      type: 'warning',
+      visible: row.status === 'NORMAL',
+      loading: operatingId.value === row.id,
+      disabled: operatingId.value !== null,
+      onClick: () => pauseRow(row),
+    },
+    {
+      key: 'resume',
+      label: t('common.resume'),
+      type: 'success',
+      visible: row.status !== 'NORMAL',
+      loading: operatingId.value === row.id,
+      disabled: operatingId.value !== null,
+      onClick: () => resumeRow(row),
+    },
+    {
+      key: 'trigger',
+      label: t('iot.trigger'),
+      type: 'info',
+      onClick: () => triggerRow(row),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => deleteRow(row),
+    },
+  ]
+}
+
 // ─── 辅助 ───
 
 function statusTagType(status: JobStatus): 'success' | 'warning' {
@@ -420,39 +463,7 @@ onMounted(loadList)
       <el-table-column prop="lastFireTime" :label="t('job.lastFireTime')" width="170" />
       <el-table-column prop="nextFireTime" :label="t('job.nextFireTime')" width="170" />
       <el-table-column prop="createTime" :label="t('common.createTime')" width="170" />
-      <el-table-column :label="t('common.actions')" width="280" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editRow(row)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button
-            v-if="(row as JobInfo).status === 'NORMAL'"
-            size="small"
-            link
-            type="warning"
-            :loading="operatingId === (row as JobInfo).id"
-            :disabled="operatingId !== null"
-            @click="pauseRow(row)"
-            >{{ t('job.pause') }}</el-button
-          >
-          <el-button
-            v-else
-            size="small"
-            link
-            type="success"
-            :loading="operatingId === (row as JobInfo).id"
-            :disabled="operatingId !== null"
-            @click="resumeRow(row)"
-            >{{ t('common.resume') }}</el-button
-          >
-          <el-button size="small" link type="info" @click="triggerRow(row)">{{
-            t('iot.trigger')
-          }}</el-button>
-          <el-button size="small" link type="danger" @click="deleteRow(row)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="170" />
     </el-table>
 
     <!-- 空态操作 -->

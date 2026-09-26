@@ -13,6 +13,8 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError, request } from '@/foundation/request'
+import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { listEligibleDevices, type IotDevice } from '../api'
 
 interface ProcessDefRow {
@@ -79,11 +81,29 @@ async function load() {
     })
     defs.value = page.records
     devices.value = await listEligibleDevices()
+    pageNum.value = 1
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
+}
+
+// ─── 客户端分页（V012-BUG-003）：模板列表一次拉取（服务端 pageSize=50），前端切片 ───
+const pageNum = ref(1)
+const pageSize = ref(10)
+
+const pagedRows = computed(() =>
+  defs.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
+)
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
 }
 
 function deviceName(deviceId?: number): string {
@@ -152,6 +172,19 @@ async function save() {
 }
 
 onMounted(() => void load())
+
+/** 统一操作列（V012-BUG-002）：配置入口，仅已发布模板可用 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as ProcessDefRow
+  return [
+    {
+      key: 'configure',
+      label: t('common.configure'),
+      disabled: row.status !== 'PUBLISHED',
+      onClick: () => openEdit(row),
+    },
+  ]
+}
 </script>
 
 <template>
@@ -175,7 +208,7 @@ onMounted(() => void load())
       </template>
     </el-alert>
 
-    <el-table v-loading="loading" :data="defs" stripe>
+    <el-table v-loading="loading" :data="pagedRows" stripe>
       <el-table-column
         prop="processKey"
         :label="t('iot.processTemplate')"
@@ -220,18 +253,15 @@ onMounted(() => void load())
           }}</span>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="110" fixed="right">
-        <template #default="{ row }">
-          <el-button
-            size="small"
-            type="primary"
-            :disabled="row.status !== 'PUBLISHED'"
-            @click="openEdit(row as ProcessDefRow)"
-            >{{ t('common.configure') }}</el-button
-          >
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
+    <ListPagination
+      :total="defs.length"
+      :page-num="pageNum"
+      :page-size="pageSize"
+      @update:page-num="handlePageNumChange"
+      @update:page-size="handlePageSizeChange"
+    />
     <el-empty v-if="isEmpty" :description="t('iot.noProcessTemplates')" />
 
     <el-dialog

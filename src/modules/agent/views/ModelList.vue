@@ -23,7 +23,8 @@ const { t } = useI18n()
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { deleteModel, pageModels, testModelConnection } from '@/modules/agent/api'
 import type { AgentModelConfig, AgentModelTestConnectionResp } from '@/contracts/agent'
 import type { PageQuery } from '@/contracts/common'
@@ -210,6 +211,33 @@ function deleteRow(r: unknown) {
   void handleDelete(r as AgentModelConfig)
 }
 
+/** 统一操作列（V012-BUG-002）：编辑常显；连通性测试按 canTest 显隐（agent:model:test）；删除按 canManage 显隐（agent:model:manage） */
+function rowActions(r: unknown): ListAction[] {
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => editRow(r),
+    },
+    {
+      key: 'test',
+      label: t('agent.connectivityTest'),
+      type: 'success',
+      visible: canTest.value,
+      loading: testingId.value === (r as AgentModelConfig).id,
+      disabled: testingId.value !== null,
+      onClick: () => testRow(r),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      visible: canManage.value,
+      onClick: () => deleteRow(r),
+    },
+  ]
+}
+
 onMounted(() => {
   void loadList()
 })
@@ -307,27 +335,7 @@ onMounted(() => {
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
-      <el-table-column :label="t('common.actions')" width="200" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editRow(row)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button
-            v-if="canTest"
-            size="small"
-            link
-            type="success"
-            :loading="testingId === (row as AgentModelConfig).id"
-            :disabled="testingId !== null"
-            @click="testRow(row)"
-          >
-            {{ t('agent.connectivityTest') }}
-          </el-button>
-          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
 
     <template #empty-action>

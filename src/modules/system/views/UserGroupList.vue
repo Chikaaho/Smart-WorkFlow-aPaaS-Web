@@ -40,7 +40,9 @@ import {
   StandardFormTemplate,
   FormSection,
   FormGrid,
+  ListActionsColumn,
 } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
 // ─── 权限 ──────────────────────────────────────────────
 
@@ -310,6 +312,32 @@ function toggleRow(r: unknown) {
   handleToggleStatus(r as SysUserGroup)
 }
 
+/** 统一操作列（V012-BUG-002）：编辑直显；启停/删除按 canManage 显隐（后端强制，前端仅 UX） */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as SysUserGroup
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => editRow(row),
+    },
+    {
+      key: 'toggle',
+      label: row.status === 1 ? t('common.enable') : t('common.disable'),
+      visible: canManage.value,
+      type: 'warning',
+      onClick: () => toggleRow(row),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      visible: canManage.value,
+      type: 'danger',
+      onClick: () => deleteRow(row),
+    },
+  ]
+}
+
 onMounted(loadList)
 </script>
 
@@ -386,19 +414,7 @@ onMounted(loadList)
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="220" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editRow(row)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button v-if="canManage" size="small" link type="warning" @click="toggleRow(row)">
-            {{ row.status === 1 ? t('common.enable') : t('common.disable') }}
-          </el-button>
-          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
 
     <!-- 空态操作 -->

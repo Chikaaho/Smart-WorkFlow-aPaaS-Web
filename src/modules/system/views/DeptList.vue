@@ -30,7 +30,14 @@ import {
   deptStatusTagType,
   deptStatusLabel,
 } from '@/modules/system/constants'
-import { ListToolbar, StandardFormTemplate, FormSection, FormGrid } from '@/components/page-layout'
+import {
+  ListToolbar,
+  StandardFormTemplate,
+  FormSection,
+  FormGrid,
+  ListActionsColumn,
+} from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
 // ─── 列表状态 ───
 
@@ -293,6 +300,31 @@ function addChildRow(r: unknown) {
   openCreate((r as SysDept).id)
 }
 
+/** 统一操作列（V012-BUG-002）：树形表格无分页；子部门/编辑/删除显隐由权限决定 */
+function rowActions(r: unknown): ListAction[] {
+  return [
+    {
+      key: 'add-child',
+      label: t('system.newSubDept'),
+      visible: hasPerm('system:dept:create'),
+      onClick: () => addChildRow(r),
+    },
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      visible: hasPerm('system:dept:update'),
+      onClick: () => editRow(r),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      visible: hasPerm('system:dept:delete'),
+      type: 'danger',
+      onClick: () => deleteRow(r),
+    },
+  ]
+}
+
 onMounted(() => {
   void loadTree()
   // 负责人列回显依赖候选用户表：挂载即加载，而非等到打开编辑对话框（I1 G1b）
@@ -367,34 +399,7 @@ onMounted(() => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.actions')" width="220" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              v-if="hasPerm('system:dept:create')"
-              size="small"
-              link
-              type="primary"
-              @click="addChildRow(row)"
-              >{{ t('system.newSubDept') }}</el-button
-            >
-            <el-button
-              v-if="hasPerm('system:dept:update')"
-              size="small"
-              link
-              type="primary"
-              @click="editRow(row)"
-              >{{ t('common.edit') }}</el-button
-            >
-            <el-button
-              v-if="hasPerm('system:dept:delete')"
-              size="small"
-              link
-              type="danger"
-              @click="deleteRow(row)"
-              >{{ t('common.delete') }}</el-button
-            >
-          </template>
-        </el-table-column>
+        <ListActionsColumn :actions="rowActions" :width="150" />
       </el-table>
 
       <!-- 空态：筛选条件下无匹配（提示重置，不回退全量树、不显示新建入口） -->

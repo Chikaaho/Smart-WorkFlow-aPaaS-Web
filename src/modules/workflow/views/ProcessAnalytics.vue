@@ -8,6 +8,7 @@ const { t } = useI18n()
  * 汇总与明细同受数据范围约束（服务端）。
  */
 import { ref, computed, onMounted } from 'vue'
+import { ListPagination } from '@/components/page-layout'
 import { queryAnalyticsSummary, type AnalyticsSummary } from '@/modules/workflow/api/i4'
 import { ApiError } from '@/foundation/request'
 
@@ -26,6 +27,39 @@ const workloadEntries = computed(() =>
   })),
 )
 
+// ─── 明细表客户端分页（V012-BUG-003）：汇总接口一次返回全量，前端切片 ───
+const nodePageNum = ref(1)
+const nodePageSize = ref(10)
+const pagedNodeEntries = computed(() =>
+  nodeEntries.value.slice(
+    (nodePageNum.value - 1) * nodePageSize.value,
+    nodePageNum.value * nodePageSize.value,
+  ),
+)
+function handleNodePageNumChange(p: number) {
+  nodePageNum.value = p
+}
+function handleNodePageSizeChange(s: number) {
+  nodePageSize.value = s
+  nodePageNum.value = 1
+}
+
+const workloadPageNum = ref(1)
+const workloadPageSize = ref(10)
+const pagedWorkloadEntries = computed(() =>
+  workloadEntries.value.slice(
+    (workloadPageNum.value - 1) * workloadPageSize.value,
+    workloadPageNum.value * workloadPageSize.value,
+  ),
+)
+function handleWorkloadPageNumChange(p: number) {
+  workloadPageNum.value = p
+}
+function handleWorkloadPageSizeChange(s: number) {
+  workloadPageSize.value = s
+  workloadPageNum.value = 1
+}
+
 function formatMs(value: number | undefined): string {
   if (!value) return '—'
   if (value < 1000) return `${value}ms`
@@ -40,6 +74,8 @@ async function loadSummary() {
     summary.value = await queryAnalyticsSummary({
       processDefKey: processDefKey.value || undefined,
     })
+    nodePageNum.value = 1
+    workloadPageNum.value = 1
   } catch (err) {
     errorMsg.value = err instanceof ApiError ? err.msg : t('workflow.analyticsLoadFailed')
   } finally {
@@ -126,7 +162,7 @@ onMounted(loadSummary)
         <el-col :span="12">
           <el-card shadow="never">
             <template #header>{{ t('workflow.nodeDwellBottleneck') }}</template>
-            <el-table :data="nodeEntries" size="small" max-height="320">
+            <el-table :data="pagedNodeEntries" size="small" max-height="320">
               <el-table-column prop="nodeKey" :label="t('common.node')" min-width="140" />
               <el-table-column prop="count" :label="t('workflow.sampleCount')" width="80" />
               <el-table-column :label="t('workflow.avgDwell')" width="110">
@@ -137,16 +173,30 @@ onMounted(loadSummary)
               </el-table-column>
               <template #empty>{{ t('common.emptyData') }}</template>
             </el-table>
+            <ListPagination
+              :total="nodeEntries.length"
+              :page-num="nodePageNum"
+              :page-size="nodePageSize"
+              @update:page-num="handleNodePageNumChange"
+              @update:page-size="handleNodePageSizeChange"
+            />
           </el-card>
         </el-col>
         <el-col :span="12">
           <el-card shadow="never">
             <template #header>{{ t('workflow.assigneeWorkload') }}</template>
-            <el-table :data="workloadEntries" size="small" max-height="320">
+            <el-table :data="pagedWorkloadEntries" size="small" max-height="320">
               <el-table-column prop="userId" :label="t('workflow.userId')" min-width="120" />
               <el-table-column prop="count" :label="t('workflow.actionCount')" width="120" />
               <template #empty>{{ t('common.emptyData') }}</template>
             </el-table>
+            <ListPagination
+              :total="workloadEntries.length"
+              :page-num="workloadPageNum"
+              :page-size="workloadPageSize"
+              @update:page-num="handleWorkloadPageNumChange"
+              @update:page-size="handleWorkloadPageSizeChange"
+            />
           </el-card>
         </el-col>
       </el-row>

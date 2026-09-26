@@ -309,13 +309,21 @@ describe('StandardListTemplate', () => {
     expect(wrapper.find('.list-empty').exists()).toBe(false)
   })
 
-  it('displays title and total via ListToolbar', () => {
-    const wrapper = mount(StandardListTemplate, {
+  it('V012-BUG-003: toolbar total off by default (bottom pagination shows it), opt-in keeps it', () => {
+    const stubs = { ElPagination: { template: '<div class="el-pagination" />' } }
+    const wrapperDefault = mount(StandardListTemplate, {
       props: { ...baseProps, title: '用户管理', empty: true },
-      global: { stubs: { ElPagination: { template: '<div class="el-pagination" />' } } },
+      global: { stubs },
     })
-    expect(wrapper.text()).toContain('用户管理')
-    expect(wrapper.text()).toContain('共 100 条记录')
+    expect(wrapperDefault.text()).toContain('用户管理')
+    // 默认关闭工具栏内联总条数：「共 N 条」统一由右下角分页区展示
+    expect(wrapperDefault.text()).not.toContain('共 100 条记录')
+
+    const wrapperOptIn = mount(StandardListTemplate, {
+      props: { ...baseProps, title: '用户管理', empty: true, showToolbarTotal: true },
+      global: { stubs },
+    })
+    expect(wrapperOptIn.text()).toContain('共 100 条记录')
   })
 
   it('renders #filter and #filter-actions slots', () => {

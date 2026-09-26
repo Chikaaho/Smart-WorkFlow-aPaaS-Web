@@ -27,7 +27,9 @@ import {
   StandardFormTemplate,
   FormSection,
   FormGrid,
+  ListActionsColumn,
 } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -286,6 +288,23 @@ function deleteRow(r: unknown) {
   handleDelete(r as SysDictData)
 }
 
+/** 统一操作列（V012-BUG-002） */
+function rowActions(r: unknown): ListAction[] {
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => editRow(r),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => deleteRow(r),
+    },
+  ]
+}
+
 onMounted(loadList)
 </script>
 
@@ -375,16 +394,7 @@ onMounted(loadList)
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="160" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editRow(row)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button size="small" link type="danger" @click="deleteRow(row)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
 
     <!-- 空态操作 -->

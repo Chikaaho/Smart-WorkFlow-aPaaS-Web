@@ -9,7 +9,8 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { queryProcessedTasks } from '@/modules/workflow/api'
 import type { ProcessedTask } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
@@ -64,6 +65,18 @@ function handleRowClick(row: ProcessedTask) {
     params: { taskId: row.taskId },
     query: { source: 'processed' },
   })
+}
+
+// 操作列（V012-BUG-002）：单按钮「详情」，行为与行点击跳转一致
+function rowActions(row: unknown): ListAction[] {
+  const item = row as ProcessedTask
+  return [
+    {
+      key: 'detail',
+      label: t('common.detail'),
+      onClick: () => handleRowClick(item),
+    },
+  ]
 }
 
 onMounted(loadList)
@@ -124,6 +137,7 @@ onMounted(loadList)
           {{ row.endTime ?? '-' }}
         </template>
       </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
   </StandardListTemplate>
 </template>

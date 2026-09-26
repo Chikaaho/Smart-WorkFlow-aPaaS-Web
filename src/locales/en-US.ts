@@ -379,6 +379,7 @@ export default {
     confirm: 'OK',
     close: 'Close',
     actions: 'Actions',
+    moreActions: 'More',
     status: 'Status',
     name: 'Name',
     type: 'Type',

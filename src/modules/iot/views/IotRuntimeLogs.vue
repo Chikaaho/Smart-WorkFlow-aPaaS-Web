@@ -12,6 +12,8 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
+import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listMessages,
   listCommands,
@@ -67,15 +69,94 @@ async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    if (activeTab.value === 'messages') messages.value = await listMessages()
-    else if (activeTab.value === 'commands') commands.value = await listCommands()
-    else if (activeTab.value === 'scripts') scriptExecs.value = await listScriptExecs()
-    else triggers.value = await listProcessTriggers()
+    if (activeTab.value === 'messages') {
+      messages.value = await listMessages()
+      messagePageNum.value = 1
+    } else if (activeTab.value === 'commands') {
+      commands.value = await listCommands()
+      commandPageNum.value = 1
+    } else if (activeTab.value === 'scripts') {
+      scriptExecs.value = await listScriptExecs()
+      scriptPageNum.value = 1
+    } else {
+      triggers.value = await listProcessTriggers()
+      triggerPageNum.value = 1
+    }
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
+}
+
+// ─── 客户端分页（V012-BUG-003）：每个日志表格独立一组分页状态 ───
+
+// 消息日志
+const messagePageNum = ref(1)
+const messagePageSize = ref(10)
+const pagedMessages = computed(() =>
+  messages.value.slice(
+    (messagePageNum.value - 1) * messagePageSize.value,
+    messagePageNum.value * messagePageSize.value,
+  ),
+)
+function handleMessagePageNumChange(p: number) {
+  messagePageNum.value = p
+}
+function handleMessagePageSizeChange(s: number) {
+  messagePageSize.value = s
+  messagePageNum.value = 1
+}
+
+// 命令记录
+const commandPageNum = ref(1)
+const commandPageSize = ref(10)
+const pagedCommands = computed(() =>
+  commands.value.slice(
+    (commandPageNum.value - 1) * commandPageSize.value,
+    commandPageNum.value * commandPageSize.value,
+  ),
+)
+function handleCommandPageNumChange(p: number) {
+  commandPageNum.value = p
+}
+function handleCommandPageSizeChange(s: number) {
+  commandPageSize.value = s
+  commandPageNum.value = 1
+}
+
+// 脚本执行记录
+const scriptPageNum = ref(1)
+const scriptPageSize = ref(10)
+const pagedScriptExecs = computed(() =>
+  scriptExecs.value.slice(
+    (scriptPageNum.value - 1) * scriptPageSize.value,
+    scriptPageNum.value * scriptPageSize.value,
+  ),
+)
+function handleScriptPageNumChange(p: number) {
+  scriptPageNum.value = p
+}
+function handleScriptPageSizeChange(s: number) {
+  scriptPageSize.value = s
+  scriptPageNum.value = 1
+}
+
+// 流程触发记录
+const triggerPageNum = ref(1)
+const triggerPageSize = ref(10)
+const pagedTriggers = computed(() =>
+  triggers.value.slice(
+    (triggerPageNum.value - 1) * triggerPageSize.value,
+    triggerPageNum.value * triggerPageSize.value,
+  ),
+)
+function handleTriggerPageNumChange(p: number) {
+  triggerPageNum.value = p
+}
+function handleTriggerPageSizeChange(s: number) {
+  triggerPageSize.value = s
+  triggerPageNum.value = 1
 }
 
 async function handleRetry(row: IotCommandRecord) {
@@ -95,6 +176,18 @@ function statusTag(status: string): 'success' | 'danger' | 'warning' | 'info' {
   if (status === 'FAILED' || status === 'TIMEOUT') return 'danger'
   if (status === 'PENDING' || status === 'DUPLICATED') return 'warning'
   return 'info'
+}
+
+/** 统一操作列（V012-BUG-002）：仅命令表有行级动作（重试），其余日志表整行点击看详情、无操作列 */
+function commandRowActions(r: unknown): ListAction[] {
+  const row = r as IotCommandRecord
+  return [
+    {
+      key: 'retry',
+      label: t('common.retry'),
+      onClick: () => void handleRetry(row),
+    },
+  ]
 }
 
 const isEmpty = computed(
@@ -130,7 +223,7 @@ onMounted(() => void load())
 
         <el-table
           v-loading="loading"
-          :data="messages"
+          :data="pagedMessages"
           stripe
           size="small"
           @row-click="openMessageDetail"
@@ -164,12 +257,19 @@ onMounted(() => void load())
           <el-table-column prop="qos" label="QoS" width="55" />
           <el-table-column prop="createTime" :label="t('common.time')" min-width="150" />
         </el-table>
+        <ListPagination
+          :total="messages.length"
+          :page-num="messagePageNum"
+          :page-size="messagePageSize"
+          @update:page-num="handleMessagePageNumChange"
+          @update:page-size="handleMessagePageSizeChange"
+        />
       </el-tab-pane>
 
       <el-tab-pane :label="t('iot.commandsTab')" name="commands">
         <el-table
           v-loading="loading"
-          :data="commands"
+          :data="pagedCommands"
           stripe
           size="small"
           @row-click="openCommandDetail"
@@ -196,21 +296,22 @@ onMounted(() => void load())
             min-width="150"
             show-overflow-tooltip
           />
-          <el-table-column :label="t('common.actions')" width="90" fixed="right">
-            <template #default="{ row }">
-              <el-button size="small" @click="handleRetry(row as IotCommandRecord)">{{
-                t('common.retry')
-              }}</el-button>
-            </template>
-          </el-table-column>
+          <ListActionsColumn :actions="commandRowActions" :width="90" />
           <el-table-column prop="createTime" :label="t('common.time')" min-width="150" />
         </el-table>
+        <ListPagination
+          :total="commands.length"
+          :page-num="commandPageNum"
+          :page-size="commandPageSize"
+          @update:page-num="handleCommandPageNumChange"
+          @update:page-size="handleCommandPageSizeChange"
+        />
       </el-tab-pane>
 
       <el-tab-pane :label="t('iot.scriptExecutionsTab')" name="scripts">
         <el-table
           v-loading="loading"
-          :data="scriptExecs"
+          :data="pagedScriptExecs"
           stripe
           size="small"
           @row-click="openScriptDetail"
@@ -244,12 +345,19 @@ onMounted(() => void load())
             show-overflow-tooltip
           />
         </el-table>
+        <ListPagination
+          :total="scriptExecs.length"
+          :page-num="scriptPageNum"
+          :page-size="scriptPageSize"
+          @update:page-num="handleScriptPageNumChange"
+          @update:page-size="handleScriptPageSizeChange"
+        />
       </el-tab-pane>
 
       <el-tab-pane :label="t('iot.processTriggersTab')" name="triggers">
         <el-table
           v-loading="loading"
-          :data="triggers"
+          :data="pagedTriggers"
           stripe
           size="small"
           @row-click="openTriggerDetail"
@@ -286,6 +394,13 @@ onMounted(() => void load())
             show-overflow-tooltip
           />
         </el-table>
+        <ListPagination
+          :total="triggers.length"
+          :page-num="triggerPageNum"
+          :page-size="triggerPageSize"
+          @update:page-num="handleTriggerPageNumChange"
+          @update:page-size="handleTriggerPageSizeChange"
+        />
       </el-tab-pane>
     </el-tabs>
     <el-empty v-if="isEmpty" :description="t('common.noRecords')" />

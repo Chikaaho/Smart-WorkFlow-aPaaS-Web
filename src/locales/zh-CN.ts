@@ -351,6 +351,7 @@ export default {
     confirm: '确定',
     close: '关闭',
     actions: '操作',
+    moreActions: '更多',
     status: '状态',
     name: '名称',
     type: '类型',

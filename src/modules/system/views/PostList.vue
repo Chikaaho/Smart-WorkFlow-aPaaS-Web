@@ -22,7 +22,9 @@ import {
   StandardFormTemplate,
   FormSection,
   FormGrid,
+  ListActionsColumn,
 } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
 // ─── 列表状态 ───
 
@@ -218,6 +220,25 @@ function deleteRow(r: unknown) {
   handleDelete(r as SysPost)
 }
 
+/** 统一操作列（V012-BUG-002）：编辑/删除显隐由权限决定（服务端仍是最终权威） */
+function rowActions(r: unknown): ListAction[] {
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      visible: hasPerm('system:post:update'),
+      onClick: () => editRow(r),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      visible: hasPerm('system:post:delete'),
+      type: 'danger',
+      onClick: () => deleteRow(r),
+    },
+  ]
+}
+
 onMounted(loadList)
 </script>
 
@@ -289,26 +310,7 @@ onMounted(loadList)
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="180" fixed="right">
-        <template #default="{ row }">
-          <el-button
-            v-if="hasPerm('system:post:update')"
-            size="small"
-            link
-            type="primary"
-            @click="editRow(row)"
-            >{{ t('common.edit') }}</el-button
-          >
-          <el-button
-            v-if="hasPerm('system:post:delete')"
-            size="small"
-            link
-            type="danger"
-            @click="deleteRow(row)"
-            >{{ t('common.delete') }}</el-button
-          >
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
 
     <!-- 空态操作 -->

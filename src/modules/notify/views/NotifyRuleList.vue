@@ -8,7 +8,8 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 import type { NotifyRule, NotifyRuleSaveReq } from '@/contracts/notify'
@@ -175,6 +176,35 @@ async function handleDelete(row: NotifyRule) {
   }
 }
 
+/** 统一操作列（V012-BUG-002）：启停走行内开关列，此处仅编辑/删除 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as NotifyRule
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => handleEdit(row),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => handleDelete(row),
+    },
+  ]
+}
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+  void loadList()
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
+  void loadList()
+}
+
 onMounted(loadList)
 </script>
 
@@ -185,6 +215,8 @@ onMounted(loadList)
     :page-num="pageNum"
     :page-size="pageSize"
     :empty="isEmpty"
+    @update:page-num="handlePageNumChange"
+    @update:page-size="handlePageSizeChange"
   >
     <template #page-action>
       <el-button type="primary" @click="handleCreate">{{ t('common.newRule') }}</el-button>
@@ -218,16 +250,7 @@ onMounted(loadList)
           />
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="140" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" text type="primary" @click="handleEdit(row as NotifyRule)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button size="small" text type="danger" @click="handleDelete(row as NotifyRule)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
 
     <el-dialog

@@ -10,6 +10,8 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { queryTodoTasks, queryProcessedTasks, myInstances, myDrafts } from '@/modules/workflow/api'
 import { queryMyCopies } from '@/modules/workflow/api/oa'
 import type { PageQuery } from '@/contracts/common'
@@ -108,7 +110,41 @@ function openRow(row: Row) {
   }
 }
 
+/**
+ * 操作列（V012-BUG-002）：单按钮「详情」，行为与行点击 openRow 一致。
+ * 仅存在可打开对象（待办/已办的 taskId、草稿 id）的行可见，与原 v-if 口径一致。
+ */
+function rowActions(row: unknown, tab: TabKey): ListAction[] {
+  const item = row as Row
+  return [
+    {
+      key: 'detail',
+      label: t('common.detail'),
+      visible: Boolean(item.taskId) || (tab === 'drafts' && Boolean(item.id)),
+      onClick: () => openRow(item),
+    },
+  ]
+}
+
+// ─── 客户端分页（V012-BUG-003）：各页签一次拉取全量（服务端 pageSize 20），前端切片 ───
+const pageNum = ref(1)
+const pageSize = ref(20)
+
+const pagedRows = computed(() =>
+  currentRows.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
+)
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
+}
+
 function handleTabChange(tab: string | number) {
+  pageNum.value = 1
   void loadTab(tab as TabKey)
 }
 
@@ -127,7 +163,7 @@ onMounted(() => void loadTab('todo'))
             type="error"
             :closable="false"
           />
-          <el-table v-loading="loading && activeTab === key" :data="currentRows" size="default">
+          <el-table v-loading="loading && activeTab === key" :data="pagedRows" size="default">
             <el-table-column :label="t('workflow.titleOrItemColumn')" min-width="200">
               <template #default="{ row }">{{
                 row.name || row.title || row.processDefinitionKey || '—'
@@ -142,23 +178,19 @@ onMounted(() => void loadTab('todo'))
             <el-table-column :label="t('common.time')" min-width="160">
               <template #default="{ row }">{{ row.createTime || '—' }}</template>
             </el-table-column>
-            <el-table-column :label="t('common.actions')" width="90">
-              <template #default="{ row }">
-                <el-button
-                  v-if="
-                    (key as TabKey) !== 'messages' &&
-                    (row.taskId || ((key as TabKey) === 'drafts' && row.id))
-                  "
-                  link
-                  type="primary"
-                  @click="openRow(row)"
-                >
-                  {{ t('common.open') }}
-                </el-button>
-              </template>
-            </el-table-column>
+            <ListActionsColumn
+              :actions="(row: unknown) => rowActions(row, key as TabKey)"
+              :width="90"
+            />
             <template #empty>{{ t('common.emptyData') }}</template>
           </el-table>
+          <ListPagination
+            :total="currentRows.length"
+            :page-num="pageNum"
+            :page-size="pageSize"
+            @update:page-num="handlePageNumChange"
+            @update:page-size="handlePageSizeChange"
+          />
         </template>
         <template v-else>
           <el-empty :description="t('workflow.inboxEntry')">

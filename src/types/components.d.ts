@@ -70,6 +70,7 @@ declare module 'vue' {
     FormSection: typeof import('./../components/page-layout/FormSection.vue')['default']
     FormulaControl: typeof import('./../components/dynamic-field-controls/FormulaControl.vue')['default']
     LabelControl: typeof import('./../components/dynamic-field-controls/LabelControl.vue')['default']
+    ListActionsColumn: typeof import('./../components/page-layout/ListActionsColumn.vue')['default']
     ListEmpty: typeof import('./../components/page-layout/ListEmpty.vue')['default']
     ListFilterBar: typeof import('./../components/page-layout/ListFilterBar.vue')['default']
     ListPagination: typeof import('./../components/page-layout/ListPagination.vue')['default']

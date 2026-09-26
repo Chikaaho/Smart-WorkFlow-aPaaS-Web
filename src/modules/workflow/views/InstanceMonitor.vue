@@ -9,7 +9,8 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   pageMonitorInstances,
   interveneInstance,
@@ -152,6 +153,45 @@ function rowOf(r: unknown) {
   return r as MonitorInstance
 }
 
+/**
+ * 操作列（V012-BUG-002）：挂起/恢复直显，终止/迁移/历史收进「更多」，
+ * 全部干预动作显隐与授权保持原有口径（服务端逐项鉴权）。
+ */
+function rowActions(row: unknown): ListAction[] {
+  const item = rowOf(row)
+  return [
+    {
+      key: 'suspend',
+      label: t('workflow.suspend'),
+      type: 'primary',
+      onClick: () => openIntervene(item, 'SUSPEND'),
+    },
+    {
+      key: 'resume',
+      label: t('common.resume'),
+      type: 'primary',
+      onClick: () => openIntervene(item, 'RESUME'),
+    },
+    {
+      key: 'terminate',
+      label: t('workflow.terminate'),
+      type: 'danger',
+      onClick: () => openIntervene(item, 'TERMINATE'),
+    },
+    {
+      key: 'transfer',
+      label: t('workflow.transferAction'),
+      type: 'primary',
+      onClick: () => openIntervene(item, 'TRANSFER'),
+    },
+    {
+      key: 'history',
+      label: t('common.history'),
+      onClick: () => void openHistory(item),
+    },
+  ]
+}
+
 function handlePageNumChange(p: number) {
   pageNum.value = p
   void loadList()
@@ -250,25 +290,7 @@ onMounted(loadList)
       <el-table-column :label="t('common.startTimeShort')" min-width="160">
         <template #default="{ $index }">{{ list[$index]?.instance.createTime }}</template>
       </el-table-column>
-      <el-table-column :label="t('workflow.intervene')" width="270" fixed="right">
-        <template #default="{ $index }">
-          <el-button link type="primary" @click="openIntervene(rowOf(list[$index]), 'SUSPEND')">{{
-            t('workflow.suspend')
-          }}</el-button>
-          <el-button link type="primary" @click="openIntervene(rowOf(list[$index]), 'RESUME')">{{
-            t('common.resume')
-          }}</el-button>
-          <el-button link type="danger" @click="openIntervene(rowOf(list[$index]), 'TERMINATE')">{{
-            t('workflow.terminate')
-          }}</el-button>
-          <el-button link type="primary" @click="openIntervene(rowOf(list[$index]), 'TRANSFER')">{{
-            t('workflow.transferAction')
-          }}</el-button>
-          <el-button link @click="openHistory(rowOf(list[$index]))">{{
-            t('common.history')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :label="t('workflow.intervene')" :width="170" />
       <template #empty>{{ t('workflow.noInstances') }}</template>
     </el-table>
 

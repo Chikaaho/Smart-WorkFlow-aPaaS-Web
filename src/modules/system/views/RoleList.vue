@@ -38,7 +38,9 @@ import {
   StandardFormTemplate,
   FormSection,
   FormGrid,
+  ListActionsColumn,
 } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
 // ─── 列表状态 ───
 
@@ -220,6 +222,11 @@ function openMembers(row: SysRole) {
   void loadCandidates()
 }
 
+function handleMembersPageSizeChange() {
+  membersPageNum.value = 1
+  loadMembers()
+}
+
 async function loadMembers() {
   if (!membersRole.value?.id) return
   membersLoading.value = true
@@ -300,10 +307,7 @@ async function removeMember(user: SysUser) {
   }
 }
 
-// el-table row slot 的 DefaultRow 类型不与 SysRole/SysUser 兼容，通过包装函数桥接。
-function openMembersRow(r: unknown) {
-  openMembers(r as SysRole)
-}
+// el-table row slot 的 DefaultRow 类型不与 SysUser 兼容，通过包装函数桥接。
 function removeMemberRow(r: unknown) {
   removeMember(r as SysUser)
 }
@@ -489,12 +493,30 @@ async function handleDelete(row: SysRole) {
   }
 }
 
-// el-table row slot 的 DefaultRow 类型不与 SysRole 兼容，通过包装函数桥接。
-function editRow(r: unknown) {
-  openEdit(r as SysRole)
-}
-function deleteRow(r: unknown) {
-  handleDelete(r as SysRole)
+/** 统一操作列（V012-BUG-002）：成员入口权限用 visible 表达，superadmin 保护用 disabled 表达 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as SysRole
+  return [
+    {
+      key: 'members',
+      label: t('system.members'),
+      visible: hasPerm('system:role:list'),
+      onClick: () => openMembers(row),
+    },
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      disabled: !canEditRole(row),
+      onClick: () => openEdit(row),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      disabled: !canEditRole(row),
+      onClick: () => handleDelete(row),
+    },
+  ]
 }
 
 onMounted(loadList)
@@ -575,34 +597,7 @@ onMounted(loadList)
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="220" fixed="right">
-        <template #default="{ row }">
-          <el-button
-            v-if="hasPerm('system:role:list')"
-            size="small"
-            link
-            type="primary"
-            @click="openMembersRow(row)"
-            >{{ t('system.members') }}</el-button
-          >
-          <el-button
-            size="small"
-            link
-            type="primary"
-            :disabled="!canEditRole(row)"
-            @click="editRow(row)"
-            >{{ t('common.edit') }}</el-button
-          >
-          <el-button
-            size="small"
-            link
-            type="danger"
-            :disabled="!canEditRole(row)"
-            @click="deleteRow(row)"
-            >{{ t('common.delete') }}</el-button
-          >
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
 
     <!-- 空态操作 -->
@@ -791,9 +786,11 @@ onMounted(loadList)
     <el-pagination
       v-model:current-page="membersPageNum"
       v-model:page-size="membersPageSize"
-      layout="total, prev, pager, next"
+      :page-sizes="[10, 20, 50, 100]"
+      layout="total, sizes, prev, pager, next"
       :total="membersTotal"
       @current-change="loadMembers"
+      @size-change="handleMembersPageSizeChange"
     />
   </el-dialog>
 </template>

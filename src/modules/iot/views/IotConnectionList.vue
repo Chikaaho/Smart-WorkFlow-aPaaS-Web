@@ -11,7 +11,8 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { LoadErrorState } from '@/components/page-layout'
+import { LoadErrorState, ListActionsColumn, ListPagination } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { enumLabel } from '@/foundation/i18n/enum-label'
 import {
   listConnections,
@@ -53,12 +54,30 @@ async function load() {
   loadError.value = null
   try {
     list.value = await listConnections()
+    pageNum.value = 1
   } catch (err) {
     // 保留完整 ApiError：错误态需要分类结论、恢复动作与事件引用，不只是文案串
     loadError.value = err instanceof ApiError ? err : null
   } finally {
     loading.value = false
   }
+}
+
+// ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
+const pageNum = ref(1)
+const pageSize = ref(10)
+
+const pagedRows = computed(() =>
+  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
+)
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
 }
 
 function openCreate() {
@@ -161,6 +180,46 @@ async function handleDelete(row: IotConnection) {
 }
 
 onMounted(() => void load())
+
+/** 统一操作列（V012-BUG-002）：连接动作较多，2 个直显、其余收进「更多」；connect 仅 MQTT+启用态可见 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as IotConnection
+  return [
+    {
+      key: 'test',
+      label: t('common.test'),
+      onClick: () => void handleTest(row),
+    },
+    {
+      key: 'connect',
+      label: t('iot.connect'),
+      type: 'success',
+      visible: row.connType === 'MQTT' && row.enabled === 1,
+      onClick: () => void handleConnect(row),
+    },
+    {
+      key: 'rotate',
+      label: t('iot.rotate'),
+      onClick: () => void handleRotate(row),
+    },
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => openEdit(row),
+    },
+    {
+      key: 'toggle',
+      label: row.enabled === 1 ? t('common.disable') : t('common.enable'),
+      onClick: () => void handleToggle(row),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => void handleDelete(row),
+    },
+  ]
+}
 </script>
 
 <template>
@@ -171,7 +230,7 @@ onMounted(() => void load())
     </div>
     <LoadErrorState v-if="loadError" :error="loadError" @retry="load" />
 
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="pagedRows" stripe>
       <el-table-column prop="code" :label="t('common.identifier')" min-width="110" />
       <el-table-column prop="name" :label="t('common.name')" min-width="130" />
       <el-table-column prop="connType" :label="t('common.type')" width="90" />
@@ -221,33 +280,15 @@ onMounted(() => void load())
           }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="280" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" @click="handleTest(row as IotConnection)">{{
-            t('common.test')
-          }}</el-button>
-          <el-button
-            v-if="row.connType === 'MQTT' && row.enabled === 1"
-            size="small"
-            type="success"
-            @click="handleConnect(row as IotConnection)"
-            >{{ t('iot.connect') }}</el-button
-          >
-          <el-button size="small" @click="handleRotate(row as IotConnection)">{{
-            t('iot.rotate')
-          }}</el-button>
-          <el-button size="small" @click="openEdit(row as IotConnection)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button size="small" @click="handleToggle(row as IotConnection)">{{
-            row.enabled === 1 ? t('common.disable') : t('common.enable')
-          }}</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row as IotConnection)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="170" />
     </el-table>
+    <ListPagination
+      :total="list.length"
+      :page-num="pageNum"
+      :page-size="pageSize"
+      @update:page-num="handlePageNumChange"
+      @update:page-size="handlePageSizeChange"
+    />
     <el-empty v-if="isEmpty" :description="t('iot.noConnections')" />
 
     <el-dialog

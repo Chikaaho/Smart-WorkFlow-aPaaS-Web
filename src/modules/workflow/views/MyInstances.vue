@@ -11,12 +11,14 @@ const { t } = useI18n()
 import { ref, computed, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { myInstances, myInstanceDetail, withdrawInstance } from '@/modules/workflow/api'
 import { urgeMyInstance } from '@/modules/workflow/api/oa'
 import type { ProcessInstance, MyInstanceDetail } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
+import { hasPerm } from '@/foundation/permission'
 
 const router = useRouter()
 
@@ -249,10 +251,6 @@ function resultTagType(result: string | null): 'success' | 'danger' | 'info' {
 // ─── 催办（v0.0.2：发起人对运行中实例催办当前待办人；10 分钟冷却） ───
 const urgingId = ref<number | null>(null)
 
-function urgeRow(r: unknown) {
-  void urge(r as ProcessInstance)
-}
-
 async function urge(row: ProcessInstance) {
   urgingId.value = row.id
   try {
@@ -271,9 +269,35 @@ async function urge(row: ProcessInstance) {
   }
 }
 
-// el-table row slot 的 DefaultRow 类型不兼容，桥接函数（对齐 TodoList 写法）
-function openDetailRow(r: unknown) {
-  void openDetail(r as ProcessInstance)
+/**
+ * 操作列（V012-BUG-002）：详情直显；催办/撤回仅 RUNNING 且有对应权限时可见
+ * （原 v-if + v-perm 显隐转为 visible 表达式，服务端仍是最终权威）。
+ */
+function rowActions(row: unknown): ListAction[] {
+  const item = asInstance(row)
+  return [
+    {
+      key: 'detail',
+      label: t('common.viewDetails'),
+      onClick: () => void openDetail(item),
+    },
+    {
+      key: 'urge',
+      label: t('workflow.urge'),
+      type: 'warning',
+      visible: item.status === 'RUNNING' && hasPerm('workflow:urge'),
+      disabled: urgingId.value === item.id,
+      onClick: () => void urge(item),
+    },
+    {
+      key: 'withdraw',
+      label: t('common.withdraw'),
+      type: 'danger',
+      visible: item.status === 'RUNNING' && hasPerm('workflow:task:withdraw'),
+      disabled: withdrawingId.value === item.processInstanceId,
+      onClick: () => void withdrawRow(item),
+    },
+  ]
 }
 
 onMounted(loadList)
@@ -339,7 +363,6 @@ onMounted(loadList)
 
     <template #table-title>
       <h3 class="my-instances-panel-title">{{ t('common.processApplyTitle') }}</h3>
-      <span class="my-instances-panel-count">{{ t('common.totalItems', { total }) }}</span>
       <el-button
         class="my-instances-panel-create"
         type="primary"
@@ -399,35 +422,7 @@ onMounted(loadList)
           {{ formatTime(row.createTime) }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="147" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" plain round @click="openDetailRow(row)">{{
-            t('common.viewDetails')
-          }}</el-button>
-          <el-button
-            v-if="row.status === 'RUNNING'"
-            v-perm="'workflow:urge'"
-            size="small"
-            type="warning"
-            link
-            :disabled="urgingId === row.id"
-            @click="urgeRow(row)"
-          >
-            {{ t('workflow.urge') }}
-          </el-button>
-          <el-button
-            v-if="row.status === 'RUNNING'"
-            v-perm="'workflow:task:withdraw'"
-            size="small"
-            type="danger"
-            link
-            :disabled="withdrawingId === row.processInstanceId"
-            @click="withdrawRow(row)"
-          >
-            {{ t('common.withdraw') }}
-          </el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
 
     <!-- 详情弹窗 -->
@@ -541,12 +536,6 @@ onMounted(loadList)
   font-weight: 600;
   color: var(--sw-text-primary);
   transform: translateY(-7px);
-}
-.my-instances-panel-count {
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--sw-text-secondary);
-  transform: translateY(-6px);
 }
 .my-instances-field {
   display: flex;

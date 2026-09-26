@@ -24,7 +24,8 @@ import { disableFormDef, enableFormDef } from '@/modules/form/api/i2-choices'
 import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/utils/form-def-status'
 import type { FormDefListItem } from '@/modules/form/api/form-def'
 import type { PageQuery } from '@/contracts/common'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listCategories,
   queryAdminCatalogItems,
@@ -260,11 +261,6 @@ function goEdit(row: FormDefListItem) {
   void router.push(`/form/designer/${row.id}`)
 }
 
-// el-table row slot 的 DefaultRow 类型不兼容，桥接函数
-function editRow(r: unknown) {
-  goEdit(r as FormDefListItem)
-}
-
 const visibilityDialogVisible = ref(false)
 const visibilityForm = ref<FormDefListItem | null>(null)
 const visibilityUserIds = ref('')
@@ -305,9 +301,35 @@ function openVisibility(row: FormDefListItem) {
   visibilityDialogVisible.value = true
 }
 
-// el-table row slot 的 DefaultRow 类型不兼容，桥接函数
-function openVisibilityRow(r: unknown) {
-  openVisibility(r as FormDefListItem)
+/** 统一操作列（V012-BUG-002）：编辑/发起范围直显；停用/启用按状态互斥显隐 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as FormDefListItem
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => goEdit(row),
+    },
+    {
+      key: 'visibility',
+      label: t('form.initiationScope'),
+      onClick: () => openVisibility(row),
+    },
+    {
+      key: 'disable',
+      label: t('common.disable'),
+      type: 'danger',
+      visible: row.status === 'PUBLISHED',
+      onClick: () => toggleLifecycleRow(row, 'disable'),
+    },
+    {
+      key: 'enable',
+      label: t('common.enable'),
+      type: 'success',
+      visible: row.status === 'DISABLED',
+      onClick: () => toggleLifecycleRow(row, 'enable'),
+    },
+  ]
 }
 
 async function saveVisibility() {
@@ -412,33 +434,7 @@ onMounted(loadList)
             {{ formatDateTime(row.updateTime) }}
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.actions')" width="250" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" link type="primary" @click="editRow(row)">{{
-              t('common.edit')
-            }}</el-button>
-            <el-button size="small" link type="primary" @click="openVisibilityRow(row)">
-              {{ t('form.initiationScope') }}
-            </el-button>
-            <!-- I2 生命周期：停用/启用（服务端审计；前端按钮不替代服务端状态检查） -->
-            <el-button
-              v-if="row.status === 'PUBLISHED'"
-              size="small"
-              link
-              type="danger"
-              @click="toggleLifecycleRow(row, 'disable')"
-              >{{ t('common.disable') }}</el-button
-            >
-            <el-button
-              v-if="row.status === 'DISABLED'"
-              size="small"
-              link
-              type="success"
-              @click="toggleLifecycleRow(row, 'enable')"
-              >{{ t('common.enable') }}</el-button
-            >
-          </template>
-        </el-table-column>
+        <ListActionsColumn :actions="rowActions" :width="150" />
       </el-table>
 
       <!-- 空态 -->

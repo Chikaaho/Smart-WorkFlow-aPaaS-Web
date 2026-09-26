@@ -6,7 +6,8 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate, LoadErrorState } from '@/components/page-layout'
+import { StandardListTemplate, LoadErrorState, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import DictSelect from '@/foundation/dict/DictSelect.vue'
 import DictTag from '@/foundation/dict/DictTag.vue'
 import {
@@ -241,6 +242,29 @@ async function handleDelete(row: Record<string, unknown>) {
     const msg = getErrorMessage(code, errObj.message)
     ElMessage.error(msg)
   }
+}
+
+/** 统一操作列（V012-BUG-002）：查看/编辑直显，删除收进「更多」 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as Record<string, unknown>
+  return [
+    {
+      key: 'view',
+      label: t('common.view'),
+      onClick: () => handleView(row),
+    },
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => handleEdit(row),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => handleDelete(row),
+    },
+  ]
 }
 
 // ── 值显示辅助 ──
@@ -504,19 +528,7 @@ onMounted(async () => {
       </el-table-column>
 
       <!-- 操作列 -->
-      <el-table-column :label="t('common.actions')" width="200" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="handleView(row)">{{
-            t('common.view')
-          }}</el-button>
-          <el-button size="small" link type="primary" @click="handleEdit(row)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button size="small" link type="danger" @click="handleDelete(row)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
 
     <!-- toolbar 操作 -->

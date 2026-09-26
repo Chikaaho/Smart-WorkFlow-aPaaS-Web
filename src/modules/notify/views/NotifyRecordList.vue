@@ -11,7 +11,8 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   queryNotifyRecords,
   queryNotifyRecordDetail,
@@ -134,13 +135,23 @@ async function resend(row: NotifyRecord) {
   }
 }
 
-function openDetailRow(r: unknown) {
-  void openDetail(r as NotifyRecord)
-}
-
-/* el-table row slot 的 DefaultRow 类型桥接（对齐 MyInstances 写法） */
-function resendRow(r: unknown) {
-  void resend(r as NotifyRecord)
+/** 统一操作列（V012-BUG-002）：查看日志直显；重发仅失败记录可用（服务端仍会校验并发与状态） */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as NotifyRecord
+  return [
+    {
+      key: 'log',
+      label: t('notify.logButton'),
+      onClick: () => openDetail(row),
+    },
+    {
+      key: 'resend',
+      label: t('notify.resend'),
+      type: 'warning',
+      disabled: row.deliveryStatus !== 'FAILED' || resendingId.value === row.id,
+      onClick: () => resend(row),
+    },
+  ]
 }
 
 onMounted(loadList)
@@ -227,22 +238,7 @@ onMounted(loadList)
         show-overflow-tooltip
       />
       <el-table-column prop="createTime" :label="t('common.time')" min-width="170" />
-      <el-table-column :label="t('common.actions')" width="150" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" type="primary" link @click="openDetailRow(row)">{{
-            t('notify.logButton')
-          }}</el-button>
-          <el-button
-            size="small"
-            type="warning"
-            link
-            :disabled="row.deliveryStatus !== 'FAILED' || resendingId === row.id"
-            @click="resendRow(row)"
-          >
-            {{ t('notify.resend') }}
-          </el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
   </StandardListTemplate>
 

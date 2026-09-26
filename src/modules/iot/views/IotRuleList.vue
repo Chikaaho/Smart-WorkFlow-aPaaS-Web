@@ -12,6 +12,8 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
+import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listRules,
   createRule,
@@ -64,11 +66,29 @@ async function load() {
   try {
     list.value = await listRules()
     devices.value = await listEligibleDevices()
+    pageNum.value = 1
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
+}
+
+// ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
+const pageNum = ref(1)
+const pageSize = ref(10)
+
+const pagedRows = computed(() =>
+  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
+)
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
 }
 
 function deviceName(deviceId: number): string {
@@ -128,6 +148,32 @@ function openTriggerDetail(row: IotProcessTriggerRecord) {
 }
 
 onMounted(() => void load())
+
+/** 统一操作列（V012-BUG-002）：发布/停用按规则状态互斥显隐 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as IotEventRule
+  return [
+    {
+      key: 'publish',
+      label: t('common.publish'),
+      type: 'success',
+      visible: row.status !== 'PUBLISHED',
+      onClick: () => void handlePublish(row),
+    },
+    {
+      key: 'disable',
+      label: t('common.disable'),
+      type: 'danger',
+      visible: row.status === 'PUBLISHED',
+      onClick: () => void handleDisable(row),
+    },
+    {
+      key: 'triggers',
+      label: t('iot.triggerRecords'),
+      onClick: () => void openTriggers(row),
+    },
+  ]
+}
 </script>
 
 <template>
@@ -154,7 +200,7 @@ onMounted(() => void load())
       </template>
     </el-alert>
 
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="pagedRows" stripe>
       <el-table-column prop="code" :label="t('common.code')" min-width="110" />
       <el-table-column prop="name" :label="t('common.name')" min-width="130" />
       <el-table-column :label="t('common.device')" min-width="120">
@@ -185,28 +231,15 @@ onMounted(() => void load())
           >
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="180" fixed="right">
-        <template #default="{ row }">
-          <el-button
-            v-if="row.status !== 'PUBLISHED'"
-            size="small"
-            type="success"
-            @click="handlePublish(row as IotEventRule)"
-            >{{ t('common.publish') }}</el-button
-          >
-          <el-button
-            v-if="row.status === 'PUBLISHED'"
-            size="small"
-            type="danger"
-            @click="handleDisable(row as IotEventRule)"
-            >{{ t('common.disable') }}</el-button
-          >
-          <el-button size="small" @click="openTriggers(row as IotEventRule)">{{
-            t('iot.triggerRecords')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
+    <ListPagination
+      :total="list.length"
+      :page-num="pageNum"
+      :page-size="pageSize"
+      @update:page-num="handlePageNumChange"
+      @update:page-size="handlePageSizeChange"
+    />
     <el-empty v-if="isEmpty" :description="t('iot.noRules')" />
 
     <el-dialog v-model="dialogVisible" :title="t('common.newRule')" width="640px">

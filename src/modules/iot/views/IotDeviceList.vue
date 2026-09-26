@@ -12,6 +12,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError, request } from '@/foundation/request'
 import { enumLabel } from '@/foundation/i18n/enum-label'
+import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   createDevice,
   publishDevice,
@@ -61,11 +63,29 @@ async function load() {
   try {
     list.value = await request<DeviceRow[]>({ method: 'GET', url: '/iot/devices' })
     products.value = await listProducts()
+    pageNum.value = 1
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
+}
+
+// ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
+const pageNum = ref(1)
+const pageSize = ref(10)
+
+const pagedRows = computed(() =>
+  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
+)
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
 }
 
 function openCreate() {
@@ -124,6 +144,32 @@ async function handleRefresh(row: DeviceRow) {
 }
 
 onMounted(() => void load())
+
+/** 统一操作列（V012-BUG-002）：发布/刷新状态互斥禁用按管理状态显隐 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as DeviceRow
+  return [
+    {
+      key: 'publish',
+      label: t('common.publish'),
+      type: 'success',
+      visible: row.manageStatus !== 'PUBLISHED',
+      onClick: () => void handlePublish(row),
+    },
+    {
+      key: 'refresh',
+      label: t('iot.refreshStatus'),
+      onClick: () => void handleRefresh(row),
+    },
+    {
+      key: 'disable',
+      label: t('common.disable'),
+      type: 'danger',
+      visible: row.manageStatus === 'PUBLISHED',
+      onClick: () => void handleDisable(row),
+    },
+  ]
+}
 </script>
 
 <template>
@@ -145,7 +191,7 @@ onMounted(() => void load())
       </template>
     </el-alert>
 
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="pagedRows" stripe>
       <el-table-column prop="deviceKey" :label="t('common.businessKey')" min-width="120" />
       <el-table-column prop="name" :label="t('common.name')" min-width="130" />
       <el-table-column prop="deviceType" :label="t('common.type')" width="90" />
@@ -182,28 +228,15 @@ onMounted(() => void load())
         </template>
       </el-table-column>
       <el-table-column prop="lastReportTime" :label="t('iot.lastReported')" min-width="150" />
-      <el-table-column :label="t('common.actions')" width="200" fixed="right">
-        <template #default="{ row }">
-          <el-button
-            v-if="row.manageStatus !== 'PUBLISHED'"
-            size="small"
-            type="success"
-            @click="handlePublish(row as DeviceRow)"
-            >{{ t('common.publish') }}</el-button
-          >
-          <el-button size="small" @click="handleRefresh(row as DeviceRow)">{{
-            t('iot.refreshStatus')
-          }}</el-button>
-          <el-button
-            v-if="row.manageStatus === 'PUBLISHED'"
-            size="small"
-            type="danger"
-            @click="handleDisable(row as DeviceRow)"
-            >{{ t('common.disable') }}</el-button
-          >
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
+    <ListPagination
+      :total="list.length"
+      :page-num="pageNum"
+      :page-size="pageSize"
+      @update:page-num="handlePageNumChange"
+      @update:page-size="handlePageSizeChange"
+    />
     <el-empty v-if="isEmpty" :description="t('iot.noDevices')" />
 
     <el-dialog v-model="dialogVisible" :title="t('iot.newDevice')" width="480px">

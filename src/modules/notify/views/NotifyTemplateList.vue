@@ -14,7 +14,8 @@ const { t } = useI18n()
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   pageNotifyTemplates,
   deleteNotifyTemplate,
@@ -211,6 +212,38 @@ async function runPreview() {
   }
 }
 
+/** 统一操作列（V012-BUG-002）：预览常显；编辑/启停/删除按 canManage 显隐（notify:template:manage） */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as NotifyTemplate
+  return [
+    {
+      key: 'preview',
+      label: t('common.preview'),
+      onClick: () => openPreview(row),
+    },
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      visible: canManage.value,
+      onClick: () => openEdit(row),
+    },
+    {
+      key: 'toggle',
+      label: row.enabled ? t('common.disable') : t('common.enable'),
+      type: row.enabled ? 'warning' : 'success',
+      visible: canManage.value,
+      onClick: () => handleToggle(row),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      visible: canManage.value,
+      onClick: () => handleDelete(row),
+    },
+  ]
+}
+
 defineExpose({ list, errorMsg, retryLoad: loadTemplates })
 </script>
 
@@ -282,33 +315,7 @@ defineExpose({ list, errorMsg, retryLoad: loadTemplates })
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
-      <el-table-column :label="t('common.actions')" width="250" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="openPreview(row as NotifyTemplate)">
-            {{ t('common.preview') }}
-          </el-button>
-          <template v-if="canManage">
-            <el-button size="small" link type="primary" @click="openEdit(row as NotifyTemplate)">{{
-              t('common.edit')
-            }}</el-button>
-            <el-button
-              size="small"
-              link
-              :type="(row as NotifyTemplate).enabled ? 'warning' : 'success'"
-              @click="handleToggle(row as NotifyTemplate)"
-            >
-              {{ (row as NotifyTemplate).enabled ? t('common.disable') : t('common.enable') }}
-            </el-button>
-            <el-button
-              size="small"
-              link
-              type="danger"
-              @click="handleDelete(row as NotifyTemplate)"
-              >{{ t('common.delete') }}</el-button
-            >
-          </template>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="170" />
     </el-table>
   </StandardListTemplate>
 

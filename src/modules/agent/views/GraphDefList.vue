@@ -18,7 +18,8 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   createDebugSession,
   createGraphDef,
@@ -230,6 +231,45 @@ function handleViewExecutions(row: AgentGraphDef) {
   })
 }
 
+/** 统一操作列（V012-BUG-002）：编辑/执行历史常显；发布/删除按 canManage 显隐；源码调试仅 PUBLISHED 可用 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as AgentGraphDef
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => handleEdit(row),
+    },
+    {
+      key: 'publish',
+      label: t('common.publish'),
+      type: 'success',
+      visible: canManage.value,
+      onClick: () => void handlePublish(row),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      visible: canManage.value,
+      onClick: () => void handleDelete(row),
+    },
+    {
+      key: 'debug',
+      label: t('agent.sourceDebug'),
+      type: 'warning',
+      visible: row.status === 'PUBLISHED',
+      onClick: () => void handleDebug(row),
+    },
+    {
+      key: 'executions',
+      label: t('router.executionHistory'),
+      type: 'info',
+      onClick: () => handleViewExecutions(row),
+    },
+  ]
+}
+
 onMounted(() => {
   void loadList()
 })
@@ -280,47 +320,7 @@ onMounted(() => {
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
-      <el-table-column :label="t('common.actions')" width="320" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="handleEdit(row as AgentGraphDef)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button
-            v-if="canManage"
-            size="small"
-            link
-            type="success"
-            @click="handlePublish(row as AgentGraphDef)"
-            >{{ t('common.publish') }}</el-button
-          >
-          <el-button
-            v-if="canManage"
-            size="small"
-            link
-            type="danger"
-            @click="handleDelete(row as AgentGraphDef)"
-            >{{ t('common.delete') }}</el-button
-          >
-          <el-button
-            v-if="(row as AgentGraphDef).status === 'PUBLISHED'"
-            size="small"
-            link
-            type="warning"
-            @click="handleDebug(row as AgentGraphDef)"
-          >
-            {{ t('agent.sourceDebug') }}
-          </el-button>
-          <!-- 执行历史入口：从图定义上下文进入运行记录 -->
-          <el-button
-            size="small"
-            link
-            type="info"
-            @click="handleViewExecutions(row as AgentGraphDef)"
-          >
-            {{ t('router.executionHistory') }}
-          </el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="170" />
     </el-table>
   </StandardListTemplate>
 </template>

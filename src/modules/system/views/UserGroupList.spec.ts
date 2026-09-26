@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 vi.mock('@/modules/system/api/userGroup', () => ({
@@ -57,6 +57,16 @@ function stubPageResult(groups: SysUserGroup[] = []) {
 
 const G1: SysUserGroup = { id: '1', groupCode: 'G-TECH', groupName: '技术委员会', status: 0 }
 const G2: SysUserGroup = { id: '2', groupCode: 'G-OLD', groupName: '历史归档组', status: 1 }
+
+/**
+ * V012-BUG-002 统一操作列：el-table 会在 .hidden-columns 中以空 row 预渲染一份
+ * 占位列内容（visibility:hidden，真实浏览器不可交互），行内真实按钮需排除它。
+ */
+function findRealButton(wrapper: VueWrapper, text: string) {
+  return wrapper
+    .findAll('button')
+    .find((b) => b.text().includes(text) && !b.element.closest('.hidden-columns'))
+}
 
 describe('UserGroupList', () => {
   beforeEach(() => {
@@ -147,20 +157,14 @@ describe('UserGroupList', () => {
     await nextTick()
     await nextTick()
 
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('编辑'))
-      ?.trigger('click')
+    await findRealButton(wrapper, '编辑')?.trigger('click')
     await nextTick()
     await nextTick()
 
     expect(getUserGroup).toHaveBeenCalledWith('1')
     expect(getUserGroupMembers).toHaveBeenCalledWith('1')
 
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('保存'))
-      ?.trigger('click')
+    await findRealButton(wrapper, '保存')?.trigger('click')
     await nextTick()
 
     expect(updateUserGroup).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }))
@@ -172,23 +176,30 @@ describe('UserGroupList', () => {
     await nextTick()
     await nextTick()
 
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('停用'))
-      ?.trigger('click')
+    await findRealButton(wrapper, '停用')?.trigger('click')
     await nextTick()
     expect(disableUserGroup).toHaveBeenCalledWith('1')
   })
 
-  it('删除：确认后调用 deleteUserGroup', async () => {
+  it('删除：确认后调用 deleteUserGroup（删除按钮收纳进「更多」下拉）', async () => {
     const wrapper = mount(UserGroupList)
     await nextTick()
     await nextTick()
 
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('删除'))
-      ?.trigger('click')
+    // V012-BUG-002 统一操作列：第 3 个操作进「更多」下拉，展开后点击菜单项。
+    // 菜单经 teleport 渲染且各行/占位菜单均预渲染于文档中，用触发按钮的
+    // aria-controls 精确定位当前行菜单，避免点到位 hidden-columns 占位菜单。
+    const moreButton = findRealButton(wrapper, '更多')
+    await moreButton?.trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const menuId = moreButton?.element.getAttribute('aria-controls')
+    const menu = menuId ? document.getElementById(menuId) : null
+    const deleteItem = [...(menu?.querySelectorAll('.el-dropdown-menu__item') ?? [])].find((el) =>
+      el.textContent?.includes('删除'),
+    )
+    deleteItem?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await nextTick()
     expect(deleteUserGroup).toHaveBeenCalledWith('1')
   })

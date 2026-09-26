@@ -10,7 +10,8 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   pageTemplates,
   changeTemplateStatus,
@@ -97,6 +98,28 @@ function statusLabel(s: BpmTemplate['status']): string {
   return s === 'ENABLED' ? t('common.enable') : t('common.disable')
 }
 
+/** 操作列（V012-BUG-002）：复制后编辑并发布 / 启用停用，保留原状态 disabled 与行级 loading */
+function rowActions(row: unknown): ListAction[] {
+  const item = row as BpmTemplate | undefined
+  if (!item) return []
+  return [
+    {
+      key: 'copy',
+      label: t('workflow.copyCreateDefinition'),
+      type: 'primary',
+      disabled: item.status !== 'ENABLED',
+      loading: copyingId.value === item.id,
+      onClick: () => void handleCopy(item),
+    },
+    {
+      key: 'toggle',
+      label: item.status === 'ENABLED' ? t('common.disable') : t('common.enable'),
+      loading: togglingId.value === item.id,
+      onClick: () => void handleToggle(item),
+    },
+  ]
+}
+
 function search() {
   pageNum.value = 1
   void loadList()
@@ -180,28 +203,7 @@ onMounted(loadList)
           <el-tag v-if="row" :type="statusType(row.status)">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="180" fixed="right">
-        <template #default="{ row }">
-          <template v-if="row">
-            <el-button
-              link
-              type="primary"
-              :disabled="row.status !== 'ENABLED'"
-              :loading="copyingId === row.id"
-              @click="handleCopy(row as BpmTemplate)"
-            >
-              {{ t('workflow.copyCreateDefinition') }}
-            </el-button>
-            <el-button
-              link
-              :loading="togglingId === row.id"
-              @click="handleToggle(row as BpmTemplate)"
-            >
-              {{ row.status === 'ENABLED' ? t('common.disable') : t('common.enable') }}
-            </el-button>
-          </template>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="120" />
       <template #empty>{{ t('workflow.noVisibleTemplates') }}</template>
     </el-table>
   </StandardListTemplate>

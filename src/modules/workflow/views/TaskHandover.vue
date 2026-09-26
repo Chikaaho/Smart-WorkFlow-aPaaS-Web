@@ -8,8 +8,9 @@ const { t } = useI18n()
  * 向导式：来源/目标用户 + 流程范围 + 代理规则显式勾选；逐项清单可复核；
  * 历史与抄送零改写；失败项可安全重试（已迁移任务自动跳过）。
  */
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ListPagination } from '@/components/page-layout'
 import {
   submitHandover,
   queryHandoverItems,
@@ -45,12 +46,30 @@ async function submit() {
       includeProxyRules: includeProxyRules.value,
     })
     items.value = await queryHandoverItems(result.value.id)
+    pageNum.value = 1
     ElMessage.success(t('workflow.handoverExecuted'))
   } catch (err) {
     ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.handoverFailed'))
   } finally {
     submitting.value = false
   }
+}
+
+// ─── 逐项清单客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
+const pageNum = ref(1)
+const pageSize = ref(10)
+
+const pagedItems = computed(() =>
+  items.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
+)
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
 }
 
 function resultTag(resultValue: HandoverItem['result']) {
@@ -115,7 +134,7 @@ function resultLabel(resultValue: HandoverItem['result']) {
           })
         }}
       </template>
-      <el-table :data="items" size="small">
+      <el-table :data="pagedItems" size="small">
         <el-table-column prop="itemType" :label="t('common.type')" width="110" />
         <el-table-column prop="taskId" :label="t('common.taskId')" min-width="170" />
         <el-table-column prop="beforeAssignee" :label="t('workflow.previousOwner')" width="100" />
@@ -128,6 +147,13 @@ function resultLabel(resultValue: HandoverItem['result']) {
         <el-table-column prop="failReason" :label="t('common.failureReason')" min-width="180" />
         <template #empty>{{ t('workflow.handoverEmpty') }}</template>
       </el-table>
+      <ListPagination
+        :total="items.length"
+        :page-num="pageNum"
+        :page-size="pageSize"
+        @update:page-num="handlePageNumChange"
+        @update:page-size="handlePageSizeChange"
+      />
     </el-card>
   </div>
 </template>

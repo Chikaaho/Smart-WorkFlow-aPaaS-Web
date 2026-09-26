@@ -13,7 +13,8 @@ const { t } = useI18n()
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   pageInternalTools,
   pageExternalTools,
@@ -267,6 +268,34 @@ function deleteRow(r: unknown) {
   void handleDelete(r as AgentToolInternalConfig | AgentToolExternalConfig)
 }
 
+/** 统一操作列（V012-BUG-002）：内部/外部工具共用；编辑/启停/删除按 canManage 显隐（agent:tool:manage） */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as AgentToolInternalConfig | AgentToolExternalConfig
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      visible: canManage.value,
+      onClick: () => editRow(r),
+    },
+    {
+      key: 'toggle',
+      label: row.enabled ? t('common.disable') : t('common.enable'),
+      type: row.enabled ? 'warning' : 'success',
+      visible: canManage.value,
+      loading: togglingId.value === row.id,
+      onClick: () => toggleRow(r),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      visible: canManage.value,
+      onClick: () => deleteRow(r),
+    },
+  ]
+}
+
 onMounted(() => {
   loadCurrentList()
 })
@@ -352,28 +381,7 @@ onMounted(() => {
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
-      <el-table-column :label="t('common.actions')" width="220" fixed="right">
-        <template #default="{ row }">
-          <el-button v-if="canManage" size="small" link type="primary" @click="editRow(row)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button
-            v-if="canManage"
-            size="small"
-            link
-            :type="(row as AgentToolInternalConfig).enabled ? 'warning' : 'success'"
-            :loading="togglingId === (row as AgentToolInternalConfig).id"
-            @click="toggleRow(row)"
-          >
-            {{
-              (row as AgentToolInternalConfig).enabled ? t('common.disable') : t('common.enable')
-            }}
-          </el-button>
-          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
 
     <!-- 外部 HTTP 工具表格 -->
@@ -423,28 +431,7 @@ onMounted(() => {
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
-      <el-table-column :label="t('common.actions')" width="220" fixed="right">
-        <template #default="{ row }">
-          <el-button v-if="canManage" size="small" link type="primary" @click="editRow(row)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button
-            v-if="canManage"
-            size="small"
-            link
-            :type="(row as AgentToolExternalConfig).enabled ? 'warning' : 'success'"
-            :loading="togglingId === (row as AgentToolExternalConfig).id"
-            @click="toggleRow(row)"
-          >
-            {{
-              (row as AgentToolExternalConfig).enabled ? t('common.disable') : t('common.enable')
-            }}
-          </el-button>
-          <el-button v-if="canManage" size="small" link type="danger" @click="deleteRow(row)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
 
     <template #empty-action>

@@ -11,6 +11,8 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
+import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listProducts,
   createProduct,
@@ -43,11 +45,29 @@ async function load() {
   loadError.value = ''
   try {
     list.value = await listProducts()
+    pageNum.value = 1
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
+}
+
+// ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
+const pageNum = ref(1)
+const pageSize = ref(10)
+
+const pagedRows = computed(() =>
+  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
+)
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
 }
 
 function openCreate() {
@@ -99,6 +119,18 @@ async function publishModel() {
 }
 
 onMounted(() => void load())
+
+/** 统一操作列（V012-BUG-002）：物模型入口 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as IotProduct
+  return [
+    {
+      key: 'models',
+      label: t('iot.thingModel'),
+      onClick: () => void openModels(row),
+    },
+  ]
+}
 </script>
 
 <template>
@@ -120,7 +152,7 @@ onMounted(() => void load())
       </template>
     </el-alert>
 
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="pagedRows" stripe>
       <el-table-column prop="code" :label="t('common.code')" min-width="120" />
       <el-table-column prop="name" :label="t('common.name')" min-width="140" />
       <el-table-column prop="connType" :label="t('iot.connectionType')" width="100" />
@@ -137,14 +169,15 @@ onMounted(() => void load())
         min-width="180"
         show-overflow-tooltip
       />
-      <el-table-column :label="t('common.actions')" width="120" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" type="primary" @click="openModels(row as IotProduct)">{{
-            t('iot.thingModel')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
+    <ListPagination
+      :total="list.length"
+      :page-num="pageNum"
+      :page-size="pageSize"
+      @update:page-num="handlePageNumChange"
+      @update:page-size="handlePageSizeChange"
+    />
     <el-empty v-if="isEmpty" :description="t('iot.noProducts')" />
 
     <el-dialog v-model="dialogVisible" :title="t('iot.newProduct')" width="480px">

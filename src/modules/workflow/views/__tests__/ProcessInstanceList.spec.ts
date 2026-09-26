@@ -16,18 +16,23 @@ vi.mock('@/modules/workflow/api', () => ({
 }))
 
 // ─── Mock StandardListTemplate（浅 stub：只渲染 slot 内容，绕过其内部复杂子组件） ───
-vi.mock('@/components/page-layout', () => ({
-  StandardListTemplate: {
-    name: 'StandardListTemplate',
-    props: ['title', 'total', 'pageNum', 'pageSize', 'empty'],
-    emits: ['update:pageNum', 'update:pageSize'],
-    template: `<div class="mock-standard-list">
+// 其余导出（ListActionsColumn 等）保留真实实现：操作列按钮需真实渲染供断言点击。
+vi.mock('@/components/page-layout', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/page-layout')>()
+  return {
+    ...actual,
+    StandardListTemplate: {
+      name: 'StandardListTemplate',
+      props: ['title', 'total', 'pageNum', 'pageSize', 'empty'],
+      emits: ['update:pageNum', 'update:pageSize'],
+      template: `<div class="mock-standard-list">
       <slot name="filter" />
       <slot />
       <slot name="empty-action" />
     </div>`,
-  },
-}))
+    },
+  }
+})
 
 // ─── 测试夹具 ───
 const MOCK_LIST: ProcessInstance[] = [

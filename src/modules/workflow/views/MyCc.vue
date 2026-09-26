@@ -11,7 +11,8 @@ const { t } = useI18n()
  * 抄送身份不含审批操作权（无同意/驳回入口）。
  */
 import { ref, computed, onMounted, reactive } from 'vue'
-import { StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   queryMyCopies,
   queryMyCopyDetail,
@@ -104,8 +105,16 @@ async function openDetail(row: MyCopyItem) {
   }
 }
 
-function openDetailRow(r: unknown) {
-  void openDetail(r as MyCopyItem)
+/** 操作列（V012-BUG-002）：单按钮「详情」（抄送身份无审批操作权，仅查看） */
+function rowActions(row: unknown): ListAction[] {
+  const item = row as MyCopyItem
+  return [
+    {
+      key: 'detail',
+      label: t('common.detail'),
+      onClick: () => void openDetail(item),
+    },
+  ]
 }
 
 /** 模板展示桥接：instance/copy 以索引签名访问，避免模板内类型断言。 */
@@ -190,13 +199,7 @@ onMounted(loadList)
       </el-table-column>
       <el-table-column prop="deliveryStatus" :label="t('workflow.deliveryStatus')" width="100" />
       <el-table-column prop="createTime" :label="t('workflow.ccTime')" min-width="170" />
-      <el-table-column :label="t('common.actions')" width="90" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" type="primary" link @click="openDetailRow(row)">{{
-            t('common.detail')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
   </StandardListTemplate>
 

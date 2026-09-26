@@ -10,6 +10,8 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
+import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listTopics,
   createTopic,
@@ -54,11 +56,29 @@ async function load() {
     list.value = await listTopics()
     connections.value = await listConnections()
     products.value = await listProducts()
+    pageNum.value = 1
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
+}
+
+// ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
+const pageNum = ref(1)
+const pageSize = ref(10)
+
+const pagedRows = computed(() =>
+  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
+)
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
 }
 
 function openCreate() {
@@ -122,6 +142,29 @@ async function handleDelete(row: IotTopic) {
 }
 
 onMounted(() => void load())
+
+/** 统一操作列（V012-BUG-002）：编辑直显，启停/删除按启停状态切换文案 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as IotTopic
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => openEdit(row),
+    },
+    {
+      key: 'toggle',
+      label: row.enabled === 1 ? t('common.disable') : t('common.enable'),
+      onClick: () => void handleToggle(row),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => void handleDelete(row),
+    },
+  ]
+}
 </script>
 
 <template>
@@ -143,7 +186,7 @@ onMounted(() => void load())
       </template>
     </el-alert>
 
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="pagedRows" stripe>
       <el-table-column
         prop="topic"
         :label="t('common.subject')"
@@ -160,20 +203,15 @@ onMounted(() => void load())
           }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="160" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" @click="openEdit(row as IotTopic)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button size="small" @click="handleToggle(row as IotTopic)">{{
-            row.enabled === 1 ? t('common.disable') : t('common.enable')
-          }}</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row as IotTopic)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
+    <ListPagination
+      :total="list.length"
+      :page-num="pageNum"
+      :page-size="pageSize"
+      @update:page-num="handlePageNumChange"
+      @update:page-size="handlePageSizeChange"
+    />
     <el-empty v-if="isEmpty" :description="t('iot.noTopics')" />
 
     <el-dialog

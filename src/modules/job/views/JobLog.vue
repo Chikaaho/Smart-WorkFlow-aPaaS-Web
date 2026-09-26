@@ -12,7 +12,8 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ApiError } from '@/foundation/request'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { pageJobLogs } from '@/modules/job/api'
 import type { JobLog, ExecStatus, TriggerType } from '@/contracts/job'
 
@@ -107,6 +108,17 @@ function closeDetail() {
 // 类型桥接
 function detailRow(r: unknown) {
   openDetail(r as JobLog)
+}
+
+/** 统一操作列（V012-BUG-002）：只读日志页，仅「详情」一个动作 */
+function rowActions(r: unknown): ListAction[] {
+  return [
+    {
+      key: 'detail',
+      label: t('common.detail'),
+      onClick: () => detailRow(r),
+    },
+  ]
 }
 
 // ─── 辅助 ───
@@ -214,13 +226,7 @@ onMounted(loadList)
         show-overflow-tooltip
       />
       <el-table-column prop="createTime" :label="t('common.createTime')" width="170" />
-      <el-table-column :label="t('common.actions')" width="80" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="detailRow(row)">{{
-            t('common.detail')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
 
     <!-- 空态（默认文案） -->

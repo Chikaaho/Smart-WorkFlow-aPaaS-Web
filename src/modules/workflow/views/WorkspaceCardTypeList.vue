@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   createWorkspaceCardType,
   deleteWorkspaceCardType,
@@ -152,6 +153,42 @@ function asCardType(row: unknown): WorkspaceCardType {
   return row as WorkspaceCardType
 }
 
+/** 操作列（V012-BUG-002）：编辑 / 删除 */
+function rowActions(row: unknown): ListAction[] {
+  const item = asCardType(row)
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      type: 'primary',
+      onClick: () => openEdit(item),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => void remove(item),
+    },
+  ]
+}
+
+// ─── 客户端分页（V012-BUG-003）：管理列表一次拉全量，前端切片 ───
+const pageNum = ref(1)
+const pageSize = ref(10)
+
+const pagedList = computed(() =>
+  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
+)
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
+}
+
 onMounted(() => void loadList())
 </script>
 
@@ -159,9 +196,11 @@ onMounted(() => void loadList())
   <StandardListTemplate
     :title="t('workflow.workspaceCardTypesTitle')"
     :total="list.length"
-    :page-num="1"
-    :page-size="100"
+    :page-num="pageNum"
+    :page-size="pageSize"
     :empty="!loading && !errorMsg && list.length === 0"
+    @update:page-num="handlePageNumChange"
+    @update:page-size="handlePageSizeChange"
   >
     <template #toolbar-actions>
       <el-button type="primary" @click="openCreate">{{
@@ -170,7 +209,7 @@ onMounted(() => void loadList())
     </template>
 
     <el-alert v-if="errorMsg" :title="errorMsg" type="error" :closable="false" show-icon />
-    <el-table v-loading="loading" :data="list" stripe style="width: 100%">
+    <el-table v-loading="loading" :data="pagedList" stripe style="width: 100%">
       <el-table-column prop="displayName" :label="t('common.name')" min-width="140" />
       <el-table-column
         prop="typeCode"
@@ -196,16 +235,7 @@ onMounted(() => void loadList())
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="140" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="openEdit(asCardType(row))">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button size="small" link type="danger" @click="remove(asCardType(row))">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
   </StandardListTemplate>
 

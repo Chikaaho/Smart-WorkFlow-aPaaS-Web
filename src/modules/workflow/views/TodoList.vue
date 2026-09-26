@@ -11,7 +11,8 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { queryTodoTasks, acceptTaskAction, pollCommandStatus } from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
 import type { TodoTask } from '@/contracts/bpm'
@@ -71,13 +72,31 @@ function handlePageSizeChange(s: number) {
 
 // ─── 行操作 ───
 
-// el-table row slot 的 DefaultRow 类型不兼容，桥接函数
-function approveRow(r: unknown) {
-  void handleApprove(r as TodoTask)
-}
-
-function rejectRow(r: unknown) {
-  void handleReject(r as TodoTask)
+/**
+ * 操作列（V012-BUG-002）：通过 / 驳回两个直显按钮，
+ * 保留行级 loading 与审批进行中的互斥 disabled。
+ */
+function rowActions(row: unknown): ListAction[] {
+  const item = row as TodoTask
+  const busy = approvingId.value !== null || rejectingId.value !== null
+  return [
+    {
+      key: 'approve',
+      label: t('common.approve'),
+      type: 'primary',
+      loading: approvingId.value === item.taskId,
+      disabled: busy,
+      onClick: () => void handleApprove(item),
+    },
+    {
+      key: 'reject',
+      label: t('common.reject'),
+      type: 'danger',
+      loading: rejectingId.value === item.taskId,
+      disabled: busy,
+      onClick: () => void handleReject(item),
+    },
+  ]
 }
 
 /**
@@ -229,26 +248,7 @@ onMounted(loadList)
       <el-table-column prop="formKey" :label="t('common.formKey')" min-width="140" />
       <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="120" />
       <el-table-column prop="createTime" :label="t('common.createTime')" min-width="170" />
-      <el-table-column :label="t('common.actions')" width="210" fixed="right">
-        <template #default="{ row }">
-          <el-button
-            size="small"
-            type="primary"
-            :loading="approvingId === row.taskId"
-            :disabled="approvingId !== null || rejectingId !== null"
-            @click.stop="approveRow(row)"
-            >{{ t('common.approve') }}</el-button
-          >
-          <el-button
-            size="small"
-            type="danger"
-            :loading="rejectingId === row.taskId"
-            :disabled="approvingId !== null || rejectingId !== null"
-            @click.stop="rejectRow(row)"
-            >{{ t('common.reject') }}</el-button
-          >
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
   </StandardListTemplate>
 </template>

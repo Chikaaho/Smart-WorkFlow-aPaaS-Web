@@ -10,7 +10,8 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 // I6：服务端真分页收件箱 + 未读数 + 全部已读（同一消息与已读状态，多端共享）
 import {
   pageNotifyInbox,
@@ -219,6 +220,34 @@ async function openLink(row: NotifyMessage) {
   }
 }
 
+/** 统一操作列（V012-BUG-002）：标记已读仅未读行显示；标记/删除互斥禁用防并发 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as NotifyMessage
+  return [
+    {
+      key: 'mark-read',
+      label: t('notify.markRead'),
+      visible: !row.read,
+      loading: readingId.value === row.id,
+      disabled: readingId.value !== null || deletingId.value !== null,
+      onClick: () => markRow(row),
+    },
+    {
+      key: 'jump',
+      label: t('notify.jump'),
+      onClick: () => openLink(row),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      loading: deletingId.value === row.id,
+      disabled: readingId.value !== null || deletingId.value !== null,
+      onClick: () => deleteRow(row),
+    },
+  ]
+}
+
 onMounted(loadList)
 </script>
 
@@ -304,34 +333,7 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column prop="createTime" :label="t('common.time')" width="180" />
-      <el-table-column :label="t('common.actions')" width="160" fixed="right">
-        <template #default="{ row }">
-          <el-button
-            v-if="!row.read"
-            size="small"
-            text
-            type="primary"
-            :loading="readingId === row.id"
-            :disabled="readingId !== null || deletingId !== null"
-            @click="markRow(row)"
-          >
-            {{ t('notify.markRead') }}
-          </el-button>
-          <span v-else class="read-label">{{ t('notify.read') }}</span>
-          <el-button size="small" text type="primary" @click="openLink(row as NotifyMessage)">
-            {{ t('notify.jump') }}
-          </el-button>
-          <el-button
-            size="small"
-            text
-            type="danger"
-            :loading="deletingId === row.id"
-            :disabled="readingId !== null || deletingId !== null"
-            @click="deleteRow(row)"
-            >{{ t('common.delete') }}</el-button
-          >
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
   </StandardListTemplate>
 </template>
@@ -351,10 +353,6 @@ onMounted(loadList)
   white-space: nowrap;
   display: block;
   max-width: 100%;
-}
-.read-label {
-  color: #c0c4cc;
-  font-size: 14px;
 }
 .filter-bar {
   display: flex;

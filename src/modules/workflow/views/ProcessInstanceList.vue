@@ -11,7 +11,8 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   queryInstances,
   getInstanceDetail,
@@ -238,6 +239,18 @@ void (async () => {
 function isUserTask(activityType: string): boolean {
   return activityType === 'userTask'
 }
+
+// 操作列（V012-BUG-002）：单按钮「查看详情」，打开实例详情抽屉
+function rowActions(row: unknown): ListAction[] {
+  const item = row as ProcessInstance
+  return [
+    {
+      key: 'detail',
+      label: t('common.viewDetails'),
+      onClick: () => void openDrawer(item),
+    },
+  ]
+}
 </script>
 
 <template>
@@ -309,13 +322,7 @@ function isUserTask(activityType: string): boolean {
         min-width="180"
         show-overflow-tooltip
       />
-      <el-table-column :label="t('common.actions')" width="100" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="openDrawer(row as ProcessInstance)">
-            {{ t('common.viewDetails') }}
-          </el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
 
     <!-- 详情抽屉 -->

@@ -14,7 +14,8 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   myDrafts,
   deleteDraft,
@@ -193,17 +194,44 @@ async function handleSubmit(row: BpmDraft) {
   }
 }
 
-// el-table row slot 的 DefaultRow 类型不兼容，桥接函数（对齐 TodoList 写法）
-function openEditRow(r: unknown) {
-  openEdit(r as BpmDraft)
+// el-table row slot 的 DefaultRow 类型不兼容，桥接为类型化行操作（V012-BUG-002 操作列工厂）
+function draftActions(row: unknown): ListAction[] {
+  const item = row as BpmDraft
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      type: 'primary',
+      onClick: () => openEdit(item),
+    },
+    {
+      key: 'submit',
+      label: t('common.submit'),
+      type: 'success',
+      loading: submittingId.value === item.id,
+      disabled: submittingId.value !== null,
+      onClick: () => void handleSubmit(item),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => void handleDelete(item),
+    },
+  ]
 }
 
-function deleteRow(r: unknown) {
-  void handleDelete(r as BpmDraft)
-}
-
-function submitRow(r: unknown) {
-  void handleSubmit(r as BpmDraft)
+/** 发起入口表格：单按钮「发起」（进入该表单真实填报） */
+function startActions(row: unknown): ListAction[] {
+  const item = row as FormOption
+  return [
+    {
+      key: 'start',
+      label: t('common.start'),
+      type: 'primary',
+      onClick: () => startFromForm(item.formKey),
+    },
+  ]
 }
 
 onMounted(() => {
@@ -222,13 +250,7 @@ onMounted(() => {
     <el-table :data="initiateForms" size="small" :empty-text="t('workflow.noStartableForms')">
       <el-table-column prop="name" :label="t('common.formName')" min-width="160" />
       <el-table-column prop="formKey" :label="t('common.formKey')" min-width="160" />
-      <el-table-column :label="t('common.actions')" width="90">
-        <template #default="{ row }">
-          <el-button type="primary" size="small" @click="startFromForm(row.formKey)">{{
-            t('common.start')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="startActions" :width="90" />
     </el-table>
     <p class="draft-flow-hint">{{ t('workflow.autoResolveProcessHint') }}</p>
   </el-card>
@@ -283,25 +305,7 @@ onMounted(() => {
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" :label="t('common.updateTime')" min-width="170" />
-      <el-table-column :label="t('common.actions')" width="190" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" type="primary" link @click="openEditRow(row)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button
-            size="small"
-            type="success"
-            link
-            :loading="submittingId === row.id"
-            :disabled="submittingId !== null"
-            @click="submitRow(row)"
-            >{{ t('common.submit') }}</el-button
-          >
-          <el-button size="small" type="danger" link @click="deleteRow(row)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="draftActions" :width="150" />
     </el-table>
   </StandardListTemplate>
 </template>

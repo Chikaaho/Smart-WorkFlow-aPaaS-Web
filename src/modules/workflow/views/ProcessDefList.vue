@@ -14,7 +14,8 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ListEmpty, ListPagination } from '@/components/page-layout'
+import { ListActionsColumn, ListEmpty, ListPagination } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   pageProcessDefs,
   getProcessDefDefinition,
@@ -40,9 +41,7 @@ function getStatusLabel(status: ProcessDef['status']): string {
 }
 
 /** 状态徽标类（ProcessDef 目前仅 DRAFT/PUBLISHED 两态） */
-function getStatusClass(
-  status: ProcessDef['status'],
-): 'is-published' | 'is-draft' | 'is-disabled' {
+function getStatusClass(status: ProcessDef['status']): 'is-published' | 'is-draft' | 'is-disabled' {
   if (status === 'PUBLISHED') return 'is-published'
   if (status === 'DISABLED') return 'is-disabled'
   return 'is-draft'
@@ -81,8 +80,7 @@ const visibleList = computed(() => {
   const normalized = keyword.value.trim().toLocaleLowerCase()
   return list.value.filter((row) => {
     const matchesKeyword =
-      !normalized ||
-      `${row.name} ${row.processKey}`.toLocaleLowerCase().includes(normalized)
+      !normalized || `${row.name} ${row.processKey}`.toLocaleLowerCase().includes(normalized)
     const matchesCategory = !categoryFilter.value || row.categoryName === categoryFilter.value
     const matchesStatus = !statusFilter.value || row.status === statusFilter.value
     return matchesKeyword && matchesCategory && matchesStatus
@@ -92,9 +90,7 @@ const visibleList = computed(() => {
 const categories = computed(() =>
   Array.from(
     new Set(
-      list.value
-        .map((row) => row.categoryName)
-        .filter((value): value is string => Boolean(value)),
+      list.value.map((row) => row.categoryName).filter((value): value is string => Boolean(value)),
     ),
   ),
 )
@@ -261,6 +257,47 @@ function statusRow(r: unknown) {
   return r as ProcessDef
 }
 
+/**
+ * 操作列（V012-BUG-002）：设计直显；查看图 / 发布 / 删除（仅 DRAFT 可见）收进「更多」。
+ * 组件行内最多直显 2 个按钮，其余自动进「更多」下拉。
+ */
+function rowActions(row: unknown): ListAction[] {
+  const item = statusRow(row)
+  return [
+    {
+      key: 'design',
+      label: t('workflow.design'),
+      type: 'primary',
+      onClick: () => openDesigner(item),
+    },
+    {
+      key: 'viewDiagram',
+      label: t('workflow.viewDiagram'),
+      onClick: () => void openViewer(item),
+    },
+    {
+      key: 'publish',
+      label: t('common.publish'),
+      visible: item.status === 'DRAFT',
+      onClick: () => void handlePublish(item),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      visible: item.status === 'DRAFT',
+      onClick: () => void handleDelete(item),
+    },
+  ]
+}
+
+/** 重置筛选：仅清空过滤条件（列表经 visibleList 客户端过滤，无需重新请求） */
+function resetFilters() {
+  keyword.value = ''
+  categoryFilter.value = ''
+  statusFilter.value = ''
+}
+
 // ─── 查看流程图 ───
 
 /** 打开查看流程图对话框（自研渲染内核直接消费已保存 ProcessGraph） */
@@ -399,21 +436,31 @@ onMounted(loadList)
         placeholder="搜索流程名称 / 编码"
         clearable
       />
-      <el-select v-model="categoryFilter" class="defs-filter__category" placeholder="全部分类" clearable>
-        <el-option v-for="category in categories" :key="category" :label="category" :value="category" />
+      <el-select
+        v-model="categoryFilter"
+        class="defs-filter__category"
+        placeholder="全部分类"
+        clearable
+      >
+        <el-option
+          v-for="category in categories"
+          :key="category"
+          :label="category"
+          :value="category"
+        />
       </el-select>
-      <el-select v-model="statusFilter" class="defs-filter__status" placeholder="全部状态" clearable>
+      <el-select
+        v-model="statusFilter"
+        class="defs-filter__status"
+        placeholder="全部状态"
+        clearable
+      >
         <el-option label="已发布" value="PUBLISHED" />
         <el-option label="草稿" value="DRAFT" />
         <el-option label="停用" value="DISABLED" />
       </el-select>
       <el-button type="primary" class="defs-filter__query">查询</el-button>
-      <el-button
-        class="defs-filter__reset"
-        @click="keyword = ''; categoryFilter = ''; statusFilter = ''"
-      >
-        重置
-      </el-button>
+      <el-button class="defs-filter__reset" @click="resetFilters"> 重置 </el-button>
     </div>
 
     <div class="p53-admin-defs__table-card">
@@ -436,9 +483,16 @@ onMounted(loadList)
           <el-table-column :label="t('workflow.categoryName')" width="130">
             <template #default="{ row }">{{ statusRow(row).categoryName || '—' }}</template>
           </el-table-column>
-          <el-table-column prop="defVersion" :label="t('common.version')" width="100" align="center">
+          <el-table-column
+            prop="defVersion"
+            :label="t('common.version')"
+            width="100"
+            align="center"
+          >
             <template #default="{ row }">
-              <span class="defs-table__version">v{{ statusRow(row).versionLabel || statusRow(row).defVersion }}</span>
+              <span class="defs-table__version"
+                >v{{ statusRow(row).versionLabel || statusRow(row).defVersion }}</span
+              >
             </template>
           </el-table-column>
           <el-table-column prop="status" :label="t('common.status')" width="120">
@@ -456,38 +510,9 @@ onMounted(loadList)
               {{ statusRow(row).updatedBy || '—' }} · {{ formatDefTime(row.updateTime) }}
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.actions')" width="114" fixed="right" align="center">
-            <template #default="{ row }">
-              <el-dropdown trigger="click" placement="bottom-end">
-                <el-button class="row-action" size="small" @click="openDesigner(row as ProcessDef)">
-                  {{ t('workflow.design') }} · 更多
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item @click="openViewer(row as ProcessDef)">
-                      {{ t('workflow.viewDiagram') }}
-                    </el-dropdown-item>
-                    <el-dropdown-item
-                      v-if="(row as ProcessDef).status === 'DRAFT'"
-                      @click="handlePublish(row as ProcessDef)"
-                    >
-                      {{ t('common.publish') }}
-                    </el-dropdown-item>
-                    <el-dropdown-item
-                      v-if="(row as ProcessDef).status === 'DRAFT'"
-                      divided
-                      @click="handleDelete(row as ProcessDef)"
-                    >
-                      {{ t('common.delete') }}
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </template>
-          </el-table-column>
+          <ListActionsColumn :actions="rowActions" :width="170" />
         </el-table>
         <ListPagination
-          v-if="total > pageSize"
           :total="total"
           :page-num="pageNum"
           :page-size="pageSize"

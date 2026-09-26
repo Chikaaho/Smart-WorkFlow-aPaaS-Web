@@ -11,16 +11,20 @@ import ListTable from './ListTable.vue'
 import ListEmpty from './ListEmpty.vue'
 import ListPagination from './ListPagination.vue'
 
-const props = withDefaults(defineProps<{
-  title?: string
-  description?: string
-  large?: boolean
-  showToolbarTotal?: boolean
-  total: number
-  pageNum: number
-  pageSize: number
-  empty?: boolean
-}>(), { showToolbarTotal: true })
+const props = withDefaults(
+  defineProps<{
+    title?: string
+    description?: string
+    large?: boolean
+    /** 工具栏内联「共 N 条记录」：默认关闭，总条数统一由右下角分页区展示（V012-BUG-003） */
+    showToolbarTotal?: boolean
+    total: number
+    pageNum: number
+    pageSize: number
+    empty?: boolean
+  }>(),
+  { showToolbarTotal: false },
+)
 
 const emit = defineEmits<{
   'update:pageNum': [value: number]

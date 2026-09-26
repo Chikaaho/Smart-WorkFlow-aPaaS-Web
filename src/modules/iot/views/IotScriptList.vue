@@ -11,6 +11,8 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
+import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listScripts,
   createScript,
@@ -75,11 +77,29 @@ async function load() {
   loadError.value = ''
   try {
     list.value = await listScripts()
+    pageNum.value = 1
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
   } finally {
     loading.value = false
   }
+}
+
+// ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
+const pageNum = ref(1)
+const pageSize = ref(10)
+
+const pagedRows = computed(() =>
+  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
+)
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
 }
 
 function openCreate() {
@@ -171,6 +191,47 @@ async function openExecs(row: IotScript) {
 }
 
 onMounted(() => void load())
+
+/** 统一操作列（V012-BUG-002）：校验/试运行直显，其余按状态显隐并收进「更多」 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as IotScript
+  return [
+    {
+      key: 'validate',
+      label: t('iot.validate'),
+      onClick: () => void handleValidate(row),
+    },
+    {
+      key: 'dryRun',
+      label: t('iot.dryRun'),
+      onClick: () => void handleDryRun(row),
+    },
+    {
+      key: 'publish',
+      label: t('common.publish'),
+      type: 'success',
+      visible: row.status !== 'PUBLISHED',
+      onClick: () => void handlePublish(row),
+    },
+    {
+      key: 'disable',
+      label: t('common.disable'),
+      type: 'danger',
+      visible: row.status !== 'DISABLED',
+      onClick: () => void handleDisable(row),
+    },
+    {
+      key: 'execs',
+      label: t('iot.executionRecords'),
+      onClick: () => void openExecs(row),
+    },
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => openEdit(row),
+    },
+  ]
+}
 </script>
 
 <template>
@@ -192,7 +253,7 @@ onMounted(() => void load())
       </template>
     </el-alert>
 
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="pagedRows" stripe>
       <el-table-column prop="code" :label="t('common.code')" min-width="120" />
       <el-table-column prop="name" :label="t('common.name')" min-width="130" />
       <el-table-column prop="language" :label="t('common.language')" width="70" />
@@ -218,37 +279,15 @@ onMounted(() => void load())
           }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="280" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" @click="handleValidate(row as IotScript)">{{
-            t('iot.validate')
-          }}</el-button>
-          <el-button size="small" @click="handleDryRun(row as IotScript)">{{
-            t('iot.dryRun')
-          }}</el-button>
-          <el-button
-            v-if="row.status !== 'PUBLISHED'"
-            size="small"
-            type="success"
-            @click="handlePublish(row as IotScript)"
-            >{{ t('common.publish') }}</el-button
-          >
-          <el-button
-            v-if="row.status !== 'DISABLED'"
-            size="small"
-            type="danger"
-            @click="handleDisable(row as IotScript)"
-            >{{ t('common.disable') }}</el-button
-          >
-          <el-button size="small" @click="openExecs(row as IotScript)">{{
-            t('iot.executionRecords')
-          }}</el-button>
-          <el-button size="small" @click="openEdit(row as IotScript)">{{
-            t('common.edit')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="170" />
     </el-table>
+    <ListPagination
+      :total="list.length"
+      :page-num="pageNum"
+      :page-size="pageSize"
+      @update:page-num="handlePageNumChange"
+      @update:page-size="handlePageSizeChange"
+    />
     <el-empty v-if="isEmpty" :description="t('iot.noScripts')" />
 
     <el-dialog

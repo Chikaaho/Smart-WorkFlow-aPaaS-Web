@@ -20,7 +20,8 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { pageGraphExecutionsWithVersion, pageDebugSessions } from '@/modules/agent/api'
 import type { AgentGraphExecution, AgentGraphDebugSession } from '@/contracts/agent'
 import type { PageQuery } from '@/contracts/common'
@@ -258,6 +259,18 @@ function handleViewDetail(row: MergedRow | AgentGraphExecution | Record<string, 
   }
 }
 
+/** 统一操作列（V012-BUG-002）：仅「详情」入口，按 canViewDetail 显隐（agent:model:view） */
+function rowActions(r: unknown): ListAction[] {
+  return [
+    {
+      key: 'detail',
+      label: t('common.detail'),
+      visible: canViewDetail.value,
+      onClick: () => handleViewDetail(r as MergedRow),
+    },
+  ]
+}
+
 onMounted(() => {
   void loadList()
 })
@@ -352,18 +365,7 @@ onMounted(() => {
         </template>
       </el-table-column>
       <el-table-column prop="createTime" :label="t('agent.occurredAt')" width="180" />
-      <el-table-column :label="t('common.actions')" width="100" fixed="right">
-        <template #default="{ row }">
-          <el-button
-            v-if="canViewDetail"
-            size="small"
-            link
-            type="primary"
-            @click="handleViewDetail(row)"
-            >{{ t('common.detail') }}</el-button
-          >
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
   </StandardListTemplate>
 </template>

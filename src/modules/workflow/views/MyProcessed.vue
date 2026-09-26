@@ -9,11 +9,15 @@ const { t } = useI18n()
  * （ACTION=动作通道 / HISTORY_COMPAT=历史兼容）。分页 + 来源筛选。
  */
 import { ref, computed, reactive, onMounted } from 'vue'
-import { StandardListTemplate } from '@/components/page-layout'
+import { useRouter } from 'vue-router'
+import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { myProcessed } from '@/modules/workflow/api'
 import type { MyProcessedItem } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
+
+const router = useRouter()
 
 // ─── 列表状态 ───
 const list = ref<MyProcessedItem[]>([])
@@ -115,6 +119,27 @@ function handlePageSizeChange(s: number) {
   void loadList()
 }
 
+/** 详情跳转：携带 source=processed，详情页按已办只读渲染并回跳本列表（对齐 ProcessedList） */
+function openDetail(row: MyProcessedItem) {
+  void router.push({
+    name: 'TaskDetail',
+    params: { taskId: row.taskId },
+    query: { source: 'processed' },
+  })
+}
+
+// 操作列（V012-BUG-002）：单按钮「详情」
+function rowActions(row: unknown): ListAction[] {
+  const item = row as MyProcessedItem
+  return [
+    {
+      key: 'detail',
+      label: t('common.detail'),
+      onClick: () => openDetail(item),
+    },
+  ]
+}
+
 onMounted(loadList)
 </script>
 
@@ -207,6 +232,7 @@ onMounted(loadList)
           </el-tag>
         </template>
       </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
   </StandardListTemplate>
 </template>

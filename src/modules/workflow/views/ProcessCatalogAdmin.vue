@@ -10,7 +10,8 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   queryAdminCatalogItems,
   listCategories,
@@ -172,16 +173,36 @@ function categoryNameOf(id: number | null): string {
   return categories.value.find((c) => c.id === id)?.name ?? t('workflow.categoryFallback', { id })
 }
 
-function openAssignRow(r: unknown) {
-  openAssign(r as CatalogItem)
+/** 操作列（V012-BUG-002）：事项归属调整 */
+function itemActions(row: unknown): ListAction[] {
+  const item = row as CatalogItem
+  return [
+    {
+      key: 'assign',
+      label: t('workflow.assignment'),
+      type: 'primary',
+      onClick: () => openAssign(item),
+    },
+  ]
 }
 
-function editCategoryRow(r: unknown) {
-  openEditCategory(r as CatalogCategory)
-}
-
-function removeCategoryRow(r: unknown) {
-  void removeCategory(r as CatalogCategory)
+/** 分类总览操作列：编辑 / 删除 */
+function categoryActions(row: unknown): ListAction[] {
+  const category = row as CatalogCategory
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      type: 'primary',
+      onClick: () => openEditCategory(category),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => void removeCategory(category),
+    },
+  ]
 }
 
 onMounted(() => {
@@ -260,13 +281,7 @@ onMounted(() => {
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="90" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" type="primary" link @click="openAssignRow(row)">{{
-            t('workflow.assignment')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="itemActions" :width="90" />
     </el-table>
   </StandardListTemplate>
 
@@ -324,16 +339,7 @@ onMounted(() => {
       <el-table-column prop="name" :label="t('common.name')" min-width="140" />
       <el-table-column prop="sortNo" :label="t('common.sort')" width="80" />
       <el-table-column prop="itemCount" :label="t('workflow.itemCount')" width="90" />
-      <el-table-column :label="t('common.actions')" width="140">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="editCategoryRow(row)">{{
-            t('common.edit')
-          }}</el-button>
-          <el-button size="small" link type="danger" @click="removeCategoryRow(row)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="categoryActions" :width="120" />
     </el-table>
   </div>
 </template>

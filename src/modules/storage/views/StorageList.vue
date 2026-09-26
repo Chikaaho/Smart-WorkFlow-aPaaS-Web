@@ -16,7 +16,8 @@ const { t } = useI18n()
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { listFiles, uploadFile, deleteFile, downloadFile } from '@/modules/storage/api'
 import { formatFileSize } from '@/modules/storage/utils/format'
 import type { StorageFile } from '@/contracts/storage'
@@ -196,6 +197,23 @@ function deleteRow(r: unknown) {
   handleDelete(r as StorageFile)
 }
 
+/** 统一操作列（V012-BUG-002）：下载直显，删除收进「更多」 */
+function rowActions(r: unknown): ListAction[] {
+  return [
+    {
+      key: 'download',
+      label: t('common.download'),
+      onClick: () => downloadRow(r),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => deleteRow(r),
+    },
+  ]
+}
+
 // ─── providerType 辅助 ───
 
 function providerLabel(type: string): string {
@@ -292,16 +310,7 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column prop="createTime" :label="t('storage.uploadTime')" width="170" />
-      <el-table-column :label="t('common.actions')" width="160" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="downloadRow(row)">{{
-            t('common.download')
-          }}</el-button>
-          <el-button size="small" link type="danger" @click="deleteRow(row)">{{
-            t('common.delete')
-          }}</el-button>
-        </template>
-      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
 
     <!-- 空态操作 -->
