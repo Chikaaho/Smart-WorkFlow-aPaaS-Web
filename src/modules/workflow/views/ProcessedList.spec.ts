@@ -174,6 +174,7 @@ describe('ProcessedList.vue', () => {
     expect(mockPush).toHaveBeenCalledWith({
       name: 'TaskDetail',
       params: { taskId: 't1' },
+      query: { source: 'processed' },
     })
   })
 

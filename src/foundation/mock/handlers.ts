@@ -1737,50 +1737,86 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
-  // ── 待办任务：查询任务详情 ─────────────────────────────
+  // ── 任务详情：运行期待办优先，已完成任务回落已办（只读，V012-BUG-001） ──
   {
     method: 'GET',
     pattern: '/api/workflow/tasks/:taskId',
     handler: (params) => {
       const { taskId } = params as Record<string, string>
+
+      const buildApprovalHistory = (processInstanceId: string) => {
+        const instanceDetail = MOCK_INSTANCE_DETAILS[processInstanceId]
+        return instanceDetail
+          ? instanceDetail.flowTrace
+              .filter((node) => node.activityType === 'userTask' && node.endTime != null)
+              .map((node) => ({
+                taskId: node.taskId ?? '',
+                taskName: node.activityName ?? '',
+                assignee: node.assignee ?? '',
+                createTime: node.startTime ?? '',
+                endTime: node.endTime,
+                approvalResult: 'APPROVED' as const, // 已完成的节点默认为通过
+              }))
+          : []
+      }
+
+      // 运行期待办：可办理（canHandle），含意见表单语义
       const task = MOCK_TODO_TASKS.find((t) => t.taskId === taskId)
-      if (!task) {
-        return { code: 404, message: '任务不存在', data: null }
+      if (task) {
+        return {
+          code: 0,
+          message: 'ok',
+          data: {
+            taskId: task.taskId,
+            taskName: task.processName + '审批',
+            taskStatus: 'RUNNING',
+            instanceStatus:
+              MOCK_INSTANCES.find((i) => i.processInstanceId === task.processInstanceId)?.status ??
+              'RUNNING',
+            canHandle: true,
+            processInstanceId: task.processInstanceId,
+            processDefinitionKey: 'skeleton_approval',
+            processName: task.processName,
+            formKey: task.formKey,
+            businessKey: task.businessKey,
+            assignee: '2',
+            initiatorId: 1,
+            createTime: task.createTime,
+            processVariables: { formKey: task.formKey },
+            approvalHistory: buildApprovalHistory(task.processInstanceId),
+          },
+        }
       }
 
-      // 根据 processInstanceId 获取对应的审批历史（从 MOCK_INSTANCE_DETAILS 的 flowTrace 提取 userTask）
-      const instanceDetail = MOCK_INSTANCE_DETAILS[task.processInstanceId]
-      const approvalHistory = instanceDetail
-        ? instanceDetail.flowTrace
-            .filter((node) => node.activityType === 'userTask' && node.endTime != null)
-            .map((node) => ({
-              taskId: node.taskId ?? '',
-              taskName: node.activityName ?? '',
-              assignee: node.assignee ?? '',
-              createTime: node.startTime ?? '',
-              endTime: node.endTime,
-              approvalResult: 'APPROVED' as const, // 已完成的节点默认为通过
-            }))
-        : []
-
-      return {
-        code: 0,
-        message: 'ok',
-        data: {
-          taskId: task.taskId,
-          taskName: task.processName + '审批',
-          processInstanceId: task.processInstanceId,
-          processDefinitionKey: 'skeleton_approval',
-          processName: task.processName,
-          formKey: task.formKey,
-          businessKey: task.businessKey,
-          assignee: '2',
-          initiatorId: 1,
-          createTime: task.createTime,
-          processVariables: { formKey: task.formKey },
-          approvalHistory,
-        },
+      // 已办历史任务：只读详情（canHandle=false、无意见表单）
+      const processed = MOCK_PROCESSED_TASKS.find((t) => t.taskId === taskId)
+      if (processed) {
+        return {
+          code: 0,
+          message: 'ok',
+          data: {
+            taskId: processed.taskId,
+            taskName: processed.taskName,
+            taskStatus: 'FINISHED',
+            instanceStatus:
+              MOCK_INSTANCES.find((i) => i.processInstanceId === processed.processInstanceId)
+                ?.status ?? null,
+            canHandle: false,
+            processInstanceId: processed.processInstanceId,
+            processDefinitionKey: 'skeleton_approval',
+            processName: processed.processName,
+            formKey: processed.formKey,
+            businessKey: processed.businessKey,
+            assignee: '2',
+            initiatorId: 1,
+            createTime: processed.createTime,
+            processVariables: { formKey: processed.formKey },
+            approvalHistory: buildApprovalHistory(processed.processInstanceId),
+          },
+        }
       }
+
+      return { code: 404, message: '任务不存在', data: null }
     },
   },
 

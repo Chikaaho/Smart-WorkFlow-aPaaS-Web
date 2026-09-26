@@ -595,12 +595,15 @@ void (async () => {
             <el-button :disabled="submitting" @click="detailVisible = false">{{
               t('common.cancel')
             }}</el-button>
-            <el-button type="danger" :loading="submitting" @click="submitHandle('DISAPPROVE')">
-              {{ t('workflow.disapprove') }}
-            </el-button>
-            <el-button type="primary" :loading="submitting" @click="submitHandle('APPROVE')">{{
-              t('common.approve')
-            }}</el-button>
+            <!-- 服务端办理权限门控：已办/只读身份不展示审批动作（V012-BUG-001），后端仍是最终权威 -->
+            <template v-if="detail?.canHandle === true">
+              <el-button type="danger" :loading="submitting" @click="submitHandle('DISAPPROVE')">
+                {{ t('workflow.disapprove') }}
+              </el-button>
+              <el-button type="primary" :loading="submitting" @click="submitHandle('APPROVE')">{{
+                t('common.approve')
+              }}</el-button>
+            </template>
           </div>
         </template>
       </div>

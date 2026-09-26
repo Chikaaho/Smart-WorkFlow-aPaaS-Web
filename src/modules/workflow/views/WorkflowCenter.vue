@@ -99,7 +99,9 @@ function rowId(row: Row): string {
 function openRow(row: Row) {
   // 深链：待办/已办 → 任务办理（对象权限由服务端二次校验）；草稿 → 表单渲染草稿模式
   if (row.taskId) {
-    void router.push(`/workflow/task/${row.taskId}`)
+    // 已办页签携带 source=processed，详情页按已办只读渲染并回跳（V012-BUG-001）
+    const query = activeTab.value === 'processed' ? { source: 'processed' } : undefined
+    void router.push({ path: `/workflow/task/${row.taskId}`, query })
   } else if (activeTab.value === 'drafts' && row.id) {
     const formKey = (row as Record<string, string>).formKey ?? ''
     void router.push(`/form/form-render/${formKey}?draftId=${row.id}&mode=draft`)

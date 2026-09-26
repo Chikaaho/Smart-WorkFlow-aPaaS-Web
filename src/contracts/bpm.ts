@@ -14,6 +14,12 @@ export interface TodoTask {
 export interface TaskDetail {
   taskId: string
   taskName: string
+  /** 任务状态：RUNNING=待办进行中；FINISHED=已办结（历史任务，详情只读）。旧后端缺省为 undefined */
+  taskStatus?: 'RUNNING' | 'FINISHED'
+  /** 流程实例状态（RUNNING/APPROVED/REJECTED/FAILED 等；后端无实例记录时为 null） */
+  instanceStatus?: ProcessInstance['status'] | 'FAILED' | 'TERMINATED' | null
+  /** 当前登录用户是否可办理该任务（服务端判定；已办/无权限身份为 false） */
+  canHandle?: boolean
   nodeKey?: string | null
   processInstanceId: string
   processDefinitionKey: string

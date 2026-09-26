@@ -155,8 +155,18 @@ async function loadFormRecord() {
 }
 
 function goBack() {
+  // 已办入口（source=processed）回已办列表，不再落回待办（V012-BUG-001）
+  if (route.query?.source === 'processed') {
+    router.push({ name: 'ProcessedList' })
+    return
+  }
   router.push({ name: 'TodoList' })
 }
+
+/** 返回按钮文案：与来源列表一致。 */
+const backLabel = computed(() =>
+  route.query?.source === 'processed' ? t('workflow.backToProcessed') : t('workflow.backToTodo'),
+)
 
 /**
  * 审批 API 已成功提交后，页面导航失败不应被误报为审批失败。
@@ -565,7 +575,9 @@ function getApprovalResultType(result: string | null): 'success' | 'danger' | 'i
 
 /** 附件型表单值：常见文档扩展名按设计呈现为附件链接样式（图标+主色文字）。 */
 function isAttachmentValue(value: unknown): boolean {
-  return typeof value === 'string' && /\.(pdf|docx?|xlsx?|pptx?|png|jpe?g|zip|txt)$/i.test(value.trim())
+  return (
+    typeof value === 'string' && /\.(pdf|docx?|xlsx?|pptx?|png|jpe?g|zip|txt)$/i.test(value.trim())
+  )
 }
 
 function opinionInputType(field: NonNullable<ApprovalOpinionConfig['fields']>[number]): string {
@@ -750,10 +762,51 @@ const hasBusinessVariables = computed(() => {
 })
 
 /** 图画布高度：默认 740；高视口（长页基线 1512）下 800。 */
-const graphCanvasHeight = computed(() => (typeof window !== 'undefined' && window.innerHeight >= 1100 ? 784 : 740))
+const graphCanvasHeight = computed(() =>
+  typeof window !== 'undefined' && window.innerHeight >= 1100 ? 784 : 740,
+)
 
-/** 流程状态卡脚部快捷审批：仅普通意见模式显示；自定义意见表单走底部完整操作卡。 */
-const quickActionsVisible = computed(() => detail.value != null && opinionFields.value.length === 0)
+/** 流程状态卡脚部快捷审批：仅普通意见模式显示；自定义意见表单走底部完整操作卡。已办历史任务不呈现。 */
+const quickActionsVisible = computed(
+  () =>
+    detail.value != null &&
+    detail.value.taskStatus !== 'FINISHED' &&
+    opinionFields.value.length === 0,
+)
+
+/** 已办历史任务（后端 taskStatus=FINISHED）：详情整体只读，不含任何办理动作。 */
+const isFinishedTask = computed(() => detail.value?.taskStatus === 'FINISHED')
+
+/**
+ * 服务端办理权限（canHandle）：仅待办且当前用户可办理时呈现审批动作，
+ * 监控/发起人等只读身份不再展示通过/驳回按钮；后端动作接口仍是最终权威。
+ */
+const canAct = computed(
+  () => detail.value?.taskStatus !== 'FINISHED' && detail.value?.canHandle === true,
+)
+
+/** 页头状态标签：已办任务展示真实实例状态；待办保持既有节点派生口径。 */
+const headerTagType = computed<'primary' | 'success' | 'danger' | 'info'>(() => {
+  if (isFinishedTask.value) {
+    const status = detail.value?.instanceStatus
+    if (status === 'APPROVED') return 'success'
+    if (status === 'REJECTED') return 'danger'
+    if (status === 'RUNNING') return 'primary'
+    return 'info'
+  }
+  return detail.value?.nodeKey ? 'primary' : 'success'
+})
+
+const headerTagLabel = computed(() => {
+  if (isFinishedTask.value) {
+    const status = detail.value?.instanceStatus
+    if (status === 'APPROVED') return t('common.statusApproved')
+    if (status === 'REJECTED') return t('common.statusRejected')
+    if (status === 'RUNNING') return t('common.statusInProgress')
+    return t('common.statusTerminated')
+  }
+  return detail.value?.nodeKey ? t('common.statusInProgress') : t('common.statusApproved')
+})
 
 /** 催办仅对流程发起人呈现（真实契约：POST /workflow/my/instances/{id}/urge）。 */
 const isInitiator = computed(() => {
@@ -828,12 +881,13 @@ const opinionDetailCheckEntries = computed(() => {
 const opinionDetailAttachmentEntries = computed(() => {
   const row = opinionDetailRow.value
   if (!row?.opinionData) return []
-  return Object.entries(row.opinionData).filter(
-    ([key]) => key !== 'comment' && OPINION_ATTACHMENT_KEY.test(key),
-  ).map(([key, value]) => ({
-    key,
-    value: Array.isArray(value) ? value.map((item) => String(item)).join('、') : String(value),
-  })).filter((entry) => entry.value !== '')
+  return Object.entries(row.opinionData)
+    .filter(([key]) => key !== 'comment' && OPINION_ATTACHMENT_KEY.test(key))
+    .map(([key, value]) => ({
+      key,
+      value: Array.isArray(value) ? value.map((item) => String(item)).join('、') : String(value),
+    }))
+    .filter((entry) => entry.value !== '')
 })
 
 // ─── 会签聚合：同一节点的多条历史聚合为真实统计 ───
@@ -915,7 +969,10 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
     }
     const nodeName = String((el.config as { name?: unknown } | undefined)?.name ?? '')
     if (el.type === 'END') {
-      endFallback = { name: nodeName || t('taskDetailUi.endNode'), hint: t('taskDetailUi.nextNodeEndHint') }
+      endFallback = {
+        name: nodeName || t('taskDetailUi.endNode'),
+        hint: t('taskDetailUi.nextNodeEndHint'),
+      }
       continue
     }
     if (el.type === 'APPROVAL') {
@@ -934,19 +991,14 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
   >
     <!-- 页头：返回 + 标题 + 状态 + 元信息 -->
     <div class="detail-header">
-      <el-button class="detail-header__back" @click="goBack">{{ t('workflow.backToTodo') }}</el-button>
+      <el-button class="detail-header__back" @click="goBack">{{ backLabel }}</el-button>
       <div class="detail-header__body">
         <div class="detail-header__title-row">
           <h2 class="detail-header__title">
             {{ detail?.processName ?? t('workflow.taskDetail') }}
           </h2>
-          <el-tag
-            v-if="detail"
-            :type="detail.nodeKey ? 'primary' : 'success'"
-            size="small"
-            class="detail-header__status"
-          >
-            {{ detail.nodeKey ? t('common.statusInProgress') : t('common.statusApproved') }}
+          <el-tag v-if="detail" :type="headerTagType" size="small" class="detail-header__status">
+            {{ headerTagLabel }}
           </el-tag>
         </div>
         <p v-if="detail" class="detail-header__meta">
@@ -1046,7 +1098,9 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
                   }}
                 </span>
                 <span v-if="entry.state === 'current'" class="flow-node__prog">
-                  {{ t('taskDetailUi.currentProgress', { done: entry.doneCount, total: entry.total }) }}
+                  {{
+                    t('taskDetailUi.currentProgress', { done: entry.doneCount, total: entry.total })
+                  }}
                 </span>
               </p>
               <div class="flow-node__head">
@@ -1056,15 +1110,22 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
                 {{ t('taskDetailUi.parallelSignRule') }}
               </p>
               <p v-if="entry.state === 'current'" class="flow-node__sub">
-                {{ t('taskDetailUi.signDoneProgress', { done: entry.doneCount, total: entry.total })
+                {{
+                  t('taskDetailUi.signDoneProgress', { done: entry.doneCount, total: entry.total })
                 }}<template v-if="entry.pendingNames">
-                  · {{ t('taskDetailUi.pendingNamesPrefix') }}{{ entry.pendingNames }}</template>
+                  · {{ t('taskDetailUi.pendingNamesPrefix') }}{{ entry.pendingNames }}</template
+                >
               </p>
               <div v-else class="flow-node__meta-row">
                 <p class="flow-node__meta">
                   {{ entry.who }} · {{ getApprovalResultLabel(entry.result) }} · {{ entry.when }}
                 </p>
-                <el-button size="small" type="primary" plain @click="openOpinionDetailRow(entry.row)">
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  @click="openOpinionDetailRow(entry.row)"
+                >
                   {{ t('taskDetailUi.viewDetail') }}
                 </el-button>
               </div>
@@ -1089,13 +1150,32 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
               <p class="flow-node__sub">{{ nextRailNode.hint }}</p>
             </div>
             <div v-if="quickActionsVisible" class="flow-actions">
-              <el-button v-if="isInitiator" class="flow-actions__urge" :disabled="acting !== null" @click="onUrge">
+              <el-button
+                v-if="isInitiator"
+                class="flow-actions__urge"
+                :disabled="acting !== null"
+                @click="onUrge"
+              >
                 {{ t('taskDetailUi.urgeAction') }}
               </el-button>
-              <el-button type="success" :loading="acting === 'approve'" :disabled="acting !== null" @click="quickApprove">
+              <el-button
+                v-if="canAct"
+                type="success"
+                :loading="acting === 'approve'"
+                :disabled="acting !== null"
+                @click="quickApprove"
+              >
                 {{ t('common.approve') }}
               </el-button>
-              <el-button class="p53-reject-action" type="danger" plain :loading="acting === 'reject'" :disabled="acting !== null" @click="quickReject">
+              <el-button
+                v-if="canAct"
+                class="p53-reject-action"
+                type="danger"
+                plain
+                :loading="acting === 'reject'"
+                :disabled="acting !== null"
+                @click="quickReject"
+              >
                 {{ t('common.reject') }}
               </el-button>
             </div>
@@ -1108,7 +1188,6 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
             />
           </div>
         </el-card>
-
       </div>
     </div>
 
@@ -1117,7 +1196,9 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
       <el-tabs v-model="activeTab" @tab-change="onTabChange">
         <!-- 流转记录：四列设计版式，行数据来自真实审批历史 -->
         <el-tab-pane name="records">
-          <template #label><span class="detail-tab-label">{{ t('taskDetailUi.tabRecords') }}</span></template>
+          <template #label
+            ><span class="detail-tab-label">{{ t('taskDetailUi.tabRecords') }}</span></template
+          >
           <el-alert
             v-if="detail.approvalHistory.length === 0"
             :title="t('workflow.noApprovalHistory')"
@@ -1132,11 +1213,7 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
               <span>{{ t('taskDetailUi.operatorLabel') }}</span>
               <span>{{ t('taskDetailUi.recordEvent') }}</span>
             </div>
-            <div
-              v-for="row in flowRecordRows"
-              :key="row.key"
-              class="p53-records-table__row"
-            >
+            <div v-for="row in flowRecordRows" :key="row.key" class="p53-records-table__row">
               <span>{{ row.time }}</span>
               <span>{{ row.node }}</span>
               <span>{{ row.operator }}</span>
@@ -1147,7 +1224,9 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
 
         <!-- 流程图：定义图 + 真实轨迹高亮，切 tab 懒加载；图内容由 ProcessGraphView 内核输出 -->
         <el-tab-pane name="graph">
-          <template #label><span class="detail-tab-label">{{ t('taskDetailUi.tabGraph') }}</span></template>
+          <template #label
+            ><span class="detail-tab-label">{{ t('taskDetailUi.tabGraph') }}</span></template
+          >
           <div v-loading="graphLoading" class="p53-graph-shell">
             <el-alert
               v-if="graphError"
@@ -1198,7 +1277,9 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
 
         <!-- 审批详情列表：按真实历史逐人一行；已处理行可打开意见详情弹窗，会签节点可开聚合记录 -->
         <el-tab-pane name="people">
-          <template #label><span class="detail-tab-label">{{ t('taskDetailUi.tabPeople') }}</span></template>
+          <template #label
+            ><span class="detail-tab-label">{{ t('taskDetailUi.tabPeople') }}</span></template
+          >
           <el-table :data="peopleRows" stripe>
             <el-table-column prop="taskName" :label="t('workflow.approvalNode')" min-width="260" />
             <el-table-column :label="t('workflow.approver')" width="120">
@@ -1249,148 +1330,139 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
       </el-tabs>
     </el-card>
 
-<!-- 操作区（原操作栏移入右栏，审批逻辑不变）：置于记录卡之后，主审批入口在流程状态卡脚部 -->
-        <el-card v-if="detail" class="detail-card detail-card--actions">
-          <template #header>
-            <span>{{ t('workflow.taskDetail') }}</span>
-          </template>
-          <div class="detail-actions">
-            <div v-if="returnTargets.length > 0" class="return-config">
-              <span>{{ t('workflow.returnToLabel') }}</span>
-              <el-select
-                v-model="returnTargetNodeId"
-                :placeholder="t('workflow.selectApprovedNode')"
-                style="width: 180px"
-              >
-                <el-option
-                  v-for="target in returnTargets"
-                  :key="target.nodeKey"
-                  :label="target.taskName"
-                  :value="target.nodeKey"
-                />
-              </el-select>
-              <el-button
-                type="warning"
-                :loading="acting === 'return'"
-                :disabled="acting !== null"
-                @click="handleReturn"
-                >{{ t('common.returnBack') }}</el-button
-              >
-            </div>
-            <div v-if="opinionFields.length > 0" class="opinion-form">
-              <div class="opinion-form__title">
-                审批意见{{
-                  detail.opinionForm?.formId
-                    ? t('workflow.opinionFormSuffix', {
-                        formId: detail.opinionForm.formId,
-                        version: detail.opinionForm.version,
-                      })
-                    : ''
-                }}
-              </div>
-              <div v-for="field in visibleOpinionFields" :key="field.key" class="opinion-field">
-                <template v-if="field.type === 'NOTE'">
-                  <span class="opinion-note">{{ field.label }}</span>
-                </template>
-                <template v-else>
-                  <label :for="`opinion-${field.key}`">
-                    {{ field.label || field.key
-                    }}<span v-if="field.required" class="required-mark"> *</span>
-                  </label>
-                  <textarea
-                    v-if="field.type === 'TEXTAREA'"
-                    :id="`opinion-${field.key}`"
-                    :value="opinionTextValue(field)"
-                    :maxlength="field.maxLength"
-                    rows="3"
-                    @input="
-                      setOpinionFieldValue(field.key, ($event.target as HTMLTextAreaElement).value)
-                    "
-                  />
-                  <select
-                    v-else-if="field.type === 'SELECT'"
-                    :id="`opinion-${field.key}`"
-                    :value="String(opinionFieldValue(field) ?? '')"
-                    @change="
-                      setOpinionFieldValue(field.key, ($event.target as HTMLSelectElement).value)
-                    "
-                  >
-                    <option value="">{{ t('common.pleaseSelect') }}</option>
-                    <option v-for="option in field.options ?? []" :key="option" :value="option">
-                      {{ option }}
-                    </option>
-                  </select>
-                  <div v-else-if="field.type === 'RADIO'" class="opinion-options">
-                    <label
-                      v-for="option in field.options ?? []"
-                      :key="option"
-                      class="opinion-option"
-                    >
-                      <input
-                        :name="`opinion-${field.key}`"
-                        type="radio"
-                        :value="option"
-                        :checked="opinionFieldValue(field) === option"
-                        @change="setOpinionFieldValue(field.key, option)"
-                      />
-                      {{ option }}
-                    </label>
-                  </div>
-                  <input
-                    v-else
-                    :id="`opinion-${field.key}`"
-                    :type="opinionInputType(field)"
-                    :value="opinionInputValue(field)"
-                    :min="field.min"
-                    :max="field.max"
-                    :maxlength="field.maxLength"
-                    @input="
-                      setOpinionFieldValue(
-                        field.key,
-                        field.type === 'NUMBER'
-                          ? Number(($event.target as HTMLInputElement).value)
-                          : ($event.target as HTMLInputElement).value,
-                      )
-                    "
-                  />
-                </template>
-              </div>
-            </div>
-            <textarea
-              v-if="opinionFields.length === 0"
-              v-model="opinionComment"
-              class="opinion-input"
-              rows="3"
-              :placeholder="t('workflow.remarkOptional')"
+    <!-- 操作区（原操作栏移入右栏，审批逻辑不变）：置于记录卡之后，主审批入口在流程状态卡脚部；
+     仅待办且当前用户可办理（canHandle）时呈现，已办/只读身份不渲染任何办理动作 -->
+    <el-card v-if="detail && canAct" class="detail-card detail-card--actions">
+      <template #header>
+        <span>{{ t('workflow.taskDetail') }}</span>
+      </template>
+      <div class="detail-actions">
+        <div v-if="returnTargets.length > 0" class="return-config">
+          <span>{{ t('workflow.returnToLabel') }}</span>
+          <el-select
+            v-model="returnTargetNodeId"
+            :placeholder="t('workflow.selectApprovedNode')"
+            style="width: 180px"
+          >
+            <el-option
+              v-for="target in returnTargets"
+              :key="target.nodeKey"
+              :label="target.taskName"
+              :value="target.nodeKey"
             />
-            <div class="detail-actions__row detail-actions__row--lifecycle">
-              <el-button :disabled="acting !== null" @click="openLifecycle('TRANSFER')">
-                {{ t('workflow.transferOwnTask') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('DELEGATE')">
-                {{ t('workflow.delegateAction') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('COMMUNICATE')">
-                {{ t('workflow.consultTask') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('ADD_SIGN')">
-                {{ t('workflow.addSign') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('SUPPLEMENT_SIGN')">
-                {{ t('workflow.supplementSign') }}
-              </el-button>
-            </div>
+          </el-select>
+          <el-button
+            type="warning"
+            :loading="acting === 'return'"
+            :disabled="acting !== null"
+            @click="handleReturn"
+            >{{ t('common.returnBack') }}</el-button
+          >
+        </div>
+        <div v-if="opinionFields.length > 0" class="opinion-form">
+          <div class="opinion-form__title">
+            审批意见{{
+              detail.opinionForm?.formId
+                ? t('workflow.opinionFormSuffix', {
+                    formId: detail.opinionForm.formId,
+                    version: detail.opinionForm.version,
+                  })
+                : ''
+            }}
           </div>
-        </el-card>
-
+          <div v-for="field in visibleOpinionFields" :key="field.key" class="opinion-field">
+            <template v-if="field.type === 'NOTE'">
+              <span class="opinion-note">{{ field.label }}</span>
+            </template>
+            <template v-else>
+              <label :for="`opinion-${field.key}`">
+                {{ field.label || field.key
+                }}<span v-if="field.required" class="required-mark"> *</span>
+              </label>
+              <textarea
+                v-if="field.type === 'TEXTAREA'"
+                :id="`opinion-${field.key}`"
+                :value="opinionTextValue(field)"
+                :maxlength="field.maxLength"
+                rows="3"
+                @input="
+                  setOpinionFieldValue(field.key, ($event.target as HTMLTextAreaElement).value)
+                "
+              />
+              <select
+                v-else-if="field.type === 'SELECT'"
+                :id="`opinion-${field.key}`"
+                :value="String(opinionFieldValue(field) ?? '')"
+                @change="
+                  setOpinionFieldValue(field.key, ($event.target as HTMLSelectElement).value)
+                "
+              >
+                <option value="">{{ t('common.pleaseSelect') }}</option>
+                <option v-for="option in field.options ?? []" :key="option" :value="option">
+                  {{ option }}
+                </option>
+              </select>
+              <div v-else-if="field.type === 'RADIO'" class="opinion-options">
+                <label v-for="option in field.options ?? []" :key="option" class="opinion-option">
+                  <input
+                    :name="`opinion-${field.key}`"
+                    type="radio"
+                    :value="option"
+                    :checked="opinionFieldValue(field) === option"
+                    @change="setOpinionFieldValue(field.key, option)"
+                  />
+                  {{ option }}
+                </label>
+              </div>
+              <input
+                v-else
+                :id="`opinion-${field.key}`"
+                :type="opinionInputType(field)"
+                :value="opinionInputValue(field)"
+                :min="field.min"
+                :max="field.max"
+                :maxlength="field.maxLength"
+                @input="
+                  setOpinionFieldValue(
+                    field.key,
+                    field.type === 'NUMBER'
+                      ? Number(($event.target as HTMLInputElement).value)
+                      : ($event.target as HTMLInputElement).value,
+                  )
+                "
+              />
+            </template>
+          </div>
+        </div>
+        <textarea
+          v-if="opinionFields.length === 0"
+          v-model="opinionComment"
+          class="opinion-input"
+          rows="3"
+          :placeholder="t('workflow.remarkOptional')"
+        />
+        <div class="detail-actions__row detail-actions__row--lifecycle">
+          <el-button :disabled="acting !== null" @click="openLifecycle('TRANSFER')">
+            {{ t('workflow.transferOwnTask') }}
+          </el-button>
+          <el-button :disabled="acting !== null" @click="openLifecycle('DELEGATE')">
+            {{ t('workflow.delegateAction') }}
+          </el-button>
+          <el-button :disabled="acting !== null" @click="openLifecycle('COMMUNICATE')">
+            {{ t('workflow.consultTask') }}
+          </el-button>
+          <el-button :disabled="acting !== null" @click="openLifecycle('ADD_SIGN')">
+            {{ t('workflow.addSign') }}
+          </el-button>
+          <el-button :disabled="acting !== null" @click="openLifecycle('SUPPLEMENT_SIGN')">
+            {{ t('workflow.supplementSign') }}
+          </el-button>
+        </div>
+      </div>
+    </el-card>
 
     <!-- 意见详情弹窗：仅渲染该行真实可得字段；无对应数据时区块留白，不虚构 -->
-    <el-dialog
-      v-model="opinionDetailVisible"
-      width="780px"
-      top="12vh"
-      class="p53-opinion-dialog"
-    >
+    <el-dialog v-model="opinionDetailVisible" width="780px" top="12vh" class="p53-opinion-dialog">
       <template #header>
         <div v-if="opinionDetailRow" class="p53-opinion-dialog__head">
           <h2>{{ t('taskDetailUi.opinionDetailTitle') }}</h2>
@@ -1405,9 +1477,7 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
             {{ getApprovalResultLabel(opinionDetailRow.approvalResult) }} ·
             {{ opinionDetailRow.endTime ?? opinionDetailRow.createTime }}
             <template v-if="opinionDetailRow.opinionFormVersion">
-              · {{ t('taskDetailUi.formVersionLabel') }} v{{
-                opinionDetailRow.opinionFormVersion
-              }}
+              · {{ t('taskDetailUi.formVersionLabel') }} v{{ opinionDetailRow.opinionFormVersion }}
             </template>
           </p>
         </div>
@@ -1464,9 +1534,9 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
       </template>
       <p class="p53-sign-summary">
         {{ signGroupStats.total }} {{ t('taskDetailUi.signParticipants') }}
-        {{ signGroupStats.agreed }} {{ t('taskDetailUi.signAgreed') }}
-        {{ signGroupStats.pending }} {{ t('taskDetailUi.signPending') }}
-        {{ signGroupStats.rejected }} {{ t('taskDetailUi.signRejected') }}
+        {{ signGroupStats.agreed }} {{ t('taskDetailUi.signAgreed') }} {{ signGroupStats.pending }}
+        {{ t('taskDetailUi.signPending') }} {{ signGroupStats.rejected }}
+        {{ t('taskDetailUi.signRejected') }}
       </p>
       <el-table :data="signGroupRows" stripe class="p53-sign-table">
         <el-table-column :label="t('workflow.approver')" width="112">
@@ -2428,15 +2498,16 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
   padding-left: 1px;
   padding-right: 0;
 }
-.task-detail--people-active > .detail-card--tabs
-  :deep(.el-table__header-wrapper .cell) {
+.task-detail--people-active > .detail-card--tabs :deep(.el-table__header-wrapper .cell) {
   transform: translateY(-2.5px);
 }
-.task-detail--people-active > .detail-card--tabs
+.task-detail--people-active
+  > .detail-card--tabs
   :deep(.el-table__body-wrapper td:not(:last-child) .cell) {
   transform: translateY(-6px);
 }
-.task-detail--people-active > .detail-card--tabs
+.task-detail--people-active
+  > .detail-card--tabs
   :deep(.el-table__body-wrapper td:last-child .cell) {
   transform: translateY(-1px);
 }

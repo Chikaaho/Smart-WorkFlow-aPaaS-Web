@@ -1930,6 +1930,7 @@ export default {
     consultReceiversRequired: 'Enter at least one recipient user ID (comma-separated).',
     participantsRequired: 'Enter at least one participant user ID (comma-separated).',
     backToTodo: '← Back to to-dos',
+    backToProcessed: '← Back to processed',
     currentApprover: 'Current approver',
     formDataThisSubmission: 'Form data (this submission)',
     formRecordUnavailable: 'The form record could not be loaded or no longer exists',

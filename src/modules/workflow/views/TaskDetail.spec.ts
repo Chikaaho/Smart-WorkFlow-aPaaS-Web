@@ -5,9 +5,11 @@ import { i18n } from '@/locales'
 import { createPinia } from 'pinia'
 
 const mockPush = vi.fn()
+/** 可变 route 桩：query 在用例内按需设置（如 source=processed） */
+const mockRoute = { params: { taskId: 'task-001' }, query: {} as Record<string, string> }
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockPush }),
-  useRoute: () => ({ params: { taskId: 'task-001' } }),
+  useRoute: () => mockRoute,
 }))
 
 vi.mock('@/modules/workflow/api', () => ({
@@ -98,6 +100,7 @@ const mockDetail: TaskDetail = {
 describe('TaskDetail.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockRoute.query = {}
   })
 
   it('calls queryTaskDetail with taskId on mount', async () => {
@@ -254,5 +257,73 @@ describe('TaskDetail.vue', () => {
     vm.goBack()
 
     expect(mockPush).toHaveBeenCalledWith({ name: 'TodoList' })
+  })
+
+  it('V012-BUG-001: navigates back to ProcessedList when source=processed', async () => {
+    mockRoute.query = { source: 'processed' }
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as { goBack: () => void }
+    vm.goBack()
+
+    expect(mockPush).toHaveBeenCalledWith({ name: 'ProcessedList' })
+  })
+
+  it('V012-BUG-001: finished task renders read-only detail with instance status', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      taskStatus: 'FINISHED',
+      instanceStatus: 'APPROVED',
+      canHandle: false,
+    })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      isFinishedTask: boolean
+      canAct: boolean
+      headerTagLabel: string
+    }
+    expect(vm.isFinishedTask).toBe(true)
+    expect(vm.canAct).toBe(false)
+    // 页头展示真实实例状态（已通过），不再按 nodeKey 推断
+    expect(vm.headerTagLabel).toBe(i18n.global.t('common.statusApproved'))
+    // 办理操作卡不渲染
+    expect(wrapper.findAll('.detail-card--actions')).toHaveLength(0)
+  })
+
+  it('V012-BUG-001: running task without handle permission hides approval actions', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      taskStatus: 'RUNNING',
+      canHandle: false,
+    })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as { isFinishedTask: boolean; canAct: boolean }
+    expect(vm.isFinishedTask).toBe(false)
+    expect(vm.canAct).toBe(false)
+    expect(wrapper.findAll('.detail-card--actions')).toHaveLength(0)
+  })
+
+  it('V012-BUG-001: running task with handle permission renders action card', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      taskStatus: 'RUNNING',
+      canHandle: true,
+    })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as { canAct: boolean }
+    expect(vm.canAct).toBe(true)
+    expect(wrapper.findAll('.detail-card--actions')).toHaveLength(1)
   })
 })

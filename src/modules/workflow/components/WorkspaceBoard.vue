@@ -192,6 +192,14 @@ function rowMeta(row: Record<string, unknown>): string {
   return meta
 }
 
+/** 待办面板深链：已办页签携带 source=processed，详情页按已办只读渲染并回跳（V012-BUG-001）。 */
+function openPanelTask(row: Record<string, unknown>) {
+  const taskId = String(row.taskId ?? '')
+  if (!taskId) return
+  const query = activeTodoTab.value === 'processed' ? { source: 'processed' } : undefined
+  void router.push({ path: `/workflow/task/${taskId}`, query })
+}
+
 /** 活动时间显示（设计01）：今天→HH:mm，昨天→昨天 HH:mm，其余→MM-DD HH:mm；基于真实时间戳派生。 */
 function activityTime(v: unknown): string {
   const s = String(v ?? '')
@@ -1069,11 +1077,7 @@ onBeforeUnmount(() => {
               </p>
               <ul v-else class="wsd-taskrows">
                 <li v-for="(row, index) in panelRows" :key="index" class="wsd-task">
-                  <button
-                    class="wsd-task__title"
-                    type="button"
-                    @click="router.push(`/workflow/task/${(row.taskId as string) ?? ''}`)"
-                  >
+                  <button class="wsd-task__title" type="button" @click="openPanelTask(row)">
                     {{ row.name ?? row.taskName ?? row.title ?? (row.formKey as string) ?? '-' }}
                   </button>
                   <span class="wsd-task__meta">{{ rowMeta(row) }}</span>

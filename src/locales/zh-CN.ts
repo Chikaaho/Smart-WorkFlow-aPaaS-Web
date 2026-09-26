@@ -1848,6 +1848,7 @@ export default {
     consultReceiversRequired: '请填写至少一个沟通接收人用户 ID（逗号分隔）',
     participantsRequired: '请填写至少一个参与人用户 ID（逗号分隔）',
     backToTodo: '返回我的待办',
+    backToProcessed: '返回已办列表',
     currentApprover: '当前审批人',
     formDataThisSubmission: '表单数据（本次提交）',
     formRecordUnavailable: '表单记录加载失败或已不存在',

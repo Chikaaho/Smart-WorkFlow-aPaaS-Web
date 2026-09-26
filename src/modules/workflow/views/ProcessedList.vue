@@ -58,7 +58,12 @@ function handlePageSizeChange(s: number) {
 }
 
 function handleRowClick(row: ProcessedTask) {
-  router.push({ name: 'TaskDetail', params: { taskId: row.taskId } })
+  // 已办入口：携带 source=processed，详情页按已办只读渲染并回跳本列表（V012-BUG-001）
+  router.push({
+    name: 'TaskDetail',
+    params: { taskId: row.taskId },
+    query: { source: 'processed' },
+  })
 }
 
 onMounted(loadList)
