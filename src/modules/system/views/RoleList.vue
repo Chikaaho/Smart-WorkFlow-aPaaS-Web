@@ -237,7 +237,8 @@ async function loadMembers() {
       pageSize: membersPageSize.value,
     })
     members.value = result.list
-    membersTotal.value = result.total
+    // 后端 Long → JSON string：el-pagination 的 total 必须为 number，否则分页条静默消失
+    membersTotal.value = Number(result.total) || 0
   } catch (err) {
     membersError.value = err instanceof ApiError ? err.msg : t('system.roleMembersLoadFailed')
   } finally {

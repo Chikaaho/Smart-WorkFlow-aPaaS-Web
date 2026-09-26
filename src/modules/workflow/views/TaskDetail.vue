@@ -785,26 +785,25 @@ const canAct = computed(
   () => detail.value?.taskStatus !== 'FINISHED' && detail.value?.canHandle === true,
 )
 
-/** 页头状态标签：已办任务展示真实实例状态；待办保持既有节点派生口径。 */
+/** 页头状态标签：统一由真实实例状态驱动。后端 TaskDetailRespDTO 无 nodeKey 字段，
+ *  旧 nodeKey 推断在真实接口下恒走"已通过"分支、运行中任务误显示已通过，故改为
+ *  instanceStatus 优先（V012-BUG-001），nodeKey 仅作旧 mock 契约后备，均缺失时
+ *  待办显示进行中、已办显示已终止。 */
 const headerTagType = computed<'primary' | 'success' | 'danger' | 'info'>(() => {
-  if (isFinishedTask.value) {
-    const status = detail.value?.instanceStatus
-    if (status === 'APPROVED') return 'success'
-    if (status === 'REJECTED') return 'danger'
-    if (status === 'RUNNING') return 'primary'
-    return 'info'
-  }
+  const status = detail.value?.instanceStatus
+  if (status === 'APPROVED') return 'success'
+  if (status === 'REJECTED') return 'danger'
+  if (status === 'RUNNING') return 'primary'
+  if (isFinishedTask.value) return 'info'
   return detail.value?.nodeKey ? 'primary' : 'success'
 })
 
 const headerTagLabel = computed(() => {
-  if (isFinishedTask.value) {
-    const status = detail.value?.instanceStatus
-    if (status === 'APPROVED') return t('common.statusApproved')
-    if (status === 'REJECTED') return t('common.statusRejected')
-    if (status === 'RUNNING') return t('common.statusInProgress')
-    return t('common.statusTerminated')
-  }
+  const status = detail.value?.instanceStatus
+  if (status === 'APPROVED') return t('common.statusApproved')
+  if (status === 'REJECTED') return t('common.statusRejected')
+  if (status === 'RUNNING') return t('common.statusInProgress')
+  if (isFinishedTask.value) return t('common.statusTerminated')
   return detail.value?.nodeKey ? t('common.statusInProgress') : t('common.statusApproved')
 })
 

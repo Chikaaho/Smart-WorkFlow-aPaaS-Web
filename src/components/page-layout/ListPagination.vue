@@ -17,13 +17,23 @@ const emit = defineEmits<{
 }>()
 
 const currentPage = computed({
-  get: () => props.pageNum,
+  get: () => Number(props.pageNum) || 1,
   set: (v: number) => emit('update:pageNum', v),
 })
 
 const pageSize = computed({
-  get: () => props.pageSize,
+  get: () => Number(props.pageSize) || 10,
   set: (v: number) => emit('update:pageSize', v),
+})
+
+/**
+ * total 必须是 number：后端 JacksonLongToStringConfig 把 PageResult.total（Long）
+ * 序列化为字符串，直接透传会被 Element Plus 的 isAbsent（typeof !== 'number'）
+ * 判为缺省，整个分页条静默消失（V012-BUG-003 根因，服务端分页列表全量命中）。
+ */
+const pageTotal = computed(() => {
+  const n = Number(props.total)
+  return Number.isFinite(n) ? n : 0
 })
 </script>
 
@@ -32,7 +42,7 @@ const pageSize = computed({
     <el-pagination
       v-model:current-page="currentPage"
       v-model:page-size="pageSize"
-      :total="total"
+      :total="pageTotal"
       :page-sizes="[10, 20, 50, 100]"
       layout="total, sizes, prev, pager, next, jumper"
       background
