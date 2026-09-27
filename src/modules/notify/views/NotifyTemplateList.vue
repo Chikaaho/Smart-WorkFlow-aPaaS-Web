@@ -315,7 +315,8 @@ defineExpose({ list, errorMsg, retryLoad: loadTemplates })
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
-      <ListActionsColumn :actions="rowActions" :width="170" />
+      <!-- 240：三直显动作（Preview/Edit/Disable）+ 末位 More 英文 locale 不溢出单元格（补充提示 01 G1a） -->
+      <ListActionsColumn :actions="rowActions" :width="240" />
     </el-table>
   </StandardListTemplate>
 
