@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import FormGrid from './FormGrid.vue'
 import FormSection from './FormSection.vue'
@@ -390,5 +390,102 @@ describe('page-layout/index.ts', () => {
     expect(pageLayout.ListEmpty).toBeDefined()
     expect(pageLayout.StandardFormTemplate).toBeDefined()
     expect(pageLayout.StandardListTemplate).toBeDefined()
+  })
+})
+
+/* ═══════════════════════════════════════════════════
+ * ListActionsColumn（V012-BUG-002/015 统一操作列）
+ * ═══════════════════════════════════════════════════ */
+
+import ListActionsColumn from './ListActionsColumn.vue'
+
+describe('ListActionsColumn', () => {
+  const mkActions = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      key: `a${i}`,
+      label: `操作${i}`,
+      onClick: vi.fn(),
+    }))
+
+  it('V012-BUG-015 复核 G1：超过 3 个动作 → 直显 3 个 + 第 4 位固定「更多」下拉收拢其余', async () => {
+    const actions = mkActions(5)
+    const wrapper = mount(ListActionsColumn, {
+      props: { actions: () => actions, width: 240 },
+      global: {
+        stubs: {
+          'el-table-column': {
+            template: '<div><slot name="default" :row="row" /></div>',
+            props: [],
+          },
+          'el-button': { template: '<button class="stub-btn"><slot /></button>' },
+          'el-dropdown': {
+            template: '<div class="stub-dropdown"><slot /><slot name="dropdown" /></div>',
+            emits: ['command'],
+          },
+          'el-dropdown-menu': { template: '<div class="stub-menu"><slot /></div>' },
+          'el-dropdown-item': {
+            template:
+              '<div class="stub-item" @click="$parent?.$emit?.(\'command\', command)"><slot /></div>',
+            props: ['command'],
+          },
+        },
+      },
+    })
+    const btns = wrapper.findAll('.stub-btn')
+    // 直显 3 个 + 「更多」触发按钮 = 4 个按钮（四格末位更多）
+    expect(btns).toHaveLength(4)
+    expect(btns[0].text()).toBe('操作0')
+    expect(btns[2].text()).toBe('操作2')
+    expect(btns[3].text()).toBe('更多')
+    // 收拢项渲染进下拉菜单
+    const items = wrapper.findAll('.stub-item')
+    expect(items.map((i) => i.text())).toEqual(['操作3', '操作4'])
+  })
+
+  it('V012-BUG-015 复核 G1：不超过 3 个动作 → 全部直显、无「更多」', () => {
+    const actions = mkActions(3)
+    const wrapper = mount(ListActionsColumn, {
+      props: { actions: () => actions },
+      global: {
+        stubs: {
+          'el-table-column': { template: '<div><slot name="default" :row="row" /></div>' },
+          'el-button': { template: '<button class="stub-btn"><slot /></button>' },
+          'el-dropdown': {
+            template: '<div class="stub-dropdown"><slot /><slot name="dropdown" /></div>',
+          },
+        },
+      },
+    })
+    expect(wrapper.findAll('.stub-btn')).toHaveLength(3)
+    expect(wrapper.find('.stub-dropdown').exists()).toBe(false)
+  })
+
+  it('visible=false 的动作不渲染、不占直显名额', () => {
+    const actions = [
+      ...mkActions(2),
+      { key: 'hidden', label: '隐藏', onClick: () => {}, visible: false },
+      ...mkActions(2).map((a, i) => ({ ...a, key: `b${i}`, label: `后续${i}` })),
+    ]
+    const wrapper = mount(ListActionsColumn, {
+      props: { actions: () => actions },
+      global: {
+        stubs: {
+          'el-table-column': { template: '<div><slot name="default" :row="row" /></div>' },
+          'el-button': { template: '<button class="stub-btn"><slot /></button>' },
+          'el-dropdown': {
+            template: '<div class="stub-dropdown"><slot /><slot name="dropdown" /></div>',
+          },
+          'el-dropdown-menu': { template: '<div class="stub-menu"><slot /></div>' },
+          'el-dropdown-item': {
+            template: '<div class="stub-item"><slot /></div>',
+            props: ['command'],
+          },
+        },
+      },
+    })
+    const btns = wrapper.findAll('.stub-btn').map((b) => b.text())
+    expect(btns).not.toContain('隐藏')
+    expect(btns).toHaveLength(4) // 3 直显 + 更多
+    expect(wrapper.findAll('.stub-item')).toHaveLength(1)
   })
 })

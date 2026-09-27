@@ -444,7 +444,8 @@ onMounted(loadList)
             </el-tag>
           </template>
         </el-table-column>
-        <ListActionsColumn :actions="rowActions" :width="190" />
+        <!-- 240：三直显按钮（编辑/发起范围/停用）英文 locale 不裁尾（复核 G1） -->
+        <ListActionsColumn :actions="rowActions" :width="240" />
       </el-table>
 
       <!-- 空态 -->
