@@ -92,6 +92,7 @@ declare module 'vue' {
     TextControl: typeof import('./../components/dynamic-field-controls/TextControl.vue')['default']
     TimeControl: typeof import('./../components/dynamic-field-controls/TimeControl.vue')['default']
     UserControl: typeof import('./../components/dynamic-field-controls/UserControl.vue')['default']
+    UserRemoteSelect: typeof import('./../components/UserRemoteSelect.vue')['default']
   }
   export interface GlobalDirectives {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

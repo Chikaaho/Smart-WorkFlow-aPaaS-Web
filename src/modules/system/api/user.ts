@@ -127,3 +127,17 @@ export async function updateUserPosts(id: string, posts: PostAssociation[]): Pro
   }))
   return request<void>({ method: 'PUT', url: `/system/user/${id}/posts`, data: body })
 }
+
+/** 用户候选选项（V012-BUG-019 选择器数据源）：最小展示字段，租户内启用用户。 */
+export interface UserOption {
+  id: number
+  username: string
+  realName: string | null
+}
+
+/** GET /system/user/options?keyword=&limit=：按 username/real_name 模糊搜索。 */
+export async function searchUserOptions(keyword?: string, limit = 50): Promise<UserOption[]> {
+  const params: Record<string, unknown> = { limit }
+  if (keyword && keyword.trim()) params.keyword = keyword.trim()
+  return request<UserOption[]>({ method: 'GET', url: '/system/user/options', params })
+}

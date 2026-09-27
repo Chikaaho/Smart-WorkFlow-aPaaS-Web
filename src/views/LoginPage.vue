@@ -25,7 +25,7 @@ const errorMessage = ref('')
 
 // 第三方登录（登录前安全发起：显式租户，服务端校验后重定向到 Provider）
 const ssoProvider = ref<SsoProvider>('WECOM')
-const ssoTenantId = ref('')
+const ssoTenantName = ref('')
 const ssoBusy = ref(false)
 const ssoError = ref('')
 
@@ -75,15 +75,16 @@ async function onSubmit(): Promise<void> {
 
 async function onSsoLogin(): Promise<void> {
   ssoError.value = ''
-  const tenant = Number(ssoTenantId.value)
-  if (!Number.isInteger(tenant) || tenant < 0) {
-    ssoError.value = t('auth.tenantIdInvalid')
+  // V012-BUG-019：租户只按名称精确匹配，服务端解析唯一租户；不再手填数值 ID
+  const tenantName = ssoTenantName.value.trim()
+  if (!tenantName) {
+    ssoError.value = t('auth.tenantNameRequired')
     return
   }
   ssoBusy.value = true
   try {
     const redirect = safeRedirect(route.query.redirect)
-    const start = await startSsoLoginAuthorize(ssoProvider.value, tenant, redirect)
+    const start = await startSsoLoginAuthorize(ssoProvider.value, tenantName, redirect)
     // 服务端重定向到 Provider 授权页；state 由服务端签发，前端不持久化
     globalThis.location.href = start.authorizeUrl
   } catch (error) {
@@ -210,17 +211,16 @@ function onSsoProviderSelect(key: SsoProvider): void {
           <p class="login-page__sso-title">
             <span class="login-page__sso-rule" />{{ t('login.ssoDivider') }}
           </p>
-          <!-- 既有 SSO 契约（方向 §4.4 / EV-06 口径）：租户 ID 输入只服务于 SSO 授权，账号登录无需填写 -->
+          <!-- V012-BUG-019：租户以名称精确匹配，输入只服务于 SSO 授权；账号登录无需填写 -->
           <label class="login-page__sso-tenant">
-            <span>{{ t('auth.tenantId') }}</span>
+            <span>{{ t('auth.tenantName') }}</span>
             <span class="login-page__input-wrap">
               <el-icon class="login-page__input-icon"><House /></el-icon>
               <input
-                v-model="ssoTenantId"
-                type="number"
-                min="0"
+                v-model="ssoTenantName"
+                type="text"
                 autocomplete="organization"
-                :placeholder="t('auth.tenantId')"
+                :placeholder="t('auth.tenantNamePlaceholder')"
               />
             </span>
           </label>

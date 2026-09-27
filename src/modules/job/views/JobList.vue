@@ -11,6 +11,8 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
+import { pageProcessDefs } from '@/modules/workflow/api'
+import type { ProcessDef } from '@/contracts/bpm'
 import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
@@ -52,6 +54,10 @@ const editingId = ref<number | null>(null) // null = 创建模式
 
 // ─── 表单数据 ───
 
+const flowDefOptions = ref<ProcessDef[]>([])
+void pageProcessDefs({ pageNum: 1, pageSize: 200 }).then((page) => {
+  flowDefOptions.value = page.list
+})
 const form = reactive<JobInfo>({
   jobName: '',
   cronExpression: '',
@@ -539,8 +545,22 @@ onMounted(loadList)
       </template>
       <!-- Flow 配置（jobType=FLOW 时显示） -->
       <template v-if="showFlowFields">
+        <!-- V012-BUG-019：发起流程改流程定义选择器，不再手填流程标识 -->
         <el-form-item :label="t('common.processDefKey')">
-          <el-input v-model="form.flowDefKey" :placeholder="t('common.processDefKey')" />
+          <el-select
+            v-model="form.flowDefKey"
+            filterable
+            clearable
+            :placeholder="t('common.processDefKey')"
+            style="width: 320px"
+          >
+            <el-option
+              v-for="d in flowDefOptions"
+              :key="d.processKey"
+              :label="`${d.name}（${d.processKey}）`"
+              :value="d.processKey"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item :label="t('router.formData')">
           <el-input

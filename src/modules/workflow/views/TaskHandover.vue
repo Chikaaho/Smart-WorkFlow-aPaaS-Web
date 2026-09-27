@@ -18,11 +18,20 @@ import {
   type HandoverItem,
 } from '@/modules/workflow/api/i4'
 import { ApiError } from '@/foundation/request'
+import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
+import { pageProcessDefs } from '@/modules/workflow/api'
+import type { ProcessDef } from '@/contracts/bpm'
 
+// V012-BUG-019：来源/目标用户改用户选择器；范围改流程定义多选（提交仍为 defKeys）
 const fromUserId = ref<number | undefined>()
 const toUserId = ref<number | undefined>()
-const scopeText = ref('')
+const scopeDefKeys = ref<string[]>([])
+const defOptions = ref<ProcessDef[]>([])
 const includeProxyRules = ref(false)
+
+void pageProcessDefs({ pageNum: 1, pageSize: 200 }).then((page) => {
+  defOptions.value = page.list
+})
 const submitting = ref(false)
 const result = ref<HandoverResult | null>(null)
 const items = ref<HandoverItem[]>([])
@@ -37,12 +46,7 @@ async function submit() {
     result.value = await submitHandover({
       fromUserId: fromUserId.value,
       toUserId: toUserId.value,
-      scopeDefKeys: scopeText.value
-        ? scopeText.value
-            .split(',')
-            .map((key) => key.trim())
-            .filter(Boolean)
-        : undefined,
+      scopeDefKeys: scopeDefKeys.value.length > 0 ? scopeDefKeys.value : undefined,
       includeProxyRules: includeProxyRules.value,
     })
     items.value = await queryHandoverItems(result.value.id)
@@ -102,13 +106,37 @@ function resultLabel(resultValue: HandoverItem['result']) {
     <el-card shadow="never" class="form-card">
       <el-form label-width="130px">
         <el-form-item :label="t('workflow.sourceUserId')">
-          <el-input-number v-model="fromUserId" :min="1" controls-position="right" />
+          <UserRemoteSelect
+            v-model="fromUserId"
+            :placeholder="t('workflow.pickSourceUser')"
+            style="width: 280px"
+          />
         </el-form-item>
         <el-form-item :label="t('workflow.targetUserId')">
-          <el-input-number v-model="toUserId" :min="1" controls-position="right" />
+          <UserRemoteSelect
+            v-model="toUserId"
+            :placeholder="t('workflow.pickTargetUser')"
+            style="width: 280px"
+          />
         </el-form-item>
         <el-form-item :label="t('workflow.processScope')">
-          <el-input v-model="scopeText" :placeholder="t('workflow.processScopePlaceholder')" />
+          <el-select
+            v-model="scopeDefKeys"
+            multiple
+            filterable
+            clearable
+            collapse-tags
+            collapse-tags-tooltip
+            :placeholder="t('workflow.processScopeAll')"
+            style="width: 420px"
+          >
+            <el-option
+              v-for="d in defOptions"
+              :key="d.processKey"
+              :label="`${d.name}（${d.processKey}）`"
+              :value="d.processKey"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item :label="t('workflow.carryOverDelegateRules')">
           <el-switch v-model="includeProxyRules" />

@@ -25,6 +25,7 @@ import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/util
 import type { FormDefListItem } from '@/modules/form/api/form-def'
 import type { PageQuery } from '@/contracts/common'
 import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listCategories,
@@ -263,7 +264,7 @@ function goEdit(row: FormDefListItem) {
 
 const visibilityDialogVisible = ref(false)
 const visibilityForm = ref<FormDefListItem | null>(null)
-const visibilityUserIds = ref('')
+const visibilityUserIds = ref<number[]>([]) // V012-BUG-019：用户选择器（存 id 显示姓名）
 const visibilitySaving = ref(false)
 
 // I2 生命周期：停用/启用（PUBLISHED ↔ DISABLED），成功后刷新列表
@@ -293,10 +294,12 @@ function openVisibility(row: FormDefListItem) {
   visibilityForm.value = row
   try {
     const parsed = row.visibilityScope ? JSON.parse(row.visibilityScope) : null
-    const ids = Array.isArray(parsed?.userIds) ? parsed.userIds : []
-    visibilityUserIds.value = ids.join(',')
+    const ids: unknown[] = Array.isArray(parsed?.userIds) ? parsed.userIds : []
+    visibilityUserIds.value = ids.filter(
+      (id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0,
+    )
   } catch {
-    visibilityUserIds.value = ''
+    visibilityUserIds.value = []
   }
   visibilityDialogVisible.value = true
 }
@@ -334,12 +337,7 @@ function rowActions(r: unknown): ListAction[] {
 
 async function saveVisibility() {
   if (!visibilityForm.value) return
-  const raw = visibilityUserIds.value.trim()
-  const userIds = raw ? raw.split(',').map((value) => Number(value.trim())) : []
-  if (userIds.some((id) => !Number.isInteger(id) || id <= 0)) {
-    errorMsg.value = t('form.visibilityUserIdInvalid')
-    return
-  }
+  const userIds = visibilityUserIds.value
   visibilitySaving.value = true
   try {
     await updateFormVisibility(visibilityForm.value.id, userIds)
@@ -463,10 +461,12 @@ onMounted(loadList)
     <p v-if="visibilityForm" class="visibility-form__hint">
       {{ visibilityForm.name }}（{{ visibilityForm.formKey }}）
     </p>
-    <el-input
+    <!-- V012-BUG-019：发起范围用用户选择器（存 id 显示姓名），不再手填用户 ID -->
+    <UserRemoteSelect
       v-model="visibilityUserIds"
+      multiple
       :placeholder="t('form.startVisibilityPlaceholder')"
-      clearable
+      style="width: 100%"
     />
     <p class="visibility-form__hint">
       {{ t('form.initiationScopeNote') }}

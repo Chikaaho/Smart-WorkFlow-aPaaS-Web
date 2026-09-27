@@ -26,6 +26,7 @@ import {
   type TaskActionSegment,
 } from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
+import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 import type { ApprovalHistoryItem, TaskDetail } from '@/contracts/bpm'
 import type { ApprovalActionRequest, ApprovalOpinionConfig } from '@/contracts/bpm-node'
 import type { FormSchema } from '@/contracts/form-schema'
@@ -417,6 +418,17 @@ async function handleReturn() {
 }
 
 // ═════════ I3 生命周期动作（转办/委托/沟通/加签/补签） ═══════════════════
+
+// V012-BUG-019：生命周期弹窗用户输入改选择器；仍以 CSV 字符串承载提交契约
+function csvToIds(value: string | undefined): number[] {
+  return (value ?? '')
+    .split(',')
+    .map((item) => Number(item.trim()))
+    .filter((id) => Number.isInteger(id) && id > 0)
+}
+function idsToCsv(ids: number[] | null | undefined): string {
+  return (ids ?? []).join(',')
+}
 
 const lifecycleDialogVisible = computed({
   get: () => lifecycleDialog.value !== null,
@@ -1606,18 +1618,37 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
         <template
           v-if="lifecycleDialog?.kind === 'TRANSFER' || lifecycleDialog?.kind === 'DELEGATE'"
         >
-          <el-form-item :label="t('workflow.targetUserId')">
-            <el-input
-              v-model="lifecycleDialog.targetUserId"
-              :placeholder="t('workflow.targetUserIdPlaceholder')"
+          <el-form-item :label="t('workflow.targetUser')">
+            <!-- V012-BUG-019：目标用户改选择器（存 id 显示姓名） -->
+            <UserRemoteSelect
+              :model-value="
+                lifecycleDialog.targetUserId ? Number(lifecycleDialog.targetUserId) : undefined
+              "
+              :placeholder="t('workflow.pickTargetUser')"
+              style="width: 100%"
+              @update:model-value="
+                (v: number | number[] | null) => {
+                  if (!lifecycleDialog) return
+                  lifecycleDialog.targetUserId = v == null || Array.isArray(v) ? '' : String(v)
+                }
+              "
             />
           </el-form-item>
         </template>
         <template v-if="lifecycleDialog?.kind === 'COMMUNICATE'">
-          <el-form-item :label="t('workflow.receiverIdsLabel')">
-            <el-input
-              v-model="lifecycleDialog.receivers"
-              :placeholder="t('workflow.receiverIdsExample')"
+          <el-form-item :label="t('workflow.receiversLabel')">
+            <!-- V012-BUG-019：接收人改选择器（存 id 显示姓名） -->
+            <UserRemoteSelect
+              :model-value="csvToIds(lifecycleDialog.receivers)"
+              multiple
+              :placeholder="t('workflow.pickReceivers')"
+              style="width: 100%"
+              @update:model-value="
+                (v: number | number[] | null) => {
+                  if (!lifecycleDialog) return
+                  lifecycleDialog.receivers = Array.isArray(v) ? idsToCsv(v) : ''
+                }
+              "
             />
           </el-form-item>
           <el-form-item :label="t('workflow.consultContent')">
@@ -1625,10 +1656,19 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
           </el-form-item>
         </template>
         <template v-if="lifecycleDialog?.kind === 'ADD_SIGN'">
-          <el-form-item :label="t('workflow.participantIdsLabel')">
-            <el-input
-              v-model="lifecycleDialog.participants"
-              :placeholder="t('workflow.participantIdsExample')"
+          <el-form-item :label="t('workflow.participantsLabel')">
+            <!-- V012-BUG-019：参与人改选择器（存 id 显示姓名） -->
+            <UserRemoteSelect
+              :model-value="csvToIds(lifecycleDialog.participants)"
+              multiple
+              :placeholder="t('workflow.pickParticipants')"
+              style="width: 100%"
+              @update:model-value="
+                (v: number | number[] | null) => {
+                  if (!lifecycleDialog) return
+                  lifecycleDialog.participants = Array.isArray(v) ? idsToCsv(v) : ''
+                }
+              "
             />
           </el-form-item>
           <el-form-item :label="t('workflow.signOrder')">
@@ -1639,10 +1679,19 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
           </el-form-item>
         </template>
         <template v-if="lifecycleDialog?.kind === 'SUPPLEMENT_SIGN'">
-          <el-form-item :label="t('workflow.supplementConfirmerIdsLabel')">
-            <el-input
-              v-model="lifecycleDialog.participants"
-              :placeholder="t('workflow.participantIdsExample')"
+          <el-form-item :label="t('workflow.supplementConfirmerLabel')">
+            <!-- V012-BUG-019：补充确认人改选择器（存 id 显示姓名） -->
+            <UserRemoteSelect
+              :model-value="csvToIds(lifecycleDialog.participants)"
+              multiple
+              :placeholder="t('workflow.pickParticipants')"
+              style="width: 100%"
+              @update:model-value="
+                (v: number | number[] | null) => {
+                  if (!lifecycleDialog) return
+                  lifecycleDialog.participants = Array.isArray(v) ? idsToCsv(v) : ''
+                }
+              "
             />
           </el-form-item>
           <el-form-item :label="t('common.description')">

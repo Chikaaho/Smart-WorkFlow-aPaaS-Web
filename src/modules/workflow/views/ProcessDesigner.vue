@@ -1320,15 +1320,10 @@ function nodeLabelLines(label: string) {
                   </div>
                   <small class="approver-card__hint">{{ t('workflow.approverSupportHint') }}</small>
                 </div>
+                <!-- V012-BUG-019：未解析时同样以选择器选人，移除手填用户 ID 输入框 -->
                 <div v-else class="approver-field">
-                  <el-input
-                    v-model="propForm[field.key] as string"
-                    :placeholder="t('workflow.targetUserIdPlaceholder')"
-                    @change="applyProps"
-                    @blur="applyProps"
-                  />
                   <el-button @click="openApproverPicker(field.key)">
-                    {{ t('approverPicker.button') }}
+                    {{ t('workflow.selectApprover') }}
                   </el-button>
                 </div>
               </el-form-item>
