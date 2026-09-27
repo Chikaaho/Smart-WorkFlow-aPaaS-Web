@@ -586,7 +586,7 @@ onMounted(loadList)
   <!-- V012-BUG-010：主题生成规则设置 -->
   <el-dialog v-model="themeDialogVisible" :title="t('workflow.themeRuleTitle')" width="560px">
     <p v-if="themeDef" class="theme-dialog__meta">
-      {{ themeDef.name }}（{{ themeDef.processKey }}）
+      {{ themeDef.name + '（' + themeDef.processKey + '）' }}
     </p>
     <el-input
       v-model="themeRuleInput"

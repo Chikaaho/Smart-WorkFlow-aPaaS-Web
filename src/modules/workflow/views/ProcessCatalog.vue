@@ -248,6 +248,11 @@ async function renameCategory() {
   }
 }
 
+function startRename(category: CatalogCategory) {
+  editingCategoryId.value = category.id
+  editingCategoryName.value = category.name
+}
+
 async function removeCategory(category: CatalogCategory) {
   try {
     await ElMessageBox.confirm(t('catalog.categoryDeleteConfirm', { name: category.name }), {
@@ -457,16 +462,9 @@ onMounted(() => {
             </template>
             <template v-else>
               <span class="category-manage__name">{{ category.name }}</span>
-              <el-button
-                link
-                type="primary"
-                size="small"
-                @click="
-                  editingCategoryId = category.id
-                  editingCategoryName = category.name
-                "
-                >{{ t('common.rename') }}</el-button
-              >
+              <el-button link type="primary" size="small" @click="startRename(category)">{{
+                t('common.rename')
+              }}</el-button>
               <el-button link type="danger" size="small" @click="removeCategory(category)">{{
                 t('common.delete')
               }}</el-button>
