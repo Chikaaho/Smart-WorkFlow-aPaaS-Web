@@ -14,6 +14,10 @@ vi.mock('@/modules/job/api', () => ({
   triggerJob: vi.fn(),
 }))
 
+vi.mock('@/modules/workflow/api', () => ({
+  pageProcessDefs: vi.fn().mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 10 }),
+}))
+
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
   useRoute: () => ({ params: {}, query: {} }),
