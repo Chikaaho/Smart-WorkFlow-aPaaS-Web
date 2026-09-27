@@ -30,7 +30,7 @@ import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 import type { ApprovalHistoryItem, TaskDetail } from '@/contracts/bpm'
 import type { ApprovalActionRequest, ApprovalOpinionConfig } from '@/contracts/bpm-node'
 import type { FormSchema } from '@/contracts/form-schema'
-import ProcessGraphView from './ProcessGraphView.vue'
+import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { deriveProcessTrace } from '../utils/process-trace'
 
 const router = useRouter()
@@ -164,10 +164,8 @@ function goBack() {
   router.push({ name: 'TodoList' })
 }
 
-/** 返回按钮文案：与来源列表一致。 */
-const backLabel = computed(() =>
-  route.query?.source === 'processed' ? t('workflow.backToProcessed') : t('workflow.backToTodo'),
-)
+/** 返回按钮文案：V012-BUG-013 精简为「返回」（来源差异仍由 goBack 行为保留）。 */
+const backLabel = computed(() => t('common.backShort'))
 
 /**
  * 审批 API 已成功提交后，页面导航失败不应被误报为审批失败。
@@ -553,10 +551,6 @@ async function submitLifecycle() {
   }
 }
 
-function formatVariables(vars: Record<string, unknown>): [string, string][] {
-  return Object.entries(vars).map(([k, v]) => [k, String(v)])
-}
-
 // ─── 审批结果映射 ───
 const APPROVAL_RESULT_MAP: Record<string, { label: string; type: 'success' | 'danger' | 'info' }> =
   {
@@ -767,11 +761,6 @@ const flowRail = computed<FlowRailEntry[]>(() => {
 const currentRailEntry = computed(() => flowRail.value.find((e) => e.state === 'current') ?? null)
 
 /** 业务流程变量：formKey 属页头元信息，其余变量才以表格呈现。 */
-const hasBusinessVariables = computed(() => {
-  const vars = detail.value?.processVariables
-  if (!vars) return false
-  return Object.keys(vars).some((k) => k !== 'formKey')
-})
 
 /** 图画布高度：默认 740；高视口（长页基线 1512）下 800。 */
 const graphCanvasHeight = computed(() =>
@@ -1012,9 +1001,9 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
             {{ headerTagLabel }}
           </el-tag>
         </div>
+        <p v-if="detail?.theme" class="detail-header__theme">{{ detail.theme }}</p>
         <p v-if="detail" class="detail-header__meta">
-          {{ t('common.processNo') }} {{ detail.businessKey }} · {{ t('common.initiator') }}
-          {{ detail.initiatorName ?? detail.initiatorId }} ·
+          {{ t('common.initiator') }} {{ detail.initiatorName ?? detail.initiatorId }} ·
           {{ detail.createTime?.slice(0, 16)?.replace('T', ' ') }}
         </p>
       </div>
@@ -1063,17 +1052,6 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
               }}</el-descriptions-item>
             </el-descriptions>
           </div>
-        </el-card>
-
-        <!-- 流程变量 -->
-        <el-card v-if="hasBusinessVariables" class="detail-card">
-          <template #header>
-            <span>{{ t('common.processVariable') }}</span>
-          </template>
-          <el-table :data="formatVariables(detail.processVariables)" stripe>
-            <el-table-column prop="0" :label="t('workflow.variableName')" min-width="180" />
-            <el-table-column prop="1" :label="t('workflow.variableValue')" min-width="280" />
-          </el-table>
         </el-card>
       </div>
 

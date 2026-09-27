@@ -31,6 +31,7 @@ import {
   normalizeSubmitData,
 } from '@/modules/form/api/form'
 import { ApiError, getErrorMessage } from '@/foundation/request'
+import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import DynamicField from '@/components/DynamicField.vue'
 import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-display'
 import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
@@ -574,20 +575,48 @@ function backToDrafts() {
   void router.push('/workflow/my-drafts')
 }
 
-// ── P53 节点 27：右侧说明栏的模式标签（渲染期求值，避免语言固化） ──
-const modeLabel = computed(() => {
-  if (isViewMode.value) return t('formSide.modeView')
-  if (isDraftMode.value) return t('formSide.modeDraft')
-  return t('formSide.modeSubmit')
-})
+// ── V012-BUG-012：表单下方真实流程图（携带 process 参数时加载） ──
+const processKey = String(route.query.process ?? '')
+const flowGraph = ref<import('@/contracts/process-graph').ProcessGraphDocument | null>(null)
 
-const processMeta = computed(() => {
-  const title = schema.value?.title ?? formKey
-  return `${t('workflow.processCenter')} / ${title} · ${formKey}`
-})
+async function loadFlowGraph() {
+  if (!processKey || flowGraph.value) return
+  try {
+    const { getProcessDefDefinitionByKey } = await import('@/modules/workflow/api')
+    const definition = await getProcessDefDefinitionByKey(processKey)
+    flowGraph.value = {
+      processKey: definition.processKey,
+      name: definition.name ?? '',
+      formKey: definition.formKey ?? '',
+      version: definition.version,
+      contractVersion: (definition as { contractVersion?: number }).contractVersion,
+      elements: (definition.elements ??
+        []) as import('@/contracts/process-graph').ProcessGraphElement[],
+      canvas: definition.canvas ?? {},
+    }
+  } catch {
+    // 流程图加载失败静默：不阻断表单填写主流程
+  }
+}
+
+/** V012-BUG-012：左上精简返回——历史返回优先，兜底回流程中心 */
+function goBack() {
+  // eslint-disable-next-line no-undef
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    void router.push('/workflow/catalog')
+  }
+}
+
+// ── P53 节点 27：模式标签（渲染期求值，避免语言固化） ──
+// V012-BUG-012：元信息去技术噪音（目录路径/流程标识不再展示）
 
 // ── 挂载 ──
-onMounted(loadSchema)
+onMounted(() => {
+  void loadSchema()
+  void loadFlowGraph()
+})
 </script>
 
 <template>
@@ -615,18 +644,13 @@ onMounted(loadSchema)
       <el-empty v-if="!schema && !errorMsg" :description="t('form.notFoundOrLoadFailed')" />
 
       <template v-else-if="schema">
-        <button
-          class="form-render-page__back"
-          type="button"
-          @click="router.push('/workflow/catalog')"
-        >
+        <button class="form-render-page__back" type="button" @click="goBack">
           <span aria-hidden="true">‹</span>
-          {{ t('form.backToProcessCenter') }}
+          {{ t('common.backShort') }}
         </button>
 
         <!-- 页标题 -->
         <h1 class="form-render-page__title">{{ pageTitle }}</h1>
-        <p class="form-render-page__meta">{{ processMeta }}</p>
         <p v-if="!isViewMode" class="form-render-page__hint">{{ t('form.requiredHint') }}</p>
 
         <div class="form-render-page__layout">
@@ -693,26 +717,11 @@ onMounted(loadSchema)
               </div>
             </template>
           </div>
+        </div>
 
-          <!-- 流程说明（节点 27）：只展示真实可得信息，不虚构版本/发起范围 -->
-          <aside class="form-render-page__aside">
-            <div class="form-render-page__aside-card">
-              <h3 class="form-render-page__aside-title">{{ t('formSide.infoTitle') }}</h3>
-              <div class="form-render-page__aside-row">
-                <span>{{ t('formSide.formNameLabel') }}</span>
-                <strong>{{ schema.title }}</strong>
-              </div>
-              <div class="form-render-page__aside-row">
-                <span>{{ t('formSide.infoFormKey') }}</span>
-                <strong>{{ formKey }}</strong>
-              </div>
-              <div class="form-render-page__aside-row">
-                <span>{{ t('formSide.infoMode') }}</span>
-                <strong>{{ modeLabel }}</strong>
-              </div>
-              <p class="form-render-page__aside-hint">{{ t('form.processResolvedByBinding') }}</p>
-            </div>
-          </aside>
+        <!-- V012-BUG-012：表单下方真实流程图 -->
+        <div v-if="flowGraph" class="form-render-page__graph">
+          <ProcessGraphView :graph="flowGraph" />
         </div>
 
         <!-- 新建填报的持久操作栏：保存草稿与正式提交均绑定真实接口。 -->
@@ -730,10 +739,32 @@ onMounted(loadSchema)
 </template>
 
 <style scoped>
+/* V012-BUG-012：发起页独占整页（覆盖布局层），左上返回，内容随内容缩放 */
 .form-render-page {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: var(--sw-space-24) var(--sw-space-24);
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-y: auto;
+  background: #ffffff;
+  max-width: none;
+  padding: 12px 14px;
+}
+.form-render-page__graph {
+  margin-top: 2px;
+  padding: 2px;
+  background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+}
+/* 不可输入字段灰色区分（只读/禁用控件统一置灰） */
+.form-render-page :deep(input[readonly]),
+.form-render-page :deep(textarea[readonly]),
+.form-render-page :deep(.el-input.is-disabled .el-input__inner),
+.form-render-page :deep(.el-textarea.is-disabled .el-textarea__inner),
+.form-render-page :deep(.el-select.is-disabled .el-input__inner) {
+  background: #f3f4f8;
+  color: #909399;
+  cursor: not-allowed;
 }
 
 /* P53 节点 27：左表单右说明双栏；窄屏单列 */

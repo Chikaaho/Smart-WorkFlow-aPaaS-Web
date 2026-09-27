@@ -8,6 +8,14 @@ export interface TodoTask {
   formKey: string
   businessKey: string
   createTime: string
+  /** 实例主题（V012-BUG-010：发起时按主题规则生成；历史实例为空） */
+  theme?: string | null
+  /** 申请人展示名（V012-BUG-010） */
+  initiatorName?: string | null
+  /** 流程状态（待办页固定待审语义） */
+  flowStatus?: string | null
+  /** 流程定义键（定位分类用） */
+  processDefKey?: string | null
 }
 
 // ─── 任务详情 DTO（对齐后端 TaskDetailRespDTO） ───
@@ -30,6 +38,8 @@ export interface TaskDetail {
   assigneeName?: string | null // 审批人展示名（可读身份回显）
   initiatorId: number // 后端 Long → JSON number
   initiatorName?: string | null // 发起人展示名（可读身份回显）
+  /** 实例主题（V012-BUG-010） */
+  theme?: string | null
   createTime: string // LocalDateTime → ISO-8601 string
   processVariables: Record<string, unknown> // Map<String, Object>
   opinionForm?: ApprovalOpinionConfig | null // 当前人工节点的低代码审批意见配置

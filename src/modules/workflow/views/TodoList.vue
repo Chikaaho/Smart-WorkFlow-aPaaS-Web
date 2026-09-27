@@ -17,8 +17,49 @@ import { queryTodoTasks, acceptTaskAction, pollCommandStatus } from '@/modules/w
 import { ApiError } from '@/foundation/request'
 import type { TodoTask } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
+import { queryCatalogItems, type CatalogItem } from '@/modules/workflow/api/oa'
 
 const router = useRouter()
+
+// ─── 定位分类（V012-BUG-010 参考蓝凌「定位分类」） ───
+const catalogItems = ref<CatalogItem[]>([])
+const activeCategory = ref<number | 'all'>('all')
+
+const defKeyCategory = computed(() => {
+  const map = new Map<string, number | null>()
+  for (const item of catalogItems.value) {
+    map.set(item.itemKey, item.categoryId)
+  }
+  return map
+})
+
+const categoryOptions = computed(() => {
+  const byId = new Map<number, string>()
+  for (const item of catalogItems.value) {
+    if (item.categoryId != null && !byId.has(item.categoryId)) {
+      byId.set(
+        item.categoryId,
+        catalogItems.value.find((c) => c.categoryId === item.categoryId)?.name ??
+          t('workflow.uncategorized'),
+      )
+    }
+  }
+  return Array.from(byId, ([id, name]) => ({ id, name }))
+})
+
+const filteredList = computed(() => {
+  if (activeCategory.value === 'all') return list.value
+  return list.value.filter((row) => {
+    const cat = row.processDefKey ? defKeyCategory.value.get(row.processDefKey) : undefined
+    if (activeCategory.value === 0)
+      return cat == null || !defKeyCategory.value.has(row.processDefKey ?? '')
+    return cat === activeCategory.value
+  })
+})
+
+function selectCategory(id: number | 'all') {
+  activeCategory.value = id
+}
 
 // ─── 列表状态 ───
 
@@ -34,11 +75,6 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
 // 真分页
 const pageNum = ref(1)
 const pageSize = ref(10)
-
-function formatTaskId(taskId: string): string {
-  // 短显示：取后 8 字符
-  return taskId.length > 8 ? `...${taskId.slice(-8)}` : taskId
-}
 
 async function loadList() {
   loading.value = true
@@ -195,10 +231,36 @@ function handleRowClick(row: TodoTask) {
   router.push({ name: 'TaskDetail', params: { taskId: row.taskId } })
 }
 
+void queryCatalogItems({ pageNum: 1, pageSize: 200 }).then((page) => {
+  catalogItems.value = page.list
+})
+
 onMounted(loadList)
 </script>
 
 <template>
+  <!-- V012-BUG-010：定位分类（参考蓝凌）——按目录分类过滤本人待办 -->
+  <div class="todo-locator">
+    <span class="todo-locator__label">{{ t('workflow.locateCategory') }}</span>
+    <button
+      type="button"
+      class="todo-locator__chip"
+      :class="{ 'is-active': activeCategory === 'all' }"
+      @click="selectCategory('all')"
+    >
+      {{ t('catalog.allProcesses') }}
+    </button>
+    <button
+      v-for="opt in categoryOptions"
+      :key="opt.id"
+      type="button"
+      class="todo-locator__chip"
+      :class="{ 'is-active': activeCategory === opt.id }"
+      @click="selectCategory(opt.id)"
+    >
+      {{ opt.name }}
+    </button>
+  </div>
   <StandardListTemplate
     :title="t('workflow.myTodoTitle')"
     :total="total"
@@ -212,6 +274,9 @@ onMounted(loadList)
     <template #toolbar-actions>
       <el-button @click="router.push({ name: 'ProcessedList' })">{{
         t('workflow.processedTasks')
+      }}</el-button>
+      <el-button type="primary" plain @click="router.push('/workflow/batch-approval')">{{
+        t('workflow.batchApproval')
       }}</el-button>
     </template>
 
@@ -233,21 +298,30 @@ onMounted(loadList)
     <!-- 表格 -->
     <el-table
       v-loading="loading"
-      :data="list"
+      :data="filteredList"
       stripe
       highlight-current-row
       style="width: 100%"
       @row-click="handleRowClick"
     >
-      <el-table-column :label="t('common.taskNo')" min-width="140">
+      <!-- V012-BUG-010：列改版 主题/流程状态/申请单编号/申请人/接收时间；去 formKey 噪音列 -->
+      <el-table-column type="index" :label="t('common.indexNo')" width="70" />
+      <el-table-column :label="t('common.theme')" min-width="220">
         <template #default="{ row }">
-          <span :title="row.taskId">{{ formatTaskId(row.taskId) }}</span>
+          <span class="todo-theme">{{ row.theme || row.processName || '—' }}</span>
+          <span v-if="row.theme" class="todo-theme__process">{{ row.processName }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="processName" :label="t('common.processName')" min-width="140" />
-      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="140" />
-      <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="120" />
-      <el-table-column prop="createTime" :label="t('common.createTime')" min-width="170" />
+      <el-table-column :label="t('workflow.flowStatus')" width="100">
+        <template #default>
+          <el-tag size="small" type="warning">{{ t('workflow.pendingReview') }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="140" />
+      <el-table-column :label="t('workflow.applicant')" min-width="110">
+        <template #default="{ row }">{{ row.initiatorName || '—' }}</template>
+      </el-table-column>
+      <el-table-column prop="createTime" :label="t('workflow.receiveTime')" min-width="170" />
       <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
   </StandardListTemplate>

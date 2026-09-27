@@ -14,7 +14,7 @@ const { t } = useI18n()
  */
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import ProcessGraphView from './ProcessGraphView.vue'
+import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { deriveProcessTrace } from '../utils/process-trace'
 import { queryTaskDetail } from '@/modules/workflow/api'
 import type { TaskDetail } from '@/contracts/bpm'
@@ -158,8 +158,12 @@ function goTaskRecords() {
           <small class="graph-rail__kicker">{{ t('taskDetailUi.nodeStatus') }}</small>
           <div class="graph-rail__chips">
             <span class="graph-chip graph-chip--done">{{ t('taskDetailUi.prevDone') }}</span>
-            <span class="graph-chip graph-chip--running">{{ t('taskDetailUi.statusApproving') }}</span>
-            <span class="graph-chip graph-chip--pending">{{ t('taskDetailUi.stateNotReached') }}</span>
+            <span class="graph-chip graph-chip--running">{{
+              t('taskDetailUi.statusApproving')
+            }}</span>
+            <span class="graph-chip graph-chip--pending">{{
+              t('taskDetailUi.stateNotReached')
+            }}</span>
           </div>
         </div>
       </aside>

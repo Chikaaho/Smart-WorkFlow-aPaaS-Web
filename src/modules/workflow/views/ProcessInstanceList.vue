@@ -21,7 +21,7 @@ import {
 import type { ProcessInstance, InstanceDetail } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
-import ProcessGraphView from './ProcessGraphView.vue'
+import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import type { InstanceFilter } from '@/modules/workflow/api'
 

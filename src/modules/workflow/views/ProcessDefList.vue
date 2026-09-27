@@ -25,7 +25,7 @@ import {
 import type { ProcessDef } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
-import ProcessGraphView from './ProcessGraphView.vue'
+import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { ElMessage } from 'element-plus'
 import { CircleCheck, EditPen, Plus, Tickets, VideoPause } from '@element-plus/icons-vue'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
