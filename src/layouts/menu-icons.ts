@@ -11,6 +11,24 @@ import {
   EditPen,
   Tickets,
   Files,
+  User,
+  Avatar,
+  Monitor,
+  Finished,
+  Message,
+  TrendCharts,
+  Checked,
+  Position,
+  Clock,
+  List,
+  Promotion,
+  Link,
+  Goods,
+  ChatLineSquare,
+  DataLine,
+  SetUp,
+  Menu,
+  Switch,
 } from '@element-plus/icons-vue'
 
 /**
@@ -29,8 +47,29 @@ const ICON_MAP: Record<string, Component> = {
   EditPen,
   Tickets,
   Files,
+  User,
+  Avatar,
+  Monitor,
+  Finished,
+  Message,
+  TrendCharts,
+  Checked,
+  Position,
+  Clock,
+  ToggleOn: Switch,
+  List,
+  Promotion,
+  Link,
+  Goods,
+  ChatLineSquare,
+  DataLine,
+  SetUp,
+  Menu,
 }
 
 export function menuIcon(name?: string): Component | undefined {
   return name ? ICON_MAP[name] : undefined
 }
+
+/** 通用图标库白名单键名（V012-BUG-011 菜单管理图标选择器数据源）。 */
+export const MENU_ICON_KEYS: string[] = Object.keys(ICON_MAP)

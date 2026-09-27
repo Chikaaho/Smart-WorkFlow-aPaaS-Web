@@ -15,6 +15,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import {
   pageDictData,
+  pageDictTypes,
   getDictData,
   createDictData,
   updateDictData,
@@ -34,10 +35,35 @@ import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 const route = useRoute()
 const router = useRouter()
 
-// ─── 路由参数 ───
+// ─── 路由参数 / 类型选择（V012-BUG-017：支持独立菜单入口） ───
 
-const dictCode = String(route.query.dictCode ?? '')
-const dictName = String(route.query.dictName ?? '')
+const dictCode = ref(String(route.query.dictCode ?? ''))
+const dictName = ref(String(route.query.dictName ?? ''))
+const typeOptions = ref<{ code: string; name: string }[]>([])
+
+void (async () => {
+  try {
+    const page = await pageDictTypes({ pageNum: 1, pageSize: 200 }, {})
+    typeOptions.value = page.list
+      .filter((item) => item.code)
+      .map((item) => ({ code: String(item.code), name: item.name }))
+    // 独立打开且未带类型参数：默认选第一个类型，保证页面直接可用
+    if (!dictCode.value && typeOptions.value.length > 0) {
+      dictCode.value = typeOptions.value[0]!.code
+      dictName.value = typeOptions.value[0]!.name
+    }
+    if (dictCode.value) void loadList()
+  } catch {
+    // 类型列表加载失败不阻塞页面，用户仍可手动刷新
+  }
+})
+
+function onTypeChange(code: string) {
+  dictCode.value = code
+  dictName.value = typeOptions.value.find((item) => item.code === code)?.name ?? ''
+  pageNum.value = 1
+  void loadList()
+}
 
 // ─── 列表状态 ───
 
@@ -73,7 +99,7 @@ const currentFilter = reactive<AppliedFilter>({
 })
 
 function buildFilter(): DictDataFilter {
-  const f: DictDataFilter = { dictCode }
+  const f: DictDataFilter = { dictCode: dictCode.value }
   if (currentFilter.label) f.label = currentFilter.label
   if (currentFilter.dictValue) f.dictValue = currentFilter.dictValue
   if (currentFilter.status !== undefined) f.status = currentFilter.status
@@ -81,8 +107,10 @@ function buildFilter(): DictDataFilter {
 }
 
 async function loadList() {
-  if (!dictCode) {
-    errorMsg.value = t('system.dictCodeParamMissing')
+  if (!dictCode.value) {
+    // 独立菜单入口尚无类型上下文：保持空态，等选择类型后加载
+    list.value = []
+    total.value = 0
     return
   }
 
@@ -157,7 +185,7 @@ const submitting = ref(false)
 const formError = ref('')
 
 const form = reactive<SysDictData>({
-  dictCode,
+  dictCode: dictCode.value,
   label: '',
   dictValue: '',
   sort: 0,
@@ -169,7 +197,7 @@ const form = reactive<SysDictData>({
 })
 
 function resetForm() {
-  form.dictCode = dictCode
+  form.dictCode = dictCode.value
   form.label = ''
   form.dictValue = ''
   form.sort = 0
@@ -277,7 +305,7 @@ async function handleDelete(row: SysDictData) {
 }
 
 function handleGoBack() {
-  void router.push({ path: '/dict-type' })
+  void router.push({ path: '/system/dict' })
 }
 
 // el-table row slot 的 DefaultRow 类型不与 SysDictData 兼容，通过包装函数桥接。
@@ -305,7 +333,9 @@ function rowActions(r: unknown): ListAction[] {
   ]
 }
 
-onMounted(loadList)
+onMounted(() => {
+  if (dictCode.value) void loadList()
+})
 </script>
 
 <template>
@@ -338,6 +368,21 @@ onMounted(loadList)
 
     <!-- 筛选区 -->
     <template #filter>
+      <!-- V012-BUG-017：字典数据管理独立菜单入口——页内切换字典类型 -->
+      <el-select
+        :model-value="dictCode"
+        filterable
+        :placeholder="t('system.dictTypeSelect')"
+        style="width: 220px"
+        @change="onTypeChange"
+      >
+        <el-option
+          v-for="item in typeOptions"
+          :key="item.code"
+          :label="`${item.name}（${item.code}）`"
+          :value="item.code"
+        />
+      </el-select>
       <el-input
         v-model="filter.label"
         :placeholder="t('system.dictLabel')"

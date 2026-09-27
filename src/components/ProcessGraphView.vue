@@ -15,11 +15,7 @@ const { t } = useI18n()
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { NODE_RUNTIME_STATE_CLASS } from '@/contracts/process-graph'
 import type { ProcessGraphDocument, ProcessNodeRuntimeState } from '@/contracts/process-graph'
-import {
-  normalizeGraph,
-  GRAPH_NODE_WIDTH,
-  GRAPH_NODE_HEIGHT,
-} from '@/adapters/process-graph'
+import { normalizeGraph, GRAPH_NODE_WIDTH, GRAPH_NODE_HEIGHT } from '@/adapters/process-graph'
 import type { PositionedEdge, PositionedNode } from '@/adapters/process-graph'
 
 const props = defineProps<{
@@ -306,7 +302,10 @@ defineExpose({ fitViewport, zoom, locateCurrent })
                 d="M13.83 0 H0.92 C0.4 0 0 0.4 0 0.92 V15.58 C0 16.1 0.4 16.5 0.92 16.5 H13.83 C14.34 16.5 14.75 16.1 14.75 15.58 V0.92 C14.75 0.4 14.34 0 13.83 0 Z"
                 class="pg-node-icon-stroke"
               />
-              <path d="M2.75 3.67 H10.08 M2.75 7.33 H8.25 M2.75 11 H6.42" class="pg-node-icon-stroke" />
+              <path
+                d="M2.75 3.67 H10.08 M2.75 7.33 H8.25 M2.75 11 H6.42"
+                class="pg-node-icon-stroke"
+              />
               <circle cx="14.75" cy="10.08" r="2.75" class="pg-node-icon-badge" />
               <path
                 d="M9.17 17.42 C9.17 16.2 9.65 15.04 10.51 14.18 C11.37 13.32 12.53 12.83 13.75 12.83 C14.97 12.83 16.13 13.32 16.99 14.18 C17.85 15.04 18.33 16.2 18.33 17.42"
@@ -314,7 +313,12 @@ defineExpose({ fitViewport, zoom, locateCurrent })
               />
             </template>
           </g>
-          <text x="-39.4" :y="node.label.length > 8 ? -4 : 4.5" text-anchor="start" class="pg-node-label">
+          <text
+            x="-39.4"
+            :y="node.label.length > 8 ? -4 : 4.5"
+            text-anchor="start"
+            class="pg-node-label"
+          >
             <template v-if="node.label.length > 8">
               <tspan x="-39.4" dy="0">{{ node.label.slice(0, 8) }}</tspan>
               <tspan x="-39.4" dy="17">{{ node.label.slice(8) }}</tspan>
@@ -324,12 +328,14 @@ defineExpose({ fitViewport, zoom, locateCurrent })
         </template>
       </g>
     </svg>
-    <span v-if="spec?.compatibilityLayout" class="pg-compat-tag">{{ t('workflow.compatLayout') }}</span>
+    <span v-if="spec?.compatibilityLayout" class="pg-compat-tag">{{
+      t('workflow.compatLayout')
+    }}</span>
     <div class="pg-zoom">
       <div class="pg-zoom__row">
-        <el-button size="small" text @click="zoom(1.2)" aria-label="缩小">－</el-button>
+        <el-button size="small" text aria-label="缩小" @click="zoom(1.2)">－</el-button>
         <span class="pg-zoom__level">{{ Math.round(zoomLevel * 100) }}%</span>
-        <el-button size="small" text @click="zoom(1 / 1.2)" aria-label="放大">＋</el-button>
+        <el-button size="small" text aria-label="放大" @click="zoom(1 / 1.2)">＋</el-button>
       </div>
       <div v-if="trace" class="pg-zoom__row pg-zoom__actions-row">
         <span class="pg-zoom__actions-text">

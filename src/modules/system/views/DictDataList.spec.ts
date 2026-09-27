@@ -118,7 +118,7 @@ describe('DictDataList', () => {
 
   // ─── 返回导航 ───
 
-  it('handleGoBack navigates to /dict-type', async () => {
+  it('handleGoBack navigates to /system/dict (V012-BUG-017 路径修正)', async () => {
     mockPush.mockClear()
     const wrapper = mount(DictDataList, { global: { stubs: minimalStubs } })
     await nextTick()
@@ -129,6 +129,6 @@ describe('DictDataList', () => {
     vm.handleGoBack()
     await nextTick()
 
-    expect(mockPush).toHaveBeenCalledWith({ path: '/dict-type' })
+    expect(mockPush).toHaveBeenCalledWith({ path: '/system/dict' })
   })
 })
