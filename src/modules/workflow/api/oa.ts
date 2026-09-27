@@ -253,3 +253,47 @@ export async function updateWorkspaceCardType(
 export async function deleteWorkspaceCardType(id: number): Promise<void> {
   await request<void>({ method: 'DELETE', url: `/system/workspace/card-types/${id}` })
 }
+
+// ─── 流程收藏 / 常用 / 最近使用（V012-BUG-009） ───
+
+export interface FavoriteItem {
+  processKey: string
+  name: string
+}
+
+/** 当前用户收藏列表（最近收藏在前）。 */
+export async function listMyFavorites(): Promise<FavoriteItem[]> {
+  return request<FavoriteItem[]>({ method: 'GET', url: '/workflow/favorites' })
+}
+
+/** 收藏流程（name 为展示名快照，可缺省）。 */
+export async function favoriteProcess(processKey: string, name?: string): Promise<void> {
+  return request<void>({
+    method: 'POST',
+    url: `/workflow/favorites/${processKey}`,
+    data: name ? { name } : {},
+  })
+}
+
+/** 取消收藏（幂等）。 */
+export async function unfavoriteProcess(processKey: string): Promise<void> {
+  return request<void>({ method: 'DELETE', url: `/workflow/favorites/${processKey}` })
+}
+
+/** 常用流程：租户内发起次数总量 TopN。 */
+export async function frequentlyStarted(limit = 5): Promise<FavoriteItem[]> {
+  return request<FavoriteItem[]>({
+    method: 'GET',
+    url: '/workflow/favorites/frequently-started',
+    params: { limit },
+  })
+}
+
+/** 最近使用：本人最近发起去重 TopN。 */
+export async function recentlyUsed(limit = 5): Promise<FavoriteItem[]> {
+  return request<FavoriteItem[]>({
+    method: 'GET',
+    url: '/workflow/favorites/recently-used',
+    params: { limit },
+  })
+}
