@@ -17,7 +17,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { ListActionsColumn, ListEmpty, ListPagination } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
+  getProcessDefThemeRule,
   pageProcessDefs,
+  updateProcessDefThemeRule,
   getProcessDefDefinition,
   publishProcessDef,
   deleteProcessDef,
@@ -288,7 +290,46 @@ function rowActions(row: unknown): ListAction[] {
       visible: item.status === 'DRAFT',
       onClick: () => void handleDelete(item),
     },
+    {
+      key: 'themeRule',
+      label: t('workflow.themeRuleAction'),
+      onClick: () => openThemeRule(item),
+    },
   ]
+}
+
+// ── V012-BUG-010：主题规则设置（管理流程系统级设置，必填） ──
+const themeDialogVisible = ref(false)
+const themeDef = ref<ProcessDef | null>(null)
+const themeRuleInput = ref('')
+const themeSaving = ref(false)
+
+function openThemeRule(item: ProcessDef) {
+  themeDef.value = item
+  themeRuleInput.value = ''
+  themeDialogVisible.value = true
+  void getProcessDefThemeRule(item.id).then((rule) => {
+    themeRuleInput.value = rule ?? ''
+  })
+}
+
+async function saveThemeRule() {
+  if (!themeDef.value) return
+  const rule = themeRuleInput.value.trim()
+  if (!rule) {
+    ElMessage.warning(t('workflow.themeRuleRequired'))
+    return
+  }
+  themeSaving.value = true
+  try {
+    await updateProcessDefThemeRule(themeDef.value.id, rule)
+    ElMessage.success(t('workflow.themeRuleSaved'))
+    themeDialogVisible.value = false
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.themeRuleSaveFailed'))
+  } finally {
+    themeSaving.value = false
+  }
 }
 
 /** 重置筛选：仅清空过滤条件（列表经 visibleList 客户端过滤，无需重新请求） */
@@ -541,6 +582,25 @@ onMounted(loadList)
       />
       <ProcessGraphView v-else :graph="viewerGraph" :height="480" />
     </div>
+  </el-dialog>
+  <!-- V012-BUG-010：主题生成规则设置 -->
+  <el-dialog v-model="themeDialogVisible" :title="t('workflow.themeRuleTitle')" width="560px">
+    <p v-if="themeDef" class="theme-dialog__meta">
+      {{ themeDef.name }}（{{ themeDef.processKey }}）
+    </p>
+    <el-input
+      v-model="themeRuleInput"
+      :placeholder="t('workflow.themeRulePlaceholder')"
+      maxlength="200"
+      clearable
+    />
+    <p class="theme-dialog__hint">{{ t('workflow.themeRuleHint') }}</p>
+    <template #footer>
+      <el-button @click="themeDialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="themeSaving" @click="saveThemeRule">{{
+        t('common.save')
+      }}</el-button>
+    </template>
   </el-dialog>
 
   <!-- 创建流程定义对话框 -->

@@ -605,3 +605,23 @@ export interface AuthorizeRule {
 export async function listAuthorizeRules(): Promise<AuthorizeRule[]> {
   return request<AuthorizeRule[]>({ method: 'GET', url: '/workflow/authorize-rules' })
 }
+
+/** GET /workflow/defs/{id}/theme-rule → string|null（V012-BUG-010 主题生成规则） */
+export async function getProcessDefThemeRule(id: number | string): Promise<string | null> {
+  return request<string | null>({
+    method: 'GET',
+    url: `/workflow/defs/${id}/theme-rule`,
+  })
+}
+
+/** PUT /workflow/defs/{id}/theme-rule：非空 + 占位符白名单（服务端权威校验） */
+export async function updateProcessDefThemeRule(
+  id: number | string,
+  themeRule: string,
+): Promise<void> {
+  return request<void>({
+    method: 'PUT',
+    url: `/workflow/defs/${id}/theme-rule`,
+    data: { themeRule },
+  })
+}
