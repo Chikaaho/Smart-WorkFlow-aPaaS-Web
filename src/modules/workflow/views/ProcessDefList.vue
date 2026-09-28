@@ -543,6 +543,24 @@ onMounted(loadList)
               }}</span>
             </template>
           </el-table-column>
+          <!-- V012-BUG-010：主题规则列内联入口（点击即设置，不再只藏在「更多」） -->
+          <el-table-column :label="t('workflow.themeRuleColumn')" width="180">
+            <template #default="{ row }">
+              <span
+                v-if="statusRow(row).themeRule"
+                class="defs-table__theme"
+                :title="statusRow(row).themeRule ?? undefined"
+                @click="openThemeRule(statusRow(row))"
+                >{{ statusRow(row).themeRule }}</span
+              >
+              <span
+                v-else
+                class="defs-table__theme defs-table__theme--unset"
+                @click="openThemeRule(statusRow(row))"
+                >{{ t('workflow.themeRuleUnset') }}</span
+              >
+            </template>
+          </el-table-column>
           <el-table-column :label="t('workflow.instanceCount')" width="114" align="center">
             <template #default="{ row }">{{ statusRow(row).instanceCount ?? '—' }}</template>
           </el-table-column>
@@ -805,6 +823,22 @@ onMounted(loadList)
 }
 .defs-table :deep(.defs-table__version) {
   color: #17213a;
+}
+/* 主题规则列内联入口：已设置展示规则（超长省略+悬浮全称），未设置警示色引导点击 */
+.defs-table :deep(.defs-table__theme) {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  cursor: pointer;
+}
+.defs-table :deep(.defs-table__theme:hover) {
+  color: var(--el-color-primary);
+}
+.defs-table :deep(.defs-table__theme--unset) {
+  color: var(--el-color-warning);
 }
 
 /* 状态徽标：fixture 胶囊样式原样移植 */

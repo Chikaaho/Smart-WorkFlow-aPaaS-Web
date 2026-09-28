@@ -17,49 +17,8 @@ import { queryTodoTasks, acceptTaskAction, pollCommandStatus } from '@/modules/w
 import { ApiError } from '@/foundation/request'
 import type { TodoTask } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
-import { queryCatalogItems, type CatalogItem } from '@/modules/workflow/api/oa'
 
 const router = useRouter()
-
-// ─── 定位分类（V012-BUG-010 参考蓝凌「定位分类」） ───
-const catalogItems = ref<CatalogItem[]>([])
-const activeCategory = ref<number | 'all'>('all')
-
-const defKeyCategory = computed(() => {
-  const map = new Map<string, number | null>()
-  for (const item of catalogItems.value) {
-    map.set(item.itemKey, item.categoryId)
-  }
-  return map
-})
-
-const categoryOptions = computed(() => {
-  const byId = new Map<number, string>()
-  for (const item of catalogItems.value) {
-    if (item.categoryId != null && !byId.has(item.categoryId)) {
-      byId.set(
-        item.categoryId,
-        catalogItems.value.find((c) => c.categoryId === item.categoryId)?.name ??
-          t('workflow.uncategorized'),
-      )
-    }
-  }
-  return Array.from(byId, ([id, name]) => ({ id, name }))
-})
-
-const filteredList = computed(() => {
-  if (activeCategory.value === 'all') return list.value
-  return list.value.filter((row) => {
-    const cat = row.processDefKey ? defKeyCategory.value.get(row.processDefKey) : undefined
-    if (activeCategory.value === 0)
-      return cat == null || !defKeyCategory.value.has(row.processDefKey ?? '')
-    return cat === activeCategory.value
-  })
-})
-
-function selectCategory(id: number | 'all') {
-  activeCategory.value = id
-}
 
 // ─── 列表状态 ───
 
@@ -231,36 +190,10 @@ function handleRowClick(row: TodoTask) {
   router.push({ name: 'TaskDetail', params: { taskId: row.taskId } })
 }
 
-void queryCatalogItems({ pageNum: 1, pageSize: 200 }).then((page) => {
-  catalogItems.value = page.list
-})
-
 onMounted(loadList)
 </script>
 
 <template>
-  <!-- V012-BUG-010：定位分类（参考蓝凌）——按目录分类过滤本人待办 -->
-  <div class="todo-locator">
-    <span class="todo-locator__label">{{ t('workflow.locateCategory') }}</span>
-    <button
-      type="button"
-      class="todo-locator__chip"
-      :class="{ 'is-active': activeCategory === 'all' }"
-      @click="selectCategory('all')"
-    >
-      {{ t('catalog.allProcesses') }}
-    </button>
-    <button
-      v-for="opt in categoryOptions"
-      :key="opt.id"
-      type="button"
-      class="todo-locator__chip"
-      :class="{ 'is-active': activeCategory === opt.id }"
-      @click="selectCategory(opt.id)"
-    >
-      {{ opt.name }}
-    </button>
-  </div>
   <StandardListTemplate
     :title="t('workflow.myTodoTitle')"
     :total="total"
@@ -298,7 +231,7 @@ onMounted(loadList)
     <!-- 表格 -->
     <el-table
       v-loading="loading"
-      :data="filteredList"
+      :data="list"
       stripe
       highlight-current-row
       style="width: 100%"

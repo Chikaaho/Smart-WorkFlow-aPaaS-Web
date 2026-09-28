@@ -246,7 +246,7 @@ describe('TodoList.vue', () => {
     const wrapper = mount(TodoList, { global: { stubs } })
     await nextTick()
 
-    // 查找「已办任务」按钮并点击（V012-BUG-010 后首个按钮为定位分类 chip）
+    // 查找「已办任务」按钮并点击
     const button = wrapper.findAll('button').find((b) => b.text().includes('已办任务'))
     expect(button).toBeDefined()
     await button!.trigger('click')

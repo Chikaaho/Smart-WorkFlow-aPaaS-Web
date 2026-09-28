@@ -91,6 +91,8 @@ export interface ProcessDef {
   updatedBy?: string | null
   /** Optional display version supplied by list adapters that expose a revision label. */
   versionLabel?: string | null
+  /** 主题生成规则（V012-BUG-010；列表行随实体下发，历史响应可能缺省） */
+  themeRule?: string | null
   p53Stats?: { total: number; published: number; draft: number; disabled: number }
 }
 

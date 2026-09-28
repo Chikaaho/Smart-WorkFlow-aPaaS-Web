@@ -1841,7 +1841,6 @@ export default {
     taskDetail: '任务详情',
     taskGraphTitle: '完整流程图',
     processedTasks: '已办任务',
-    locateCategory: '定位分类',
     instanceStatus: '实例状态',
     assignee: '办理人',
     statusDiscarded: '已废弃',
@@ -1991,6 +1990,8 @@ export default {
     receiveTime: '接收时间',
     pendingReview: '待审',
     themeRuleAction: '主题规则',
+    themeRuleColumn: '主题规则',
+    themeRuleUnset: '未设置',
     themeRuleTitle: '主题生成规则',
     themeRulePlaceholder: '请输入主题生成规则',
     themeRuleHint:

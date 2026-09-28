@@ -1921,7 +1921,6 @@ export default {
     taskDetail: 'Task details',
     taskGraphTitle: 'Full process graph',
     processedTasks: 'Processed tasks',
-    locateCategory: 'Locate by category',
     instanceStatus: 'Instance status',
     assignee: 'Assignee',
     statusDiscarded: 'Discarded',
@@ -2079,6 +2078,8 @@ export default {
     receiveTime: 'Received at',
     pendingReview: 'Pending review',
     themeRuleAction: 'Theme rule',
+    themeRuleColumn: 'Theme rule',
+    themeRuleUnset: 'Not set',
     themeRuleTitle: 'Theme generation rule',
     themeRulePlaceholder: 'Enter the theme generation rule',
     themeRuleHint:

@@ -206,8 +206,8 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
 .app-main-nav {
   display: flex;
   align-items: stretch;
-  /* V012-BUG-017：顶级 tab 移至最右（贴个人区左侧） */
-  justify-content: flex-end;
+  /* V012-BUG-020：前台顶栏 tab 左对齐（紧跟 Logo 区域） */
+  justify-content: flex-start;
   height: 100%;
   min-width: 0;
   /* 窄屏顶栏放不下全部主导航时横向滑动，保证每一项可点（方向 §4.5：不留不可操作元素） */
