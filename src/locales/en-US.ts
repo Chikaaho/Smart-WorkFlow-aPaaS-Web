@@ -2349,7 +2349,6 @@ export default {
     handle: 'Handle',
     batchProcessingNote:
       'Batch handling runs item by item synchronously, so no items are in progress.',
-    categoryFallback: 'Category {id}',
     categoryDialogTitle: "categoryEditing ? 'Edit category' : 'New category'",
     deleteCategoryConfirm:
       'Delete category "{name}"? Any items assigned to it must be unassigned first.',

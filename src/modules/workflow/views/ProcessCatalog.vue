@@ -72,10 +72,24 @@ const orderedItems = computed(() => {
   return [...pinned, ...rest]
 })
 
-function categoryLabel(id: number | null): string {
-  if (id === null) return t('workflow.uncategorized')
-  return categories.value.find((c) => c.id === id)?.name ?? t('workflow.categoryFallback', { id })
-}
+/** V012-BUG-009 列表化：按分类分组（树序在前、未分类殿后），组内保持收藏置顶序。 */
+const groupedItems = computed(() => {
+  const byId = new Map<number | null, CatalogItem[]>()
+  for (const item of orderedItems.value) {
+    const key = item.categoryId
+    if (!byId.has(key)) byId.set(key, [])
+    byId.get(key)!.push(item)
+  }
+  const groups: Array<{ id: number | null; name: string; items: CatalogItem[] }> = []
+  for (const category of categories.value) {
+    const list = byId.get(category.id)
+    if (list) groups.push({ id: category.id, name: category.name, items: list })
+  }
+  const uncategorized = byId.get(null)
+  if (uncategorized)
+    groups.push({ id: null, name: t('workflow.uncategorized'), items: uncategorized })
+  return groups
+})
 
 function itemCountOf(categoryId: number | ''): number {
   if (categoryId === '') return total.value
@@ -106,14 +120,6 @@ function catalogIconTone(item: CatalogItem): 'primary' | 'info' | 'success' | 'p
   if (categoryId === 104) return 'success'
   if (categoryId === 105) return 'purple'
   return 'primary'
-}
-
-/** 卡片 meta 行：分类 · 版本（可选）· 可发起。 */
-function itemMeta(item: CatalogItem): string {
-  const parts = [categoryLabel(item.categoryId)]
-  if (item.version) parts.push(item.version)
-  parts.push(t('catalog.canLaunch'))
-  return parts.join(' · ')
 }
 
 async function loadCatalog() {
@@ -369,6 +375,12 @@ onMounted(() => {
               @click="openByKey(entry)"
             >
               <span class="catalog-mini__rank">{{ index + 1 }}</span>
+              <span class="catalog-mini__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
+                  <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
+                </svg>
+              </span>
               <span class="catalog-mini__name">{{ entry.name }}</span>
             </button>
           </div>
@@ -385,6 +397,12 @@ onMounted(() => {
               class="catalog-mini"
               @click="openByKey(entry)"
             >
+              <span class="catalog-mini__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
+                  <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
+                </svg>
+              </span>
               <span class="catalog-mini__name">{{ entry.name }}</span>
             </button>
           </div>
@@ -392,46 +410,48 @@ onMounted(() => {
 
         <h3 class="catalog-page__result-title">{{ resultTitle }}</h3>
 
-        <div v-loading="loading" class="catalog-page__grid">
+        <!-- V012-BUG-009 复开：流程用列表不用卡片——分类分组带 + 多列「图标+名称」条目（参考蓝凌） -->
+        <div v-loading="loading" class="catalog-list">
           <el-empty v-if="isEmpty" :description="t('workflow.noCatalogItems')" />
-          <div v-for="item in orderedItems" :key="item.itemKey" class="catalog-card">
-            <div class="catalog-card__head">
-              <span
-                class="catalog-card__icon"
-                :class="`catalog-card__icon--tone-${catalogIconTone(item)}`"
-                aria-hidden="true"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
-                  <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
-                </svg>
-              </span>
-              <span class="catalog-card__name">{{ item.name }}</span>
-              <!-- V012-BUG-009：收藏星标（收藏置顶） -->
-              <button
-                type="button"
-                class="catalog-card__star"
-                :class="{ 'is-active': favoriteKeys.has(item.itemKey) }"
-                :aria-label="
-                  favoriteKeys.has(item.itemKey) ? t('catalog.unfavorite') : t('catalog.favorite')
-                "
-                :disabled="toggling === item.itemKey"
-                @click="toggleFavorite(item)"
-              >
-                ★
-              </button>
+          <section v-for="group in groupedItems" :key="String(group.id)" class="catalog-group">
+            <div class="catalog-group__head">
+              <span class="catalog-group__name">{{ group.name }}</span>
+              <span class="catalog-group__count">{{ group.items.length }}</span>
             </div>
-            <p class="catalog-card__desc">{{ item.description ?? '' }}</p>
-            <span class="catalog-card__meta">{{ itemMeta(item) }}</span>
-            <div class="catalog-card__actions">
-              <span v-if="favoriteKeys.has(item.itemKey)" class="catalog-card__fav-tag">{{
-                t('catalog.favoritedTag')
-              }}</span>
-              <button type="button" class="catalog-card__launch" @click="openItem(item)">
-                {{ t('catalog.launch') }}
-              </button>
+            <div class="catalog-group__grid">
+              <div
+                v-for="item in group.items"
+                :key="item.itemKey"
+                class="catalog-item"
+                :title="item.description ?? ''"
+                @click="openItem(item)"
+              >
+                <span
+                  class="catalog-item__icon"
+                  :class="`catalog-item__icon--tone-${catalogIconTone(item)}`"
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
+                    <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
+                  </svg>
+                </span>
+                <span class="catalog-item__name">{{ item.name }}</span>
+                <button
+                  type="button"
+                  class="catalog-item__star"
+                  :class="{ 'is-active': favoriteKeys.has(item.itemKey) }"
+                  :aria-label="
+                    favoriteKeys.has(item.itemKey) ? t('catalog.unfavorite') : t('catalog.favorite')
+                  "
+                  :disabled="toggling === item.itemKey"
+                  @click.stop="toggleFavorite(item)"
+                >
+                  ★
+                </button>
+              </div>
             </div>
-          </div>
+          </section>
         </div>
 
         <p class="catalog-page__note">{{ t('catalog.permissionNote') }}</p>
@@ -658,76 +678,95 @@ onMounted(() => {
   font-weight: 600;
   color: var(--sw-text-primary);
 }
-.catalog-page__grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px 24px;
+/* V012-BUG-009 复开：列表化（不用卡片）——分类分组带 + 多列条目，参考蓝凌流程发起 */
+.catalog-list {
   min-height: 120px;
 }
-.catalog-card {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  height: 232px;
-  padding: 21px 18px 21px 21px;
-  background: var(--sw-surface-card);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-  box-shadow: var(--sw-shadow-card);
-  transition: border-color 0.15s ease;
+.catalog-group {
+  margin-bottom: 14px;
 }
-.catalog-card:hover {
-  border-color: var(--sw-color-primary);
-}
-.catalog-card__icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--sw-radius-base);
-  background: var(--sw-color-primary-soft);
-  color: var(--sw-color-primary);
-}
-.catalog-card__icon--tone-info {
-  background: var(--sw-info-bg);
-  color: #20b8cd;
-}
-.catalog-card__icon--tone-success {
-  background: var(--sw-info-bg);
-  color: #18a67a;
-}
-.catalog-card__icon--tone-purple {
-  background: var(--sw-color-primary-soft);
-  color: #8b5cf6;
-}
-.catalog-card__head {
+.catalog-group__head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 9px;
+  padding: 9px 14px;
+  border-left: 3px solid var(--sw-color-primary);
+  border-radius: 4px;
+  background: #eef2fb;
 }
-.catalog-card__icon svg {
-  width: 18px;
-  height: 18px;
+.catalog-group__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
 }
-.catalog-card__name {
+.catalog-group__count {
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+}
+.catalog-group__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px 24px;
+  padding: 10px 6px 2px;
+}
+.catalog-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 4px 8px;
+  border-radius: var(--sw-radius-base);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.catalog-item:hover {
+  background: var(--sw-color-primary-soft);
+}
+.catalog-item__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
+}
+.catalog-item__icon svg {
+  width: 15px;
+  height: 15px;
+}
+.catalog-item__icon--tone-info {
+  background: var(--sw-info-bg);
+  color: #20b8cd;
+}
+.catalog-item__icon--tone-success {
+  background: var(--sw-info-bg);
+  color: #18a67a;
+}
+.catalog-item__icon--tone-purple {
+  background: var(--sw-color-primary-soft);
+  color: #8b5cf6;
+}
+.catalog-item__name {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 17px;
-  line-height: 25px;
-  font-weight: 600;
+  font-size: 14px;
   color: var(--sw-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.catalog-card__star {
+.catalog-item:hover .catalog-item__name {
+  color: var(--sw-color-primary);
+}
+.catalog-item__star {
   flex: 0 0 auto;
   border: none;
   background: transparent;
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1;
   color: var(--sw-border-base);
   cursor: pointer;
@@ -735,53 +774,35 @@ onMounted(() => {
     color 0.15s ease,
     transform 0.15s ease;
 }
-.catalog-card__star:hover {
+.catalog-item__star:hover {
   transform: scale(1.15);
 }
-.catalog-card__star.is-active {
+.catalog-item__star.is-active {
   color: #f7ba2a;
 }
-.catalog-card__fav-tag {
-  font-size: 12px;
-  color: #f7ba2a;
+@media (max-width: 1439px) {
+  .catalog-group__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
-.catalog-card__desc {
-  margin: 26px 0 0;
-  min-height: 38px;
-  font-size: 13px;
-  line-height: 19px;
-  color: var(--sw-text-regular);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+@media (max-width: 1199px) {
+  .catalog-group__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
-.catalog-card__meta {
-  margin-top: 19px;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--sw-text-secondary);
-}
-.catalog-card__actions {
-  display: flex;
+.catalog-mini__icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
   align-items: center;
-  justify-content: space-between;
-  margin-top: auto;
+  justify-content: center;
+  border-radius: 4px;
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
 }
-.catalog-card__launch {
-  flex: 0 0 auto;
-  width: 104px;
-  height: 34px;
-  border: none;
-  border-radius: var(--sw-radius-base);
-  background: var(--sw-color-primary);
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.catalog-card__launch:hover {
-  background: var(--sw-color-primary-dark);
+.catalog-mini__icon svg {
+  width: 12px;
+  height: 12px;
 }
 .catalog-page__note {
   margin: 16px 0 0;

@@ -2251,7 +2251,6 @@ export default {
     copyCreateDefinition: '复制创建定义',
     handle: '办理',
     batchProcessingNote: '批量办理为同步逐项执行，本次没有处理中的事项。',
-    categoryFallback: '分类 {id}',
     categoryDialogTitle: "categoryEditing ? '编辑分类' : '新建分类'",
     deleteCategoryConfirm: '确认删除分类「{name}」？已有事项归属时须先解除归属。',
     interventionExecuted: '{action}已执行',
