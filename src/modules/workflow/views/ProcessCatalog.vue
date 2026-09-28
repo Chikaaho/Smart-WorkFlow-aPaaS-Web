@@ -504,9 +504,8 @@ onMounted(() => {
 <style scoped>
 /* P53 设计节点21/22-26 基础上 V012-BUG-009 改双栏：左分类树 240 + 右内容。 */
 .catalog-page {
-  max-width: 1152px;
+  /* V012-BUG-009 复开：内容铺满内容区，消除宽屏左右大留白 */
   padding: 28px 32px 32px;
-  margin: 0 auto;
 }
 .catalog-layout {
   display: grid;
