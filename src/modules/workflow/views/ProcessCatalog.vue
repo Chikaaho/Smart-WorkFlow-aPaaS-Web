@@ -184,7 +184,8 @@ async function toggleFavorite(item: CatalogItem) {
 
 /** 选择事项即进入关联表单填报（服务端解析唯一合法绑定）。 */
 function openItem(item: CatalogItem) {
-  void router.push(`/form/form-render/${item.formKey}`)
+  // V012-BUG-012：携带 process 参数以在发起页下方渲染真实流程图
+  void router.push({ path: `/form/form-render/${item.formKey}`, query: { process: item.itemKey } })
 }
 
 /** 常用/最近使用条目点击：经目录详情解析 formKey 后进入。 */

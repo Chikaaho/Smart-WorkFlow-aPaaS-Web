@@ -739,34 +739,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* V012-BUG-012：发起页独占整页（覆盖布局层），左上返回，内容随内容缩放 */
-.form-render-page {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  overflow-y: auto;
-  background: #ffffff;
-  max-width: none;
-  padding: 12px 14px;
-}
-.form-render-page__graph {
-  margin-top: 2px;
-  padding: 2px;
-  background: var(--sw-surface-card);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-}
-/* 不可输入字段灰色区分（只读/禁用控件统一置灰） */
-.form-render-page :deep(input[readonly]),
-.form-render-page :deep(textarea[readonly]),
-.form-render-page :deep(.el-input.is-disabled .el-input__inner),
-.form-render-page :deep(.el-textarea.is-disabled .el-textarea__inner),
-.form-render-page :deep(.el-select.is-disabled .el-input__inner) {
-  background: #f3f4f8;
-  color: #909399;
-  cursor: not-allowed;
-}
-
 /* P53 节点 27：左表单右说明双栏；窄屏单列 */
 .form-render-page__layout {
   display: grid;
@@ -1106,5 +1078,32 @@ onMounted(() => {
     position: relative;
     left: 12px;
   }
+}
+/* ── V012-BUG-012 接管覆盖：置于文件尾以覆盖 --design 与 media 规则 ── */
+.form-render-page {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-y: auto;
+  max-width: none !important;
+  width: 100%;
+  padding: 12px 14px;
+  background: #ffffff;
+}
+.form-render-page__graph {
+  margin-top: 2px;
+  padding: 2px;
+  background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+}
+.form-render-page :deep(input[readonly]),
+.form-render-page :deep(textarea[readonly]),
+.form-render-page :deep(.el-input.is-disabled .el-input__inner),
+.form-render-page :deep(.el-textarea.is-disabled .el-textarea__inner),
+.form-render-page :deep(.el-select.is-disabled .el-input__inner) {
+  background: #f3f4f8;
+  color: #909399;
+  cursor: not-allowed;
 }
 </style>
