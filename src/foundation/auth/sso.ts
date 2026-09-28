@@ -14,10 +14,6 @@ interface SsoAuthorizeDTO {
   state: string
 }
 
-interface SsoCallbackDTO {
-  redirect: string
-}
-
 export interface SsoBindingItem {
   provider: string
   externalDigestPrefix: string
@@ -61,22 +57,6 @@ export async function startSsoAuthorize(
     method: 'GET',
     url: `/auth/sso/${provider}/authorize`,
     params: redirect ? { redirect } : undefined,
-  })
-}
-
-/**
- * 服务端回调换票（免认证）：后端校验一次性 state 并定位绑定，
- * 返回受控同源回跳地址（含一次性 ticket，不含 code/state）。
- */
-export async function completeSsoCallback(
-  provider: SsoProvider,
-  code: string,
-  state: string,
-): Promise<SsoCallbackDTO> {
-  return request<SsoCallbackDTO>({
-    method: 'GET',
-    url: `/auth/sso/${provider}/callback`,
-    params: { code, state },
   })
 }
 

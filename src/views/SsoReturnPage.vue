@@ -23,7 +23,9 @@ function safeRedirect(raw: unknown): string {
 onMounted(async () => {
   const ticket = typeof route.query.sso_ticket === 'string' ? route.query.sso_ticket : ''
   if (!ticket) {
-    errorMessage.value = t('view.ssoTicketMissing')
+    // 服务端回调拒绝会 302 到本页并携带脱敏 sso_error；提示语保持人性化，原因明细在服务端审计。
+    const ssoError = typeof route.query.sso_error === 'string' ? route.query.sso_error : ''
+    errorMessage.value = ssoError ? t('view.ssoLoginFailed') : t('view.ssoTicketMissing')
     exchanging.value = false
     return
   }

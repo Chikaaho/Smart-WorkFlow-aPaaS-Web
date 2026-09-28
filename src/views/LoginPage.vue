@@ -8,6 +8,9 @@ import type { SsoProvider } from '@/foundation/auth/sso'
 import { useI18n } from '@/locales'
 import { Lock, Share, Document, House, MagicStick, User, View } from '@element-plus/icons-vue'
 import LocaleSwitch from '@/components/LocaleSwitch.vue'
+
+// SSO 徽标字：label 经 i18n 解析，徽标按 provider key 固定映射（WECOM=企业微信）
+const SSO_MARKS: Record<SsoProvider, string> = { WECOM: '企', FEISHU: '飞', DINGTALK: '钉' }
 import logoUrl from '@/assets/brand/logo-mark.png'
 
 const { t } = useI18n()
@@ -235,9 +238,9 @@ function onSsoProviderSelect(key: SsoProvider): void {
               @click="onSsoProviderSelect(provider.key)"
             >
               <span class="login-page__sso-provider-mark" aria-hidden="true">{{
-                ['微', '飞', '钉'][index]
+                SSO_MARKS[provider.key]
               }}</span>
-              {{ ['微信', '飞书', '钉钉'][index] }}
+              {{ provider.label }}
             </button>
           </div>
           <p v-if="ssoError" class="login-page__error" role="alert">{{ ssoError }}</p>
