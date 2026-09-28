@@ -27,11 +27,6 @@ const area = computed(() => resolveArea(route.path))
  * 三个直达项（工作台固定项另渲染）。仍只读菜单单一数据源——从当前区域树中
  * 按路径平铺挑出目标页面节点，不二次拉取、不另设菜单源。
  */
-const WORKSPACE_SLIM_PATHS: ReadonlySet<string> = new Set([
-  '/workflow/todo',
-  '/workflow/processed',
-  '/workflow/my-drafts',
-])
 const workspaceSlim = computed(() => area.value === 'portal' && route.path.startsWith('/workspace'))
 
 /**
@@ -46,18 +41,6 @@ const catalogSlim = computed(() => area.value === 'portal' && route.path.startsW
  */
 const inboxSlim = computed(() => area.value === 'portal' && route.path.startsWith('/notify'))
 
-function flattenByPaths(nodes: MenuNode[], paths: ReadonlySet<string>): MenuNode[] {
-  const picked: MenuNode[] = []
-  const walk = (list: MenuNode[]): void => {
-    for (const node of list) {
-      if (node.menuType === MenuType.MENU && paths.has(toFullPath(node))) picked.push(node)
-      if (node.children?.length) walk(node.children as MenuNode[])
-    }
-  }
-  walk(nodes)
-  return picked
-}
-
 /**
  * 后台侧栏按**顶部导航分区**收敛：只渲染当前分区（与顶栏同一份菜单数据）。
  * 顶栏进入「系统管理」时，侧栏不应再出现「流程管理」等其它分区的页面。
@@ -68,8 +51,8 @@ const items = computed(() => {
   const current = resolveArea(route.path)
   const scoped = visibleMenuForArea(localizedMenu.value, current)
   if (current !== 'admin') {
-    // 工作台页轻量导航（V012-BUG-004）
-    if (workspaceSlim.value) return flattenByPaths(scoped, WORKSPACE_SLIM_PATHS)
+    // 工作台页轻量导航（V012-BUG-004/023）：固定本地直达项在模板渲染，树项不出现
+    if (workspaceSlim.value) return []
     // 收件箱上下文不渲染菜单树（分类项在模板固定渲染，V012-BUG-008）
     if (inboxSlim.value) return []
     // 流程中心上下文仅流程管理分组（V012-BUG-006）
@@ -162,6 +145,18 @@ function resolveAdminActive(path: string): string {
       <img class="app-sidebar__design-icon" :src="iconWorkspace" alt="" aria-hidden="true" />
       <template #title>{{ $t('common.workspace') }}</template>
     </el-menu-item>
+    <!-- 工作台本地列表直达（V012-BUG-023）：待办/已办/草稿留在工作台分区，不再跳流程中心 -->
+    <template v-if="workspaceSlim">
+      <el-menu-item index="/workspace/todo">
+        <template #title>{{ $t('workflow.todoTasks') }}</template>
+      </el-menu-item>
+      <el-menu-item index="/workspace/processed">
+        <template #title>{{ $t('workflow.processedTasks') }}</template>
+      </el-menu-item>
+      <el-menu-item index="/workspace/my-drafts">
+        <template #title>{{ $t('workflow.myDrafts') }}</template>
+      </el-menu-item>
+    </template>
     <!-- 收件箱分类直达（V012-BUG-008）：全部/已读/未读，query 驱动列表过滤 -->
     <template v-if="inboxSlim">
       <el-menu-item index="/notify/inbox">

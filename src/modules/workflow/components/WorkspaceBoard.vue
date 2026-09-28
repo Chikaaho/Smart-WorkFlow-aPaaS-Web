@@ -180,10 +180,46 @@ const panelRows = computed(() => {
   }
 })
 
-/** 面板行两行式元信息（设计01）：来源 · 人 · 时间（不伪造字段，仅组合真实列） */
+/** 面板行标题（V012-BUG-021）：优先流程主题，缺省回退流程名称/任务名/标题，末位回退表单标识。 */
+function rowTitle(row: Record<string, unknown>): string {
+  for (const key of ['theme', 'processName', 'taskName', 'title', 'name']) {
+    const value = row[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return typeof row.formKey === 'string' && row.formKey ? row.formKey : '-'
+}
+
+/** 状态/动作翻译（V012-BUG-022）：已知枚举译为人话，未知值原样展示。 */
+function statusText(value: unknown): string {
+  const key = String(value ?? '')
+  const map: Record<string, () => string> = {
+    RUNNING: () => t('common.statusInProgress'),
+    APPROVED: () => t('common.statusApproved'),
+    REJECTED: () => t('common.statusRejected'),
+  }
+  return map[key]?.() ?? key
+}
+
+function actionText(value: unknown): string {
+  const key = String(value ?? '')
+  const map: Record<string, () => string> = {
+    APPROVE: () => t('common.resultAgreed'),
+    REJECT: () => t('common.statusRejected'),
+    DISAPPROVE: () => t('common.statusRejected'),
+  }
+  return map[key]?.() ?? key
+}
+
+/** 面板行两行式元信息（V012-BUG-021）：流程名称 · 发起人 · 发起时间；真实字段缺失时回退既有节点/动作/到期口径。 */
 function rowMeta(row: Record<string, unknown>): string {
+  const parts = [
+    typeof row.processName === 'string' ? row.processName.trim() : '',
+    typeof row.initiatorName === 'string' ? row.initiatorName.trim() : '',
+    row.createTime ? activityTime(row.createTime) : '',
+  ].filter(Boolean)
+  if (parts.length > 0) return parts.join(' · ')
   const base = String(row.action ?? '')
-    ? [String(row.action)]
+    ? [actionText(row.action)]
     : [String(row.nodeName ?? row.currentNode ?? ''), String(row.assigneeName ?? '')].filter(
         Boolean,
       )
@@ -233,8 +269,16 @@ const activityRowsAll = computed(() => {
   if (activityVisible) {
     for (const item of processedList.value) {
       rows.push({
-        title: String(item.taskName ?? '-'),
-        meta: String(item.action ?? t('workflow.myProcessed')),
+        title: String(
+          (typeof item.theme === 'string' && item.theme.trim()) ||
+            item.taskName ||
+            item.processName ||
+            '-',
+        ),
+        meta:
+          [actionText(item.action ?? ''), statusText(item.instanceStatus)]
+            .filter((part) => part && part !== 'null')
+            .join(' · ') || String(item.action ?? t('workflow.myProcessed')),
         time: activityTime(item.endTime ?? item.createTime),
         at: timeOf(item.endTime ?? item.createTime),
         src: 'approval',
@@ -244,8 +288,13 @@ const activityRowsAll = computed(() => {
   if (activityVisible) {
     for (const item of initiatedList.value) {
       rows.push({
-        title: String(item.processName ?? item.processDefKey ?? '-'),
-        meta: String(item.currentNode ?? item.status ?? ''),
+        title: String(
+          (typeof item.theme === 'string' && item.theme.trim()) ||
+            item.processName ||
+            item.processDefKey ||
+            '-',
+        ),
+        meta: [String(item.currentNode ?? ''), statusText(item.status)].filter(Boolean).join(' · '),
         time: activityTime(item.createTime),
         at: timeOf(item.createTime),
         src: 'initiated',
@@ -255,8 +304,8 @@ const activityRowsAll = computed(() => {
   if (activityVisible) {
     for (const item of ccList.value) {
       rows.push({
-        title: String(item.taskName ?? item.formKey ?? '-'),
-        meta: String(item.action ?? t('workflow.cc')),
+        title: String(item.taskName ?? item.nodeKey ?? item.formKey ?? '-'),
+        meta: [t('workflow.cc'), statusText(item.instanceStatus)].filter(Boolean).join(' · '),
         time: activityTime(item.createTime),
         at: timeOf(item.createTime),
         src: 'cc',
@@ -1054,7 +1103,7 @@ onBeforeUnmount(() => {
             >
               <div class="wsd-panel__head">
                 <h3 class="wsd-panel__title">{{ t('workflow.myTodoTitle') }}</h3>
-                <button class="wsd-btn" type="button" @click="router.push('/workflow/todo')">
+                <button class="wsd-btn" type="button" @click="router.push('/workspace/todo')">
                   {{ t('workspace.allTodos') }} →
                 </button>
               </div>
@@ -1078,7 +1127,7 @@ onBeforeUnmount(() => {
               <ul v-else class="wsd-taskrows">
                 <li v-for="(row, index) in panelRows" :key="index" class="wsd-task">
                   <button class="wsd-task__title" type="button" @click="openPanelTask(row)">
-                    {{ row.name ?? row.taskName ?? row.title ?? (row.formKey as string) ?? '-' }}
+                    {{ rowTitle(row) }}
                   </button>
                   <span class="wsd-task__meta">{{ rowMeta(row) }}</span>
                 </li>

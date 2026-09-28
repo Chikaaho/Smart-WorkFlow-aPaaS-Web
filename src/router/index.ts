@@ -37,6 +37,37 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // V012-BUG-023：工作台本地列表页（暂与流程中心同组件，后续做展示内容区分）。
+        path: 'workspace/todo',
+        name: 'workspace-todo',
+        component: () => import('@/modules/workflow/views/TodoList.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.todoTasks')
+          },
+        },
+      },
+      {
+        path: 'workspace/processed',
+        name: 'workspace-processed',
+        component: () => import('@/modules/workflow/views/ProcessedList.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.processedTasks')
+          },
+        },
+      },
+      {
+        path: 'workspace/my-drafts',
+        name: 'workspace-my-drafts',
+        component: () => import('@/modules/workflow/views/MyDrafts.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.myDrafts')
+          },
+        },
+      },
+      {
         // P53：企业门户（受限聚合页，节点 05）——只聚合真实可达能力，登录即可达。
         path: 'portal',
         name: 'portal-home',

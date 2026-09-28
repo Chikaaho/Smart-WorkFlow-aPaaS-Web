@@ -73,6 +73,10 @@ export interface ProcessedTask {
   businessKey: string
   createTime: string
   endTime: string | null // 极端历史数据可能为 null
+  /** 实例主题（V012-BUG-021；历史实例/旧响应缺省） */
+  theme?: string | null
+  /** 发起人展示名（V012-BUG-021；旧响应缺省） */
+  initiatorName?: string | null
 }
 
 // ─── 流程定义列表项 DTO（对齐后端 BpmProcessDef，不含 graph_json） ───
@@ -122,6 +126,8 @@ export interface ProcessInstance {
   createTime: string // 发起时间（LocalDateTime → ISO-8601 string）
   /** 当前处理节点（P53 展示补充；后端未下发时为 undefined，页面显示「—」） */
   currentNode?: string
+  /** 实例主题（V012-BUG-022；发起时按主题规则生成，历史实例为空） */
+  theme?: string | null
 }
 
 // ─── 活动节点 DTO（对齐后端 BpmActivityDTO） ───
@@ -223,6 +229,12 @@ export interface MyProcessedItem {
   handleTime: string
   instanceStatus: ProcessInstance['status'] | null
   source: 'ACTION' | 'HISTORY_COMPAT'
+  /** 实例主题（V012-BUG-021；旧响应缺省） */
+  theme?: string | null
+  /** 实例发起时间（V012-BUG-021；区别于本人办理时间 handleTime；旧响应缺省） */
+  createTime?: string | null
+  /** 发起人展示名（V012-BUG-021；旧响应缺省） */
+  initiatorName?: string | null
 }
 
 // ─── 流程实例详情 DTO（对齐后端 InstanceDetailDTO） ───

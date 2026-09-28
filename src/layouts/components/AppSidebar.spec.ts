@@ -270,13 +270,13 @@ describe('layouts/AppSidebar', () => {
     const wrapper = mountSidebar()
 
     const indexes = wrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))
-    // 工作台固定项 + 精简三直达项；流程管理组内其它页面与收件箱不再出现
+    // 工作台固定项 + 本地三直达项（V012-BUG-023：/workspace/* 不再跳流程中心）
     expect(indexes).toContain('/workspace')
     expect(indexes).toEqual([
       '/workspace',
-      '/workflow/todo',
-      '/workflow/processed',
-      '/workflow/my-drafts',
+      '/workspace/todo',
+      '/workspace/processed',
+      '/workspace/my-drafts',
     ])
     expect(wrapper.findAll('.stub-sub')).toHaveLength(0)
   })
