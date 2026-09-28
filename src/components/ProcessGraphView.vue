@@ -372,6 +372,9 @@ defineExpose({ fitViewport, zoom, locateCurrent })
   overflow: hidden;
 }
 .pg-svg {
+  /* 定位后 z-index 生效：画布网格（消费方 ::before z-index:0）必须垫在图形下方，不得盖住节点（V012-BUG-013） */
+  position: relative;
+  z-index: 1;
   display: block;
   cursor: grab;
 }

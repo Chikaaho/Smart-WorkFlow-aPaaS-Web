@@ -1702,7 +1702,11 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
 
 <style scoped>
 .task-detail {
-  max-width: 1216px;
+  /* V012-BUG-013：内容铺满内容区（去 1216 上限），页面纵向撑满视口让记录卡贴底不留白 */
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: calc(100vh - var(--sw-layout-header-height));
   padding: 6px 32px 24px;
 }
 .detail-header {
@@ -1755,8 +1759,9 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
 }
 .task-main {
   display: grid;
-  grid-template-columns: 784px minmax(0, 1fr);
-  gap: 0;
+  /* V012-BUG-013：左表单区自适应铺满、右状态栏固定宽，两区间留出间距（原 gap:0 两卡贴死） */
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 16px;
   align-items: start;
   margin-bottom: 15px;
 }
@@ -1802,31 +1807,36 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
   font-weight: 400;
   color: var(--sw-text-secondary);
 }
-/* 数据表单行式展示（横排 label/value） */
+/* 数据表单与发起页同款（V012-BUG-013）：字段名在上，值落入带边框灰底只读盒 */
 .data-rows {
-  margin-top: -26px;
+  margin-top: -10px;
   display: flex;
   flex-direction: column;
 }
 .data-row {
   box-sizing: border-box;
-  display: grid;
-  grid-template-columns: 128px minmax(0, 1fr);
-  align-items: center;
-  min-height: 48px;
-  margin-bottom: 8px;
-  padding: 6px 12px 6px 12px;
-  border: 1px solid #eef1f7;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 0;
   font-size: 13px;
 }
 .data-row:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
 }
 .data-row__label {
   color: var(--sw-text-secondary);
 }
 .data-row__value {
-  color: var(--sw-text-primary);
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 4px;
+  background: #f3f4f8;
+  color: #17213a;
+  line-height: 20px;
   word-break: break-all;
   white-space: pre-wrap;
 }
@@ -2467,9 +2477,10 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
   background: #f0f3f9;
   color: #8a96ad;
 }
-/* ─── 底部记录卡页签几何（48px 页签 / 150px 页签宽） ─── */
+/* ─── 底部记录卡页签几何（48px 页签 / 150px 页签宽）；flex 撑满页面剩余高度 ─── */
 .detail-card--tabs {
   box-sizing: border-box;
+  flex: 1 1 auto;
   min-height: 332px;
 }
 .detail-card--tabs :deep(.el-card__body) {

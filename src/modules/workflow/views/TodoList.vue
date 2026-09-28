@@ -255,7 +255,7 @@ onMounted(loadList)
         <template #default="{ row }">{{ row.initiatorName || '—' }}</template>
       </el-table-column>
       <el-table-column prop="createTime" :label="t('workflow.receiveTime')" min-width="170" />
-      <ListActionsColumn :actions="rowActions" :width="120" />
+      <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
   </StandardListTemplate>
 </template>

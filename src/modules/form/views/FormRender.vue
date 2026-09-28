@@ -620,7 +620,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="form-render-page form-render-page--design">
+  <div class="form-render-page">
     <el-skeleton v-if="loading && !schema" :rows="4" animated />
     <template v-else>
       <!-- 提示条 -->
@@ -741,10 +741,8 @@ onMounted(() => {
 <style scoped>
 /* P53 节点 27：左表单右说明双栏；窄屏单列 */
 .form-render-page__layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: var(--sw-space-20);
-  align-items: start;
+  /* V012-BUG-012：单栏布局（右侧说明栏已删，消除最右空白） */
+  display: block;
 }
 .form-render-page__main {
   min-width: 0;
@@ -861,12 +859,10 @@ onMounted(() => {
   margin: 0 0 var(--sw-space-20);
 }
 
+/* V012-BUG-012：去掉表单外层卡片边框/阴影——一般表单形态（标签+带边框控件直接落在页面上） */
 .form-render-page__card {
-  background: #fff;
-  border-radius: 6px;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.04);
-  padding: 22px 28px;
-  margin-bottom: var(--sw-space-20);
+  padding: 0 0 var(--sw-space-8);
+  margin-bottom: var(--sw-space-8);
 }
 
 .form-render-page__card-title {
@@ -927,159 +923,7 @@ onMounted(() => {
   background: var(--sw-surface-card);
 }
 
-@media (min-width: 1280px) {
-  .form-render-page--design {
-    max-width: 1152px;
-    padding-top: 6px;
-  }
-  .form-render-page--design .form-render-page__title {
-    margin-top: 6px;
-    margin-bottom: 4px;
-  }
-  .form-render-page--design .form-render-page__meta {
-    margin-bottom: 25px;
-  }
-  .form-render-page--design .form-render-page__hint {
-    display: none;
-  }
-  .form-render-page--design .form-render-page__layout {
-    grid-template-columns: minmax(0, 1fr) 366px;
-    gap: 0;
-    align-items: stretch;
-    border: 1px solid var(--sw-border-light);
-    border-radius: var(--sw-radius-card);
-    overflow: hidden;
-  }
-  .form-render-page--design .form-render-page__card {
-    height: 474px;
-    min-height: 474px;
-    margin: 0;
-    padding: 27px 24px 16px;
-    box-sizing: border-box;
-    border-radius: 0;
-    box-shadow: none;
-  }
-  .form-render-page--design .form-render-page__card-title {
-    position: relative;
-    top: -7px;
-    line-height: 28px;
-    margin-bottom: 5px;
-  }
-  .form-render-page--design .form-render-page__back {
-    gap: 0;
-    font-size: 12px;
-  }
-  .form-render-page--design .form-render-page__group {
-    display: block;
-  }
-  .form-render-page--design .form-render-page__field {
-    display: grid;
-    grid-template-columns: 128px minmax(0, 1fr);
-    align-items: center;
-    min-height: 48px;
-    padding: 0 12px;
-    margin-bottom: 8px;
-    border: 1px solid #eef1f7;
-  }
-  .form-render-page--design .form-render-page__field:first-child {
-    border-top: 1px solid #eef1f7;
-  }
-  .form-render-page--design :deep(.dynamic-field) {
-    display: contents;
-  }
-  .form-render-page--design :deep(.dynamic-field__label) {
-    position: relative;
-    top: -4px;
-    margin: 0;
-  }
-  .form-render-page--design :deep(.dynamic-field__required) {
-    display: none;
-  }
-  .form-render-page--design :deep(.el-input),
-  .form-render-page--design :deep(.el-select),
-  .form-render-page--design :deep(.el-date-editor) {
-    width: 100%;
-  }
-  .form-render-page--design :deep(.el-input__wrapper),
-  .form-render-page--design :deep(.el-select__wrapper),
-  .form-render-page--design :deep(.el-date-editor .el-input__wrapper) {
-    min-height: 44px;
-    padding: 0;
-    border-radius: 0;
-    box-shadow: none;
-    background: transparent;
-  }
-  .form-render-page--design :deep(.el-input__inner) {
-    position: relative;
-    left: -10px;
-    width: calc(100% + 10px);
-    height: 16px;
-    line-height: 16px;
-    padding: 0;
-    transform: translateY(4px);
-  }
-  .form-render-page--design :deep(.el-date-editor .el-input__inner) {
-    left: -10px;
-    width: calc(100% + 10px);
-    text-indent: 0;
-    height: 16px;
-    line-height: 16px;
-    transform: translateY(1px);
-  }
-  .form-render-page--design :deep(.el-select__selected-item),
-  .form-render-page--design :deep(.el-select__placeholder) {
-    height: 16px;
-    line-height: 16px;
-  }
-  .form-render-page--design :deep(.el-select__selected-item) {
-    color: #17213a !important;
-  }
-  .form-render-page--design :deep(.el-select__input.is-default) {
-    color: #a1aabe !important;
-  }
-  .form-render-page--design :deep(.el-date-editor .el-input__prefix) {
-    display: none;
-  }
-  .form-render-page--design .form-render-page__aside {
-    min-width: 0;
-    background: #fbfcff;
-  }
-  .form-render-page--design .form-render-page__aside-card {
-    height: 100%;
-    box-sizing: border-box;
-    padding: 24px;
-    border: 0;
-    border-left: 1px solid var(--sw-border-light);
-    border-radius: 0;
-    box-shadow: none;
-    background: transparent;
-  }
-  .form-render-page--design .form-render-page__action-bar {
-    margin-top: 25px;
-  }
-  .form-render-page--design .form-render-page__action-bar .el-button {
-    width: 104px;
-    height: 34px;
-    padding: 0;
-    justify-content: center;
-    line-height: 14px;
-    letter-spacing: -2px;
-  }
-  .form-render-page--design .form-render-page__action-bar .el-button > span {
-    transform: none;
-  }
-  .form-render-page--design .form-render-page__action-bar .el-button:first-child {
-    padding: 0;
-  }
-  .form-render-page--design .form-render-page__action-bar .el-button:last-child {
-    padding: 0;
-  }
-  .form-render-page--design :deep(.form-render-page__action-bar .el-button:first-child > span) {
-    position: relative;
-    left: 12px;
-  }
-}
-/* ── V012-BUG-012 接管覆盖：置于文件尾以覆盖 --design 与 media 规则 ── */
+/* ── V012-BUG-012 接管覆盖：置于文件尾以覆盖既有与 media 规则 ── */
 .form-render-page {
   position: fixed;
   inset: 0;
@@ -1090,12 +934,26 @@ onMounted(() => {
   padding: 12px 14px;
   background: #ffffff;
 }
+/* 流程图：带边框画布 + 网格底（与详情/查看图画布同款；图形层已定位绘制在网格之上） */
 .form-render-page__graph {
+  position: relative;
   margin-top: 2px;
-  padding: 2px;
-  background: var(--sw-surface-card);
+}
+.form-render-page__graph :deep(.pg-view) {
   border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
+  border-radius: 10px;
+  background: #fbfdff;
+}
+.form-render-page__graph :deep(.pg-view)::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: '';
+  background-image:
+    linear-gradient(#e8edf6 1px, transparent 1px),
+    linear-gradient(90deg, #e8edf6 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 .form-render-page :deep(input[readonly]),
 .form-render-page :deep(textarea[readonly]),
