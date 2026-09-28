@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { i18n } from '@/locales'
+import type { DynamicFieldSchema } from '../dynamic-field-registry'
 
 vi.mock('@/modules/form/api/i2-choices', () => ({
   loadDeptChoices: vi.fn(),
@@ -11,10 +12,17 @@ vi.mock('@/modules/form/api/i2-choices', () => ({
 import DeptControl from './DeptControl.vue'
 import { loadDeptChoices } from '@/modules/form/api/i2-choices'
 
+const field = {
+  name: 'dept',
+  type: 'DEPT',
+  label: '部门',
+  required: false,
+} as unknown as DynamicFieldSchema
+
 const mountOptions = {
   props: {
-    field: { name: 'dept', type: 'DEPT', label: '部门', required: false },
-    modelValue: null,
+    field,
+    modelValue: null as unknown,
   },
   global: { plugins: [i18n], stubs: { teleport: true } },
 }
