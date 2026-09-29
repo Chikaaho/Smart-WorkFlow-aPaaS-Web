@@ -260,13 +260,9 @@ onMounted(() => {
       <el-table-column
         prop="callbackUrl"
         :label="t('view.ssoConfig.callbackUrl')"
-        min-width="260"
+        min-width="300"
         show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          <span class="callback-url">{{ row.callbackUrl }}</span>
-        </template>
-      </el-table-column>
+      />
       <el-table-column
         prop="updateTime"
         :label="t('view.ssoConfig.updateTime')"
@@ -457,11 +453,6 @@ h2 {
   margin-left: 6px;
   font-size: 12px;
   color: #909399;
-}
-.callback-url {
-  font-size: 12px;
-  color: #606266;
-  word-break: break-all;
 }
 .mode-hint {
   font-size: 12px;
