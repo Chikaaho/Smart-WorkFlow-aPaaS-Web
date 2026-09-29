@@ -247,6 +247,7 @@ onMounted(() => {
       <el-table-column :label="t('view.ssoConfig.enabledLabel')" width="90">
         <template #default="{ row }">
           <el-switch
+            v-perm="'system:sso:config:enable'"
             :model-value="row.enabled"
             :disabled="row.deferred"
             @change="
