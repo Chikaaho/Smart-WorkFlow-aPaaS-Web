@@ -207,7 +207,7 @@ onMounted(() => {
     <p class="desc">{{ t('view.ssoConfig.desc') }}</p>
 
     <el-table v-loading="loading" :data="rows" class="config-table">
-      <el-table-column :label="t('view.ssoConfig.provider')" width="130">
+      <el-table-column :label="t('view.ssoConfig.provider')" width="170">
         <template #default="{ row }">
           {{ labelOf(row.provider) }}
           <el-tag v-if="row.deferred" size="small" type="info" class="deferred-tag">
