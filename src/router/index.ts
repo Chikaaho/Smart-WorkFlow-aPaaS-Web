@@ -512,13 +512,6 @@ export const routes: RouteRecordRaw[] = [
     meta: { public: true },
   },
   {
-    // I5：SSO 绑定确认页（一次性候选 ticket），公开路由
-    path: '/sso/bind',
-    name: 'sso-bind',
-    component: () => import('@/views/SsoBindPage.vue'),
-    meta: { public: true },
-  },
-  {
     // I5：账号绑定管理（个人中心入口；已认证会话内使用）
     path: '/account/bindings',
     name: 'account-bindings',

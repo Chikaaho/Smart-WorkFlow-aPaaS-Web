@@ -957,11 +957,6 @@ export const mockRegistrations: MockRegistration[] = [
     pattern: '/api/auth/sso/unbind',
     handler: () => ({ code: 0, message: 'ok', data: null }),
   },
-  {
-    method: 'POST',
-    pattern: '/api/auth/sso/bind',
-    handler: () => ({ code: 0, message: 'ok', data: null }),
-  },
 
   // ── 当前用户会话 ──────────────────────────────────────────
   // GET /api/system/auth/me → SessionDTO

@@ -25,7 +25,13 @@ onMounted(async () => {
   if (!ticket) {
     // 服务端回调拒绝会 302 到本页并携带脱敏 sso_error；提示语保持人性化，原因明细在服务端审计。
     const ssoError = typeof route.query.sso_error === 'string' ? route.query.sso_error : ''
-    errorMessage.value = ssoError ? t('view.ssoLoginFailed') : t('view.ssoTicketMissing')
+    // B 端准入拒绝（sso-admin-config）：统一安全提示，不区分具体原因
+    errorMessage.value =
+      ssoError === 'system.sso_admission_rejected'
+        ? t('view.ssoAdmissionRejected')
+        : ssoError
+          ? t('view.ssoLoginFailed')
+          : t('view.ssoTicketMissing')
     exchanging.value = false
     return
   }
