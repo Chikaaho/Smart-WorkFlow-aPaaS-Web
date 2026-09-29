@@ -59,6 +59,8 @@ const checkDialog = reactive({ visible: false, provider: '', result: null as Che
 const auditDrawer = reactive({ visible: false, records: [] as AuditRecord[], loading: false })
 // 触屏可用的完整值展开：点击单元格（tap 生成 click）弹出只读全文，不依赖 hover
 const fullValueDialog = reactive({ visible: false, title: '', value: '' })
+// 小屏弹窗宽度自适应：390 视口下 520px 会溢出裁切
+const fullValueDialogWidth = globalThis.innerWidth < 560 ? '92%' : '520px'
 
 function showFullValue(title: string, value: string): void {
   if (!value) return
@@ -414,7 +416,11 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="fullValueDialog.visible" :title="fullValueDialog.title" width="520px">
+    <el-dialog
+      v-model="fullValueDialog.visible"
+      :title="fullValueDialog.title"
+      :width="fullValueDialogWidth"
+    >
       <p class="full-value-text">{{ fullValueDialog.value }}</p>
       <template #footer>
         <el-button @click="fullValueDialog.visible = false">{{ t('common.close') }}</el-button>
