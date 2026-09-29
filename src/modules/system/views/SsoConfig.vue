@@ -57,6 +57,15 @@ const editDialog = reactive({
 const secretDialog = reactive({ visible: false, provider: '', appSecret: '', saving: false })
 const checkDialog = reactive({ visible: false, provider: '', result: null as CheckResult | null })
 const auditDrawer = reactive({ visible: false, records: [] as AuditRecord[], loading: false })
+// 触屏可用的完整值展开：点击单元格（tap 生成 click）弹出只读全文，不依赖 hover
+const fullValueDialog = reactive({ visible: false, title: '', value: '' })
+
+function showFullValue(title: string, value: string): void {
+  if (!value) return
+  fullValueDialog.title = title
+  fullValueDialog.value = value
+  fullValueDialog.visible = true
+}
 
 function labelOf(provider: string): string {
   return t(`view.ssoConfig.providers.${provider.toLowerCase()}`)
@@ -220,7 +229,15 @@ onMounted(() => {
         :label="t('view.ssoConfig.appId')"
         min-width="180"
         show-overflow-tooltip
-      />
+      >
+        <template #default="{ row }">
+          <span
+            class="cell-full-value"
+            @click="showFullValue(t('view.ssoConfig.appId'), row.appId)"
+            >{{ row.appId }}</span
+          >
+        </template>
+      </el-table-column>
       <el-table-column :label="t('view.ssoConfig.identityMode')" width="200">
         <template #default="{ row }">
           <el-tag :type="row.identityMode === 'enterprise' ? 'warning' : 'info'" size="small">
@@ -262,7 +279,15 @@ onMounted(() => {
         :label="t('view.ssoConfig.callbackUrl')"
         min-width="300"
         show-overflow-tooltip
-      />
+      >
+        <template #default="{ row }">
+          <span
+            class="cell-full-value"
+            @click="showFullValue(t('view.ssoConfig.callbackUrl'), row.callbackUrl)"
+            >{{ row.callbackUrl }}</span
+          >
+        </template>
+      </el-table-column>
       <el-table-column
         prop="updateTime"
         :label="t('view.ssoConfig.updateTime')"
@@ -389,6 +414,13 @@ onMounted(() => {
       </template>
     </el-dialog>
 
+    <el-dialog v-model="fullValueDialog.visible" :title="fullValueDialog.title" width="520px">
+      <p class="full-value-text">{{ fullValueDialog.value }}</p>
+      <template #footer>
+        <el-button @click="fullValueDialog.visible = false">{{ t('common.close') }}</el-button>
+      </template>
+    </el-dialog>
+
     <el-drawer v-model="auditDrawer.visible" :title="t('view.ssoConfig.auditTitle')" size="560px">
       <el-table v-loading="auditDrawer.loading" :data="auditDrawer.records" size="small">
         <el-table-column
@@ -453,6 +485,14 @@ h2 {
   margin-left: 6px;
   font-size: 12px;
   color: #909399;
+}
+.cell-full-value {
+  cursor: pointer;
+}
+.full-value-text {
+  margin: 0;
+  word-break: break-all;
+  line-height: 1.6;
 }
 .mode-hint {
   font-size: 12px;
