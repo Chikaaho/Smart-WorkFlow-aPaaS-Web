@@ -1166,7 +1166,245 @@ const p62TxnActionMockRegistrations: MockRegistration[] = [
   },
 ]
 
+/** P62 S5 mock（临时）：后台批量批次（批次键 → 批次）。 */
+const MOCK_TXN_BATCHES = new Map<
+  string,
+  {
+    batchKey: string
+    actionId: string
+    actionVersion: number
+    status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'PARTIALLY_FAILED'
+    totalCount: number
+    succeededCount: number
+    failedCount: number
+    commandId: number
+    replay: boolean
+    items: {
+      itemKey: string
+      recordId: string
+      quantity: string
+      status: 'PENDING' | 'SUCCEEDED' | 'REJECTED'
+      invocationId: string | null
+      errorCode: number | null
+      errorMsg: string | null
+      attemptCount: number
+      _reject?: boolean
+    }[]
+  }
+>()
+
+/** P62 S5 mock（临时）：设备命令（含一条 UNKNOWN 供人工核实演示）。 */
+const MOCK_IOT_DEVICE_COMMANDS: {
+  id: number
+  createTime: string
+  updateTime: string
+  tenantId: number
+  productId: string
+  deviceName: string
+  deviceKey: string | null
+  commandType: string
+  commandKey: string
+  semanticMode: string
+  payload: string | null
+  status:
+    | 'QUEUED'
+    | 'SENDING'
+    | 'SENT'
+    | 'DELIVERED'
+    | 'ACKED'
+    | 'SUCCESS'
+    | 'FAILED'
+    | 'UNKNOWN'
+    | 'EXPIRED'
+  idempotentKey: string | null
+  expiryTime: string | null
+  retryCount: number | null
+  lastError: string | null
+  tencentRequestId: string | null
+  clientToken: string | null
+  deviceOutput: string | null
+  result: string | null
+  approvalBizId: string | null
+}[] = [
+  {
+    id: 9301,
+    createTime: '2026-09-30T10:00:00',
+    updateTime: '2026-09-30T10:01:00',
+    tenantId: 0,
+    productId: 'demo-product',
+    deviceName: 'demo-device-01',
+    deviceKey: 'demo-device-01',
+    commandType: 'ACTION',
+    commandKey: 'power_on',
+    semanticMode: 'DEFERRED',
+    payload: '{"switch":1}',
+    status: 'UNKNOWN',
+    idempotentKey: 'mock-rcpt-01',
+    expiryTime: '2026-09-30T10:05:00',
+    retryCount: 0,
+    lastError: '回执超时：传输已发出但未获确定业务回执（转待核实，不自动重发）',
+    tencentRequestId: 'req-1',
+    clientToken: null,
+    deviceOutput: null,
+    result: null,
+    approvalBizId: 'mock-instance-01',
+  },
+  {
+    id: 9302,
+    createTime: '2026-09-30T09:30:00',
+    updateTime: '2026-09-30T09:32:00',
+    tenantId: 0,
+    productId: 'demo-product',
+    deviceName: 'demo-device-01',
+    deviceKey: 'demo-device-01',
+    commandType: 'ACTION',
+    commandKey: 'set_brightness',
+    semanticMode: 'DEFERRED',
+    payload: '{"brightness":5}',
+    status: 'SUCCESS',
+    idempotentKey: 'mock-rcpt-02',
+    expiryTime: '2026-09-30T09:40:00',
+    retryCount: 0,
+    lastError: null,
+    tencentRequestId: 'req-2',
+    clientToken: null,
+    deviceOutput: null,
+    result: '{"source":"RECEIPT","requestId":"req-2"}',
+    approvalBizId: 'mock-instance-02',
+  },
+]
+
 export const mockRegistrations: MockRegistration[] = [
+  // POST /api/workflow/txn-batch — 后台批量受理（P62 S5 mock，临时）
+  // 同批次键幂等重放返回原批次（replay=true）；受理后转 PROCESSING，首次回查完成逐项结算。
+  {
+    method: 'POST',
+    pattern: '/api/workflow/txn-batch',
+    handler: (_params, _query, body) => {
+      const req = body as {
+        batchKey?: string
+        actionId?: string
+        items?: { itemKey: string; recordId: string; quantity: string }[]
+      }
+      if (!req?.batchKey || !req?.actionId || !Array.isArray(req.items) || req.items.length === 0) {
+        return { code: 400, message: 'batchKey/actionId/items 不能为空', data: null }
+      }
+      const existing = MOCK_TXN_BATCHES.get(req.batchKey)
+      if (existing) {
+        return {
+          code: 0,
+          message: 'ok',
+          data: { ...existing, replay: true, items: existing.items },
+        }
+      }
+      const items = req.items.map((item, index) => ({
+        itemKey: item.itemKey,
+        recordId: item.recordId,
+        quantity: item.quantity,
+        status: 'PENDING' as const,
+        invocationId: null,
+        errorCode: null,
+        errorMsg: null,
+        attemptCount: 0,
+        _reject: index === 1,
+      }))
+      const batch = {
+        batchKey: req.batchKey,
+        actionId: req.actionId,
+        actionVersion: 1,
+        status: 'PROCESSING' as const,
+        totalCount: items.length,
+        succeededCount: 0,
+        failedCount: 0,
+        commandId: Math.floor(Math.random() * 900000) + 100000,
+        replay: false,
+        items,
+      }
+      MOCK_TXN_BATCHES.set(req.batchKey, batch)
+      return {
+        code: 0,
+        message: 'ok',
+        data: JSON.parse(JSON.stringify({ ...batch, replay: false })),
+      }
+    },
+  },
+
+  // GET /api/workflow/txn-batch/:batchKey — 批次回查（P62 S5 mock，临时）
+  // 首次回查完成逐项结算：1 成功 + 1 拒绝（1604），之后保持终态。
+  {
+    method: 'GET',
+    pattern: '/api/workflow/txn-batch/:batchKey',
+    handler: (params) => {
+      const batchKey = (params as Record<string, string>).batchKey
+      const batch = MOCK_TXN_BATCHES.get(batchKey)
+      if (!batch) {
+        return { code: 404, message: '批量批次不存在或不属于当前租户', data: null }
+      }
+      if (batch.status === 'PENDING' || batch.status === 'PROCESSING') {
+        let succeeded = 0
+        let failed = 0
+        for (const item of batch.items) {
+          if (item.status !== 'PENDING') continue
+          const record = item as typeof item & { _reject?: boolean }
+          if (record._reject) {
+            item.status = 'REJECTED'
+            item.errorCode = 1604
+            item.errorMsg = '可用量不足（mock 部分失败演示）'
+            item.invocationId = 'mock-inv-' + item.itemKey
+            failed += 1
+          } else {
+            item.status = 'SUCCEEDED'
+            item.invocationId = 'mock-inv-' + item.itemKey
+            succeeded += 1
+          }
+          item.attemptCount = 1
+        }
+        batch.succeededCount = succeeded
+        batch.failedCount = failed
+        batch.status = failed > 0 ? 'PARTIALLY_FAILED' : 'COMPLETED'
+      }
+      return { code: 0, message: 'ok', data: JSON.parse(JSON.stringify(batch)) }
+    },
+  },
+
+  // GET /api/iot/devices/:productId/:deviceName/commands — 设备命令回查（P62 S5 mock，临时）
+  {
+    method: 'GET',
+    pattern: '/api/iot/devices/:productId/:deviceName/commands',
+    handler: () => ({ code: 0, message: 'ok', data: MOCK_IOT_DEVICE_COMMANDS }),
+  },
+
+  // POST /api/iot/commands/:commandId/manual-verify — 人工核实（P62 S5 mock，临时）
+  {
+    method: 'POST',
+    pattern: '/api/iot/commands/:commandId/manual-verify',
+    handler: (params, _query, body) => {
+      const commandId = (params as Record<string, string>).commandId
+      const req = body as { outcome?: string; basis?: string }
+      if (!req?.basis || !req.basis.trim()) {
+        return { code: 400, message: '人工核实必须携带可信依据（无依据不得宣告结果）', data: null }
+      }
+      const command = MOCK_IOT_DEVICE_COMMANDS.find((c) => String(c.id) === commandId)
+      if (!command) {
+        return { code: 404, message: '命令不存在', data: null }
+      }
+      if (command.status !== 'UNKNOWN') {
+        return {
+          code: 400,
+          message: '仅结果未知（UNKNOWN）的命令可人工核实: 当前 ' + command.status,
+          data: null,
+        }
+      }
+      command.status = (req.outcome === 'FAILED' ? 'FAILED' : 'SUCCESS') as typeof command.status
+      command.result = JSON.stringify({ source: 'MANUAL_VERIFY', basis: req.basis, operatorId: 1 })
+      return {
+        code: 0,
+        message: 'ok',
+        data: { verdict: 'APPLIED', statusBefore: 'UNKNOWN', statusAfter: command.status },
+      }
+    },
+  },
+
   // ── I4 编排/运营/工作台 mock（上方 i4MockRegistrations 展开） ──
   ...i4MockRegistrations,
   // ── P62 事务动作 mock（上方 p62TxnActionMockRegistrations 展开） ──

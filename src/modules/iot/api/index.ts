@@ -358,3 +358,59 @@ export function retryCommand(id: number): Promise<IotCommandRecord> {
 export function listProcessTriggers(ruleId?: number): Promise<IotProcessTriggerRecord[]> {
   return get<IotProcessTriggerRecord[]>('/iot/runtime/process-triggers', { ruleId })
 }
+
+// ─── 设备命令回查与人工核实（P62 分级执行 S4/S5） ───
+
+/** 设备控制命令（sw_iot_device_command）。 */
+export interface IotDeviceCommandRecord extends IotBase {
+  productId: string
+  deviceName: string
+  deviceKey: string | null
+  commandType: string
+  commandKey: string
+  semanticMode: string
+  payload: string | null
+  status:
+    | 'QUEUED'
+    | 'SENDING'
+    | 'SENT'
+    | 'DELIVERED'
+    | 'ACKED'
+    | 'SUCCESS'
+    | 'FAILED'
+    | 'UNKNOWN'
+    | 'EXPIRED'
+  idempotentKey: string | null
+  expiryTime: string | null
+  retryCount: number | null
+  lastError: string | null
+  tencentRequestId: string | null
+  clientToken: string | null
+  deviceOutput: string | null
+  result: string | null
+  approvalBizId: string | null
+}
+
+/** 查询设备控制命令（含执行结果与待核实状态）。 */
+export function listDeviceCommands(
+  productId: string,
+  deviceName: string,
+): Promise<IotDeviceCommandRecord[]> {
+  return request<IotDeviceCommandRecord[]>({
+    url: `/iot/devices/${encodeURIComponent(productId)}/${encodeURIComponent(deviceName)}/commands`,
+    method: 'get',
+  })
+}
+
+/** 独立授权人工核实（U04）：仅 UNKNOWN 命令；依据必填（不带可信依据不得宣告结果）。 */
+export function manualVerifyCommand(
+  commandId: number,
+  outcome: 'SUCCESS' | 'FAILED',
+  basis: string,
+): Promise<{ verdict: string; statusBefore: string | null; statusAfter: string | null }> {
+  return request<{ verdict: string; statusBefore: string | null; statusAfter: string | null }>({
+    url: `/iot/commands/${commandId}/manual-verify`,
+    method: 'post',
+    data: { outcome, basis },
+  })
+}
