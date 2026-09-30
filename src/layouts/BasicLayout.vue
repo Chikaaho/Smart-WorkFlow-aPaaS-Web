@@ -133,6 +133,12 @@ const showAside = computed(
   width: 0;
   height: 0;
 }
+/* P62 复核01 G6：≤1279px 视口隐藏管理端字标后缀（负 margin 叠字），导航空间让位主项 */
+@media (max-width: 1279px) {
+  .basic-layout__topbar :deep(.app-logo__text) {
+    display: none;
+  }
+}
 /* R5 延续：移动视口隐藏侧栏，页面主体无横向溢出（业务表格保留容器内局部横滚） */
 @media (max-width: 767px) {
   .basic-layout__aside {
