@@ -172,6 +172,18 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // P62：事务动作管理（静态路由保证直达；命名与菜单动态路由（name=FormTxnAction）不同名，避免被顶掉）
+        path: 'form/txn-action',
+        name: 'form-txn-action',
+        component: () => import('@/modules/form/views/TxnActionList.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('txnAction.title')
+          },
+          authority: ['form:action:view'],
+        },
+      },
+      {
         path: 'agent/graph-designer/:id',
         name: 'agent-graph-designer',
         component: () => import('@/modules/agent/views/GraphDesigner.vue'),
