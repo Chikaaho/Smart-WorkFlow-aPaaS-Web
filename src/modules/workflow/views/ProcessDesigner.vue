@@ -138,11 +138,35 @@ const zoomPercent = computed(() => Math.round(fitZoom.value * 100))
 /** 流程高级配置弹窗（P53 节点13）：只读呈现已加载定义的真实信息，不新增任何端点。 */
 const advancedConfigVisible = ref(false)
 
-/** 草稿已保存时钟（头部文案；以定义加载时刻起算）。 */
+/** 草稿保存状态（复核02 G6a 修复）：头部只反映真实保存结果——加载时刻不再假报
+ * "草稿已保存"；模型变更为脏状态并防抖自动保存（1.5s），保存成功后刷新时钟。 */
 const savedAtText = ref('')
+const dirty = ref(false)
+let lastSavedJson = ''
+let autoSaveTimer: number | null = null
 function formatClock(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return pad(d.getHours()) + ':' + pad(d.getMinutes())
+}
+function currentGraphJson(): string {
+  try {
+    return JSON.stringify(model?.serialize() ?? {})
+  } catch {
+    return ''
+  }
+}
+function scheduleAutoSave() {
+  if (autoSaveTimer !== null) window.clearTimeout(autoSaveTimer)
+  autoSaveTimer = window.setTimeout(() => {
+    autoSaveTimer = null
+    if (dirty.value) void save()
+  }, 1500)
+}
+function onModelChanged() {
+  const json = currentGraphJson()
+  if (!json || json === lastSavedJson) return
+  dirty.value = true
+  scheduleAutoSave()
 }
 
 /** 高级配置元数据（定义 payload 的 advancedConfig 扩展；缺省展示占位符）。 */
@@ -725,12 +749,20 @@ const validating = ref(false)
 const publishing = ref(false)
 const validationErrors = ref<GraphValidationError[]>([])
 
+function markSaved() {
+  dirty.value = false
+  savedAtText.value = formatClock(new Date())
+  lastSavedJson = currentGraphJson()
+}
+
 async function save() {
   if (!model || !graph.value || !defId.value) return
   saving.value = true
   errorMsg.value = ''
   try {
     await saveProcessDefGraph(defId.value, model.serialize())
+    // 复核02 G6a：以真实保存成功为准刷新状态（脏清零 + 时钟 + 基线快照）
+    markSaved()
     ElMessage.success(t('common.draftSaved'))
   } catch (err) {
     errorMsg.value = (err as { msg?: string }).msg ?? t('common.saveFailed')
@@ -746,6 +778,7 @@ async function validate() {
   try {
     // 先保存草稿再校验，保证服务端查询到最新图
     await saveProcessDefGraph(defId.value, model.serialize())
+    markSaved()
     validationErrors.value = await validateProcessDefGraph(defId.value)
     if (validationErrors.value.length === 0) {
       ElMessage.success(t('workflow.validationPassedNoErrors'))
@@ -778,6 +811,10 @@ async function publish() {
   }
   publishing.value = true
   try {
+    // 复核02 G6a：发布消费的是服务端持久化图——存在未保存更改时先真实保存，杜绝"发布旧图"
+    if (dirty.value) {
+      await save()
+    }
     await publishProcessDef(defId.value)
     ElMessage.success(t('workflow.publishSucceeded'))
     await load()
@@ -839,8 +876,6 @@ async function load() {
         []) as import('@/contracts/process-graph').ProcessGraphElement[],
       canvas: definition.canvas ?? {},
     } as ProcessGraphDocument
-    savedAtText.value = formatClock(new Date())
-    savedAtText.value = formatClock(new Date())
     await nextTick()
     if (!graph.value) {
       errorMsg.value = t('workflow.graphDataEmpty')
@@ -851,6 +886,11 @@ async function load() {
       { width: P53_NODE_WIDTH, height: P53_NODE_HEIGHT },
       P53_GATEWAY_RADIUS,
     )
+    // 复核02 G6a：订阅模型变更驱动脏状态与自动保存；加载时刻重置为真实未保存前状态
+    model.subscribe(onModelChanged)
+    lastSavedJson = currentGraphJson()
+    dirty.value = false
+    savedAtText.value = ''
     selectNode(null)
     snapshot()
     fitViewport()
@@ -877,6 +917,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   canvasObserver?.disconnect()
   canvasObserver = null
+  if (autoSaveTimer !== null) {
+    window.clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+  }
 })
 
 function onKeydown(event: KeyboardEvent) {
@@ -922,7 +966,13 @@ function nodeLabelLines(label: string) {
         }}{{ graph?.version ? ` v${graph.version}` : '' }}
       </span>
       <span class="spacer" />
-      <span class="designer-saved">{{ t('form.draftSavedAt', { time: savedAtText }) }}</span>
+      <span class="designer-saved">{{
+        dirty
+          ? t('form.unsavedChanges')
+          : savedAtText
+            ? t('form.draftSavedAt', { time: savedAtText })
+            : ''
+      }}</span>
       <!-- 设计09：右侧操作组 = 草稿历史 + 保存 + 发布（撤销/删除/适配保留在画布缩放控件与快捷键） -->
       <div class="toolbar-actions">
         <el-button size="small" class="toolbar-drafts">{{ t('form.draftHistory') }}</el-button>
@@ -1557,6 +1607,14 @@ function nodeLabelLines(label: string) {
 .designer-saved {
   line-height: 16px;
   color: #7e89a1;
+}
+/* R5/G6b：窄视口面包屑单行省略，不逐字竖排挤压工具栏 */
+.designer-crumb {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .toolbar-actions {
   display: flex;

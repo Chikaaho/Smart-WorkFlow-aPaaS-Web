@@ -67,7 +67,13 @@ async function load() {
   loadError.value = ''
   try {
     list.value = await request<DeviceRow[]>({ method: 'GET', url: '/iot/devices' })
-    products.value = await listProducts()
+    // 产品下拉是管理侧增强读（iot:product:manage）：核实员视角（iot:view + iot:command:verify）
+    // 无该权限时降级为空选项，不阻塞设备列表与人工核实主路径（复核02 G6b 403横幅修复）
+    try {
+      products.value = await listProducts()
+    } catch {
+      products.value = []
+    }
     pageNum.value = 1
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
@@ -416,12 +422,14 @@ function rowActions(r: unknown): ListAction[] {
       </el-table>
     </el-drawer>
 
-    <!-- 人工核实弹窗：仅 UNKNOWN；依据必填（不带可信依据不得宣告结果） -->
+    <!-- 人工核实弹窗：仅 UNKNOWN；依据必填（不带可信依据不得宣告结果）；
+         窄视口宽度自适应并在小屏收敛内边距（复核02 G6b：375 视口提交按钮可及） -->
     <el-dialog
       v-model="verifyVisible"
       title="设备命令人工核实"
-      width="480px"
+      width="min(480px, calc(100vw - 24px))"
       data-test="verify-dialog"
+      class="verify-dialog"
     >
       <el-alert
         type="warning"
@@ -460,3 +468,10 @@ function rowActions(r: unknown): ListAction[] {
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+/* 复核02 G6b：核实弹窗窄视口收敛——宽度 min(480px, 100vw-24px) 保证 375 视口提交按钮可及 */
+:global(.el-dialog.verify-dialog) {
+  max-width: calc(100vw - 24px);
+}
+</style>

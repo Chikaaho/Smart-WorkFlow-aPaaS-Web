@@ -869,6 +869,7 @@ export default {
     workbenchSettings: '设置',
     breadcrumbEdit: '事项编辑',
     draftSavedAt: '草稿已保存 · {time}',
+    unsavedChanges: '未保存的更改',
     draftHistory: '草稿历史',
     sectionBasicInfo: '基础信息',
     sectionAdvancedInfo: '高级信息',

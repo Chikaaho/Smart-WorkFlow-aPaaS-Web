@@ -907,6 +907,7 @@ export default {
     workbenchSettings: 'Settings',
     breadcrumbEdit: 'Item edit',
     draftSavedAt: 'Draft saved · {time}',
+    unsavedChanges: 'Unsaved changes',
     draftHistory: 'Draft history',
     sectionBasicInfo: 'Basic info',
     sectionAdvancedInfo: 'Advanced info',
