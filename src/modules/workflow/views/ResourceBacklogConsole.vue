@@ -258,7 +258,9 @@ onMounted(() => {
           <template #default="{ row }">{{ row.create_time ?? '—' }}</template>
         </el-table-column>
         <el-table-column label="完成/释放时间" width="160">
-          <template #default="{ row }">{{ row.finished_at ?? '—' }}</template>
+          <template #default="{ row }">{{
+            row.finished_at ?? row.resource_released_at ?? '—'
+          }}</template>
         </el-table-column>
         <el-table-column label="失败原因" min-width="160">
           <template #default="{ row }">

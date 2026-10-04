@@ -251,7 +251,9 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
 }
 .app-main-nav--admin .app-main-nav__item {
   flex: 1 1 0;
-  min-width: 88px;
+  /* RA03b 窄屏修复：显式 88px 会压过 flex 的 min-width:auto，nowrap 文字溢出与相邻项重叠；
+     max-content 保底不压缩文字，宽屏仍均分、窄屏由容器横向滑动（方向 §4.5 不留不可操作元素） */
+  min-width: max-content;
   padding: 0 12px;
 }
 /* 设计（节点02）：当前栏目指示线 48×2，居中（PNG 墨迹行 61-62） */
