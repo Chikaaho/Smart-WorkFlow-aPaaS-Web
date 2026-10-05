@@ -10,8 +10,8 @@ const { t } = useI18n()
  * 内部字段」这个**独立上下文**：
  *  - 状态独立：子画布的 items / 选中项与主画布严格隔离（本组件 v-if 挂载，每次打开从
  *    subFields 重新播种；主画布的 items / selectedId 引用不被触碰）。
- *  - 控件库只露六种通用字段（ALLOWED_SUBFIELD_TYPES），硬挡 REFERENCE / TABLE 进子表
- *    （防递归，对齐后端 1207）。
+ *  - 控件库只露通用数据字段（ALLOWED_SUBFIELD_TYPES，P63 起含 USER/DEPT），
+ *    硬挡 REFERENCE / TABLE 进子表（防递归）。
  *  - 列名查重范围 = **当前子表内部的子字段们**（独立物理子表，列名空间与主表、与别的
  *    子表隔离）；existing-names / other-names 全取自子画布 items，不掺主表字段。
  *  - 拖放 group 用独立名 'designer-subfields'，与主画布 'designer-fields' 互不串。
@@ -124,6 +124,7 @@ function back() {
         :field="selectedItem"
         :other-names="otherNames"
         :readonly="readonly"
+        :subfield="true"
         @update="patchSelected"
       />
     </div>

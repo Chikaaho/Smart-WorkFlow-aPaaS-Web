@@ -42,8 +42,10 @@ const props = withDefaults(
     rule?: VisibilityRule | null
     /** 同表单全部字段名（规则条件候选，含选中字段以外的字段）。 */
     ruleFieldNames?: string[]
+    /** 子表子字段上下文（P63）：子画布复用本面板时置 true，配置面板据此隐藏主表专属配置。 */
+    subfield?: boolean
   }>(),
-  { readonly: false, keyLocked: false, rule: null, ruleFieldNames: () => [] },
+  { readonly: false, keyLocked: false, rule: null, ruleFieldNames: () => [], subfield: false },
 )
 
 const emit = defineEmits<{
@@ -224,6 +226,7 @@ function onFieldKeySuffix(raw: string) {
         :field="field.field"
         :other-names="otherNames"
         :hide-length="field.field.type === 'TEXT'"
+        :subfield="subfield"
         @update="(p: FieldPatch) => emit('update', p)"
       />
       <p v-else-if="!readonly" class="config__placeholder">

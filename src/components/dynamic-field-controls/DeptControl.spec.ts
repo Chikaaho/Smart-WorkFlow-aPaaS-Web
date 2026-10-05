@@ -77,3 +77,71 @@ describe('DeptControl 弹窗选择', () => {
     expect(wrapper.find('.dept-picker__table').exists()).toBe(false)
   })
 })
+
+/**
+ * P63：multiple=true 多选——弹窗可复选，确认上抛 ID 数组（清空上抛 null）；
+ * 回显兼容 JSON 数组串 / 已解析数组，显示名复用单选回显通道（逐个解析部门名）。
+ */
+describe('DeptControl 多选（P63）', () => {
+  const multiField = {
+    name: 'depts',
+    type: 'DEPT',
+    label: '部门',
+    required: false,
+    multiple: true,
+  } as unknown as DynamicFieldSchema
+
+  beforeEach(() => {
+    vi.mocked(loadDeptChoices).mockResolvedValue([
+      { id: '10', label: '总公司' },
+      { id: '11', label: '　研发部' },
+      { id: '12', label: '　市场部' },
+    ])
+  })
+
+  it('触发框逐个回显部门名；JSON 数组串归一（数字 ID 亦兼容）', async () => {
+    const wrapper = mount(DeptControl, {
+      ...mountOptions,
+      props: { ...mountOptions.props, field: multiField, modelValue: '[10,11]' },
+    })
+    await nextTick()
+    await nextTick()
+
+    const trigger = wrapper.find('.dept-picker__trigger input')
+    expect((trigger.element as HTMLInputElement).value).toBe('总公司、研发部')
+  })
+
+  it('弹窗内复选后确认上抛 ID 字符串数组；全部取消确认上抛 null', async () => {
+    const wrapper = mount(DeptControl, {
+      ...mountOptions,
+      props: { ...mountOptions.props, field: multiField, modelValue: null },
+    })
+    await nextTick()
+    await wrapper.find('.dept-picker__trigger input').trigger('click')
+
+    const rows = wrapper.findAll('.dept-picker__table tbody tr')
+    await rows[0]!.trigger('click')
+    await rows[2]!.trigger('click')
+    expect(wrapper.findAll('.dept-picker__check.is-checked').length).toBe(2)
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === '确定')!
+      .trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([['10', '12']])
+
+    // 再开弹窗（prop 未回写 → 待选从空开始），勾选两行再逐一取消勾选，确认 → 上抛 null
+    await wrapper.find('.dept-picker__trigger input').trigger('click')
+    await nextTick()
+    const rowsAgain = wrapper.findAll('.dept-picker__table tbody tr')
+    await rowsAgain[0]!.trigger('click')
+    await rowsAgain[2]!.trigger('click')
+    await rowsAgain[0]!.trigger('click')
+    await rowsAgain[2]!.trigger('click')
+    expect(wrapper.findAll('.dept-picker__check.is-checked').length).toBe(0)
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === '确定')!
+      .trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[1]).toEqual([null])
+  })
+})

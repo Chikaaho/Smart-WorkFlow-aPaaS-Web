@@ -3,8 +3,9 @@ import { useI18n } from '@/locales'
 
 const { t } = useI18n()
 /**
- * OaFieldConfig — v0.0.2 新控件（MULTISELECT/ATTACHMENT/IMAGE/LABEL）配置面板。
+ * OaFieldConfig — v0.0.2 新控件（MULTISELECT/ATTACHMENT/IMAGE/LABEL/USER/DEPT/TIME）配置面板。
  * MULTISELECT 编辑候选选项（逗号分隔）；LABEL 编辑文字正文与颜色/字号/粗细/对齐；
+ * USER/DEPT 编辑多选开关（P63，写 definition multiple，缺省单选）；
  * 通用行（标签/列名/必填/默认值）复用 CommonConfigRows。
  */
 import type { FieldPatch } from '../field-config'
@@ -14,6 +15,8 @@ import {
   type FieldTextAlign,
   type MultiSelectField,
   type LabelField,
+  type UserField,
+  type DeptField,
   type FormSchemaField,
 } from '@/contracts/form-schema'
 
@@ -84,6 +87,19 @@ function onTextAlign(value: string | number | boolean | undefined) {
     value === 'center' || value === 'right' ? value : DEFAULT_FIELD_TEXT_ALIGN
   emit('update', { textAlign: align })
 }
+
+/* ── 人员/部门（USER/DEPT）多选（P63） ── */
+
+/** USER/DEPT 才有 multiple 键；缺省单选（false/缺省均按单选渲染）。 */
+function isPickerMultiple(): boolean {
+  const field = props.field as UserField | DeptField
+  return field.type === 'USER' || field.type === 'DEPT' ? Boolean(field.multiple) : false
+}
+
+/** 关闭时写 undefined（JSON 序列化丢键），保持「缺省单选」的干净入库形状。 */
+function onPickerMultiple(value: string | number | boolean) {
+  emit('update', { multiple: value ? true : undefined })
+}
 </script>
 
 <template>
@@ -105,6 +121,12 @@ function onTextAlign(value: string | number | boolean | undefined) {
       :placeholder="t('form.multiselectOptionsPlaceholder')"
       @update:model-value="onOptionsText"
     />
+  </div>
+
+  <!-- P63：人员/部门多选开关（写入 definition multiple；子表子字段同样可用） -->
+  <div v-if="field.type === 'USER' || field.type === 'DEPT'" class="row row--inline">
+    <label class="row__label">{{ t('form.fieldTypeMultiSelect') }}</label>
+    <el-switch :model-value="isPickerMultiple()" @update:model-value="onPickerMultiple" />
   </div>
 
   <template v-if="field.type === 'LABEL'">

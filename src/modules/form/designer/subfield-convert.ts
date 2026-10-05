@@ -8,16 +8,16 @@ import { nextDesignerItemId } from './types'
  * 子表作者侧的盖层子画布复用主画布那套（DesignerItem / DesignerCanvas / 配置面板），
  * 但子字段在契约里存为 `TableField.subFields: TableSubField[]`（不递归、无 subFields 键）。
  * 本文件把 subFields 与 DesignerItem[] 互转，承担两件硬事：
- *  1. **类型硬挡**：子表内部只允许六种通用数据字段，REFERENCE/TABLE 一律拒收
- *     （防子表递归，对齐后端 1207；引用为本刀范围外）。进出两个方向都挡。
+ *  1. **类型硬挡**：子表内部只允许通用数据字段（P63 起含 USER/DEPT），REFERENCE/TABLE
+ *     一律拒收（防子表递归，对齐后端 1207；引用为本刀范围外）。进出两个方向都挡。
  *  2. **形状对齐**：写回的 TableSubField 只带契约已有键（name/type/label/required/length/
- *     dictType/renderAs），不漏 UI-only 键（DesignerItem.id 丢弃）。
+ *     dictType/renderAs/multiple），不漏 UI-only 键（DesignerItem.id 丢弃）。
  *
  * 红线：本文件不碰第四刀的 definition↔items 转换（definition-convert.ts）。顶层 TABLE 字段
  * 的 subFields 由那层 deepClone 原样保全；本层只在盖层进出时做 subFields ↔ items。
  */
 
-/** 子表内部允许的六种通用数据字段（硬挡 REFERENCE 引用与 TABLE 子表，防递归）。 */
+/** 子表内部允许的通用数据字段（P63 放行 USER/DEPT；仍硬挡 REFERENCE 引用与 TABLE 子表，防递归）。 */
 export const ALLOWED_SUBFIELD_TYPES = [
   'TEXT',
   'RICH_TEXT',
@@ -25,6 +25,8 @@ export const ALLOWED_SUBFIELD_TYPES = [
   'DATE',
   'BOOL',
   'DICT',
+  'USER',
+  'DEPT',
 ] as const
 
 export type AllowedSubFieldType = (typeof ALLOWED_SUBFIELD_TYPES)[number]
@@ -36,7 +38,8 @@ export function isAllowedSubFieldType(type: FieldType): type is AllowedSubFieldT
 
 /**
  * TableSubField → DesignerItem 的内层字段。
- * 只搬契约键；DICT 补 dictType（DictField 契约要求，缺省空串供面板再选）。
+ * 只搬契约键；DICT 补 dictType（DictField 契约要求，缺省空串供面板再选）；
+ * USER/DEPT 透传 multiple（P63，缺省单选不落键）。
  */
 function subFieldToField(sub: TableSubField): FormSchemaField {
   const field: Record<string, unknown> = {
@@ -50,12 +53,16 @@ function subFieldToField(sub: TableSubField): FormSchemaField {
     field.dictType = sub.dictType ?? ''
     if (sub.renderAs) field.renderAs = sub.renderAs
   }
+  if (sub.type === 'USER' || sub.type === 'DEPT') {
+    if (sub.multiple) field.multiple = true
+  }
   return field as unknown as FormSchemaField
 }
 
 /**
  * DesignerItem 的内层字段 → TableSubField。
  * 只产出契约已有键，required=false 等默认值省略，保持入库 JSON 干净；
+ * USER/DEPT 的 multiple 仅在开启时落键（P63，缺省单选省略）；
  * 丢弃 DesignerItem.id（UI-only，不入库）。
  */
 function fieldToSubField(field: FormSchemaField): TableSubField {
@@ -66,6 +73,9 @@ function fieldToSubField(field: FormSchemaField): TableSubField {
   if (field.type === 'DICT') {
     sub.dictType = field.dictType
     if (field.renderAs) sub.renderAs = field.renderAs
+  }
+  if (field.type === 'USER' || field.type === 'DEPT') {
+    if (field.multiple) sub.multiple = true
   }
   return sub
 }

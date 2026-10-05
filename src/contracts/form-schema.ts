@@ -97,6 +97,8 @@ export interface TableSubField {
   renderAs?: 'select' | 'radio'
   targetFormId?: string
   defaultValue?: unknown
+  /** USER/DEPT 子字段多选（P63）：语义同 UserField/DeptField.multiple。 */
+  multiple?: boolean
 }
 
 interface BaseField {
@@ -131,6 +133,8 @@ export interface NumberField extends BaseField {
 
 export interface DateField extends BaseField {
   type: 'DATE'
+  /** 日期时间格式（P63）：'datetime' = 值含时间部分（YYYY-MM-DD HH:mm[:ss]）；缺省仅日期（YYYY-MM-DD）。 */
+  format?: string
 }
 
 export interface BoolField extends BaseField {
@@ -194,11 +198,15 @@ export interface TimeField extends BaseField {
 /** 人员选择：值 = 当前租户内启用用户 ID（服务端经 Facade 校验）。 */
 export interface UserField extends BaseField {
   type: 'USER'
+  /** 多选（P63）：true = 值为用户 ID 字符串列表（落库 JSON 数组串）；缺省单选（单个 ID 字符串）。 */
+  multiple?: boolean
 }
 
 /** 部门选择：值 = 当前租户内正常状态部门 ID（服务端经 Facade 校验）。 */
 export interface DeptField extends BaseField {
   type: 'DEPT'
+  /** 多选（P63）：true = 值为部门 ID 字符串列表（落库 JSON 数组串）；缺省单选（单个 ID 字符串）。 */
+  multiple?: boolean
 }
 
 /** 外部数据源绑定（稳定标识；SQL/密钥只存服务端契约注册表）。 */

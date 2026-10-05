@@ -42,6 +42,10 @@ export interface FieldPatch {
   expression?: string
   /** I2 DATASOURCE 稳定绑定标识（SQL/密钥只存服务端契约注册表）。 */
   dsBinding?: import('@/contracts/form-schema').DatasourceField['dsBinding']
+  /** USER/DEPT 多选（P63 契约已落 UserField/DeptField.multiple）。 */
+  multiple?: boolean
+  /** DATE 日期时间格式（P63 契约已落 DateField.format）。 */
+  format?: string
 }
 
 /**

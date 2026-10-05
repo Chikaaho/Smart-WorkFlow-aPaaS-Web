@@ -104,3 +104,47 @@ describe('subfield-convert', () => {
     warn.mockRestore()
   })
 })
+
+/**
+ * P63：子表放行 USER/DEPT（服务端 subFields 已放行），multiple 标志进出双向透传；
+ * REFERENCE/TABLE 的递归硬挡不回退。
+ */
+describe('subfield-convert P63 USER/DEPT 子字段', () => {
+  it('isAllowedSubFieldType 放行 USER/DEPT；REFERENCE/TABLE 仍拒收', () => {
+    expect(isAllowedSubFieldType('USER')).toBe(true)
+    expect(isAllowedSubFieldType('DEPT')).toBe(true)
+    expect(isAllowedSubFieldType('REFERENCE')).toBe(false)
+    expect(isAllowedSubFieldType('TABLE')).toBe(false)
+  })
+
+  it('multiple=true 进出双向透传；未开启时不残留键（缺省单选）', () => {
+    const subs: TableSubField[] = [
+      { name: 'owners', type: 'USER', label: '负责人员', multiple: true },
+      { name: 'dept', type: 'DEPT', required: true },
+    ]
+    const items = subFieldsToItems(subs)
+    expect(items[0].field).toMatchObject({ name: 'owners', type: 'USER', multiple: true })
+    expect(items[1].field).toMatchObject({ name: 'dept', type: 'DEPT' })
+    expect(items[1].field).not.toHaveProperty('multiple')
+
+    const roundtrip = itemsToSubFields(items)
+    expect(roundtrip[0]).toEqual({
+      name: 'owners',
+      type: 'USER',
+      label: '负责人员',
+      multiple: true,
+    })
+    expect(roundtrip[1]).toEqual({ name: 'dept', type: 'DEPT', required: true })
+  })
+
+  it('即使绕过控件库塞入 USER（multiple=false），写回也不落 multiple 键', () => {
+    const items: DesignerItem[] = [
+      fieldItem('di_1', {
+        name: 'owner',
+        type: 'USER',
+        multiple: false,
+      } as Partial<FormSchemaField> & { name: string }),
+    ]
+    expect(itemsToSubFields(items)).toEqual([{ name: 'owner', type: 'USER' }])
+  })
+})
