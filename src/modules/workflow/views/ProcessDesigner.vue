@@ -25,7 +25,25 @@ import {
   validateProcessDefGraph,
 } from '@/modules/workflow/api'
 import type { GraphValidationError, ApproverCandidate } from '@/modules/workflow/api'
-import type { BpmNodeCapability, BpmNodeConfigField } from '@/contracts/bpm-node'
+import type {
+  BpmNodeCapability,
+  BpmNodeConfigField,
+  ParticipantStrategy,
+} from '@/contracts/bpm-node'
+import { PARTICIPANT_STRATEGIES } from '@/contracts/bpm-node'
+import {
+  buildDynamicParallelConfig,
+  buildDynamicParallelFormDraft,
+  buildParticipantConfig,
+  buildParticipantFormDraft,
+  emptyParticipantFormDraft,
+  validateNodeConfigSemantics,
+} from '@/modules/workflow/utils/node-capabilities'
+import type {
+  DynamicParallelFormDraft,
+  ParticipantFormDraft,
+  ParticipantShapeKind,
+} from '@/modules/workflow/utils/node-capabilities'
 import type { ProcessGraphDocument, ProcessGraphWaypoint } from '@/contracts/process-graph'
 import { createDesignerModel, buildEdgePath, hitTestEdgeAtPoint } from '@/adapters/process-graph'
 import type { DesignerModel, PositionedEdge, PositionedNode } from '@/adapters/process-graph'
@@ -60,6 +78,14 @@ const SNAP_Y = 20
 const P53_NODE_WIDTH = 160
 const P53_NODE_HEIGHT = 50
 const P53_GATEWAY_RADIUS = 22
+
+/**
+ * 网关类节点（菱形渲染）：GATEWAY 为既有口径；P63 将 CONDITION 与
+ * PARALLEL_GATEWAY（并行网关，1入多出分叉/多入1出到齐汇合）归入同一菱形分支。
+ */
+function isGatewayShape(type: string): boolean {
+  return type === 'GATEWAY' || type === 'CONDITION' || type === 'PARALLEL_GATEWAY'
+}
 
 function snapshot() {
   version.value++
@@ -626,6 +652,10 @@ const currentApproverIds = computed<number[]>(() => {
       value = raw
     }
   }
+  // P63 参与人面板写入的是对象而非 JSON 文本（{strategy, value}），同样取 value 回显
+  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw) && 'value' in raw) {
+    value = (raw as { value?: unknown }).value
+  }
   if (typeof value === 'string') {
     value = value
       .split(',')
@@ -644,24 +674,6 @@ const selectedNode = computed(() =>
 )
 /** 能力 configFields → 表单草稿（object 类型拆 participant.strategy/value） */
 const propForm = ref<Record<string, unknown>>({})
-
-watch(selectedNode, (node) => {
-  // object 类型字段（configFields.type === 'object'）回显为 JSON 文本，
-  // 避免输入框显示 [object Object]；applyProps 提交前解析回对象。
-  if (!node) {
-    propForm.value = {}
-    return
-  }
-  const draft: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(node.config ?? {})) {
-    const field = selectedCapability.value?.configFields.find((f) => f.key === key)
-    draft[key] =
-      field?.type === 'object' && value !== null && typeof value === 'object'
-        ? JSON.stringify(value)
-        : value
-  }
-  propForm.value = draft
-})
 
 function applyProps() {
   if (!selectedNode.value || !model) return
@@ -761,8 +773,20 @@ function markSaved() {
   lastSavedJson = currentGraphJson()
 }
 
-async function save() {
-  if (!model || !graph.value || !defId.value) return
+/** P63 保存前语义校验：FORM_FIELD/动态并行配置错误以中文提示直接展示（对齐服务端口径）。 */
+function assertNodeSemantics(): boolean {
+  if (!model) return true
+  const semanticErrors = validateNodeConfigSemantics(model.serialize())
+  if (semanticErrors.length === 0) return true
+  errorMsg.value = semanticErrors.join('；')
+  ElMessage.error(semanticErrors[0])
+  return false
+}
+
+/** 保存草稿；返回是否真实保存成功（发布前依赖该结果避免“发布旧图”）。 */
+async function save(): Promise<boolean> {
+  if (!model || !graph.value || !defId.value) return false
+  if (!assertNodeSemantics()) return false
   saving.value = true
   errorMsg.value = ''
   try {
@@ -770,8 +794,10 @@ async function save() {
     // 复核02 G6a：以真实保存成功为准刷新状态（脏清零 + 时钟 + 基线快照）
     markSaved()
     ElMessage.success(t('common.draftSaved'))
+    return true
   } catch (err) {
     errorMsg.value = (err as { msg?: string }).msg ?? t('common.saveFailed')
+    return false
   } finally {
     saving.value = false
   }
@@ -779,6 +805,11 @@ async function save() {
 
 async function validate() {
   if (!model || !defId.value) return
+  // 本地语义校验未通过时不再请求服务端（错误口径一致且可先定位画布节点）
+  if (!assertNodeSemantics()) {
+    validationErrors.value = []
+    return
+  }
   validating.value = true
   validationErrors.value = []
   try {
@@ -817,9 +848,11 @@ async function publish() {
   }
   publishing.value = true
   try {
-    // 复核02 G6a：发布消费的是服务端持久化图——存在未保存更改时先真实保存，杜绝"发布旧图"
+    // 复核02 G6a：发布消费的是服务端持久化图——存在未保存更改时先真实保存，杜绝"发布旧图"；
+    // P63：保存被语义校验拦截时中止发布，避免带着旧图继续走发布链路
     if (dirty.value) {
-      await save()
+      const saved = await save()
+      if (!saved) return
     }
     await publishProcessDef(defId.value)
     ElMessage.success(t('workflow.publishSucceeded'))
@@ -856,6 +889,158 @@ function focusError(error: GraphValidationError) {
 const selectedCapability = computed(() => {
   const node = selectedNode.value as PositionedNode | null
   return node ? (capabilities.value.find((cap) => cap.type === node.type) ?? null) : null
+})
+
+/* ─────────── P63 参与人结构化面板（APPROVAL/CONSENSUS） ─────────── */
+
+/** 参与人结构化面板覆盖的节点类型；其余节点保持既有 approver/object 渲染路径。 */
+const PARTICIPANT_PANEL_NODE_TYPES = ['APPROVAL', 'CONSENSUS']
+
+/** 参与人策略展示名（本批改动文件域不含 locale 资源，文案先落在设计器，后续可迁 locale 键）。 */
+const PARTICIPANT_STRATEGY_LABELS: Record<ParticipantStrategy, string> = {
+  FIXED_USER: '指定人员',
+  ROLE: '指定角色',
+  DEPT_LEADER: '部门负责人',
+  POST: '指定岗位',
+  DEPT_POST: '部门岗位',
+  EXPRESSION: '表达式',
+  ADAPTER: '外部适配器',
+  FORM_FIELD: '表单字段',
+}
+
+/** 参与人字段：真实契约的 participant、mock APPROVAL 的 approver，或带 approverTypes 的兼容 object 字段。 */
+const participantField = computed<BpmNodeConfigField | null>(() => {
+  const node = selectedNode.value
+  const capability = selectedCapability.value
+  if (!node || !capability) return null
+  if (!PARTICIPANT_PANEL_NODE_TYPES.includes(node.type)) return null
+  return (
+    capability.configFields.find(
+      (field) => field.key === 'participant' || field.key === 'approver',
+    ) ??
+    capability.configFields.find((field) => isApproverSelectionField(field)) ??
+    null
+  )
+})
+
+const participantForm = ref<ParticipantFormDraft>(emptyParticipantFormDraft())
+/** 打开节点时检测到的参与人数据形态（旧数据兼容展示提示的依据）。 */
+const participantShape = ref<ParticipantShapeKind>('empty')
+
+const participantStrategyOptions = computed(() => {
+  // 策略全集以服务端 validation.strategies 优先；未下发时回退契约常量（含 P63 FORM_FIELD）
+  const declared = participantField.value?.validation?.['strategies']
+  const strategies =
+    Array.isArray(declared) && declared.length > 0
+      ? declared.map((item) => String(item))
+      : [...PARTICIPANT_STRATEGIES]
+  return strategies.map((strategy) => ({
+    value: strategy,
+    label: PARTICIPANT_STRATEGY_LABELS[strategy as ParticipantStrategy] ?? strategy,
+  }))
+})
+
+const participantLegacyNote = computed(() => {
+  switch (participantShape.value) {
+    case 'legacy':
+      return '检测到旧版参与人配置，已做兼容展示；保存后将升级为 strategy 取值形状。'
+    case 'unparsed':
+      return '当前参与人配置无法识别；重新选择策略并保存后将覆盖旧值。'
+    default:
+      return ''
+  }
+})
+
+/** 参与人面板提交：写入 {strategy, value} 对象（object 字段 JSON 序列化路径既有）。 */
+function applyParticipant() {
+  if (!selectedNode.value || !model || !participantField.value) return
+  model.updateNodeConfig(selectedNode.value.id, {
+    [participantField.value.key]: buildParticipantConfig(participantForm.value),
+  })
+}
+
+/* FIXED_USER 人员多选：复用 ApproverCandidatesDialog 人员页签（id 十进制字符串保持精度）。 */
+const participantUserPickerVisible = ref(false)
+const participantUserIds = computed(() =>
+  participantForm.value.userIds.map(Number).filter((id) => Number.isFinite(id)),
+)
+function openParticipantUserPicker() {
+  participantUserPickerVisible.value = true
+}
+function onParticipantUsersPicked(candidates: ApproverCandidate[]) {
+  participantForm.value = {
+    ...participantForm.value,
+    userIds: candidates.map((candidate) => String(candidate.id)),
+  }
+  applyParticipant()
+}
+
+/* DEPT_LEADER 部门多选：复用同一弹窗的部门多选模式（部门树勾选）。 */
+const participantDeptPickerVisible = ref(false)
+function openParticipantDeptPicker() {
+  participantDeptPickerVisible.value = true
+}
+function onParticipantDeptsPicked(depts: Array<{ id: string; name: string }>) {
+  participantForm.value = { ...participantForm.value, deptIds: depts.map((dept) => dept.id) }
+  applyParticipant()
+}
+
+/* ─────────── P63 动态并行专属面板 ─────────── */
+
+const dynamicParallelActive = computed(() => selectedNode.value?.type === 'DYNAMIC_PARALLEL')
+const dynamicParallelForm = ref<DynamicParallelFormDraft>(buildDynamicParallelFormDraft(null))
+
+/** 动态并行面板提交：勾选新语义写 semanticVersion:2，旧语义不写该键（透传语义不受影响）。 */
+function applyDynamicParallel() {
+  if (!selectedNode.value || !model) return
+  model.updateNodeConfig(selectedNode.value.id, {
+    ...buildDynamicParallelConfig(dynamicParallelForm.value),
+  })
+}
+
+/**
+ * 选中节点 → 面板草稿回显：
+ * - object 类型字段（configFields.type === 'object'）回显为 JSON 文本，
+ *   避免输入框显示 [object Object]；applyProps 提交前解析回对象；
+ * - 参与人字段由结构化面板承载（participantForm），不进入通用 JSON 文本草稿；
+ * - 动态并行节点 config 整体进入专属面板草稿。
+ */
+watch(selectedNode, (node) => {
+  if (!node) {
+    propForm.value = {}
+    participantShape.value = 'empty'
+    return
+  }
+  const fields = selectedCapability.value?.configFields ?? []
+  const participantKey = participantField.value?.key
+  const draft: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(node.config ?? {})) {
+    if (key === participantKey) continue
+    const field = fields.find((f) => f.key === key)
+    draft[key] =
+      field?.type === 'object' && value !== null && typeof value === 'object'
+        ? JSON.stringify(value)
+        : value
+  }
+  propForm.value = draft
+  if (participantKey) {
+    const built = buildParticipantFormDraft(
+      (node.config as Record<string, unknown> | undefined)?.[participantKey],
+    )
+    participantForm.value = built.draft
+    participantShape.value = built.shape
+  } else {
+    participantShape.value = 'empty'
+  }
+  dynamicParallelForm.value = buildDynamicParallelFormDraft(node.config)
+})
+
+/** 通用字段渲染清单：name 由顶部承载；参与人字段由结构化面板承载；动态并行整表由专属面板承载。 */
+const genericConfigFields = computed(() => {
+  const fields = selectedCapability.value?.configFields ?? []
+  if (dynamicParallelActive.value) return []
+  const participantKey = participantField.value?.key
+  return fields.filter((field) => field.key !== 'name' && field.key !== participantKey)
 })
 
 /* ─────────── 加载 ─────────── */
@@ -1037,6 +1222,11 @@ function nodeLabelLines(label: string) {
           <template v-else-if="cap.type === 'CONDITION'">
             <path d="M12 1.667L20.333 10L12 18.333L3.667 10L12 1.667Z" />
           </template>
+          <!-- P63 并行网关与条件分支同为菱形语义（分叉/汇合） -->
+          <template v-else-if="cap.type === 'PARALLEL_GATEWAY'">
+            <path d="M10 1.667L18.333 10L10 18.333L1.667 10L10 1.667Z" />
+            <path d="M10 6.667V13.333M6.667 10H13.333" />
+          </template>
           <template v-else-if="cap.type === 'NOTIFICATION'">
             <path d="M11.667 1.667H4.167V18.333H15.833V5.833L11.667 1.667V1.667Z" />
           </template>
@@ -1170,7 +1360,7 @@ function nodeLabelLines(label: string) {
             v-for="node in canvasNodes"
             :key="node.id"
             :transform="
-              node.type === 'GATEWAY'
+              isGatewayShape(node.type)
                 ? `translate(${node.x - P53_GATEWAY_RADIUS}, ${node.y - P53_GATEWAY_RADIUS})`
                 : `translate(${node.x - P53_NODE_WIDTH / 2}, ${node.y - P53_NODE_HEIGHT / 2})`
             "
@@ -1187,13 +1377,13 @@ function nodeLabelLines(label: string) {
             @pointerup="onNodePointerUp($event, node)"
           >
             <rect
-              v-if="node.type !== 'GATEWAY'"
+              v-if="!isGatewayShape(node.type)"
               :width="P53_NODE_WIDTH"
               :height="P53_NODE_HEIGHT"
               rx="8"
               class="designer-node-rect"
             />
-            <!-- 设计09：网关为菱形（+号），名称置于菱形右侧 -->
+            <!-- 设计09：网关为菱形（+号），名称置于菱形右侧；P63 纳入 CONDITION/PARALLEL_GATEWAY -->
             <template v-else>
               <polygon
                 points="22,0 44,22 22,44 0,22"
@@ -1203,7 +1393,7 @@ function nodeLabelLines(label: string) {
             </template>
             <!-- V011-BUG-023：四向锚点（上下左右缘中点）均可拖拽/点选拉线（ProcessOn 口径） -->
             <circle
-              v-if="selectionId === node.id && node.type !== 'GATEWAY'"
+              v-if="selectionId === node.id && !isGatewayShape(node.type)"
               cx="0"
               :cy="P53_NODE_HEIGHT / 2"
               r="3"
@@ -1211,7 +1401,7 @@ function nodeLabelLines(label: string) {
               @pointerdown.stop="startConnect($event, node, 'left')"
             />
             <circle
-              v-if="selectionId === node.id && node.type !== 'GATEWAY'"
+              v-if="selectionId === node.id && !isGatewayShape(node.type)"
               :cx="P53_NODE_WIDTH"
               :cy="P53_NODE_HEIGHT / 2"
               r="3"
@@ -1219,7 +1409,7 @@ function nodeLabelLines(label: string) {
               @pointerdown.stop="startConnect($event, node, 'right')"
             />
             <circle
-              v-if="selectionId === node.id && node.type !== 'GATEWAY'"
+              v-if="selectionId === node.id && !isGatewayShape(node.type)"
               :cx="P53_NODE_WIDTH / 2"
               cy="0"
               r="3"
@@ -1227,7 +1417,7 @@ function nodeLabelLines(label: string) {
               @pointerdown.stop="startConnect($event, node, 'top')"
             />
             <circle
-              v-if="selectionId === node.id && node.type !== 'GATEWAY'"
+              v-if="selectionId === node.id && !isGatewayShape(node.type)"
               :cx="P53_NODE_WIDTH / 2"
               :cy="P53_NODE_HEIGHT"
               r="3"
@@ -1236,7 +1426,7 @@ function nodeLabelLines(label: string) {
             />
             <!-- 设计09：节点图标为锁定 SVG 矢量字形（22×22，起点 (12,14)） -->
             <g
-              v-if="node.type !== 'GATEWAY'"
+              v-if="!isGatewayShape(node.type)"
               class="designer-node-icon"
               transform="translate(12 14)"
             >
@@ -1268,7 +1458,7 @@ function nodeLabelLines(label: string) {
               </template>
             </g>
             <text
-              v-if="node.type !== 'GATEWAY'"
+              v-if="!isGatewayShape(node.type)"
               :x="42"
               :y="P53_NODE_HEIGHT / 2 + (nodeLabelLines(node.label).length > 1 ? -5 : 2)"
               text-anchor="start"
@@ -1354,12 +1544,233 @@ function nodeLabelLines(label: string) {
             <el-form-item v-if="nodeMeta.approveMode" :label="t('workflow.approveModeLabel')">
               <el-input :model-value="nodeMeta.approveMode" disabled />
             </el-form-item>
-            <template
-              v-for="field in (selectedCapability?.configFields ?? []).filter(
-                (f) => f.key !== 'name',
-              )"
-              :key="field.key"
-            >
+            <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
+            <template v-if="participantField">
+              <el-form-item label="参与人策略">
+                <el-select v-model="participantForm.strategy" @change="applyParticipant">
+                  <el-option
+                    v-for="option in participantStrategyOptions"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
+                  />
+                </el-select>
+              </el-form-item>
+              <!-- FIXED_USER：人员多选（复用审批人候选弹窗人员页签；id 数组保持精度） -->
+              <el-form-item v-if="participantForm.strategy === 'FIXED_USER'" label="指定人员">
+                <div class="participant-picker-row">
+                  <el-button @click="openParticipantUserPicker">
+                    {{
+                      participantForm.userIds.length > 0
+                        ? `已选 ${participantForm.userIds.length} 人（点击修改）`
+                        : t('workflow.selectApprover')
+                    }}
+                  </el-button>
+                  <small v-if="nodeMeta.approverName" class="participant-hint">
+                    {{ nodeMeta.approverName }}
+                  </small>
+                </div>
+              </el-form-item>
+              <!-- DEPT_LEADER：部门多选（复用弹窗部门树勾选，运行期服务端解析唯一负责人） -->
+              <el-form-item v-else-if="participantForm.strategy === 'DEPT_LEADER'" label="部门多选">
+                <el-button @click="openParticipantDeptPicker">
+                  {{
+                    participantForm.deptIds.length > 0
+                      ? `已选 ${participantForm.deptIds.length} 个部门（点击修改）`
+                      : '选择部门'
+                  }}
+                </el-button>
+              </el-form-item>
+              <!-- FORM_FIELD：来源表单（objectType + scope + 字段绑定） -->
+              <template v-else-if="participantForm.strategy === 'FORM_FIELD'">
+                <el-form-item label="对象类型">
+                  <el-radio-group
+                    v-model="participantForm.formField.objectType"
+                    @change="applyParticipant"
+                  >
+                    <el-radio value="USER">人员（所选人员审批）</el-radio>
+                    <el-radio value="DEPT">部门（解析唯一负责人）</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+                <el-form-item label="取值范围">
+                  <el-radio-group
+                    v-model="participantForm.formField.scope"
+                    @change="applyParticipant"
+                  >
+                    <el-radio value="MAIN">主表字段</el-radio>
+                    <el-radio value="TABLE">表格字段</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+                <el-form-item label="主字段名">
+                  <el-input
+                    v-model="participantForm.formField.field"
+                    placeholder="请输入主表字段名"
+                    @change="applyParticipant"
+                    @blur="applyParticipant"
+                  />
+                </el-form-item>
+                <template v-if="participantForm.formField.scope === 'TABLE'">
+                  <el-form-item label="表格字段名">
+                    <el-input
+                      v-model="participantForm.formField.tableField"
+                      placeholder="请输入表格字段名"
+                      @change="applyParticipant"
+                      @blur="applyParticipant"
+                    />
+                  </el-form-item>
+                  <el-form-item label="列字段名">
+                    <el-input
+                      v-model="participantForm.formField.column"
+                      placeholder="请输入列字段名"
+                      @change="applyParticipant"
+                      @blur="applyParticipant"
+                    />
+                  </el-form-item>
+                </template>
+              </template>
+              <!-- ROLE/POST/DEPT_POST/EXPRESSION：通用取值（保存为 {strategy, value}） -->
+              <el-form-item
+                v-else
+                :label="participantForm.strategy === 'EXPRESSION' ? '表达式' : '取值'"
+              >
+                <el-input
+                  v-model="participantForm.genericValue"
+                  :placeholder="
+                    participantForm.strategy === 'EXPRESSION'
+                      ? '请输入表达式'
+                      : '多个取值用英文逗号分隔'
+                  "
+                  @change="applyParticipant"
+                  @blur="applyParticipant"
+                />
+              </el-form-item>
+              <el-form-item v-if="participantForm.strategy === 'ADAPTER'" label="适配器 ID">
+                <el-input
+                  v-model="participantForm.adapterId"
+                  @change="applyParticipant"
+                  @blur="applyParticipant"
+                />
+              </el-form-item>
+              <el-alert
+                v-if="participantLegacyNote"
+                :title="participantLegacyNote"
+                type="info"
+                :closable="false"
+                class="participant-legacy-note"
+              />
+            </template>
+            <!-- ═══ P63 动态并行专属面板（semanticVersion 开关 = 新语义按对象分支） ═══ -->
+            <template v-else-if="dynamicParallelActive">
+              <el-form-item label="分支来源类型">
+                <el-select v-model="dynamicParallelForm.sourceType" @change="applyDynamicParallel">
+                  <el-option label="表单字段" value="FORM_FIELD" />
+                  <el-option label="流程变量" value="VARIABLE" />
+                  <el-option label="固定值" value="FIXED" />
+                </el-select>
+              </el-form-item>
+              <el-form-item
+                :label="dynamicParallelForm.sourceType === 'FIXED' ? '固定值' : '字段绑定'"
+              >
+                <el-input
+                  v-model="dynamicParallelForm.sourceValue"
+                  :placeholder="
+                    dynamicParallelForm.sourceType === 'FIXED'
+                      ? '多个取值用英文逗号分隔'
+                      : '请输入字段名/变量名'
+                  "
+                  @change="applyDynamicParallel"
+                  @blur="applyDynamicParallel"
+                />
+              </el-form-item>
+              <!-- 对象类型仅新语义（按对象分支）下有意义，随 semanticVersion 开关显示 -->
+              <el-form-item v-if="dynamicParallelForm.objectSemantic" label="对象类型">
+                <el-radio-group
+                  v-model="dynamicParallelForm.objectType"
+                  @change="applyDynamicParallel"
+                >
+                  <el-radio value="USER">人员（逐人分支）</el-radio>
+                  <el-radio value="DEPT">部门（逐部门分支）</el-radio>
+                </el-radio-group>
+              </el-form-item>
+              <el-form-item label="取值范围">
+                <el-radio-group v-model="dynamicParallelForm.scope" @change="applyDynamicParallel">
+                  <el-radio value="MAIN">主表字段</el-radio>
+                  <el-radio value="TABLE">表格字段</el-radio>
+                </el-radio-group>
+              </el-form-item>
+              <template v-if="dynamicParallelForm.scope === 'TABLE'">
+                <el-form-item label="表格字段名">
+                  <el-input
+                    v-model="dynamicParallelForm.tableField"
+                    @change="applyDynamicParallel"
+                    @blur="applyDynamicParallel"
+                  />
+                </el-form-item>
+                <el-form-item label="列字段名">
+                  <el-input
+                    v-model="dynamicParallelForm.column"
+                    @change="applyDynamicParallel"
+                    @blur="applyDynamicParallel"
+                  />
+                </el-form-item>
+              </template>
+              <el-form-item label="完成模式">
+                <el-select v-model="dynamicParallelForm.mode" @change="applyDynamicParallel">
+                  <el-option label="全部通过（ALL）" value="ALL" />
+                  <el-option label="任一通过（ANY）" value="ANY" />
+                  <el-option label="按比例通过（RATIO）" value="RATIO" />
+                  <el-option label="一票否决（VETO）" value="VETO" />
+                </el-select>
+              </el-form-item>
+              <el-form-item v-if="dynamicParallelForm.mode === 'RATIO'" label="通过比例（%）">
+                <el-input-number
+                  v-model="dynamicParallelForm.ratio"
+                  :min="1"
+                  :max="100"
+                  @change="applyDynamicParallel"
+                />
+              </el-form-item>
+              <el-form-item label="最大分支数">
+                <el-input-number
+                  v-model="dynamicParallelForm.maxBranches"
+                  :min="1"
+                  @change="applyDynamicParallel"
+                />
+              </el-form-item>
+              <el-form-item label="空来源处置">
+                <el-select
+                  v-model="dynamicParallelForm.emptyStrategy"
+                  @change="applyDynamicParallel"
+                >
+                  <el-option label="阻断（BLOCK）" value="BLOCK" />
+                  <el-option label="放行（PROCEED）" value="PROCEED" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="无效值处置">
+                <el-select
+                  v-model="dynamicParallelForm.invalidStrategy"
+                  @change="applyDynamicParallel"
+                >
+                  <el-option label="阻断（BLOCK）" value="BLOCK" />
+                  <el-option label="跳过（SKIP）" value="SKIP" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="分支语义">
+                <div class="participant-picker-row">
+                  <el-checkbox
+                    v-model="dynamicParallelForm.objectSemantic"
+                    @change="applyDynamicParallel"
+                  >
+                    新语义（按对象分支）
+                  </el-checkbox>
+                </div>
+                <small class="participant-hint">
+                  勾选后写入
+                  semanticVersion=2：人员来源逐人分支、部门来源逐部门分支（同负责人不同部门独立分支）、表格列来源逐行可追溯；不勾选保持旧语义（按负责人合并，行为不变）。
+                </small>
+              </el-form-item>
+            </template>
+            <template v-for="field in genericConfigFields" :key="field.key">
               <!-- name 已由顶部「节点名称」编辑项承载，能力注册表同名项不再重复渲染 -->
               <el-form-item v-if="isApproverSelectionField(field)" :label="field.label">
                 <!-- 设计09：已解析审批人（config.approverName）以 chip+按钮呈现；未解析回退输入框 -->
@@ -1557,6 +1968,24 @@ function nodeLabelLines(label: string) {
         v-model:visible="approverPickerVisible"
         :initial-ids="currentApproverIds"
         @pick="onApproverPicked"
+      />
+    </div>
+
+    <!-- P63 参与人策略「部门负责人」部门多选弹窗（复用同一组件的部门勾选模式） -->
+    <div class="approver-dialog-host">
+      <ApproverCandidatesDialog
+        v-model:visible="participantDeptPickerVisible"
+        picker-mode="dept"
+        :initial-dept-ids="participantForm.deptIds"
+        @pick-depts="onParticipantDeptsPicked"
+      />
+    </div>
+    <!-- P63 参与人策略「指定人员」人员多选弹窗（与既有选择器并存，互不回填） -->
+    <div class="approver-dialog-host">
+      <ApproverCandidatesDialog
+        v-model:visible="participantUserPickerVisible"
+        :initial-ids="participantUserIds"
+        @pick="onParticipantUsersPicked"
       />
     </div>
 
@@ -2185,6 +2614,38 @@ function nodeLabelLines(label: string) {
   border-color: #cbd6e8;
   color: #6f2dff;
   background: #fff;
+}
+
+/* ── P63 参与人结构化面板 / 动态并行专属面板 ── */
+.participant-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.participant-picker-row :deep(.el-button) {
+  border-color: #cbd6e8;
+  color: #6f2dff;
+  background: #fff;
+}
+.participant-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: #99a5bb;
+  white-space: normal;
+}
+.participant-legacy-note {
+  margin-bottom: 15px;
+}
+/* 面板内选择/单选组占满 336px 面板宽（与既有输入框对齐） */
+.designer-props :deep(.el-select),
+.designer-props :deep(.el-radio-group) {
+  width: 100%;
+}
+.designer-props :deep(.el-radio) {
+  margin-right: 14px;
 }
 
 /* ── 校验错误面板 ── */

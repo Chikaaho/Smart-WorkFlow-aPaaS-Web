@@ -1,12 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { User } from '@element-plus/icons-vue'
 import { useI18n } from '@/locales'
 import { request } from '@/foundation/request'
-import {
-  queryApproverCandidates,
-  type ApproverCandidate,
-} from '@/modules/workflow/api'
+import { queryApproverCandidates, type ApproverCandidate } from '@/modules/workflow/api'
 
 /** 部门/角色展示条目（modules 间禁止互相 import：经 foundation request 走同一端点）。 */
 interface PickerDept {
@@ -29,14 +26,33 @@ interface PickerRole {
  *  - 部门：真实部门树（/system/dept/tree），选择部门即按部门过滤候选人员；
  *  - 角色：真实角色列表（/system/role/page）；
  *  - 动态规则：服务端契约已登记的审批人类型展示（解析在服务端运行时完成）。
+ *
+ * P63 扩展：pickerMode=dept 时进入「部门负责人」多选模式——固定部门树页签、
+ * 勾选部门，确认经 pickDepts 回填部门 id/名称（设计器 DEPT_LEADER 策略取值）。
  */
 const visible = defineModel<boolean>('visible', { required: true })
-const emit = defineEmits<{ pick: [candidates: ApproverCandidate[]] }>()
+const emit = defineEmits<{
+  pick: [candidates: ApproverCandidate[]]
+  /** P63 部门多选模式：确认回填勾选部门（部门负责人策略取值）。 */
+  pickDepts: [depts: Array<{ id: string; name: string }>]
+}>()
 
 /** 已存审批人 id（父级字段当前值的回显）：打开时按其预选候选。 */
-const props = withDefaults(defineProps<{ initialIds?: number[] }>(), { initialIds: () => [] })
+const props = withDefaults(
+  defineProps<{
+    initialIds?: number[]
+    /** P63：pickerMode=dept 时为「部门负责人」多选模式（部门树勾选，隐藏人员页签）。 */
+    pickerMode?: 'user' | 'dept'
+    /** 部门模式回显：已存部门 id 预勾选。 */
+    initialDeptIds?: string[]
+  }>(),
+  { initialIds: () => [], pickerMode: 'user', initialDeptIds: () => [] },
+)
 
 const { t } = useI18n()
+
+/** 部门多选模式（复用同一弹窗：隐藏页签、部门树勾选、确认回填部门）。 */
+const isDeptMode = computed(() => props.pickerMode === 'dept')
 
 type PickerTab = 'user' | 'dept' | 'role' | 'rule'
 const activeTab = ref<PickerTab>('user')
@@ -120,14 +136,34 @@ async function loadRoles() {
   }
 }
 
+/** 部门树勾选状态（部门多选模式的确认依据；打开时按已存部门 id 预勾选）。 */
+const checkedDeptIds = ref<string[]>([])
+const deptTreeRef = ref<{
+  getCheckedNodes: (leafOnly?: boolean) => PickerDept[]
+  setCheckedKeys: (keys: Array<string | number>) => void
+} | null>(null)
+
+function onDeptCheck(_data: PickerDept, info: { checkedKeys: unknown }) {
+  checkedDeptIds.value = Array.isArray(info.checkedKeys) ? info.checkedKeys.map(String) : []
+}
+
+/** 部门多选模式：树渲染后显式回显已存勾选（default-checked-keys 对异步数据时序不稳）。 */
+async function syncDeptChecks() {
+  if (!isDeptMode.value || checkedDeptIds.value.length === 0) return
+  await nextTick()
+  deptTreeRef.value?.setCheckedKeys([...checkedDeptIds.value])
+}
+
 watch(visible, (open) => {
   if (open) {
     keyword.value = ''
     selected.value = []
     deptId.value = null
-    activeTab.value = 'user'
+    // 部门负责人多选模式固定停留在部门树页签
+    activeTab.value = isDeptMode.value ? 'dept' : 'user'
+    checkedDeptIds.value = isDeptMode.value ? [...props.initialDeptIds] : []
     void load('')
-    void loadDepts()
+    void loadDepts().then(() => syncDeptChecks())
     void loadRoles()
   }
 })
@@ -148,12 +184,27 @@ function removeSelected(candidate: ApproverCandidate) {
   selected.value = selected.value.filter((c) => c.id !== candidate.id)
 }
 
-/** 确认选择：把全部选中候选回填父级（value = 用户 id 数组）。 */
+/** 确认选择：人员模式回填候选（value = 用户 id 数组）；部门模式回填勾选部门。 */
 function confirmSelection() {
+  if (isDeptMode.value) {
+    const nodes = deptTreeRef.value?.getCheckedNodes(false) ?? []
+    if (!nodes.length) return
+    emit(
+      'pickDepts',
+      nodes.map((dept) => ({ id: String(dept.id), name: dept.name })),
+    )
+    visible.value = false
+    return
+  }
   if (!selected.value.length) return
   emit('pick', selected.value)
   visible.value = false
 }
+
+/** 确认按钮可用性跟随当前模式（人员=已选候选；部门=已勾选部门）。 */
+const confirmDisabled = computed(() =>
+  isDeptMode.value ? checkedDeptIds.value.length === 0 : selected.value.length === 0,
+)
 
 const RULE_TYPES = [
   { key: 'INITIATOR', labelKey: 'approverPicker.ruleInitiator' },
@@ -178,16 +229,15 @@ const RULE_TYPES = [
       </div>
     </template>
 
-    <div class="approver-dialog__tabs">
+    <!-- 部门负责人多选模式固定部门树，不再提供页签切换 -->
+    <div v-if="!isDeptMode" class="approver-dialog__tabs">
       <button
-        v-for="tab in (
-          [
-            ['user', 'approverPicker.tabUser'],
-            ['dept', 'approverPicker.tabDept'],
-            ['role', 'approverPicker.tabRole'],
-            ['rule', 'approverPicker.tabRule'],
-          ] as Array<[PickerTab, string]>
-        )"
+        v-for="tab in [
+          ['user', 'approverPicker.tabUser'],
+          ['dept', 'approverPicker.tabDept'],
+          ['role', 'approverPicker.tabRole'],
+          ['rule', 'approverPicker.tabRule'],
+        ] as Array<[PickerTab, string]>"
         :key="tab[0]"
         type="button"
         class="approver-dialog__tab"
@@ -209,7 +259,9 @@ const RULE_TYPES = [
           :props="{ label: 'name', children: 'children' }"
           :expand-on-click-node="false"
           default-expand-all
-          @node-click="(node: PickerDept) => (deptId = String(node.id) === deptId ? null : String(node.id))"
+          @node-click="
+            (node: PickerDept) => (deptId = String(node.id) === deptId ? null : String(node.id))
+          "
         />
       </div>
 
@@ -234,7 +286,11 @@ const RULE_TYPES = [
               <b>{{ candidate.realName || candidate.username }}</b>
               <span>{{ subText(candidate) }}</span>
             </span>
-            <el-checkbox :model-value="isSelected(candidate)" @click.stop @change="toggle(candidate)" />
+            <el-checkbox
+              :model-value="isSelected(candidate)"
+              @click.stop
+              @change="toggle(candidate)"
+            />
           </button>
           <p v-if="!loading && filteredCandidates.length === 0" class="approver-pane__empty">
             {{ t('approverPicker.empty') }}
@@ -246,11 +302,7 @@ const RULE_TYPES = [
         <h3 class="approver-pane__title">
           {{ t('approverPicker.pickedTitle', { count: selected.length }) }}
         </h3>
-        <div
-          v-for="candidate in selected"
-          :key="candidate.id"
-          class="approver-picked"
-        >
+        <div v-for="candidate in selected" :key="candidate.id" class="approver-picked">
           <el-icon class="approver-user__avatar"><User /></el-icon>
           <span class="approver-user__body">
             <b>{{ candidate.realName || candidate.username }}</b>
@@ -269,13 +321,27 @@ const RULE_TYPES = [
     <!-- ── 部门 ── -->
     <div v-else-if="activeTab === 'dept'" class="approver-dialog__single">
       <el-tree
+        ref="deptTreeRef"
         :data="depts"
         node-key="id"
         :props="{ label: 'name', children: 'children' }"
         :expand-on-click-node="false"
+        :show-checkbox="isDeptMode"
+        :default-checked-keys="isDeptMode ? initialDeptIds : []"
         default-expand-all
+        @check="onDeptCheck"
+        @node-click="
+          (node: PickerDept) =>
+            isDeptMode ? undefined : (deptId = String(node.id) === deptId ? null : String(node.id))
+        "
       />
-      <p class="approver-pane__note">{{ t('approverPicker.deptHint') }}</p>
+      <p class="approver-pane__note">
+        {{
+          isDeptMode
+            ? '勾选部门作为「部门负责人」策略取值，运行期由服务端解析各部门唯一负责人。'
+            : t('approverPicker.deptHint')
+        }}
+      </p>
     </div>
 
     <!-- ── 角色 ── -->
@@ -304,7 +370,7 @@ const RULE_TYPES = [
         <el-button
           type="primary"
           class="approver-dialog__confirm"
-          :disabled="selected.length === 0"
+          :disabled="confirmDisabled"
           @click="confirmSelection"
         >
           &nbsp;&nbsp;&nbsp;{{ t('approverPicker.confirm') }}&nbsp;&nbsp;&nbsp;&nbsp;
@@ -351,7 +417,6 @@ const RULE_TYPES = [
   border-color: var(--sw-color-primary);
   font-weight: 600;
 }
-
 
 .approver-dialog__panes {
   display: grid;
