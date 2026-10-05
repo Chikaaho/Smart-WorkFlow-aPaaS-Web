@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { i18n } from '@/locales'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 
 const mockPush = vi.fn()
 /** 可变 route 桩：query 在用例内按需设置（如 source=processed） */
@@ -16,6 +16,12 @@ vi.mock('@/modules/workflow/api', () => ({
   queryTaskDetail: vi.fn(),
   acceptTaskAction: vi.fn(),
   pollCommandStatus: vi.fn(),
+}))
+
+// P63 IoT 预约：TaskDetail 经动态 import 使用 iot 模块 API，这里整体替换
+vi.mock('@/adapters/iot-reservation', () => ({
+  listReservationsByInstance: vi.fn(async () => []),
+  cancelReservation: vi.fn(),
 }))
 
 vi.mock('element-plus', async (importOriginal) => {
@@ -34,6 +40,9 @@ vi.mock('element-plus', async (importOriginal) => {
 })
 
 import { queryTaskDetail, acceptTaskAction, pollCommandStatus } from '@/modules/workflow/api'
+import { listReservationsByInstance, cancelReservation } from '@/adapters/iot-reservation'
+import { permissionDirective } from '@/foundation/permission'
+import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import type { TaskDetail, CommandAcceptResp, WorkflowCommandStatus } from '@/contracts/bpm'
@@ -325,5 +334,176 @@ describe('TaskDetail.vue', () => {
     const vm = wrapper.vm as unknown as { canAct: boolean }
     expect(vm.canAct).toBe(true)
     expect(wrapper.findAll('.detail-card--actions')).toHaveLength(1)
+  })
+})
+
+// ═════════ P63 IoT 预约区块（实例维度查询 + v-perm 取消入口） ═════════
+
+/** 预约单视图类型：类型查询拿到 iot 模块真实契约（不建立运行时/静态 import 依赖）。 */
+type IotReservationView = import('@/adapters/iot-reservation').IotReservationView
+
+/** 预约单视图行（形状对齐 iot 模块 IotReservationView 契约）。 */
+function reservationRow(overrides: Partial<IotReservationView> = {}): IotReservationView {
+  return {
+    id: 9501,
+    processInstanceId: 'pi-001',
+    processDefKey: 'skeleton_approval',
+    defVersion: 1,
+    formKey: 'leave-request',
+    recordId: 'fd_001',
+    deviceKey: 'demo-device-01',
+    productId: 'demo-product',
+    deviceName: 'demo-device-01',
+    commandKey: 'power_on',
+    commandType: 'ACTION',
+    payload: '{"switch":1}',
+    dueAtUtc: '2026-10-07T01:30:00Z',
+    timezoneId: 'Asia/Shanghai',
+    dueLocalText: '2026-10-07 09:30:00',
+    lateWindowSeconds: 60,
+    status: 'PENDING',
+    commandId: null,
+    rejectReason: null,
+    cancelBy: null,
+    cancelReason: null,
+    cancelTime: null,
+    createTime: '2026-10-06 09:00:00',
+    ...overrides,
+  }
+}
+
+interface ReservationVm {
+  openCancelReservation: (row: unknown) => void
+  submitCancelReservation: () => Promise<void>
+  cancelReason: string
+}
+
+/** 挂载详情页并注入会话权限（permissionDirective 读 user store）。 */
+async function mountWithPerms(permissionCodes: string[]) {
+  const pinia = createPinia()
+  setActivePinia(pinia) // v-perm 指令经 activePinia 读权限，测试与组件必须同库
+  useUserStore(pinia).setSession({
+    user: {
+      id: '2',
+      username: 'approver',
+      displayName: '审批人',
+      deptId: null,
+      tenantId: null,
+    },
+    permissions: new Set(permissionCodes),
+    roles: new Set<string>(),
+    superAdmin: false,
+  })
+  vi.mocked(queryTaskDetail).mockResolvedValue(mockDetail)
+  const wrapper = mount(TaskDetailView, {
+    global: { plugins: [i18n, pinia], stubs, directives: { perm: permissionDirective } },
+  })
+  await flushPromises()
+  return wrapper
+}
+
+describe('TaskDetail P63 IoT 预约区块', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('有预约数据时渲染预约卡：实例维度查询一次并展示状态/时间/时区/窗口', async () => {
+    vi.mocked(listReservationsByInstance).mockResolvedValue([
+      reservationRow(),
+      reservationRow({
+        id: 9502,
+        status: 'DISPATCHED',
+        commandId: 9302,
+        dueLocalText: '2026-10-06 09:00:00',
+      }),
+    ])
+    const wrapper = await mountWithPerms(['iot:reservation:cancel'])
+    await flushPromises()
+
+    expect(listReservationsByInstance).toHaveBeenCalledWith('pi-001')
+    const card = wrapper.find('.detail-card--iot-reservations')
+    expect(card.exists()).toBe(true)
+    const text = card.text()
+    expect(text).toContain('待触发')
+    expect(text).toContain('已下发')
+    expect(text).toContain('2026-10-07 09:30:00')
+    expect(text).toContain('Asia/Shanghai')
+    expect(text).toContain('60 秒')
+    // commandId 有关联提示文本（与既有 IoT 命令页衔接）
+    expect(text).toContain('命令 #9302')
+  })
+
+  it('无预约数据时不渲染预约卡', async () => {
+    vi.mocked(listReservationsByInstance).mockResolvedValue([])
+    const wrapper = await mountWithPerms(['iot:reservation:cancel'])
+    await flushPromises()
+
+    expect(wrapper.findAll('.detail-card--iot-reservations')).toHaveLength(0)
+  })
+
+  it('PENDING 且有 iot:reservation:cancel 权限时取消按钮可见；无权限时隐藏（v-perm fail closed）', async () => {
+    vi.mocked(listReservationsByInstance).mockResolvedValue([reservationRow()])
+    const allowed = await mountWithPerms(['iot:reservation:cancel'])
+    await flushPromises()
+    const visibleBtn = allowed.findAll('button').find((btn) => btn.text().includes('取消预约'))
+    expect(visibleBtn).toBeTruthy()
+    expect(visibleBtn!.element.style.display).not.toBe('none')
+
+    vi.mocked(listReservationsByInstance).mockClear()
+    vi.mocked(listReservationsByInstance).mockResolvedValue([reservationRow()])
+    const denied = await mountWithPerms([])
+    await flushPromises()
+    const hiddenBtn = denied.findAll('button').find((btn) => btn.text().includes('取消预约'))
+    // v-perm 指令以 display:none 隐藏受控入口（元素存在但不呈现）
+    expect(hiddenBtn).toBeTruthy()
+    expect(hiddenBtn!.element.style.display).toBe('none')
+  })
+
+  it('取消 outcome=CANCELED：成功提示并刷新预约列表', async () => {
+    vi.mocked(listReservationsByInstance).mockResolvedValue([reservationRow()])
+    vi.mocked(cancelReservation).mockResolvedValue('CANCELED')
+    const wrapper = await mountWithPerms(['iot:reservation:cancel'])
+
+    const vm = wrapper.vm as unknown as ReservationVm
+    vm.openCancelReservation(reservationRow())
+    vm.cancelReason = '审批被驳回，无需开机'
+    await vm.submitCancelReservation()
+    await flushPromises()
+
+    expect(cancelReservation).toHaveBeenCalledWith(9501, '审批被驳回，无需开机')
+    expect(ElMessage.success).toHaveBeenCalledWith('预约已取消')
+    // 初始查询 + 取消后刷新
+    expect(listReservationsByInstance).toHaveBeenCalledTimes(2)
+  })
+
+  it('取消 outcome=NOT_CANCELLABLE：提示不可取消并刷新，不提示成功', async () => {
+    vi.mocked(listReservationsByInstance).mockResolvedValue([reservationRow()])
+    vi.mocked(cancelReservation).mockResolvedValue('NOT_CANCELLABLE')
+    const wrapper = await mountWithPerms(['iot:reservation:cancel'])
+
+    const vm = wrapper.vm as unknown as ReservationVm
+    vm.openCancelReservation(reservationRow())
+    vm.cancelReason = '重复取消'
+    await vm.submitCancelReservation()
+    await flushPromises()
+
+    expect(cancelReservation).toHaveBeenCalledWith(9501, '重复取消')
+    expect(ElMessage.warning).toHaveBeenCalledWith('当前预约状态不可取消')
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(listReservationsByInstance).toHaveBeenCalledTimes(2)
+  })
+
+  it('取消原因为空白：提示必填且不调用取消接口', async () => {
+    vi.mocked(listReservationsByInstance).mockResolvedValue([reservationRow()])
+    const wrapper = await mountWithPerms(['iot:reservation:cancel'])
+
+    const vm = wrapper.vm as unknown as ReservationVm
+    vm.openCancelReservation(reservationRow())
+    vm.cancelReason = '   '
+    await vm.submitCancelReservation()
+    await flushPromises()
+
+    expect(cancelReservation).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledWith('请填写取消原因')
   })
 })

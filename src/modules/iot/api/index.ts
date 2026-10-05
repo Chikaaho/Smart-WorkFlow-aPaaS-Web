@@ -414,3 +414,67 @@ export function manualVerifyCommand(
     data: { outcome, basis },
   })
 }
+
+// ─── IoT 预约下发（P63） ───
+
+/** 预约单状态：PENDING 待触发 → DISPATCHING 下发处理中 → DISPATCHED 已下发；其余为终态。 */
+export type IotReservationStatus =
+  | 'PENDING'
+  | 'DISPATCHING'
+  | 'DISPATCHED'
+  | 'CANCELED'
+  | 'EXPIRED'
+  | 'FAILED'
+
+/** 预约单视图（GET /iot/reservations 行，实例维度查询返回）。 */
+export interface IotReservationView {
+  id: number
+  processInstanceId: string
+  processDefKey: string
+  defVersion: number
+  formKey: string
+  recordId: string
+  deviceKey: string
+  productId: string
+  deviceName: string
+  commandKey: string
+  commandType: string
+  payload: string | null
+  /** 预约时间（UTC 文本，仅展示备用；页面优先展示 dueLocalText 原文） */
+  dueAtUtc: string
+  timezoneId: string
+  /** 预约时间本地原文（按 timezoneId 解析，后端原样返回） */
+  dueLocalText: string
+  lateWindowSeconds: number
+  status: IotReservationStatus
+  /** 命令结果沿既有 IoT 命令链（关联 sw_iot_device_command 主键） */
+  commandId: number | null
+  /** 下发失败/拒绝原因 */
+  rejectReason: string | null
+  cancelBy: string | null
+  cancelReason: string | null
+  cancelTime: string | null
+  createTime: string
+}
+
+/** 取消结果：CANCELED 已取消；NOT_CANCELLABLE 当前状态不可取消（幂等语义，不报错）。 */
+export type IotReservationCancelOutcome = 'CANCELED' | 'NOT_CANCELLABLE'
+
+/** 按流程实例查询 IoT 预约单（查询权限 iot:view）。 */
+export function listReservationsByInstance(
+  processInstanceId: string | number,
+): Promise<IotReservationView[]> {
+  return get<IotReservationView[]>('/iot/reservations', {
+    processInstanceId: String(processInstanceId),
+  })
+}
+
+/** 取消预约单（权限 iot:reservation:cancel；仅 PENDING 可取消，其余返回 NOT_CANCELLABLE）。 */
+export function cancelReservation(
+  id: number,
+  reason: string,
+): Promise<{ outcome: IotReservationCancelOutcome }> {
+  return post<{ outcome: IotReservationCancelOutcome }>(`/iot/reservations/${id}/cancel`, {
+    reason,
+  })
+}

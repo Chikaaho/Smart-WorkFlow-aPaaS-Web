@@ -20,6 +20,7 @@ declare module 'vue' {
     DictControl: typeof import('./../components/dynamic-field-controls/DictControl.vue')['default']
     DynamicField: typeof import('./../components/DynamicField.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
+    ElAutocomplete: typeof import('element-plus/es')['ElAutocomplete']
     ElBadge: typeof import('element-plus/es')['ElBadge']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']

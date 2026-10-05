@@ -7,7 +7,8 @@ const { t } = useI18n()
  * IotFlowActions — 流程设备动作配置（P21 A6/G2a）。
  *
  * 管理员可为「已发布且允许 IoT 接入」的流程模板配置设备动作：
- * 设备来源（设计时固定 / 发起表单字段 / 流程变量）、能力、参数字段、失败策略。
+ * 设备来源（设计时固定 / 发起表单字段 / 流程变量）、能力、参数字段、失败策略，
+ * 以及下发方式（P63：立即下发=缺省 / 预约下发）。
  * 保存经 POST /workflow/defs/{id}/iot-device-action，重开回读恢复。
  */
 import { ref, reactive, computed, onMounted } from 'vue'
@@ -44,6 +45,11 @@ const form = reactive({
   commandKey: 'iot_action',
   paramField: 'temperature',
   failurePolicy: 'BLOCK',
+  // P63 下发方式：IMMEDIATE 立即下发（缺省，行为与既有完全一致）/ RESERVATION 预约下发
+  deliveryMode: 'IMMEDIATE' as 'IMMEDIATE' | 'RESERVATION',
+  reservationDueField: '',
+  reservationTimezone: 'Asia/Shanghai',
+  reservationLateWindow: 60,
 })
 
 const isEmpty = computed(
@@ -59,6 +65,16 @@ interface ActionConfig {
   commandKey?: string
   paramField?: string
   failurePolicy?: string
+  /** P63 下发方式；缺省（含历史配置）= IMMEDIATE 立即下发 */
+  deliveryMode?: 'IMMEDIATE' | 'RESERVATION'
+  /** P63 预约下发参数：仅 deliveryMode=RESERVATION 时存在 */
+  reservation?: {
+    /** 表单日期时间字段名（DATE 字段且 format=datetime） */
+    dueField: string
+    timezoneId: string
+    /** 允许迟到秒数（1-3600） */
+    lateWindowSeconds: number
+  }
 }
 
 function parseAction(row: ProcessDefRow): ActionConfig | null {
@@ -128,6 +144,40 @@ function sourceLabel(config: ActionConfig | null): string {
   return map[config.deviceSource] ?? config.deviceSource
 }
 
+// ─── P63 预约下发：时区可编辑文本 + 常用时区下拉建议（最终值以文本为准，服务端校验） ───
+
+const COMMON_TIMEZONES = [
+  'Asia/Shanghai',
+  'Asia/Hong_Kong',
+  'Asia/Taipei',
+  'Asia/Singapore',
+  'Asia/Tokyo',
+  'Asia/Seoul',
+  'Asia/Bangkok',
+  'Asia/Kolkata',
+  'Asia/Dubai',
+  'UTC',
+  'Europe/London',
+  'Europe/Paris',
+  'Europe/Berlin',
+  'Europe/Moscow',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+]
+
+interface TimezoneSuggestion {
+  value: string
+}
+
+function queryTimezones(queryString: string, cb: (suggestions: TimezoneSuggestion[]) => void) {
+  const keyword = queryString.trim().toLowerCase()
+  const matched = keyword
+    ? COMMON_TIMEZONES.filter((tz) => tz.toLowerCase().includes(keyword))
+    : [...COMMON_TIMEZONES]
+  cb(matched.map((tz) => ({ value: tz })))
+}
+
 function openEdit(row: ProcessDefRow) {
   editingDef.value = row
   const existing = parseAction(row as ProcessDefRow)
@@ -140,6 +190,11 @@ function openEdit(row: ProcessDefRow) {
     commandKey: existing?.commandKey ?? 'iot_action',
     paramField: existing?.paramField ?? 'temperature',
     failurePolicy: existing?.failurePolicy ?? 'BLOCK',
+    // P63：历史配置/未配置一律按 IMMEDIATE（缺省）回显
+    deliveryMode: existing?.deliveryMode === 'RESERVATION' ? 'RESERVATION' : 'IMMEDIATE',
+    reservationDueField: existing?.reservation?.dueField ?? '',
+    reservationTimezone: existing?.reservation?.timezoneId ?? 'Asia/Shanghai',
+    reservationLateWindow: existing?.reservation?.lateWindowSeconds ?? 60,
   })
   dialogVisible.value = true
 }
@@ -160,6 +215,23 @@ async function save() {
   if (form.deviceSource === 'FORM_FIELD') action.deviceField = form.deviceField
   if (form.deviceSource === 'VARIABLE') action.variableName = form.variableName
   if (form.paramField) action.paramField = form.paramField
+  // ── P63 下发方式：IMMEDIATE 为缺省语义，不写 deliveryMode/reservation（既有 action JSON 零变化）──
+  if (form.deliveryMode === 'RESERVATION') {
+    if (!form.reservationDueField.trim()) {
+      ElMessage.warning('预约下发必须填写预约时间字段（表单日期时间字段名）')
+      return
+    }
+    action.deliveryMode = 'RESERVATION'
+    action.reservation = {
+      dueField: form.reservationDueField.trim(),
+      timezoneId: form.reservationTimezone.trim() || 'Asia/Shanghai',
+      // 服务端约束 1-3600，前端先收敛到合法区间
+      lateWindowSeconds: Math.min(
+        3600,
+        Math.max(1, Math.trunc(Number(form.reservationLateWindow) || 60)),
+      ),
+    }
+  }
   const result = await request<ProcessDefRow>({
     method: 'POST',
     url: `/workflow/defs/${editingDef.value.id}/iot-device-action`,
@@ -245,7 +317,10 @@ function rowActions(r: unknown): ListAction[] {
                   : ''
               }}
               {{ parseAction(row as ProcessDefRow)!.commandKey }}
-              / {{ parseAction(row as ProcessDefRow)!.failurePolicy }}
+              / {{ parseAction(row as ProcessDefRow)!.failurePolicy
+              }}<template v-if="parseAction(row as ProcessDefRow)!.deliveryMode === 'RESERVATION'"
+                >· 预约下发</template
+              >
             </span>
           </template>
           <span v-else style="color: var(--el-text-color-secondary)">{{
@@ -310,6 +385,38 @@ function rowActions(r: unknown): ListAction[] {
         <el-form-item :label="t('iot.paramField')">
           <el-input v-model="form.paramField" :placeholder="t('iot.paramFieldPlaceholder')" />
         </el-form-item>
+        <!-- P63 下发方式：立即下发=既有缺省行为零变化；预约下发在到点时间窗内触发 -->
+        <el-form-item label="下发方式" required>
+          <el-radio-group v-model="form.deliveryMode">
+            <el-radio value="IMMEDIATE">立即下发</el-radio>
+            <el-radio value="RESERVATION">预约下发</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <template v-if="form.deliveryMode === 'RESERVATION'">
+          <el-form-item label="预约时间字段" required>
+            <el-input
+              v-model="form.reservationDueField"
+              placeholder="表单日期时间字段名（DATE 字段且 format=datetime）"
+            />
+          </el-form-item>
+          <el-form-item label="时区">
+            <el-autocomplete
+              v-model="form.reservationTimezone"
+              :fetch-suggestions="queryTimezones"
+              placeholder="Asia/Shanghai"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="允许迟到(秒)">
+            <el-input-number
+              v-model="form.reservationLateWindow"
+              :min="1"
+              :max="3600"
+              :step="10"
+              step-strictly
+            />
+          </el-form-item>
+        </template>
         <el-form-item :label="t('notify.failurePolicy')" required>
           <el-select v-model="form.failurePolicy">
             <el-option :label="t('iot.failurePolicyBlock')" value="BLOCK" />

@@ -1274,6 +1274,159 @@ const MOCK_IOT_DEVICE_COMMANDS: {
   },
 ]
 
+/** P63 mock（临时）：IoT 预约单可变种子（实例 ID 对齐待办任务种子，覆盖全部状态供肉眼验收）。 */
+const MOCK_IOT_RESERVATIONS: {
+  id: number
+  processInstanceId: string
+  processDefKey: string
+  defVersion: number
+  formKey: string
+  recordId: string
+  deviceKey: string
+  productId: string
+  deviceName: string
+  commandKey: string
+  commandType: string
+  payload: string | null
+  dueAtUtc: string
+  timezoneId: string
+  dueLocalText: string
+  lateWindowSeconds: number
+  status: 'PENDING' | 'DISPATCHING' | 'DISPATCHED' | 'CANCELED' | 'EXPIRED' | 'FAILED'
+  commandId: number | null
+  rejectReason: string | null
+  cancelBy: string | null
+  cancelReason: string | null
+  cancelTime: string | null
+  createTime: string
+}[] = [
+  {
+    id: 9501,
+    processInstanceId: 'mock-proc-001',
+    processDefKey: 'leave_approval',
+    defVersion: 1,
+    formKey: 'leave-request',
+    recordId: 'fd_001',
+    deviceKey: 'demo-device-01',
+    productId: 'demo-product',
+    deviceName: 'demo-device-01',
+    commandKey: 'power_on',
+    commandType: 'ACTION',
+    payload: '{"switch":1}',
+    dueAtUtc: '2026-10-07T01:30:00Z',
+    timezoneId: 'Asia/Shanghai',
+    dueLocalText: '2026-10-07 09:30:00',
+    lateWindowSeconds: 60,
+    status: 'PENDING',
+    commandId: null,
+    rejectReason: null,
+    cancelBy: null,
+    cancelReason: null,
+    cancelTime: null,
+    createTime: '2026-10-06 09:00:00',
+  },
+  {
+    id: 9502,
+    processInstanceId: 'mock-proc-002',
+    processDefKey: 'purchase_approval',
+    defVersion: 1,
+    formKey: 'purchase-order',
+    recordId: 'fd_003',
+    deviceKey: 'demo-device-01',
+    productId: 'demo-product',
+    deviceName: 'demo-device-01',
+    commandKey: 'set_brightness',
+    commandType: 'ACTION',
+    payload: '{"brightness":5}',
+    dueAtUtc: '2026-10-06T01:00:00Z',
+    timezoneId: 'Asia/Shanghai',
+    dueLocalText: '2026-10-06 09:00:00',
+    lateWindowSeconds: 120,
+    status: 'DISPATCHED',
+    commandId: 9302,
+    rejectReason: null,
+    cancelBy: null,
+    cancelReason: null,
+    cancelTime: null,
+    createTime: '2026-10-05 15:00:00',
+  },
+  {
+    id: 9503,
+    processInstanceId: 'mock-proc-003',
+    processDefKey: 'contract_approval',
+    defVersion: 1,
+    formKey: 'contract-approval',
+    recordId: 'fd_005',
+    deviceKey: 'demo-device-01',
+    productId: 'demo-product',
+    deviceName: 'demo-device-01',
+    commandKey: 'power_off',
+    commandType: 'ACTION',
+    payload: '{"switch":0}',
+    dueAtUtc: '2026-10-06T02:00:00Z',
+    timezoneId: 'Asia/Shanghai',
+    dueLocalText: '2026-10-06 10:00:00',
+    lateWindowSeconds: 60,
+    status: 'CANCELED',
+    commandId: null,
+    rejectReason: null,
+    cancelBy: 'admin',
+    cancelReason: '审批被驳回，无需关机',
+    cancelTime: '2026-10-06 08:50:00',
+    createTime: '2026-10-05 16:00:00',
+  },
+  {
+    id: 9504,
+    processInstanceId: 'mock-proc-004',
+    processDefKey: 'expense_approval',
+    defVersion: 1,
+    formKey: 'expense-report',
+    recordId: 'gen_001',
+    deviceKey: 'demo-device-01',
+    productId: 'demo-product',
+    deviceName: 'demo-device-01',
+    commandKey: 'power_on',
+    commandType: 'ACTION',
+    payload: '{"switch":1}',
+    dueAtUtc: '2026-10-05T02:00:00Z',
+    timezoneId: 'Asia/Shanghai',
+    dueLocalText: '2026-10-05 10:00:00',
+    lateWindowSeconds: 60,
+    status: 'FAILED',
+    commandId: null,
+    rejectReason: '设备离线，超过迟到窗口未下发',
+    cancelBy: null,
+    cancelReason: null,
+    cancelTime: null,
+    createTime: '2026-10-04 11:00:00',
+  },
+  {
+    id: 9505,
+    processInstanceId: 'mock-proc-005',
+    processDefKey: 'leave_approval',
+    defVersion: 1,
+    formKey: 'leave-request',
+    recordId: 'gen_002',
+    deviceKey: 'demo-device-01',
+    productId: 'demo-product',
+    deviceName: 'demo-device-01',
+    commandKey: 'power_on',
+    commandType: 'ACTION',
+    payload: '{"switch":1}',
+    dueAtUtc: '2026-10-04T02:00:00Z',
+    timezoneId: 'Asia/Shanghai',
+    dueLocalText: '2026-10-04 10:00:00',
+    lateWindowSeconds: 60,
+    status: 'EXPIRED',
+    commandId: null,
+    rejectReason: null,
+    cancelBy: null,
+    cancelReason: null,
+    cancelTime: null,
+    createTime: '2026-10-03 10:00:00',
+  },
+]
+
 export const mockRegistrations: MockRegistration[] = [
   // POST /api/workflow/txn-batch — 后台批量受理（P62 S5 mock，临时）
   // 同批次键幂等重放返回原批次（replay=true）；受理后转 PROCESSING，首次回查完成逐项结算。
@@ -1402,6 +1555,66 @@ export const mockRegistrations: MockRegistration[] = [
         message: 'ok',
         data: { verdict: 'APPLIED', statusBefore: 'UNKNOWN', statusAfter: command.status },
       }
+    },
+  },
+
+  // GET /api/iot/reservations?processInstanceId=xxx — 实例维度预约查询（P63 mock，临时）
+  // processInstanceId 缺省返回全量（便于 IoT 侧肉眼验收）；深拷贝返回避免泄漏可变种子引用。
+  {
+    method: 'GET',
+    pattern: '/api/iot/reservations',
+    handler: (_params, query) => {
+      const pid = (query.processInstanceId ?? '').trim()
+      const list =
+        pid === ''
+          ? MOCK_IOT_RESERVATIONS
+          : MOCK_IOT_RESERVATIONS.filter((r) => r.processInstanceId === pid)
+      return { code: 0, message: 'ok', data: JSON.parse(JSON.stringify(list)) }
+    },
+  },
+
+  // POST /api/iot/reservations/:id/cancel — 取消预约（P63 mock，临时）
+  // 幂等：仅 PENDING 可取消并落取消人/原因/时间；非 PENDING 返回 NOT_CANCELLABLE（不报错）。
+  {
+    method: 'POST',
+    pattern: '/api/iot/reservations/:id/cancel',
+    handler: (params, _query, body) => {
+      const id = (params as Record<string, string>).id
+      const req = body as { reason?: string }
+      const reservation = MOCK_IOT_RESERVATIONS.find((r) => String(r.id) === id)
+      if (!reservation) {
+        return { code: 404, message: '预约单不存在', data: null }
+      }
+      if (reservation.status !== 'PENDING') {
+        return { code: 0, message: 'ok', data: { outcome: 'NOT_CANCELLABLE' } }
+      }
+      reservation.status = 'CANCELED'
+      reservation.cancelBy = MOCK_CURRENT_SESSION.user.username || 'mock-user'
+      reservation.cancelReason = req?.reason?.trim() || ''
+      reservation.cancelTime = new Date().toISOString().slice(0, 19).replace('T', ' ')
+      return { code: 0, message: 'ok', data: { outcome: 'CANCELED' } }
+    },
+  },
+
+  // POST /api/workflow/defs/:id/iot-device-action — 流程设备动作保存（P63 dev:mock 验收辅助，临时）
+  // 合并写入种子行 iotDeviceActionJson（可变数据原则），重开配置对话框即可回读下发方式。
+  {
+    method: 'POST',
+    pattern: '/api/workflow/defs/:id/iot-device-action',
+    handler: (params, _query, body) => {
+      const id = Number((params as Record<string, string>).id)
+      const def = MOCK_PROCESS_DEFS.find((d) => d.id === id)
+      if (!def) {
+        return { code: 404, message: '流程定义不存在', data: null }
+      }
+      const req = body as { action?: Record<string, unknown> }
+      if (!req?.action || typeof req.action !== 'object') {
+        return { code: 400, message: '缺少 action 配置', data: null }
+      }
+      const iotDeviceActionJson = JSON.stringify(req.action)
+      const row = def as typeof def & { iotDeviceActionJson?: string }
+      row.iotDeviceActionJson = iotDeviceActionJson
+      return { code: 0, message: 'ok', data: { ...def, iotDeviceActionJson } }
     },
   },
 
