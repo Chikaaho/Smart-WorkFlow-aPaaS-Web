@@ -27,7 +27,7 @@ import {
 import type { GraphValidationError, ApproverCandidate } from '@/modules/workflow/api'
 import type { BpmNodeCapability, BpmNodeConfigField } from '@/contracts/bpm-node'
 import type { ProcessGraphDocument, ProcessGraphWaypoint } from '@/contracts/process-graph'
-import { createDesignerModel, buildEdgePath } from '@/adapters/process-graph'
+import { createDesignerModel, buildEdgePath, hitTestEdgeAtPoint } from '@/adapters/process-graph'
 import type { DesignerModel, PositionedEdge, PositionedNode } from '@/adapters/process-graph'
 
 const route = useRoute()
@@ -737,7 +737,13 @@ function onWorkbarClick(cap: BpmNodeCapability) {
   if (!cap.supports.design || !model) return
   const x = Math.round((viewBox.value.x + viewBox.value.w / 2) / SNAP_X) * SNAP_X
   const y = Math.round((viewBox.value.y + viewBox.value.h / 2) / SNAP_Y) * SNAP_Y
-  const id = model.addNode(cap.type, cap.displayName, x, y)
+  // P62 FD01：点击落点命中既有连线时与拖放同语义（插入该连线），避免产生
+  // 视觉压线而图中断连的节点（此前固定 addNode 导致发布校验 2004/2005）。
+  const state = model.state()
+  const edgeId = hitTestEdgeAtPoint(state.nodes, state.edges, x, y)
+  const id = edgeId
+    ? model.insertNodeOnEdge(edgeId, cap.type, cap.displayName, x, y)
+    : model.addNode(cap.type, cap.displayName, x, y)
   selectNode(id)
   snapshot()
 }

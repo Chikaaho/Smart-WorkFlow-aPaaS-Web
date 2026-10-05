@@ -291,6 +291,55 @@ export function buildEdgePath(
   return points.map((p, index) => `${index === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
 }
 
+/**
+ * P62 最终交付 FD01：画布点位的连线命中检测（设计器组件库「点击添加」与拖放同语义）。
+ *
+ * 背景缺陷：点击添加固定落点为画布中心，而初始 START→END 连线恰好横穿中心，
+ * 节点被视觉压在连线上但图中无任何边，发布校验报 2004/2005（断连节点）。
+ * 修复语义：点击落点命中既有连线（点到折线段距离 ≤ tolerance）时按连线插入处理，
+ * 与拖放到连线（insertNodeOnEdge）一致；未命中才落到画布空白处新增孤立节点。
+ * 距离按节点中心与 waypoints 展开的折线段计算（与 buildEdgePath 同一几何）。
+ */
+export function hitTestEdgeAtPoint(
+  nodes: PositionedNode[],
+  edges: PositionedEdge[],
+  x: number,
+  y: number,
+  tolerance: number = 14,
+): string | null {
+  const byId = new Map(nodes.map((node) => [node.id, node] as const))
+  let best: { id: string; distance: number } | null = null
+  for (const edge of edges) {
+    const source = byId.get(edge.sourceId)
+    const target = byId.get(edge.targetId)
+    if (!source || !target) continue
+    const points = [source, ...edge.waypoints, target]
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const distance = pointToSegmentDistance(x, y, points[index], points[index + 1])
+      if (distance <= tolerance && (best === null || distance < best.distance)) {
+        best = { id: edge.id, distance }
+      }
+    }
+  }
+  return best?.id ?? null
+}
+
+function pointToSegmentDistance(
+  px: number,
+  py: number,
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): number {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const lengthSquared = dx * dx + dy * dy
+  if (lengthSquared === 0) {
+    return Math.hypot(px - a.x, py - a.y)
+  }
+  const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / lengthSquared))
+  return Math.hypot(px - (a.x + t * dx), py - (a.y + t * dy))
+}
+
 /** 计算所有节点的外包盒（含节点尺寸），供 fitViewport 定位。 */
 export function graphBounds(
   nodes: PositionedNode[],
@@ -416,8 +465,11 @@ export function createDesignerModel(
     emit()
   }
 
-  function nextId(prefix: string): string {
+  function nextId(prefix: string, exclude?: Set<string>): string {
     const existing = new Set([...current.nodes, ...current.edges].map((e) => e.id))
+    if (exclude) {
+      for (const id of exclude) existing.add(id)
+    }
     for (let i = 1; ; i++) {
       const candidate = `${prefix}_${i}`
       if (!existing.has(candidate)) return candidate
@@ -496,8 +548,12 @@ export function createDesignerModel(
       }
       const chainEdge = (from: PositionedNode, to: PositionedNode): PositionedEdge => {
         const [start, end] = edgeEndpoints(from, to, designerNodeSize, gatewayRadius)
+        // P62 FD01：同一事务内连续生成两条边 ID，须基于已分配集合递增，
+        // 否则两次 nextId 都读到替换前的边集合而产生重复 ID（BPMN cvc-id.2 发布失败）
+        const id = nextId('edge', pendingEdgeIds)
+        pendingEdgeIds.add(id)
         return {
-          id: nextId('edge'),
+          id,
           sourceId: from.id,
           targetId: to.id,
           path: buildEdgePath(start, end, []),
@@ -505,6 +561,7 @@ export function createDesignerModel(
           config: {},
         }
       }
+      const pendingEdgeIds = new Set<string>()
       current = {
         ...current,
         nodes: [...current.nodes, inserted],

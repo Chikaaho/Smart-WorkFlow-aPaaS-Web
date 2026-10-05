@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { normalizeGraph, createDesignerModel, buildEdgePath } from './index'
+import { normalizeGraph, createDesignerModel, buildEdgePath, hitTestEdgeAtPoint } from './index'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 
 function baseGraph(): ProcessGraphDocument {
@@ -107,6 +107,8 @@ describe('createDesignerModel', () => {
     expect(state.nodes).toHaveLength(3)
     // 原连线拆除，替换为 源→新节点→目标 两条
     expect(state.edges).toHaveLength(2)
+    // P62 FD01：两条新边 ID 必须互异（重复 ID 会导致 BPMN cvc-id.2 发布失败）
+    expect(new Set(state.edges.map((e) => e.id)).size).toBe(2)
     expect(state.edges.map((e) => `${e.sourceId}->${e.targetId}`).sort()).toEqual([
       `${nodeId}->node_end`,
       'node_start->' + nodeId,
@@ -119,6 +121,40 @@ describe('createDesignerModel', () => {
   it('insertNodeOnEdge 对不存在的连线返回 null', () => {
     const model = createDesignerModel(baseGraph())
     expect(model.insertNodeOnEdge('edge_missing', 'APPROVAL', '审批', 400, 300)).toBeNull()
+  })
+
+  it('P62 FD01：hitTestEdgeAtPoint 命中连线返回边 id，空白处返回 null，多边取最近', () => {
+    const model = createDesignerModel(baseGraph())
+    const state = model.state()
+    // START(100,300)→END(700,300) 的中点 (400,300) 命中唯一连线
+    expect(hitTestEdgeAtPoint(state.nodes, state.edges, 400, 300)).toBe('edge_1')
+    // 容差外空白点不命中
+    expect(hitTestEdgeAtPoint(state.nodes, state.edges, 400, 500)).toBeNull()
+    // 插入审批节点后画布中心出现两条相邻边，命中其中距点位最近的一条
+    model.insertNodeOnEdge('edge_1', 'APPROVAL', '审批', 400, 300)
+    const after = model.state()
+    const hit = hitTestEdgeAtPoint(after.nodes, after.edges, 400, 300)
+    expect(hit).not.toBeNull()
+    const hitEdge = after.edges.find((candidate) => candidate.id === hit)
+    expect(hitEdge).toBeDefined()
+  })
+
+  it('P62 FD01：点击添加命中连线时与拖放同语义插入（addNode 路径不再产生断连节点）', () => {
+    const model = createDesignerModel(baseGraph())
+    const state = model.state()
+    const edgeId = hitTestEdgeAtPoint(state.nodes, state.edges, 400, 300)
+    expect(edgeId).toBe('edge_1')
+    model.insertNodeOnEdge(edgeId as string, 'APPROVAL', '审批', 400, 300)
+    const after = model.state()
+    // 图中每个节点都连通：无孤立节点（每个节点至少出现在一条边上）
+    const touched = new Set<string>()
+    for (const edge of after.edges) {
+      touched.add(edge.sourceId)
+      touched.add(edge.targetId)
+    }
+    for (const node of after.nodes) {
+      expect(touched.has(node.id)).toBe(true)
+    }
   })
 
   it('V011-BUG-025：setEdgeEndpoint 改接端点重算 path；自环/重复边拒绝', () => {
