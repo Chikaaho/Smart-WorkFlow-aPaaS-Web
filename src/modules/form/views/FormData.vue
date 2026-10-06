@@ -46,6 +46,8 @@ const schema = ref<FormSchema | null>(null)
 const result = ref<PageResult<Record<string, unknown>> | null>(null)
 const pageNum = ref(1)
 const pageSize = ref(10)
+/** P63 G01：USER/DEPT 列 ID→可读名缓存（人员与部门各一，失败回退原值）。 */
+const idLabelMaps = ref<{ user: Map<string, string>; dept: Map<string, string> } | null>(null)
 
 // ── 列与筛选配置（I2：优先消费服务端持久化列表配置；未配置回退 definition 派生） ──
 const persistedListConfig = ref<Awaited<ReturnType<typeof getListConfig>>>(null)
@@ -164,6 +166,7 @@ async function loadData() {
       pageSize: pageSize.value,
       filters,
     })
+    void resolveRowIdLabels()
   } catch (err: unknown) {
     // 不再从裸对象猜 code/message：请求层已把 4xx/5xx/网络/超时归一为带分类的 ApiError，
     // 页面按分类给出结论与恢复动作，并保留事件引用供用户反馈。
@@ -172,6 +175,60 @@ async function loadData() {
     result.value = null
   } finally {
     loading.value = false
+  }
+}
+
+/** P63 G01：按当前页收集 USER/DEPT 列 ID，并发解析可读名（分页接口容量内；取不到的字段回退原值）。 */
+async function resolveRowIdLabels() {
+  const cols = columns.value.filter((c) => c.type === 'USER' || c.type === 'DEPT')
+  if (cols.length === 0 || !result.value?.list?.length) {
+    idLabelMaps.value = cols.length === 0 ? null : idLabelMaps.value
+    return
+  }
+  const userIds = new Set<string>()
+  const deptIds = new Set<string>()
+  for (const row of result.value.list) {
+    for (const col of cols) {
+      let rawText = row[col.prop] == null ? '' : String(row[col.prop])
+      if (!rawText) continue
+      const ids: string[] = []
+      if (rawText.trim().startsWith('[')) {
+        try {
+          const decoded = JSON.parse(rawText)
+          if (Array.isArray(decoded)) ids.push(...decoded.map((x) => String(x)))
+        } catch {
+          ids.push(rawText)
+        }
+      } else {
+        ids.push(...rawText.split(','))
+      }
+      for (const id of ids) {
+        const t = id.trim().replace(/^#/, '')
+        if (/^\d{1,19}$/.test(t)) (col.type === 'USER' ? userIds : deptIds).add(t)
+      }
+    }
+  }
+  const next = { user: new Map<string, string>(), dept: new Map<string, string>() }
+  try {
+    if (userIds.size > 0 || deptIds.size > 0) {
+      const [users, depts] = await Promise.all([
+        userIds.size > 0
+          ? (await import('@/modules/form/api/i2-choices')).loadUserChoices().catch(() => [])
+          : Promise.resolve([] as { id: string; label: string }[]),
+        deptIds.size > 0
+          ? (await import('@/modules/form/api/i2-choices')).loadDeptChoices().catch(() => [])
+          : Promise.resolve([] as { id: string; label: string }[]),
+      ])
+      for (const u of users) {
+        if (userIds.has(u.id)) next.user.set(u.id, u.label)
+      }
+      for (const d of depts) {
+        if (deptIds.has(d.id)) next.dept.set(d.id, d.label.replace(/^\u3000+/, ''))
+      }
+    }
+    idLabelMaps.value = next
+  } catch {
+    idLabelMaps.value = null
   }
 }
 
@@ -283,6 +340,29 @@ function formatCellValue(
     case 'REFERENCE':
       // 展示裸 ref_id（展示名解析未做，与后端 v1 一致）
       return raw !== null ? String(raw) : '-'
+    case 'USER':
+    case 'DEPT': {
+      // P63 G01：保存回读显示可读姓名/部门名；多选（JSON 数组串）顿号连接，未命中回退原 ID
+      const rawText = String(raw)
+      let ids: string[] = []
+      if (rawText.trim().startsWith('[')) {
+        try {
+          const decoded = JSON.parse(rawText)
+          if (Array.isArray(decoded)) ids = decoded.map((x) => String(x).trim()).filter(Boolean)
+        } catch {
+          ids = []
+        }
+      }
+      if (ids.length === 0)
+        ids = rawText
+          .split(',')
+          .map((x) => x.trim())
+          .filter(Boolean)
+      const map = col.type === 'USER' ? idLabelMaps.value?.user : idLabelMaps.value?.dept
+      if (!map) return rawText || '-'
+      const parts = ids.map((id) => map.get(id) ?? `#${id.replace(/^#/, '')}`)
+      return parts.length ? parts.join('、') : '-'
+    }
     case 'DICT':
       // 字典值通过 useDict 查找 label
       return String(raw)

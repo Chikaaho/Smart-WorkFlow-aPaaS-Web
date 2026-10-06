@@ -88,7 +88,7 @@ const LABELS: Record<string, string> = {
   GRID: 'form.paletteGrid',
   GROUP: 'form.paletteGroupPanel',
   DIVIDER: 'form.paletteDivider',
-  SUBTABLE: 'form.paletteSubTable',
+  TABLE: 'form.paletteSubTable',
   FORMULA: 'form.paletteFormula',
   IOT: 'form.paletteIot',
   AGENT: 'form.paletteAgent',
@@ -111,7 +111,7 @@ const ENTRY_ICONS: Record<string, string> = {
   GRID: 'Grid',
   GROUP: 'Grid',
   DIVIDER: 'Tickets',
-  SUBTABLE: 'Grid',
+  TABLE: 'Grid',
   FORMULA: 'HashGlyph',
   IOT: 'Cpu',
   AGENT: 'Monitor',
@@ -138,7 +138,7 @@ const PALETTE_GROUPS: Array<{ key: string; types: string[] }> = [
     ],
   },
   { key: 'form.paletteGroupBusiness', types: ['USER', 'DEPT', 'SERIAL', 'DATASOURCE'] },
-  { key: 'form.paletteGroupLayout', types: ['GRID', 'GROUP', 'DIVIDER', 'SUBTABLE'] },
+  { key: 'form.paletteGroupLayout', types: ['GRID', 'GROUP', 'DIVIDER', 'TABLE'] },
   { key: 'form.paletteGroupAdvanced', types: ['FORMULA', 'RICH_TEXT', 'IOT', 'AGENT'] },
 ]
 
@@ -146,7 +146,9 @@ const descriptorByType = computed(() => new Map(palette.value.map((d) => [d.type
 
 const paletteGrouped = computed(() => {
   const keyword = paletteSearch.value.trim().toLowerCase()
-  const unavailable = new Set(['SERIAL', 'GRID', 'GROUP', 'DIVIDER', 'SUBTABLE', 'IOT', 'AGENT'])
+  // P63 G01：TABLE（子表）进入可用入口——表格列人员/部门来源是本轮验收合同范围；
+  // 子字段编辑走画布盖层子画布（SubFieldDesigner）。GRID/GROUP/DIVIDER 仍为锁定占位。
+  const unavailable = new Set(['SERIAL', 'GRID', 'GROUP', 'DIVIDER', 'IOT', 'AGENT'])
   const entries = (type: string, groupKey: string): PaletteEntry | null => {
     const descriptor = descriptorByType.value.get(type as FieldType)
     if (props.allowedTypes && (!descriptor || !props.allowedTypes.includes(descriptor.type)))

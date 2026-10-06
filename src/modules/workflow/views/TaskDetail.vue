@@ -53,6 +53,8 @@ const formRecordLoading = ref(false)
 const formSchema = ref<FormSchema | null>(null)
 /** REFERENCE 字段显示名缓存（id→可读关联对象信息，授权单查解析，取不到回退 id）。 */
 const refDisplayMap = ref<Record<string, string>>({})
+/** P63 G01：USER/DEPT 字段可读显示缓存（字段名→姓名/部门名，多选顿号连接，取不到回退原值）。 */
+const userDeptDisplays = ref<Record<string, string>>({})
 
 /** 表单宽表的系统列：与业务数据无关，不在审批详情展示 */
 const SYSTEM_COLUMNS = new Set([
@@ -85,7 +87,9 @@ const formFieldRows = computed(() => {
             ? '-'
             : field.type === 'REFERENCE'
               ? (refDisplayMap.value[field.name] ?? String(v))
-              : String(v),
+              : field.type === 'USER' || field.type === 'DEPT'
+                ? (userDeptDisplays.value[field.name] ?? String(v))
+                : String(v),
       })
     }
   }
@@ -147,6 +151,14 @@ async function loadFormRecord() {
       formSchema.value = await getFormDefinition(d.formKey)
     } catch {
       formSchema.value = null
+    }
+    // P63 G01：USER/DEPT 字段保存回读显示为可读姓名/部门名（解析失败回退原值不阻断）
+    if (formSchema.value && formRecord.value) {
+      const { buildUserDeptDisplays } = await import('@/modules/form/utils/user-dept-display')
+      userDeptDisplays.value = await buildUserDeptDisplays(
+        formSchema.value,
+        formRecord.value,
+      ).catch(() => ({}))
     }
     await resolveRefDisplays()
   } catch {

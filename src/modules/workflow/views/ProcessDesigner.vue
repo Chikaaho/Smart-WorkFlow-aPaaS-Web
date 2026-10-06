@@ -914,10 +914,11 @@ const participantField = computed<BpmNodeConfigField | null>(() => {
   const capability = selectedCapability.value
   if (!node || !capability) return null
   if (!PARTICIPANT_PANEL_NODE_TYPES.includes(node.type)) return null
+  // P63：结构化参与人面板写 participant（服务端新契约，strategy=ALL）；
+  // approver 是旧单选兼容键，仅作回显兜底，不再作为面板写入目标。
   return (
-    capability.configFields.find(
-      (field) => field.key === 'participant' || field.key === 'approver',
-    ) ??
+    capability.configFields.find((field) => field.key === 'participant') ??
+    capability.configFields.find((field) => field.key === 'approver') ??
     capability.configFields.find((field) => isApproverSelectionField(field)) ??
     null
   )
@@ -1024,9 +1025,12 @@ watch(selectedNode, (node) => {
   }
   propForm.value = draft
   if (participantKey) {
-    const built = buildParticipantFormDraft(
-      (node.config as Record<string, unknown> | undefined)?.[participantKey],
-    )
+    // 旧图可能只有 legacy approver 键：面板回显兜底读取，写入仍走 participantKey
+    const config = node.config as Record<string, unknown> | undefined
+    const legacyKey = participantKey === 'participant' ? 'approver' : 'participant'
+    const raw =
+      config?.[participantKey] ?? (config?.[legacyKey] as Record<string, unknown> | undefined)
+    const built = buildParticipantFormDraft(raw)
     participantForm.value = built.draft
     participantShape.value = built.shape
   } else {
