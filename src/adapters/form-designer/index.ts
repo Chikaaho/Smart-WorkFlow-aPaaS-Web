@@ -54,6 +54,9 @@ interface RawSubFieldDef {
   fontWeight?: string
   textAlign?: string
   expression?: string
+  /** P63：USER/DEPT 多选、DATE 日期时间格式（definition 契约键透传）。 */
+  multiple?: boolean
+  format?: string
   dsBinding?: {
     queryKey: string
     version?: number
@@ -143,6 +146,24 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     }
   }
 
+  if (type === 'USER' || type === 'DEPT') {
+    // P63 多选：契约键透传（缺省单选语义不变）
+    return {
+      ...base,
+      type,
+      ...(raw.multiple !== undefined ? { multiple: raw.multiple } : {}),
+    }
+  }
+
+  if (type === 'DATE') {
+    // P63 日期时间格式：'datetime' 透传（缺省仅日期语义不变）
+    return {
+      ...base,
+      type,
+      ...(raw.format !== undefined ? { format: raw.format } : {}),
+    }
+  }
+
   if (type === 'DATASOURCE') {
     return {
       ...base,
@@ -163,6 +184,7 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
         ...(sf.dictType !== undefined ? { dictType: sf.dictType } : {}),
         ...(sf.renderAs !== undefined ? { renderAs: sf.renderAs as 'select' | 'radio' } : {}),
         ...(sf.targetFormId !== undefined ? { targetFormId: sf.targetFormId } : {}),
+        ...(sf.multiple !== undefined ? { multiple: sf.multiple } : {}),
       }))
     return { ...base, type, subFields }
   }

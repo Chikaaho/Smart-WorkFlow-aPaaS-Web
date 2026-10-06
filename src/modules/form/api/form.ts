@@ -67,6 +67,16 @@ export async function submitForm(
  * 纯函数，可独立使用，有单测覆盖。
  * TODO(P3-1b): TABLE 子字段按 subField type 递归归一。
  */
+/** JSON 数组串 → 列表（非法 JSON 回退原值；P63 多选回显归一用）。 */
+function tryParseList(text: string): unknown {
+  try {
+    const parsed: unknown = JSON.parse(text)
+    return Array.isArray(parsed) ? parsed : text
+  } catch {
+    return text
+  }
+}
+
 export function normalizeSubmitData(
   data: Record<string, unknown>,
   fields: FormSchemaField[],
@@ -85,7 +95,23 @@ export function normalizeSubmitData(
         break
       case 'DATE':
         // 可选日期未填写时传 null，避免动态 TIMESTAMP 列收到空字符串而被数据库拒绝。
+        // P63 format=datetime：保留完整 "YYYY-MM-DD HH:mm[:ss]" 串（后端按 LocalDateTime 解析）。
         result[field.name] = String(value).trim() ? String(value) : null
+        break
+      case 'USER':
+      case 'DEPT':
+        // P63 多选：值=ID 字符串列表（后端按 JSON 数组落列）；空值统一为 []；单选保持原值。
+        if (field.multiple) {
+          const raw =
+            typeof value === 'string' && value.trim().startsWith('[') ? tryParseList(value) : value
+          result[field.name] = Array.isArray(raw)
+            ? raw.map(String)
+            : raw === null || raw === undefined || raw === ''
+              ? []
+              : [String(raw)]
+          break
+        }
+        result[field.name] = value
         break
       case 'TABLE': {
         const rows = Array.isArray(value) ? (value as Record<string, unknown>[]) : []

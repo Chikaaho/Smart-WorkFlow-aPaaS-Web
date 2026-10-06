@@ -117,6 +117,8 @@ interface BaseField {
    * 恢复草稿及编辑已有数据不覆盖原值。
    */
   defaultValue?: unknown
+  /** USER/DEPT 多选（P63，主字段同义透传）：值=稳定对象 ID 字符串列表；缺省单选。 */
+  multiple?: boolean
 }
 
 export interface TextField extends BaseField {
