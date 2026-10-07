@@ -24,7 +24,9 @@ import {
   publishProcessDef,
   validateProcessDefGraph,
   publishedFormDefinition,
-  type FormSchemaField,
+} from '@/modules/workflow/api'
+import type {
+  FormSchemaField,
   GraphValidationError,
   ApproverCandidate,
 } from '@/modules/workflow/api'
