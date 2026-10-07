@@ -209,7 +209,7 @@ export interface WorkflowCommandStatus {
   commandId: string
   commandType: string
   channel: string
-  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'EXPIRED'
   result: Record<string, unknown> | null
   failureReason: string | null
   retryCount: number

@@ -414,6 +414,12 @@ async function runAction(
     } else if (finalStatus?.status === 'FAILED') {
       ElMessage.error(finalStatus.failureReason ?? failMsg)
       acting.value = null
+    } else if (finalStatus?.status === 'EXPIRED') {
+      // P63 G05b：过期=效果未发生，明确呈现原因与下一动作（原用户可直接重试，重提交即恢复）
+      ElMessage.error(
+        (finalStatus.failureReason ?? failMsg) + '；可直接重试本次操作（将重新提交审批命令）',
+      )
+      acting.value = null
     } else {
       ElMessage.warning(t('common.processingCheckLater'))
       acting.value = null

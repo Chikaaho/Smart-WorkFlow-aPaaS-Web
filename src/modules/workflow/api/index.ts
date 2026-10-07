@@ -98,7 +98,8 @@ export interface CommandPollOptions {
 }
 
 /**
- * 受理后轮询命令状态到终态（COMPLETED/FAILED）。
+ * 受理后轮询命令状态到终态（COMPLETED/FAILED/EXPIRED）。
+ * EXPIRED（P63 G05b）= 准入截止到期且效果未发生的可恢复终态，同样返回给调用方如实呈现。
  * 超过 maxAttempts 仍未终态时返回 null（调用方如实提示「处理中」，不伪装成功）。
  */
 export async function pollCommandStatus(
@@ -110,7 +111,11 @@ export async function pollCommandStatus(
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, intervalMs))
     const status = await queryCommandStatus(commandId)
-    if (status.status === 'COMPLETED' || status.status === 'FAILED') {
+    if (
+      status.status === 'COMPLETED' ||
+      status.status === 'FAILED' ||
+      status.status === 'EXPIRED'
+    ) {
       return status
     }
   }
