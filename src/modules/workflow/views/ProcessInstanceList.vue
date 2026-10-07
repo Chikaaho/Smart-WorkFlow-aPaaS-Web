@@ -408,48 +408,48 @@ function rowActions(row: unknown): ListAction[] {
               :closable="false"
               show-icon
             />
-            <el-table
-              v-else
-              :data="detail.flowTrace.filter((n) => isUserTask(n.activityType))"
-              stripe
-            >
-              <el-table-column
-                prop="activityName"
-                :label="t('workflow.approvalNode')"
-                min-width="140"
-              />
-              <el-table-column
-                :label="t('workflow.approver')"
-                min-width="120"
-                show-overflow-tooltip
-              >
-                <template #default="{ row }">
-                  {{ row.assigneeName ?? row.assignee ?? '-' }}
-                </template>
-              </el-table-column>
-              <el-table-column :label="t('workflow.approvalStatus')" min-width="100">
-                <template #default="{ row }">
-                  <el-tag :type="row.endTime ? 'success' : 'warning'" size="small">
-                    {{ row.endTime ? t('common.statusCompleted') : t('common.statusInProgress') }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="startTime"
-                :label="t('common.startTime')"
-                min-width="175"
-                show-overflow-tooltip
-              />
-              <el-table-column
-                :label="t('workflow.completedAt')"
-                min-width="175"
-                show-overflow-tooltip
-              >
-                <template #default="{ row }">
-                  {{ row.endTime ?? t('common.inProgressEllipsis') }}
-                </template>
-              </el-table-column>
-            </el-table>
+            <!-- G08b 窄屏真实障碍修复：历史表总宽超出 375 抽屉时原本被裁切且无横滚，
+                 包一层横向滚动容器让 审批节点/审批人/审批状态 可真实滚动入视口 -->
+            <div v-else class="history-table-scroll">
+              <el-table :data="detail.flowTrace.filter((n) => isUserTask(n.activityType))" stripe>
+                <el-table-column
+                  prop="activityName"
+                  :label="t('workflow.approvalNode')"
+                  min-width="140"
+                />
+                <el-table-column
+                  :label="t('workflow.approver')"
+                  min-width="120"
+                  show-overflow-tooltip
+                >
+                  <template #default="{ row }">
+                    {{ row.assigneeName ?? row.assignee ?? '-' }}
+                  </template>
+                </el-table-column>
+                <el-table-column :label="t('workflow.approvalStatus')" min-width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="row.endTime ? 'success' : 'warning'" size="small">
+                      {{ row.endTime ? t('common.statusCompleted') : t('common.statusInProgress') }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  prop="startTime"
+                  :label="t('common.startTime')"
+                  min-width="175"
+                  show-overflow-tooltip
+                />
+                <el-table-column
+                  :label="t('workflow.completedAt')"
+                  min-width="175"
+                  show-overflow-tooltip
+                >
+                  <template #default="{ row }">
+                    {{ row.endTime ?? t('common.inProgressEllipsis') }}
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
           </el-card>
         </template>
       </div>
@@ -458,6 +458,11 @@ function rowActions(row: unknown): ListAction[] {
 </template>
 
 <style scoped>
+/* G08b：窄屏历史表横向滚动容器（375 抽屉内真实滚动） */
+.history-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .drawer-content {
   padding: 0;
 }
