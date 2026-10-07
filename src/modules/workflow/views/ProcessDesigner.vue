@@ -23,8 +23,11 @@ import {
   saveProcessDefGraph,
   publishProcessDef,
   validateProcessDefGraph,
+  publishedFormDefinition,
+  type FormSchemaField,
+  GraphValidationError,
+  ApproverCandidate,
 } from '@/modules/workflow/api'
-import type { GraphValidationError, ApproverCandidate } from '@/modules/workflow/api'
 import type {
   BpmNodeCapability,
   BpmNodeConfigField,
@@ -925,6 +928,39 @@ const participantField = computed<BpmNodeConfigField | null>(() => {
 })
 
 const participantForm = ref<ParticipantFormDraft>(emptyParticipantFormDraft())
+
+/* ── G01a 字段选择器：绑定表单已发布 schema，替代手填字段名 ── */
+const formSchemaFields = ref<FormSchemaField[]>([])
+async function loadBoundFormSchema(formKey: string) {
+  if (!formKey) {
+    formSchemaFields.value = []
+    return
+  }
+  try {
+    const schema = await publishedFormDefinition(formKey)
+    formSchemaFields.value = schema.fields
+  } catch {
+    formSchemaFields.value = []
+  }
+}
+/** 主表字段候选：按对象类型过滤（人员/部门） */
+function mainFieldOptionsFor(objectType: string): FormSchemaField[] {
+  return formSchemaFields.value.filter((f) => f.type === objectType)
+}
+/** 表格字段候选：schema 中 TABLE 类型字段 */
+const tableFieldOptions = computed(() => formSchemaFields.value.filter((f) => f.type === 'TABLE'))
+/** 选中表格的列候选：按对象类型过滤 */
+function tableColumnOptionsFor(tableField: string, objectType: string): FormSchemaField[] {
+  const table = formSchemaFields.value.find((f) => f.name === tableField)
+  return (table?.subFields ?? []).filter((sf) => sf.type === objectType)
+}
+watch(
+  () => graph.value?.formKey,
+  (key) => {
+    void loadBoundFormSchema(key ?? '')
+  },
+  { immediate: true },
+)
 /** 打开节点时检测到的参与人数据形态（旧数据兼容展示提示的依据）。 */
 const participantShape = ref<ParticipantShapeKind>('empty')
 
@@ -1605,30 +1641,59 @@ function nodeLabelLines(label: string) {
                     <el-radio value="TABLE">表格字段</el-radio>
                   </el-radio-group>
                 </el-form-item>
-                <el-form-item label="主字段名">
-                  <el-input
+                <el-form-item label="主字段">
+                  <el-select
                     v-model="participantForm.formField.field"
-                    placeholder="请输入主表字段名"
+                    filterable
+                    placeholder="选择主表字段"
                     @change="applyParticipant"
-                    @blur="applyParticipant"
-                  />
+                  >
+                    <el-option
+                      v-for="option in mainFieldOptionsFor(participantForm.formField.objectType)"
+                      :key="option.name"
+                      :label="`${option.label || option.name}（${option.name}）`"
+                      :value="option.name"
+                    />
+                  </el-select>
                 </el-form-item>
                 <template v-if="participantForm.formField.scope === 'TABLE'">
-                  <el-form-item label="表格字段名">
-                    <el-input
+                  <el-form-item label="表格字段">
+                    <el-select
                       v-model="participantForm.formField.tableField"
-                      placeholder="请输入表格字段名"
-                      @change="applyParticipant"
-                      @blur="applyParticipant"
-                    />
+                      filterable
+                      placeholder="选择表格字段"
+                      @change="
+                        () => {
+                          participantForm.formField.column = ''
+                          applyParticipant()
+                        }
+                      "
+                    >
+                      <el-option
+                        v-for="option in tableFieldOptions"
+                        :key="option.name"
+                        :label="`${option.label || option.name}（${option.name}）`"
+                        :value="option.name"
+                      />
+                    </el-select>
                   </el-form-item>
-                  <el-form-item label="列字段名">
-                    <el-input
+                  <el-form-item label="表格列">
+                    <el-select
                       v-model="participantForm.formField.column"
-                      placeholder="请输入列字段名"
+                      filterable
+                      placeholder="选择表格列"
                       @change="applyParticipant"
-                      @blur="applyParticipant"
-                    />
+                    >
+                      <el-option
+                        v-for="option in tableColumnOptionsFor(
+                          participantForm.formField.tableField,
+                          participantForm.formField.objectType,
+                        )"
+                        :key="option.name"
+                        :label="`${option.label || option.name}（${option.name}）`"
+                        :value="option.name"
+                      />
+                    </el-select>
                   </el-form-item>
                 </template>
               </template>
@@ -1672,19 +1737,39 @@ function nodeLabelLines(label: string) {
                   <el-option label="固定值" value="FIXED" />
                 </el-select>
               </el-form-item>
-              <el-form-item
-                :label="dynamicParallelForm.sourceType === 'FIXED' ? '固定值' : '字段绑定'"
-              >
+              <el-form-item v-if="dynamicParallelForm.sourceType === 'FIXED'" label="固定值">
                 <el-input
                   v-model="dynamicParallelForm.sourceValue"
-                  :placeholder="
-                    dynamicParallelForm.sourceType === 'FIXED'
-                      ? '多个取值用英文逗号分隔'
-                      : '请输入字段名/变量名'
-                  "
+                  placeholder="多个取值用英文逗号分隔"
                   @change="applyDynamicParallel"
                   @blur="applyDynamicParallel"
                 />
+              </el-form-item>
+              <el-form-item
+                v-else-if="dynamicParallelForm.sourceType === 'VARIABLE'"
+                label="变量名"
+              >
+                <el-input
+                  v-model="dynamicParallelForm.sourceValue"
+                  placeholder="请输入变量名"
+                  @change="applyDynamicParallel"
+                  @blur="applyDynamicParallel"
+                />
+              </el-form-item>
+              <el-form-item v-else-if="dynamicParallelForm.scope === 'MAIN'" label="主字段">
+                <el-select
+                  v-model="dynamicParallelForm.sourceValue"
+                  filterable
+                  placeholder="选择主表字段"
+                  @change="applyDynamicParallel"
+                >
+                  <el-option
+                    v-for="option in mainFieldOptionsFor(dynamicParallelForm.objectType)"
+                    :key="option.name"
+                    :label="`${option.label || option.name}（${option.name}）`"
+                    :value="option.name"
+                  />
+                </el-select>
               </el-form-item>
               <!-- 对象类型仅新语义（按对象分支）下有意义，随 semanticVersion 开关显示 -->
               <el-form-item v-if="dynamicParallelForm.objectSemantic" label="对象类型">
@@ -1703,19 +1788,48 @@ function nodeLabelLines(label: string) {
                 </el-radio-group>
               </el-form-item>
               <template v-if="dynamicParallelForm.scope === 'TABLE'">
-                <el-form-item label="表格字段名">
-                  <el-input
+                <el-form-item label="表格字段">
+                  <el-select
                     v-model="dynamicParallelForm.tableField"
-                    @change="applyDynamicParallel"
-                    @blur="applyDynamicParallel"
-                  />
+                    filterable
+                    placeholder="选择表格字段"
+                    @change="
+                      () => {
+                        dynamicParallelForm.column = ''
+                        applyDynamicParallel()
+                      }
+                    "
+                  >
+                    <el-option
+                      v-for="option in tableFieldOptions"
+                      :key="option.name"
+                      :label="`${option.label || option.name}（${option.name}）`"
+                      :value="option.name"
+                    />
+                  </el-select>
                 </el-form-item>
-                <el-form-item label="列字段名">
-                  <el-input
+                <el-form-item label="表格列">
+                  <el-select
                     v-model="dynamicParallelForm.column"
-                    @change="applyDynamicParallel"
-                    @blur="applyDynamicParallel"
-                  />
+                    filterable
+                    placeholder="选择表格列"
+                    @change="
+                      () => {
+                        dynamicParallelForm.sourceValue = dynamicParallelForm.column
+                        applyDynamicParallel()
+                      }
+                    "
+                  >
+                    <el-option
+                      v-for="option in tableColumnOptionsFor(
+                        dynamicParallelForm.tableField,
+                        dynamicParallelForm.objectType,
+                      )"
+                      :key="option.name"
+                      :label="`${option.label || option.name}（${option.name}）`"
+                      :value="option.name"
+                    />
+                  </el-select>
                 </el-form-item>
               </template>
               <el-form-item label="完成模式">

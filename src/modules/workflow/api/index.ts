@@ -383,6 +383,33 @@ export async function publishedFormDefs(): Promise<PublishedFormDef[]> {
   })
 }
 
+/** 已发布表单 schema 字段（G01a 设计器字段选择器数据源） */
+export interface FormSchemaField {
+  name: string
+  label?: string
+  type: string
+  subFields?: { name: string; label?: string; type: string }[] | null
+}
+
+/**
+ * GET /form/def/by-key/{formKey}/definition → 已发布表单 schema。
+ * 服务端 data 为 schema JSON 字符串；解析出 fields 供设计器字段选择器绑定，
+ * 不再手填字段名（主方向 §3.1：主字段通过字段选择器绑定、表格来源明确选择表格与列）。
+ */
+export async function publishedFormDefinition(
+  formKey: string,
+): Promise<{ title?: string; fields: FormSchemaField[] }> {
+  const raw = await request<string | { title?: string; fields: FormSchemaField[] }>({
+    method: 'GET',
+    url: `/form/def/by-key/${formKey}/definition`,
+  })
+  const parsed =
+    typeof raw === 'string'
+      ? (JSON.parse(raw) as { title?: string; fields: FormSchemaField[] })
+      : raw
+  return parsed && Array.isArray(parsed.fields) ? parsed : { fields: [] }
+}
+
 /** GET /workflow/drafts?pageNum=&pageSize= → PageResult<BpmDraft> */
 export async function myDrafts(page: PageQuery): Promise<PageResult<BpmDraft>> {
   const raw = await request<BackendPageResult<BpmDraft>>({
