@@ -167,6 +167,10 @@ const COMMAND_STATUS_TEXT: Record<string, string> = {
   EXPIRED: '已过期',
 }
 
+/** G08b：窄屏命令抽屉不超出视口（375 全宽，桌面 60%）。 */
+const viewportWidth = ref(Number.MAX_SAFE_INTEGER)
+const commandsDrawerSize = computed(() => (viewportWidth.value < 768 ? '100%' : '60%'))
+
 const commandsVisible = ref(false)
 const commandsLoading = ref(false)
 const commandRows = ref<IotDeviceCommandRecord[]>([])
@@ -240,7 +244,10 @@ async function submitVerify(): Promise<void> {
   }
 }
 
-onMounted(() => void load())
+onMounted(() => {
+  viewportWidth.value = globalThis.document.documentElement.clientWidth
+  void load()
+})
 
 /** 统一操作列（V012-BUG-002）：发布/刷新状态互斥禁用按管理状态显隐 */
 function rowActions(r: unknown): ListAction[] {
@@ -369,57 +376,65 @@ function rowActions(r: unknown): ListAction[] {
     <el-drawer
       v-model="commandsVisible"
       :title="`设备命令：${commandDevice?.deviceName ?? ''}`"
-      size="60%"
+      :size="commandsDrawerSize"
       data-test="device-commands-drawer"
     >
       <el-button link type="primary" data-test="commands-refresh" @click="loadCommands">
         刷新
       </el-button>
-      <el-table
-        v-loading="commandsLoading"
-        :data="commandRows"
-        size="small"
-        data-test="commands-table"
-      >
-        <el-table-column prop="commandKey" label="命令" min-width="120" />
-        <el-table-column prop="commandType" label="类型" width="90" />
-        <el-table-column label="状态" width="140">
-          <template #default="{ row }">
-            <el-tag
-              :type="
-                row.status === 'UNKNOWN'
-                  ? 'warning'
-                  : row.status === 'SUCCESS'
-                    ? 'success'
-                    : row.status === 'FAILED'
-                      ? 'danger'
-                      : 'info'
-              "
-            >
-              {{ commandStatusText(row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="result" label="结果" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="lastError" label="失败原因" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="approvalBizId" label="关联实例" min-width="130" />
-        <el-table-column label="操作" width="110">
-          <template #default="{ row }">
-            <el-button
-              v-if="row.status === 'UNKNOWN' && canVerify"
-              link
-              type="primary"
-              :data-test="`verify-${row.id}`"
-              @click="openVerify(row as IotDeviceCommandRecord)"
-            >
-              人工核实
-            </el-button>
-            <span v-else-if="row.status === 'UNKNOWN' && !canVerify" class="verify-hint">
-              待独立授权核实
-            </span>
-          </template>
-        </el-table-column>
-      </el-table>
+      <!-- G08b 窄屏真实障碍修复：命令表横向滚动容器（375 抽屉内状态/结果/关联实例可滚动入视口） -->
+      <div class="commands-table-scroll" data-test="commands-table-scroll">
+        <el-table
+          v-loading="commandsLoading"
+          :data="commandRows"
+          size="small"
+          data-test="commands-table"
+        >
+          <el-table-column prop="commandKey" label="命令" min-width="120" />
+          <el-table-column prop="commandType" label="类型" width="90" />
+          <el-table-column label="状态" width="140">
+            <template #default="{ row }">
+              <el-tag
+                :type="
+                  row.status === 'UNKNOWN'
+                    ? 'warning'
+                    : row.status === 'SUCCESS'
+                      ? 'success'
+                      : row.status === 'FAILED'
+                        ? 'danger'
+                        : 'info'
+                "
+              >
+                {{ commandStatusText(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="result" label="结果" min-width="180" show-overflow-tooltip />
+          <el-table-column
+            prop="lastError"
+            label="失败原因"
+            min-width="150"
+            show-overflow-tooltip
+          />
+          <el-table-column prop="approvalBizId" label="关联实例" min-width="130" />
+          <el-table-column label="操作" width="110">
+            <template #default="{ row }">
+              <el-button
+                v-if="row.status === 'UNKNOWN' && canVerify"
+                link
+                type="primary"
+                :data-test="`verify-${row.id}`"
+                @click="openVerify(row as IotDeviceCommandRecord)"
+              >
+                人工核实
+              </el-button>
+              <span v-else-if="row.status === 'UNKNOWN' && !canVerify" class="verify-hint">
+                待独立授权核实
+              </span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </el-drawer>
 
     <!-- 人工核实弹窗：仅 UNKNOWN；依据必填（不带可信依据不得宣告结果）；
@@ -470,6 +485,11 @@ function rowActions(r: unknown): ListAction[] {
 </template>
 
 <style scoped>
+/* G08b：窄屏命令表横向滚动容器 */
+.commands-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 /* 复核02 G6b：核实弹窗窄视口收敛——宽度 min(480px, 100vw-24px) 保证 375 视口提交按钮可及 */
 :global(.el-dialog.verify-dialog) {
   max-width: calc(100vw - 24px);
