@@ -102,6 +102,14 @@ export interface CommandPollOptions {
  * EXPIRED（P63 G05b）= 准入截止到期且效果未发生的可恢复终态，同样返回给调用方如实呈现。
  * 超过 maxAttempts 仍未终态时返回 null（调用方如实提示「处理中」，不伪装成功）。
  */
+/** P63 G05b：本用户对某任务的最新审批命令回查（任务详情加载时呈现上次动作终态）。 */
+export function latestTaskCommand(taskId: string): Promise<WorkflowCommandStatus | null> {
+  return request<WorkflowCommandStatus | null>({
+    method: 'GET',
+    url: `/workflow/commands/tasks/${taskId}/latest`,
+  })
+}
+
 export async function pollCommandStatus(
   commandId: string,
   options?: CommandPollOptions,

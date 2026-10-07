@@ -17,6 +17,7 @@ import { useUserStore } from '@/stores/user'
 import {
   queryTaskDetail,
   acceptTaskAction,
+  latestTaskCommand,
   pollCommandStatus,
   transferTask,
   delegateTask,
@@ -43,6 +44,8 @@ const detail = ref<TaskDetail | null>(null)
 const loading = ref(false)
 const errorMsg = ref('')
 const acting = ref<string | null>(null) // 'approve' | 'reject' | null
+// P63 G05b：本人上次动作的过期终态（任务加载即呈现，可重试恢复）
+const lastExpired = ref<{ reason: string } | null>(null)
 const opinionComment = ref('')
 const opinionData = ref<Record<string, unknown>>({})
 const returnTargetNodeId = ref('')
@@ -109,6 +112,7 @@ async function loadDetail() {
     void loadFormRecord()
     void loadGraph()
     void loadReservations()
+    void loadLastExpired()
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
@@ -1044,6 +1048,17 @@ function openSignGroup(nodeKey: string) {
   signGroupVisible.value = true
 }
 
+/** P63 G05b：任务加载时回查本人最新命令，EXPIRED 则持久呈现原因与重试提示。 */
+async function loadLastExpired() {
+  try {
+    const latest = await latestTaskCommand(taskId)
+    lastExpired.value =
+      latest && latest.status === 'EXPIRED' ? { reason: latest.failureReason ?? '' } : null
+  } catch {
+    lastExpired.value = null
+  }
+}
+
 onMounted(loadDetail)
 
 /** 后继节点（设计右栏第三块）：由真实流程图推导；仅在图可达时呈现。 */
@@ -1235,6 +1250,20 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
               <span class="card-head__hint">{{ t('taskDetailUi.byFlowPath') }}</span>
             </div>
           </template>
+          <el-alert
+            v-if="lastExpired"
+            class="g05b-expired-alert"
+            type="warning"
+            :closable="false"
+            show-icon
+          >
+            <p>
+              上次提交的审批命令已过期：{{
+                lastExpired.reason || '准入截止到期且未执行（效果未发生）'
+              }}
+            </p>
+            <p>可直接重试本次操作（将重新提交审批命令，原过期记录保留可查）。</p>
+          </el-alert>
           <div class="flow-status">
             <div
               v-for="entry in flowRail"
