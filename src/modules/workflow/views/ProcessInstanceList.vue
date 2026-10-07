@@ -133,6 +133,13 @@ function handleFilterChange() {
 const drawerVisible = ref(false)
 const drawerLoading = ref(false)
 const drawerError = ref('')
+/** G08b：窄屏抽屉不超出视口（375 真实可读，桌面保持 900px）。 */
+const viewportWidth = ref(Number.MAX_SAFE_INTEGER)
+onMounted(() => {
+  viewportWidth.value = globalThis.document.documentElement.clientWidth
+})
+const detailDrawerSize = computed(() => (viewportWidth.value < 768 ? '100%' : '900px'))
+
 const detail = ref<InstanceDetail | null>(null)
 
 /** 详情视图消费的图 + 轨迹（自研渲染内核） */
@@ -331,7 +338,7 @@ function rowActions(row: unknown): ListAction[] {
       :title="t('workflow.instanceDetailTitle')"
       :close-on-click-modal="false"
       destroy-on-close
-      size="900px"
+      :size="detailDrawerSize"
       @closed="closeDrawer"
     >
       <div v-loading="drawerLoading" class="drawer-content">
