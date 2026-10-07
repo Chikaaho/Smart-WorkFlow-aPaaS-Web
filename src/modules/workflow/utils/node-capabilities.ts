@@ -738,7 +738,8 @@ export function buildDynamicParallelFormDraft(config: unknown): DynamicParallelF
     ratio: null,
     maxBranches: null,
     emptyStrategy: 'BLOCK',
-    invalidStrategy: 'SKIP',
+    // P63 §3.1：新配置来源含无效值默认阻止继续；旧快照显式 SKIP 原样回显不受影响
+    invalidStrategy: 'BLOCK',
     objectSemantic: false,
   }
   if (!isRecord(config)) return draft
@@ -758,10 +759,11 @@ export function buildDynamicParallelFormDraft(config: unknown): DynamicParallelF
   }
   draft.mode = pickEnum(config.mode, DYNAMIC_PARALLEL_MODES, 'ALL')
   draft.emptyStrategy = pickEnum(config.emptyStrategy, DYNAMIC_PARALLEL_EMPTY_STRATEGIES, 'BLOCK')
+  // 显式 SKIP 的旧快照原样回显；缺省（新配置）按 BLOCK 展示与写入
   draft.invalidStrategy = pickEnum(
     config.invalidStrategy,
     DYNAMIC_PARALLEL_INVALID_STRATEGIES,
-    'SKIP',
+    'BLOCK',
   )
   draft.ratio = pickOptionalNumber(config.ratio)
   draft.maxBranches = pickOptionalNumber(config.maxBranches)
