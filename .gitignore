@@ -1,6 +1,10 @@
 # Logs
 logs
 *.log
+*.log.gz
+*.stdout
+*.stderr
+*.raw
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
