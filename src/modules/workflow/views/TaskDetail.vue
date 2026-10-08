@@ -31,6 +31,9 @@ import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 import type { ApprovalHistoryItem, TaskDetail } from '@/contracts/bpm'
 import type { ApprovalActionRequest, ApprovalOpinionConfig } from '@/contracts/bpm-node'
 import type { FormSchema } from '@/contracts/form-schema'
+import type { TaskNodeFormView } from '@/contracts/p64'
+import { getTaskNodeForm, saveTaskNodeFormDraft } from '@/modules/workflow/api/p64'
+import DynamicField from '@/components/DynamicField.vue'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { deriveProcessTrace } from '../utils/process-trace'
 
@@ -113,6 +116,7 @@ async function loadDetail() {
     void loadGraph()
     void loadReservations()
     void loadLastExpired()
+    void loadNodeForm()
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
@@ -169,6 +173,61 @@ async function loadFormRecord() {
     formRecord.value = null
   } finally {
     formRecordLoading.value = false
+  }
+}
+
+// ═════════ P64 阶段Ⅰ：节点业务表单（绑定任务可填报；草稿/最终提交/已提交回看） ═════════
+
+const nodeForm = ref<TaskNodeFormView | null>(null)
+const nodeFormModel = ref<Record<string, unknown>>({})
+const nodeFormErrors = ref<string[]>([])
+const nodeFormSavingDraft = ref(false)
+
+const nodeFormFields = computed(
+  () => (nodeForm.value?.definition?.fields ?? []) as unknown as FormSchema['fields'],
+)
+const nodeFormBound = computed(() => Boolean(nodeForm.value?.bound))
+const nodeFormSubmitted = computed(() => nodeForm.value?.status === 'SUBMITTED')
+/** 待办且未最终提交时可编辑；已提交或历史任务只读回看。 */
+const nodeFormEditable = computed(() => nodeFormBound.value && !nodeFormSubmitted.value)
+
+async function loadNodeForm() {
+  try {
+    const view = await getTaskNodeForm(taskId)
+    nodeForm.value = view
+    nodeFormModel.value = { ...(view.data ?? {}) }
+  } catch {
+    nodeForm.value = null
+  }
+}
+
+/** 节点表单必填校验（客户端 UX 提示；服务端提交仍全量校验，1401/2433 为权威口径）。 */
+function validateNodeFormRequired(): boolean {
+  nodeFormErrors.value = []
+  if (!nodeFormBound.value || nodeFormSubmitted.value) return true
+  for (const field of nodeFormFields.value) {
+    if (!field.required) continue
+    const value = nodeFormModel.value[field.name]
+    const empty =
+      value == null ||
+      (typeof value === 'string' && value.trim() === '') ||
+      (Array.isArray(value) && value.length === 0)
+    if (empty) nodeFormErrors.value.push(`${field.label || field.name}: 必填`)
+  }
+  return nodeFormErrors.value.length === 0
+}
+
+async function handleNodeFormDraft() {
+  if (!nodeFormEditable.value || nodeFormSavingDraft.value) return
+  nodeFormSavingDraft.value = true
+  try {
+    await saveTaskNodeFormDraft(taskId, nodeFormModel.value)
+    ElMessage.success('节点表单草稿已保存')
+    await loadNodeForm()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '节点表单草稿保存失败')
+  } finally {
+    nodeFormSavingDraft.value = false
   }
 }
 
@@ -296,18 +355,25 @@ function actionPayload(
 ): Partial<ApprovalActionRequest> | undefined {
   const form = detail.value?.opinionForm
   const comment = opinionComment.value.trim()
-  if (!form || !form.formId || !form.version) {
-    return comment ? { action, comment, opinionData: { comment } } : undefined
+  const base = (() => {
+    if (!form || !form.formId || !form.version) {
+      return comment ? { action, comment, opinionData: { comment } } : undefined
+    }
+    const data = { ...opinionData.value }
+    if (comment && data.comment == null) data.comment = comment
+    return {
+      action,
+      opinionFormId: form.formId,
+      opinionFormVersion: form.version,
+      comment: typeof data.comment === 'string' ? data.comment : undefined,
+      opinionData: data,
+    }
+  })()
+  // P64 阶段Ⅰ：任务绑定节点业务表单时，最终提交随合法动作同事务生效
+  if (base && action === 'APPROVE' && nodeFormBound.value) {
+    return { ...base, nodeFormData: nodeFormModel.value }
   }
-  const data = { ...opinionData.value }
-  if (comment && data.comment == null) data.comment = comment
-  return {
-    action,
-    opinionFormId: form.formId,
-    opinionFormVersion: form.version,
-    comment: typeof data.comment === 'string' ? data.comment : undefined,
-    opinionData: data,
-  }
+  return base
 }
 
 const userStore = useUserStore()
@@ -437,6 +503,11 @@ async function runAction(
 async function handleApprove() {
   if (acting.value) return
   if (!ensureOpinionData()) return
+  // P64 阶段Ⅰ：节点表单必填客户端预检（服务端 2433 为权威口径）
+  if (nodeFormBound.value && !nodeFormSubmitted.value && !validateNodeFormRequired()) {
+    ElMessage.error(nodeFormErrors.value[0] ?? '节点业务表单校验未通过')
+    return
+  }
   acting.value = 'approve'
 
   let confirmed = false
@@ -1170,6 +1241,57 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
                 t('workflow.noDisplayableFields')
               }}</el-descriptions-item>
             </el-descriptions>
+          </div>
+        </el-card>
+
+        <!-- P64 阶段Ⅰ：节点业务表单（绑定节点可填报；草稿可存，最终提交随审批动作同事务生效；已提交只读回看） -->
+        <el-card v-if="nodeForm && nodeFormBound" class="detail-card detail-card--node-form">
+          <template #header>
+            <span>
+              节点业务表单
+              <el-tag v-if="nodeFormSubmitted" size="small" type="success" class="nodeform-tag"
+                >已最终提交</el-tag
+              >
+              <el-tag v-else size="small" type="info" class="nodeform-tag">草稿</el-tag>
+            </span>
+          </template>
+          <div class="nodeform-body">
+            <small class="nodeform-meta">
+              {{ nodeForm.formName
+              }}<template v-if="nodeForm.formVersion"> · v{{ nodeForm.formVersion }}</template>
+              <template v-if="nodeForm.roundNo"> · 第 {{ nodeForm.roundNo }} 轮</template>
+              <template v-if="nodeFormSubmitted"> · 数据已生效，可读变量与历史回看</template>
+            </small>
+            <div class="nodeform-fields">
+              <div v-for="field in nodeFormFields" :key="field.name" class="nodeform-field">
+                <div class="nodeform-field__label">
+                  <span v-if="field.required && nodeFormEditable" class="nodeform-field__required"
+                    >*</span
+                  >
+                  {{ field.label || field.name }}
+                </div>
+                <DynamicField
+                  :field="field"
+                  :model-value="nodeFormModel[field.name]"
+                  :readonly="!nodeFormEditable"
+                  @update:model-value="nodeFormModel[field.name] = $event"
+                />
+              </div>
+            </div>
+            <div v-if="nodeFormErrors.length > 0" class="nodeform-errors" role="alert">
+              <p v-for="item in nodeFormErrors" :key="item">{{ item }}</p>
+            </div>
+            <div v-if="nodeFormEditable" class="nodeform-actions">
+              <el-button
+                size="small"
+                :loading="nodeFormSavingDraft"
+                :disabled="acting !== null"
+                @click="handleNodeFormDraft"
+              >
+                保存草稿
+              </el-button>
+              <span class="nodeform-meta">最终提交与「同意」动作一并在服务端事务生效</span>
+            </div>
           </div>
         </el-card>
 
@@ -2883,5 +3005,46 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
   .iot-reservation__label {
     flex-basis: auto;
   }
+}
+
+/* ─────────── P64 阶段Ⅰ：节点业务表单 ─────────── */
+.nodeform-tag {
+  margin-left: 8px;
+}
+.nodeform-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.nodeform-meta {
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 12px;
+}
+.nodeform-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  column-gap: 28px;
+  row-gap: 14px;
+}
+.nodeform-field__label {
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: var(--el-text-color-primary, #303133);
+}
+.nodeform-field__required {
+  color: var(--el-color-danger, #f56c6c);
+  margin-right: 2px;
+}
+.nodeform-errors {
+  color: var(--el-color-danger, #f56c6c);
+  font-size: 12px;
+}
+.nodeform-errors p {
+  margin: 2px 0;
+}
+.nodeform-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 </style>

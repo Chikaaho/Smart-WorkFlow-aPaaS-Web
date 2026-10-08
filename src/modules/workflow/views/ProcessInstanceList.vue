@@ -24,6 +24,8 @@ import { ApiError } from '@/foundation/request'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import type { InstanceFilter } from '@/modules/workflow/api'
+import type { ActionRefView, TriggerExecView } from '@/contracts/p64'
+import { listActionRefs, listTriggerExecs, retryActionRef } from '@/modules/workflow/api/p64'
 
 // ─── 状态映射 ───
 
@@ -146,6 +148,29 @@ const detail = ref<InstanceDetail | null>(null)
 const detailGraph = ref<ProcessGraphDocument | null>(null)
 const detailTrace = ref<{ activeNodeIds: string[]; completedNodeIds: string[] } | null>(null)
 
+// ─── P64 阶段Ⅰ：触发与动作链回查 ───
+const p64Execs = ref<TriggerExecView[]>([])
+const p64Refs = ref<ActionRefView[]>([])
+const p64Retrying = ref<number | null>(null)
+
+async function handleRetryActionRef(refId: number) {
+  if (p64Retrying.value !== null) return
+  p64Retrying.value = refId
+  try {
+    await retryActionRef(refId)
+    ElMessage.success('失败意图已重新入队')
+    if (detail.value) {
+      p64Refs.value = await listActionRefs(detail.value.processInstanceId).catch(
+        () => p64Refs.value,
+      )
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '重试失败')
+  } finally {
+    p64Retrying.value = null
+  }
+}
+
 function toDetailGraph(
   definition: Awaited<ReturnType<typeof getProcessDefDefinitionByKey>>,
 ): ProcessGraphDocument {
@@ -169,9 +194,26 @@ async function openDrawer(row: ProcessInstance) {
   detail.value = null
   detailGraph.value = null
   detailTrace.value = null
+  p64Execs.value = []
+  p64Refs.value = []
 
   try {
     detail.value = await getInstanceDetail(row.processInstanceId)
+    // P64 阶段Ⅰ：触发与动作链回查（失败不阻断详情主链）
+    void listTriggerExecs(row.processInstanceId)
+      .then((items) => {
+        p64Execs.value = items
+      })
+      .catch(() => {
+        p64Execs.value = []
+      })
+    void listActionRefs(row.processInstanceId)
+      .then((items) => {
+        p64Refs.value = items
+      })
+      .catch(() => {
+        p64Refs.value = []
+      })
 
     // 流程定义 key → 定义图（无需 defId：后端 /workflow/defs/{id} 与实例绑定按 key 匹配）
     const processDefKey = row.processDefKey
@@ -458,6 +500,105 @@ function rowActions(row: unknown): ListAction[] {
               </el-table>
             </div>
           </el-card>
+
+          <!-- P64 阶段Ⅰ：触发与动作（判断→意图→关联实例 回查链；有数据才渲染） -->
+          <el-card v-if="p64Execs.length > 0 || p64Refs.length > 0" class="detail-section">
+            <template #header><span>触发与动作</span></template>
+            <template v-if="p64Execs.length > 0">
+              <h4 class="p64-section-title">触发执行</h4>
+              <div class="p64-table-scroll">
+                <el-table :data="p64Execs" stripe size="small">
+                  <el-table-column prop="triggerId" label="触发器" min-width="110" />
+                  <el-table-column prop="eventType" label="事件" min-width="150" />
+                  <el-table-column prop="nodeKey" label="节点" min-width="100" />
+                  <el-table-column label="结果" min-width="150">
+                    <template #default="{ row }">
+                      <el-tag
+                        :type="
+                          row.status === 'MATCHED'
+                            ? 'success'
+                            : row.status === 'FAILED'
+                              ? 'danger'
+                              : 'warning'
+                        "
+                        size="small"
+                      >
+                        {{ row.status }}
+                      </el-tag>
+                      <span class="p64-cell-note"
+                        >{{ row.resultType }}={{ row.resultValue ?? '-' }}</span
+                      >
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    prop="errorText"
+                    label="诊断"
+                    min-width="200"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column prop="durationMs" label="耗时ms" width="80" />
+                </el-table>
+              </div>
+            </template>
+            <template v-if="p64Refs.length > 0">
+              <h4 class="p64-section-title">动作意图与关联实例</h4>
+              <div class="p64-table-scroll">
+                <el-table :data="p64Refs" stripe size="small">
+                  <el-table-column prop="actionId" label="动作" min-width="100" />
+                  <el-table-column prop="itemKey" label="派发项" min-width="100" />
+                  <el-table-column label="状态" min-width="130">
+                    <template #default="{ row }">
+                      <el-tag
+                        :type="
+                          row.status === 'STARTED'
+                            ? 'success'
+                            : row.status === 'FAILED'
+                              ? 'danger'
+                              : 'info'
+                        "
+                        size="small"
+                      >
+                        {{ row.status }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="targetDefKey" label="目标流程" min-width="120" />
+                  <el-table-column
+                    prop="targetRecordId"
+                    label="目标记录"
+                    min-width="140"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column
+                    prop="targetInstanceId"
+                    label="关联实例"
+                    min-width="140"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column
+                    prop="errorText"
+                    label="诊断"
+                    min-width="160"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column label="操作" width="90" fixed="right">
+                    <template #default="{ row }">
+                      <el-button
+                        v-if="row.status === 'FAILED' || row.status === 'INTENT_SUBMITTED'"
+                        size="small"
+                        link
+                        type="primary"
+                        :loading="p64Retrying === row.id"
+                        @click="handleRetryActionRef(row.id)"
+                      >
+                        重试
+                      </el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </template>
+          </el-card>
         </template>
       </div>
     </el-drawer>
@@ -465,6 +606,18 @@ function rowActions(row: unknown): ListAction[] {
 </template>
 
 <style scoped>
+/* P64 阶段Ⅰ：触发与动作回查卡 */
+.p64-section-title {
+  margin: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7e306b;
+}
+.p64-cell-note {
+  margin-left: 6px;
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 12px;
+}
 /* G08b：窄屏历史表横向滚动容器（375 抽屉内真实滚动） */
 .history-table-scroll {
   overflow-x: auto;

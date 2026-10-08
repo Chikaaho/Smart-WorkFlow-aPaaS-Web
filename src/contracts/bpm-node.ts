@@ -153,6 +153,8 @@ export interface ApprovalActionRequest {
   receivers?: number[]
   /** I3：沟通内容/回复。 */
   message?: string
+  /** P64 阶段Ⅰ：节点业务表单数据（任务绑定节点表单时随合法动作最终提交；服务端与任务完成同事务落库）。 */
+  nodeFormData?: Record<string, unknown>
 }
 
 export interface BpmNodeTopology {

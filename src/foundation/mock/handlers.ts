@@ -2877,6 +2877,52 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
+  // ── P64 阶段Ⅰ：节点业务表单 / 触发器回查（mock 模式返回空绑定/空链，真实数据走 dev 直连） ──
+  {
+    method: 'GET',
+    pattern: '/api/workflow/tasks/:taskId/node-form',
+    handler: () => ({ code: 0, message: 'ok', data: { bound: false } }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/workflow/tasks/:taskId/node-form/draft',
+    handler: () => ({ code: 0, message: 'ok', data: 0 }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/workflow/triggers/preview',
+    handler: () => ({
+      code: 0,
+      message: 'ok',
+      data: {
+        kind: 'SCRIPT_ERROR',
+        variables: {},
+        missingRequired: [],
+        errors: ['mock 模式无真实实例上下文'],
+      },
+    }),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/workflow/instances/:instanceId/trigger-execs',
+    handler: () => ({ code: 0, message: 'ok', data: [] }),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/workflow/instances/:instanceId/action-refs',
+    handler: () => ({ code: 0, message: 'ok', data: [] }),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/workflow/instances/:instanceId/node-form-data',
+    handler: () => ({ code: 0, message: 'ok', data: [] }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/workflow/action-refs/:refId/retry',
+    handler: () => ({ code: 2441, message: 'mock 模式无真实命令队列', data: null }),
+  },
+
   // ── I6 收件箱：服务端真分页 + 未读数 + 全部已读 + 受保护深链 ──
   {
     method: 'GET',

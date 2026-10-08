@@ -16,11 +16,7 @@ const { t } = useI18n()
  */
 import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  listFormSnapshots,
-  getFormSnapshotDefinition,
-  type FormSnapshotDTO,
-} from '../api/form-def'
+import { listFormSnapshots, getFormSnapshotDefinition, type FormSnapshotDTO } from '../api/form-def'
 import { saveDraftDefinition } from './draft-actions'
 import { parseDefinition } from '@/adapters/form-designer'
 import type { FormSchema } from '@/contracts/form-schema'
@@ -51,7 +47,8 @@ async function loadSnapshots() {
   loading.value = true
   try {
     snapshots.value = await listFormSnapshots(props.formId)
-    selectedVersion.value = snapshots.value[1]?.formVersion ?? snapshots.value[0]?.formVersion ?? null
+    selectedVersion.value =
+      snapshots.value[1]?.formVersion ?? snapshots.value[0]?.formVersion ?? null
   } catch {
     ElMessage.error(t('form.historyLoadFailed'))
   } finally {
@@ -168,9 +165,7 @@ async function restoreSelected() {
       >
         <span class="history-card__head">
           <b class="history-card__time">{{ formatTime(row.createTime) }}</b>
-          <span class="history-card__badge" :class="badgeClass(row, i)">{{
-            badgeOf(row, i)
-          }}</span>
+          <span class="history-card__badge" :class="badgeClass(row, i)">{{ badgeOf(row, i) }}</span>
         </span>
         <span v-if="row.author" class="history-card__meta">{{
           t('form.snapshotAuthorScope', { author: row.author })

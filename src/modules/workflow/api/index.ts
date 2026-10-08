@@ -296,6 +296,10 @@ export interface ProcessGraphPayload {
     waypoints?: Array<{ x: number; y: number }>
   }>
   canvas?: Record<string, unknown>
+  /** P64 阶段Ⅰ：BPM 变量定义（文档级；旧图缺省 = 能力未启用）。 */
+  variables?: import('@/contracts/p64').BpmVariableDef[]
+  /** P64 阶段Ⅰ：Trigger 判断配置（文档级）。 */
+  triggers?: import('@/contracts/p64').TriggerConfig[]
 }
 
 // ═══════════════════════════════════════

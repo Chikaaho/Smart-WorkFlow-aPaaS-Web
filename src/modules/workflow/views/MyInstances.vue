@@ -14,6 +14,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { myInstances, myInstanceDetail, withdrawInstance } from '@/modules/workflow/api'
+import { listTriggerExecs, listActionRefs } from '@/modules/workflow/api/p64'
 import { urgeMyInstance } from '@/modules/workflow/api/oa'
 import type { ProcessInstance, MyInstanceDetail } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
@@ -182,12 +183,31 @@ const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref<MyInstanceDetail | null>(null)
 const detailError = ref('')
+// P64 阶段Ⅰ：触发与动作链回查（失败不阻断详情主链）
+const p64Execs = ref<import('@/contracts/p64').TriggerExecView[]>([])
+const p64Refs = ref<import('@/contracts/p64').ActionRefView[]>([])
 
 async function openDetail(row: ProcessInstance) {
   detailVisible.value = true
   detailLoading.value = true
   detailError.value = ''
   detail.value = null
+  p64Execs.value = []
+  p64Refs.value = []
+  void listTriggerExecs(row.id)
+    .then((items) => {
+      p64Execs.value = items
+    })
+    .catch(() => {
+      p64Execs.value = []
+    })
+  void listActionRefs(row.id)
+    .then((items) => {
+      p64Refs.value = items
+    })
+    .catch(() => {
+      p64Refs.value = []
+    })
   try {
     detail.value = await myInstanceDetail(row.id)
   } catch (err) {
@@ -515,6 +535,83 @@ onMounted(loadList)
           </el-table-column>
         </el-table>
       </template>
+
+      <!-- P64 阶段Ⅰ：触发与动作（判断→意图→关联实例 回查链；有数据才渲染） -->
+      <template v-if="p64Execs.length > 0 || p64Refs.length > 0">
+        <h4 class="detail-section-title">触发与动作</h4>
+        <template v-if="p64Execs.length > 0">
+          <p class="p64-subtitle">触发执行</p>
+          <div class="p64-table-scroll">
+            <el-table :data="p64Execs" stripe size="small">
+              <el-table-column prop="triggerId" label="触发器" min-width="110" />
+              <el-table-column prop="eventType" label="事件" min-width="150" />
+              <el-table-column label="结果" min-width="130">
+                <template #default="{ row }">
+                  <el-tag
+                    :type="
+                      row.status === 'MATCHED'
+                        ? 'success'
+                        : row.status === 'FAILED'
+                          ? 'danger'
+                          : 'warning'
+                    "
+                    size="small"
+                  >
+                    {{ row.status }}
+                  </el-tag>
+                  <span class="p64-cell-note"
+                    >{{ row.resultType }}={{ row.resultValue ?? '-' }}</span
+                  >
+                </template>
+              </el-table-column>
+              <el-table-column
+                prop="errorText"
+                label="诊断"
+                min-width="180"
+                show-overflow-tooltip
+              />
+            </el-table>
+          </div>
+        </template>
+        <template v-if="p64Refs.length > 0">
+          <p class="p64-subtitle">动作意图与关联实例</p>
+          <div class="p64-table-scroll">
+            <el-table :data="p64Refs" stripe size="small">
+              <el-table-column prop="actionId" label="动作" min-width="100" />
+              <el-table-column prop="itemKey" label="派发项" min-width="90" />
+              <el-table-column label="状态" width="130">
+                <template #default="{ row }">
+                  <el-tag
+                    :type="
+                      row.status === 'STARTED'
+                        ? 'success'
+                        : row.status === 'FAILED'
+                          ? 'danger'
+                          : 'info'
+                    "
+                    size="small"
+                  >
+                    {{ row.status }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="targetDefKey" label="目标流程" min-width="110" />
+              <el-table-column
+                prop="targetRecordId"
+                label="目标记录"
+                min-width="130"
+                show-overflow-tooltip
+              />
+              <el-table-column
+                prop="targetInstanceId"
+                label="关联实例"
+                min-width="130"
+                show-overflow-tooltip
+              />
+            </el-table>
+          </div>
+        </template>
+      </template>
     </div>
     <template #footer>
       <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
@@ -528,6 +625,22 @@ onMounted(loadList)
   color: var(--sw-color-primary);
   font-size: 13px;
   font-weight: 600;
+}
+/* P64 阶段Ⅰ：触发与动作回查 */
+.p64-subtitle {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  color: var(--sw-color-primary);
+  font-weight: 600;
+}
+.p64-cell-note {
+  margin-left: 6px;
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 12px;
+}
+.p64-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .my-instances-panel-title {
   margin: 0;

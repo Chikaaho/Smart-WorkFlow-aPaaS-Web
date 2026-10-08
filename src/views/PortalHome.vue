@@ -130,12 +130,12 @@ function formatDuration(value: number): string {
 
 onMounted(async () => {
   try {
-      const [catalog, initiated, todo, unreadCount, summary] = await Promise.allSettled([
-        queryCatalogItems({ pageNum: 1, pageSize: 1 }),
-        myInstances({ pageNum: 1, pageSize: 1 }),
-        queryTodoTasks({ pageNum: 1, pageSize: 1 }),
-        unreadNotifyCount(),
-        queryAnalyticsSummary(),
+    const [catalog, initiated, todo, unreadCount, summary] = await Promise.allSettled([
+      queryCatalogItems({ pageNum: 1, pageSize: 1 }),
+      myInstances({ pageNum: 1, pageSize: 1 }),
+      queryTodoTasks({ pageNum: 1, pageSize: 1 }),
+      unreadNotifyCount(),
+      queryAnalyticsSummary(),
     ])
     if (catalog.status === 'fulfilled') catalogTotal.value = catalog.value.total
     if (initiated.status === 'fulfilled') initiatedTotal.value = initiated.value.total
@@ -184,14 +184,18 @@ function searchPortal(): void {
           <span>{{ t('portal.heroStatInstances') }}</span>
         </div>
         <div class="portal__hero-stat portal__hero-stat--accent">
-          <strong>{{ analytics && analytics.launched > 0 ? `${((analytics.completed / analytics.launched) * 100).toFixed(1)}%` : '—' }}</strong>
+          <strong>{{
+            analytics && analytics.launched > 0
+              ? `${((analytics.completed / analytics.launched) * 100).toFixed(1)}%`
+              : '—'
+          }}</strong>
           <span>{{ t('portal.heroStatOnTime') }}</span>
         </div>
       </div>
     </section>
 
-      <section class="portal__section">
-        <h3 class="portal__section-title">{{ t('portal.quickServices') }}</h3>
+    <section class="portal__section">
+      <h3 class="portal__section-title">{{ t('portal.quickServices') }}</h3>
       <div class="portal__services">
         <button
           v-for="(svc, index) in services"
@@ -216,68 +220,78 @@ function searchPortal(): void {
           <span class="portal-service__enter">{{ t('portal.enter') }} →</span>
         </button>
       </div>
-      </section>
+    </section>
 
-      <div class="portal__lower">
-        <section class="portal__analytics">
-          <div class="portal__lower-head">
-            <h3 class="portal__section-title">{{ t('portal.overview') }}</h3>
-            <span>{{ t('portal.analyticsWindow') }}</span>
+    <div class="portal__lower">
+      <section class="portal__analytics">
+        <div class="portal__lower-head">
+          <h3 class="portal__section-title">{{ t('portal.overview') }}</h3>
+          <span>{{ t('portal.analyticsWindow') }}</span>
+        </div>
+        <div v-if="analytics" class="portal__analytics-summary">
+          <div>
+            <strong>{{ analytics.launched }}</strong>
+            <span>{{ t('portal.flowInstances') }}</span>
+            <em v-if="analytics.launchTrendPercent != null">
+              {{ analytics.launchTrendPercent > 0 ? '+' : '' }}{{ analytics.launchTrendPercent }}%
+            </em>
           </div>
-          <div v-if="analytics" class="portal__analytics-summary">
-            <div>
-                <strong>{{ analytics.launched }}</strong>
-                <span>{{ t('portal.flowInstances') }}</span>
-                <em v-if="analytics.launchTrendPercent != null">
-                  {{ analytics.launchTrendPercent > 0 ? '+' : '' }}{{ analytics.launchTrendPercent }}%
-                </em>
-              </div>
-              <div>
-                <strong>{{ formatDuration(analytics.avgDurationMs) }}</strong>
-                <span>{{ t('portal.avgHandling') }}</span>
-                <em v-if="analytics.durationTrendPercent != null">{{ analytics.durationTrendPercent }}%</em>
-              </div>
-              <div>
-                <strong>{{ analytics.overdue ?? analytics.rejected }}</strong>
-                <span>{{ t('portal.overdueTasks') }}</span>
-                <em v-if="analytics.overdueTrendPercent != null">{{ analytics.overdueTrendPercent }}%</em>
-              </div>
-            </div>
-          <div class="portal__analytics-chart-label">{{ t('portal.trendTitle') }}</div>
-          <div v-if="analyticsTrend.length" class="portal__analytics-bars">
-            <div v-for="point in analyticsTrend" :key="point.date" class="portal__analytics-bar">
-              <span
-                :style="{
-                  height: `${Math.min(100, Math.max(18, point.count / Math.max(1, Math.max(...analyticsTrend.map((item) => item.count))) * 100))}%`,
-                }"
-              />
-              <small v-if="point === analyticsTrend[0] || point === analyticsTrend[analyticsTrend.length - 1]">
-                {{ point.date }}
-              </small>
-            </div>
-          </div>
-        </section>
-        <section class="portal__section portal__focus-section">
-          <h3 class="portal__section-title">{{ t('portal.myFocus') }}</h3>
-          <div class="portal__focus">
-            <button
-              v-for="item in focus"
-              :key="item.key"
-              type="button"
-              class="portal-focus"
-              :disabled="!item.to"
-              @click="open(item.to)"
+          <div>
+            <strong>{{ formatDuration(analytics.avgDurationMs) }}</strong>
+            <span>{{ t('portal.avgHandling') }}</span>
+            <em v-if="analytics.durationTrendPercent != null"
+              >{{ analytics.durationTrendPercent }}%</em
             >
-              <span class="portal-focus__badge" :class="`portal-focus__badge--${item.tone}`">{{ item.value }}</span>
-              <span class="portal-focus__body">
-                <strong>{{ item.label }}</strong>
-                <small>{{ item.subtitle }}</small>
-              </span>
-              <el-button size="small" plain>{{ t('portal.view') }}</el-button>
-            </button>
           </div>
-        </section>
-      </div>
+          <div>
+            <strong>{{ analytics.overdue ?? analytics.rejected }}</strong>
+            <span>{{ t('portal.overdueTasks') }}</span>
+            <em v-if="analytics.overdueTrendPercent != null"
+              >{{ analytics.overdueTrendPercent }}%</em
+            >
+          </div>
+        </div>
+        <div class="portal__analytics-chart-label">{{ t('portal.trendTitle') }}</div>
+        <div v-if="analyticsTrend.length" class="portal__analytics-bars">
+          <div v-for="point in analyticsTrend" :key="point.date" class="portal__analytics-bar">
+            <span
+              :style="{
+                height: `${Math.min(100, Math.max(18, (point.count / Math.max(1, Math.max(...analyticsTrend.map((item) => item.count)))) * 100))}%`,
+              }"
+            />
+            <small
+              v-if="
+                point === analyticsTrend[0] || point === analyticsTrend[analyticsTrend.length - 1]
+              "
+            >
+              {{ point.date }}
+            </small>
+          </div>
+        </div>
+      </section>
+      <section class="portal__section portal__focus-section">
+        <h3 class="portal__section-title">{{ t('portal.myFocus') }}</h3>
+        <div class="portal__focus">
+          <button
+            v-for="item in focus"
+            :key="item.key"
+            type="button"
+            class="portal-focus"
+            :disabled="!item.to"
+            @click="open(item.to)"
+          >
+            <span class="portal-focus__badge" :class="`portal-focus__badge--${item.tone}`">{{
+              item.value
+            }}</span>
+            <span class="portal-focus__body">
+              <strong>{{ item.label }}</strong>
+              <small>{{ item.subtitle }}</small>
+            </span>
+            <el-button size="small" plain>{{ t('portal.view') }}</el-button>
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
