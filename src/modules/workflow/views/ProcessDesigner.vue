@@ -271,6 +271,7 @@ function applyNodeForm(formKey: string) {
   model?.updateNodeConfig(selectedNode.value.id, {
     nodeForm: formKey ? { formKey } : {},
   })
+  snapshot()
   onModelChanged()
 }
 
@@ -310,6 +311,7 @@ watch(
 
 /** 节点业务表单绑定清单（nodeKey → formKey）：NODE_FORM 来源候选。 */
 const nodeFormBindings = computed<Array<{ nodeKey: string; formKey: string }>>(() => {
+  void version.value // model 非响应式：依赖快照 serial 驱动重算
   const result: Array<{ nodeKey: string; formKey: string }> = []
   for (const node of model?.serialize().elements ?? []) {
     if (node.kind !== 'node') continue
@@ -356,11 +358,12 @@ function nodeFormFieldOptions(nodeKey: string) {
   return binding ? (nodeFormDefinitions.value[binding.formKey] ?? []) : []
 }
 
-const graphNodes = computed(() =>
-  (model?.serialize().elements ?? [])
+const graphNodes = computed(() => {
+  void version.value // model 非响应式：依赖快照 serial 驱动重算
+  return (model?.serialize().elements ?? [])
     .filter((element) => element.kind === 'node')
-    .map((element) => ({ id: element.id, type: element.type ?? '' })),
-)
+    .map((element) => ({ id: element.id, type: element.type ?? '' }))
+})
 
 const variablesVisible = ref(false)
 const triggersVisible = ref(false)
@@ -487,6 +490,55 @@ function removeTrigger(index: number) {
   list.splice(index, 1)
   graph.value = { ...(graph.value ?? {}), triggers: list } as DesignerGraph
   onModelChanged()
+}
+
+/** JSON 批量导入（模板/批量配置场景）：解析后整体替换，发布校验仍为权威。 */
+async function importVariablesJson() {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '粘贴变量定义 JSON 数组（ProcessVariableDef[]）',
+      '导入变量 JSON',
+      {
+        inputType: 'textarea',
+        inputPlaceholder: '[{"varId":"v_example", ...}]',
+        inputValue: JSON.stringify(graph.value?.variables ?? [], null, 2),
+      },
+    )
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) {
+      ElMessage.error('导入失败：JSON 必须是数组')
+      return
+    }
+    graph.value = { ...(graph.value ?? {}), variables: parsed } as DesignerGraph
+    onModelChanged()
+    ElMessage.success(`已导入 ${parsed.length} 个变量定义（保存并经发布校验生效）`)
+  } catch {
+    // 用户取消或 JSON 解析失败由 catch 吞掉；解析错误单独提示
+  }
+}
+
+async function importTriggersJson() {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '粘贴触发器配置 JSON 数组（TriggerConfig[]）',
+      '导入触发器 JSON',
+      {
+        inputType: 'textarea',
+        inputPlaceholder: '[{"triggerId":"trg_example", ...}]',
+        inputValue: JSON.stringify(graph.value?.triggers ?? [], null, 2),
+      },
+    )
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) {
+      ElMessage.error('导入失败：JSON 必须是数组')
+      return
+    }
+    graph.value = { ...(graph.value ?? {}), triggers: parsed } as DesignerGraph
+    onModelChanged()
+    ElMessage.success(`已导入 ${parsed.length} 个触发器（保存并经发布校验生效）`)
+  } catch {
+    // 用户取消
+  }
 }
 
 function addTriggerBranch() {
@@ -2455,6 +2507,7 @@ function nodeLabelLines(label: string) {
     >
       <div class="p64-toolbar">
         <el-button size="small" type="primary" @click="resetVariableDraft">新增变量</el-button>
+        <el-button size="small" @click="importVariablesJson">导入 JSON</el-button>
         <span class="p64-hint"
           >来源=主表/节点表单/系统白名单；集合类型必须 UNION 聚合；必填变量缺值阻止触发。</span
         >
@@ -2598,6 +2651,7 @@ function nodeLabelLines(label: string) {
     >
       <div class="p64-toolbar">
         <el-button size="small" type="primary" @click="resetTriggerDraft">新增触发器</el-button>
+        <el-button size="small" @click="importTriggersJson">导入 JSON</el-button>
         <span class="p64-hint"
           >脚本只判断（流程变量取值/返回
           Number/String/Boolean/null）；动作=可靠发起关联流程；未匹配/异常不产生动作。</span

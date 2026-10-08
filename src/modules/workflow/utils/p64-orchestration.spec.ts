@@ -48,7 +48,7 @@ describe('p64-orchestration 变量草稿', () => {
     expect(mainForm.sourceNodeKey).toBeUndefined()
   })
 
-  it('validateVariableDraft：重复 ID/空字段/集合缺 UNION 逐项拒绝', () => {
+  it('validateVariableDraft：重复 ID/空字段逐项拒绝；集合 UNION 由 buildVariableDef 自动对齐', () => {
     const errors = validateVariableDraft(
       {
         ...emptyVariableDraft(),
@@ -60,9 +60,17 @@ describe('p64-orchestration 变量草稿', () => {
       ['dup'],
     )
     expect(errors).toContain('变量引用 ID 重复: dup')
-    expect(errors).toContain('集合类型必须配置 UNION 聚合')
     expect(errors).toContain('节点表单来源必须选择节点')
     expect(errors).toContain('节点表单来源必须选择字段')
+    // 集合类型的 UNION 由 buildVariableDef 自动对齐（服务端发布校验仍为权威）
+    expect(
+      buildVariableDef({
+        ...emptyVariableDraft(),
+        varId: 'v2',
+        type: 'USER_SET',
+        aggregation: 'NONE',
+      }).aggregation,
+    ).toBe('UNION')
   })
 
   it('compatibleVariableTypes：USER 多选只能映射 USER_SET；TABLE 映射 ROWS', () => {

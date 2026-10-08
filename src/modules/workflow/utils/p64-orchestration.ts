@@ -77,6 +77,8 @@ export function emptyVariableDraft(): VariableDraft {
 }
 
 export function buildVariableDef(draft: VariableDraft): BpmVariableDef {
+  // 集合类型语义上必须并集去重：聚合规则自动对齐 UNION（服务端发布校验仍为权威）
+  const isSetType = draft.type === 'USER_SET' || draft.type === 'DEPT_SET'
   return {
     varId: draft.varId.trim(),
     name: draft.name.trim() || draft.varId.trim(),
@@ -86,7 +88,7 @@ export function buildVariableDef(draft: VariableDraft): BpmVariableDef {
     sourceNodeKey: draft.source === 'NODE_FORM' ? draft.sourceNodeKey.trim() : undefined,
     sourceFormField: draft.source === 'NODE_FORM' ? draft.sourceFormField.trim() : undefined,
     roundRule: 'CURRENT',
-    aggregation: draft.aggregation,
+    aggregation: isSetType ? 'UNION' : draft.aggregation,
     nullable: draft.nullable,
   }
 }
@@ -124,9 +126,7 @@ export function validateVariableDraft(draft: VariableDraft, existingVarIds: stri
   if (draft.source === 'SYSTEM' && !draft.sourceField.trim()) {
     errors.push('系统变量必须选择白名单字段')
   }
-  if ((draft.type === 'USER_SET' || draft.type === 'DEPT_SET') && draft.aggregation !== 'UNION') {
-    errors.push('集合类型必须配置 UNION 聚合')
-  }
+  // 集合类型的 UNION 聚合由 buildVariableDef 自动对齐（服务端发布校验仍为权威）
   return errors
 }
 
