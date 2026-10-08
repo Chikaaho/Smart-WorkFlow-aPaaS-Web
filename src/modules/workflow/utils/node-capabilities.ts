@@ -683,7 +683,7 @@ export function validateParticipantConfigErrors(raw: unknown): string[] {
 /** 属性面板动态并行草稿（semanticVersion 开关以 objectSemantic 承载）。 */
 export interface DynamicParallelFormDraft {
   sourceType: DynamicParallelSourceType
-  /** 来源取值：FORM_FIELD/VARIABLE=字段名/变量名；FIXED=固定值（多人以英文逗号分隔）。 */
+  /** 来源取值：FORM_FIELD/VARIABLE=字段名/变量名；FIXED=固定对象（多个 ID 以英文逗号分隔，保存为 ID 数组）。 */
   sourceValue: string
   /** 新语义（按对象分支）的对象类型：USER=逐人分支；DEPT=逐部门分支。 */
   objectType: ParticipantFormFieldObjectType
@@ -772,11 +772,28 @@ export function buildDynamicParallelFormDraft(config: unknown): DynamicParallelF
   return draft
 }
 
+/**
+ * FIXED 取值 → 稳定对象 ID 数组（面板内多选以英文逗号连接）：
+ * 解析为空时保留原文本，交由保存前/服务端校验给出可读错误。
+ */
+export function buildFixedSourceValue(raw: string): string | string[] {
+  const ids = raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item !== '')
+  return ids.length > 0 ? ids : raw.trim()
+}
+
 /** 面板草稿 → DYNAMIC_PARALLEL config：勾选新语义写 semanticVersion:2，旧语义不写该键。 */
 export function buildDynamicParallelConfig(draft: DynamicParallelFormDraft): DynamicParallelConfig {
   const source: DynamicParallelSource = {
     type: draft.sourceType,
-    value: draft.sourceValue.trim(),
+    // FIXED 直接来源落稳定对象 ID 数组：单一取值同样成组，与服务端
+    // 「FIXED 来源只能配置正整数对象 ID」及 CONSENSUS participant 取值形状一致。
+    value:
+      draft.sourceType === 'FIXED'
+        ? buildFixedSourceValue(draft.sourceValue)
+        : draft.sourceValue.trim(),
     scope: draft.scope,
   }
   if (draft.scope === 'TABLE') {
@@ -798,7 +815,7 @@ export function buildDynamicParallelConfig(draft: DynamicParallelFormDraft): Dyn
 }
 
 /**
- * DYNAMIC_PARALLEL config 语义校验（保存前前置口径，与服务端一致）：
+ * 动态并行 config 语义校验（保存前前置口径，与服务端一致）：
  * semanticVersion=2 缺 objectType、scope=TABLE 缺 tableField/column、来源缺取值。
  */
 export function validateDynamicParallelConfigErrors(config: unknown): string[] {

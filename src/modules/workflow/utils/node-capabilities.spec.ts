@@ -262,6 +262,33 @@ describe('P63 dynamic parallel config (semanticVersion switch)', () => {
     expect(legacy.source.objectType).toBeUndefined()
   })
 
+  it('persists FIXED direct selection as stable object id arrays (single and multiple)', () => {
+    // P63 G01a：直接选择人员/部门后落稳定 ID 数组；服务端 FIXED 校验只接受正整数对象 ID
+    const two = buildDynamicParallelConfig({
+      ...baseDraft,
+      sourceType: 'FIXED',
+      sourceValue: '1,90002',
+      objectType: 'USER',
+      objectSemantic: true,
+    })
+    expect(two.source.value).toEqual(['1', '90002'])
+    expect(two.source.objectType).toBe('USER')
+
+    const one = buildDynamicParallelConfig({
+      ...baseDraft,
+      sourceType: 'FIXED',
+      sourceValue: '90001',
+      objectType: 'DEPT',
+      objectSemantic: true,
+    })
+    expect(one.source.value).toEqual(['90001'])
+
+    // 草稿回显仍以逗号串承载多选
+    const draft = buildDynamicParallelFormDraft(two)
+    expect(draft.sourceType).toBe('FIXED')
+    expect(draft.sourceValue).toBe('1,90002')
+  })
+
   it('only persists ratio for RATIO mode and optional bounds when present', () => {
     const ratio = buildDynamicParallelConfig({ ...baseDraft, mode: 'RATIO', ratio: 60 })
     expect(ratio.ratio).toBe(60)

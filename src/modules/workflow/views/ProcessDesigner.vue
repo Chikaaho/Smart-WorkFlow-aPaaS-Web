@@ -1037,6 +1037,40 @@ function applyDynamicParallel() {
   })
 }
 
+/* 动态并行「固定值」直接选择：复用审批人候选弹窗（人员多选/部门树），保存稳定对象 ID。 */
+const dynamicUserPickerVisible = ref(false)
+const dynamicDeptPickerVisible = ref(false)
+const dynamicFixedSelectedIdList = computed(() =>
+  dynamicParallelForm.value.sourceValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item !== ''),
+)
+const dynamicFixedSelectedIds = computed(() =>
+  dynamicFixedSelectedIdList.value.map(Number).filter((id) => Number.isFinite(id)),
+)
+function openDynamicUserPicker() {
+  dynamicUserPickerVisible.value = true
+}
+function openDynamicDeptPicker() {
+  dynamicDeptPickerVisible.value = true
+}
+function onDynamicUsersPicked(candidates: ApproverCandidate[]) {
+  dynamicParallelForm.value.sourceValue = candidates
+    .map((candidate) => String(candidate.id))
+    .join(',')
+  applyDynamicParallel()
+}
+function onDynamicDeptsPicked(depts: Array<{ id: string; name: string }>) {
+  dynamicParallelForm.value.sourceValue = depts.map((dept) => dept.id).join(',')
+  applyDynamicParallel()
+}
+/** 对象类型切换：人员/部门 ID 命名空间不同，清空旧取值避免把人员 ID 当部门 ID 保存。 */
+function onDynamicObjectTypeChange() {
+  dynamicParallelForm.value.sourceValue = ''
+  applyDynamicParallel()
+}
+
 /**
  * 选中节点 → 面板草稿回显：
  * - object 类型字段（configFields.type === 'object'）回显为 JSON 文本，
@@ -1740,7 +1774,31 @@ function nodeLabelLines(label: string) {
                 </el-select>
               </el-form-item>
               <el-form-item v-if="dynamicParallelForm.sourceType === 'FIXED'" label="固定值">
+                <!-- 新语义下直接选择人员/部门对象（稳定 ID）；旧语义保留手填取值形状 -->
+                <div v-if="dynamicParallelForm.objectSemantic" class="participant-picker-row">
+                  <el-button
+                    v-if="dynamicParallelForm.objectType === 'USER'"
+                    @click="openDynamicUserPicker"
+                  >
+                    {{
+                      dynamicFixedSelectedIdList.length > 0
+                        ? `已选 ${dynamicFixedSelectedIdList.length} 人（点击修改）`
+                        : '选择人员'
+                    }}
+                  </el-button>
+                  <el-button v-else @click="openDynamicDeptPicker">
+                    {{
+                      dynamicFixedSelectedIdList.length > 0
+                        ? `已选 ${dynamicFixedSelectedIdList.length} 个部门（点击修改）`
+                        : '选择部门'
+                    }}
+                  </el-button>
+                  <small class="participant-hint">
+                    直接选择对象并保存稳定 ID：人员逐人分支，部门逐部门分支（服务端解析负责人）。
+                  </small>
+                </div>
                 <el-input
+                  v-else
                   v-model="dynamicParallelForm.sourceValue"
                   placeholder="多个取值用英文逗号分隔"
                   @change="applyDynamicParallel"
@@ -1777,7 +1835,7 @@ function nodeLabelLines(label: string) {
               <el-form-item v-if="dynamicParallelForm.objectSemantic" label="对象类型">
                 <el-radio-group
                   v-model="dynamicParallelForm.objectType"
-                  @change="applyDynamicParallel"
+                  @change="onDynamicObjectTypeChange"
                 >
                   <el-radio value="USER">人员（逐人分支）</el-radio>
                   <el-radio value="DEPT">部门（逐部门分支）</el-radio>
@@ -2106,6 +2164,24 @@ function nodeLabelLines(label: string) {
         v-model:visible="participantUserPickerVisible"
         :initial-ids="participantUserIds"
         @pick="onParticipantUsersPicked"
+      />
+    </div>
+
+    <!-- P63 动态并行「固定值」直接人员选择（新语义逐人分支） -->
+    <div class="approver-dialog-host">
+      <ApproverCandidatesDialog
+        v-model:visible="dynamicUserPickerVisible"
+        :initial-ids="dynamicFixedSelectedIds"
+        @pick="onDynamicUsersPicked"
+      />
+    </div>
+    <!-- P63 动态并行「固定值」直接部门选择（新语义逐部门分支） -->
+    <div class="approver-dialog-host">
+      <ApproverCandidatesDialog
+        v-model:visible="dynamicDeptPickerVisible"
+        picker-mode="dept"
+        :initial-dept-ids="dynamicFixedSelectedIdList"
+        @pick-depts="onDynamicDeptsPicked"
       />
     </div>
 
