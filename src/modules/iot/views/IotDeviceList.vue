@@ -409,7 +409,8 @@ function rowActions(r: unknown): ListAction[] {
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="result" label="结果" min-width="180" show-overflow-tooltip />
+          <!-- 最小展示修正（G08b）：结果不截断不悬停，窄屏换行完整可读 -->
+          <el-table-column prop="result" label="结果" min-width="180" />
           <el-table-column
             prop="lastError"
             label="失败原因"
