@@ -3,6 +3,7 @@ import {
   buildActionConfig,
   buildTriggerConfig,
   buildVariableDef,
+  canRetryActionRefStatus,
   compatibleVariableTypes,
   emptyActionDraft,
   emptyBranchDraft,
@@ -158,5 +159,21 @@ describe('p64-orchestration 触发器草稿', () => {
     expect(errors).toContain('动作 a1: 集合动作必须选择来源变量')
     expect(errors).toContain('动作 a1: 必须选择目标流程与表单')
     expect(errors).toContain('动作 a1: 派发上限必须在 1—200 内')
+  })
+})
+
+describe('canRetryActionRefStatus 恢复入口可见性（复审06/提示05 P1-08a-W）', () => {
+  it('合法恢复窗口：FAILED / INTENT_SUBMITTED / STARTING（含新增 STARTING 窗口）', () => {
+    expect(canRetryActionRefStatus('FAILED')).toBe(true)
+    expect(canRetryActionRefStatus('INTENT_SUBMITTED')).toBe(true)
+    expect(canRetryActionRefStatus('STARTING')).toBe(true)
+  })
+
+  it('已成功启动与其余终态不渲染恢复入口（后端按持久事实二次拒绝）', () => {
+    expect(canRetryActionRefStatus('STARTED')).toBe(false)
+    expect(canRetryActionRefStatus('COMPLETED')).toBe(false)
+    expect(canRetryActionRefStatus('REJECTED')).toBe(false)
+    expect(canRetryActionRefStatus('')).toBe(false)
+    expect(canRetryActionRefStatus('starting')).toBe(false)
   })
 })

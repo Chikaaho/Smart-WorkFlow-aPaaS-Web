@@ -393,3 +393,13 @@ export function validateTriggerDraft(
 export function buildNodeFormConfig(formKey: string): { formKey: string } {
   return { formKey }
 }
+
+/**
+ * 动作意图恢复入口可见性（复审06/提示05 P1-08a-W）。
+ * 与后端 retryActionRef 的持久状态门槛一致：FAILED（有界重试终态失败）、
+ * INTENT_SUBMITTED（已受理未启动）、STARTING（FLOW_START 失败/过期窗口）是合法恢复窗口；
+ * STARTED 及其余终态（已成功启动/已收敛）不可再触发恢复，后端按持久事实二次拒绝。
+ */
+export function canRetryActionRefStatus(status: string): boolean {
+  return status === 'FAILED' || status === 'INTENT_SUBMITTED' || status === 'STARTING'
+}
