@@ -157,8 +157,10 @@ async function handleRetryActionRef(refId: number) {
   if (p64Retrying.value !== null) return
   p64Retrying.value = refId
   try {
-    await retryActionRef(refId)
-    ElMessage.success('失败意图已重新入队')
+    const res = await retryActionRef(refId)
+    ElMessage.success(
+      typeof res?.message === 'string' && res.message ? res.message : '失败意图已重新入队',
+    )
     if (detail.value) {
       p64Refs.value = await listActionRefs(detail.value.processInstanceId).catch(
         () => p64Refs.value,
@@ -583,8 +585,14 @@ function rowActions(row: unknown): ListAction[] {
                   />
                   <el-table-column label="操作" width="90" fixed="right">
                     <template #default="{ row }">
+                      <!-- 复审05 P1-06b：STARTING 且目标实例未建（FLOW_START 失败/过期窗口）
+                           也是合法恢复入口，后端按持久状态给出可诊断结果或受控恢复 -->
                       <el-button
-                        v-if="row.status === 'FAILED' || row.status === 'INTENT_SUBMITTED'"
+                        v-if="
+                          row.status === 'FAILED' ||
+                          row.status === 'INTENT_SUBMITTED' ||
+                          row.status === 'STARTING'
+                        "
                         size="small"
                         link
                         type="primary"
