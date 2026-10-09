@@ -313,60 +313,111 @@ watch(
 )
 
 /** 节点业务表单绑定清单（nodeKey → formKey）：NODE_FORM 来源候选。 */
-const nodeFormBindings = computed<Array<{ nodeKey: string; formKey: string }>>(() => {
-  void version.value // model 非响应式：依赖快照 serial 驱动重算
-  const result: Array<{ nodeKey: string; formKey: string }> = []
-  for (const node of model?.serialize().elements ?? []) {
-    if (node.kind !== 'node') continue
-    const nodeForm = (node.config as Record<string, unknown> | undefined)?.nodeForm as
-      | { formKey?: string }
-      | undefined
-    if (nodeForm?.formKey) {
-      result.push({ nodeKey: node.id, formKey: nodeForm.formKey })
-    }
-  }
-  return result
-})
-
-/** 节点表单定义缓存（变量来源字段选择器）。 */
-const nodeFormDefinitions = ref<
-  Record<string, Array<{ name: string; type: string; label?: string }>>
->({})
-watch(
-  nodeFormBindings,
-  async (bindings) => {
-    for (const binding of bindings) {
-      if (nodeFormDefinitions.value[binding.formKey]) continue
-      try {
-        const { getFormDefinition } = await import('@/modules/form/api/form')
-        const schema = await getFormDefinition(binding.formKey)
-        nodeFormDefinitions.value = {
-          ...nodeFormDefinitions.value,
-          [binding.formKey]: (schema.fields ?? []) as Array<{
-            name: string
-            type: string
-            label?: string
-          }>,
-        }
-      } catch {
-        nodeFormDefinitions.value = { ...nodeFormDefinitions.value, [binding.formKey]: [] }
+const nodeFormBindings = computed<Array<{ nodeKey: string; formKey: string; nodeName: string }>>(
+  () => {
+    void version.value // model 非响应式：依赖快照 serial 驱动重算
+    const result: Array<{ nodeKey: string; formKey: string; nodeName: string }> = []
+    for (const node of model?.serialize().elements ?? []) {
+      if (node.kind !== 'node') continue
+      const config = node.config as Record<string, unknown> | undefined
+      const nodeForm = config?.nodeForm as { formKey?: string } | undefined
+      if (nodeForm?.formKey) {
+        // 变量来源节点按业务名展示（节点名优先，未命名回退节点 ID）
+        const nodeName =
+          typeof config?.name === 'string' && config.name.trim() ? config.name.trim() : node.id
+        result.push({ nodeKey: node.id, formKey: nodeForm.formKey, nodeName })
       }
     }
+    return result
+  },
+)
+
+/** 来源节点选项文案：业务名(nodeKey)，未命名/同名时仅 nodeKey。 */
+function nodeBindingLabel(item: { nodeKey: string; nodeName: string }) {
+  return item.nodeName === item.nodeKey ? item.nodeKey : `${item.nodeName}(${item.nodeKey})`
+}
+
+/** 变量表来源列：节点业务名（未绑定/未命名回退 nodeKey）。 */
+function nodeFormBindingName(nodeKey?: string) {
+  if (!nodeKey) return ''
+  const hit = nodeFormBindings.value.find((item) => item.nodeKey === nodeKey)
+  return hit ? nodeBindingLabel(hit) : nodeKey
+}
+
+/** 表单字段缓存（节点表单/主表/动作目标表单的字段选择器共用；按 formKey 惰性加载）。 */
+const formFieldCache = ref<Record<string, Array<{ name: string; type: string; label?: string }>>>(
+  {},
+)
+const loadingFormKeys = new Set<string>()
+
+async function ensureFormFields(formKey?: string) {
+  if (!formKey || formFieldCache.value[formKey] || loadingFormKeys.has(formKey)) return
+  loadingFormKeys.add(formKey)
+  try {
+    const { getFormDefinition } = await import('@/modules/form/api/form')
+    const schema = await getFormDefinition(formKey)
+    formFieldCache.value = {
+      ...formFieldCache.value,
+      [formKey]: (schema.fields ?? []) as Array<{ name: string; type: string; label?: string }>,
+    }
+  } catch {
+    // 失败不写缓存：瞬时失败（网络/会话刷新/HMR）下次仍可重试，避免空白选项被固化
+  } finally {
+    loadingFormKeys.delete(formKey)
+  }
+}
+
+watch(
+  nodeFormBindings,
+  (bindings) => {
+    for (const binding of bindings) void ensureFormFields(binding.formKey)
   },
   { immediate: true },
 )
 
+function formFieldOptions(formKey?: string) {
+  return (formKey ? formFieldCache.value[formKey] : undefined) ?? []
+}
+
+function formFieldLabel(field: { name: string; label?: string }) {
+  return field.label ? `${field.label}(${field.name})` : field.name
+}
+
 function nodeFormFieldOptions(nodeKey: string) {
   const binding = nodeFormBindings.value.find((item) => item.nodeKey === nodeKey)
-  return binding ? (nodeFormDefinitions.value[binding.formKey] ?? []) : []
+  return binding ? formFieldOptions(binding.formKey) : []
+}
+
+/** 打开节点表单字段选择器时自愈加载对应表单字段（瞬时失败可重试）。 */
+function ensureNodeFormFields(nodeKey?: string) {
+  if (!nodeKey) return
+  const binding = nodeFormBindings.value.find((item) => item.nodeKey === nodeKey)
+  if (binding) void ensureFormFields(binding.formKey)
 }
 
 const graphNodes = computed(() => {
   void version.value // model 非响应式：依赖快照 serial 驱动重算
   return (model?.serialize().elements ?? [])
     .filter((element) => element.kind === 'node')
-    .map((element) => ({ id: element.id, type: element.type ?? '' }))
+    .map((element) => {
+      const config = element.config as Record<string, unknown> | undefined
+      // 触发器源节点按业务名展示（节点名优先，未命名回退节点 ID）
+      const name = typeof config?.name === 'string' && config.name.trim() ? config.name.trim() : ''
+      return { id: element.id, type: element.type ?? '', name }
+    })
 })
+
+/** 触发器源节点选项文案：业务名(nodeId)，未命名仅 nodeId。 */
+function graphNodeLabel(node: { id: string; name: string }) {
+  return node.name && node.name !== node.id ? `${node.name}(${node.id})` : node.id
+}
+
+/** 触发器表源节点列：节点业务名（未命名回退 nodeId）。 */
+function graphNodeName(nodeKey?: string) {
+  if (!nodeKey) return ''
+  const hit = graphNodes.value.find((item) => item.id === nodeKey)
+  return hit ? graphNodeLabel(hit) : nodeKey
+}
 
 const variablesVisible = ref(false)
 const triggersVisible = ref(false)
@@ -473,6 +524,18 @@ function openTriggers() {
   resetTriggerDraft()
   void loadPublishedTargetOptions()
 }
+
+/** 动作目标表单字段随选择加载（目标字段按业务字段选择，非手写内部名）。 */
+watch(
+  () =>
+    (triggerDraft.value.branches ?? [])
+      .flatMap((branch) => branch.actions ?? [])
+      .map((action) => action.targetFormKey),
+  (keys) => {
+    for (const key of keys) void ensureFormFields(key)
+  },
+  { immediate: true },
+)
 
 function resetTriggerDraft() {
   triggerDraft.value = emptyTriggerDraft()
@@ -2537,7 +2600,7 @@ function nodeLabelLines(label: string) {
     <el-dialog
       v-model="variablesVisible"
       title="BPM 变量"
-      width="860px"
+      width="min(860px, 94vw)"
       class="p64-dialog"
       append-to-body
     >
@@ -2557,7 +2620,7 @@ function nodeLabelLines(label: string) {
             {{ row.source }}
             <template v-if="row.source === 'MAIN_FORM'">· {{ row.sourceField }}</template>
             <template v-else-if="row.source === 'NODE_FORM'">
-              · {{ row.sourceNodeKey }}/{{ row.sourceFormField }}</template
+              · {{ nodeFormBindingName(row.sourceNodeKey) }}/{{ row.sourceFormField }}</template
             >
             <template v-else>· {{ row.sourceField }}</template>
           </template>
@@ -2625,17 +2688,23 @@ function nodeLabelLines(label: string) {
               <el-option
                 v-for="item in nodeFormBindings"
                 :key="item.nodeKey"
-                :label="item.nodeKey"
+                :label="nodeBindingLabel(item)"
                 :value="item.nodeKey"
               />
             </el-select>
           </el-form-item>
           <el-form-item v-if="variableDraft.source === 'NODE_FORM'" label="节点表单字段">
-            <el-select v-model="variableDraft.sourceFormField" filterable>
+            <el-select
+              v-model="variableDraft.sourceFormField"
+              filterable
+              @visible-change="
+                (visible: boolean) => visible && ensureNodeFormFields(variableDraft.sourceNodeKey)
+              "
+            >
               <el-option
                 v-for="field in nodeFormFieldOptions(variableDraft.sourceNodeKey)"
                 :key="field.name"
-                :label="field.label ? `${field.label}(${field.name})` : field.name"
+                :label="formFieldLabel(field)"
                 :value="field.name"
               />
             </el-select>
@@ -2681,7 +2750,7 @@ function nodeLabelLines(label: string) {
     <el-dialog
       v-model="triggersVisible"
       title="触发器（判断与动作）"
-      width="980px"
+      width="min(980px, 94vw)"
       class="p64-dialog"
       append-to-body
     >
@@ -2697,7 +2766,9 @@ function nodeLabelLines(label: string) {
         <el-table-column prop="triggerId" label="ID" width="130" />
         <el-table-column prop="name" label="名称" width="130" />
         <el-table-column prop="event" label="事件" width="190" />
-        <el-table-column prop="nodeKey" label="源节点" width="120" />
+        <el-table-column label="源节点" width="140">
+          <template #default="{ row }">{{ graphNodeName(row.nodeKey) }}</template>
+        </el-table-column>
         <el-table-column label="分支" min-width="160">
           <template #default="{ row }">
             {{
@@ -2749,7 +2820,7 @@ function nodeLabelLines(label: string) {
               <el-option
                 v-for="node in graphNodes"
                 :key="node.id"
-                :label="node.id"
+                :label="graphNodeLabel(node)"
                 :value="node.id"
               />
             </el-select>
@@ -2883,14 +2954,14 @@ function nodeLabelLines(label: string) {
               class="p64-grid"
             >
               <el-form-item label="目标字段">
-                <el-input v-model="mapping.targetField" />
+                <el-input v-model="mapping.targetField" placeholder="目标表单字段名" />
               </el-form-item>
               <el-form-item label="来源变量 varId">
                 <el-select v-model="mapping.sourceVarId" clearable filterable>
                   <el-option
                     v-for="item in graph?.variables ?? []"
                     :key="item.varId"
-                    :label="item.varId"
+                    :label="`${item.name}(${item.varId})`"
                     :value="item.varId"
                   />
                 </el-select>
@@ -4180,6 +4251,9 @@ function nodeLabelLines(label: string) {
   gap: 12px;
   margin-bottom: 8px;
 }
+/* P64 宽/矮视口可达性（审查02 P1-03b）：弹窗不超出视口，内容区滚动，
+   关闭/保存/映射等控件在大变量与多分支配置下仍可到达。append-to-body 传送后
+   弹窗不带 scoped 属性，规则见文件末尾的全局样式块。 */
 .p64-hint {
   color: var(--el-text-color-secondary);
   font-size: 12px;
@@ -4211,5 +4285,21 @@ function nodeLabelLines(label: string) {
 }
 .p64-errors p {
   margin: 2px 0;
+}
+</style>
+
+<!-- P64 弹窗可达性全局规则：append-to-body 传送后不带 scoped 属性，需全局选择器。 -->
+<style>
+.el-dialog.p64-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+  margin-top: 6vh;
+  margin-bottom: 6vh;
+}
+.el-dialog.p64-dialog .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 </style>
