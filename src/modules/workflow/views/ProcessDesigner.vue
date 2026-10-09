@@ -24,12 +24,15 @@ import {
   publishProcessDef,
   validateProcessDefGraph,
   publishedFormDefinition,
+  pageProcessDefs,
 } from '@/modules/workflow/api'
+import { pageFormDefs } from '@/modules/form/api/form-def'
 import type {
   FormSchemaField,
   GraphValidationError,
   ApproverCandidate,
 } from '@/modules/workflow/api'
+import type { ProcessDef } from '@/contracts/bpm'
 import type {
   BpmNodeCapability,
   BpmNodeConfigField,
@@ -432,10 +435,43 @@ function variableTypeOptions(sourceField: string) {
 const triggerDraft = ref<TriggerDraft>(emptyTriggerDraft())
 const triggerEditIndex = ref<number | null>(null)
 const triggerErrors = ref<string[]>([])
+/**
+ * P64 审查01 P1-03：触发动作目标按业务名称选择已发布流程/表单；
+ * allow-create 保留手输 defKey/formKey 的可选逃生口。
+ */
+const publishedTargetOptions = ref<{
+  defs: Array<{ key: string; name: string }>
+  forms: Array<{ key: string; name: string }>
+}>({ defs: [], forms: [] })
+
+async function loadPublishedTargetOptions() {
+  try {
+    const [defsPage, formsPage] = await Promise.all([
+      pageProcessDefs({ pageNum: 1, pageSize: 200 }),
+      pageFormDefs({ pageNum: 1, pageSize: 200 }),
+    ])
+    // 后端分页实际承载字段为 records（PageResult.list 兼容别名），此处按运行时形态归一
+    const defRows = ((defsPage as unknown as { records?: ProcessDef[] }).records ??
+      defsPage.list ??
+      []) as ProcessDef[]
+    publishedTargetOptions.value = {
+      defs: defRows
+        .filter((def) => def.status === 'PUBLISHED')
+        .map((def) => ({ key: String(def.processKey ?? ''), name: def.name })),
+      forms: (formsPage.list ?? [])
+        .filter((form) => form.status === 'PUBLISHED')
+        .map((form) => ({ key: form.formKey, name: form.name ?? form.formKey })),
+    }
+  } catch {
+    // 目标选项加载失败不阻断面板：保留 allow-create 手输路径
+    publishedTargetOptions.value = { defs: [], forms: [] }
+  }
+}
 
 function openTriggers() {
   triggersVisible.value = true
   resetTriggerDraft()
+  void loadPublishedTargetOptions()
 }
 
 function resetTriggerDraft() {
@@ -2799,11 +2835,37 @@ function nodeLabelLines(label: string) {
               </el-form-item>
             </div>
             <div class="p64-grid">
-              <el-form-item label="目标流程 defKey">
-                <el-input v-model="action.targetProcessDefKey" placeholder="def_key" />
+              <el-form-item label="目标流程（按名称选择）">
+                <el-select
+                  v-model="action.targetProcessDefKey"
+                  filterable
+                  allow-create
+                  default-first-option
+                  placeholder="选择已发布流程或输入 defKey"
+                >
+                  <el-option
+                    v-for="item in publishedTargetOptions.defs"
+                    :key="item.key"
+                    :label="`${item.name}(${item.key})`"
+                    :value="item.key"
+                  />
+                </el-select>
               </el-form-item>
-              <el-form-item label="目标表单 formKey">
-                <el-input v-model="action.targetFormKey" placeholder="form_key" />
+              <el-form-item label="目标表单（按名称选择）">
+                <el-select
+                  v-model="action.targetFormKey"
+                  filterable
+                  allow-create
+                  default-first-option
+                  placeholder="选择已发布表单或输入 formKey"
+                >
+                  <el-option
+                    v-for="item in publishedTargetOptions.forms"
+                    :key="item.key"
+                    :label="`${item.name}(${item.key})`"
+                    :value="item.key"
+                  />
+                </el-select>
               </el-form-item>
               <el-form-item label="派发上限(1-200)">
                 <el-input-number v-model="action.maxDispatch" :min="1" :max="200" />
