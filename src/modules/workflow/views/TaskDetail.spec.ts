@@ -18,6 +18,14 @@ vi.mock('@/modules/workflow/api', () => ({
   pollCommandStatus: vi.fn(),
 }))
 
+// P64 节点业务表单：办理页读取绑定与数据（默认未绑定，用例内按需 stub）
+vi.mock('@/modules/workflow/api/p64', () => ({
+  getTaskNodeForm: vi.fn(),
+  saveTaskNodeFormDraft: vi.fn(),
+  listInstanceNodeFormData: vi.fn(),
+  previewTrigger: vi.fn(),
+}))
+
 // P63 IoT 预约：TaskDetail 经动态 import 使用 iot 模块 API，这里整体替换
 vi.mock('@/adapters/iot-reservation', () => ({
   listReservationsByInstance: vi.fn(async () => []),
@@ -40,6 +48,7 @@ vi.mock('element-plus', async (importOriginal) => {
 })
 
 import { queryTaskDetail, acceptTaskAction, pollCommandStatus } from '@/modules/workflow/api'
+import { getTaskNodeForm } from '@/modules/workflow/api/p64'
 import { listReservationsByInstance, cancelReservation } from '@/adapters/iot-reservation'
 import { permissionDirective } from '@/foundation/permission'
 import { useUserStore } from '@/stores/user'
@@ -196,6 +205,40 @@ describe('TaskDetail.vue', () => {
     // 断言目录键而不是某个语言的字面量：文案收敛/改词不应让行为断言失效
     expect(ElMessage.success).toHaveBeenCalledWith(i18n.global.t('common.statusApproved'))
     expect(mockPush).toHaveBeenCalledWith({ name: 'TodoList' })
+  })
+
+  it('P64: 无意见表单/备注时节点表单数据仍随同意提交（nodeFormData 不丢）', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
+    vi.mocked(getTaskNodeForm).mockResolvedValueOnce({
+      bound: true,
+      formKey: 'qc_form',
+      formName: '质检处理单',
+      formVersion: '2',
+      definition: {
+        fields: [{ name: 'verdict', type: 'TEXT', label: '判定结果', required: true }],
+      },
+      status: 'EMPTY',
+      data: { verdict: 'REWORK' },
+      roundNo: 1,
+    } as never)
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+    await flushPromises()
+
+    await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
+    await nextTick()
+
+    // 无 opinionForm 且无 comment：payload 不得因此丢掉 nodeFormData（服务端同事务提交依赖它）
+    expect(acceptTaskAction).toHaveBeenCalledWith(
+      'task-001',
+      'complete',
+      expect.objectContaining({ action: 'APPROVE', nodeFormData: { verdict: 'REWORK' } }),
+    )
   })
 
   it('accepts reject via command channel and navigates to TodoList', async () => {

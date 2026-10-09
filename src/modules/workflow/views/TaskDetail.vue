@@ -369,9 +369,11 @@ function actionPayload(
       opinionData: data,
     }
   })()
-  // P64 阶段Ⅰ：任务绑定节点业务表单时，最终提交随合法动作同事务生效
-  if (base && action === 'APPROVE' && nodeFormBound.value) {
-    return { ...base, nodeFormData: nodeFormModel.value }
+  // P64 阶段Ⅰ：任务绑定节点业务表单时，最终提交随合法动作同事务生效。
+  // 无意见表单且无备注时 base 为 undefined，节点表单数据仍必须随动作提交
+  // （否则后端读不到节点表单值 → 节点数据丢失/触发变量缺失）。
+  if (action === 'APPROVE' && nodeFormBound.value && !nodeFormSubmitted.value) {
+    return { ...(base ?? { action }), nodeFormData: nodeFormModel.value }
   }
   return base
 }

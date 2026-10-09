@@ -648,6 +648,7 @@ export default {
   component: {
     selectDataObject: 'Select a data object',
     selectUser: 'Select people',
+    selectUsers: 'Select users (multiple)',
     selectDept: 'Select a department',
     serverCalculated: 'Calculated on the server',
     referenceTextPlaceholder: 'Reference type (text placeholder)',

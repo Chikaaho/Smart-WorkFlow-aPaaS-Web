@@ -388,6 +388,21 @@ function nodeFormFieldOptions(nodeKey: string) {
   return binding ? formFieldOptions(binding.formKey) : []
 }
 
+/** 变量表来源列：主表字段业务名（未加载/未知回退字段键）。 */
+function mainFormFieldLabel(fieldName?: string) {
+  if (!fieldName) return ''
+  const field = mainFormFields.value.find((item) => item.name === fieldName)
+  return field ? formFieldLabel(field) : fieldName
+}
+
+/** 变量表来源列：节点表单字段业务名（未加载/未知回退字段键）。 */
+function nodeFormFieldLabel(nodeKey: string | undefined, fieldName?: string) {
+  if (!fieldName) return ''
+  if (!nodeKey) return fieldName
+  const field = nodeFormFieldOptions(nodeKey).find((item) => item.name === fieldName)
+  return field ? formFieldLabel(field) : fieldName
+}
+
 /** 打开节点表单字段选择器时自愈加载对应表单字段（瞬时失败可重试）。 */
 function ensureNodeFormFields(nodeKey?: string) {
   if (!nodeKey) return
@@ -2618,9 +2633,13 @@ function nodeLabelLines(label: string) {
         <el-table-column label="来源" min-width="220">
           <template #default="{ row }">
             {{ row.source }}
-            <template v-if="row.source === 'MAIN_FORM'">· {{ row.sourceField }}</template>
+            <template v-if="row.source === 'MAIN_FORM'"
+              >· {{ mainFormFieldLabel(row.sourceField) }}</template
+            >
             <template v-else-if="row.source === 'NODE_FORM'">
-              · {{ nodeFormBindingName(row.sourceNodeKey) }}/{{ row.sourceFormField }}</template
+              · {{ nodeFormBindingName(row.sourceNodeKey) }}/{{
+                nodeFormFieldLabel(row.sourceNodeKey, row.sourceFormField)
+              }}</template
             >
             <template v-else>· {{ row.sourceField }}</template>
           </template>
@@ -2954,7 +2973,23 @@ function nodeLabelLines(label: string) {
               class="p64-grid"
             >
               <el-form-item label="目标字段">
-                <el-input v-model="mapping.targetField" placeholder="目标表单字段名" />
+                <el-select
+                  v-model="mapping.targetField"
+                  filterable
+                  allow-create
+                  default-first-option
+                  placeholder="选择目标表单字段"
+                  @visible-change="
+                    (visible: boolean) => visible && ensureFormFields(action.targetFormKey)
+                  "
+                >
+                  <el-option
+                    v-for="field in formFieldOptions(action.targetFormKey)"
+                    :key="field.name"
+                    :label="formFieldLabel(field)"
+                    :value="field.name"
+                  />
+                </el-select>
               </el-form-item>
               <el-form-item label="来源变量 varId">
                 <el-select v-model="mapping.sourceVarId" clearable filterable>

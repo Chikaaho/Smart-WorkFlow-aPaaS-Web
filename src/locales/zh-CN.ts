@@ -621,6 +621,7 @@ export default {
   component: {
     selectDataObject: '选择数据对象',
     selectUser: '选择人员',
+    selectUsers: '选择人员（可多选）',
     selectDept: '选择部门',
     serverCalculated: '服务端计算',
     referenceTextPlaceholder: '引用类型（文本占位）',
