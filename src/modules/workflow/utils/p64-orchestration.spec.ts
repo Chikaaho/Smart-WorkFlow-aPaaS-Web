@@ -11,6 +11,8 @@ import {
   emptyVariableDraft,
   validateTriggerDraft,
   validateVariableDraft,
+  validateChildActionDraft,
+  childItemStatusKind,
 } from './p64-orchestration'
 
 describe('p64-orchestration 变量草稿', () => {
@@ -175,5 +177,88 @@ describe('canRetryActionRefStatus 恢复入口可见性（复审06/提示05 P1-0
     expect(canRetryActionRefStatus('REJECTED')).toBe(false)
     expect(canRetryActionRefStatus('')).toBe(false)
     expect(canRetryActionRefStatus('starting')).toBe(false)
+  })
+})
+
+describe('P64 阶段Ⅱ：CHILD 子流程配置校验（与后端发布校验同口径）', () => {
+  it('非 CHILD 动作零校验（阶段Ⅰ零行为）', () => {
+    expect(validateChildActionDraft({ actionId: 'a', type: 'START_EACH' } as never)).toEqual([])
+  })
+
+  it('等待策略枚举与 COUNT K 正整数校验', () => {
+    expect(
+      validateChildActionDraft({ actionId: 'a', orchestration: 'CHILD', waitPolicy: 'SOMETIMES' }),
+    ).toHaveLength(1)
+    expect(
+      validateChildActionDraft({ actionId: 'a', orchestration: 'CHILD', waitPolicy: 'COUNT' }),
+    ).toHaveLength(1)
+    expect(
+      validateChildActionDraft({
+        actionId: 'a',
+        orchestration: 'CHILD',
+        waitPolicy: 'COUNT',
+        waitCount: 5,
+        maxDispatch: 3,
+      }),
+    ).toHaveLength(1)
+    expect(
+      validateChildActionDraft({ actionId: 'a', orchestration: 'CHILD', waitPolicy: 'NONE' }),
+    ).toEqual([])
+  })
+
+  it('回写结构校验：行级回写三件套与字段映射非空', () => {
+    expect(
+      validateChildActionDraft({
+        actionId: 'a',
+        orchestration: 'CHILD',
+        waitPolicy: 'ALL',
+        writeBack: {},
+      }),
+    ).toHaveLength(1)
+    expect(
+      validateChildActionDraft({
+        actionId: 'a',
+        orchestration: 'CHILD',
+        waitPolicy: 'ALL',
+        writeBack: { resultNodeKey: 'node_result', tableField: 'result_table' },
+      }),
+    ).toHaveLength(1)
+    expect(
+      validateChildActionDraft({
+        actionId: 'a',
+        orchestration: 'CHILD',
+        waitPolicy: 'ALL',
+        writeBack: {
+          resultNodeKey: 'node_result',
+          tableField: 'result_table',
+          rowKeyField: 'id',
+          parentTableField: 'parent_table',
+          fields: [],
+        },
+      }),
+    ).toHaveLength(1)
+    expect(
+      validateChildActionDraft({
+        actionId: 'a',
+        orchestration: 'CHILD',
+        waitPolicy: 'ALL',
+        writeBack: {
+          resultNodeKey: 'node_result',
+          tableField: 'result_table',
+          rowKeyField: 'id',
+          parentTableField: 'parent_table',
+          fields: [{ fromField: 'feedback', toField: 'feedback' }],
+        },
+      }),
+    ).toEqual([])
+  })
+
+  it('批次项状态语义分组（等待/成功/挂起/失败/留痕）', () => {
+    expect(childItemStatusKind('DISPATCHED')).toBe('pending')
+    expect(childItemStatusKind('WRITTEN')).toBe('success')
+    expect(childItemStatusKind('CONFLICT')).toBe('suspended')
+    expect(childItemStatusKind('FAILED')).toBe('failed')
+    expect(childItemStatusKind('REFUSED')).toBe('failed')
+    expect(childItemStatusKind('LATE')).toBe('recorded')
   })
 })

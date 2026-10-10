@@ -24,9 +24,18 @@ import { ApiError } from '@/foundation/request'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import type { InstanceFilter } from '@/modules/workflow/api'
-import type { ActionRefView, TriggerExecView } from '@/contracts/p64'
-import { listActionRefs, listTriggerExecs, retryActionRef } from '@/modules/workflow/api/p64'
-import { canRetryActionRefStatus } from '@/modules/workflow/utils/p64-orchestration'
+import type { ActionRefView, ChildBatchView, TriggerExecView } from '@/contracts/p64'
+import {
+  listActionRefs,
+  listTriggerExecs,
+  retryActionRef,
+  listChildBatches,
+  retryChildWriteback,
+} from '@/modules/workflow/api/p64'
+import {
+  canRetryActionRefStatus,
+  childItemStatusKind,
+} from '@/modules/workflow/utils/p64-orchestration'
 
 // ─── 状态映射 ───
 
@@ -153,6 +162,29 @@ const detailTrace = ref<{ activeNodeIds: string[]; completedNodeIds: string[] } 
 const p64Execs = ref<TriggerExecView[]>([])
 const p64Refs = ref<ActionRefView[]>([])
 const p64Retrying = ref<number | null>(null)
+// ─── P64 阶段Ⅱ：子流程批次/回写与等待结果回查 ───
+const p64Batches = ref<ChildBatchView[]>([])
+const p64ItemRetrying = ref<number | null>(null)
+
+async function handleRetryChildWriteback(itemId: number) {
+  if (p64ItemRetrying.value !== null) return
+  p64ItemRetrying.value = itemId
+  try {
+    const res = await retryChildWriteback(itemId)
+    ElMessage.success(
+      typeof res?.message === 'string' && res.message ? res.message : '回写已按当前版本重放',
+    )
+    if (detail.value) {
+      p64Batches.value = await listChildBatches(detail.value.processInstanceId).catch(
+        () => p64Batches.value,
+      )
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '回写恢复失败')
+  } finally {
+    p64ItemRetrying.value = null
+  }
+}
 
 async function handleRetryActionRef(refId: number) {
   if (p64Retrying.value !== null) return
@@ -199,9 +231,18 @@ async function openDrawer(row: ProcessInstance) {
   detailTrace.value = null
   p64Execs.value = []
   p64Refs.value = []
+  p64Batches.value = []
 
   try {
     detail.value = await getInstanceDetail(row.processInstanceId)
+    // P64 阶段Ⅱ：子流程批次/回写与等待结果回查（失败不阻断详情主链）
+    void listChildBatches(row.processInstanceId)
+      .then((items) => {
+        p64Batches.value = items
+      })
+      .catch(() => {
+        p64Batches.value = []
+      })
     // P64 阶段Ⅰ：触发与动作链回查（失败不阻断详情主链）
     void listTriggerExecs(row.processInstanceId)
       .then((items) => {
@@ -603,6 +644,111 @@ function rowActions(row: unknown): ListAction[] {
                 </el-table>
               </div>
             </template>
+            <template v-if="p64Batches.length > 0">
+              <h4 class="p64-section-title">子流程批次与回写（P64 阶段Ⅱ）</h4>
+              <div v-for="batch in p64Batches" :key="batch.id" class="child-batch-block">
+                <div class="child-batch-meta">
+                  <el-tag
+                    size="small"
+                    :type="
+                      batch.status === 'SETTLED'
+                        ? 'success'
+                        : batch.status === 'BLOCKED'
+                          ? 'danger'
+                          : batch.status === 'CANCELLED'
+                            ? 'info'
+                            : 'warning'
+                    "
+                  >
+                    {{ batch.status }}
+                  </el-tag>
+                  <span
+                    >动作 {{ batch.actionId }} · 第 {{ batch.roundNo }} 轮 · 策略
+                    {{ batch.waitPolicy
+                    }}<template v-if="batch.waitCount != null"
+                      >（K={{ batch.waitCount }}）</template
+                    >
+                    · 预期 {{ batch.expectedCount }} / 已结算 {{ batch.settledCount ?? 0 }} · 深度
+                    {{ batch.parentDepth }}</span
+                  >
+                </div>
+                <el-alert
+                  v-if="batch.blockReason"
+                  type="warning"
+                  :closable="false"
+                  :title="batch.blockReason"
+                  class="child-batch-reason"
+                />
+                <div class="p64-table-scroll">
+                  <el-table :data="batch.items" stripe size="small">
+                    <el-table-column prop="itemKey" label="派发项" min-width="100" />
+                    <el-table-column label="状态" width="120">
+                      <template #default="{ row }">
+                        <el-tag
+                          size="small"
+                          :type="
+                            childItemStatusKind(row.status) === 'success'
+                              ? 'success'
+                              : childItemStatusKind(row.status) === 'failed'
+                                ? 'danger'
+                                : childItemStatusKind(row.status) === 'suspended'
+                                  ? 'warning'
+                                  : 'info'
+                          "
+                        >
+                          {{ row.status }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column
+                      prop="sourceRowId"
+                      label="来源行"
+                      min-width="120"
+                      show-overflow-tooltip
+                    />
+                    <el-table-column
+                      prop="targetInstanceId"
+                      label="子实例"
+                      min-width="140"
+                      show-overflow-tooltip
+                    />
+                    <el-table-column
+                      prop="writebackJson"
+                      label="回写值"
+                      min-width="160"
+                      show-overflow-tooltip
+                    />
+                    <el-table-column
+                      prop="writebackSource"
+                      label="来源"
+                      min-width="150"
+                      show-overflow-tooltip
+                    />
+                    <el-table-column
+                      prop="errorText"
+                      label="诊断"
+                      min-width="180"
+                      show-overflow-tooltip
+                    />
+                    <el-table-column label="操作" width="90" fixed="right">
+                      <template #default="{ row }">
+                        <!-- 回写冲突受控恢复：仅 CONFLICT 项可重放（按当前权威版本） -->
+                        <el-button
+                          v-if="row.status === 'CONFLICT'"
+                          size="small"
+                          link
+                          type="primary"
+                          :loading="p64ItemRetrying === row.id"
+                          @click="handleRetryChildWriteback(row.id)"
+                        >
+                          恢复回写
+                        </el-button>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </div>
+              </div>
+            </template>
           </el-card>
         </template>
       </div>
@@ -611,6 +757,21 @@ function rowActions(row: unknown): ListAction[] {
 </template>
 
 <style scoped>
+/* P64 阶段Ⅰ/Ⅱ：触发、动作与子流程批次回查卡 */
+.child-batch-block {
+  margin-bottom: 12px;
+}
+.child-batch-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #606266;
+  margin: 6px 0;
+}
+.child-batch-reason {
+  margin-bottom: 6px;
+}
 /* P64 阶段Ⅰ：触发与动作回查卡 */
 .p64-section-title {
   margin: 8px 0;

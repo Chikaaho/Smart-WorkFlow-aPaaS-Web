@@ -47,7 +47,29 @@ export interface TriggerActionMapping {
   literal?: unknown
 }
 
-/** 配置化动作（阶段Ⅰ仅独立关联流程发起）。 */
+/** 子→父输出回写字段映射项（from = 子侧字段/列，to = 父侧字段/列）。 */
+export interface WriteBackFieldMapping {
+  fromField: string
+  toField: string
+}
+
+/** 子流程输出回写配置（P64 阶段Ⅱ A06：稳定行身份 + 版本守卫 + 允许字段受控）。 */
+export interface WriteBackConfig {
+  /** 子流程结果节点 key（取该节点最新有效轮次最终提交）。 */
+  resultNodeKey: string
+  /** 行级回写：子结果表格字段名（每行携带稳定来源行身份）。 */
+  tableField?: string
+  /** 子结果表格中承载来源行 ID 的列名（tableField 配置时必填）。 */
+  rowKeyField?: string
+  /** 父表单承载来源行的 TABLE 字段名（tableField 配置时必填）。 */
+  parentTableField?: string
+  /** 行级回写列映射（允许字段受控，未列出的列不回写）。 */
+  fields?: WriteBackFieldMapping[]
+  /** 主记录回写字段映射。 */
+  mainFields?: WriteBackFieldMapping[]
+}
+
+/** 配置化动作（CHILD = 主子流程：派发冻结 + 等待策略 + 输出回写；缺省 = 阶段Ⅰ独立关联流程）。 */
 export interface TriggerAction {
   actionId: string
   name?: string
@@ -61,6 +83,14 @@ export interface TriggerAction {
   /** 单次派发上限（默认 50，硬上限 200）。 */
   maxDispatch?: number
   mapping: TriggerActionMapping[]
+  /** 阶段Ⅱ：'CHILD' = 主子流程；缺省/INDEPENDENT = 独立关联流程（零行为变化）。 */
+  orchestration?: 'INDEPENDENT' | 'CHILD'
+  /** 等待策略：ALL/ANY/COUNT/NONE（仅 CHILD）。 */
+  waitPolicy?: 'ALL' | 'ANY' | 'COUNT' | 'NONE'
+  /** COUNT 策略正整数 K（K ≤ 本批实际子流程数）。 */
+  waitCount?: number
+  /** 子→父输出回写配置（仅 CHILD）。 */
+  writeBack?: WriteBackConfig
 }
 
 /** Trigger 结果分支：同类型同值精确匹配；同类型同值重复分支发布拒绝。 */
@@ -142,5 +172,55 @@ export interface ActionRefView {
   /** INTENT_SUBMITTED / STARTED / FAILED。 */
   status: string
   errorText?: string
+  createTime?: string
+}
+
+/** 子流程批次项视图（实例维度回查，P64 阶段Ⅱ）。 */
+export interface ChildItemView {
+  id: number
+  itemKey: string
+  /** DISPATCHED / WRITTEN / CONFLICT / FAILED / LATE / REFUSED。 */
+  status: string
+  sourceRowId?: string
+  sourceRowVersion?: number
+  targetRecordId?: string
+  targetInstanceId?: string
+  writebackJson?: string
+  writebackSource?: string
+  errorText?: string
+}
+
+/** 子流程派发批次视图（含批次项与等待/回写结果）。 */
+export interface ChildBatchView {
+  id: number
+  batchKey: string
+  parentInstanceId: string
+  triggerId: string
+  actionId: string
+  roundNo: number
+  waitPolicy: 'ALL' | 'ANY' | 'COUNT' | 'NONE'
+  waitCount?: number
+  expectedCount: number
+  settledCount?: number
+  /** WAITING / SETTLED / BLOCKED / CANCELLED。 */
+  status: string
+  blockReason?: string
+  settledAt?: string
+  parentDepth: number
+  items: ChildItemView[]
+}
+
+/** 岗位委托关系（P64 阶段Ⅱ A07 后台组织域配置）。 */
+export interface PostDelegateRow {
+  id: number | string
+  sourcePostId: number | string
+  targetPostId: number | string
+  /** ORG / DEPT。 */
+  scopeType: string
+  /** 精确部门 ID（字符串形态，雪花 ID 超出 JS 安全整数范围）。 */
+  deptId?: string
+  /** ENABLED / DISABLED。 */
+  status: string
+  remark?: string
   createTime?: string
 }

@@ -3,7 +3,12 @@
  * 与后端 BpmNodeFormController / BpmTriggerController 对齐（ADR-P64-001）。
  */
 import { request } from '@/foundation/request'
-import type { ActionRefView, TaskNodeFormView, TriggerExecView } from '@/contracts/p64'
+import type {
+  ActionRefView,
+  ChildBatchView,
+  TaskNodeFormView,
+  TriggerExecView,
+} from '@/contracts/p64'
 
 /** GET /workflow/tasks/{taskId}/node-form → 绑定 + definition + 当前数据（草稿/已提交） */
 export async function getTaskNodeForm(taskId: number | string): Promise<TaskNodeFormView> {
@@ -65,5 +70,23 @@ export async function retryActionRef(refId: number | string): Promise<Record<str
   return request<Record<string, unknown>>({
     method: 'POST',
     url: `/workflow/action-refs/${refId}/retry`,
+  })
+}
+
+/** GET /workflow/instances/{id}/child-batches → 子流程批次/项/回写与等待结果（P64 阶段Ⅱ） */
+export async function listChildBatches(instanceId: number | string): Promise<ChildBatchView[]> {
+  return request<ChildBatchView[]>({
+    method: 'GET',
+    url: `/workflow/instances/${instanceId}/child-batches`,
+  })
+}
+
+/** POST /workflow/child-items/{itemId}/retry-writeback → 回写冲突受控恢复（按当前权威版本重放） */
+export async function retryChildWriteback(
+  itemId: number | string,
+): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>({
+    method: 'POST',
+    url: `/workflow/child-items/${itemId}/retry-writeback`,
   })
 }

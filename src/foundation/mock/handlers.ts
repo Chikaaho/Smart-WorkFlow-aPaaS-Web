@@ -2922,6 +2922,41 @@ export const mockRegistrations: MockRegistration[] = [
     pattern: '/api/workflow/action-refs/:refId/retry',
     handler: () => ({ code: 2441, message: 'mock 模式无真实命令队列', data: null }),
   },
+  {
+    method: 'GET',
+    pattern: '/api/workflow/instances/:instanceId/child-batches',
+    handler: () => ({ code: 0, message: 'ok', data: [] }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/workflow/child-items/:itemId/retry-writeback',
+    handler: () => ({ code: 2448, message: 'mock 模式无真实子流程编排', data: null }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/system/post-delegate/page',
+    handler: () => ({ code: 0, message: 'ok', data: { list: [], total: 0 } }),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/system/post-delegate',
+    handler: () => ({ code: 0, message: 'ok', data: null }),
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/system/post-delegate',
+    handler: () => ({ code: 0, message: 'ok', data: null }),
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/system/post-delegate/:id/status',
+    handler: () => ({ code: 0, message: 'ok', data: null }),
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/system/post-delegate/:id',
+    handler: () => ({ code: 0, message: 'ok', data: null }),
+  },
 
   // ── I6 收件箱：服务端真分页 + 未读数 + 全部已读 + 受保护深链 ──
   {

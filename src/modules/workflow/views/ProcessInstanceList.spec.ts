@@ -11,6 +11,8 @@ vi.mock('@/modules/workflow/api/p64', () => ({
   listActionRefs: vi.fn(),
   listTriggerExecs: vi.fn(),
   retryActionRef: vi.fn(),
+  listChildBatches: vi.fn(),
+  retryChildWriteback: vi.fn(),
 }))
 
 vi.mock('element-plus', async (importOriginal) => {
@@ -33,7 +35,12 @@ import {
   getInstanceDetail,
   getProcessDefDefinitionByKey,
 } from '@/modules/workflow/api'
-import { listActionRefs, listTriggerExecs, retryActionRef } from '@/modules/workflow/api/p64'
+import {
+  listActionRefs,
+  listChildBatches,
+  listTriggerExecs,
+  retryActionRef,
+} from '@/modules/workflow/api/p64'
 import { ApiError } from '@/foundation/request'
 import type { InstanceDetail, ProcessInstance } from '@/contracts/bpm'
 import type { ActionRefView } from '@/contracts/p64'
@@ -140,6 +147,7 @@ describe('ProcessInstanceList.vue 动作意图恢复入口（复审06/提示05 P
       canvas: {},
     })
     vi.mocked(listTriggerExecs).mockResolvedValue([])
+    vi.mocked(listChildBatches).mockResolvedValue([])
     vi.mocked(listActionRefs).mockResolvedValue([refStarting, refStarted])
   })
 

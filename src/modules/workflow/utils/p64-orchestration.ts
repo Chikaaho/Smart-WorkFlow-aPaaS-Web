@@ -403,3 +403,97 @@ export function buildNodeFormConfig(formKey: string): { formKey: string } {
 export function canRetryActionRefStatus(status: string): boolean {
   return status === 'FAILED' || status === 'INTENT_SUBMITTED' || status === 'STARTING'
 }
+
+/** 子流程等待策略（P64 阶段Ⅱ A05）。 */
+export const CHILD_WAIT_POLICIES = ['ALL', 'ANY', 'COUNT', 'NONE'] as const
+export type ChildWaitPolicy = (typeof CHILD_WAIT_POLICIES)[number]
+
+/**
+ * CHILD 子流程动作配置校验（与后端 ProcessVariableValidator#validateChildAction 同口径）：
+ * 等待策略枚举、COUNT 正整数 K（≤ 单次派发上限）、回写结构（行级回写三件套/字段映射非空）。
+ *
+ * @return 错误列表；空 = 形状合法
+ */
+export function validateChildActionDraft(action: {
+  actionId?: string
+  orchestration?: string
+  waitPolicy?: string
+  waitCount?: number
+  maxDispatch?: number
+  writeBack?: {
+    resultNodeKey?: string
+    tableField?: string
+    rowKeyField?: string
+    parentTableField?: string
+    fields?: Array<{ fromField: string; toField: string }>
+    mainFields?: Array<{ fromField: string; toField: string }>
+  }
+}): string[] {
+  const errors: string[] = []
+  if (action.orchestration !== 'CHILD') {
+    return errors
+  }
+  const actionId = action.actionId || '?'
+  const policy = (action.waitPolicy || 'ALL').toUpperCase()
+  if (!CHILD_WAIT_POLICIES.includes(policy as ChildWaitPolicy)) {
+    errors.push(
+      '子流程动作 ' + actionId + ': 等待策略无效 ' + action.waitPolicy + '（ALL/ANY/COUNT/NONE）',
+    )
+    return errors
+  }
+  if (policy === 'COUNT') {
+    const k = action.waitCount
+    if (k === undefined || k < 1) {
+      errors.push('子流程动作 ' + actionId + ': COUNT 策略必须配置正整数 K')
+    } else if (action.maxDispatch !== undefined && k > action.maxDispatch) {
+      errors.push('子流程动作 ' + actionId + ': K=' + k + ' 超过单次派发上限 ' + action.maxDispatch)
+    }
+  }
+  const wb = action.writeBack
+  if (!wb) {
+    return errors
+  }
+  if (!wb.resultNodeKey || !wb.resultNodeKey.trim()) {
+    errors.push('子流程动作 ' + actionId + ': 回写配置缺少 resultNodeKey')
+    return errors
+  }
+  const hasRowWrite = !!(wb.tableField && wb.tableField.trim())
+  if (hasRowWrite) {
+    if (
+      !wb.rowKeyField ||
+      !wb.rowKeyField.trim() ||
+      !wb.parentTableField ||
+      !wb.parentTableField.trim()
+    ) {
+      errors.push('子流程动作 ' + actionId + ': 行级回写必须配置 rowKeyField 与 parentTableField')
+      return errors
+    }
+    if (!wb.fields || wb.fields.length === 0) {
+      errors.push('子流程动作 ' + actionId + ': 行级回写必须配置允许列映射 fields')
+      return errors
+    }
+  }
+  if ((!wb.fields || wb.fields.length === 0) && (!wb.mainFields || wb.mainFields.length === 0)) {
+    errors.push('子流程动作 ' + actionId + ': 回写配置缺少任何字段映射')
+  }
+  return errors
+}
+
+/** 子流程批次项状态语义分组（回查展示用：等待中/成功/挂起/失败/留痕）。 */
+export function childItemStatusKind(
+  status: string,
+): 'pending' | 'success' | 'suspended' | 'failed' | 'recorded' {
+  switch (status) {
+    case 'DISPATCHED':
+      return 'pending'
+    case 'WRITTEN':
+      return 'success'
+    case 'CONFLICT':
+      return 'suspended'
+    case 'FAILED':
+    case 'REFUSED':
+      return 'failed'
+    default:
+      return 'recorded'
+  }
+}
