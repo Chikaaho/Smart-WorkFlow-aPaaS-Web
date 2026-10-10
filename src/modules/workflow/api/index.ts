@@ -61,6 +61,17 @@ export async function queryTaskDetail(taskId: string): Promise<TaskDetail> {
   })
 }
 
+/**
+ * POST /workflow/tasks/{taskId}/claim → void（P64 阶段Ⅱ候选领取）
+ * 候选组任务唯一合法办理入口：先领取（竞争单结果，后到方确定性失败），后查看/办理。
+ */
+export async function claimTask(taskId: string): Promise<void> {
+  await request<void>({
+    method: 'POST',
+    url: `/workflow/tasks/${taskId}/claim`,
+  })
+}
+
 // ═══════════════════════════════════════
 // 审批动作（异步命令通道）
 // ═══════════════════════════════════════

@@ -16,6 +16,8 @@ export interface TodoTask {
   flowStatus?: string | null
   /** 流程定义键（定位分类用） */
   processDefKey?: string | null
+  /** 候选任务标记（P64 阶段Ⅱ：须先领取再查看/办理；后端 assignee 为空即 true） */
+  candidate?: boolean
 }
 
 // ─── 任务详情 DTO（对齐后端 TaskDetailRespDTO） ───

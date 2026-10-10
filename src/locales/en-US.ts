@@ -2243,6 +2243,13 @@ export default {
     applicant: 'Applicant',
     receiveTime: 'Received at',
     pendingReview: 'Pending review',
+    claimTask: 'Claim',
+    candidatePending: 'To claim',
+    claimSuccess: 'Task claimed. Handle it from your todo list',
+    claimConfirmTitle: 'Confirm task claim',
+    claimConfirm:
+      'Once claimed, this task is handled solely by you and other candidates will no longer see it. Claim now?',
+    claimFailed: 'Claim failed',
     themeRuleAction: 'Theme rule',
     themeRuleColumn: 'Theme rule',
     themeRuleUnset: 'Not set',

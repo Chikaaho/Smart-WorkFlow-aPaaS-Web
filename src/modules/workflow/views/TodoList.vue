@@ -13,7 +13,12 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
-import { queryTodoTasks, acceptTaskAction, pollCommandStatus } from '@/modules/workflow/api'
+import {
+  queryTodoTasks,
+  acceptTaskAction,
+  pollCommandStatus,
+  claimTask,
+} from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
 import type { TodoTask } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
@@ -28,6 +33,7 @@ const loading = ref(false)
 const errorMsg = ref('')
 const approvingId = ref<string | null>(null) // 当前正在审批的任务 ID（loading 态）
 const rejectingId = ref<string | null>(null) // 当前正在驳回的任务 ID（loading 态）
+const claimingId = ref<string | null>(null) // 当前正在领取的候选任务 ID（P64 阶段Ⅱ）
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
 
@@ -73,6 +79,20 @@ function handlePageSizeChange(s: number) {
  */
 function rowActions(row: unknown): ListAction[] {
   const item = row as TodoTask
+  // P64 阶段Ⅱ：候选组任务（assignee 为空）唯一合法入口=先领取；
+  // 领取后由本人办理，其他候选人不再可见（竞争单结果由服务端保证）
+  if (item.candidate) {
+    return [
+      {
+        key: 'claim',
+        label: t('workflow.claimTask'),
+        type: 'primary',
+        loading: claimingId.value === item.taskId,
+        disabled: claimingId.value !== null,
+        onClick: () => void handleClaim(item),
+      },
+    ]
+  }
   const busy = approvingId.value !== null || rejectingId.value !== null
   return [
     {
@@ -186,6 +206,42 @@ async function handleReject(row: TodoTask) {
   rejectingId.value = null
 }
 
+async function handleClaim(row: TodoTask) {
+  if (claimingId.value || approvingId.value || rejectingId.value) return
+  claimingId.value = row.taskId
+
+  let confirmed = false
+  try {
+    await ElMessageBox.confirm(t('workflow.claimConfirm'), t('workflow.claimConfirmTitle'), {
+      get confirmButtonText() {
+        return t('workflow.claimTask')
+      },
+      get cancelButtonText() {
+        return t('common.cancel')
+      },
+      type: 'info',
+    })
+    confirmed = true
+  } catch {
+    return // 用户取消
+  } finally {
+    if (!confirmed) claimingId.value = null
+  }
+  try {
+    await claimTask(row.taskId)
+    ElMessage.success(t('workflow.claimSuccess'))
+  } catch (err) {
+    if (err instanceof ApiError) {
+      ElMessage.error(err.msg)
+    } else {
+      ElMessage.error(t('workflow.claimFailed'))
+    }
+  } finally {
+    claimingId.value = null
+    await loadList()
+  }
+}
+
 function handleRowClick(row: TodoTask) {
   router.push({ name: 'TaskDetail', params: { taskId: row.taskId } })
 }
@@ -246,8 +302,11 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column :label="t('workflow.flowStatus')" width="100">
-        <template #default>
-          <el-tag size="small" type="warning">{{ t('workflow.pendingReview') }}</el-tag>
+        <template #default="{ row }">
+          <el-tag v-if="row.candidate" size="small" type="info">{{
+            t('workflow.candidatePending')
+          }}</el-tag>
+          <el-tag v-else size="small" type="warning">{{ t('workflow.pendingReview') }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="140" />
