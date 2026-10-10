@@ -9,7 +9,7 @@ const { t } = useI18n()
  * 展示任务详情信息、流程变量、审批历史，提供通过/驳回操作。
  * 路由参数：taskId
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Paperclip } from '@element-plus/icons-vue'
@@ -200,6 +200,37 @@ async function loadNodeForm() {
     nodeForm.value = null
   }
 }
+
+/**
+ * 节点表单表格预填（P64 阶段Ⅱ A06）：节点表格字段尚无值时以业务记录现值初始化。
+ * 子流程办理人因此只看到本实例授权来源行（行标识随派发冻结），无需手工录入；
+ * 记录表为空或节点表单已有值时保持原值（用户编辑不回退）。
+ */
+function prefillNodeFormTables() {
+  if (!nodeFormEditable.value) return
+  const record = formRecord.value as Record<string, unknown> | null
+  if (!record) return
+  for (const field of nodeFormFields.value) {
+    if (field.type !== 'TABLE') continue
+    const current = nodeFormModel.value[field.name]
+    if (Array.isArray(current) && current.length > 0) continue
+    const source = record[field.name]
+    if (!Array.isArray(source) || source.length === 0) continue
+    nodeFormModel.value = {
+      ...nodeFormModel.value,
+      [field.name]: source.map((row) => {
+        const clean = { ...((row ?? {}) as Record<string, unknown>) }
+        delete clean._rowId
+        delete clean._rowAction
+        return clean
+      }),
+    }
+  }
+}
+
+watch([nodeForm, formRecord], () => {
+  prefillNodeFormTables()
+})
 
 /** 节点表单必填校验（客户端 UX 提示；服务端提交仍全量校验，1401/2433 为权威口径）。 */
 function validateNodeFormRequired(): boolean {
