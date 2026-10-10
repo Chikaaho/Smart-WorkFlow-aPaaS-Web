@@ -1,18 +1,20 @@
 import { describe, expect, it } from 'vitest'
+
 import {
   buildActionConfig,
   buildTriggerConfig,
   buildVariableDef,
   canRetryActionRefStatus,
+  childItemStatusKind,
   compatibleVariableTypes,
   emptyActionDraft,
   emptyBranchDraft,
   emptyTriggerDraft,
   emptyVariableDraft,
+  toTriggerDraft,
+  validateChildActionDraft,
   validateTriggerDraft,
   validateVariableDraft,
-  validateChildActionDraft,
-  childItemStatusKind,
 } from './p64-orchestration'
 
 describe('p64-orchestration 变量草稿', () => {
@@ -260,5 +262,64 @@ describe('P64 阶段Ⅱ：CHILD 子流程配置校验（与后端发布校验同
     expect(childItemStatusKind('FAILED')).toBe('failed')
     expect(childItemStatusKind('REFUSED')).toBe('failed')
     expect(childItemStatusKind('LATE')).toBe('recorded')
+  })
+})
+
+describe('P64 阶段Ⅱ：CHILD 动作构建与回读（设计器草稿往返）', () => {
+  it('buildActionConfig：CHILD + COUNT + 行级/主记录回写序列化；非 CHILD 零字段', () => {
+    const draft = emptyActionDraft()
+    draft.actionId = 'act_child'
+    draft.type = 'START_EACH'
+    draft.sourceVariable = 'var_rows'
+    draft.targetProcessDefKey = 'child_def'
+    draft.targetFormKey = 'child_form'
+    draft.orchestration = 'CHILD'
+    draft.waitPolicy = 'COUNT'
+    draft.waitCount = 2
+    draft.wbEnabled = true
+    draft.wbResultNodeKey = 'node_result'
+    draft.wbTableField = 'result_table'
+    draft.wbRowKeyField = 'id'
+    draft.wbParentTableField = 'parent_table'
+    draft.wbFields = [{ fromField: 'feedback', toField: 'feedback' }]
+    draft.wbMainFields = [{ fromField: 'summary', toField: 'summary' }]
+    const cfg = buildActionConfig(draft)
+    expect(cfg.orchestration).toBe('CHILD')
+    expect(cfg.waitPolicy).toBe('COUNT')
+    expect(cfg.waitCount).toBe(2)
+    expect(cfg.writeBack?.resultNodeKey).toBe('node_result')
+    expect(cfg.writeBack?.fields).toEqual([{ fromField: 'feedback', toField: 'feedback' }])
+    expect(cfg.writeBack?.mainFields).toEqual([{ fromField: 'summary', toField: 'summary' }])
+
+    draft.orchestration = ''
+    const plain = buildActionConfig(draft)
+    expect(plain.orchestration).toBeUndefined()
+    expect(plain.writeBack).toBeUndefined()
+  })
+
+  it('toTriggerDraft：CHILD 配置回读不丢（等待策略/回写映射）', () => {
+    const trigger = emptyTriggerDraft()
+    trigger.triggerId = 'trg_1'
+    trigger.nodeKey = 'node_1'
+    const draft = emptyActionDraft()
+    draft.actionId = 'act_child'
+    draft.orchestration = 'CHILD'
+    draft.waitPolicy = 'ANY'
+    draft.wbEnabled = true
+    draft.wbResultNodeKey = 'node_result'
+    draft.wbFields = [{ fromField: 'feedback', toField: 'feedback' }]
+    draft.wbMainFields = [{ fromField: '', toField: '' }]
+    trigger.branches = [
+      { branchId: 'b1', name: '', matchType: 'STRING', matchValue: 'x', actions: [draft] },
+    ]
+    const round = toTriggerDraft({ ...buildTriggerConfig(trigger) })
+    expect(round.branches[0].actions[0].orchestration).toBe('CHILD')
+    expect(round.branches[0].actions[0].waitPolicy).toBe('ANY')
+    expect(round.branches[0].actions[0].wbEnabled).toBe(true)
+    expect(round.branches[0].actions[0].wbResultNodeKey).toBe('node_result')
+    expect(round.branches[0].actions[0].wbFields[0]).toEqual({
+      fromField: 'feedback',
+      toField: 'feedback',
+    })
   })
 })

@@ -4,7 +4,17 @@ import ApproverCandidatesDialog from './ApproverCandidatesDialog.vue'
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
-/* global HTMLElement, ResizeObserver, SVGElement, SVGSVGElement, WheelEvent, PointerEvent, DragEvent, KeyboardEvent, MouseEvent, window, document */
+/* global HTMLElement,
+  ResizeObserver,
+  SVGElement,
+  SVGSVGElement,
+  WheelEvent,
+  PointerEvent,
+  DragEvent,
+  KeyboardEvent,
+  MouseEvent,
+  window,
+  document */
 /**
  * ProcessDesigner — 第一方流程设计器页（I3 §4.1：节点拖入/移动/连线/选择/删除/
  * 属性配置/缩放平移适配/撤销/保存/校验/发布/错误定位）。
@@ -72,6 +82,7 @@ import {
   validateTriggerDraft,
   validateVariableDraft,
   compatibleVariableTypes,
+  CHILD_WAIT_POLICIES,
 } from '@/modules/workflow/utils/p64-orchestration'
 import type { TriggerDraft, VariableDraft } from '@/modules/workflow/utils/p64-orchestration'
 
@@ -661,6 +672,29 @@ function addTriggerBranch() {
 
 function addTriggerAction(branchIndex: number) {
   triggerDraft.value.branches[branchIndex]?.actions.push(emptyActionDraft())
+}
+/** P64 阶段Ⅱ：行级/主记录回写映射行增删（子流程配置面板）。 */
+function addChildWbField(branchIndex: number, actionIndex: number, kind: 'row' | 'main') {
+  const action = triggerDraft.value.branches[branchIndex]?.actions[actionIndex]
+  if (!action) return
+  const target = kind === 'row' ? action.wbFields : action.wbMainFields
+  target.push({ fromField: '', toField: '' })
+}
+
+function removeChildWbField(
+  branchIndex: number,
+  actionIndex: number,
+  kind: 'row' | 'main',
+  index: number,
+) {
+  const action = triggerDraft.value.branches[branchIndex]?.actions[actionIndex]
+  if (!action) return
+  const target = kind === 'row' ? action.wbFields : action.wbMainFields
+  if (target.length <= 1) {
+    target.splice(0, 1, { fromField: '', toField: '' })
+    return
+  }
+  target.splice(index, 1)
 }
 
 function addTriggerMapping(branchIndex: number, actionIndex: number) {
@@ -3008,6 +3042,107 @@ function nodeLabelLines(label: string) {
                 <el-input v-model="mapping.literal" placeholder="三选一" />
               </el-form-item>
             </div>
+            <!-- P64 阶段Ⅱ：子流程（主子流程）配置 -->
+            <div class="p64-grid">
+              <el-form-item label="子流程模式">
+                <el-checkbox
+                  :model-value="action.orchestration === 'CHILD'"
+                  @update:model-value="
+                    (v: boolean | string | number) => {
+                      action.orchestration = v === true ? 'CHILD' : ''
+                    }
+                  "
+                >
+                  主子流程（派发冻结 + 等待策略 + 输出回写）
+                </el-checkbox>
+              </el-form-item>
+              <template v-if="action.orchestration === 'CHILD'">
+                <el-form-item label="等待策略">
+                  <el-select v-model="action.waitPolicy">
+                    <el-option
+                      v-for="item in CHILD_WAIT_POLICIES"
+                      :key="item"
+                      :label="item"
+                      :value="item"
+                    />
+                  </el-select>
+                </el-form-item>
+                <el-form-item v-if="action.waitPolicy === 'COUNT'" label="K（正整数）">
+                  <el-input-number v-model="action.waitCount" :min="1" :max="action.maxDispatch" />
+                </el-form-item>
+                <el-form-item label="输出回写">
+                  <el-checkbox v-model="action.wbEnabled">启用子→父回写</el-checkbox>
+                </el-form-item>
+              </template>
+            </div>
+            <template v-if="action.orchestration === 'CHILD' && action.wbEnabled">
+              <div class="p64-grid">
+                <el-form-item label="结果节点 key">
+                  <el-input
+                    v-model="action.wbResultNodeKey"
+                    placeholder="子流程结果节点（如 node_result）"
+                  />
+                </el-form-item>
+                <el-form-item label="子结果表格字段">
+                  <el-input
+                    v-model="action.wbTableField"
+                    placeholder="行级回写时填写（子表单 TABLE 字段）"
+                  />
+                </el-form-item>
+                <el-form-item label="来源行 ID 列">
+                  <el-input v-model="action.wbRowKeyField" placeholder="承载来源行 ID 的列名" />
+                </el-form-item>
+                <el-form-item label="父来源表格字段">
+                  <el-input v-model="action.wbParentTableField" placeholder="父表单 TABLE 字段名" />
+                </el-form-item>
+              </div>
+              <div class="p64-toolbar">
+                <span class="p64-subtitle">行级回写列映射（子列 → 父列）</span>
+                <el-button size="small" @click="addChildWbField(branchIndex, actionIndex, 'row')"
+                  >添加列映射</el-button
+                >
+              </div>
+              <div v-for="(f, fi) in action.wbFields" :key="'wr' + fi" class="p64-grid">
+                <el-form-item label="子列">
+                  <el-input v-model="f.fromField" />
+                </el-form-item>
+                <el-form-item label="父列">
+                  <el-input v-model="f.toField" />
+                </el-form-item>
+                <el-form-item label=" ">
+                  <el-button
+                    size="small"
+                    link
+                    type="danger"
+                    @click="removeChildWbField(branchIndex, actionIndex, 'row', fi)"
+                    >删除</el-button
+                  >
+                </el-form-item>
+              </div>
+              <div class="p64-toolbar">
+                <span class="p64-subtitle">主记录回写字段映射（子字段 → 父字段）</span>
+                <el-button size="small" @click="addChildWbField(branchIndex, actionIndex, 'main')"
+                  >添加字段映射</el-button
+                >
+              </div>
+              <div v-for="(f, fi) in action.wbMainFields" :key="'wm' + fi" class="p64-grid">
+                <el-form-item label="子字段">
+                  <el-input v-model="f.fromField" />
+                </el-form-item>
+                <el-form-item label="父字段">
+                  <el-input v-model="f.toField" />
+                </el-form-item>
+                <el-form-item label=" ">
+                  <el-button
+                    size="small"
+                    link
+                    type="danger"
+                    @click="removeChildWbField(branchIndex, actionIndex, 'main', fi)"
+                    >删除</el-button
+                  >
+                </el-form-item>
+              </div>
+            </template>
           </div>
         </div>
         <div v-if="triggerErrors.length" class="p64-errors">

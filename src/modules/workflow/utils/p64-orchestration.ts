@@ -161,6 +161,17 @@ export interface TriggerActionDraft {
   targetFormKey: string
   maxDispatch: number
   mapping: TriggerActionMappingDraft[]
+  /** P64 阶段Ⅱ：'CHILD' = 主子流程；'' = 独立关联流程 */
+  orchestration: '' | 'CHILD'
+  waitPolicy: ChildWaitPolicy
+  waitCount: number
+  wbEnabled: boolean
+  wbResultNodeKey: string
+  wbTableField: string
+  wbRowKeyField: string
+  wbParentTableField: string
+  wbFields: Array<{ fromField: string; toField: string }>
+  wbMainFields: Array<{ fromField: string; toField: string }>
 }
 
 export interface TriggerActionMappingDraft {
@@ -205,6 +216,16 @@ export function emptyActionDraft(): TriggerActionDraft {
     targetFormKey: '',
     maxDispatch: DEFAULT_MAX_DISPATCH,
     mapping: [emptyMappingDraft()],
+    orchestration: '',
+    waitPolicy: 'ALL',
+    waitCount: 1,
+    wbEnabled: false,
+    wbResultNodeKey: '',
+    wbTableField: '',
+    wbRowKeyField: '',
+    wbParentTableField: '',
+    wbFields: [{ fromField: '', toField: '' }],
+    wbMainFields: [{ fromField: '', toField: '' }],
   }
 }
 
@@ -248,6 +269,13 @@ function buildMapping(
 }
 
 export function buildActionConfig(draft: TriggerActionDraft): TriggerAction {
+  const child = draft.orchestration === 'CHILD'
+  const fields = draft.wbFields
+    .filter((f) => f.fromField.trim() && f.toField.trim())
+    .map((f) => ({ fromField: f.fromField.trim(), toField: f.toField.trim() }))
+  const mainFields = draft.wbMainFields
+    .filter((f) => f.fromField.trim() && f.toField.trim())
+    .map((f) => ({ fromField: f.fromField.trim(), toField: f.toField.trim() }))
   return {
     actionId: draft.actionId.trim(),
     name: draft.name.trim() || draft.actionId.trim(),
@@ -258,6 +286,20 @@ export function buildActionConfig(draft: TriggerActionDraft): TriggerAction {
     targetFormKey: draft.targetFormKey.trim(),
     maxDispatch: draft.maxDispatch,
     mapping: draft.mapping.map(buildMapping).filter((m): m is NonNullable<typeof m> => m !== null),
+    orchestration: child ? 'CHILD' : undefined,
+    waitPolicy: child ? draft.waitPolicy : undefined,
+    waitCount: child && draft.waitPolicy === 'COUNT' ? draft.waitCount : undefined,
+    writeBack:
+      child && draft.wbEnabled
+        ? {
+            resultNodeKey: draft.wbResultNodeKey.trim(),
+            tableField: draft.wbTableField.trim() || undefined,
+            rowKeyField: draft.wbRowKeyField.trim() || undefined,
+            parentTableField: draft.wbParentTableField.trim() || undefined,
+            fields: fields.length > 0 ? fields : undefined,
+            mainFields: mainFields.length > 0 ? mainFields : undefined,
+          }
+        : undefined,
   }
 }
 
@@ -313,6 +355,25 @@ export function toTriggerDraft(config: TriggerConfig): TriggerDraft {
           itemField: m.itemField ?? '',
           literal: m.literal === undefined || m.literal === null ? '' : String(m.literal),
         })),
+        orchestration: action.orchestration === 'CHILD' ? ('CHILD' as const) : ('' as const),
+        waitPolicy: (action.waitPolicy ?? 'ALL') as ChildWaitPolicy,
+        waitCount: action.waitCount ?? 1,
+        wbEnabled: !!action.writeBack,
+        wbResultNodeKey: action.writeBack?.resultNodeKey ?? '',
+        wbTableField: action.writeBack?.tableField ?? '',
+        wbRowKeyField: action.writeBack?.rowKeyField ?? '',
+        wbParentTableField: action.writeBack?.parentTableField ?? '',
+        wbFields:
+          action.writeBack?.fields && action.writeBack.fields.length > 0
+            ? action.writeBack.fields.map((f) => ({ fromField: f.fromField, toField: f.toField }))
+            : [{ fromField: '', toField: '' }],
+        wbMainFields:
+          action.writeBack?.mainFields && action.writeBack.mainFields.length > 0
+            ? action.writeBack.mainFields.map((f) => ({
+                fromField: f.fromField,
+                toField: f.toField,
+              }))
+            : [{ fromField: '', toField: '' }],
       })),
     })),
     unmatchedDisposition: config.unmatchedDisposition ?? 'HALT',
@@ -384,6 +445,28 @@ export function validateTriggerDraft(
           errors.push(`动作 ${actionId || '?'}: 映射 ${mapping.targetField} 缺少来源`)
         }
       }
+      // P64 阶段Ⅱ：CHILD 子流程配置（等待策略/K/输出回写；与后端发布校验同口径）
+      errors.push(
+        ...validateChildActionDraft({
+          actionId,
+          orchestration: action.orchestration,
+          waitPolicy: action.waitPolicy,
+          waitCount: action.waitCount,
+          maxDispatch: action.maxDispatch,
+          writeBack: action.wbEnabled
+            ? {
+                resultNodeKey: action.wbResultNodeKey,
+                tableField: action.wbTableField,
+                rowKeyField: action.wbRowKeyField,
+                parentTableField: action.wbParentTableField,
+                fields: action.wbFields.filter((f) => f.fromField.trim() && f.toField.trim()),
+                mainFields: action.wbMainFields.filter(
+                  (f) => f.fromField.trim() && f.toField.trim(),
+                ),
+              }
+            : undefined,
+        }),
+      )
     }
   }
   return errors
