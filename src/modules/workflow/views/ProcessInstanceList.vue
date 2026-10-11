@@ -35,6 +35,8 @@ import {
 import {
   canRetryActionRefStatus,
   childItemStatusKind,
+  isBatchBlockReasonCurrent,
+  isItemDiagnosisCurrent,
 } from '@/modules/workflow/utils/p64-orchestration'
 
 // ─── 状态映射 ───
@@ -684,13 +686,21 @@ function rowActions(row: unknown): ListAction[] {
                     {{ batch.parentDepth }}</span
                   >
                 </div>
+                <!-- 复审05 P2-02b-V-C：阻断原因只在未决批次（WAITING/BLOCKED）按当前待处置呈现；
+                     已结算/已取消批次的阻断文案降级为可区分的历史诊断，不误报当前挂起 -->
                 <el-alert
-                  v-if="batch.blockReason"
+                  v-if="batch.blockReason && isBatchBlockReasonCurrent(batch.status)"
                   type="warning"
                   :closable="false"
                   :title="batch.blockReason"
                   class="child-batch-reason"
                 />
+                <div
+                  v-else-if="batch.blockReason"
+                  class="child-batch-reason child-batch-reason--history"
+                >
+                  历史诊断（批次已 {{ batch.status }}）：{{ batch.blockReason }}
+                </div>
                 <div class="p64-table-scroll">
                   <el-table :data="batch.items" stripe size="small">
                     <el-table-column prop="itemKey" label="派发项" min-width="100" />
@@ -736,12 +746,26 @@ function rowActions(row: unknown): ListAction[] {
                       min-width="150"
                       show-overflow-tooltip
                     />
-                    <el-table-column
-                      prop="errorText"
-                      label="诊断"
-                      min-width="180"
-                      show-overflow-tooltip
-                    />
+                    <!-- 复审05 P2-02b-V-C：诊断按状态分当前/历史语义——
+                         CONFLICT/FAILED/REFUSED 为现存待处置；已恢复/留痕项降级历史标注 -->
+                    <el-table-column label="诊断" min-width="180" show-overflow-tooltip>
+                      <template #default="{ row }">
+                        <span
+                          v-if="row.errorText"
+                          :class="
+                            isItemDiagnosisCurrent(row.status)
+                              ? 'child-item-diagnosis'
+                              : 'child-item-diagnosis--history'
+                          "
+                        >
+                          {{
+                            isItemDiagnosisCurrent(row.status)
+                              ? row.errorText
+                              : `历史诊断（${row.status}）：${row.errorText}`
+                          }}
+                        </span>
+                      </template>
+                    </el-table-column>
                     <el-table-column label="操作" width="90" fixed="right">
                       <template #default="{ row }">
                         <!-- 回写冲突受控恢复：仅 CONFLICT 项可重放（按当前权威版本） -->
@@ -783,6 +807,16 @@ function rowActions(row: unknown): ListAction[] {
 }
 .child-batch-reason {
   margin-bottom: 6px;
+}
+/* 复审05 P2-02b-V-C：历史期诊断降级呈现（与当前待处置的 warning/alert 可区分） */
+.child-batch-reason--history {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+.child-item-diagnosis--history {
+  color: var(--el-text-color-secondary);
 }
 /* P64 阶段Ⅰ：触发与动作回查卡 */
 .p64-section-title {

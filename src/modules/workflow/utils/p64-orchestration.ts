@@ -580,3 +580,22 @@ export function childItemStatusKind(
       return 'recorded'
   }
 }
+
+/**
+ * 批次阻断原因是否属于当前未决状态（复审05 P2-02b-V-C）：
+ * 仅 WAITING/BLOCKED 批次的 blockReason 表示现存待处置；SETTLED/CANCELLED 后
+ * 阻断文案是历史期诊断，展示必须降级为可区分的历史标注，不得误报为当前挂起。
+ */
+export function isBatchBlockReasonCurrent(status: string): boolean {
+  return status === 'WAITING' || status === 'BLOCKED'
+}
+
+/**
+ * 批次项诊断是否属于当前未决状态（复审05 P2-02b-V-C）：
+ * CONFLICT/FAILED/REFUSED 项的诊断是现存待处置；WRITTEN/LATE 等状态下残留的
+ * 诊断文本是恢复/留痕前的历史文案，展示必须降级为历史标注（后端在恢复成功时
+ * 已清空 errorText，此处兜底历史数据行不被误报为当前挂起）。
+ */
+export function isItemDiagnosisCurrent(status: string): boolean {
+  return status === 'CONFLICT' || status === 'FAILED' || status === 'REFUSED'
+}

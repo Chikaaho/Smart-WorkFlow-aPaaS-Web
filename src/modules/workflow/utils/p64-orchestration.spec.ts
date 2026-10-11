@@ -11,6 +11,8 @@ import {
   emptyBranchDraft,
   emptyTriggerDraft,
   emptyVariableDraft,
+  isBatchBlockReasonCurrent,
+  isItemDiagnosisCurrent,
   toTriggerDraft,
   validateChildActionDraft,
   validateTriggerDraft,
@@ -262,6 +264,21 @@ describe('P64 阶段Ⅱ：CHILD 子流程配置校验（与后端发布校验同
     expect(childItemStatusKind('FAILED')).toBe('failed')
     expect(childItemStatusKind('REFUSED')).toBe('failed')
     expect(childItemStatusKind('LATE')).toBe('recorded')
+  })
+
+  it('诊断当前/历史语义（复审05 P2-02b-V-C）：未决状态为当前，已恢复/终态降级历史', () => {
+    // 批次阻断原因：仅未决批次为当前待处置
+    expect(isBatchBlockReasonCurrent('WAITING')).toBe(true)
+    expect(isBatchBlockReasonCurrent('BLOCKED')).toBe(true)
+    expect(isBatchBlockReasonCurrent('SETTLED')).toBe(false)
+    expect(isBatchBlockReasonCurrent('CANCELLED')).toBe(false)
+    // 批次项诊断：CONFLICT/FAILED/REFUSED 现存待处置；WRITTEN（已恢复）为历史
+    expect(isItemDiagnosisCurrent('CONFLICT')).toBe(true)
+    expect(isItemDiagnosisCurrent('FAILED')).toBe(true)
+    expect(isItemDiagnosisCurrent('REFUSED')).toBe(true)
+    expect(isItemDiagnosisCurrent('WRITTEN')).toBe(false)
+    expect(isItemDiagnosisCurrent('LATE')).toBe(false)
+    expect(isItemDiagnosisCurrent('DISPATCHED')).toBe(false)
   })
 })
 
