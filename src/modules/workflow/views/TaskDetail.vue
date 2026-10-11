@@ -74,6 +74,29 @@ const SYSTEM_COLUMNS = new Set([
   'version',
 ])
 
+/** 表单宽表系统列之外的子表行内部列：不进入业务值展示 */
+const SUBTABLE_INTERNAL_COLUMNS = new Set([...SYSTEM_COLUMNS, 'deleted', 'parent_record_id'])
+
+/** 子表行 → 单行业务值文本（key=value 对；空对象回退原样，避免 [object Object]） */
+function formatTableRowValue(item: unknown): string {
+  if (item == null || typeof item !== 'object') return String(item)
+  const entries = Object.entries(item as Record<string, unknown>).filter(
+    ([k]) => !SUBTABLE_INTERNAL_COLUMNS.has(k),
+  )
+  if (entries.length === 0) return JSON.stringify(item)
+  return entries.map(([k, v]) => `${k}=${v == null || v === '' ? '-' : String(v)}`).join('；')
+}
+
+/** 业务字段值 → 可读文本：表格行数组逐行展示，普通值原样 */
+function formatFieldValue(v: unknown): string {
+  if (v == null || v === '') return '-'
+  if (Array.isArray(v)) {
+    return v.length === 0 ? '-' : v.map((item) => formatTableRowValue(item)).join('\n')
+  }
+  if (typeof v === 'object') return formatTableRowValue(v)
+  return String(v)
+}
+
 /** 表单数据行：按 schema 字段顺序输出业务标签，系统列与未定义字段不展示 */
 const formFieldRows = computed(() => {
   if (!formRecord.value) return []
@@ -95,13 +118,13 @@ const formFieldRows = computed(() => {
               ? (refDisplayMap.value[field.name] ?? String(v))
               : field.type === 'USER' || field.type === 'DEPT'
                 ? (userDeptDisplays.value[field.name] ?? String(v))
-                : String(v),
+                : formatFieldValue(v),
       })
     }
   }
   for (const [k, v] of Object.entries(formRecord.value)) {
     if (SYSTEM_COLUMNS.has(k) || seen.has(k)) continue
-    rows.push({ key: k, label: k, value: v == null || v === '' ? '-' : String(v) })
+    rows.push({ key: k, label: k, value: formatFieldValue(v) })
   }
   return rows
 })

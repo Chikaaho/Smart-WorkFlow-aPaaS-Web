@@ -9,7 +9,7 @@ const { t } = useI18n()
  * 列表页：分页展示流程实例，支持按状态/流程定义/发起人过滤。
  * 详情抽屉：实例基本信息 + BPMN 流程图高亮（活跃节点/已完成节点）+ 流转时间线。
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
@@ -147,10 +147,22 @@ const drawerLoading = ref(false)
 const drawerError = ref('')
 /** G08b：窄屏抽屉不超出视口（375 真实可读，桌面保持 900px）。 */
 const viewportWidth = ref(Number.MAX_SAFE_INTEGER)
-onMounted(() => {
+const updateViewportWidth = () => {
   viewportWidth.value = globalThis.document.documentElement.clientWidth
+}
+onMounted(() => {
+  updateViewportWidth()
+  globalThis.addEventListener('resize', updateViewportWidth)
 })
-const detailDrawerSize = computed(() => (viewportWidth.value < 768 ? '100%' : '900px'))
+onBeforeUnmount(() => {
+  globalThis.removeEventListener('resize', updateViewportWidth)
+})
+/* P64 阶段Ⅱ A11：900px 抽屉右锚定，视口 <900 时左侧字段列被裁切——
+   全额宽抽屉与基本信息单列共用同一窄屏判定（覆盖 768 等常见窄屏）。 */
+const isNarrowViewport = computed(() => viewportWidth.value < 900)
+const detailDrawerSize = computed(() => (isNarrowViewport.value ? '100%' : '900px'))
+/** P64 阶段Ⅱ A11：窄屏基本信息单列排布——长实例ID不挤压标签列，字段标题完整可见 */
+const detailDescriptionsColumn = computed(() => (isNarrowViewport.value ? 1 : 2))
 
 const detail = ref<InstanceDetail | null>(null)
 
@@ -444,7 +456,7 @@ function rowActions(row: unknown): ListAction[] {
             <template #header
               ><span>{{ t('common.basicInfo') }}</span></template
             >
-            <el-descriptions :column="2" border>
+            <el-descriptions :column="detailDescriptionsColumn" border>
               <el-descriptions-item :label="t('common.processName')">{{
                 detail.processName ?? '-'
               }}</el-descriptions-item>
@@ -795,6 +807,11 @@ function rowActions(row: unknown): ListAction[] {
 
 .detail-section {
   margin-bottom: 16px;
+}
+
+/* P64 阶段Ⅱ A11：基本信息长值（实例ID UUID）可断行，字段列不被长值撑出视口 */
+.detail-section :deep(.el-descriptions__cell.el-descriptions__content) {
+  word-break: break-all;
 }
 
 /* ─── 高亮标记 CSS ─── */
