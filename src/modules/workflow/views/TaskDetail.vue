@@ -57,6 +57,7 @@ const formRecord = ref<Record<string, unknown> | null>(null)
 const formRecordLoading = ref(false)
 /** 表单定义（用于把内部字段名映射为业务字段标签） */
 const formSchema = ref<FormSchema | null>(null)
+
 /** REFERENCE 字段显示名缓存（id→可读关联对象信息，授权单查解析，取不到回退 id）。 */
 const refDisplayMap = ref<Record<string, string>>({})
 /** P63 G01：USER/DEPT 字段可读显示缓存（字段名→姓名/部门名，多选顿号连接，取不到回退原值）。 */
@@ -77,23 +78,31 @@ const SYSTEM_COLUMNS = new Set([
 /** 表单宽表系统列之外的子表行内部列：不进入业务值展示 */
 const SUBTABLE_INTERNAL_COLUMNS = new Set([...SYSTEM_COLUMNS, 'deleted', 'parent_record_id'])
 
-/** 子表行 → 单行业务值文本（key=value 对；空对象回退原样，避免 [object Object]） */
-function formatTableRowValue(item: unknown): string {
+/** 子表行 → 单行业务值文本（表单声明的子字段按业务标签展示，未声明列回退列名；空对象回退原样） */
+function formatTableRowValue(item: unknown, field?: FormSchema['fields'][number]): string {
   if (item == null || typeof item !== 'object') return String(item)
-  const entries = Object.entries(item as Record<string, unknown>).filter(
-    ([k]) => !SUBTABLE_INTERNAL_COLUMNS.has(k),
-  )
+  const row = item as Record<string, unknown>
+  const subFields = field && field.type === 'TABLE' ? (field.subFields ?? []) : []
+  if (subFields.length > 0) {
+    return subFields
+      .map((sf) => {
+        const v = row[sf.name]
+        return `${sf.label || sf.name}=${v == null || v === '' ? '-' : String(v)}`
+      })
+      .join('；')
+  }
+  const entries = Object.entries(row).filter(([k]) => !SUBTABLE_INTERNAL_COLUMNS.has(k))
   if (entries.length === 0) return JSON.stringify(item)
   return entries.map(([k, v]) => `${k}=${v == null || v === '' ? '-' : String(v)}`).join('；')
 }
 
-/** 业务字段值 → 可读文本：表格行数组逐行展示，普通值原样 */
-function formatFieldValue(v: unknown): string {
+/** 业务字段值 → 可读文本：表格行数组逐行展示（按子字段业务名），普通值原样 */
+function formatFieldValue(v: unknown, field?: FormSchema['fields'][number]): string {
   if (v == null || v === '') return '-'
   if (Array.isArray(v)) {
-    return v.length === 0 ? '-' : v.map((item) => formatTableRowValue(item)).join('\n')
+    return v.length === 0 ? '-' : v.map((item) => formatTableRowValue(item, field)).join('\n')
   }
-  if (typeof v === 'object') return formatTableRowValue(v)
+  if (typeof v === 'object') return formatTableRowValue(v, field)
   return String(v)
 }
 
@@ -118,7 +127,7 @@ const formFieldRows = computed(() => {
               ? (refDisplayMap.value[field.name] ?? String(v))
               : field.type === 'USER' || field.type === 'DEPT'
                 ? (userDeptDisplays.value[field.name] ?? String(v))
-                : formatFieldValue(v),
+                : formatFieldValue(v, field),
       })
     }
   }
