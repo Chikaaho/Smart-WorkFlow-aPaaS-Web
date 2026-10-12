@@ -1394,6 +1394,7 @@ const PARTICIPANT_STRATEGY_LABELS: Record<ParticipantStrategy, string> = {
   EXPRESSION: '表达式',
   ADAPTER: '外部适配器',
   FORM_FIELD: '表单字段',
+  NODE_FORM_AGGREGATE: '节点表单聚合',
 }
 
 /** 参与人字段：真实契约的 participant、mock APPROVAL 的 approver，或带 approverTypes 的兼容 object 字段。 */
@@ -2237,6 +2238,41 @@ function nodeLabelLines(label: string) {
                     </el-select>
                   </el-form-item>
                 </template>
+              </template>
+              <!-- NODE_FORM_AGGREGATE：来源节点 + 人员字段 + 轮次口径（P64 A07 聚合会签） -->
+              <template v-else-if="participantForm.strategy === 'NODE_FORM_AGGREGATE'">
+                <el-form-item label="来源节点 key">
+                  <el-input
+                    v-model="participantForm.aggregate.nodeKey"
+                    placeholder="填写来源节点 key（读取该节点本轮全部有效最终提交）"
+                    @change="applyParticipant"
+                  />
+                </el-form-item>
+                <el-form-item label="人员字段">
+                  <el-select
+                    v-model="participantForm.aggregate.formField"
+                    filterable
+                    allow-create
+                    placeholder="选择或填写人员字段名（并集去重生成下一轮参与人）"
+                    @change="applyParticipant"
+                  >
+                    <el-option
+                      v-for="option in mainFieldOptionsFor('USER')"
+                      :key="option.name"
+                      :label="`${option.label || option.name}（${option.name}）`"
+                      :value="option.name"
+                    />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="轮次口径">
+                  <el-radio-group
+                    v-model="participantForm.aggregate.round"
+                    @change="applyParticipant"
+                  >
+                    <el-radio value="">当前轮（缺省）</el-radio>
+                    <el-radio value="PREVIOUS">上一轮</el-radio>
+                  </el-radio-group>
+                </el-form-item>
               </template>
               <!-- ROLE/POST/DEPT_POST/EXPRESSION：通用取值（保存为 {strategy, value}） -->
               <el-form-item

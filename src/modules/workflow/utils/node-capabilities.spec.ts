@@ -236,6 +236,70 @@ describe('P63 participant config (FORM_FIELD shape and legacy compat)', () => {
   })
 })
 
+describe('P64 NODE_FORM_AGGREGATE participant config (aggregate round-trip)', () => {
+  it('builds aggregate value object; round omitted when left at default', () => {
+    const config = buildParticipantConfig({
+      ...emptyParticipantFormDraft(),
+      strategy: 'NODE_FORM_AGGREGATE',
+      aggregate: { nodeKey: ' node_handlers ', formField: ' 下一阶段审批人 ', round: '' },
+    })
+    expect(config).toEqual({
+      strategy: 'NODE_FORM_AGGREGATE',
+      value: { nodeKey: 'node_handlers', formField: '下一阶段审批人' },
+    })
+
+    const previous = buildParticipantConfig({
+      ...emptyParticipantFormDraft(),
+      strategy: 'NODE_FORM_AGGREGATE',
+      aggregate: { nodeKey: 'n1', formField: 'handlers', round: 'PREVIOUS' },
+    })
+    expect(previous).toEqual({
+      strategy: 'NODE_FORM_AGGREGATE',
+      value: { nodeKey: 'n1', formField: 'handlers', round: 'PREVIOUS' },
+    })
+  })
+
+  it('round-trips an aggregate config through the panel draft', () => {
+    const raw = {
+      strategy: 'NODE_FORM_AGGREGATE',
+      value: { nodeKey: 'n1', formField: 'h', round: 'CURRENT' },
+    }
+    const built = buildParticipantFormDraft(raw)
+    expect(built.shape).toBe('strategy')
+    expect(built.draft.strategy).toBe('NODE_FORM_AGGREGATE')
+    expect(built.draft.aggregate).toEqual({ nodeKey: 'n1', formField: 'h', round: 'CURRENT' })
+    expect(buildParticipantConfig(built.draft)).toEqual(raw)
+  })
+
+  it('reports readable Chinese errors for aggregate gaps', () => {
+    expect(validateParticipantConfigErrors({ strategy: 'FIXED_USER', value: ['1'] })).toEqual([])
+    expect(
+      validateParticipantConfigErrors({
+        strategy: 'NODE_FORM_AGGREGATE',
+        value: { formField: 'h' },
+      }),
+    ).toEqual(['节点表单聚合参与人缺少来源节点 key（nodeKey）'])
+    expect(
+      validateParticipantConfigErrors({
+        strategy: 'NODE_FORM_AGGREGATE',
+        value: { nodeKey: 'n1' },
+      }),
+    ).toEqual(['节点表单聚合参与人缺少人员字段名（formField）'])
+    expect(
+      validateParticipantConfigErrors({
+        strategy: 'NODE_FORM_AGGREGATE',
+        value: { nodeKey: 'n1', formField: 'h', round: 'NEXT' },
+      }),
+    ).toEqual(['节点表单聚合参与人 round 非法：NEXT（仅支持 CURRENT/PREVIOUS）'])
+    expect(
+      validateParticipantConfigErrors({
+        strategy: 'NODE_FORM_AGGREGATE',
+        value: { nodeKey: 'n1', formField: 'h', round: 'PREVIOUS' },
+      }),
+    ).toEqual([])
+  })
+})
+
 describe('P63 dynamic parallel config (semanticVersion switch)', () => {
   const baseDraft = buildDynamicParallelFormDraft(null)
 
