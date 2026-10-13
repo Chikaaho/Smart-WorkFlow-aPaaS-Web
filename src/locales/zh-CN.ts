@@ -992,7 +992,7 @@ export default {
     paletteFormula: '公式字段',
     paletteIot: 'IoT 设备',
     paletteAgent: 'Agent 结果',
-    paletteDragHint: '拖拽组件到画布，按 12 栏布局自动吸附',
+    paletteDragHint: '拖拽组件到画布，新组件默认占满一行，可在右侧属性面板调整宽度',
     canvasDeviceLabel: '桌面端',
     canvasGridMeta: '12 栏栅格 · 组件吸附 · 100%',
     canvasFootSelected: '当前组件：{label} / {type} · 宽度 {span} / 24 栏',

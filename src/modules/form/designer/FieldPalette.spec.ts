@@ -40,7 +40,8 @@ describe('FieldPalette 原生拖拽', () => {
     expect(item.field).toMatchObject({ type: 'TEXT', required: false })
     expect(typeof item.field.name).toBe('string')
     expect(String(item.field.name).length).toBeGreaterThan(0)
-    expect(item.field.colSpan).toBe(12)
+    // BF20261013-003：新拖字段默认占满整行（不预设半行宽度）
+    expect(item.field.colSpan).toBe(24)
   })
 
   it('dragend 通知宿主清预览', async () => {

@@ -1,7 +1,7 @@
 import { i18n } from '@/locales'
 import type { Component } from 'vue'
 import type { FieldType, FormSchemaField } from '@/contracts/form-schema'
-import { defaultFormFieldColSpan } from '@/contracts/form-layout'
+import { FORM_GRID_COLUMNS } from '@/contracts/form-layout'
 import TextConfig from './config/TextConfig.vue'
 import RichTextConfig from './config/RichTextConfig.vue'
 import NumberConfig from './config/NumberConfig.vue'
@@ -47,7 +47,10 @@ export interface FieldTypeDescriptor {
 
 /** 字段默认 label：以中文类型名作初值，作者可在配置面板（第二刀）改。 */
 function baseField(type: FieldType, name: string, label: string) {
-  return { name, type, label, required: false, colSpan: defaultFormFieldColSpan(type) }
+  // BF20261013-003：新拖字段默认占满整行（不预设半行宽度），作者可在配置面板调窄。
+  // 存量旧定义的 normalize fallback（contracts/form-layout defaultFormFieldColSpan）不动，
+  // 已保存表单不受影响。
+  return { name, type, label, required: false, colSpan: FORM_GRID_COLUMNS }
 }
 
 export const FIELD_TYPE_REGISTRY: readonly FieldTypeDescriptor[] = [

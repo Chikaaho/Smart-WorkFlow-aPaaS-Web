@@ -142,6 +142,20 @@ function addPaletteItem(item: DesignerItem) {
   if (isPublished.value) return
   items.value.push(item)
   selectedId.value = item.id
+  scrollSelectedShellIntoView()
+}
+
+/**
+ * BF20261013-006：点击/拖入成功后滚动到新字段。
+ * 字段多于一屏时新项落在视口外，没有任何视觉反馈，会被当成「点击没效果」；
+ * 渲染完成后按选中壳（field-shell--active）滚到可见位置。
+ */
+function scrollSelectedShellIntoView() {
+  void nextTick(() => {
+    globalThis.document
+      ?.querySelector('.field-shell--active')
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
 }
 
 /** 组件库拖拽中的待插入字段：画布据此在有落点的位置渲染真实预览。 */
@@ -159,6 +173,7 @@ function addDroppedItem(item: DesignerItem, index: number) {
   const at = Math.min(Math.max(index, 0), items.value.length)
   items.value.splice(at, 0, item)
   selectedId.value = item.id
+  scrollSelectedShellIntoView()
 }
 
 /** 配置面板回写：就地把补丁合并进选中字段；字段标识改名时显隐规则同步跟随。 */

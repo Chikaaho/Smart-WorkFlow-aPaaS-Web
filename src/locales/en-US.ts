@@ -1037,7 +1037,8 @@ export default {
     paletteFormula: 'Formula field',
     paletteIot: 'IoT device',
     paletteAgent: 'Agent result',
-    paletteDragHint: 'Drag components onto the canvas; they snap to the 12-column layout.',
+    paletteDragHint:
+      'Drag components onto the canvas; new fields fill the row by default — adjust width in the panel.',
     canvasDeviceLabel: 'Desktop',
     canvasGridMeta: '12-column grid · snap · 100%',
     canvasFootSelected: 'Current field: {label} / {type} · span {span} / 24',

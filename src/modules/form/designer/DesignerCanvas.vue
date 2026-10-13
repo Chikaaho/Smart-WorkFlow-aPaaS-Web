@@ -24,7 +24,7 @@ import type { DesignerItem } from './types'
 import type { FormSchema } from '@/contracts/form-schema'
 import FormPreview from '@/adapters/form-designer/FormPreview.vue'
 import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
-import { resolveDropIndex, type DropRect } from './drop-index'
+import { resolveDropIndex, type DropPoint, type DropRect } from './drop-index'
 import type { CanvasElement, DragLikeEvent } from './dnd'
 
 const items = defineModel<DesignerItem[]>('items', { required: true })
@@ -139,12 +139,43 @@ function shellRects(): DropRect[] {
   })
 }
 
+/**
+ * BF20261013-005：拖拽指针接近滚动容器上下边缘时自动滚动。
+ * 字段多于一屏时白板卡（overflow-y:auto 祖先）出滚动条，没有这一步指针到不了
+ * 下方区域，落点预览与放置都被截断在首屏内。
+ */
+function scrollContainer(): CanvasElement | null {
+  const root = rootRef.value
+  let el = root ? root.parentElement : null
+  while (el) {
+    const overflowY = globalThis.getComputedStyle(el).overflowY
+    if (overflowY === 'auto' || overflowY === 'scroll') return el
+    el = el.parentElement
+  }
+  return null
+}
+
+function autoScrollDuringDrag(point: DropPoint) {
+  const scroller = scrollContainer()
+  if (!scroller) return
+  const rect = scroller.getBoundingClientRect()
+  const edge = 56
+  const step = 24
+  if (point.y < rect.top + edge && scroller.scrollTop > 0) {
+    scroller.scrollBy({ top: -step })
+  } else if (point.y > rect.bottom - edge) {
+    scroller.scrollBy({ top: step })
+  }
+}
+
 /** dragover 必须 preventDefault 才允许放置；顺带实时更新落点。 */
 function onDragOver(event: DragLikeEvent) {
   if (props.readonly || !props.pendingItem) return
   event.preventDefault()
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
-  const next = resolveDropIndex(shellRects(), { x: event.clientX, y: event.clientY })
+  const point = { x: event.clientX, y: event.clientY }
+  autoScrollDuringDrag(point)
+  const next = resolveDropIndex(shellRects(), point)
   if (next !== dropIndex.value) dropIndex.value = next
 }
 
@@ -360,20 +391,17 @@ function onShellClick(entry: ShellEntry) {
 }
 
 .field-shell__control :deep(.el-input__inner) {
-  padding: 0;
-  text-indent: -12px;
   line-height: 17px;
 }
 
+/* BF20261013-002：移除 text-indent 负缩进 hack——select/picker 类 placeholder 左移被裁切；
+   控件恢复 Element Plus 默认内边距后提示完整可见，控件框贴缘由 .field-shell__control 负 margin 承担 */
 .field-shell__control :deep(.el-select__wrapper) {
-  padding-left: 0;
-  text-indent: -12px;
+  min-height: 32px;
 }
 
 .field-shell__control :deep(.el-textarea__inner) {
-  padding-left: 0;
-  text-indent: -11px;
-  margin-left: 11px;
+  padding-left: 11px;
 }
 
 .field-shell__control :deep(.el-date-editor .el-input__prefix) {
