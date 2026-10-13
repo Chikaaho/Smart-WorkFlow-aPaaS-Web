@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { enumLabel } from '@/foundation/i18n/enum-label'
 import ApproverCandidatesDialog from './ApproverCandidatesDialog.vue'
 import { useI18n } from '@/locales'
 
@@ -89,6 +88,7 @@ import {
   validateVariableDraft,
   compatibleVariableTypes,
   CHILD_WAIT_POLICIES,
+  DEFAULT_MAX_DISPATCH,
 } from '@/modules/workflow/utils/p64-orchestration'
 import type { TriggerDraft, VariableDraft } from '@/modules/workflow/utils/p64-orchestration'
 
@@ -642,6 +642,9 @@ const publishedTargetOptions = ref<{
   defs: Array<{ key: string; name: string }>
   forms: Array<{ key: string; name: string }>
 }>({ defs: [], forms: [] })
+
+/** BF20261013-019：目标选项进程内只装载一次（触发器弹窗与审批节点面板共用）。 */
+let publishedTargetsLoaded = false
 
 async function loadPublishedTargetOptions() {
   try {
@@ -1677,6 +1680,171 @@ function onDynamicObjectTypeChange() {
   applyDynamicParallel()
 }
 
+/* ─────────── P64 BF20261013-019：审批节点发起子流程 ─────────── */
+
+/**
+ * 「发起子流程」面板草稿。源头真值 = node.config.subflow；应用时同步两类生成物：
+ *  1) 触发规则 subflow_<节点id>：本节点任务提交时按判断脚本决定是否发起（返回 1 = 发起）；
+ *  2) SUBFLOW_WAIT 等待块（画布名「子流程」）：自动插入本节点出边之后，等本动作全部子流程
+ *     完成才放行；判断为「不发起」时无批次，等待块到达即放行（不会卡住流程）。
+ * 用户不接触动作 ID：等待引用由设计器自动接线。
+ */
+interface SubflowFormDraft {
+  enabled: boolean
+  targetProcessDefKey: string
+  targetFormKey: string
+  script: string
+  variables: string[]
+  mode: 'SINGLE' | 'EACH'
+  sourceVariable: string
+  mappings: Array<{ targetField: string; sourceVarId: string; literal: string }>
+}
+
+function emptySubflowForm(): SubflowFormDraft {
+  return {
+    enabled: false,
+    targetProcessDefKey: '',
+    targetFormKey: '',
+    script: '',
+    variables: [],
+    mode: 'SINGLE',
+    sourceVariable: '',
+    mappings: [],
+  }
+}
+
+const subflowForm = ref<SubflowFormDraft>(emptySubflowForm())
+
+function subflowTriggerId(nodeKey: string): string {
+  return `subflow_${nodeKey}`
+}
+function subflowWaitNodeId(nodeKey: string): string {
+  return `subflow_wait_${nodeKey}`
+}
+function subflowActionId(nodeKey: string): string {
+  return `act_subflow_${nodeKey}`
+}
+
+/** ROWS 集合变量选项（按表格行逐条发起的数据源，来自「变量」登记）。 */
+const rowsVariableOptions = computed(() =>
+  (graph.value?.variables ?? []).filter((item) => item.type === 'ROWS'),
+)
+
+/** 应用「发起子流程」：写回节点配置并同步触发规则与等待块（重复应用 = 原地更新）。 */
+function applySubflow() {
+  if (!model || !graph.value) return
+  const node = selectedNode.value
+  if (!node || node.type !== 'APPROVAL') return
+  const form = subflowForm.value
+  model.updateNodeConfig(node.id, {
+    subflow: {
+      enabled: form.enabled,
+      targetProcessDefKey: form.targetProcessDefKey,
+      targetFormKey: form.targetFormKey,
+      script: form.script,
+      variables: [...form.variables],
+      mode: form.mode,
+      sourceVariable: form.sourceVariable,
+      mappings: form.mappings.map((m) => ({ ...m })),
+    },
+  })
+  const triggerId = subflowTriggerId(node.id)
+  const triggers = (graph.value.triggers ?? []).filter((item) => item.triggerId !== triggerId)
+  if (form.enabled) {
+    const draft: TriggerDraft = {
+      triggerId,
+      name: `子流程发起·${node.label || node.id}`,
+      event: 'TASK_SUBMITTED',
+      nodeKey: node.id,
+      script: form.script.trim() || 'return 1;',
+      variables: [...form.variables],
+      branches: [
+        {
+          branchId: 'b1',
+          name: 'b1',
+          matchType: 'NUMBER',
+          matchValue: '1',
+          actions: [
+            {
+              actionId: subflowActionId(node.id),
+              name: `发起子流程·${node.label || node.id}`,
+              type: form.mode === 'EACH' ? 'START_EACH' : 'START_SINGLE',
+              sourceVariable: form.mode === 'EACH' ? form.sourceVariable : '',
+              groupBy: '',
+              targetProcessDefKey: form.targetProcessDefKey,
+              targetFormKey: form.targetFormKey,
+              maxDispatch: DEFAULT_MAX_DISPATCH,
+              mapping: form.mappings
+                .filter((m) => m.targetField.trim())
+                .map((m) => ({
+                  targetField: m.targetField,
+                  sourceVarId: m.sourceVarId,
+                  itemField: '',
+                  literal: m.literal,
+                })),
+              orchestration: 'CHILD',
+              waitPolicy: 'ALL',
+              waitCount: 1,
+              wbEnabled: false,
+              wbResultNodeKey: '',
+              wbTableField: '',
+              wbRowKeyField: '',
+              wbParentTableField: '',
+              wbFields: [],
+              wbMainFields: [],
+            },
+          ],
+        },
+      ],
+      unmatchedDisposition: 'HALT',
+      errorDisposition: 'HALT',
+    }
+    triggers.push(buildTriggerConfig(draft))
+  }
+  graph.value = { ...graph.value, triggers }
+  syncSubflowWaitNode(node, form.enabled)
+}
+
+/** 同步等待块：开启=出边自动插入「子流程」等待节点并引用本动作；关闭=移除并回连原走向。 */
+function syncSubflowWaitNode(node: { id: string; x: number; y: number }, enabled: boolean) {
+  if (!model) return
+  const state = model.state()
+  const waitId = subflowWaitNodeId(node.id)
+  const existing = state.nodes.find((n) => n.id === waitId)
+  if (!enabled) {
+    if (existing) {
+      const nextId = state.edges.find((edge) => edge.sourceId === waitId)?.targetId
+      model.select(waitId)
+      model.removeSelection()
+      if (nextId) model.connect(node.id, nextId)
+    }
+    return
+  }
+  const actionId = subflowActionId(node.id)
+  if (existing) {
+    model.updateNodeConfig(waitId, { name: '子流程', waitActionIds: [actionId] })
+    return
+  }
+  const edge = state.edges.find((item) => item.sourceId === node.id)
+  if (!edge) return
+  const waitNodeId = model.insertNodeOnEdge(
+    edge.id,
+    'SUBFLOW_WAIT',
+    '子流程',
+    Math.round((node.x + 160) / SNAP_X) * SNAP_X,
+    node.y,
+  )
+  if (waitNodeId) model.updateNodeConfig(waitNodeId, { name: '子流程', waitActionIds: [actionId] })
+}
+
+function addSubflowMapping() {
+  subflowForm.value.mappings.push({ targetField: '', sourceVarId: '', literal: '' })
+}
+function removeSubflowMapping(index: number) {
+  subflowForm.value.mappings.splice(index, 1)
+  applySubflow()
+}
+
 /**
  * 选中节点 → 面板草稿回显：
  * - object 类型字段（configFields.type === 'object'）回显为 JSON 文本，
@@ -1717,16 +1885,39 @@ watch(selectedNode, (node, prev) => {
     participantShape.value = 'empty'
   }
   dynamicParallelForm.value = buildDynamicParallelFormDraft(node.config)
+  // BF20261013-019：发起子流程面板回显 + 目标选项装载（已发布流程/表单，一次即可）
+  if (node.type === 'APPROVAL') {
+    const raw = (node.config as Record<string, unknown> | undefined)?.subflow as
+      | Partial<SubflowFormDraft>
+      | undefined
+    subflowForm.value = raw
+      ? {
+          ...emptySubflowForm(),
+          ...raw,
+          mappings: (raw.mappings ?? []).map((m) => ({ ...m })),
+        }
+      : emptySubflowForm()
+    if (!publishedTargetsLoaded) {
+      publishedTargetsLoaded = true
+      void loadPublishedTargetOptions()
+    }
+  } else {
+    subflowForm.value = emptySubflowForm()
+  }
 })
 
 /** 通用字段渲染清单：name 由顶部承载；参与人字段由结构化面板承载；动态并行整表由专属面板承载；
- * nodeForm 由 P64 节点业务表单选择器承载。 */
+ * nodeForm 由 P64 节点业务表单选择器承载；waitActionIds 不再手工配置（BF20261013-019，由设计器自动接线）。 */
 const genericConfigFields = computed(() => {
   const fields = selectedCapability.value?.configFields ?? []
   if (dynamicParallelActive.value) return []
   const participantKey = participantField.value?.key
   return fields.filter(
-    (field) => field.key !== 'name' && field.key !== participantKey && field.key !== 'nodeForm',
+    (field) =>
+      field.key !== 'name' &&
+      field.key !== participantKey &&
+      field.key !== 'nodeForm' &&
+      field.key !== 'waitActionIds',
   )
 })
 
@@ -1740,7 +1931,8 @@ async function load() {
       getProcessDefDefinition(defId.value),
       getProcessNodeCapabilities(),
     ])
-    capabilities.value = caps
+    // BF20261013-019：子流程不再是独立节点——发起子流程配置在审批节点上，等待块由设计器自动生成
+    capabilities.value = caps.filter((cap) => cap.type !== 'SUBFLOW_WAIT')
     graph.value = {
       processKey: definition.processKey,
       name: definition.name ?? '',
@@ -2219,9 +2411,6 @@ function nodeLabelLines(label: string) {
         <template v-if="selectedNode">
           <div class="props-heading">
             <span class="props-title">{{ t('workflow.nodePropsTitle') }}</span>
-            <span class="props-type-chip">{{
-              enumLabel('WORKFLOW_NODE_TYPE', selectedNode.type)
-            }}</span>
           </div>
 
           <!-- BF20261013-013：页签（字段属性仅非结束节点） -->
@@ -2274,6 +2463,140 @@ function nodeLabelLines(label: string) {
                   >办理人填报的业务字段按任务/轮次独立保存；变量可读本轮已最终提交数据。</small
                 >
               </el-form-item>
+              <!-- ═══ BF20261013-019：发起子流程（子流程并入审批节点；等待块由设计器自动生成） ═══ -->
+              <template v-if="selectedNode.type === 'APPROVAL'">
+                <el-form-item label="发起子流程">
+                  <el-switch v-model="subflowForm.enabled" @change="applySubflow" />
+                </el-form-item>
+                <template v-if="subflowForm.enabled">
+                  <el-form-item label="目标子流程">
+                    <el-select
+                      v-model="subflowForm.targetProcessDefKey"
+                      filterable
+                      allow-create
+                      default-first-option
+                      placeholder="选择已发布流程（或输入流程标识）"
+                      @change="applySubflow"
+                    >
+                      <el-option
+                        v-for="item in publishedTargetOptions.defs"
+                        :key="item.key"
+                        :label="`${item.name}(${item.key})`"
+                        :value="item.key"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="目标表单">
+                    <el-select
+                      v-model="subflowForm.targetFormKey"
+                      filterable
+                      allow-create
+                      default-first-option
+                      placeholder="选择已发布表单（或输入表单标识）"
+                      @change="applySubflow"
+                    >
+                      <el-option
+                        v-for="item in publishedTargetOptions.forms"
+                        :key="item.key"
+                        :label="`${item.name}(${item.key})`"
+                        :value="item.key"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="是否发起（判断脚本：读取变量返回 是/否；留空 = 总是发起）">
+                    <el-input
+                      v-model="subflowForm.script"
+                      type="textarea"
+                      :rows="4"
+                      spellcheck="false"
+                      @blur="applySubflow"
+                    />
+                  </el-form-item>
+                  <el-form-item label="可读取的变量（判断脚本只能用这里勾选的变量）">
+                    <el-select
+                      v-model="subflowForm.variables"
+                      multiple
+                      filterable
+                      @change="applySubflow"
+                    >
+                      <el-option
+                        v-for="item in graph?.variables ?? []"
+                        :key="item.varId"
+                        :label="`${item.name}(${item.varId})`"
+                        :value="item.varId"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="发起范围">
+                    <el-select v-model="subflowForm.mode" @change="applySubflow">
+                      <el-option label="发起一个（按整表数据）" value="SINGLE" />
+                      <el-option label="按表格行逐条发起（每行一个）" value="EACH" />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item v-if="subflowForm.mode === 'EACH'" label="集合变量（表格行集合）">
+                    <el-select
+                      v-model="subflowForm.sourceVariable"
+                      filterable
+                      placeholder="先在「变量」里登记表格行集合变量"
+                      @change="applySubflow"
+                    >
+                      <el-option
+                        v-for="item in rowsVariableOptions"
+                        :key="item.varId"
+                        :label="`${item.name}(${item.varId})`"
+                        :value="item.varId"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <div class="p64-toolbar">
+                    <span class="p64-subtitle">初始值（带入子流程表单）</span>
+                    <el-button size="small" @click="addSubflowMapping">添加一行</el-button>
+                  </div>
+                  <div
+                    v-for="(mapping, mappingIndex) in subflowForm.mappings"
+                    :key="mappingIndex"
+                    class="p64-grid"
+                  >
+                    <el-form-item label="子流程表单字段">
+                      <el-input v-model="mapping.targetField" @change="applySubflow" />
+                    </el-form-item>
+                    <el-form-item label="取变量值">
+                      <el-select
+                        v-model="mapping.sourceVarId"
+                        clearable
+                        filterable
+                        @change="applySubflow"
+                      >
+                        <el-option
+                          v-for="item in graph?.variables ?? []"
+                          :key="item.varId"
+                          :label="`${item.name}(${item.varId})`"
+                          :value="item.varId"
+                        />
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="固定值">
+                      <el-input
+                        v-model="mapping.literal"
+                        placeholder="两种来源任选一种"
+                        @change="applySubflow"
+                      />
+                    </el-form-item>
+                    <el-form-item label=" ">
+                      <el-button
+                        size="small"
+                        link
+                        type="danger"
+                        @click="removeSubflowMapping(mappingIndex)"
+                        >删除</el-button
+                      >
+                    </el-form-item>
+                  </div>
+                  <small class="nodeform-hint"
+                    >保存后自动生成发起与等待：本节点任务提交时按条件发起子流程；全部子流程完成后流程才继续；判断为「不发起」时直接继续。</small
+                  >
+                </template>
+              </template>
               <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
               <template v-if="participantField">
                 <el-form-item label="参与人策略">
@@ -3983,17 +4306,6 @@ function nodeLabelLines(label: string) {
   font-size: 18px;
   font-weight: 600;
   color: #19233b;
-}
-.props-type-chip {
-  box-sizing: border-box;
-  width: 82px;
-  font-size: 12px;
-  line-height: 15px;
-  text-align: left;
-  background: #eee7ff;
-  color: #6b2dff;
-  border-radius: 6px;
-  padding: 4.5px 9px;
 }
 .props-section {
   font-size: 13px;
