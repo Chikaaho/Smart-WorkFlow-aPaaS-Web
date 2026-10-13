@@ -388,17 +388,20 @@ function onFieldKeySuffix(raw: string) {
 .config__required-chip:disabled {
   cursor: not-allowed;
 }
+/* BF20261013-007：类型徽标不换行、无底色；超长省略号兜底（不再固定宽度导致折行） */
 .config__type {
   box-sizing: border-box;
-  width: 82px;
-  padding: 4.5px 9px;
+  max-width: 70%;
+  padding: 4.5px 0;
   height: 24px;
   line-height: 15px;
   font-size: var(--sw-font-caption);
   text-align: left;
   color: var(--sw-color-primary);
-  background: var(--el-color-primary-light-9);
-  border-radius: var(--sw-radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .config__name {

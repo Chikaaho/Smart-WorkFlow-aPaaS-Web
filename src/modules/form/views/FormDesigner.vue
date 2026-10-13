@@ -1367,14 +1367,12 @@ async function loadBreadcrumbCategory() {
   justify-content: space-between;
 }
 
+/* BF20261013-007：徽标无底色不换行（原紫底+水平 18px 内边距把固定宽度挤到折行，随面板规则一并去除） */
 .designer-main-config :deep(.config__type) {
   height: 24px;
   line-height: 24px;
-  padding: 0 18px;
   font-size: 12px;
   color: var(--sw-color-primary);
-  background: var(--sw-color-primary-soft, #ece9ff);
-  border-radius: 6px;
 }
 
 .designer__published-bar {
