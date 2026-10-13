@@ -17,6 +17,8 @@ export type ParticipantStrategy =
   | 'ADAPTER'
   /** P63：表单字段参与人——运行期按所选表单字段取人/取部门。 */
   | 'FORM_FIELD'
+  /** P64 A07：节点表单人员聚合——读取指定节点本轮有效最终提交的人员字段并集去重生成下一轮参与人。 */
+  | 'NODE_FORM_AGGREGATE'
 
 /** 参与人策略全集（设计器策略下拉的权威顺序；来源仍以服务端 validation.strategies 优先）。 */
 export const PARTICIPANT_STRATEGIES: readonly ParticipantStrategy[] = [
@@ -28,6 +30,7 @@ export const PARTICIPANT_STRATEGIES: readonly ParticipantStrategy[] = [
   'EXPRESSION',
   'ADAPTER',
   'FORM_FIELD',
+  'NODE_FORM_AGGREGATE',
 ]
 
 /** P63：FORM_FIELD 参与人来源的对象类型（USER=所选人员审批；DEPT=服务端解析部门唯一负责人）。 */
@@ -49,10 +52,25 @@ export interface ParticipantFormFieldValue {
   column?: string
 }
 
+/** P64 A07：NODE_FORM_AGGREGATE 参与人来源 value 形状（与服务端形状校验单一权威一致）。 */
+export interface ParticipantNodeFormAggregateValue {
+  /** 来源节点 key（读取该节点本轮全部有效最终提交）。 */
+  nodeKey: string
+  /** 人员字段名（并集去重的人员字段）。 */
+  formField: string
+  /** 轮次口径：缺省 CURRENT；PREVIOUS 读上一轮。 */
+  round?: 'CURRENT' | 'PREVIOUS'
+}
+
 export interface ParticipantConfig {
   strategy: ParticipantStrategy
-  /** FORM_FIELD 策略的 value 为 ParticipantFormFieldValue 对象；其余策略为标量/标量数组。 */
-  value?: string | number | Array<string | number> | ParticipantFormFieldValue
+  /** FORM_FIELD/NODE_FORM_AGGREGATE 策略的 value 为对象；其余策略为标量/标量数组。 */
+  value?:
+    | string
+    | number
+    | Array<string | number>
+    | ParticipantFormFieldValue
+    | ParticipantNodeFormAggregateValue
   adapterId?: string
 }
 
@@ -153,6 +171,8 @@ export interface ApprovalActionRequest {
   receivers?: number[]
   /** I3：沟通内容/回复。 */
   message?: string
+  /** P64 阶段Ⅰ：节点业务表单数据（任务绑定节点表单时随合法动作最终提交；服务端与任务完成同事务落库）。 */
+  nodeFormData?: Record<string, unknown>
 }
 
 export interface BpmNodeTopology {

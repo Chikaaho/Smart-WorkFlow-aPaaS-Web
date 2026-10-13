@@ -64,7 +64,7 @@ const designerStubs = {
   // V011-BUG-006/014 起画布标题输入已移除：以「组件库添加字段」作为制造脏态的真实入口
   FieldPalette: {
     template:
-      '<button class="stub-palette-add" @click="$emit(\'add\', { id: \'f1\', field: { name: \'field_1\', type: \'TEXT\', label: \'单行文本\', colSpan: 24, subFields: [] } })" />',
+      "<button class=\"stub-palette-add\" @click=\"$emit('add', { id: 'f1', field: { name: 'field_1', type: 'TEXT', label: '单行文本', colSpan: 24, subFields: [] } })\" />",
     emits: ['add'],
   },
   DesignerCanvas: { template: '<div class="stub-canvas" />' },

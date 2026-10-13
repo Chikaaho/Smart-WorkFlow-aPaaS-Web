@@ -9,7 +9,7 @@ const { t } = useI18n()
  * 展示任务详情信息、流程变量、审批历史，提供通过/驳回操作。
  * 路由参数：taskId
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Paperclip } from '@element-plus/icons-vue'
@@ -31,6 +31,9 @@ import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 import type { ApprovalHistoryItem, TaskDetail } from '@/contracts/bpm'
 import type { ApprovalActionRequest, ApprovalOpinionConfig } from '@/contracts/bpm-node'
 import type { FormSchema } from '@/contracts/form-schema'
+import type { TaskNodeFormView } from '@/contracts/p64'
+import { getTaskNodeForm, saveTaskNodeFormDraft } from '@/modules/workflow/api/p64'
+import DynamicField from '@/components/DynamicField.vue'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { deriveProcessTrace } from '../utils/process-trace'
 
@@ -54,6 +57,7 @@ const formRecord = ref<Record<string, unknown> | null>(null)
 const formRecordLoading = ref(false)
 /** 表单定义（用于把内部字段名映射为业务字段标签） */
 const formSchema = ref<FormSchema | null>(null)
+
 /** REFERENCE 字段显示名缓存（id→可读关联对象信息，授权单查解析，取不到回退 id）。 */
 const refDisplayMap = ref<Record<string, string>>({})
 /** P63 G01：USER/DEPT 字段可读显示缓存（字段名→姓名/部门名，多选顿号连接，取不到回退原值）。 */
@@ -70,6 +74,37 @@ const SYSTEM_COLUMNS = new Set([
   'tenant_id',
   'version',
 ])
+
+/** 表单宽表系统列之外的子表行内部列：不进入业务值展示 */
+const SUBTABLE_INTERNAL_COLUMNS = new Set([...SYSTEM_COLUMNS, 'deleted', 'parent_record_id'])
+
+/** 子表行 → 单行业务值文本（表单声明的子字段按业务标签展示，未声明列回退列名；空对象回退原样） */
+function formatTableRowValue(item: unknown, field?: FormSchema['fields'][number]): string {
+  if (item == null || typeof item !== 'object') return String(item)
+  const row = item as Record<string, unknown>
+  const subFields = field && field.type === 'TABLE' ? (field.subFields ?? []) : []
+  if (subFields.length > 0) {
+    return subFields
+      .map((sf) => {
+        const v = row[sf.name]
+        return `${sf.label || sf.name}=${v == null || v === '' ? '-' : String(v)}`
+      })
+      .join('；')
+  }
+  const entries = Object.entries(row).filter(([k]) => !SUBTABLE_INTERNAL_COLUMNS.has(k))
+  if (entries.length === 0) return JSON.stringify(item)
+  return entries.map(([k, v]) => `${k}=${v == null || v === '' ? '-' : String(v)}`).join('；')
+}
+
+/** 业务字段值 → 可读文本：表格行数组逐行展示（按子字段业务名），普通值原样 */
+function formatFieldValue(v: unknown, field?: FormSchema['fields'][number]): string {
+  if (v == null || v === '') return '-'
+  if (Array.isArray(v)) {
+    return v.length === 0 ? '-' : v.map((item) => formatTableRowValue(item, field)).join('\n')
+  }
+  if (typeof v === 'object') return formatTableRowValue(v, field)
+  return String(v)
+}
 
 /** 表单数据行：按 schema 字段顺序输出业务标签，系统列与未定义字段不展示 */
 const formFieldRows = computed(() => {
@@ -92,13 +127,13 @@ const formFieldRows = computed(() => {
               ? (refDisplayMap.value[field.name] ?? String(v))
               : field.type === 'USER' || field.type === 'DEPT'
                 ? (userDeptDisplays.value[field.name] ?? String(v))
-                : String(v),
+                : formatFieldValue(v, field),
       })
     }
   }
   for (const [k, v] of Object.entries(formRecord.value)) {
     if (SYSTEM_COLUMNS.has(k) || seen.has(k)) continue
-    rows.push({ key: k, label: k, value: v == null || v === '' ? '-' : String(v) })
+    rows.push({ key: k, label: k, value: formatFieldValue(v) })
   }
   return rows
 })
@@ -113,6 +148,7 @@ async function loadDetail() {
     void loadGraph()
     void loadReservations()
     void loadLastExpired()
+    void loadNodeForm()
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
@@ -169,6 +205,92 @@ async function loadFormRecord() {
     formRecord.value = null
   } finally {
     formRecordLoading.value = false
+  }
+}
+
+// ═════════ P64 阶段Ⅰ：节点业务表单（绑定任务可填报；草稿/最终提交/已提交回看） ═════════
+
+const nodeForm = ref<TaskNodeFormView | null>(null)
+const nodeFormModel = ref<Record<string, unknown>>({})
+const nodeFormErrors = ref<string[]>([])
+const nodeFormSavingDraft = ref(false)
+
+const nodeFormFields = computed(
+  () => (nodeForm.value?.definition?.fields ?? []) as unknown as FormSchema['fields'],
+)
+const nodeFormBound = computed(() => Boolean(nodeForm.value?.bound))
+const nodeFormSubmitted = computed(() => nodeForm.value?.status === 'SUBMITTED')
+/** 待办且未最终提交时可编辑；已提交或历史任务只读回看。 */
+const nodeFormEditable = computed(() => nodeFormBound.value && !nodeFormSubmitted.value)
+
+async function loadNodeForm() {
+  try {
+    const view = await getTaskNodeForm(taskId)
+    nodeForm.value = view
+    nodeFormModel.value = { ...(view.data ?? {}) }
+  } catch {
+    nodeForm.value = null
+  }
+}
+
+/**
+ * 节点表单表格预填（P64 阶段Ⅱ A06）：节点表格字段尚无值时以业务记录现值初始化。
+ * 子流程办理人因此只看到本实例授权来源行（行标识随派发冻结），无需手工录入；
+ * 记录表为空或节点表单已有值时保持原值（用户编辑不回退）。
+ */
+function prefillNodeFormTables() {
+  if (!nodeFormEditable.value) return
+  const record = formRecord.value as Record<string, unknown> | null
+  if (!record) return
+  for (const field of nodeFormFields.value) {
+    if (field.type !== 'TABLE') continue
+    const current = nodeFormModel.value[field.name]
+    if (Array.isArray(current) && current.length > 0) continue
+    const source = record[field.name]
+    if (!Array.isArray(source) || source.length === 0) continue
+    nodeFormModel.value = {
+      ...nodeFormModel.value,
+      [field.name]: source.map((row) => {
+        const clean = { ...((row ?? {}) as Record<string, unknown>) }
+        delete clean._rowId
+        delete clean._rowAction
+        return clean
+      }),
+    }
+  }
+}
+
+watch([nodeForm, formRecord], () => {
+  prefillNodeFormTables()
+})
+
+/** 节点表单必填校验（客户端 UX 提示；服务端提交仍全量校验，1401/2433 为权威口径）。 */
+function validateNodeFormRequired(): boolean {
+  nodeFormErrors.value = []
+  if (!nodeFormBound.value || nodeFormSubmitted.value) return true
+  for (const field of nodeFormFields.value) {
+    if (!field.required) continue
+    const value = nodeFormModel.value[field.name]
+    const empty =
+      value == null ||
+      (typeof value === 'string' && value.trim() === '') ||
+      (Array.isArray(value) && value.length === 0)
+    if (empty) nodeFormErrors.value.push(`${field.label || field.name}: 必填`)
+  }
+  return nodeFormErrors.value.length === 0
+}
+
+async function handleNodeFormDraft() {
+  if (!nodeFormEditable.value || nodeFormSavingDraft.value) return
+  nodeFormSavingDraft.value = true
+  try {
+    await saveTaskNodeFormDraft(taskId, nodeFormModel.value)
+    ElMessage.success('节点表单草稿已保存')
+    await loadNodeForm()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '节点表单草稿保存失败')
+  } finally {
+    nodeFormSavingDraft.value = false
   }
 }
 
@@ -296,18 +418,27 @@ function actionPayload(
 ): Partial<ApprovalActionRequest> | undefined {
   const form = detail.value?.opinionForm
   const comment = opinionComment.value.trim()
-  if (!form || !form.formId || !form.version) {
-    return comment ? { action, comment, opinionData: { comment } } : undefined
+  const base = (() => {
+    if (!form || !form.formId || !form.version) {
+      return comment ? { action, comment, opinionData: { comment } } : undefined
+    }
+    const data = { ...opinionData.value }
+    if (comment && data.comment == null) data.comment = comment
+    return {
+      action,
+      opinionFormId: form.formId,
+      opinionFormVersion: form.version,
+      comment: typeof data.comment === 'string' ? data.comment : undefined,
+      opinionData: data,
+    }
+  })()
+  // P64 阶段Ⅰ：任务绑定节点业务表单时，最终提交随合法动作同事务生效。
+  // 无意见表单且无备注时 base 为 undefined，节点表单数据仍必须随动作提交
+  // （否则后端读不到节点表单值 → 节点数据丢失/触发变量缺失）。
+  if (action === 'APPROVE' && nodeFormBound.value && !nodeFormSubmitted.value) {
+    return { ...(base ?? { action }), nodeFormData: nodeFormModel.value }
   }
-  const data = { ...opinionData.value }
-  if (comment && data.comment == null) data.comment = comment
-  return {
-    action,
-    opinionFormId: form.formId,
-    opinionFormVersion: form.version,
-    comment: typeof data.comment === 'string' ? data.comment : undefined,
-    opinionData: data,
-  }
+  return base
 }
 
 const userStore = useUserStore()
@@ -437,6 +568,11 @@ async function runAction(
 async function handleApprove() {
   if (acting.value) return
   if (!ensureOpinionData()) return
+  // P64 阶段Ⅰ：节点表单必填客户端预检（服务端 2433 为权威口径）
+  if (nodeFormBound.value && !nodeFormSubmitted.value && !validateNodeFormRequired()) {
+    ElMessage.error(nodeFormErrors.value[0] ?? '节点业务表单校验未通过')
+    return
+  }
   acting.value = 'approve'
 
   let confirmed = false
@@ -1170,6 +1306,57 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
                 t('workflow.noDisplayableFields')
               }}</el-descriptions-item>
             </el-descriptions>
+          </div>
+        </el-card>
+
+        <!-- P64 阶段Ⅰ：节点业务表单（绑定节点可填报；草稿可存，最终提交随审批动作同事务生效；已提交只读回看） -->
+        <el-card v-if="nodeForm && nodeFormBound" class="detail-card detail-card--node-form">
+          <template #header>
+            <span>
+              节点业务表单
+              <el-tag v-if="nodeFormSubmitted" size="small" type="success" class="nodeform-tag"
+                >已最终提交</el-tag
+              >
+              <el-tag v-else size="small" type="info" class="nodeform-tag">草稿</el-tag>
+            </span>
+          </template>
+          <div class="nodeform-body">
+            <small class="nodeform-meta">
+              {{ nodeForm.formName
+              }}<template v-if="nodeForm.formVersion"> · v{{ nodeForm.formVersion }}</template>
+              <template v-if="nodeForm.roundNo"> · 第 {{ nodeForm.roundNo }} 轮</template>
+              <template v-if="nodeFormSubmitted"> · 数据已生效，可读变量与历史回看</template>
+            </small>
+            <div class="nodeform-fields">
+              <div v-for="field in nodeFormFields" :key="field.name" class="nodeform-field">
+                <div class="nodeform-field__label">
+                  <span v-if="field.required && nodeFormEditable" class="nodeform-field__required"
+                    >*</span
+                  >
+                  {{ field.label || field.name }}
+                </div>
+                <DynamicField
+                  :field="field"
+                  :model-value="nodeFormModel[field.name]"
+                  :readonly="!nodeFormEditable"
+                  @update:model-value="nodeFormModel[field.name] = $event"
+                />
+              </div>
+            </div>
+            <div v-if="nodeFormErrors.length > 0" class="nodeform-errors" role="alert">
+              <p v-for="item in nodeFormErrors" :key="item">{{ item }}</p>
+            </div>
+            <div v-if="nodeFormEditable" class="nodeform-actions">
+              <el-button
+                size="small"
+                :loading="nodeFormSavingDraft"
+                :disabled="acting !== null"
+                @click="handleNodeFormDraft"
+              >
+                保存草稿
+              </el-button>
+              <span class="nodeform-meta">最终提交与「同意」动作一并在服务端事务生效</span>
+            </div>
           </div>
         </el-card>
 
@@ -2883,5 +3070,46 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
   .iot-reservation__label {
     flex-basis: auto;
   }
+}
+
+/* ─────────── P64 阶段Ⅰ：节点业务表单 ─────────── */
+.nodeform-tag {
+  margin-left: 8px;
+}
+.nodeform-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.nodeform-meta {
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 12px;
+}
+.nodeform-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  column-gap: 28px;
+  row-gap: 14px;
+}
+.nodeform-field__label {
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: var(--el-text-color-primary, #303133);
+}
+.nodeform-field__required {
+  color: var(--el-color-danger, #f56c6c);
+  margin-right: 2px;
+}
+.nodeform-errors {
+  color: var(--el-color-danger, #f56c6c);
+  font-size: 12px;
+}
+.nodeform-errors p {
+  margin: 2px 0;
+}
+.nodeform-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 </style>

@@ -1,5 +1,4 @@
 import { request } from '@/foundation/request'
-import { pageUsers } from '@/modules/system/api/user'
 import { listDeptTree } from '@/modules/system/api/dept'
 import type { SysDept } from '@/modules/system/types/dept'
 
@@ -16,12 +15,22 @@ export interface UserChoice {
   label: string
 }
 
-/** 当前租户内启用用户候选（首屏 100 条，服务端过滤）。 */
+/** 用户候选选项（/system/user/options，登录即可调用；最小展示字段，服务端租户过滤）。 */
+interface UserOption {
+  id: string | number
+  username?: string
+  realName?: string
+}
+
 export async function loadUserChoices(): Promise<UserChoice[]> {
-  const page = await pageUsers({ pageNum: 1, pageSize: 100 }, {})
-  return (page.list ?? []).map((u) => ({
+  const list = await request<UserOption[]>({
+    method: 'GET',
+    url: '/system/user/options',
+    params: { limit: 100 },
+  })
+  return (list ?? []).map((u) => ({
     id: String(u.id),
-    label: u.realName || u.username,
+    label: u.realName || u.username || String(u.id),
   }))
 }
 

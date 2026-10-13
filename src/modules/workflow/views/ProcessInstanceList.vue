@@ -9,7 +9,7 @@ const { t } = useI18n()
  * 列表页：分页展示流程实例，支持按状态/流程定义/发起人过滤。
  * 详情抽屉：实例基本信息 + BPMN 流程图高亮（活跃节点/已完成节点）+ 流转时间线。
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
@@ -24,6 +24,20 @@ import { ApiError } from '@/foundation/request'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import type { InstanceFilter } from '@/modules/workflow/api'
+import type { ActionRefView, ChildBatchView, TriggerExecView } from '@/contracts/p64'
+import {
+  listActionRefs,
+  listTriggerExecs,
+  retryActionRef,
+  listChildBatches,
+  retryChildWriteback,
+} from '@/modules/workflow/api/p64'
+import {
+  canRetryActionRefStatus,
+  childItemStatusKind,
+  isBatchBlockReasonCurrent,
+  isItemDiagnosisCurrent,
+} from '@/modules/workflow/utils/p64-orchestration'
 
 // ─── 状态映射 ───
 
@@ -135,16 +149,76 @@ const drawerLoading = ref(false)
 const drawerError = ref('')
 /** G08b：窄屏抽屉不超出视口（375 真实可读，桌面保持 900px）。 */
 const viewportWidth = ref(Number.MAX_SAFE_INTEGER)
-onMounted(() => {
+const updateViewportWidth = () => {
   viewportWidth.value = globalThis.document.documentElement.clientWidth
+}
+onMounted(() => {
+  updateViewportWidth()
+  globalThis.addEventListener('resize', updateViewportWidth)
 })
-const detailDrawerSize = computed(() => (viewportWidth.value < 768 ? '100%' : '900px'))
+onBeforeUnmount(() => {
+  globalThis.removeEventListener('resize', updateViewportWidth)
+})
+/* P64 阶段Ⅱ A11：900px 抽屉右锚定，视口 <900 时左侧字段列被裁切——
+   全额宽抽屉与基本信息单列共用同一窄屏判定（覆盖 768 等常见窄屏）。 */
+const isNarrowViewport = computed(() => viewportWidth.value < 900)
+const detailDrawerSize = computed(() => (isNarrowViewport.value ? '100%' : '900px'))
+/** P64 阶段Ⅱ A11：窄屏基本信息单列排布——长实例ID不挤压标签列，字段标题完整可见 */
+const detailDescriptionsColumn = computed(() => (isNarrowViewport.value ? 1 : 2))
 
 const detail = ref<InstanceDetail | null>(null)
 
 /** 详情视图消费的图 + 轨迹（自研渲染内核） */
 const detailGraph = ref<ProcessGraphDocument | null>(null)
 const detailTrace = ref<{ activeNodeIds: string[]; completedNodeIds: string[] } | null>(null)
+
+// ─── P64 阶段Ⅰ：触发与动作链回查 ───
+const p64Execs = ref<TriggerExecView[]>([])
+const p64Refs = ref<ActionRefView[]>([])
+const p64Retrying = ref<number | null>(null)
+// ─── P64 阶段Ⅱ：子流程批次/回写与等待结果回查 ───
+const p64Batches = ref<ChildBatchView[]>([])
+const p64ItemRetrying = ref<number | null>(null)
+
+async function handleRetryChildWriteback(itemId: number) {
+  if (p64ItemRetrying.value !== null) return
+  p64ItemRetrying.value = itemId
+  try {
+    const res = await retryChildWriteback(itemId)
+    ElMessage.success(
+      typeof res?.message === 'string' && res.message ? res.message : '回写已按当前版本重放',
+    )
+    if (detail.value) {
+      p64Batches.value = await listChildBatches(detail.value.processInstanceId).catch(
+        () => p64Batches.value,
+      )
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '回写恢复失败')
+  } finally {
+    p64ItemRetrying.value = null
+  }
+}
+
+async function handleRetryActionRef(refId: number) {
+  if (p64Retrying.value !== null) return
+  p64Retrying.value = refId
+  try {
+    const res = await retryActionRef(refId)
+    ElMessage.success(
+      typeof res?.message === 'string' && res.message ? res.message : '失败意图已重新入队',
+    )
+    if (detail.value) {
+      p64Refs.value = await listActionRefs(detail.value.processInstanceId).catch(
+        () => p64Refs.value,
+      )
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : '重试失败')
+  } finally {
+    p64Retrying.value = null
+  }
+}
 
 function toDetailGraph(
   definition: Awaited<ReturnType<typeof getProcessDefDefinitionByKey>>,
@@ -169,9 +243,35 @@ async function openDrawer(row: ProcessInstance) {
   detail.value = null
   detailGraph.value = null
   detailTrace.value = null
+  p64Execs.value = []
+  p64Refs.value = []
+  p64Batches.value = []
 
   try {
     detail.value = await getInstanceDetail(row.processInstanceId)
+    // P64 阶段Ⅱ：子流程批次/回写与等待结果回查（失败不阻断详情主链）
+    void listChildBatches(row.processInstanceId)
+      .then((items) => {
+        p64Batches.value = items
+      })
+      .catch(() => {
+        p64Batches.value = []
+      })
+    // P64 阶段Ⅰ：触发与动作链回查（失败不阻断详情主链）
+    void listTriggerExecs(row.processInstanceId)
+      .then((items) => {
+        p64Execs.value = items
+      })
+      .catch(() => {
+        p64Execs.value = []
+      })
+    void listActionRefs(row.processInstanceId)
+      .then((items) => {
+        p64Refs.value = items
+      })
+      .catch(() => {
+        p64Refs.value = []
+      })
 
     // 流程定义 key → 定义图（无需 defId：后端 /workflow/defs/{id} 与实例绑定按 key 匹配）
     const processDefKey = row.processDefKey
@@ -358,7 +458,7 @@ function rowActions(row: unknown): ListAction[] {
             <template #header
               ><span>{{ t('common.basicInfo') }}</span></template
             >
-            <el-descriptions :column="2" border>
+            <el-descriptions :column="detailDescriptionsColumn" border>
               <el-descriptions-item :label="t('common.processName')">{{
                 detail.processName ?? '-'
               }}</el-descriptions-item>
@@ -458,6 +558,234 @@ function rowActions(row: unknown): ListAction[] {
               </el-table>
             </div>
           </el-card>
+
+          <!-- P64 阶段Ⅰ：触发与动作（判断→意图→关联实例 回查链；有数据才渲染） -->
+          <el-card v-if="p64Execs.length > 0 || p64Refs.length > 0" class="detail-section">
+            <template #header><span>触发与动作</span></template>
+            <template v-if="p64Execs.length > 0">
+              <h4 class="p64-section-title">触发执行</h4>
+              <div class="p64-table-scroll">
+                <el-table :data="p64Execs" stripe size="small">
+                  <el-table-column prop="triggerId" label="触发器" min-width="110" />
+                  <el-table-column prop="eventType" label="事件" min-width="150" />
+                  <el-table-column prop="nodeKey" label="节点" min-width="100" />
+                  <el-table-column label="结果" min-width="150">
+                    <template #default="{ row }">
+                      <el-tag
+                        :type="
+                          row.status === 'MATCHED'
+                            ? 'success'
+                            : row.status === 'FAILED'
+                              ? 'danger'
+                              : 'warning'
+                        "
+                        size="small"
+                      >
+                        {{ row.status }}
+                      </el-tag>
+                      <span class="p64-cell-note"
+                        >{{ row.resultType }}={{ row.resultValue ?? '-' }}</span
+                      >
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    prop="errorText"
+                    label="诊断"
+                    min-width="200"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column prop="durationMs" label="耗时ms" width="80" />
+                </el-table>
+              </div>
+            </template>
+            <template v-if="p64Refs.length > 0">
+              <h4 class="p64-section-title">动作意图与关联实例</h4>
+              <div class="p64-table-scroll">
+                <el-table :data="p64Refs" stripe size="small">
+                  <el-table-column prop="actionId" label="动作" min-width="100" />
+                  <el-table-column prop="itemKey" label="派发项" min-width="100" />
+                  <el-table-column label="状态" min-width="130">
+                    <template #default="{ row }">
+                      <el-tag
+                        :type="
+                          row.status === 'STARTED'
+                            ? 'success'
+                            : row.status === 'FAILED'
+                              ? 'danger'
+                              : 'info'
+                        "
+                        size="small"
+                      >
+                        {{ row.status }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="targetDefKey" label="目标流程" min-width="120" />
+                  <el-table-column
+                    prop="targetRecordId"
+                    label="目标记录"
+                    min-width="140"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column
+                    prop="targetInstanceId"
+                    label="关联实例"
+                    min-width="140"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column
+                    prop="errorText"
+                    label="诊断"
+                    min-width="160"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column label="操作" width="90" fixed="right">
+                    <template #default="{ row }">
+                      <!-- 复审05 P1-06b：STARTING 且目标实例未建（FLOW_START 失败/过期窗口）
+                           也是合法恢复入口，后端按持久状态给出可诊断结果或受控恢复 -->
+                      <el-button
+                        v-if="canRetryActionRefStatus(row.status)"
+                        size="small"
+                        link
+                        type="primary"
+                        :loading="p64Retrying === row.id"
+                        @click="handleRetryActionRef(row.id)"
+                      >
+                        重试
+                      </el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </template>
+            <template v-if="p64Batches.length > 0">
+              <h4 class="p64-section-title">子流程批次与回写（P64 阶段Ⅱ）</h4>
+              <div v-for="batch in p64Batches" :key="batch.id" class="child-batch-block">
+                <div class="child-batch-meta">
+                  <el-tag
+                    size="small"
+                    :type="
+                      batch.status === 'SETTLED'
+                        ? 'success'
+                        : batch.status === 'BLOCKED'
+                          ? 'danger'
+                          : batch.status === 'CANCELLED'
+                            ? 'info'
+                            : 'warning'
+                    "
+                  >
+                    {{ batch.status }}
+                  </el-tag>
+                  <span
+                    >动作 {{ batch.actionId }} · 第 {{ batch.roundNo }} 轮 · 策略
+                    {{ batch.waitPolicy
+                    }}<template v-if="batch.waitCount != null"
+                      >（K={{ batch.waitCount }}）</template
+                    >
+                    · 预期 {{ batch.expectedCount }} / 已结算 {{ batch.settledCount ?? 0 }} · 深度
+                    {{ batch.parentDepth }}</span
+                  >
+                </div>
+                <!-- 复审05 P2-02b-V-C：阻断原因只在未决批次（WAITING/BLOCKED）按当前待处置呈现；
+                     已结算/已取消批次的阻断文案降级为可区分的历史诊断，不误报当前挂起 -->
+                <el-alert
+                  v-if="batch.blockReason && isBatchBlockReasonCurrent(batch.status)"
+                  type="warning"
+                  :closable="false"
+                  :title="batch.blockReason"
+                  class="child-batch-reason"
+                />
+                <div
+                  v-else-if="batch.blockReason"
+                  class="child-batch-reason child-batch-reason--history"
+                >
+                  历史诊断（批次已 {{ batch.status }}）：{{ batch.blockReason }}
+                </div>
+                <div class="p64-table-scroll">
+                  <el-table :data="batch.items" stripe size="small">
+                    <el-table-column prop="itemKey" label="派发项" min-width="100" />
+                    <el-table-column label="状态" width="120">
+                      <template #default="{ row }">
+                        <el-tag
+                          size="small"
+                          :type="
+                            childItemStatusKind(row.status) === 'success'
+                              ? 'success'
+                              : childItemStatusKind(row.status) === 'failed'
+                                ? 'danger'
+                                : childItemStatusKind(row.status) === 'suspended'
+                                  ? 'warning'
+                                  : 'info'
+                          "
+                        >
+                          {{ row.status }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column
+                      prop="sourceRowId"
+                      label="来源行"
+                      min-width="120"
+                      show-overflow-tooltip
+                    />
+                    <el-table-column
+                      prop="targetInstanceId"
+                      label="子实例"
+                      min-width="140"
+                      show-overflow-tooltip
+                    />
+                    <el-table-column
+                      prop="writebackJson"
+                      label="回写值"
+                      min-width="160"
+                      show-overflow-tooltip
+                    />
+                    <el-table-column
+                      prop="writebackSource"
+                      label="来源"
+                      min-width="150"
+                      show-overflow-tooltip
+                    />
+                    <!-- 复审05 P2-02b-V-C：诊断按状态分当前/历史语义——
+                         CONFLICT/FAILED/REFUSED 为现存待处置；已恢复/留痕项降级历史标注 -->
+                    <el-table-column label="诊断" min-width="180" show-overflow-tooltip>
+                      <template #default="{ row }">
+                        <span
+                          v-if="row.errorText"
+                          :class="
+                            isItemDiagnosisCurrent(row.status)
+                              ? 'child-item-diagnosis'
+                              : 'child-item-diagnosis--history'
+                          "
+                        >
+                          {{
+                            isItemDiagnosisCurrent(row.status)
+                              ? row.errorText
+                              : `历史诊断（${row.status}）：${row.errorText}`
+                          }}
+                        </span>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="操作" width="90" fixed="right">
+                      <template #default="{ row }">
+                        <!-- 回写冲突受控恢复：仅 CONFLICT 项可重放（按当前权威版本） -->
+                        <el-button
+                          v-if="row.status === 'CONFLICT'"
+                          size="small"
+                          link
+                          type="primary"
+                          :loading="p64ItemRetrying === row.id"
+                          @click="handleRetryChildWriteback(row.id)"
+                        >
+                          恢复回写
+                        </el-button>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </div>
+              </div>
+            </template>
+          </el-card>
         </template>
       </div>
     </el-drawer>
@@ -465,6 +793,43 @@ function rowActions(row: unknown): ListAction[] {
 </template>
 
 <style scoped>
+/* P64 阶段Ⅰ/Ⅱ：触发、动作与子流程批次回查卡 */
+.child-batch-block {
+  margin-bottom: 12px;
+}
+.child-batch-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #606266;
+  margin: 6px 0;
+}
+.child-batch-reason {
+  margin-bottom: 6px;
+}
+/* 复审05 P2-02b-V-C：历史期诊断降级呈现（与当前待处置的 warning/alert 可区分） */
+.child-batch-reason--history {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+.child-item-diagnosis--history {
+  color: var(--el-text-color-secondary);
+}
+/* P64 阶段Ⅰ：触发与动作回查卡 */
+.p64-section-title {
+  margin: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7e306b;
+}
+.p64-cell-note {
+  margin-left: 6px;
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 12px;
+}
 /* G08b：窄屏历史表横向滚动容器（375 抽屉内真实滚动） */
 .history-table-scroll {
   overflow-x: auto;
@@ -476,6 +841,11 @@ function rowActions(row: unknown): ListAction[] {
 
 .detail-section {
   margin-bottom: 16px;
+}
+
+/* P64 阶段Ⅱ A11：基本信息长值（实例ID UUID）可断行，字段列不被长值撑出视口 */
+.detail-section :deep(.el-descriptions__cell.el-descriptions__content) {
+  word-break: break-all;
 }
 
 /* ─── 高亮标记 CSS ─── */

@@ -69,7 +69,7 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
     <table class="dynamic-field__table-inner">
       <thead>
         <tr>
-          <th v-for="sf in subFields" :key="sf.name">{{ sf.name }}</th>
+          <th v-for="sf in subFields" :key="sf.name">{{ sf.label || sf.name }}</th>
           <th v-if="!readonly">{{ t('common.actions') }}</th>
         </tr>
       </thead>

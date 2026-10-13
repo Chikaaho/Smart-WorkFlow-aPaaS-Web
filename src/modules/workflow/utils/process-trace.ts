@@ -35,7 +35,8 @@ export function deriveProcessTrace(input: {
     if (el.kind !== 'node') continue
     const elId = String(el.id)
     const name = String((el.config as { name?: unknown } | undefined)?.name ?? '')
-    const isCurrentNode = (name && currentNodeName && name === currentNodeName) || activeNodeIds.includes(elId)
+    const isCurrentNode =
+      (name && currentNodeName && name === currentNodeName) || activeNodeIds.includes(elId)
     if (isCurrentNode) {
       if (!activeNodeIds.includes(elId)) activeNodeIds.push(elId)
       continue
@@ -53,9 +54,7 @@ export function deriveProcessTrace(input: {
   for (const el of elements) {
     if (el.kind === 'node' && el.type === 'START') startId = String(el.id)
   }
-  const elementIds = new Set(
-    elements.filter((el) => el.kind === 'node').map((el) => String(el.id)),
-  )
+  const elementIds = new Set(elements.filter((el) => el.kind === 'node').map((el) => String(el.id)))
   const currentId = activeNodeIds.find((id) => elementIds.has(id)) ?? null
   if (startId && currentId && startId !== currentId) {
     // 收集 start→current 的所有简单路径（节点数上限内 DFS）

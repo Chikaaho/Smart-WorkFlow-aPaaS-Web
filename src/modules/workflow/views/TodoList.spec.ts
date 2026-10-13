@@ -7,6 +7,7 @@ vi.mock('@/modules/workflow/api', () => ({
   queryTodoTasks: vi.fn(),
   acceptTaskAction: vi.fn(),
   pollCommandStatus: vi.fn(),
+  claimTask: vi.fn(),
 }))
 
 const mockPush = vi.fn()
@@ -30,7 +31,12 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
-import { queryTodoTasks, acceptTaskAction, pollCommandStatus } from '@/modules/workflow/api'
+import {
+  queryTodoTasks,
+  acceptTaskAction,
+  pollCommandStatus,
+  claimTask,
+} from '@/modules/workflow/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import type { TodoTask, CommandAcceptResp, WorkflowCommandStatus } from '@/contracts/bpm'
@@ -239,6 +245,74 @@ describe('TodoList.vue', () => {
       name: 'TaskDetail',
       params: { taskId: 'mock-task-001' },
     })
+  })
+
+  it('claims candidate task via claim endpoint and reloads list', async () => {
+    const candidateTask: TodoTask = { ...mockTask, taskId: 'cand-1', candidate: true }
+    vi.mocked(queryTodoTasks).mockResolvedValue({
+      list: [candidateTask],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    vi.mocked(claimTask).mockResolvedValueOnce(undefined)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+
+    const wrapper = mount(TodoList, { global: { stubs } })
+    await nextTick()
+
+    await (wrapper.vm as unknown as { handleClaim: (r: TodoTask) => Promise<void> }).handleClaim(
+      candidateTask,
+    )
+    await nextTick()
+
+    expect(claimTask).toHaveBeenCalledWith('cand-1')
+    expect(ElMessage.success).toHaveBeenCalledWith('任务已领取，可在待办中办理')
+    expect(queryTodoTasks).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows server error message when claim fails (e.g. already claimed by another candidate)', async () => {
+    const candidateTask: TodoTask = { ...mockTask, taskId: 'cand-2', candidate: true }
+    vi.mocked(queryTodoTasks).mockResolvedValue({
+      list: [candidateTask],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    vi.mocked(claimTask).mockRejectedValueOnce(new ApiError(2305, '任务已被领取: 当前办理人 2'))
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+
+    const wrapper = mount(TodoList, { global: { stubs } })
+    await nextTick()
+
+    await (wrapper.vm as unknown as { handleClaim: (r: TodoTask) => Promise<void> }).handleClaim(
+      candidateTask,
+    )
+    await nextTick()
+
+    expect(ElMessage.error).toHaveBeenCalledWith('任务已被领取: 当前办理人 2')
+    expect(ElMessage.success).not.toHaveBeenCalled()
+  })
+
+  it('does not call claimTask when user cancels confirm', async () => {
+    const candidateTask: TodoTask = { ...mockTask, taskId: 'cand-3', candidate: true }
+    vi.mocked(queryTodoTasks).mockResolvedValueOnce({
+      list: [candidateTask],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
+
+    const wrapper = mount(TodoList, { global: { stubs } })
+    await nextTick()
+
+    await (wrapper.vm as unknown as { handleClaim: (r: TodoTask) => Promise<void> }).handleClaim(
+      candidateTask,
+    )
+    await nextTick()
+
+    expect(claimTask).not.toHaveBeenCalled()
   })
 
   it('navigates to ProcessedList on toolbar button click', async () => {

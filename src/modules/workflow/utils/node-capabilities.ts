@@ -14,6 +14,7 @@ import type {
   ParticipantFormFieldObjectType,
   ParticipantFormFieldScope,
   ParticipantFormFieldValue,
+  ParticipantNodeFormAggregateValue,
   ParticipantStrategy,
 } from '@/contracts/bpm-node'
 
@@ -538,6 +539,15 @@ export interface ParticipantFormDraft {
   adapterId: string
   /** FORM_FIELD：来源表单绑定。 */
   formField: ParticipantFormFieldDraft
+  /** NODE_FORM_AGGREGATE：来源节点与人员字段（P64 A07 聚合会签）。 */
+  aggregate: ParticipantNodeFormAggregateDraft
+}
+
+/** NODE_FORM_AGGREGATE 面板草稿（与服务端 {nodeKey, formField[, round]} 形状一致）。 */
+export interface ParticipantNodeFormAggregateDraft {
+  nodeKey: string
+  formField: string
+  round: '' | 'CURRENT' | 'PREVIOUS'
 }
 
 export function emptyParticipantFormDraft(): ParticipantFormDraft {
@@ -548,6 +558,7 @@ export function emptyParticipantFormDraft(): ParticipantFormDraft {
     genericValue: '',
     adapterId: '',
     formField: { objectType: 'USER', scope: 'MAIN', field: '', tableField: '', column: '' },
+    aggregate: { nodeKey: '', formField: '', round: '' },
   }
 }
 
@@ -560,6 +571,15 @@ function participantFormFieldDraft(value: unknown): ParticipantFormFieldDraft {
   if (typeof value.field === 'string') draft.field = value.field
   if (typeof value.tableField === 'string') draft.tableField = value.tableField
   if (typeof value.column === 'string') draft.column = value.column
+  return draft
+}
+
+function participantAggregateDraft(value: unknown): ParticipantNodeFormAggregateDraft {
+  const draft = emptyParticipantFormDraft().aggregate
+  if (!isRecord(value)) return draft
+  if (typeof value.nodeKey === 'string') draft.nodeKey = value.nodeKey
+  if (typeof value.formField === 'string') draft.formField = value.formField
+  if (value.round === 'CURRENT' || value.round === 'PREVIOUS') draft.round = value.round
   return draft
 }
 
@@ -592,6 +612,9 @@ export function buildParticipantFormDraft(raw: unknown): {
       break
     case 'FORM_FIELD':
       draft.formField = participantFormFieldDraft(value)
+      break
+    case 'NODE_FORM_AGGREGATE':
+      draft.aggregate = participantAggregateDraft(value)
       break
     default:
       if (Array.isArray(value)) draft.genericValue = value.map((item) => String(item)).join(',')
@@ -633,6 +656,15 @@ export function buildParticipantConfig(draft: ParticipantFormDraft): Participant
     case 'FORM_FIELD':
       config.value = buildParticipantFormFieldValue(draft.formField)
       break
+    case 'NODE_FORM_AGGREGATE': {
+      const aggregate: ParticipantNodeFormAggregateValue = {
+        nodeKey: draft.aggregate.nodeKey.trim(),
+        formField: draft.aggregate.formField.trim(),
+      }
+      if (draft.aggregate.round !== '') aggregate.round = draft.aggregate.round
+      config.value = aggregate
+      break
+    }
     case 'ADAPTER':
       if (draft.genericValue.trim() !== '') config.value = draft.genericValue.trim()
       if (draft.adapterId.trim() !== '') config.adapterId = draft.adapterId.trim()
@@ -650,8 +682,27 @@ export function buildParticipantConfig(draft: ParticipantFormDraft): Participant
  */
 export function validateParticipantConfigErrors(raw: unknown): string[] {
   const config = normalizeParticipantConfig(raw)
-  if (!config || config.strategy !== 'FORM_FIELD') return []
+  if (!config) return []
   const value = parseMaybeJson(config.value)
+  if (config.strategy === 'NODE_FORM_AGGREGATE') {
+    if (!isRecord(value)) {
+      return ['节点表单聚合参与人取值必须为对象（{nodeKey, formField[, round]}）']
+    }
+    const errors: string[] = []
+    if (typeof value.nodeKey !== 'string' || value.nodeKey.trim() === '') {
+      errors.push('节点表单聚合参与人缺少来源节点 key（nodeKey）')
+    }
+    if (typeof value.formField !== 'string' || value.formField.trim() === '') {
+      errors.push('节点表单聚合参与人缺少人员字段名（formField）')
+    }
+    if (value.round !== undefined && value.round !== 'CURRENT' && value.round !== 'PREVIOUS') {
+      errors.push(
+        `节点表单聚合参与人 round 非法：${String(value.round)}（仅支持 CURRENT/PREVIOUS）`,
+      )
+    }
+    return errors
+  }
+  if (config.strategy !== 'FORM_FIELD') return []
   if (!isRecord(value)) {
     return ['表单字段参与人取值必须为对象（{objectType, scope, field}）']
   }
