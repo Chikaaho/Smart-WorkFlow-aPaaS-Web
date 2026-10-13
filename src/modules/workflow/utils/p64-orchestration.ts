@@ -111,20 +111,20 @@ export function toVariableDraft(def: BpmVariableDef): VariableDraft {
 export function validateVariableDraft(draft: VariableDraft, existingVarIds: string[]): string[] {
   const errors: string[] = []
   const varId = draft.varId.trim()
-  if (!varId) errors.push('变量引用 ID 不能为空')
-  if (existingVarIds.includes(varId)) errors.push(`变量引用 ID 重复: ${varId}`)
+  if (!varId) errors.push('变量标识不能为空')
+  if (existingVarIds.includes(varId)) errors.push(`变量标识重复：${varId}`)
   if (!/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(varId)) {
-    errors.push('变量引用 ID 只能包含字母/数字/下划线且以字母或下划线开头')
+    errors.push('变量标识只能包含字母、数字、下划线，且以字母或下划线开头')
   }
   if (draft.source === 'MAIN_FORM' && !draft.sourceField.trim()) {
-    errors.push('主表来源必须选择字段')
+    errors.push('数据来源为主表字段时，必须选择具体字段')
   }
   if (draft.source === 'NODE_FORM') {
-    if (!draft.sourceNodeKey.trim()) errors.push('节点表单来源必须选择节点')
-    if (!draft.sourceFormField.trim()) errors.push('节点表单来源必须选择字段')
+    if (!draft.sourceNodeKey.trim()) errors.push('数据来源为节点表单时，必须选择来源节点')
+    if (!draft.sourceFormField.trim()) errors.push('数据来源为节点表单时，必须选择表单字段')
   }
   if (draft.source === 'SYSTEM' && !draft.sourceField.trim()) {
-    errors.push('系统变量必须选择白名单字段')
+    errors.push('数据来源为系统字段时，必须选择具体字段')
   }
   // 集合类型的 UNION 聚合由 buildVariableDef 自动对齐（服务端发布校验仍为权威）
   return errors
@@ -240,7 +240,7 @@ export function emptyTriggerDraft(): TriggerDraft {
     event: 'NODE_ROUND_COMPLETED',
     nodeKey: '',
     script:
-      "const v = 流程变量取值('请替换为变量ID');\nif (v === 'PASS') {\n  return 1;\n}\nreturn null;",
+      "const v = 流程变量取值('请替换为变量标识');\nif (v === 'PASS') {\n  return 1;\n}\nreturn null;",
     variables: [],
     branches: [],
     unmatchedDisposition: 'HALT',
@@ -390,50 +390,50 @@ export function validateTriggerDraft(
 ): string[] {
   const errors: string[] = []
   const triggerId = draft.triggerId.trim()
-  if (!triggerId) errors.push('触发器 ID 不能为空')
-  if (existingTriggerIds.includes(triggerId)) errors.push(`触发器 ID 重复: ${triggerId}`)
+  if (!triggerId) errors.push('规则标识不能为空')
+  if (existingTriggerIds.includes(triggerId)) errors.push(`规则标识重复：${triggerId}`)
   if (draft.event !== 'PROCESS_COMPLETED') {
-    if (!draft.nodeKey.trim()) errors.push('该事件必须绑定源节点')
-    else if (!nodeKeys.includes(draft.nodeKey.trim())) errors.push('源节点不存在')
+    if (!draft.nodeKey.trim()) errors.push('该触发时机必须选择来源节点')
+    else if (!nodeKeys.includes(draft.nodeKey.trim())) errors.push('来源节点不存在')
   }
   if (!draft.script.trim()) errors.push('判断脚本为空')
-  else if (!draft.script.includes('return')) errors.push('脚本体必须包含 return 语句')
+  else if (!draft.script.includes('return')) errors.push('判断脚本必须包含 return 语句')
   const unknownVars = draft.variables.filter((varId) => !knownVarIds.includes(varId))
-  if (unknownVars.length > 0) errors.push(`授权了未定义变量: ${unknownVars.join(', ')}`)
+  if (unknownVars.length > 0) errors.push(`勾选了不存在的变量：${unknownVars.join(', ')}`)
   const branchIds: string[] = []
   const seenMatch = new Set<string>()
   for (const branch of draft.branches) {
     const branchId = branch.branchId.trim()
-    if (!branchId) errors.push('分支缺少 ID')
-    else if (branchIds.includes(branchId)) errors.push(`分支 ID 重复: ${branchId}`)
+    if (!branchId) errors.push('分支缺少标识')
+    else if (branchIds.includes(branchId)) errors.push(`分支标识重复：${branchId}`)
     else branchIds.push(branchId)
-    if (!branch.matchValue.trim()) errors.push(`分支 ${branchId || '?'} 匹配值为空`)
+    if (!branch.matchValue.trim()) errors.push(`分支 ${branchId || '?'} 的结果值为空`)
     if (branch.matchType === 'NUMBER' && Number.isNaN(Number(branch.matchValue))) {
-      errors.push(`分支 ${branchId || '?'} 匹配值不是数字`)
+      errors.push(`分支 ${branchId || '?'} 的结果值不是数字`)
     }
     if (branch.matchType === 'BOOLEAN' && !['true', 'false'].includes(branch.matchValue.trim())) {
-      errors.push(`分支 ${branchId || '?'} 布尔匹配值无效`)
+      errors.push(`分支 ${branchId || '?'} 的「是/否」结果值无效`)
     }
     const matchKey = `${branch.matchType}=${branch.matchValue.trim()}`
-    if (seenMatch.has(matchKey)) errors.push(`存在同类型同值重复分支: ${matchKey}`)
+    if (seenMatch.has(matchKey)) errors.push(`存在结果类型与结果值都相同的重复分支：${matchKey}`)
     else seenMatch.add(matchKey)
     const actionIds: string[] = []
     for (const action of branch.actions) {
       const actionId = action.actionId.trim()
-      if (!actionId) errors.push('动作缺少 ID')
-      else if (actionIds.includes(actionId)) errors.push(`动作 ID 重复: ${actionId}`)
+      if (!actionId) errors.push('动作缺少标识')
+      else if (actionIds.includes(actionId)) errors.push(`动作标识重复：${actionId}`)
       else actionIds.push(actionId)
       if (action.type !== 'START_SINGLE' && !action.sourceVariable.trim()) {
-        errors.push(`动作 ${actionId || '?'}: 集合动作必须选择来源变量`)
+        errors.push(`动作 ${actionId || '?'}：按集合发起的动作必须选择集合变量`)
       }
       if (action.type === 'START_GROUPED' && !action.groupBy.trim()) {
-        errors.push(`动作 ${actionId || '?'}: 分组动作必须配置分组身份`)
+        errors.push(`动作 ${actionId || '?'}：按分组发起的动作必须填写分组字段`)
       }
       if (!action.targetFormKey.trim() || !action.targetProcessDefKey.trim()) {
-        errors.push(`动作 ${actionId || '?'}: 必须选择目标流程与表单`)
+        errors.push(`动作 ${actionId || '?'}：必须选择目标流程和目标表单`)
       }
       if (action.maxDispatch < 1 || action.maxDispatch > HARD_MAX_DISPATCH) {
-        errors.push(`动作 ${actionId || '?'}: 派发上限必须在 1—${HARD_MAX_DISPATCH} 内`)
+        errors.push(`动作 ${actionId || '?'}：单次最多发起数量必须在 1—${HARD_MAX_DISPATCH} 内`)
       }
       for (const mapping of action.mapping) {
         if (
@@ -442,7 +442,7 @@ export function validateTriggerDraft(
           !mapping.itemField.trim() &&
           !mapping.literal.trim()
         ) {
-          errors.push(`动作 ${actionId || '?'}: 映射 ${mapping.targetField} 缺少来源`)
+          errors.push(`动作 ${actionId || '?'}：字段 ${mapping.targetField} 的数据来源未选择`)
         }
       }
       // P64 阶段Ⅱ：CHILD 子流程配置（等待策略/K/输出回写；与后端发布校验同口径）
@@ -520,16 +520,27 @@ export function validateChildActionDraft(action: {
   const policy = (action.waitPolicy || 'ALL').toUpperCase()
   if (!CHILD_WAIT_POLICIES.includes(policy as ChildWaitPolicy)) {
     errors.push(
-      '子流程动作 ' + actionId + ': 等待策略无效 ' + action.waitPolicy + '（ALL/ANY/COUNT/NONE）',
+      '子流程动作 ' +
+        actionId +
+        '：继续条件无效 ' +
+        action.waitPolicy +
+        '（可选：全部子流程完成/任一子流程完成/完成数量达到设定值/不等待）',
     )
     return errors
   }
   if (policy === 'COUNT') {
     const k = action.waitCount
     if (k === undefined || k < 1) {
-      errors.push('子流程动作 ' + actionId + ': COUNT 策略必须配置正整数 K')
+      errors.push('子流程动作 ' + actionId + '：继续条件为「完成数量达到设定值」时，必须填写正整数')
     } else if (action.maxDispatch !== undefined && k > action.maxDispatch) {
-      errors.push('子流程动作 ' + actionId + ': K=' + k + ' 超过单次派发上限 ' + action.maxDispatch)
+      errors.push(
+        '子流程动作 ' +
+          actionId +
+          '：完成数量 ' +
+          k +
+          ' 超过单次最多发起数量 ' +
+          action.maxDispatch,
+      )
     }
   }
   const wb = action.writeBack
@@ -537,7 +548,7 @@ export function validateChildActionDraft(action: {
     return errors
   }
   if (!wb.resultNodeKey || !wb.resultNodeKey.trim()) {
-    errors.push('子流程动作 ' + actionId + ': 回写配置缺少 resultNodeKey')
+    errors.push('子流程动作 ' + actionId + '：结果回填缺少「结果节点」')
     return errors
   }
   const hasRowWrite = !!(wb.tableField && wb.tableField.trim())
@@ -548,16 +559,18 @@ export function validateChildActionDraft(action: {
       !wb.parentTableField ||
       !wb.parentTableField.trim()
     ) {
-      errors.push('子流程动作 ' + actionId + ': 行级回写必须配置 rowKeyField 与 parentTableField')
+      errors.push(
+        '子流程动作 ' + actionId + '：行级回填必须填写「来源行标识列」和「本表单的来源表」',
+      )
       return errors
     }
     if (!wb.fields || wb.fields.length === 0) {
-      errors.push('子流程动作 ' + actionId + ': 行级回写必须配置允许列映射 fields')
+      errors.push('子流程动作 ' + actionId + '：行级回填必须至少配置一组「子表列 → 本表单列」')
       return errors
     }
   }
   if ((!wb.fields || wb.fields.length === 0) && (!wb.mainFields || wb.mainFields.length === 0)) {
-    errors.push('子流程动作 ' + actionId + ': 回写配置缺少任何字段映射')
+    errors.push('子流程动作 ' + actionId + '：结果回填没有配置任何字段对应')
   }
   return errors
 }

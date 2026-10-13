@@ -66,9 +66,9 @@ describe('p64-orchestration 变量草稿', () => {
       },
       ['dup'],
     )
-    expect(errors).toContain('变量引用 ID 重复: dup')
-    expect(errors).toContain('节点表单来源必须选择节点')
-    expect(errors).toContain('节点表单来源必须选择字段')
+    expect(errors).toContain('变量标识重复：dup')
+    expect(errors).toContain('数据来源为节点表单时，必须选择来源节点')
+    expect(errors).toContain('数据来源为节点表单时，必须选择表单字段')
     // 集合类型的 UNION 由 buildVariableDef 自动对齐（服务端发布校验仍为权威）
     expect(
       buildVariableDef({
@@ -156,15 +156,15 @@ describe('p64-orchestration 触发器草稿', () => {
       ['v_real'],
       ['node_qc'],
     )
-    expect(errors).toContain('触发器 ID 重复: dup')
-    expect(errors).toContain('该事件必须绑定源节点')
-    expect(errors).toContain('脚本体必须包含 return 语句')
-    expect(errors).toContain('授权了未定义变量: ghost')
-    expect(errors).toContain('分支 ID 重复: b1')
-    expect(errors).toContain('存在同类型同值重复分支: NUMBER=1')
-    expect(errors).toContain('动作 a1: 集合动作必须选择来源变量')
-    expect(errors).toContain('动作 a1: 必须选择目标流程与表单')
-    expect(errors).toContain('动作 a1: 派发上限必须在 1—200 内')
+    expect(errors).toContain('规则标识重复：dup')
+    expect(errors).toContain('该触发时机必须选择来源节点')
+    expect(errors).toContain('判断脚本必须包含 return 语句')
+    expect(errors).toContain('勾选了不存在的变量：ghost')
+    expect(errors).toContain('分支标识重复：b1')
+    expect(errors).toContain('存在结果类型与结果值都相同的重复分支：NUMBER=1')
+    expect(errors).toContain('动作 a1：按集合发起的动作必须选择集合变量')
+    expect(errors).toContain('动作 a1：必须选择目标流程和目标表单')
+    expect(errors).toContain('动作 a1：单次最多发起数量必须在 1—200 内')
   })
 })
 

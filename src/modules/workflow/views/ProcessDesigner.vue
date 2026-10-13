@@ -556,6 +556,81 @@ function variableTypeOptions(sourceField: string) {
   return compatible.length > 0 ? compatible : BPM_VARIABLE_TYPES
 }
 
+/* ─── BF20261013-018：P64 配置面板业务化文案（枚举值不变，仅展示中文化） ─── */
+
+/** 变量数据类型展示名。 */
+const VARIABLE_TYPE_LABELS: Record<string, string> = {
+  NUMBER: '数字',
+  STRING: '文本',
+  BOOLEAN: '是/否',
+  USER: '人员',
+  DEPT: '部门',
+  USER_SET: '人员集合',
+  DEPT_SET: '部门集合',
+  ROWS: '表格行集合',
+}
+
+/** 变量数据来源展示名。 */
+const VARIABLE_SOURCE_LABELS: Record<string, string> = {
+  MAIN_FORM: '主表字段',
+  NODE_FORM: '节点表单字段',
+  SYSTEM: '系统字段',
+}
+
+/** 系统字段白名单展示名（键 → 业务名）。 */
+const SYSTEM_FIELD_LABELS: Record<string, string> = {
+  processInstanceId: '流程实例编号',
+  processDefKey: '流程标识',
+  businessKey: '业务单号',
+  formKey: '表单标识',
+  initiatorId: '发起人',
+  tenantId: '租户',
+  currentNodeKey: '当前节点',
+  roundNo: '办理轮次',
+}
+
+/** 集合汇总方式展示名。 */
+const AGGREGATION_LABELS: Record<string, string> = {
+  NONE: '不汇总（单值）',
+  UNION: '合并去重',
+  CONCAT: '逐行拼接',
+}
+
+/** 触发时机展示名。 */
+const TRIGGER_EVENT_LABELS: Record<string, string> = {
+  TASK_SUBMITTED: '任务提交时',
+  NODE_ROUND_COMPLETED: '节点本轮完成时',
+  PROCESS_COMPLETED: '流程完成时',
+}
+
+/** 判断结果类型展示名。 */
+const MATCH_TYPE_LABELS: Record<string, string> = {
+  NUMBER: '数字',
+  STRING: '文本',
+  BOOLEAN: '是/否',
+}
+
+/** 动作发起方式展示名。 */
+const ACTION_TYPE_LABELS: Record<string, string> = {
+  START_SINGLE: '发起一个流程',
+  START_EACH: '按集合逐条发起',
+  START_GROUPED: '按分组批量发起',
+}
+
+/** 子流程继续条件展示名。 */
+const WAIT_POLICY_LABELS: Record<string, string> = {
+  ALL: '全部子流程完成',
+  ANY: '任一子流程完成',
+  COUNT: '完成数量达到设定值',
+  NONE: '不等待（立即继续）',
+}
+
+/** 枚举值 → 展示名（缺映射回退原值，保证未知枚举可诊断）。 */
+function labelOf(labels: Record<string, string>, value: string | undefined): string {
+  if (!value) return ''
+  return labels[value] ?? value
+}
+
 const triggerDraft = ref<TriggerDraft>(emptyTriggerDraft())
 const triggerEditIndex = ref<number | null>(null)
 const triggerErrors = ref<string[]>([])
@@ -2317,12 +2392,20 @@ function nodeLabelLines(label: string) {
                 </template>
                 <!-- NODE_FORM_AGGREGATE：来源节点 + 人员字段 + 轮次口径（P64 A07 聚合会签） -->
                 <template v-else-if="participantForm.strategy === 'NODE_FORM_AGGREGATE'">
-                  <el-form-item label="来源节点 key">
-                    <el-input
+                  <el-form-item label="来源节点">
+                    <el-select
                       v-model="participantForm.aggregate.nodeKey"
-                      placeholder="填写来源节点 key（读取该节点本轮全部有效最终提交）"
+                      filterable
+                      placeholder="选择来源节点（读取该节点本轮全部有效最终提交）"
                       @change="applyParticipant"
-                    />
+                    >
+                      <el-option
+                        v-for="node in graphNodes"
+                        :key="node.id"
+                        :label="graphNodeLabel(node)"
+                        :value="node.id"
+                      />
+                    </el-select>
                   </el-form-item>
                   <el-form-item label="人员字段">
                     <el-select
@@ -2804,28 +2887,30 @@ function nodeLabelLines(label: string) {
       </template>
     </el-dialog>
 
-    <!-- ═══ P64 阶段Ⅰ：BPM 变量配置弹窗 ═══ -->
+    <!-- ═══ P64 阶段Ⅰ：流程变量配置弹窗 ═══ -->
     <el-dialog
       v-model="variablesVisible"
-      title="BPM 变量"
+      title="流程变量"
       width="min(860px, 94vw)"
       class="p64-dialog"
       append-to-body
     >
       <div class="p64-toolbar">
         <el-button size="small" type="primary" @click="resetVariableDraft">新增变量</el-button>
-        <el-button size="small" @click="importVariablesJson">导入 JSON</el-button>
+        <el-button size="small" @click="importVariablesJson">批量导入</el-button>
         <span class="p64-hint"
-          >来源=主表/节点表单/系统白名单；集合类型必须 UNION 聚合；必填变量缺值阻止触发。</span
+          >变量是给判断规则取数用的：来源可选主表字段、节点表单字段或系统字段；集合类变量需选一种汇总方式；设为必填的变量取不到值时，不会触发后续动作。</span
         >
       </div>
       <el-table :data="graph?.variables ?? []" size="small" class="p64-table">
-        <el-table-column prop="varId" label="引用 ID" width="150" />
+        <el-table-column prop="varId" label="变量标识" width="150" />
         <el-table-column prop="name" label="名称" width="140" />
-        <el-table-column prop="type" label="类型" width="100" />
-        <el-table-column label="来源" min-width="220">
+        <el-table-column label="数据类型" width="100">
+          <template #default="{ row }">{{ labelOf(VARIABLE_TYPE_LABELS, row.type) }}</template>
+        </el-table-column>
+        <el-table-column label="数据来源" min-width="220">
           <template #default="{ row }">
-            {{ row.source }}
+            {{ labelOf(VARIABLE_SOURCE_LABELS, row.source) }}
             <template v-if="row.source === 'MAIN_FORM'"
               >· {{ mainFormFieldLabel(row.sourceField) }}</template
             >
@@ -2837,7 +2922,9 @@ function nodeLabelLines(label: string) {
             <template v-else>· {{ row.sourceField }}</template>
           </template>
         </el-table-column>
-        <el-table-column prop="aggregation" label="聚合" width="90" />
+        <el-table-column label="汇总方式" width="110">
+          <template #default="{ row }">{{ labelOf(AGGREGATION_LABELS, row.aggregation) }}</template>
+        </el-table-column>
         <el-table-column label="操作" width="140">
           <template #default="{ $index }">
             <el-button size="small" link type="primary" @click="editVariable($index)"
@@ -2852,32 +2939,32 @@ function nodeLabelLines(label: string) {
       <el-divider />
       <el-form label-position="top" size="small">
         <div class="p64-grid">
-          <el-form-item label="引用 ID（稳定，改名不改引用）">
+          <el-form-item label="变量标识（创建后不可修改，改名不影响已引用处）">
             <el-input
               v-model="variableDraft.varId"
               placeholder="var_example"
               :disabled="variableEditIndex !== null"
             />
           </el-form-item>
-          <el-form-item label="显示名">
+          <el-form-item label="变量名称">
             <el-input v-model="variableDraft.name" />
           </el-form-item>
-          <el-form-item label="类型">
+          <el-form-item label="数据类型">
             <el-select v-model="variableDraft.type">
               <el-option
                 v-for="item in variableTypeOptions(variableDraft.sourceField)"
                 :key="item"
-                :label="item"
+                :label="labelOf(VARIABLE_TYPE_LABELS, item)"
                 :value="item"
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="来源">
+          <el-form-item label="数据来源">
             <el-select v-model="variableDraft.source">
               <el-option
                 v-for="item in BPM_VARIABLE_SOURCES"
                 :key="item"
-                :label="item"
+                :label="labelOf(VARIABLE_SOURCE_LABELS, item)"
                 :value="item"
               />
             </el-select>
@@ -2921,31 +3008,31 @@ function nodeLabelLines(label: string) {
               />
             </el-select>
           </el-form-item>
-          <el-form-item v-if="variableDraft.source === 'SYSTEM'" label="系统白名单字段">
+          <el-form-item v-if="variableDraft.source === 'SYSTEM'" label="系统字段">
             <el-select v-model="variableDraft.sourceField">
               <el-option
                 v-for="item in BPM_SYSTEM_FIELDS"
                 :key="item"
-                :label="item"
+                :label="labelOf(SYSTEM_FIELD_LABELS, item)"
                 :value="item"
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="聚合规则">
+          <el-form-item label="汇总方式">
             <el-select v-model="variableDraft.aggregation">
               <el-option
                 v-for="item in ['NONE', 'UNION', 'CONCAT']"
                 :key="item"
-                :label="item"
+                :label="labelOf(AGGREGATION_LABELS, item)"
                 :value="item"
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="缺值处置">
+          <el-form-item label="取不到值时">
             <el-switch
               v-model="variableDraft.nullable"
-              active-text="可空（null）"
-              inactive-text="必填（阻止触发）"
+              active-text="允许为空（由判断规则自行处理）"
+              inactive-text="视为必填（不触发后续动作）"
             />
           </el-form-item>
         </div>
@@ -2958,26 +3045,28 @@ function nodeLabelLines(label: string) {
       </el-form>
     </el-dialog>
 
-    <!-- ═══ P64 阶段Ⅰ：Trigger 触发器配置弹窗 ═══ -->
+    <!-- ═══ P64 阶段Ⅰ：触发规则配置弹窗 ═══ -->
     <el-dialog
       v-model="triggersVisible"
-      title="触发器（判断与动作）"
+      title="触发规则（判断后自动发起流程）"
       width="min(980px, 94vw)"
       class="p64-dialog"
       append-to-body
     >
       <div class="p64-toolbar">
         <el-button size="small" type="primary" @click="resetTriggerDraft">新增触发器</el-button>
-        <el-button size="small" @click="importTriggersJson">导入 JSON</el-button>
+        <el-button size="small" @click="importTriggersJson">批量导入</el-button>
         <span class="p64-hint"
-          >脚本只判断（流程变量取值/返回
-          Number/String/Boolean/null）；动作=可靠发起关联流程；未匹配/异常不产生动作。</span
+          >判断脚本只做判断、不改数据：读取勾选的变量并返回一个结果值（数字、文本、是/否 或 空）；
+          每个结果值对应一个动作（自动发起关联流程）；未匹配或出错时不会自动执行动作。</span
         >
       </div>
       <el-table :data="graph?.triggers ?? []" size="small" class="p64-table">
-        <el-table-column prop="triggerId" label="ID" width="130" />
+        <el-table-column prop="triggerId" label="规则标识" width="130" />
         <el-table-column prop="name" label="名称" width="130" />
-        <el-table-column prop="event" label="事件" width="190" />
+        <el-table-column label="触发时机" width="190">
+          <template #default="{ row }">{{ labelOf(TRIGGER_EVENT_LABELS, row.event) }}</template>
+        </el-table-column>
         <el-table-column label="源节点" width="140">
           <template #default="{ row }">{{ graphNodeName(row.nodeKey) }}</template>
         </el-table-column>
@@ -2987,7 +3076,7 @@ function nodeLabelLines(label: string) {
               (row.branches ?? [])
                 .map(
                   (b: { branchId: string; matchType: string; matchValue: string }) =>
-                    `${b.branchId}(${b.matchType}=${b.matchValue})`,
+                    `${b.branchId}（${labelOf(MATCH_TYPE_LABELS, b.matchType)}=${b.matchValue}）`,
                 )
                 .join('；')
             }}
@@ -3007,7 +3096,7 @@ function nodeLabelLines(label: string) {
       <el-divider />
       <el-form label-position="top" size="small">
         <div class="p64-grid">
-          <el-form-item label="触发器 ID">
+          <el-form-item label="规则标识（创建后不可修改）">
             <el-input
               v-model="triggerDraft.triggerId"
               :disabled="triggerEditIndex !== null"
@@ -3017,12 +3106,12 @@ function nodeLabelLines(label: string) {
           <el-form-item label="名称">
             <el-input v-model="triggerDraft.name" />
           </el-form-item>
-          <el-form-item label="事件">
+          <el-form-item label="触发时机">
             <el-select v-model="triggerDraft.event">
               <el-option
                 v-for="item in ['TASK_SUBMITTED', 'NODE_ROUND_COMPLETED', 'PROCESS_COMPLETED']"
                 :key="item"
-                :label="item"
+                :label="labelOf(TRIGGER_EVENT_LABELS, item)"
                 :value="item"
               />
             </el-select>
@@ -3037,7 +3126,7 @@ function nodeLabelLines(label: string) {
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="授权变量">
+          <el-form-item label="可读取的变量（判断脚本只能用这里勾选的变量）">
             <el-select v-model="triggerDraft.variables" multiple filterable>
               <el-option
                 v-for="item in graph?.variables ?? []"
@@ -3049,12 +3138,12 @@ function nodeLabelLines(label: string) {
           </el-form-item>
         </div>
         <el-form-item
-          label="判断脚本（函数体，流程变量取值('varId') 读取；返回 Number/String/Boolean/null）"
+          label="判断脚本（只做判断、不改数据；用 流程变量取值('变量标识') 读取变量，返回 数字/文本/是-否/空）"
         >
           <el-input v-model="triggerDraft.script" type="textarea" :rows="7" spellcheck="false" />
         </el-form-item>
         <div class="p64-toolbar">
-          <span class="p64-subtitle">结果分支</span>
+          <span class="p64-subtitle">结果分支（按返回值匹配）</span>
           <el-button size="small" @click="addTriggerBranch">添加分支</el-button>
         </div>
         <div
@@ -3063,25 +3152,25 @@ function nodeLabelLines(label: string) {
           class="p64-branch-card"
         >
           <div class="p64-grid">
-            <el-form-item label="分支 ID">
+            <el-form-item label="分支标识">
               <el-input v-model="branch.branchId" />
             </el-form-item>
-            <el-form-item label="匹配类型">
+            <el-form-item label="结果类型">
               <el-select v-model="branch.matchType">
                 <el-option
                   v-for="item in ['NUMBER', 'STRING', 'BOOLEAN']"
                   :key="item"
-                  :label="item"
+                  :label="labelOf(MATCH_TYPE_LABELS, item)"
                   :value="item"
                 />
               </el-select>
             </el-form-item>
-            <el-form-item label="匹配值">
+            <el-form-item label="结果值">
               <el-input v-model="branch.matchValue" />
             </el-form-item>
           </div>
           <div class="p64-toolbar">
-            <span class="p64-subtitle">命中动作</span>
+            <span class="p64-subtitle">命中后执行的动作</span>
             <el-button size="small" @click="addTriggerAction(branchIndex)">添加动作</el-button>
           </div>
           <div
@@ -3090,20 +3179,20 @@ function nodeLabelLines(label: string) {
             class="p64-action-card"
           >
             <div class="p64-grid">
-              <el-form-item label="动作 ID">
+              <el-form-item label="动作标识">
                 <el-input v-model="action.actionId" />
               </el-form-item>
-              <el-form-item label="类型">
+              <el-form-item label="发起方式">
                 <el-select v-model="action.type">
                   <el-option
                     v-for="item in ['START_SINGLE', 'START_EACH', 'START_GROUPED']"
                     :key="item"
-                    :label="item"
+                    :label="labelOf(ACTION_TYPE_LABELS, item)"
                     :value="item"
                   />
                 </el-select>
               </el-form-item>
-              <el-form-item v-if="action.type !== 'START_SINGLE'" label="来源集合变量">
+              <el-form-item v-if="action.type !== 'START_SINGLE'" label="集合变量">
                 <el-select v-model="action.sourceVariable" filterable>
                   <el-option
                     v-for="item in graph?.variables ?? []"
@@ -3113,18 +3202,21 @@ function nodeLabelLines(label: string) {
                   />
                 </el-select>
               </el-form-item>
-              <el-form-item v-if="action.type === 'START_GROUPED'" label="分组字段（稳定身份）">
+              <el-form-item
+                v-if="action.type === 'START_GROUPED'"
+                label="分组字段（按该字段值分组）"
+              >
                 <el-input v-model="action.groupBy" placeholder="id" />
               </el-form-item>
             </div>
             <div class="p64-grid">
-              <el-form-item label="目标流程（按名称选择）">
+              <el-form-item label="目标流程">
                 <el-select
                   v-model="action.targetProcessDefKey"
                   filterable
                   allow-create
                   default-first-option
-                  placeholder="选择已发布流程或输入 defKey"
+                  placeholder="选择已发布流程（或输入流程标识）"
                 >
                   <el-option
                     v-for="item in publishedTargetOptions.defs"
@@ -3134,13 +3226,13 @@ function nodeLabelLines(label: string) {
                   />
                 </el-select>
               </el-form-item>
-              <el-form-item label="目标表单（按名称选择）">
+              <el-form-item label="目标表单">
                 <el-select
                   v-model="action.targetFormKey"
                   filterable
                   allow-create
                   default-first-option
-                  placeholder="选择已发布表单或输入 formKey"
+                  placeholder="选择已发布表单（或输入表单标识）"
                 >
                   <el-option
                     v-for="item in publishedTargetOptions.forms"
@@ -3150,12 +3242,12 @@ function nodeLabelLines(label: string) {
                   />
                 </el-select>
               </el-form-item>
-              <el-form-item label="派发上限(1-200)">
+              <el-form-item label="单次最多发起（1-200）">
                 <el-input-number v-model="action.maxDispatch" :min="1" :max="200" />
               </el-form-item>
             </div>
             <div class="p64-toolbar">
-              <span class="p64-subtitle">输入映射</span>
+              <span class="p64-subtitle">带入目标流程的数据</span>
               <el-button size="small" @click="addTriggerMapping(branchIndex, actionIndex)"
                 >添加映射</el-button
               >
@@ -3165,7 +3257,7 @@ function nodeLabelLines(label: string) {
               :key="mappingIndex"
               class="p64-grid"
             >
-              <el-form-item label="目标字段">
+              <el-form-item label="目标表单字段">
                 <el-select
                   v-model="mapping.targetField"
                   filterable
@@ -3184,7 +3276,7 @@ function nodeLabelLines(label: string) {
                   />
                 </el-select>
               </el-form-item>
-              <el-form-item label="来源变量 varId">
+              <el-form-item label="取变量值">
                 <el-select v-model="mapping.sourceVarId" clearable filterable>
                   <el-option
                     v-for="item in graph?.variables ?? []"
@@ -3194,11 +3286,11 @@ function nodeLabelLines(label: string) {
                   />
                 </el-select>
               </el-form-item>
-              <el-form-item label="集合项字段">
-                <el-input v-model="mapping.itemField" placeholder="如 id / 行列名" />
+              <el-form-item label="取集合行字段">
+                <el-input v-model="mapping.itemField" placeholder="如 id（集合行的字段名）" />
               </el-form-item>
-              <el-form-item label="字面量">
-                <el-input v-model="mapping.literal" placeholder="三选一" />
+              <el-form-item label="固定值">
+                <el-input v-model="mapping.literal" placeholder="与上面两种来源任选一种" />
               </el-form-item>
             </div>
             <!-- P64 阶段Ⅱ：子流程（主子流程）配置 -->
@@ -3212,60 +3304,63 @@ function nodeLabelLines(label: string) {
                     }
                   "
                 >
-                  主子流程（派发冻结 + 等待策略 + 输出回写）
+                  按主子流程编排（发起后按「继续条件」推进，并可把子流程结果回填到本表单）
                 </el-checkbox>
               </el-form-item>
               <template v-if="action.orchestration === 'CHILD'">
-                <el-form-item label="等待策略">
+                <el-form-item label="继续条件">
                   <el-select v-model="action.waitPolicy">
                     <el-option
                       v-for="item in CHILD_WAIT_POLICIES"
                       :key="item"
-                      :label="item"
+                      :label="labelOf(WAIT_POLICY_LABELS, item)"
                       :value="item"
                     />
                   </el-select>
                 </el-form-item>
-                <el-form-item v-if="action.waitPolicy === 'COUNT'" label="K（正整数）">
+                <el-form-item v-if="action.waitPolicy === 'COUNT'" label="完成数量（达到即继续）">
                   <el-input-number v-model="action.waitCount" :min="1" :max="action.maxDispatch" />
                 </el-form-item>
-                <el-form-item label="输出回写">
-                  <el-checkbox v-model="action.wbEnabled">启用子→父回写</el-checkbox>
+                <el-form-item label="结果回填">
+                  <el-checkbox v-model="action.wbEnabled">把子流程结果回填到本表单</el-checkbox>
                 </el-form-item>
               </template>
             </div>
             <template v-if="action.orchestration === 'CHILD' && action.wbEnabled">
               <div class="p64-grid">
-                <el-form-item label="结果节点 key">
+                <el-form-item label="结果节点">
                   <el-input
                     v-model="action.wbResultNodeKey"
-                    placeholder="子流程结果节点（如 node_result）"
+                    placeholder="子流程中产出结果的节点（如 node_result）"
                   />
                 </el-form-item>
-                <el-form-item label="子结果表格字段">
+                <el-form-item label="子表单结果表">
                   <el-input
                     v-model="action.wbTableField"
-                    placeholder="行级回写时填写（子表单 TABLE 字段）"
+                    placeholder="行级回填时填写（子表单里的表格字段）"
                   />
                 </el-form-item>
-                <el-form-item label="来源行 ID 列">
-                  <el-input v-model="action.wbRowKeyField" placeholder="承载来源行 ID 的列名" />
+                <el-form-item label="来源行标识列">
+                  <el-input v-model="action.wbRowKeyField" placeholder="记录来源行标识的列名" />
                 </el-form-item>
-                <el-form-item label="父来源表格字段">
-                  <el-input v-model="action.wbParentTableField" placeholder="父表单 TABLE 字段名" />
+                <el-form-item label="本表单的来源表">
+                  <el-input
+                    v-model="action.wbParentTableField"
+                    placeholder="本表单承载来源行的表格字段"
+                  />
                 </el-form-item>
               </div>
               <div class="p64-toolbar">
-                <span class="p64-subtitle">行级回写列映射（子列 → 父列）</span>
+                <span class="p64-subtitle">行级回填对应（子表列 → 本表单列）</span>
                 <el-button size="small" @click="addChildWbField(branchIndex, actionIndex, 'row')"
-                  >添加列映射</el-button
+                  >添加一行</el-button
                 >
               </div>
               <div v-for="(f, fi) in action.wbFields" :key="'wr' + fi" class="p64-grid">
-                <el-form-item label="子列">
+                <el-form-item label="子表列">
                   <el-input v-model="f.fromField" />
                 </el-form-item>
-                <el-form-item label="父列">
+                <el-form-item label="本表单列">
                   <el-input v-model="f.toField" />
                 </el-form-item>
                 <el-form-item label=" ">
@@ -3279,16 +3374,16 @@ function nodeLabelLines(label: string) {
                 </el-form-item>
               </div>
               <div class="p64-toolbar">
-                <span class="p64-subtitle">主记录回写字段映射（子字段 → 父字段）</span>
+                <span class="p64-subtitle">主记录回填对应（子表单字段 → 本表单字段）</span>
                 <el-button size="small" @click="addChildWbField(branchIndex, actionIndex, 'main')"
-                  >添加字段映射</el-button
+                  >添加一行</el-button
                 >
               </div>
               <div v-for="(f, fi) in action.wbMainFields" :key="'wm' + fi" class="p64-grid">
-                <el-form-item label="子字段">
+                <el-form-item label="子表单字段">
                   <el-input v-model="f.fromField" />
                 </el-form-item>
-                <el-form-item label="父字段">
+                <el-form-item label="本表单字段">
                   <el-input v-model="f.toField" />
                 </el-form-item>
                 <el-form-item label=" ">
