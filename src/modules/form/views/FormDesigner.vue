@@ -1285,7 +1285,8 @@ async function loadBreadcrumbCategory() {
 }
 
 .designer-main-canvas :deep(.field-shell) {
-  border-color: #e3e9f4;
+  /* BF20261013-011：最外圈默认不显示边框（透明占位保持盒尺寸），选中态由 --active 主色环承担 */
+  border-color: transparent;
   border-radius: 8px;
   box-shadow: none;
 }

@@ -349,10 +349,10 @@ function onShellClick(entry: ShellEntry) {
 
 .field-shell {
   position: relative;
-  padding: 8px 11px 9px;
-  /* P53 设计（节点07）：字段格白底浅框行式，选中/hover 强化 */
+  /* BF20261013-011：左右空隙加大且相等（16px）；最外圈默认无边框（透明占位保持盒尺寸，选中态仍显主色环） */
+  padding: 8px 16px 9px;
   background: #fff;
-  border: 1px solid #e3e9f4;
+  border: 1px solid transparent;
   border-radius: var(--sw-radius-card);
   box-shadow: none;
   cursor: pointer;
@@ -360,10 +360,6 @@ function onShellClick(entry: ShellEntry) {
   min-height: 80px;
   box-sizing: border-box;
   transition: border-color 0.15s;
-}
-
-.field-shell:hover {
-  border-color: #dde3ef;
 }
 
 .field-shell--active {
@@ -386,8 +382,8 @@ function onShellClick(entry: ShellEntry) {
   display: flex;
   position: absolute;
   top: 4px;
-  right: 11px;
-  left: 11px;
+  right: 16px;
+  left: 16px;
   align-items: center;
   justify-content: flex-end;
   gap: var(--sw-space-8);
@@ -418,12 +414,12 @@ function onShellClick(entry: ShellEntry) {
 
 .field-shell__control {
   min-width: 0;
-  /* 设计07：控件贴字段格缘（输入文本 pad 12 与设计同位），标签补回缩进 */
-  margin: 0 1px 0 -11px;
+  /* BF20261013-011：去掉 -11px 负外边距（原使控件贴左缘造成左右不对称），控件与壳内边距对齐、左右等距 */
+  margin: 0;
 }
 
 .field-shell__control :deep(.el-form-item__label) {
-  margin-left: 11px;
+  margin-left: 0;
 }
 
 .field-shell__control :deep(.el-input__inner) {

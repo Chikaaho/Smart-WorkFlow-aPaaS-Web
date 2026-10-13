@@ -61,7 +61,7 @@ describe('FieldConfigPanel 字段标题位置', () => {
     })
   }
 
-  it('未配置时回显上方左对齐，选择后回写 labelPosition', async () => {
+  it('未配置时回显上边（缺省），选择后回写 labelPosition', async () => {
     const wrapper = mountWithField({
       name: 'field_name',
       type: 'TEXT',
@@ -73,9 +73,29 @@ describe('FieldConfigPanel 字段标题位置', () => {
       .find((s) => s.props('modelValue') === 'top-left')
     expect(select).toBeTruthy()
 
-    await select!.vm.$emit('update:modelValue', 'top-center')
+    await select!.vm.$emit('update:modelValue', 'left')
     const patches = wrapper.emitted('update') as unknown as Array<[{ labelPosition?: string }]>
-    expect(patches?.at(-1)?.[0].labelPosition).toBe('top-center')
+    expect(patches?.at(-1)?.[0].labelPosition).toBe('left')
+  })
+
+  it('BF20261013-011：标题位置仅左/右/上三选项；历史上面居中归一到上边展示', () => {
+    const wrapper = mountWithField({
+      name: 'field_name',
+      type: 'TEXT',
+      label: '姓名',
+      colSpan: 24,
+      labelPosition: 'top-center',
+    })
+    const select = wrapper
+      .findAllComponents({ name: 'ElSelect' })
+      .find((s) => s.props('modelValue') === 'top-left')
+    expect(select).toBeTruthy()
+    // 标题位置选项（字符串值；数字 1-12 为宽度选择器选项）
+    const optionValues = wrapper
+      .findAllComponents({ name: 'ElOption' })
+      .map((o) => o.props('value'))
+      .filter((v) => typeof v === 'string')
+    expect(optionValues).toEqual(['left', 'right', 'top-left'])
   })
 
   it('文字组件无独立标题，不展示标题位置行', () => {

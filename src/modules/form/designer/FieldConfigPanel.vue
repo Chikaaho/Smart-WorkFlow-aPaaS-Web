@@ -66,19 +66,21 @@ const span12 = computed(() => Math.max(1, Math.round(colSpan.value / 2)))
 
 const spanOptions = Array.from({ length: 12 }, (_, i) => i + 1)
 
-/** 标题位置选项（枚举顺序 = Owner 指定的五种位置）。 */
+/** 标题位置选项（BF20261013-011：收敛为 左边 / 右边 / 上边 三种）。 */
 const LABEL_POSITION_OPTIONS: ReadonlyArray<{ value: FieldLabelPosition; key: string }> = [
   { value: 'left', key: 'form.labelPositionLeft' },
   { value: 'right', key: 'form.labelPositionRight' },
   { value: 'top-left', key: 'form.labelPositionTopLeft' },
-  { value: 'top-right', key: 'form.labelPositionTopRight' },
-  { value: 'top-center', key: 'form.labelPositionTopCenter' },
 ]
 
-/** 当前字段标题位置（缺省上方左对齐）。文字组件无独立标题，不展示该行。 */
-const labelPosition = computed<FieldLabelPosition>(
-  () => props.field?.field.labelPosition ?? DEFAULT_FIELD_LABEL_POSITION,
-)
+/**
+ * 当前字段标题位置（缺省上边）。文字组件无独立标题，不展示该行。
+ * 历史定义的上面右对齐/居中归一到「上边」展示（再次选择时写回 top-left）。
+ */
+const labelPosition = computed<FieldLabelPosition>(() => {
+  const raw = props.field?.field.labelPosition ?? DEFAULT_FIELD_LABEL_POSITION
+  return raw === 'top-right' || raw === 'top-center' ? 'top-left' : raw
+})
 
 const showLabelPosition = computed(() => props.field?.field.type !== 'LABEL')
 
