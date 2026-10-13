@@ -9,6 +9,7 @@ import { pinia } from './stores'
 import { router } from './router'
 import { i18n } from './locales'
 import { permissionDirective } from './foundation/permission'
+import { installCompositionEscapeGuard } from './foundation/keyboard/composition-escape-guard'
 
 async function bootstrap(): Promise<void> {
   // 仅开发构建按显式环境变量动态载入，生产构建不生成该入口或 debug 模块。
@@ -23,6 +24,9 @@ async function bootstrap(): Promise<void> {
   app.use(router)
   app.use(i18n)
   app.directive('perm', permissionDirective)
+
+  // BF20261013-017：全局弹窗 ESC 关闭的输入法保护（组合态 ESC 只取消候选、不关弹窗）
+  installCompositionEscapeGuard()
 
   app.mount('#app')
 }
