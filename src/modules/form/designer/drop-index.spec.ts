@@ -35,6 +35,15 @@ describe('resolveDropIndex 画布落点', () => {
     expect(resolveDropIndex([A, B, C], { x: 20, y: 130 })).toBe(2)
   })
 
+  it('BF20261013-004：格下半区一律插到该格之后（不因左半判前）', () => {
+    // 指针在 A 格下半左侧（y 过中线）：意图=放到 A 后面，而不是插到 A 前面
+    expect(resolveDropIndex([A, B, C], { x: 60, y: 80 })).toBe(1)
+    expect(resolveDropIndex([A, B, C], { x: 20, y: 99 })).toBe(1)
+    // 指针在 C（末行整行格）下半任意位置 → 追加末尾
+    expect(resolveDropIndex([A, B, C], { x: 60, y: 200 })).toBe(3)
+    expect(resolveDropIndex([A, B, C], { x: 590, y: 180 })).toBe(3)
+  })
+
   it('落点水平超出画布仍按最近字段判定', () => {
     // 指针在最右字段右侧远处：仍在同一行垂直范围内 → 按右半区判为插后
     expect(resolveDropIndex([A, B, C], { x: 900, y: 50 })).toBe(2)
