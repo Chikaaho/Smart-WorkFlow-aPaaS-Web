@@ -227,7 +227,8 @@ describe('DesignerCanvas 拖入落点', () => {
     dragEvent(wrapper, 'drop', { clientX: 0, clientY: 0 })
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.emitted('add')?.at(-1)).toEqual([pendingItem, 0])
+    // BF20261013-004：第 3 参=落点行内剩余 span（0 号位/空画布=整行 24）
+    expect(wrapper.emitted('add')?.at(-1)).toEqual([pendingItem, 0, 24])
     expect(wrapper.findAll('.field-shell--pending')).toHaveLength(0)
   })
 
@@ -239,7 +240,8 @@ describe('DesignerCanvas 拖入落点', () => {
 
     dragEvent(wrapper, 'drop', { clientX: 10, clientY: 400 })
     await wrapper.vm.$nextTick()
-    expect(wrapper.emitted('add')?.at(-1)).toEqual([pendingItem, 0])
+    // BF20261013-004：第 3 参=落点行内剩余 span（0 号位/空画布=整行 24）
+    expect(wrapper.emitted('add')?.at(-1)).toEqual([pendingItem, 0, 24])
   })
 
   it('BF20261013-004：画布内 leave 后紧接 dragover 不闪预览；真离开（无 dragover）延迟收起', async () => {
