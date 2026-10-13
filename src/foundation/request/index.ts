@@ -42,6 +42,11 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
   unauthorizedHandler = handler
 }
 
+/** 401 无感重放的防循环标记（BF20261013-001）：重放请求不再触发第二次 refresh 重试。 */
+interface AuthRetriableConfig {
+  _auth401Retried?: boolean
+}
+
 // ========== refreshHandler 依赖注入（避免 request ↔ auth/index 循环依赖） ==========
 
 type RefreshHandler = () => Promise<void>
@@ -159,12 +164,25 @@ client.interceptors.response.use(
     }
     return response
   },
-  (error: AxiosError) => {
-    const url = error.config?.url ?? ''
+  async (error: AxiosError) => {
+    const config = error.config
+    const url = config?.url ?? ''
     const isAuthEndpoint = AUTH_ENDPOINTS_EXCLUDED_FROM_401_HANDLING.some((path) =>
       url.includes(path),
     )
     if (error.response?.status === 401 && !isAuthEndpoint) {
+      // BF20261013-001：401 先走单飞 refresh 无感续期，成功则重放原请求一次；
+      // refresh 失败（rt cookie 缺失/无效/撤销）或重放仍 401 才清态跳登录。
+      const alreadyRetried = (config as AuthRetriableConfig | undefined)?._auth401Retried === true
+      if (refreshHandler && config && !alreadyRetried) {
+        try {
+          await refreshHandler()
+          ;(config as AuthRetriableConfig)._auth401Retried = true
+          return client.request(config)
+        } catch {
+          // 无效 refresh 凭证：落回登出路径
+        }
+      }
       unauthorizedHandler?.(window.location.pathname + window.location.search)
     } else if (!isAuthEndpoint) {
       // TODO(skeleton): 5xx / 网络层基础设施异常分级处理，对齐后端「过滤层异常分级」原则
