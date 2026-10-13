@@ -106,13 +106,27 @@ const rootRef = ref<CanvasElement | null>(null)
 /** 落点下标；null = 指针不在画布上（不显示预览）。 */
 const dropIndex = ref<number | null>(null)
 
-// 新一轮拖拽开始时先清空上一轮的落点，预览只在指针真正进入画布后出现。
+// 新一轮拖拽开始时先清空上一轮的落点与几何快照，预览只在指针真正进入画布后出现。
 watch(
   () => props.pendingItem,
   () => {
     dropIndex.value = null
+    dragGeometry = null
   },
 )
+
+/**
+ * BF20261013-004：本轮拖拽的真实字段格几何快照。
+ * 预览格渲染会把其他格推移位置——若每次 dragover 实时取矩形，指针不动判定也会随
+ * 布局漂移（预览在已有组件间跳位）。拖入期间无排序变更，快照一次即稳定；
+ * 自动滚动改变视口时按「页面滚动 + 滚动容器 scrollTop」差值补偿回同一坐标系。
+ */
+let dragGeometry: { rects: DropRect[]; scrollOffset: number } | null = null
+
+function currentScrollOffset(): number {
+  const scroller = scrollContainer()
+  return (globalThis.scrollY ?? 0) + (scroller?.scrollTop ?? 0)
+}
 
 /**
  * 渲染列表 = 真实字段 + （指针在画布上时的）预览格。
@@ -168,24 +182,45 @@ function autoScrollDuringDrag(point: DropPoint) {
   }
 }
 
+/** dragleave 延迟收起挂起的定时器：画布内移动（leave 后必有 dragover）不闪预览。 */
+let leaveTimer: ReturnType<typeof globalThis.setTimeout> | null = null
+
 /** dragover 必须 preventDefault 才允许放置；顺带实时更新落点。 */
 function onDragOver(event: DragLikeEvent) {
+  if (leaveTimer !== null) {
+    globalThis.clearTimeout(leaveTimer)
+    leaveTimer = null
+  }
   if (props.readonly || !props.pendingItem) return
   event.preventDefault()
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
   const point = { x: event.clientX, y: event.clientY }
   autoScrollDuringDrag(point)
-  const next = resolveDropIndex(shellRects(), point)
+  if (!dragGeometry) dragGeometry = { rects: shellRects(), scrollOffset: currentScrollOffset() }
+  // 快照存的是视口坐标：scrollTop 增加 = 内容在视口中上移，故按 -shift 平移
+  const shift = currentScrollOffset() - dragGeometry.scrollOffset
+  const rects =
+    shift === 0
+      ? dragGeometry.rects
+      : dragGeometry.rects.map((r) => ({ ...r, top: r.top - shift, bottom: r.bottom - shift }))
+  const next = resolveDropIndex(rects, point)
   if (next !== dropIndex.value) dropIndex.value = next
 }
 
-/** 指针移出画布（含在子元素间移动）才收起预览。 */
-function onDragLeave(event: DragLikeEvent) {
-  const root = rootRef.value
-  const related = event.relatedTarget
-  // relatedTarget 仍落在画布内 = 在子元素间移动，不算离开（contains 形参类型由自身派生，避免命名 DOM 全局）
-  if (root && related && root.contains(related as Parameters<typeof root.contains>[0])) return
-  dropIndex.value = null
+/**
+ * 指针移出画布就收起预览；几何快照**不**在这里清。
+ * 原因（BF20261013-004）：拖拽中预览渲染/自动滚动会让指针下的节点更替，浏览器派发
+ * dragleave——Chrome 对这类事件往往不回传坐标（clientX/Y=0），无论按 relatedTarget
+ * 还是坐标判「真离开」都会误清快照，落点判定随即随重建后的布局漂移（预览在组件间跳位）。
+ * 快照只在两处重置：新一轮拖拽（watch pendingItem）与 drop——期间残留无害：
+ * dragover 只在画布根上触发，画布外的停留不产生任何判定。
+ */
+function onDragLeave() {
+  if (leaveTimer !== null) globalThis.clearTimeout(leaveTimer)
+  leaveTimer = globalThis.setTimeout(() => {
+    leaveTimer = null
+    dropIndex.value = null
+  }, 120)
 }
 
 /** 放置：按落点交给宿主插入（流式顺序，不做自由定位）。 */
@@ -195,6 +230,7 @@ function onDrop(event: DragLikeEvent) {
   event.preventDefault()
   const at = Math.min(Math.max(dropIndex.value ?? items.value.length, 0), items.value.length)
   dropIndex.value = null
+  dragGeometry = null
   emit('add', pending, at)
 }
 

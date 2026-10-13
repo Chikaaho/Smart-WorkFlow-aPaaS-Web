@@ -242,21 +242,23 @@ describe('DesignerCanvas 拖入落点', () => {
     expect(wrapper.emitted('add')?.at(-1)).toEqual([pendingItem, 0])
   })
 
-  it('指针移出画布才收起预览，未离开则保留', async () => {
+  it('BF20261013-004：画布内 leave 后紧接 dragover 不闪预览；真离开（无 dragover）延迟收起', async () => {
     const wrapper = mountWithPending([item('di_1', 'a')])
     dragEvent(wrapper, 'dragover', { clientX: 0, clientY: 0 })
     await wrapper.vm.$nextTick()
 
-    // 在画布内部移动（relatedTarget 仍在画布内）→ 保留预览
+    // 在画布内部移动：leave 后紧接 dragover（延迟清理被取消）→ 预览保留
     dragEvent(wrapper, 'dragleave', {
       relatedTarget: wrapper.find('.canvas__list').element,
     })
     await wrapper.vm.$nextTick()
+    dragEvent(wrapper, 'dragover', { clientX: 10, clientY: 400 })
+    await wrapper.vm.$nextTick()
     expect(wrapper.findAll('.field-shell--pending')).toHaveLength(1)
 
-    // 真正离开画布 → 收起预览
+    // 真正离开画布：leave 后无 dragover → 延迟收起预览
     dragEvent(wrapper, 'dragleave', { relatedTarget: document.body })
-    await wrapper.vm.$nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 200))
     expect(wrapper.findAll('.field-shell--pending')).toHaveLength(0)
   })
 })
