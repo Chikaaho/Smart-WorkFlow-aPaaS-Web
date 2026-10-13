@@ -288,6 +288,103 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     expect((r as Record<string, unknown>).__dictType__).toBe('sys_user_gender')
   })
 
+  /* ---- BF20261013-009：选择类字段数据来源 ---- */
+
+  it('DICT 未配置数据源：占位提示为「请配置数据」', () => {
+    const schema = {
+      title: 'F',
+      fields: [{ name: 'pick', type: 'DICT' as const, dictType: '', source: 'dict' as const }],
+    }
+    const r = toFormCreateRule(schema)[0] as Record<string, unknown>
+    expect((r.props as Record<string, unknown>).placeholder).toBe('请配置数据')
+  })
+
+  it('DICT 已绑定字典：占位提示为通用「请选择」，不带 __dictType__ 之外的元数据', () => {
+    const schema = {
+      title: 'F',
+      fields: [{ name: 'pick', type: 'DICT' as const, dictType: 'sys_user_sex' }],
+    }
+    const r = toFormCreateRule(schema)[0] as Record<string, unknown>
+    expect((r.props as Record<string, unknown>).placeholder).toBe('请选择')
+  })
+
+  it('DICT custom 来源：候选键值对映射 label=value / value=key，不再传 __dictType__', () => {
+    const schema = {
+      title: 'F',
+      fields: [
+        {
+          name: 'meal',
+          type: 'DICT' as const,
+          dictType: '',
+          source: 'custom' as const,
+          options: [
+            { key: 'canyin', value: '餐饮' },
+            { key: 'jiaotong', value: '交通' },
+          ],
+        },
+      ],
+    }
+    const r = toFormCreateRule(schema)[0] as Record<string, unknown>
+    expect(r.type).toBe('select')
+    expect(r.options).toEqual([
+      { value: 'canyin', label: '餐饮' },
+      { value: 'jiaotong', label: '交通' },
+    ])
+    expect((r as Record<string, unknown>).__dictType__).toBeUndefined()
+    expect((r.props as Record<string, unknown>).placeholder).toBe('请选择')
+  })
+
+  it('DICT 下拉多选：props.multiple=true 且初始值为空数组', () => {
+    const schema = {
+      title: 'F',
+      fields: [{ name: 'pick', type: 'DICT' as const, dictType: 'sys_user_sex', multiple: true }],
+    }
+    const r = toFormCreateRule(schema)[0] as Record<string, unknown>
+    expect((r.props as Record<string, unknown>).multiple).toBe(true)
+    expect(r.value).toEqual([])
+  })
+
+  it('DICT renderAs=radio：映射 radio 规则（dict 来源保留 __dictType__）', () => {
+    const schema = {
+      title: 'F',
+      fields: [
+        {
+          name: 'pick',
+          type: 'DICT' as const,
+          dictType: 'sys_user_sex',
+          renderAs: 'radio' as const,
+        },
+      ],
+    }
+    const r = toFormCreateRule(schema)[0] as Record<string, unknown>
+    expect(r.type).toBe('radio')
+    expect((r as Record<string, unknown>).__dictType__).toBe('sys_user_sex')
+  })
+
+  it('MULTISELECT 字典来源：空选项 + __dictType__ 元数据；custom 来源保持键值对映射', () => {
+    const schema = {
+      title: 'F',
+      fields: [
+        {
+          name: 'm1',
+          type: 'MULTISELECT' as const,
+          source: 'dict' as const,
+          dictType: 'sys_opt',
+        },
+        {
+          name: 'm2',
+          type: 'MULTISELECT' as const,
+          options: [{ key: 'a', value: '甲' }],
+        },
+      ],
+    }
+    const [r1, r2] = toFormCreateRule(schema) as Record<string, unknown>[]
+    expect(r1!.options).toEqual([])
+    expect(r1!.__dictType__).toBe('sys_opt')
+    expect(r2!.options).toEqual([{ value: 'a', label: '甲' }])
+    expect(r2!.__dictType__).toBeUndefined()
+  })
+
   it('maps REFERENCE to disabled input as unified button placeholder', () => {
     const schema = {
       title: 'F',
@@ -498,8 +595,9 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     }
     const rules = toFormCreateRule(schema)
     const children = (rules[0] as Record<string, unknown>).children as Record<string, unknown>[]
-    expect(children[0].type).toBe('select')
-    expect((children[0] as Record<string, unknown>).renderAs).toBe('radio')
+    // BF20261013-009：renderAs=radio 子字段直接映射 radio 规则（字典来源保留 __dictType__ 元数据）
+    expect(children[0].type).toBe('radio')
+    expect(children[0].__dictType__).toBe('sys_sex')
   })
 
   it('TABLE children DICT sub-field without renderAs omits renderAs metadata', () => {

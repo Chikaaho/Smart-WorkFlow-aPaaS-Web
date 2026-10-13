@@ -69,3 +69,44 @@ describe('FieldPalette 原生拖拽', () => {
     expect(types).toEqual(['TEXT', 'NUMBER'])
   })
 })
+
+/**
+ * BF20261013-009：选择类入口——下拉选择 / 单选框同为 DICT（变体），开关为 BOOL。
+ */
+describe('FieldPalette 选择类入口（BF20261013-009）', () => {
+  it('DICT 双入口：下拉选择与单选框，开关入口映射 BOOL', () => {
+    const wrapper = mountPalette()
+    const dictItems = wrapper.findAll('.palette__item[data-field-type="DICT"]')
+    expect(dictItems.map((b) => b.text())).toEqual(['下拉选择', '单选框'])
+    expect(dictItems.map((b) => b.attributes('data-field-variant'))).toEqual(['dropdown', 'radio'])
+    expect(itemEl(wrapper, 'BOOL').text()).toBe('开关')
+  })
+
+  it('单选框入口产出 DICT + renderAs=radio，标签取入口名', async () => {
+    const wrapper = mountPalette()
+    await wrapper
+      .find('.palette__item[data-field-type="DICT"][data-field-variant="radio"]')
+      .trigger('dragstart')
+
+    const emitted = wrapper.emitted('drag-start')
+    const item = emitted![0][0] as { field: Record<string, unknown> }
+    expect(item.field).toMatchObject({
+      type: 'DICT',
+      renderAs: 'radio',
+      label: '单选框',
+      source: 'dict',
+    })
+  })
+
+  it('下拉选择入口产出 DICT 缺省（renderAs 缺省 select、source=dict）', async () => {
+    const wrapper = mountPalette()
+    await wrapper
+      .find('.palette__item[data-field-type="DICT"][data-field-variant="dropdown"]')
+      .trigger('dragstart')
+
+    const emitted = wrapper.emitted('drag-start')
+    const item = emitted![0][0] as { field: Record<string, unknown> }
+    expect(item.field).toMatchObject({ type: 'DICT', source: 'dict' })
+    expect(item.field.renderAs).toBeUndefined()
+  })
+})

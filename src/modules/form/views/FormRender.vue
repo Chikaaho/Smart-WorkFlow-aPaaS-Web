@@ -119,6 +119,10 @@ function initField(field: FormSchemaField) {
     case 'IMAGE':
       formData[field.name] = []
       break
+    case 'DICT':
+      // BF20261013-009：下拉多选默认空数组（值=key/code 列表）；单选保持空串
+      formData[field.name] = field.multiple ? [] : ''
+      break
     case 'USER':
     case 'DEPT':
       // P63 多选：默认空数组（值=ID 列表）；单选保持空串

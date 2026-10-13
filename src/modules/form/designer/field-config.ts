@@ -22,6 +22,8 @@ export interface FieldPatch {
   colSpan?: number
   dictType?: string
   renderAs?: 'select' | 'radio'
+  /** 选择类字段数据来源（BF20261013-009 契约已落 DictField/MultiSelectField.source）：dict / custom。 */
+  source?: import('@/contracts/form-schema').FieldOptionSource
   /** REFERENCE 字段的目标表单 formKey（非 id）。红线：存 formKey，禁存 UUID。 */
   targetFormId?: string
   /** 静态默认值（v0.0.2 契约已落 BaseField.defaultValue）。 */

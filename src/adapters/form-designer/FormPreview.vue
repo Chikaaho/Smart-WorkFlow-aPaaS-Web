@@ -26,11 +26,13 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  watchEffect,
   type App,
 } from 'vue'
 import formCreate from '@form-create/element-ui'
 import { setupFcApp } from './setup'
 import { toFormCreateRule } from './index'
+import { loadDict, type DictItem } from '@/foundation/dict'
 import type { FormSchema } from '@/contracts/form-schema'
 
 const props = withDefaults(
@@ -42,7 +44,70 @@ const props = withDefaults(
   { mode: 'fill' },
 )
 
-const rules = computed(() => toFormCreateRule(props.schema))
+/* ── 字典项异步装载（BF20261013-009）──
+ * 规则带 __dictType__ 的 select/radio/checkbox 由运行时字典填充选项；
+ * form-create 侧自装一份（带缓存），装载完成后自动重算 rules 触发重渲。 */
+const dictItemsByType = ref<Record<string, DictItem[]>>({})
+const dictLoading = new Map<string, Promise<void>>()
+
+function ensureDictItems(type: string) {
+  if (!type || dictItemsByType.value[type] || dictLoading.has(type)) return
+  const promise = loadDict(type)
+    .then((items) => {
+      dictItemsByType.value = { ...dictItemsByType.value, [type]: items }
+    })
+    .catch(() => {
+      globalThis.console?.warn(`[form-preview] failed to load dict: ${type}`)
+    })
+    .finally(() => {
+      dictLoading.delete(type)
+    })
+  dictLoading.set(type, promise)
+}
+
+function collectDictTypes(list: unknown[], acc: Set<string> = new Set()): Set<string> {
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue
+    const rule = item as Record<string, unknown>
+    if (typeof rule.__dictType__ === 'string' && rule.__dictType__.trim()) {
+      acc.add(rule.__dictType__)
+    }
+    if (Array.isArray(rule.children)) collectDictTypes(rule.children, acc)
+  }
+  return acc
+}
+
+/** 把已装载的字典项回填进 option 为空的 __dictType__ 规则（含子表 children）。 */
+function applyDictItems(list: unknown[]) {
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue
+    const rule = item as Record<string, unknown>
+    const dictType = rule.__dictType__
+    if (
+      typeof dictType === 'string' &&
+      dictType.trim() &&
+      Array.isArray(rule.options) &&
+      rule.options.length === 0
+    ) {
+      const items = dictItemsByType.value[dictType]
+      if (items) {
+        rule.options = items.map((i) => ({ value: i.value, label: i.label }))
+      }
+    }
+    if (Array.isArray(rule.children)) applyDictItems(rule.children)
+  }
+}
+
+const rules = computed(() => {
+  const result = toFormCreateRule(props.schema)
+  applyDictItems(result)
+  return result
+})
+
+// 触发字典装载：幂等（缓存 + 在途去重），装载完成经 dictItemsByType 触发 rules 重算
+watchEffect(() => {
+  collectDictTypes(toFormCreateRule(props.schema)).forEach((type) => ensureDictItems(type))
+})
 
 // 子 app 挂载点（模板 ref）。不显式标 DOM 全局类型，避免 eslint no-undef 误报；
 // 仅流向 childApp.mount(Element | string)，类型安全由该签名兜底。

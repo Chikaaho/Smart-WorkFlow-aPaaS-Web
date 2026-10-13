@@ -113,10 +113,12 @@ export const FIELD_TYPE_REGISTRY: readonly FieldTypeDescriptor[] = [
     },
     icon: 'List',
     // DICT 必带 dictType（DictField 契约要求），初值空串，配置面板再选具体字典。
+    // BF20261013-009：数据来源显式缺省 dict；custom 时用候选选项（配置面板切换）。
     createDefault: (name) =>
       ({
         ...baseField('DICT', name, i18n.global.t('form.fieldTypeDict')),
         dictType: '',
+        source: 'dict',
       }) as FormSchemaField,
     configComponent: DictConfig,
   },
@@ -158,6 +160,7 @@ export const FIELD_TYPE_REGISTRY: readonly FieldTypeDescriptor[] = [
       ({
         ...baseField('MULTISELECT', name, i18n.global.t('form.fieldTypeMultiSelect')),
         options: [],
+        source: 'custom',
       }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },

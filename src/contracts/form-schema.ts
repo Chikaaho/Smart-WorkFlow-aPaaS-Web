@@ -99,6 +99,10 @@ export interface TableSubField {
   defaultValue?: unknown
   /** USER/DEPT 子字段多选（P63）：语义同 UserField/DeptField.multiple。 */
   multiple?: boolean
+  /** 选择类子字段数据来源（BF20261013-009）：缺省按类型（DICT=dict、其余=custom）。 */
+  source?: FieldOptionSource
+  /** source=custom 时的候选选项（键值对，BF20261013-009）。 */
+  options?: FormFieldOption[]
 }
 
 interface BaseField {
@@ -147,6 +151,13 @@ export interface DictField extends BaseField {
   type: 'DICT'
   dictType: string
   renderAs?: 'select' | 'radio'
+  /**
+   * 数据来源（BF20261013-009）：'dict'=绑定系统字典（缺省，历史定义兼容）、'custom'=自定义候选选项。
+   * custom 时 dictType 不再参与值域校验与运行时装载。
+   */
+  source?: FieldOptionSource
+  /** source='custom' 时的候选选项（键值对：展示 value、提交 key）。 */
+  options?: FormFieldOption[]
 }
 
 export interface ReferenceField extends BaseField {
@@ -158,6 +169,9 @@ export interface TableField extends BaseField {
   type: 'TABLE'
   subFields: TableSubField[]
 }
+
+/** 选择类字段数据来源（BF20261013-009）：字典 / 自定义键值对。 */
+export type FieldOptionSource = 'dict' | 'custom'
 
 /**
  * 候选选项键值对：key=提交/存储的稳定标识（不含空白字符、同字段内不重复），
@@ -190,10 +204,14 @@ export function parseFormFieldOptions(raw: unknown): FormFieldOption[] {
   return rows
 }
 
-/** 多选：候选选项为键值对列表，提交值为选中的 key 字符串数组。 */
+/** 多选：候选选项为键值对列表，提交值为选中的 key 字符串数组（BF20261013-008；009 增数据来源）。 */
 export interface MultiSelectField extends BaseField {
   type: 'MULTISELECT'
   options?: FormFieldOption[]
+  /** 数据来源：'custom'=候选选项（缺省，历史定义兼容）、'dict'=绑定系统字典（dictType 生效）。 */
+  source?: FieldOptionSource
+  /** source='dict' 时绑定的字典类型编码。 */
+  dictType?: string
 }
 
 /** 附件：值 = AttachmentItem[]（[{storageKey,name}]）。 */

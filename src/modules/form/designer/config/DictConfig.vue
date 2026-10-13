@@ -1,38 +1,37 @@
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
 /**
- * 字典选择（DICT）配置面板。
- * 契约键：label / name / required / dictType（绑定字典）/ renderAs（下拉 or 单选）。
+ * 下拉选择（DICT）配置面板。
+ * 契约键：label / name / required / dictType / renderAs / source / options / multiple。
+ * BF20261013-009：数据来源可选 字典（dictType）/ 自定义（键值对 options）；
+ * 下拉形态再分 下拉单选 / 下拉多选（multiple，提交值为 key/code 数组）。
  * 默认值无契约键 → seam（禁自造键）。
- *
- * 绑定字典走真接：foundation/dict.listDictTypes()（单一请求层 foundation/request）。
- * 字典是横切基础设施，清单读取沉淀在 foundation/dict —— modules/form 不直引 modules/system
- * 的字典管理 API，遵守跨模块导入边界。取不到（后端未就绪）时下拉留空，作者可重选不阻塞。
  */
-import { ref, onMounted } from 'vue'
-import type { DictField } from '@/contracts/form-schema'
-import { listDictTypes, type DictTypeItem } from '@/foundation/dict'
+import { computed } from 'vue'
+import type { DictField, FieldOptionSource } from '@/contracts/form-schema'
 import type { FieldPatch } from '../field-config'
 import CommonConfigRows from './CommonConfigRows.vue'
+import DictTypeSelect from './DictTypeSelect.vue'
+import OptionsKvEditor from './OptionsKvEditor.vue'
 import ConfigSeamNote from './ConfigSeamNote.vue'
 
 const props = defineProps<{ field: DictField; otherNames: string[] }>()
 const emit = defineEmits<{ update: [patch: FieldPatch] }>()
 
-const dictTypes = ref<DictTypeItem[]>([])
+/** 数据来源：缺省 dict（历史定义兼容）。 */
+const source = computed<FieldOptionSource>(() => props.field.source ?? 'dict')
 
-onMounted(async () => {
-  try {
-    dictTypes.value = await listDictTypes()
-  } catch {
-    ElMessage.error(t('common.loadFailed'))
-    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
-    // 非阻塞：字典类型清单取不到则留空，作者可稍后重开面板重试。
-  }
-})
+const renderAs = computed(() => props.field.renderAs ?? 'select')
+
+function onSource(value: string | number | boolean | undefined) {
+  emit('update', { source: value === 'custom' ? 'custom' : 'dict' })
+}
+
+function onSelectMode(value: string | number | boolean | undefined) {
+  emit('update', { multiple: value === 'multiple' })
+}
 </script>
 
 <template>
@@ -46,26 +45,32 @@ onMounted(async () => {
     />
 
     <div class="row">
+      <label class="row__label">{{ t('form.optionSource') }}</label>
+      <el-radio-group :model-value="source" @update:model-value="onSource">
+        <el-radio value="dict">{{ t('form.optionSourceDict') }}</el-radio>
+        <el-radio value="custom">{{ t('form.optionSourceCustom') }}</el-radio>
+      </el-radio-group>
+    </div>
+
+    <div v-if="source === 'dict'" class="row">
       <label class="row__label">{{ t('form.bindDict') }}</label>
-      <el-select
+      <DictTypeSelect
         :model-value="props.field.dictType"
-        :placeholder="t('form.selectDictType')"
-        class="row__control"
         @update:model-value="(v: string) => emit('update', { dictType: v })"
-      >
-        <el-option
-          v-for="dt in dictTypes"
-          :key="dt.code"
-          :label="t('common.nameWithCode', { name: dt.name, code: dt.code })"
-          :value="dt.code"
-        />
-      </el-select>
+      />
+    </div>
+    <div v-else class="row">
+      <label class="row__label">{{ t('form.multiselectOptions') }}</label>
+      <OptionsKvEditor
+        :options="props.field.options ?? []"
+        @update:options="(opts) => emit('update', { options: opts })"
+      />
     </div>
 
     <div class="row">
       <label class="row__label">{{ t('form.displayMode') }}</label>
       <el-radio-group
-        :model-value="props.field.renderAs ?? 'select'"
+        :model-value="renderAs"
         @update:model-value="
           (v: string | number | boolean | undefined) =>
             emit('update', { renderAs: v === 'radio' ? 'radio' : 'select' })
@@ -73,6 +78,17 @@ onMounted(async () => {
       >
         <el-radio value="select">{{ t('form.renderSelect') }}</el-radio>
         <el-radio value="radio">{{ t('form.renderRadio') }}</el-radio>
+      </el-radio-group>
+    </div>
+
+    <div v-if="renderAs === 'select'" class="row">
+      <label class="row__label">{{ t('form.selectMode') }}</label>
+      <el-radio-group
+        :model-value="props.field.multiple ? 'multiple' : 'single'"
+        @update:model-value="onSelectMode"
+      >
+        <el-radio value="single">{{ t('form.selectModeSingle') }}</el-radio>
+        <el-radio value="multiple">{{ t('form.selectModeMulti') }}</el-radio>
       </el-radio-group>
     </div>
 
@@ -91,9 +107,5 @@ onMounted(async () => {
   font-size: var(--sw-font-emphasis);
   font-weight: var(--sw-font-weight-emphasis);
   color: var(--sw-text-regular);
-}
-
-.row__control {
-  width: 100%;
 }
 </style>

@@ -49,8 +49,10 @@ interface RawSubFieldDef {
   renderAs?: string
   targetFormId?: string
   defaultValue?: unknown
-  /** MULTISELECT 候选选项：键值对（新）或 string[]（历史定义，parseFormFieldOptions 兼容）。 */
+  /** MULTISELECT/选择类候选选项：键值对（新）或 string[]（历史定义，parseFormFieldOptions 兼容）。 */
   options?: FormFieldOption[] | string[]
+  /** 选择类字段数据来源（BF20261013-009）：dict / custom。 */
+  source?: string
   text?: string
   color?: string
   fontSize?: number
@@ -108,6 +110,10 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
       type,
       dictType: raw.dictType ?? '',
       ...(raw.renderAs !== undefined ? { renderAs: raw.renderAs as 'select' | 'radio' } : {}),
+      // BF20261013-009：数据来源 + 自定义候选选项 + 下拉多选
+      ...(raw.source === 'dict' || raw.source === 'custom' ? { source: raw.source } : {}),
+      ...(raw.options !== undefined ? { options: parseFormFieldOptions(raw.options) } : {}),
+      ...(raw.multiple !== undefined ? { multiple: raw.multiple } : {}),
     }
   }
 
@@ -125,6 +131,9 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
       type,
       // 键值对归一（历史 string[] 定义经 parseFormFieldOptions 兼容，key=value=原字符串）
       ...(raw.options !== undefined ? { options: parseFormFieldOptions(raw.options) } : {}),
+      // BF20261013-009：数据来源（custom 缺省/dict 绑定字典）
+      ...(raw.source === 'dict' || raw.source === 'custom' ? { source: raw.source } : {}),
+      ...(raw.dictType !== undefined ? { dictType: raw.dictType } : {}),
     }
   }
 
@@ -189,6 +198,9 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
         ...(sf.renderAs !== undefined ? { renderAs: sf.renderAs as 'select' | 'radio' } : {}),
         ...(sf.targetFormId !== undefined ? { targetFormId: sf.targetFormId } : {}),
         ...(sf.multiple !== undefined ? { multiple: sf.multiple } : {}),
+        // BF20261013-009：选择类子字段同样支持数据来源与自定义候选选项
+        ...(sf.source === 'dict' || sf.source === 'custom' ? { source: sf.source } : {}),
+        ...(sf.options !== undefined ? { options: parseFormFieldOptions(sf.options) } : {}),
       }))
     return { ...base, type, subFields }
   }
@@ -333,14 +345,40 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     }
 
     case 'DICT': {
+      // BF20261013-009：数据来源 dict=绑字典（__dictType__ 元数据运行时装载）、
+      // custom=候选键值对直接映射（展示 value、提交 key）；下拉支持单选/多选，另可渲染单选按钮组。
+      const dictField = field as import('@/contracts/form-schema').DictField
+      const customSource = dictField.source === 'custom'
+      const customOptions = parseFormFieldOptions(dictField.options).filter((o) => o.key !== '')
+      const dictBound = !customSource && !!dictField.dictType?.trim()
+      const configured = customSource ? customOptions.length > 0 : dictBound
+      if (dictField.renderAs === 'radio') {
+        rule.type = 'radio'
+        rule.value = ''
+        rule.options = customSource
+          ? customOptions.map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
+          : []
+        if (!customSource) (rule as Record<string, unknown>).__dictType__ = dictField.dictType
+        break
+      }
       rule.type = 'select'
-      rule.options = []
+      rule.value = dictField.multiple ? [] : ''
+      rule.options = customSource
+        ? customOptions.map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
+        : []
       rule.props = {
         clearable: true,
-        ...(field.placeholder ? { placeholder: field.placeholder } : {}),
+        ...(dictField.multiple ? { multiple: true } : {}),
+        // 未配置数据源时给出明确提示（EP 子 app 无中文本地化，缺省 "Select" 对用户无意义）
+        ...(dictField.placeholder
+          ? { placeholder: dictField.placeholder }
+          : {
+              placeholder: configured
+                ? i18n.global.t('common.pleaseSelect')
+                : i18n.global.t('form.configureDataPrompt'),
+            }),
       }
-      // __dictType__ 标记供渲染层在运行时通过 useDict 加载字典项并填充 options
-      ;(rule as Record<string, unknown>).__dictType__ = field.dictType
+      if (!customSource) (rule as Record<string, unknown>).__dictType__ = dictField.dictType
       break
     }
 
@@ -357,13 +395,19 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     }
 
     case 'MULTISELECT': {
-      // 多选：checkbox-group，选项来自字段定义 options（键值对：展示 value、提交 key）
+      // 多选：checkbox-group；BF20261013-009 数据来源 dict=绑字典（元数据运行时装载）、
+      // custom=候选键值对（展示 value、提交 key）
       const multiField = field as import('@/contracts/form-schema').MultiSelectField
       rule.type = 'checkbox'
       rule.value = []
-      rule.options = parseFormFieldOptions(multiField.options)
-        .filter((opt) => opt.key !== '')
-        .map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
+      if (multiField.source === 'dict') {
+        rule.options = []
+        ;(rule as Record<string, unknown>).__dictType__ = multiField.dictType ?? ''
+      } else {
+        rule.options = parseFormFieldOptions(multiField.options)
+          .filter((opt) => opt.key !== '')
+          .map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
+      }
       break
     }
 
@@ -480,15 +524,33 @@ function mapSubFieldToCreateRule(sf: TableSubField): Record<string, unknown> {
       rule.value = false
       break
 
-    case 'DICT':
-      rule.type = 'select'
-      rule.options = []
-      rule.props = { clearable: true }
-      ;(rule as Record<string, unknown>).__dictType__ = sf.dictType ?? ''
-      if (sf.renderAs) {
-        ;(rule as Record<string, unknown>).renderAs = sf.renderAs
+    case 'DICT': {
+      // BF20261013-009：子字段同样支持自定义候选（展示 value、提交 key）与 dict 绑定
+      const customSource = sf.source === 'custom'
+      const customOptions = parseFormFieldOptions(sf.options).filter((o) => o.key !== '')
+      const configured = customSource ? customOptions.length > 0 : !!sf.dictType?.trim()
+      if (sf.renderAs === 'radio') {
+        rule.type = 'radio'
+        rule.value = ''
+        rule.options = customSource
+          ? customOptions.map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
+          : []
+        if (!customSource) (rule as Record<string, unknown>).__dictType__ = sf.dictType ?? ''
+        break
       }
+      rule.type = 'select'
+      rule.value = sf.multiple ? [] : ''
+      rule.options = customSource
+        ? customOptions.map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
+        : []
+      rule.props = {
+        clearable: true,
+        ...(sf.multiple ? { multiple: true } : {}),
+        ...(configured ? {} : { placeholder: i18n.global.t('form.configureDataPrompt') }),
+      }
+      if (!customSource) (rule as Record<string, unknown>).__dictType__ = sf.dictType ?? ''
       break
+    }
 
     case 'REFERENCE':
     case 'TABLE':

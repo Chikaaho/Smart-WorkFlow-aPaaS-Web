@@ -91,9 +91,13 @@ function ensureDictLoaded(type: string): Promise<void> {
 
 /**
  * 业务层取字典只走这里，禁止硬编码枚举到文案的映射。
+ * BF20261013-009：type 为空（未配置字典/自定义数据来源）时直接返回空列表，不发无谓请求。
  */
 export function useDict(type: string): { items: Ref<DictItem[]> } {
   const items = ref<DictItem[]>(dictRegistry.get(type) ?? [])
+  if (!type) {
+    return { items }
+  }
   void ensureDictLoaded(type).then(() => {
     items.value = dictRegistry.get(type) ?? []
   })

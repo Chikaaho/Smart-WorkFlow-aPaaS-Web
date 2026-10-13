@@ -91,6 +91,13 @@ function onSpan12(value: number | undefined) {
   emit('update', { colSpan: normalizeFormFieldColSpan(value * 2, props.field.field.type) })
 }
 
+/** 数据类型族展示（BF20261013-009：下拉多选提交为 key 数组，存储族显示 JSON）。 */
+const storageLabel = computed(() => {
+  if (!props.field) return ''
+  if (props.field.field.type === 'DICT' && props.field.field.multiple) return 'JSON'
+  return getFieldTypeStorage(props.field.field.type)
+})
+
 /** 字段标识后缀展示：field_ 前缀被系统吃掉，用户只见后缀（V011-BUG-016）。 */
 const fieldKeySuffix = computed(() => {
   const name = props.field?.field.name ?? ''
@@ -201,7 +208,7 @@ function onFieldKeySuffix(raw: string) {
       <div v-if="field.field.type === 'TEXT'" class="config__type-pair">
         <div class="config__row">
           <label class="config__label">{{ t('fieldList.colType') }}</label>
-          <el-input :model-value="getFieldTypeStorage(field.field.type)" disabled />
+          <el-input :model-value="storageLabel" disabled />
         </div>
         <div class="config__row">
           <label class="config__label">{{ t('form.maxLength') }}</label>
@@ -216,7 +223,7 @@ function onFieldKeySuffix(raw: string) {
       </div>
       <div v-else class="config__row">
         <label class="config__label">{{ t('fieldList.colType') }}</label>
-        <el-input :model-value="getFieldTypeStorage(field.field.type)" disabled />
+        <el-input :model-value="storageLabel" disabled />
       </div>
 
       <!-- 类型专属配置（注册表动态挂载；已发布只读时不出可编辑面板） -->

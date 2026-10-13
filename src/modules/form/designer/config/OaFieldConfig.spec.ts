@@ -1,7 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import OaFieldConfig from './OaFieldConfig.vue'
 import type { FormSchemaField } from '@/contracts/form-schema'
+
+// BF20261013-009：多选/下拉的数据来源配置（字典）——字典类型清单走 mock，不发真实请求
+vi.mock('@/foundation/dict', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/foundation/dict')>()
+  return {
+    ...actual,
+    listDictTypes: vi.fn().mockResolvedValue([{ code: 'sys_opt', name: '选项字典' }]),
+    useDict: () => ({ items: { value: [] } }),
+  }
+})
 
 /**
  * 文字（LABEL）组件的样式属性面板：正文 / 颜色 / 字号 / 粗细 / 对齐。
@@ -154,5 +164,33 @@ describe('OaFieldConfig 多选候选选项键值对', () => {
     expect(rows).toHaveLength(2)
     expect((rows[1]![0].element as HTMLInputElement).value).toBe('交通')
     expect((rows[1]![1].element as HTMLInputElement).value).toBe('交通')
+  })
+})
+
+/**
+ * BF20261013-009：多选数据来源切换（自定义键值对 / 字典）。
+ */
+describe('OaFieldConfig 多选数据来源', () => {
+  it('缺省（custom）：显示候选选项编辑器，不显示字典绑定', () => {
+    const wrapper = mountConfig(multiField())
+    expect(wrapper.findAll('.row__kv').length).toBe(0)
+    expect(wrapper.find('.row__kv-add').exists()).toBe(true)
+    expect(wrapper.find('.dict-type-select').exists()).toBe(false)
+  })
+
+  it('source=dict：显示绑定字典下拉，隐藏候选选项编辑器', () => {
+    const wrapper = mountConfig(
+      multiField({ source: 'dict', dictType: 'sys_opt' } as Partial<FormSchemaField>),
+    )
+    expect(wrapper.find('.dict-type-select').exists()).toBe(true)
+    expect(wrapper.find('.row__kv-add').exists()).toBe(false)
+  })
+
+  it('切换数据来源回写 source', async () => {
+    const wrapper = mountConfig(multiField())
+    const dictRadio = wrapper.findAll('.el-radio').find((r) => r.text() === '字典')
+    expect(dictRadio).toBeTruthy()
+    await dictRadio!.find('input').setValue(true)
+    expect(lastPatch(wrapper).source).toBe('dict')
   })
 })

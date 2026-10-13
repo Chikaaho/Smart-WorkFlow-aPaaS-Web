@@ -64,19 +64,26 @@ const palette = computed<readonly FieldTypeDescriptor[]>(() =>
 )
 
 type PaletteEntry = {
+  /** 唯一键（同类型多变体时 `type#variant`）。 */
+  key: string
   type: string
+  /** BF20261013-009：DICT 双入口变体（下拉选择 / 单选框），其余类型无变体。 */
+  variant?: 'dropdown' | 'radio'
   label: string
   icon: string
   descriptor?: FieldTypeDescriptor
   disabled?: boolean
 }
 
+/** 控件库条目引用：字符串=注册表原样；对象=DICT 的显示变体（同类型双入口）。 */
+type PaletteTypeRef = string | { type: string; variant: 'dropdown' | 'radio' }
+
 const LABELS: Record<string, string> = {
   TEXT: 'form.paletteSingleLine',
   RICH_TEXT: 'form.paletteMultiLine',
   NUMBER: 'form.paletteNumberInput',
   DICT: 'form.paletteDropdown',
-  BOOL: 'form.paletteRadio',
+  BOOL: 'form.paletteSwitch',
   MULTISELECT: 'form.paletteCheckbox',
   DATE: 'form.paletteDateTime',
   ATTACHMENT: 'form.paletteUpload',
@@ -122,14 +129,15 @@ const ENTRY_ICONS: Record<string, string> = {
  * 形式保留位置，既不伪造能力，也不让拖拽通道产生未定义字段。
  */
 const paletteSearch = ref('')
-const PALETTE_GROUPS: Array<{ key: string; types: string[] }> = [
+const PALETTE_GROUPS: Array<{ key: string; types: PaletteTypeRef[] }> = [
   {
     key: 'form.paletteGroupBasic',
     types: [
       'TEXT',
       'RICH_TEXT',
       'NUMBER',
-      'DICT',
+      { type: 'DICT', variant: 'dropdown' },
+      { type: 'DICT', variant: 'radio' },
       'BOOL',
       'MULTISELECT',
       'DATE',
@@ -149,19 +157,32 @@ const paletteGrouped = computed(() => {
   // P63 G01：TABLE（子表）进入可用入口——表格列人员/部门来源是本轮验收合同范围；
   // 子字段编辑走画布盖层子画布（SubFieldDesigner）。GRID/GROUP/DIVIDER 仍为锁定占位。
   const unavailable = new Set(['SERIAL', 'GRID', 'GROUP', 'DIVIDER', 'IOT', 'AGENT'])
-  const entries = (type: string, groupKey: string): PaletteEntry | null => {
+  const entries = (ref: PaletteTypeRef, groupKey: string): PaletteEntry | null => {
+    const type = typeof ref === 'string' ? ref : ref.type
+    const variant = typeof ref === 'string' ? undefined : ref.variant
     const descriptor = descriptorByType.value.get(type as FieldType)
     if (props.allowedTypes && (!descriptor || !props.allowedTypes.includes(descriptor.type)))
       return null
     const labelKey =
-      groupKey === 'form.paletteGroupAdvanced' && type === 'RICH_TEXT'
-        ? 'form.fieldTypeRichText'
-        : (LABELS[type] ?? type)
+      variant === 'radio'
+        ? 'form.paletteRadio'
+        : variant === 'dropdown'
+          ? 'form.paletteDropdown'
+          : groupKey === 'form.paletteGroupAdvanced' && type === 'RICH_TEXT'
+            ? 'form.fieldTypeRichText'
+            : (LABELS[type] ?? type)
     const label = t(labelKey)
-    if (keyword && !label.toLowerCase().includes(keyword) && !type.toLowerCase().includes(keyword))
+    const entryKey = variant ? `${type}#${variant}` : type
+    if (
+      keyword &&
+      !label.toLowerCase().includes(keyword) &&
+      !entryKey.toLowerCase().includes(keyword)
+    )
       return null
     return {
+      key: entryKey,
       type,
+      variant,
       label,
       icon: ENTRY_ICONS[type] ?? 'InfoFilled',
       descriptor,
@@ -171,7 +192,7 @@ const paletteGrouped = computed(() => {
   return PALETTE_GROUPS.map((group) => ({
     key: group.key,
     items: group.types
-      .map((type) => entries(type, group.key))
+      .map((ref) => entries(ref, group.key))
       .filter((entry): entry is PaletteEntry => entry !== null),
   })).filter((group) => group.items.length > 0)
 })
@@ -213,19 +234,22 @@ const GLYPH_MAP: Record<string, string> = {
   HashGlyph: '#',
 }
 
-function createItem(descriptor: FieldTypeDescriptor): DesignerItem {
-  const name = generateColumnName(
-    descriptor.label,
-    props.existingNames,
-    props.existingNames.length + 1,
-  )
-  return { id: nextDesignerItemId(), field: descriptor.createDefault(name) }
+function createItem(entry: PaletteEntry): DesignerItem {
+  const descriptor = entry.descriptor!
+  const name = generateColumnName(entry.label, props.existingNames, props.existingNames.length + 1)
+  const field = descriptor.createDefault(name)
+  // BF20261013-009：DICT 单选框变体——数据来源/显示方式在配置面板继续可调
+  if (entry.variant === 'radio' && field.type === 'DICT') {
+    field.renderAs = 'radio'
+    field.label = entry.label
+  }
+  return { id: nextDesignerItemId(), field }
 }
 
 /** 保留拖拽入口，同时提供可访问的点击添加入口，二者使用同一默认装配逻辑。 */
 function addFromPalette(entry: PaletteEntry) {
   if (props.disabled || entry.disabled || !entry.descriptor) return
-  emit('add', createItem(entry.descriptor))
+  emit('add', createItem(entry))
 }
 
 /**
@@ -243,7 +267,7 @@ function onDragStart(event: PaletteDragEvent, entry: PaletteEntry) {
     // 仅用于宿主/浏览器识别，画布不依赖它读取字段类型（dragover 阶段数据是受保护的）。
     event.dataTransfer.setData('text/plain', entry.type)
   }
-  emit('drag-start', createItem(entry.descriptor))
+  emit('drag-start', createItem(entry))
 }
 
 /** 拖拽结束（含取消）：通知宿主清掉落点预览。 */
@@ -270,10 +294,11 @@ function onDragEnd() {
       <div class="palette__list">
         <button
           v-for="d in group.items"
-          :key="d.type"
+          :key="d.key"
           type="button"
           class="palette__item"
           :data-field-type="d.type"
+          :data-field-variant="d.variant"
           :disabled="d.disabled || disabled"
           :draggable="!d.disabled && !disabled"
           @dragstart="onDragStart($event, d)"

@@ -4,19 +4,22 @@ import { useI18n } from '@/locales'
 const { t } = useI18n()
 /**
  * OaFieldConfig — v0.0.2 新控件（MULTISELECT/ATTACHMENT/IMAGE/LABEL/USER/DEPT/TIME）配置面板。
- * MULTISELECT 编辑候选选项（键值对：左键右值，键不含空白且不重复，BF20261013-008）；
+ * MULTISELECT 配置数据来源（字典/自定义键值对，BF20261013-009；键值对编辑复用 OptionsKvEditor）；
  * LABEL 编辑文字正文与颜色/字号/粗细/对齐；
  * USER/DEPT 编辑多选开关（P63，写 definition multiple，缺省单选）；
  * 通用行（标签/列名/必填/默认值）复用 CommonConfigRows。
  */
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import type { FieldPatch } from '../field-config'
 import CommonConfigRows from './CommonConfigRows.vue'
+import DictTypeSelect from './DictTypeSelect.vue'
+import OptionsKvEditor from './OptionsKvEditor.vue'
 import {
-  parseFormFieldOptions,
   DEFAULT_FIELD_TEXT_ALIGN,
   type FieldTextAlign,
+  type FieldOptionSource,
   type LabelField,
+  type MultiSelectField,
   type UserField,
   type DeptField,
   type FormSchemaField,
@@ -30,59 +33,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{ update: [patch: FieldPatch] }>()
 
-/* ── 多选候选选项（键值对，BF20261013-008） ── */
+/* ── 多选数据来源（字典 / 自定义键值对，BF20261013-009） ── */
 
-interface OptionRow {
-  key: string
-  value: string
-}
-
-/** 行编辑器本地草稿：保留空行（增量输入中间态），随选中字段切换/定义回写重播种。 */
-const optionRows = ref<OptionRow[]>([])
-
-watch(
-  () => props.field,
-  (f) => {
-    if (f.type !== 'MULTISELECT') return
-    optionRows.value = parseFormFieldOptions(f.options).map((o) => ({ ...o }))
-  },
-  { immediate: true },
+/** 数据来源：缺省 custom（历史定义兼容）。 */
+const multiSource = computed<FieldOptionSource>(() =>
+  props.field.type === 'MULTISELECT'
+    ? ((props.field as MultiSelectField).source ?? 'custom')
+    : 'custom',
 )
 
-function emitOptions() {
-  emit('update', { options: optionRows.value.map((r) => ({ ...r })) })
+function onMultiSource(value: string | number | boolean | undefined) {
+  emit('update', { source: value === 'dict' ? 'dict' : 'custom' })
 }
-
-/** 键不允许任何空白字符（空格/制表符），输入即剔除；值保留原文（展示名可含空格）。 */
-function onOptionKey(index: number, raw: string) {
-  optionRows.value[index].key = raw.replace(/\s+/g, '')
-  emitOptions()
-}
-
-function onOptionValue(index: number, raw: string) {
-  optionRows.value[index].value = raw
-  emitOptions()
-}
-
-function addOptionRow() {
-  optionRows.value.push({ key: '', value: '' })
-  emitOptions()
-}
-
-function removeOptionRow(index: number) {
-  optionRows.value.splice(index, 1)
-  emitOptions()
-}
-
-/** UX 提示（不拦输入）：已填值的行缺键、或键重复。真把关在后端发布/运行时过滤。 */
-const optionKeyError = computed(() => {
-  if (optionRows.value.some((r) => r.key === '' && r.value !== '')) {
-    return t('form.optionKeyEmpty')
-  }
-  const keys = optionRows.value.filter((r) => r.key !== '').map((r) => r.key)
-  const duplicated = keys.find((k, i) => keys.indexOf(k) !== i)
-  return duplicated ? t('form.optionKeyDuplicate') : ''
-})
 
 function onText(value: string) {
   emit('update', { text: value })
@@ -157,34 +119,31 @@ function onPickerMultiple(value: string | number | boolean) {
     @update="(p) => emit('update', p)"
   />
 
-  <!-- BF20261013-008：候选选项键值对编辑——一行两输入框（左键右值），键无空格不重复，新增加一行 -->
-  <div v-if="field.type === 'MULTISELECT'" class="row">
-    <label class="row__label">{{ t('form.multiselectOptions') }}</label>
-    <div v-for="(row, i) in optionRows" :key="i" class="row__kv">
-      <el-input
-        :model-value="row.key"
-        :placeholder="t('form.optionKeyPlaceholder')"
-        @update:model-value="(v: string) => onOptionKey(i, v)"
-      />
-      <el-input
-        :model-value="row.value"
-        :placeholder="t('form.optionValuePlaceholder')"
-        @update:model-value="(v: string) => onOptionValue(i, v)"
-      />
-      <button
-        type="button"
-        class="row__kv-del"
-        :aria-label="t('form.optionRemoveRow')"
-        @click="removeOptionRow(i)"
-      >
-        ×
-      </button>
+  <!-- BF20261013-009：多选数据来源（字典 / 自定义键值对；键值对编辑复用 OptionsKvEditor） -->
+  <template v-if="field.type === 'MULTISELECT'">
+    <div class="row">
+      <label class="row__label">{{ t('form.optionSource') }}</label>
+      <el-radio-group :model-value="multiSource" @update:model-value="onMultiSource">
+        <el-radio value="custom">{{ t('form.optionSourceCustom') }}</el-radio>
+        <el-radio value="dict">{{ t('form.optionSourceDict') }}</el-radio>
+      </el-radio-group>
     </div>
-    <el-button class="row__kv-add" size="small" @click="addOptionRow">
-      {{ t('form.optionAddRow') }}
-    </el-button>
-    <p v-if="optionKeyError" class="row__error">{{ optionKeyError }}</p>
-  </div>
+
+    <div v-if="multiSource === 'dict'" class="row">
+      <label class="row__label">{{ t('form.bindDict') }}</label>
+      <DictTypeSelect
+        :model-value="(field as MultiSelectField).dictType ?? ''"
+        @update:model-value="(v: string) => emit('update', { dictType: v })"
+      />
+    </div>
+    <div v-else class="row">
+      <label class="row__label">{{ t('form.multiselectOptions') }}</label>
+      <OptionsKvEditor
+        :options="(field as MultiSelectField).options ?? []"
+        @update:options="(opts) => emit('update', { options: opts })"
+      />
+    </div>
+  </template>
 
   <!-- P63：人员/部门多选开关（写入 definition multiple；子表子字段同样可用） -->
   <div v-if="field.type === 'USER' || field.type === 'DEPT'" class="row row--inline">
@@ -303,48 +262,5 @@ function onPickerMultiple(value: string | number | boolean) {
   font-size: var(--sw-font-emphasis);
   font-weight: var(--sw-font-weight-emphasis);
   color: var(--sw-text-regular);
-}
-
-/* 键值对行：左键右值 + 删除；新增加行按钮 */
-.row__kv {
-  display: flex;
-  align-items: center;
-  gap: var(--sw-space-8);
-  margin-bottom: var(--sw-space-8);
-}
-
-.row__kv :deep(.el-input) {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.row__kv-del {
-  flex: 0 0 auto;
-  box-sizing: border-box;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: #f1f4fa;
-  color: #8a96ae;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.row__kv-del:hover {
-  color: var(--sw-danger);
-  background: #fdecec;
-}
-
-.row__kv-add {
-  margin-top: 2px;
-}
-
-.row__error {
-  margin: var(--sw-space-4) 0 0;
-  font-size: var(--sw-font-caption);
-  color: var(--sw-danger);
 }
 </style>

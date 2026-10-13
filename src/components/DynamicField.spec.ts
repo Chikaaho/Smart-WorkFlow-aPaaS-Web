@@ -1,7 +1,27 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import DynamicField from './DynamicField.vue'
 import type { FormSchemaField } from '@/contracts/form-schema'
+
+// BF20261013-009：DICT 控件不再经 DictSelect 桩，改为真实下拉 + 字典项装载（mock foundation/dict）
+vi.mock('@/foundation/dict', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/foundation/dict')>()
+  return {
+    ...actual,
+    useDict: (type: string) =>
+      type === 'sex'
+        ? {
+            items: {
+              value: [
+                { value: 'male', label: '男' },
+                { value: 'female', label: '女' },
+              ],
+            },
+          }
+        : { items: { value: [] } },
+  }
+})
 
 /* ── stub helpers ── */
 const baseGlobal = {
@@ -72,11 +92,11 @@ describe('DynamicField — readonly', () => {
     expect(sw.attributes('disabled')).toBeDefined()
   })
 
-  it('DICT readonly → DictSelect 设 disabled', () => {
+  it('DICT readonly → 下拉禁用', () => {
     const wrapper = mountField({ name: 'f6', type: 'DICT', dictType: 'sex' }, '', true)
-    const dict = wrapper.find('[data-testid="dict-select"]')
-    expect(dict.exists()).toBe(true)
-    expect(dict.attributes('disabled')).toBeDefined()
+    const select = wrapper.findComponent({ name: 'ElSelect' })
+    expect(select.exists()).toBe(true)
+    expect(select.props('disabled')).toBe(true)
   })
 
   it('REFERENCE readonly → 选择按钮 disabled', () => {
@@ -172,11 +192,15 @@ describe('DynamicField — 8 类字段渲染', () => {
     expect(wrapper.find('[data-testid="switch"]').exists()).toBe(true)
   })
 
-  it('DICT → DictSelect 透传 dictType', () => {
+  it('DICT → 选项来自绑定字典（dictType）', () => {
     const wrapper = mountField({ name: 'f6', type: 'DICT', dictType: 'sex' })
-    const dict = wrapper.find('[data-testid="dict-select"]')
-    expect(dict.exists()).toBe(true)
-    expect(dict.attributes('data-dict-type')).toBe('sex')
+    const optionProps = wrapper
+      .findAllComponents({ name: 'ElOption' })
+      .map((o) => ({ label: o.props('label'), value: o.props('value') }))
+    expect(optionProps).toEqual([
+      { label: '男', value: 'male' },
+      { label: '女', value: 'female' },
+    ])
   })
 
   it('REFERENCE → 只读输入框 + 选择按钮（ReferenceSelector 弹窗）', () => {
@@ -263,7 +287,7 @@ describe('DynamicField — 8 类字段渲染', () => {
 
   /* ── TABLE 子字段按 type 分发 ── */
 
-  it('TABLE sub-field DICT 渲染 DictSelect', () => {
+  it('TABLE sub-field DICT 渲染下拉', () => {
     const wrapper = mountField(
       {
         name: 't1',
@@ -272,7 +296,7 @@ describe('DynamicField — 8 类字段渲染', () => {
       },
       [{ col: '' }],
     )
-    expect(wrapper.find('[data-testid="dict-select"]').exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'ElSelect' }).exists()).toBe(true)
   })
 
   it('TABLE sub-field NUMBER 渲染 el-input-number', () => {
@@ -363,9 +387,8 @@ describe('DynamicField — v-model', () => {
 
   it('DICT select emits update:modelValue', async () => {
     const wrapper = mountField({ name: 'f1', type: 'DICT', dictType: 'sex' }, 'male')
-    const select = wrapper.find('[data-testid="dict-select"]')
-    // Select the "female" option to trigger change event
-    await select.setValue('female')
+    wrapper.findComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'female')
+    await nextTick()
     const emitted = wrapper.emitted('update:modelValue')
     expect(emitted).toBeTruthy()
     expect(emitted![0][0]).toBe('female')
