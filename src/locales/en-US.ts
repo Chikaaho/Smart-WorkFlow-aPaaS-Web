@@ -933,8 +933,8 @@ export default {
     publishNewVersionSuccess: 'New version published',
     unsavedPublishedLeaveWarning:
       'Your changes have not been published as a new version and will be lost if you leave.',
-    width12Label: 'Width (12 cols)',
-    span12Cell: '{n} cols / {p}%',
+    widthLabel: 'Width',
+    resizeWidthHint: 'Drag to resize width',
     spanBadge: '{n} / 12 cols',
     labelPositionLabel: 'Title position',
     labelPositionLeft: 'Left',

@@ -19,12 +19,13 @@ const { t } = useI18n()
  */
 import { VueDraggable } from 'vue-draggable-plus'
 import { Delete } from '@element-plus/icons-vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { DesignerItem } from './types'
 import type { FormSchema } from '@/contracts/form-schema'
 import FormPreview from '@/adapters/form-designer/FormPreview.vue'
-import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
+import { FORM_GRID_COLUMNS, getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 import { resolveDropIndex, type DropPoint, type DropRect } from './drop-index'
+import { resolveResizeColSpan } from './width-steps'
 import type { CanvasElement, DragLikeEvent } from './dnd'
 
 const items = defineModel<DesignerItem[]>('items', { required: true })
@@ -92,6 +93,78 @@ function remove(id: string) {
   schemaCache.delete(id)
   if (selectedId.value === id) selectedId.value = null
 }
+
+/* ── BF20261013-016：选中字段左右缘拖拽调宽 ── */
+
+/** 调宽进行中：同步禁用排序拖拽，避免两个手势互相抢事件。 */
+const resizing = ref(false)
+
+interface ResizeState {
+  item: DesignerItem
+  startX: number
+  startCols: number
+  /** 单列步进（含列距）像素宽：由画布栅格实测，指针位移按它换算列数。 */
+  stepPx: number
+}
+
+let resizeState: ResizeState | null = null
+
+/** 调宽手柄的指针事件最小结构（同 dnd.ts：.vue 内不写 DOM 全局名）。 */
+interface ResizeHandleEvent {
+  clientX: number
+  currentTarget: unknown
+  preventDefault: () => void
+  stopPropagation: () => void
+}
+
+/** 画布栅格单列步进：优先按列表宽度与列距推算，取不到时退回字段壳自身宽度。 */
+function columnStepPx(shell: CanvasElement, cols: number): number {
+  const list = shell.parentElement
+  const listRect = list?.getBoundingClientRect()
+  const rawGap = list ? globalThis.getComputedStyle(list).columnGap : ''
+  const gap = Number.parseFloat(rawGap)
+  const columnGap = Number.isFinite(gap) ? gap : 0
+  if (listRect && listRect.width > 0) {
+    return (listRect.width - (FORM_GRID_COLUMNS - 1) * columnGap) / FORM_GRID_COLUMNS + columnGap
+  }
+  const shellRect = shell.getBoundingClientRect()
+  return (shellRect.width + columnGap) / Math.max(cols, 1)
+}
+
+function startResize(event: ResizeHandleEvent, item: DesignerItem) {
+  if (props.readonly) return
+  const handle = event.currentTarget
+  const shell = handle instanceof globalThis.HTMLElement ? handle.closest('.field-shell') : null
+  if (!(shell instanceof globalThis.HTMLElement)) return
+  const startCols = getFormFieldColSpan(item.field)
+  resizeState = {
+    item,
+    startX: event.clientX,
+    startCols,
+    stepPx: columnStepPx(shell, startCols),
+  }
+  resizing.value = true
+  globalThis.addEventListener('pointermove', onResizeMove)
+  globalThis.addEventListener('pointerup', onResizeEnd)
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+function onResizeMove(event: { clientX: number }) {
+  const state = resizeState
+  if (!state) return
+  const next = resolveResizeColSpan(state.startCols, event.clientX - state.startX, state.stepPx)
+  if (getFormFieldColSpan(state.item.field) !== next) state.item.field.colSpan = next
+}
+
+function onResizeEnd() {
+  resizeState = null
+  resizing.value = false
+  globalThis.removeEventListener('pointermove', onResizeMove)
+  globalThis.removeEventListener('pointerup', onResizeEnd)
+}
+
+onBeforeUnmount(onResizeEnd)
 
 /* ── 控件库拖入（原生 DnD）：落点解析 + 真实预览 ── */
 
@@ -260,7 +333,7 @@ function onShellClick(entry: ShellEntry) {
       filter=".field-shell--pending"
       item-key="id"
       class="canvas__list"
-      :disabled="readonly"
+      :disabled="readonly || resizing"
     >
       <div
         v-for="entry in shellEntries"
@@ -289,6 +362,15 @@ function onShellClick(entry: ShellEntry) {
             @click.stop="remove(entry.item.id)"
           />
         </div>
+        <!-- BF20261013-016：选中后拖右缘调宽（手柄只在选中态出现；Owner：左边不需要拖动） -->
+        <span
+          v-if="!entry.pending && !readonly && entry.item.id === selectedId"
+          class="field-shell__resize field-shell__resize--right"
+          :title="t('form.resizeWidthHint')"
+          @pointerdown="startResize($event, entry.item)"
+          @mousedown.stop.prevent
+          @click.stop
+        />
         <!-- TABLE：占位块 + 「编辑子表」入口（不真渲染内部表格、不发请求）；其余字段走真控件长相。 -->
         <div class="field-shell__control">
           <div v-if="entry.item.field.type === 'TABLE'" class="field-shell__table">
@@ -385,13 +467,16 @@ function onShellClick(entry: ShellEntry) {
   /* 设计07：操作条不占布局空间（绝对定位），hover 时仅显示删除动作 */
   display: flex;
   position: absolute;
-  top: 4px;
+  /* BF20261013-016：贴壳顶（原 top:4px 时删除图标与控件上缘重叠 4px，观感像被控件压住） */
+  top: 0;
   right: 16px;
   left: 16px;
   align-items: center;
   justify-content: flex-end;
   gap: var(--sw-space-8);
-  height: 24px;
+  height: 20px;
+  /* 悬浮于控件之上：el-select 等控件是 positioned 元素，不抬层会被后绘制的控件盖住 */
+  z-index: 3;
 
   opacity: 0;
   transition: opacity 0.15s;
@@ -403,6 +488,45 @@ function onShellClick(entry: ShellEntry) {
 
 .field-shell__del {
   flex: 0 0 auto;
+  /* BF20261013-016：白色圆形浮标——即使与控件相邻也清晰可辨 */
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(58, 75, 110, 0.24);
+}
+
+/* BF20261013-016：选中字段右缘拖拽调宽手柄（骑在壳边缘上，便于抓取） */
+.field-shell__resize {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 28px;
+  margin-top: -14px;
+  border: 1px solid var(--sw-color-primary);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(58, 75, 110, 0.18);
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+}
+
+.field-shell__resize::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--sw-color-primary);
+}
+
+.field-shell__resize--right {
+  right: -4px;
 }
 
 .field-shell__table {

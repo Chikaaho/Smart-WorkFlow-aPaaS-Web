@@ -6,7 +6,7 @@ const { t } = useI18n()
  * 配置面板（设计器右栏）—— 宿主只按注册表动态挂载，禁写死类型 switch。
  *
  * P53 节点07 三段结构：
- *  - 基础信息：组件名称 / 宽度（12 栏）/ 占位提示 / 必填（全部走 FieldPatch 通用键）；
+ *  - 基础信息：组件名称 / 宽度（6 档百分比）/ 占位提示 / 必填（全部走 FieldPatch 通用键）；
  *  - 高级信息：字段标识 / 数据类型族 / 类型专属配置（configComponent 动态挂载）；
  *  - 其他信息：扩展属性预留区。
  *
@@ -19,6 +19,7 @@ import { isColumnNameUnique } from './column-name'
 import type { DesignerItem } from './types'
 import type { FieldPatch } from './field-config'
 import RulesEditor from './config/RulesEditor.vue'
+import { WIDTH_COL_STEPS, widthStepPercent } from './width-steps'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 import {
   DEFAULT_FIELD_LABEL_POSITION,
@@ -61,10 +62,19 @@ const colSpan = computed(() =>
   props.field ? normalizeFormFieldColSpan(props.field.field.colSpan, props.field.field.type) : 12,
 )
 
-/** 12 栏展示值（24 栏语义的一半）。 */
-const span12 = computed(() => Math.max(1, Math.round(colSpan.value / 2)))
-
-const spanOptions = Array.from({ length: 12 }, (_, i) => i + 1)
+/**
+ * 宽度选项 = 与画布拖拽同源的 6 档（100/83/67/50/33/17）+ 当前值。
+ * 历史自定义宽度不在档位内时补一条当前项，避免选择器空显；切到其它档位后该临时项自然消失。
+ */
+const widthOptions = computed<Array<{ cols: number; pct: number }>>(() => {
+  const options = WIDTH_COL_STEPS.map((cols) => ({ cols, pct: widthStepPercent(cols) }))
+  const current = colSpan.value
+  if (!options.some((option) => option.cols === current)) {
+    options.push({ cols: current, pct: widthStepPercent(current) })
+    options.sort((a, b) => b.cols - a.cols)
+  }
+  return options
+})
 
 /** 标题位置选项（BF20261013-011：收敛为 左边 / 右边 / 上边 三种）。 */
 const LABEL_POSITION_OPTIONS: ReadonlyArray<{ value: FieldLabelPosition; key: string }> = [
@@ -88,9 +98,10 @@ function onLabelPosition(value: FieldLabelPosition) {
   emit('update', { labelPosition: value })
 }
 
-function onSpan12(value: number | undefined) {
-  if (!props.field || !value) return
-  emit('update', { colSpan: normalizeFormFieldColSpan(value * 2, props.field.field.type) })
+/** 宽度选择：选项值即 24 栅格列数。 */
+function onWidthChange(cols: number | undefined) {
+  if (!props.field || !cols) return
+  emit('update', { colSpan: normalizeFormFieldColSpan(cols, props.field.field.type) })
 }
 
 /** 数据类型族展示（BF20261013-009：下拉多选提交为 key 数组，存储族显示 JSON）。 */
@@ -145,14 +156,20 @@ function onFieldKeySuffix(raw: string) {
         />
       </div>
       <div class="config__row">
-        <label class="config__label">{{ t('form.width12Label') }}</label>
-        <el-select :model-value="span12" :disabled="readonly" @update:model-value="onSpan12">
+        <label class="config__label">{{ t('form.widthLabel') }}</label>
+        <!-- BF20261013-016：选项 = 左侧宽度示意图 + 右侧百分比（值写回 24 栅格列数） -->
+        <el-select :model-value="colSpan" :disabled="readonly" @update:model-value="onWidthChange">
           <el-option
-            v-for="n in spanOptions"
-            :key="n"
-            :value="n"
-            :label="t('form.span12Cell', { n, p: Math.round((n / 12) * 100) })"
-          />
+            v-for="option in widthOptions"
+            :key="option.cols"
+            :value="option.cols"
+            :label="`${option.pct}%`"
+          >
+            <span class="width-option">
+              <span class="width-option__gauge"><i :style="{ width: `${option.pct}%` }" /></span>
+              <span class="width-option__pct">{{ option.pct }}%</span>
+            </span>
+          </el-option>
         </el-select>
       </div>
       <div v-if="showLabelPosition" class="config__row">
@@ -368,6 +385,35 @@ function onFieldKeySuffix(raw: string) {
 .config__row :deep(.el-select),
 .config__row :deep(.el-input-number) {
   width: 100%;
+}
+
+/* BF20261013-016：宽度选项 = 宽度示意图（左）+ 百分比（右） */
+.width-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.width-option__gauge {
+  box-sizing: border-box;
+  width: 56px;
+  height: 14px;
+  padding: 2px;
+  border: 1px solid var(--sw-border-base, #ccd5e5);
+  border-radius: 3px;
+  background: var(--sw-fill-base, #f4f6fb);
+}
+
+.width-option__gauge i {
+  display: block;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--sw-color-primary);
+}
+
+.width-option__pct {
+  font-size: var(--sw-font-emphasis, 13px);
+  color: var(--sw-text-regular, #303a55);
 }
 
 .config__note {

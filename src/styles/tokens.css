@@ -302,3 +302,24 @@ body {
 .p53-dialog-overlay-37 {
   background-color: rgba(17, 26, 56, 0.37) !important;
 }
+
+/* ── BF20261013-016：全局选择框（checkbox）方框放大两倍（Owner：14px 太 mini，参考原型红框） ──
+   勾选对勾按等比放大；小/大尺寸变体一并覆盖，避免个别页面仍是旧尺寸。
+   必须 !important：按需注入的 theme-chalk/el-checkbox.css 在本文件之后加载，
+   同优先级按文档顺序会盖回 14px（实测 unplugin 组件级样式后注入）。 */
+.el-checkbox__inner,
+.el-checkbox--small .el-checkbox__inner,
+.el-checkbox--large .el-checkbox__inner {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 4px;
+}
+
+.el-checkbox__inner::after,
+.el-checkbox--small .el-checkbox__inner::after,
+.el-checkbox--large .el-checkbox__inner::after {
+  width: 6px !important;
+  height: 14px !important;
+  border-right-width: 2px !important;
+  border-bottom-width: 2px !important;
+}
