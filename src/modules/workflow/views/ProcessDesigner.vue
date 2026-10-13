@@ -64,6 +64,12 @@ import type {
 } from '@/modules/workflow/utils/node-capabilities'
 import type { ProcessGraphDocument, ProcessGraphWaypoint } from '@/contracts/process-graph'
 import { createDesignerModel, buildEdgePath, hitTestEdgeAtPoint } from '@/adapters/process-graph'
+import {
+  effectiveFieldState,
+  setFieldState,
+  type NodeFieldState,
+  type NodeFieldStates,
+} from '@/modules/workflow/utils/node-field-states'
 import type { DesignerModel, PositionedEdge, PositionedNode } from '@/adapters/process-graph'
 import FormSelectDialog from './FormSelectDialog.vue'
 import type { BpmVariableDef, TriggerConfig } from '@/contracts/p64'
@@ -300,7 +306,7 @@ function clearNodeForm() {
 
 /** 主表单字段（变量来源选择器；经动态 import 读表单定义，模块边界惯例）。 */
 const mainFormFields = ref<
-  Array<{ name: string; type: string; label?: string; multiple?: boolean }>
+  Array<{ name: string; type: string; label?: string; multiple?: boolean; required?: boolean }>
 >([])
 watch(
   () => graph.value?.formKey,
@@ -309,12 +315,22 @@ watch(
     if (!formKey) return
     try {
       const { getFormDefinition } = await import('@/modules/form/api/form')
-      const schema = await getFormDefinition(formKey)
+      // BF20261013-013：草稿表单 by-key 端点不可用（仅发布后可用），
+      // 从表单工作台进入时按 formId 直取草稿定义（by-id），否则回退 by-key。
+      const workbenchFormId = graph.value?.formDefId || returnFormId.value
+      let schema
+      if (workbenchFormId) {
+        const { getFormDefinitionById } = await import('@/modules/form/api/form-def')
+        schema = await getFormDefinitionById(workbenchFormId)
+      } else {
+        schema = await getFormDefinition(formKey)
+      }
       mainFormFields.value = (schema.fields ?? []) as Array<{
         name: string
         type: string
         label?: string
         multiple?: boolean
+        required?: boolean
       }>
     } catch {
       mainFormFields.value = []
@@ -322,6 +338,37 @@ watch(
   },
   { immediate: true },
 )
+
+/* ── BF20261013-013：节点「字段属性」页签（必填/编辑/隐藏三态） ── */
+
+/** 节点属性面板页签；切换节点时回到「基础属性」。 */
+const nodePropsTab = ref<'basic' | 'fields'>('basic')
+
+/** 字段属性仅对非结束节点开放（Owner：流程图除结束的所有节点）。 */
+const fieldConfigCapable = computed(
+  () => selectedNode.value != null && selectedNode.value.type !== 'END',
+)
+
+const nodeFieldStates = computed<NodeFieldStates>(() => {
+  const config = (selectedNode.value?.config ?? {}) as { fieldStates?: NodeFieldStates }
+  return config.fieldStates ?? {}
+})
+
+function fieldStateOf(field: { name: string; required?: boolean }): NodeFieldState {
+  return effectiveFieldState(nodeFieldStates.value, field)
+}
+
+function onFieldStateChange(
+  field: { name: string; required?: boolean },
+  key: keyof NodeFieldState,
+  value: unknown,
+) {
+  if (!selectedNode.value || !model) return
+  model.updateNodeConfig(selectedNode.value.id, {
+    fieldStates: setFieldState(nodeFieldStates.value, field, key, Boolean(value)),
+  })
+  snapshot()
+}
 
 /** 节点业务表单绑定清单（nodeKey → formKey）：NODE_FORM 来源候选。 */
 const nodeFormBindings = computed<Array<{ nodeKey: string; formKey: string; nodeName: string }>>(
@@ -1562,7 +1609,9 @@ function onDynamicObjectTypeChange() {
  * - 参与人字段由结构化面板承载（participantForm），不进入通用 JSON 文本草稿；
  * - 动态并行节点 config 整体进入专属面板草稿。
  */
-watch(selectedNode, (node) => {
+watch(selectedNode, (node, prev) => {
+  // 仅切换节点时回到「基础属性」（同节点重选/保存回流不打断当前页签）
+  if ((node?.id ?? null) !== (prev?.id ?? null)) nodePropsTab.value = 'basic'
   if (!node) {
     propForm.value = {}
     participantShape.value = 'empty'
@@ -2099,115 +2148,338 @@ function nodeLabelLines(label: string) {
               enumLabel('WORKFLOW_NODE_TYPE', selectedNode.type)
             }}</span>
           </div>
-          <div class="props-section">{{ t('workflow.basicPropsSection') }}</div>
-          <el-form label-position="top" size="small">
-            <el-form-item :label="t('workflow.nodeName')">
-              <el-input v-model="propForm.name as string" @change="applyProps" />
-            </el-form-item>
-            <!-- 节点编号 / 审批方式（定义 config 元数据；只读展示） -->
-            <el-form-item v-if="nodeMeta.nodeKey" :label="t('workflow.nodeKeyLabel')">
-              <el-input :model-value="nodeMeta.nodeKey" disabled />
-            </el-form-item>
-            <el-form-item v-if="nodeMeta.approveMode" :label="t('workflow.approveModeLabel')">
-              <el-input :model-value="nodeMeta.approveMode" disabled />
-            </el-form-item>
-            <!-- ═══ P64 阶段Ⅰ：节点业务表单绑定（APPROVAL/CONSENSUS/DYNAMIC_PARALLEL） ═══ -->
-            <el-form-item v-if="nodeFormCapable" label="节点业务表单">
-              <div class="nodeform-row">
-                <el-input :model-value="selectedNodeFormKey || '未绑定'" disabled />
-                <el-button size="small" @click="nodeFormSelectVisible = true">
-                  {{ selectedNodeFormKey ? '更换' : '选择表单' }}
-                </el-button>
-                <el-button v-if="selectedNodeFormKey" size="small" @click="clearNodeForm"
-                  >清除</el-button
-                >
-              </div>
-              <small class="nodeform-hint"
-                >办理人填报的业务字段按任务/轮次独立保存；变量可读本轮已最终提交数据。</small
-              >
-            </el-form-item>
-            <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
-            <template v-if="participantField">
-              <el-form-item label="参与人策略">
-                <el-select v-model="participantForm.strategy" @change="applyParticipant">
-                  <el-option
-                    v-for="option in participantStrategyOptions"
-                    :key="option.value"
-                    :label="option.label"
-                    :value="option.value"
-                  />
-                </el-select>
+
+          <!-- BF20261013-013：页签（字段属性仅非结束节点） -->
+          <div v-if="fieldConfigCapable" class="props-tabs">
+            <button
+              type="button"
+              class="props-tab"
+              :class="{ 'is-active': nodePropsTab === 'basic' }"
+              @click="nodePropsTab = 'basic'"
+            >
+              {{ t('workflow.basicPropsSection') }}
+            </button>
+            <button
+              type="button"
+              class="props-tab"
+              :class="{ 'is-active': nodePropsTab === 'fields' }"
+              @click="nodePropsTab = 'fields'"
+            >
+              {{ t('workflow.fieldPropsTab') }}
+            </button>
+          </div>
+
+          <template v-if="nodePropsTab === 'basic' || !fieldConfigCapable">
+            <div v-if="!fieldConfigCapable" class="props-section">
+              {{ t('workflow.basicPropsSection') }}
+            </div>
+            <el-form label-position="top" size="small">
+              <el-form-item :label="t('workflow.nodeName')">
+                <el-input v-model="propForm.name as string" @change="applyProps" />
               </el-form-item>
-              <!-- FIXED_USER：人员多选（复用审批人候选弹窗人员页签；id 数组保持精度） -->
-              <el-form-item v-if="participantForm.strategy === 'FIXED_USER'" label="指定人员">
-                <div class="participant-picker-row">
-                  <el-button @click="openParticipantUserPicker">
+              <!-- 节点编号 / 审批方式（定义 config 元数据；只读展示） -->
+              <el-form-item v-if="nodeMeta.nodeKey" :label="t('workflow.nodeKeyLabel')">
+                <el-input :model-value="nodeMeta.nodeKey" disabled />
+              </el-form-item>
+              <el-form-item v-if="nodeMeta.approveMode" :label="t('workflow.approveModeLabel')">
+                <el-input :model-value="nodeMeta.approveMode" disabled />
+              </el-form-item>
+              <!-- ═══ P64 阶段Ⅰ：节点业务表单绑定（APPROVAL/CONSENSUS/DYNAMIC_PARALLEL） ═══ -->
+              <el-form-item v-if="nodeFormCapable" label="节点业务表单">
+                <div class="nodeform-row">
+                  <el-input :model-value="selectedNodeFormKey || '未绑定'" disabled />
+                  <el-button size="small" @click="nodeFormSelectVisible = true">
+                    {{ selectedNodeFormKey ? '更换' : '选择表单' }}
+                  </el-button>
+                  <el-button v-if="selectedNodeFormKey" size="small" @click="clearNodeForm"
+                    >清除</el-button
+                  >
+                </div>
+                <small class="nodeform-hint"
+                  >办理人填报的业务字段按任务/轮次独立保存；变量可读本轮已最终提交数据。</small
+                >
+              </el-form-item>
+              <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
+              <template v-if="participantField">
+                <el-form-item label="参与人策略">
+                  <el-select v-model="participantForm.strategy" @change="applyParticipant">
+                    <el-option
+                      v-for="option in participantStrategyOptions"
+                      :key="option.value"
+                      :label="option.label"
+                      :value="option.value"
+                    />
+                  </el-select>
+                </el-form-item>
+                <!-- FIXED_USER：人员多选（复用审批人候选弹窗人员页签；id 数组保持精度） -->
+                <el-form-item v-if="participantForm.strategy === 'FIXED_USER'" label="指定人员">
+                  <div class="participant-picker-row">
+                    <el-button @click="openParticipantUserPicker">
+                      {{
+                        participantForm.userIds.length > 0
+                          ? `已选 ${participantForm.userIds.length} 人（点击修改）`
+                          : t('workflow.selectApprover')
+                      }}
+                    </el-button>
+                    <small v-if="nodeMeta.approverName" class="participant-hint">
+                      {{ nodeMeta.approverName }}
+                    </small>
+                  </div>
+                </el-form-item>
+                <!-- DEPT_LEADER：部门多选（复用弹窗部门树勾选，运行期服务端解析唯一负责人） -->
+                <el-form-item
+                  v-else-if="participantForm.strategy === 'DEPT_LEADER'"
+                  label="部门多选"
+                >
+                  <el-button @click="openParticipantDeptPicker">
                     {{
-                      participantForm.userIds.length > 0
-                        ? `已选 ${participantForm.userIds.length} 人（点击修改）`
-                        : t('workflow.selectApprover')
+                      participantForm.deptIds.length > 0
+                        ? `已选 ${participantForm.deptIds.length} 个部门（点击修改）`
+                        : '选择部门'
                     }}
                   </el-button>
-                  <small v-if="nodeMeta.approverName" class="participant-hint">
-                    {{ nodeMeta.approverName }}
-                  </small>
-                </div>
-              </el-form-item>
-              <!-- DEPT_LEADER：部门多选（复用弹窗部门树勾选，运行期服务端解析唯一负责人） -->
-              <el-form-item v-else-if="participantForm.strategy === 'DEPT_LEADER'" label="部门多选">
-                <el-button @click="openParticipantDeptPicker">
-                  {{
-                    participantForm.deptIds.length > 0
-                      ? `已选 ${participantForm.deptIds.length} 个部门（点击修改）`
-                      : '选择部门'
-                  }}
-                </el-button>
-              </el-form-item>
-              <!-- FORM_FIELD：来源表单（objectType + scope + 字段绑定） -->
-              <template v-else-if="participantForm.strategy === 'FORM_FIELD'">
-                <el-form-item label="对象类型">
-                  <el-radio-group
-                    v-model="participantForm.formField.objectType"
-                    @change="applyParticipant"
-                  >
-                    <el-radio value="USER">人员（所选人员审批）</el-radio>
-                    <el-radio value="DEPT">部门（解析唯一负责人）</el-radio>
-                  </el-radio-group>
                 </el-form-item>
-                <el-form-item label="取值范围">
-                  <el-radio-group
-                    v-model="participantForm.formField.scope"
+                <!-- FORM_FIELD：来源表单（objectType + scope + 字段绑定） -->
+                <template v-else-if="participantForm.strategy === 'FORM_FIELD'">
+                  <el-form-item label="对象类型">
+                    <el-radio-group
+                      v-model="participantForm.formField.objectType"
+                      @change="applyParticipant"
+                    >
+                      <el-radio value="USER">人员（所选人员审批）</el-radio>
+                      <el-radio value="DEPT">部门（解析唯一负责人）</el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                  <el-form-item label="取值范围">
+                    <el-radio-group
+                      v-model="participantForm.formField.scope"
+                      @change="applyParticipant"
+                    >
+                      <el-radio value="MAIN">主表字段</el-radio>
+                      <el-radio value="TABLE">表格字段</el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                  <el-form-item label="主字段">
+                    <el-select
+                      v-model="participantForm.formField.field"
+                      filterable
+                      placeholder="选择主表字段"
+                      @change="applyParticipant"
+                    >
+                      <el-option
+                        v-for="option in mainFieldOptionsFor(participantForm.formField.objectType)"
+                        :key="option.name"
+                        :label="`${option.label || option.name}（${option.name}）`"
+                        :value="option.name"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <template v-if="participantForm.formField.scope === 'TABLE'">
+                    <el-form-item label="表格字段">
+                      <el-select
+                        v-model="participantForm.formField.tableField"
+                        filterable
+                        placeholder="选择表格字段"
+                        @change="
+                          () => {
+                            participantForm.formField.column = ''
+                            applyParticipant()
+                          }
+                        "
+                      >
+                        <el-option
+                          v-for="option in tableFieldOptions"
+                          :key="option.name"
+                          :label="`${option.label || option.name}（${option.name}）`"
+                          :value="option.name"
+                        />
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="表格列">
+                      <el-select
+                        v-model="participantForm.formField.column"
+                        filterable
+                        placeholder="选择表格列"
+                        @change="applyParticipant"
+                      >
+                        <el-option
+                          v-for="option in tableColumnOptionsFor(
+                            participantForm.formField.tableField,
+                            participantForm.formField.objectType,
+                          )"
+                          :key="option.name"
+                          :label="`${option.label || option.name}（${option.name}）`"
+                          :value="option.name"
+                        />
+                      </el-select>
+                    </el-form-item>
+                  </template>
+                </template>
+                <!-- NODE_FORM_AGGREGATE：来源节点 + 人员字段 + 轮次口径（P64 A07 聚合会签） -->
+                <template v-else-if="participantForm.strategy === 'NODE_FORM_AGGREGATE'">
+                  <el-form-item label="来源节点 key">
+                    <el-input
+                      v-model="participantForm.aggregate.nodeKey"
+                      placeholder="填写来源节点 key（读取该节点本轮全部有效最终提交）"
+                      @change="applyParticipant"
+                    />
+                  </el-form-item>
+                  <el-form-item label="人员字段">
+                    <el-select
+                      v-model="participantForm.aggregate.formField"
+                      filterable
+                      allow-create
+                      placeholder="选择或填写人员字段名（并集去重生成下一轮参与人）"
+                      @change="applyParticipant"
+                    >
+                      <el-option
+                        v-for="option in mainFieldOptionsFor('USER')"
+                        :key="option.name"
+                        :label="`${option.label || option.name}（${option.name}）`"
+                        :value="option.name"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="轮次口径">
+                    <el-radio-group
+                      v-model="participantForm.aggregate.round"
+                      @change="applyParticipant"
+                    >
+                      <el-radio value="">当前轮（缺省）</el-radio>
+                      <el-radio value="PREVIOUS">上一轮</el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                </template>
+                <!-- ROLE/POST/DEPT_POST/EXPRESSION：通用取值（保存为 {strategy, value}） -->
+                <el-form-item
+                  v-else
+                  :label="participantForm.strategy === 'EXPRESSION' ? '表达式' : '取值'"
+                >
+                  <el-input
+                    v-model="participantForm.genericValue"
+                    :placeholder="
+                      participantForm.strategy === 'EXPRESSION'
+                        ? '请输入表达式'
+                        : '多个取值用英文逗号分隔'
+                    "
                     @change="applyParticipant"
-                  >
-                    <el-radio value="MAIN">主表字段</el-radio>
-                    <el-radio value="TABLE">表格字段</el-radio>
-                  </el-radio-group>
+                    @blur="applyParticipant"
+                  />
                 </el-form-item>
-                <el-form-item label="主字段">
+                <el-form-item v-if="participantForm.strategy === 'ADAPTER'" label="适配器 ID">
+                  <el-input
+                    v-model="participantForm.adapterId"
+                    @change="applyParticipant"
+                    @blur="applyParticipant"
+                  />
+                </el-form-item>
+                <el-alert
+                  v-if="participantLegacyNote"
+                  :title="participantLegacyNote"
+                  type="info"
+                  :closable="false"
+                  class="participant-legacy-note"
+                />
+              </template>
+              <!-- ═══ P63 动态并行专属面板（semanticVersion 开关 = 新语义按对象分支） ═══ -->
+              <template v-else-if="dynamicParallelActive">
+                <el-form-item label="分支来源类型">
                   <el-select
-                    v-model="participantForm.formField.field"
+                    v-model="dynamicParallelForm.sourceType"
+                    @change="applyDynamicParallel"
+                  >
+                    <el-option label="表单字段" value="FORM_FIELD" />
+                    <el-option label="流程变量" value="VARIABLE" />
+                    <el-option label="固定值" value="FIXED" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item v-if="dynamicParallelForm.sourceType === 'FIXED'" label="固定值">
+                  <!-- 新语义下直接选择人员/部门对象（稳定 ID）；旧语义保留手填取值形状 -->
+                  <div v-if="dynamicParallelForm.objectSemantic" class="participant-picker-row">
+                    <el-button
+                      v-if="dynamicParallelForm.objectType === 'USER'"
+                      @click="openDynamicUserPicker"
+                    >
+                      {{
+                        dynamicFixedSelectedIdList.length > 0
+                          ? `已选 ${dynamicFixedSelectedIdList.length} 人（点击修改）`
+                          : '选择人员'
+                      }}
+                    </el-button>
+                    <el-button v-else @click="openDynamicDeptPicker">
+                      {{
+                        dynamicFixedSelectedIdList.length > 0
+                          ? `已选 ${dynamicFixedSelectedIdList.length} 个部门（点击修改）`
+                          : '选择部门'
+                      }}
+                    </el-button>
+                    <small class="participant-hint">
+                      直接选择对象并保存稳定 ID：人员逐人分支，部门逐部门分支（服务端解析负责人）。
+                    </small>
+                  </div>
+                  <el-input
+                    v-else
+                    v-model="dynamicParallelForm.sourceValue"
+                    placeholder="多个取值用英文逗号分隔"
+                    @change="applyDynamicParallel"
+                    @blur="applyDynamicParallel"
+                  />
+                </el-form-item>
+                <el-form-item
+                  v-else-if="dynamicParallelForm.sourceType === 'VARIABLE'"
+                  label="变量名"
+                >
+                  <el-input
+                    v-model="dynamicParallelForm.sourceValue"
+                    placeholder="请输入变量名"
+                    @change="applyDynamicParallel"
+                    @blur="applyDynamicParallel"
+                  />
+                </el-form-item>
+                <el-form-item v-else-if="dynamicParallelForm.scope === 'MAIN'" label="主字段">
+                  <el-select
+                    v-model="dynamicParallelForm.sourceValue"
                     filterable
                     placeholder="选择主表字段"
-                    @change="applyParticipant"
+                    @change="applyDynamicParallel"
                   >
                     <el-option
-                      v-for="option in mainFieldOptionsFor(participantForm.formField.objectType)"
+                      v-for="option in mainFieldOptionsFor(dynamicParallelForm.objectType)"
                       :key="option.name"
                       :label="`${option.label || option.name}（${option.name}）`"
                       :value="option.name"
                     />
                   </el-select>
                 </el-form-item>
-                <template v-if="participantForm.formField.scope === 'TABLE'">
+                <!-- 对象类型仅新语义（按对象分支）下有意义，随 semanticVersion 开关显示 -->
+                <el-form-item v-if="dynamicParallelForm.objectSemantic" label="对象类型">
+                  <el-radio-group
+                    v-model="dynamicParallelForm.objectType"
+                    @change="onDynamicObjectTypeChange"
+                  >
+                    <el-radio value="USER">人员（逐人分支）</el-radio>
+                    <el-radio value="DEPT">部门（逐部门分支）</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+                <el-form-item label="取值范围">
+                  <el-radio-group
+                    v-model="dynamicParallelForm.scope"
+                    @change="applyDynamicParallel"
+                  >
+                    <el-radio value="MAIN">主表字段</el-radio>
+                    <el-radio value="TABLE">表格字段</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+                <template v-if="dynamicParallelForm.scope === 'TABLE'">
                   <el-form-item label="表格字段">
                     <el-select
-                      v-model="participantForm.formField.tableField"
+                      v-model="dynamicParallelForm.tableField"
                       filterable
                       placeholder="选择表格字段"
                       @change="
                         () => {
-                          participantForm.formField.column = ''
-                          applyParticipant()
+                          dynamicParallelForm.column = ''
+                          applyDynamicParallel()
                         }
                       "
                     >
@@ -2221,15 +2493,20 @@ function nodeLabelLines(label: string) {
                   </el-form-item>
                   <el-form-item label="表格列">
                     <el-select
-                      v-model="participantForm.formField.column"
+                      v-model="dynamicParallelForm.column"
                       filterable
                       placeholder="选择表格列"
-                      @change="applyParticipant"
+                      @change="
+                        () => {
+                          dynamicParallelForm.sourceValue = dynamicParallelForm.column
+                          applyDynamicParallel()
+                        }
+                      "
                     >
                       <el-option
                         v-for="option in tableColumnOptionsFor(
-                          participantForm.formField.tableField,
-                          participantForm.formField.objectType,
+                          dynamicParallelForm.tableField,
+                          dynamicParallelForm.objectType,
                         )"
                         :key="option.name"
                         :label="`${option.label || option.name}（${option.name}）`"
@@ -2238,340 +2515,186 @@ function nodeLabelLines(label: string) {
                     </el-select>
                   </el-form-item>
                 </template>
-              </template>
-              <!-- NODE_FORM_AGGREGATE：来源节点 + 人员字段 + 轮次口径（P64 A07 聚合会签） -->
-              <template v-else-if="participantForm.strategy === 'NODE_FORM_AGGREGATE'">
-                <el-form-item label="来源节点 key">
-                  <el-input
-                    v-model="participantForm.aggregate.nodeKey"
-                    placeholder="填写来源节点 key（读取该节点本轮全部有效最终提交）"
-                    @change="applyParticipant"
+                <el-form-item label="完成模式">
+                  <el-select v-model="dynamicParallelForm.mode" @change="applyDynamicParallel">
+                    <el-option label="全部通过（ALL）" value="ALL" />
+                    <el-option label="任一通过（ANY）" value="ANY" />
+                    <el-option label="按比例通过（RATIO）" value="RATIO" />
+                    <el-option label="一票否决（VETO）" value="VETO" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item v-if="dynamicParallelForm.mode === 'RATIO'" label="通过比例（%）">
+                  <el-input-number
+                    v-model="dynamicParallelForm.ratio"
+                    :min="1"
+                    :max="100"
+                    @change="applyDynamicParallel"
                   />
                 </el-form-item>
-                <el-form-item label="人员字段">
-                  <el-select
-                    v-model="participantForm.aggregate.formField"
-                    filterable
-                    allow-create
-                    placeholder="选择或填写人员字段名（并集去重生成下一轮参与人）"
-                    @change="applyParticipant"
-                  >
-                    <el-option
-                      v-for="option in mainFieldOptionsFor('USER')"
-                      :key="option.name"
-                      :label="`${option.label || option.name}（${option.name}）`"
-                      :value="option.name"
-                    />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="轮次口径">
-                  <el-radio-group
-                    v-model="participantForm.aggregate.round"
-                    @change="applyParticipant"
-                  >
-                    <el-radio value="">当前轮（缺省）</el-radio>
-                    <el-radio value="PREVIOUS">上一轮</el-radio>
-                  </el-radio-group>
-                </el-form-item>
-              </template>
-              <!-- ROLE/POST/DEPT_POST/EXPRESSION：通用取值（保存为 {strategy, value}） -->
-              <el-form-item
-                v-else
-                :label="participantForm.strategy === 'EXPRESSION' ? '表达式' : '取值'"
-              >
-                <el-input
-                  v-model="participantForm.genericValue"
-                  :placeholder="
-                    participantForm.strategy === 'EXPRESSION'
-                      ? '请输入表达式'
-                      : '多个取值用英文逗号分隔'
-                  "
-                  @change="applyParticipant"
-                  @blur="applyParticipant"
-                />
-              </el-form-item>
-              <el-form-item v-if="participantForm.strategy === 'ADAPTER'" label="适配器 ID">
-                <el-input
-                  v-model="participantForm.adapterId"
-                  @change="applyParticipant"
-                  @blur="applyParticipant"
-                />
-              </el-form-item>
-              <el-alert
-                v-if="participantLegacyNote"
-                :title="participantLegacyNote"
-                type="info"
-                :closable="false"
-                class="participant-legacy-note"
-              />
-            </template>
-            <!-- ═══ P63 动态并行专属面板（semanticVersion 开关 = 新语义按对象分支） ═══ -->
-            <template v-else-if="dynamicParallelActive">
-              <el-form-item label="分支来源类型">
-                <el-select v-model="dynamicParallelForm.sourceType" @change="applyDynamicParallel">
-                  <el-option label="表单字段" value="FORM_FIELD" />
-                  <el-option label="流程变量" value="VARIABLE" />
-                  <el-option label="固定值" value="FIXED" />
-                </el-select>
-              </el-form-item>
-              <el-form-item v-if="dynamicParallelForm.sourceType === 'FIXED'" label="固定值">
-                <!-- 新语义下直接选择人员/部门对象（稳定 ID）；旧语义保留手填取值形状 -->
-                <div v-if="dynamicParallelForm.objectSemantic" class="participant-picker-row">
-                  <el-button
-                    v-if="dynamicParallelForm.objectType === 'USER'"
-                    @click="openDynamicUserPicker"
-                  >
-                    {{
-                      dynamicFixedSelectedIdList.length > 0
-                        ? `已选 ${dynamicFixedSelectedIdList.length} 人（点击修改）`
-                        : '选择人员'
-                    }}
-                  </el-button>
-                  <el-button v-else @click="openDynamicDeptPicker">
-                    {{
-                      dynamicFixedSelectedIdList.length > 0
-                        ? `已选 ${dynamicFixedSelectedIdList.length} 个部门（点击修改）`
-                        : '选择部门'
-                    }}
-                  </el-button>
-                  <small class="participant-hint">
-                    直接选择对象并保存稳定 ID：人员逐人分支，部门逐部门分支（服务端解析负责人）。
-                  </small>
-                </div>
-                <el-input
-                  v-else
-                  v-model="dynamicParallelForm.sourceValue"
-                  placeholder="多个取值用英文逗号分隔"
-                  @change="applyDynamicParallel"
-                  @blur="applyDynamicParallel"
-                />
-              </el-form-item>
-              <el-form-item
-                v-else-if="dynamicParallelForm.sourceType === 'VARIABLE'"
-                label="变量名"
-              >
-                <el-input
-                  v-model="dynamicParallelForm.sourceValue"
-                  placeholder="请输入变量名"
-                  @change="applyDynamicParallel"
-                  @blur="applyDynamicParallel"
-                />
-              </el-form-item>
-              <el-form-item v-else-if="dynamicParallelForm.scope === 'MAIN'" label="主字段">
-                <el-select
-                  v-model="dynamicParallelForm.sourceValue"
-                  filterable
-                  placeholder="选择主表字段"
-                  @change="applyDynamicParallel"
-                >
-                  <el-option
-                    v-for="option in mainFieldOptionsFor(dynamicParallelForm.objectType)"
-                    :key="option.name"
-                    :label="`${option.label || option.name}（${option.name}）`"
-                    :value="option.name"
+                <el-form-item label="最大分支数">
+                  <el-input-number
+                    v-model="dynamicParallelForm.maxBranches"
+                    :min="1"
+                    @change="applyDynamicParallel"
                   />
-                </el-select>
-              </el-form-item>
-              <!-- 对象类型仅新语义（按对象分支）下有意义，随 semanticVersion 开关显示 -->
-              <el-form-item v-if="dynamicParallelForm.objectSemantic" label="对象类型">
-                <el-radio-group
-                  v-model="dynamicParallelForm.objectType"
-                  @change="onDynamicObjectTypeChange"
-                >
-                  <el-radio value="USER">人员（逐人分支）</el-radio>
-                  <el-radio value="DEPT">部门（逐部门分支）</el-radio>
-                </el-radio-group>
-              </el-form-item>
-              <el-form-item label="取值范围">
-                <el-radio-group v-model="dynamicParallelForm.scope" @change="applyDynamicParallel">
-                  <el-radio value="MAIN">主表字段</el-radio>
-                  <el-radio value="TABLE">表格字段</el-radio>
-                </el-radio-group>
-              </el-form-item>
-              <template v-if="dynamicParallelForm.scope === 'TABLE'">
-                <el-form-item label="表格字段">
-                  <el-select
-                    v-model="dynamicParallelForm.tableField"
-                    filterable
-                    placeholder="选择表格字段"
-                    @change="
-                      () => {
-                        dynamicParallelForm.column = ''
-                        applyDynamicParallel()
-                      }
-                    "
-                  >
-                    <el-option
-                      v-for="option in tableFieldOptions"
-                      :key="option.name"
-                      :label="`${option.label || option.name}（${option.name}）`"
-                      :value="option.name"
-                    />
-                  </el-select>
                 </el-form-item>
-                <el-form-item label="表格列">
+                <el-form-item label="空来源处置">
                   <el-select
-                    v-model="dynamicParallelForm.column"
-                    filterable
-                    placeholder="选择表格列"
-                    @change="
-                      () => {
-                        dynamicParallelForm.sourceValue = dynamicParallelForm.column
-                        applyDynamicParallel()
-                      }
-                    "
-                  >
-                    <el-option
-                      v-for="option in tableColumnOptionsFor(
-                        dynamicParallelForm.tableField,
-                        dynamicParallelForm.objectType,
-                      )"
-                      :key="option.name"
-                      :label="`${option.label || option.name}（${option.name}）`"
-                      :value="option.name"
-                    />
-                  </el-select>
-                </el-form-item>
-              </template>
-              <el-form-item label="完成模式">
-                <el-select v-model="dynamicParallelForm.mode" @change="applyDynamicParallel">
-                  <el-option label="全部通过（ALL）" value="ALL" />
-                  <el-option label="任一通过（ANY）" value="ANY" />
-                  <el-option label="按比例通过（RATIO）" value="RATIO" />
-                  <el-option label="一票否决（VETO）" value="VETO" />
-                </el-select>
-              </el-form-item>
-              <el-form-item v-if="dynamicParallelForm.mode === 'RATIO'" label="通过比例（%）">
-                <el-input-number
-                  v-model="dynamicParallelForm.ratio"
-                  :min="1"
-                  :max="100"
-                  @change="applyDynamicParallel"
-                />
-              </el-form-item>
-              <el-form-item label="最大分支数">
-                <el-input-number
-                  v-model="dynamicParallelForm.maxBranches"
-                  :min="1"
-                  @change="applyDynamicParallel"
-                />
-              </el-form-item>
-              <el-form-item label="空来源处置">
-                <el-select
-                  v-model="dynamicParallelForm.emptyStrategy"
-                  @change="applyDynamicParallel"
-                >
-                  <el-option label="阻断（BLOCK）" value="BLOCK" />
-                  <el-option label="放行（PROCEED）" value="PROCEED" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="无效值处置">
-                <el-select
-                  v-model="dynamicParallelForm.invalidStrategy"
-                  @change="applyDynamicParallel"
-                >
-                  <el-option label="阻断（BLOCK）" value="BLOCK" />
-                  <el-option label="跳过（SKIP）" value="SKIP" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="分支语义">
-                <div class="participant-picker-row">
-                  <el-checkbox
-                    v-model="dynamicParallelForm.objectSemantic"
+                    v-model="dynamicParallelForm.emptyStrategy"
                     @change="applyDynamicParallel"
                   >
-                    新语义（按对象分支）
-                  </el-checkbox>
-                </div>
-                <small class="participant-hint">
-                  勾选后写入
-                  semanticVersion=2：人员来源逐人分支、部门来源逐部门分支（同负责人不同部门独立分支）、表格列来源逐行可追溯；不勾选保持旧语义（按负责人合并，行为不变）。
-                </small>
-              </el-form-item>
-            </template>
-            <template v-for="field in genericConfigFields" :key="field.key">
-              <!-- name 已由顶部「节点名称」编辑项承载，能力注册表同名项不再重复渲染 -->
-              <el-form-item v-if="isApproverSelectionField(field)" :label="field.label">
-                <!-- 设计09：已解析审批人（config.approverName）以 chip+按钮呈现；未解析回退输入框 -->
-                <div v-if="nodeMeta.approverName" class="approver-card">
-                  <div class="approver-card__row">
-                    <span class="approver-card__chip">{{ nodeMeta.approverName }}</span>
-                    <el-button
-                      size="small"
-                      class="approver-card__pick"
-                      @click="openApproverPicker(field.key)"
+                    <el-option label="阻断（BLOCK）" value="BLOCK" />
+                    <el-option label="放行（PROCEED）" value="PROCEED" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="无效值处置">
+                  <el-select
+                    v-model="dynamicParallelForm.invalidStrategy"
+                    @change="applyDynamicParallel"
+                  >
+                    <el-option label="阻断（BLOCK）" value="BLOCK" />
+                    <el-option label="跳过（SKIP）" value="SKIP" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="分支语义">
+                  <div class="participant-picker-row">
+                    <el-checkbox
+                      v-model="dynamicParallelForm.objectSemantic"
+                      @change="applyDynamicParallel"
                     >
+                      新语义（按对象分支）
+                    </el-checkbox>
+                  </div>
+                  <small class="participant-hint">
+                    勾选后写入
+                    semanticVersion=2：人员来源逐人分支、部门来源逐部门分支（同负责人不同部门独立分支）、表格列来源逐行可追溯；不勾选保持旧语义（按负责人合并，行为不变）。
+                  </small>
+                </el-form-item>
+              </template>
+              <template v-for="field in genericConfigFields" :key="field.key">
+                <!-- name 已由顶部「节点名称」编辑项承载，能力注册表同名项不再重复渲染 -->
+                <el-form-item v-if="isApproverSelectionField(field)" :label="field.label">
+                  <!-- 设计09：已解析审批人（config.approverName）以 chip+按钮呈现；未解析回退输入框 -->
+                  <div v-if="nodeMeta.approverName" class="approver-card">
+                    <div class="approver-card__row">
+                      <span class="approver-card__chip">{{ nodeMeta.approverName }}</span>
+                      <el-button
+                        size="small"
+                        class="approver-card__pick"
+                        @click="openApproverPicker(field.key)"
+                      >
+                        {{ t('workflow.selectApprover') }}
+                      </el-button>
+                    </div>
+                    <small class="approver-card__hint">{{
+                      t('workflow.approverSupportHint')
+                    }}</small>
+                  </div>
+                  <!-- V012-BUG-019：未解析时同样以选择器选人，移除手填用户 ID 输入框 -->
+                  <div v-else class="approver-field">
+                    <el-button @click="openApproverPicker(field.key)">
                       {{ t('workflow.selectApprover') }}
                     </el-button>
                   </div>
-                  <small class="approver-card__hint">{{ t('workflow.approverSupportHint') }}</small>
-                </div>
-                <!-- V012-BUG-019：未解析时同样以选择器选人，移除手填用户 ID 输入框 -->
-                <div v-else class="approver-field">
-                  <el-button @click="openApproverPicker(field.key)">
-                    {{ t('workflow.selectApprover') }}
-                  </el-button>
-                </div>
-              </el-form-item>
-              <el-form-item v-else-if="field.type === 'object'" :label="field.label">
-                <el-input
-                  v-model="propForm[field.key] as string"
-                  :placeholder="t('workflow.objectConfigJsonPlaceholder')"
-                  @change="applyProps"
-                  @blur="applyProps"
+                </el-form-item>
+                <el-form-item v-else-if="field.type === 'object'" :label="field.label">
+                  <el-input
+                    v-model="propForm[field.key] as string"
+                    :placeholder="t('workflow.objectConfigJsonPlaceholder')"
+                    @change="applyProps"
+                    @blur="applyProps"
+                  />
+                </el-form-item>
+                <el-form-item v-else-if="field.type === 'string'" :label="field.label">
+                  <el-input
+                    v-model="propForm[field.key] as string"
+                    @change="applyProps"
+                    @blur="applyProps"
+                  />
+                </el-form-item>
+                <el-form-item v-else :label="field.label">
+                  <el-input
+                    v-model="propForm[field.key] as string"
+                    @change="applyProps"
+                    @blur="applyProps"
+                  />
+                </el-form-item>
+              </template>
+              <el-form-item
+                v-if="validationErrors.some((e) => e.nodeKey === selectionId)"
+                :label="t('workflow.validationIssues')"
+              >
+                <el-alert
+                  v-for="err in validationErrors.filter((e) => e.nodeKey === selectionId)"
+                  :key="String(err.nodeKey) + err.errorCode"
+                  type="error"
+                  :closable="false"
+                  :title="err.message"
                 />
               </el-form-item>
-              <el-form-item v-else-if="field.type === 'string'" :label="field.label">
-                <el-input
-                  v-model="propForm[field.key] as string"
-                  @change="applyProps"
-                  @blur="applyProps"
-                />
-              </el-form-item>
-              <el-form-item v-else :label="field.label">
-                <el-input
-                  v-model="propForm[field.key] as string"
-                  @change="applyProps"
-                  @blur="applyProps"
-                />
-              </el-form-item>
-            </template>
-            <el-form-item
-              v-if="validationErrors.some((e) => e.nodeKey === selectionId)"
-              :label="t('workflow.validationIssues')"
-            >
-              <el-alert
-                v-for="err in validationErrors.filter((e) => e.nodeKey === selectionId)"
-                :key="String(err.nodeKey) + err.errorCode"
-                type="error"
-                :closable="false"
-                :title="err.message"
-              />
-            </el-form-item>
-          </el-form>
+            </el-form>
 
-          <!-- 高级属性 · 监听器配置（定义 config.listeners 元数据；只读展示） -->
-          <template v-if="nodeMeta.listeners.length">
-            <div class="props-section props-section--advanced">
-              {{ t('workflow.listenerSectionTitle') }}
-            </div>
-            <div
-              v-for="(listener, index) in nodeMeta.listeners"
-              :key="listener.phase + String(index)"
-              class="listener-row"
-            >
-              <span class="listener-row__phase" :class="'listener-row__phase--' + listener.phase">
-                {{
-                  listener.phase === 'before'
-                    ? t('workflow.listenerBefore')
-                    : t('workflow.listenerAfter')
-                }}
-              </span>
-              <span class="listener-row__desc">{{ listener.label }}</span>
-              <span v-if="listener.bean" class="listener-row__bean">{{ listener.bean }}</span>
-              <span class="listener-row__note">{{ listener.note }}</span>
-            </div>
-            <div class="listener-add">{{ t('workflow.listenerAdd') }}</div>
+            <!-- 高级属性 · 监听器配置（定义 config.listeners 元数据；只读展示） -->
+            <template v-if="nodeMeta.listeners.length">
+              <div class="props-section props-section--advanced">
+                {{ t('workflow.listenerSectionTitle') }}
+              </div>
+              <div
+                v-for="(listener, index) in nodeMeta.listeners"
+                :key="listener.phase + String(index)"
+                class="listener-row"
+              >
+                <span class="listener-row__phase" :class="'listener-row__phase--' + listener.phase">
+                  {{
+                    listener.phase === 'before'
+                      ? t('workflow.listenerBefore')
+                      : t('workflow.listenerAfter')
+                  }}
+                </span>
+                <span class="listener-row__desc">{{ listener.label }}</span>
+                <span v-if="listener.bean" class="listener-row__bean">{{ listener.bean }}</span>
+                <span class="listener-row__note">{{ listener.note }}</span>
+              </div>
+              <div class="listener-add">{{ t('workflow.listenerAdd') }}</div>
+            </template>
+          </template>
+
+          <!-- BF20261013-013：字段属性——该节点对每个表单字段的必填/编辑/隐藏三态 -->
+          <template v-else>
+            <table v-if="mainFormFields.length" class="field-states__table">
+              <thead>
+                <tr>
+                  <th>{{ t('workflow.fieldStatesFieldName') }}</th>
+                  <th>{{ t('workflow.fieldStatesRequired') }}</th>
+                  <th>{{ t('workflow.fieldStatesEditable') }}</th>
+                  <th>{{ t('workflow.fieldStatesHidden') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="f in mainFormFields" :key="f.name">
+                  <td class="field-states__name">{{ f.label || f.name }}</td>
+                  <td>
+                    <el-checkbox
+                      :model-value="fieldStateOf(f).required"
+                      @update:model-value="(v: unknown) => onFieldStateChange(f, 'required', v)"
+                    />
+                  </td>
+                  <td>
+                    <el-checkbox
+                      :model-value="fieldStateOf(f).editable"
+                      @update:model-value="(v: unknown) => onFieldStateChange(f, 'editable', v)"
+                    />
+                  </td>
+                  <td>
+                    <el-checkbox
+                      :model-value="fieldStateOf(f).hidden"
+                      @update:model-value="(v: unknown) => onFieldStateChange(f, 'hidden', v)"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else class="field-states__empty">{{ t('workflow.fieldStatesEmptyHint') }}</p>
           </template>
         </template>
         <el-empty v-else :description="t('workflow.selectNodeToConfigure')" />
@@ -3787,6 +3910,53 @@ function nodeLabelLines(label: string) {
 }
 .props-section--advanced {
   margin-bottom: 15px;
+}
+
+/* BF20261013-013：节点属性页签与字段三态表 */
+.props-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 14px;
+}
+.props-tab {
+  padding: 4px 14px;
+  border: 1px solid #cbd5e7;
+  border-radius: 6px;
+  background: #fff;
+  color: #344164;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.props-tab.is-active {
+  border-color: var(--sw-color-primary);
+  color: var(--sw-color-primary);
+  background: var(--el-color-primary-light-9, #ece9ff);
+}
+.field-states__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.field-states__table th,
+.field-states__table td {
+  padding: 6px 4px;
+  border-bottom: 1px solid #eef1f8;
+  text-align: left;
+  vertical-align: middle;
+}
+.field-states__table th {
+  color: #8795ad;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.field-states__name {
+  color: #19233b;
+}
+.field-states__empty {
+  margin: 12px 0 0;
+  color: #99a5bb;
+  font-size: 12px;
 }
 .designer-props :deep(.el-form-item) {
   margin-bottom: 17.5px;

@@ -53,6 +53,47 @@ describe('FieldConfigPanel 字段标识（V011-BUG-016）', () => {
   })
 })
 
+describe('FieldConfigPanel 必填开关（BF20261013-013）', () => {
+  it('「是否必填」+勾选框：勾选回写 required=true，取消回写 false', async () => {
+    const wrapper = mount(FieldConfigPanel, {
+      props: {
+        field: {
+          id: 'f1',
+          field: { name: 'field_name', type: 'TEXT', label: '姓名', colSpan: 24 },
+        },
+        otherNames: [],
+      },
+      global: { stubs: { RulesEditor: { template: '<div />' } } },
+    })
+    expect(wrapper.text()).toContain('是否必填')
+    const checkbox = wrapper.findComponent({ name: 'ElCheckbox' })
+    expect(checkbox.exists()).toBe(true)
+    expect(checkbox.props('modelValue')).toBe(false)
+
+    await checkbox.vm.$emit('update:modelValue', true)
+    let patches = wrapper.emitted('update') as unknown as Array<[{ required?: boolean }]>
+    expect(patches?.at(-1)?.[0].required).toBe(true)
+
+    await checkbox.vm.$emit('update:modelValue', false)
+    patches = wrapper.emitted('update') as unknown as Array<[{ required?: boolean }]>
+    expect(patches?.at(-1)?.[0].required).toBe(false)
+  })
+
+  it('已必填字段勾选框回显勾选态', () => {
+    const wrapper = mount(FieldConfigPanel, {
+      props: {
+        field: {
+          id: 'f1',
+          field: { name: 'field_name', type: 'TEXT', label: '姓名', colSpan: 24, required: true },
+        },
+        otherNames: [],
+      },
+      global: { stubs: { RulesEditor: { template: '<div />' } } },
+    })
+    expect(wrapper.findComponent({ name: 'ElCheckbox' }).props('modelValue')).toBe(true)
+  })
+})
+
 describe('FieldConfigPanel 字段标题位置', () => {
   function mountWithField(field: DesignerItem['field']) {
     return mount(FieldConfigPanel, {

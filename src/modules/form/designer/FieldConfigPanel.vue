@@ -179,17 +179,15 @@ function onFieldKeySuffix(raw: string) {
         />
       </div>
       <div class="config__row config__row--inline">
-        <label class="config__label">{{ t('form.required') }}</label>
-        <!-- 设计（节点07）：必填行用状态徽标呈现；点击徽标切换必填（保持真实读写） -->
-        <button
-          type="button"
-          class="config__required-chip"
-          :class="{ 'is-off': !(field.field.required ?? false) }"
+        <label class="config__label">{{ t('form.requiredToggleLabel') }}</label>
+        <!-- BF20261013-013：必填改为「是否必填」+ 勾选框（原状态徽标替换） -->
+        <el-checkbox
+          :model-value="field.field.required ?? false"
           :disabled="readonly"
-          @click="emit('update', { required: !(field.field.required ?? false) })"
-        >
-          {{ (field.field.required ?? false) ? t('form.requiredOn') : t('form.requiredOff') }}
-        </button>
+          @update:model-value="
+            (v: string | number | boolean) => emit('update', { required: Boolean(v) })
+          "
+        />
       </div>
 
       <!-- ═══ 高级信息 ═══ -->
@@ -378,25 +376,6 @@ function onFieldKeySuffix(raw: string) {
   color: var(--sw-text-secondary);
 }
 
-.config__required-chip {
-  height: 24px;
-  padding: 2px 14px;
-  border: 0;
-  font-size: 12px;
-  line-height: 15px;
-  text-align: left;
-  color: var(--sw-color-primary);
-  background: var(--el-color-primary-light-9, #ece9ff);
-  border-radius: 6px;
-  cursor: pointer;
-}
-.config__required-chip.is-off {
-  color: #8a96ae;
-  background: #f1f4fa;
-}
-.config__required-chip:disabled {
-  cursor: not-allowed;
-}
 /* BF20261013-007：类型徽标不换行、无底色；超长省略号兜底（不再固定宽度导致折行） */
 .config__type {
   box-sizing: border-box;
