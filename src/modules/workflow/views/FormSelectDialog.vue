@@ -49,9 +49,11 @@ const selectedFormKey = ref<string | null>(null)
 async function loadList() {
   loading.value = true
   try {
+    // BF20261013-020：节点绑定的是「审批意见表单」——服务端按类型过滤，业务表单不进入候选
     const result = await pageFormDefs(
       { pageNum: pageNum.value, pageSize: pageSize.value },
       currentKeyword.value || undefined,
+      'APPROVAL_COMMENT',
     )
     // 客户端过滤：只展示已发布（PUBLISHED）表单（引用草稿表单无意义）
     const published = result.list.filter((item) => item.status === 'PUBLISHED')
@@ -145,16 +147,18 @@ watch(
 <template>
   <el-dialog
     :model-value="visible"
-    :title="t('workflow.selectLinkedFormTitle')"
+    title="选择审批意见表单"
     :close-on-click-modal="false"
     destroy-on-close
     width="720px"
     @update:model-value="emit('update:visible', $event)"
   >
     <div class="form-select">
-      <!-- 提示条：只展示已发布表单 -->
+      <!-- 提示条：只展示已发布的审批意见表单（业务表单在表单管理维护，不进入候选） -->
       <el-alert type="info" :closable="false" show-icon style="margin-bottom: var(--sw-space-16)">
-        <template #title> {{ t('workflow.publishedFormOnlyHint') }} </template>
+        <template #title>
+          仅展示已发布的审批意见表单作为可选绑定目标（草稿不可用；业务表单请到「表单管理」维护）
+        </template>
       </el-alert>
 
       <!-- 搜索栏 -->

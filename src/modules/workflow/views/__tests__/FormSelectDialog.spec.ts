@@ -130,7 +130,11 @@ describe('FormSelectDialog.vue', () => {
     await openDialog(wrapper)
 
     expect(pageFormDefs).toHaveBeenCalledTimes(1)
-    expect(pageFormDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 }, undefined)
+    expect(pageFormDefs).toHaveBeenCalledWith(
+      { pageNum: 1, pageSize: 10 },
+      undefined,
+      'APPROVAL_COMMENT',
+    )
   })
 
   // ─── 2. 只展示已发布表单 ───
@@ -246,7 +250,11 @@ describe('FormSelectDialog.vue', () => {
     vm.keyword = '请假'
     vm.handleSearch()
 
-    expect(pageFormDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 }, '请假')
+    expect(pageFormDefs).toHaveBeenCalledWith(
+      { pageNum: 1, pageSize: 10 },
+      '请假',
+      'APPROVAL_COMMENT',
+    )
   })
 
   // ─── 9. 重置搜索 ───
@@ -266,7 +274,11 @@ describe('FormSelectDialog.vue', () => {
 
     vm.handleReset()
     expect(vm.keyword).toBe('')
-    expect(pageFormDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 }, undefined)
+    expect(pageFormDefs).toHaveBeenCalledWith(
+      { pageNum: 1, pageSize: 10 },
+      undefined,
+      'APPROVAL_COMMENT',
+    )
   })
 
   // ─── 10. API 错误时列表为空 ───

@@ -143,7 +143,7 @@ async function loadCategoryTree() {
     const [cats, items, defs] = await Promise.all([
       listCategories(),
       queryAdminCatalogItems({ pageNum: 1, pageSize: 500 }),
-      pageFormDefs({ pageNum: 1, pageSize: 500 }),
+      pageFormDefs({ pageNum: 1, pageSize: 500 }, undefined, 'BUSINESS'),
     ])
     categories.value = cats
     catalogItems.value = items.list
@@ -178,7 +178,8 @@ async function loadList() {
   errorMsg.value = ''
   try {
     const pageQuery: PageQuery = { pageNum: pageNum.value, pageSize: pageSize.value }
-    const result = await pageFormDefs(pageQuery, currentKeyword.value || undefined)
+    // BF20261013-020：本列表是「业务表单」维护面——审批意见表单归流程管理，不混入
+    const result = await pageFormDefs(pageQuery, currentKeyword.value || undefined, 'BUSINESS')
     list.value = result.list
     total.value = result.total
   } catch (err) {

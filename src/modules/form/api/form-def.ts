@@ -16,6 +16,8 @@ export type FormDefStatus = 'DRAFT' | 'PUBLISHED' | 'DISABLED'
 export interface FormCreateReq {
   formKey: string
   name: string
+  /** 表单类型（BF20261013-020）：缺省 BUSINESS；APPROVAL_COMMENT=审批意见表单（流程节点专用）。 */
+  formType?: 'BUSINESS' | 'APPROVAL_COMMENT'
 }
 
 /** 表单定义 DTO（后端返回）。 */
@@ -38,6 +40,8 @@ export interface FormDefDTO {
 export interface FormDefListItem {
   id: string
   formKey: string
+  /** 表单类型：BUSINESS / APPROVAL_COMMENT（BF20261013-020；存量缺省 BUSINESS）。 */
+  formType?: string
   name: string
   logicalTableName: string
   status: FormDefStatus
@@ -167,13 +171,16 @@ export async function publishNewFormVersion(id: string, definition: string): Pro
  * GET /api/form/def/page?pageNum=&pageSize=&keyword=
  * 返 PageResult<FormDefListItem>，排序 update_time DESC。
  * keyword 为可选模糊搜索词（匹配 name / formKey）。
+ * formType 为可选类型过滤（BF20261013-020）：BUSINESS / APPROVAL_COMMENT。
  */
 export async function pageFormDefs(
   page: PageQuery,
   keyword?: string,
+  formType?: string,
 ): Promise<PageResult<FormDefListItem>> {
   const params: Record<string, unknown> = { ...page }
   if (keyword) params.keyword = keyword
+  if (formType) params.formType = formType
   const raw = await request<BackendPageResult<FormDefListItem>>({
     method: 'GET',
     url: '/form/def/page',

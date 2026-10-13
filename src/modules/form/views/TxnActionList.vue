@@ -78,7 +78,8 @@ const keyFieldOptions = computed(() => allFields.value.filter((f) => f.type !== 
 
 async function loadForms() {
   try {
-    const page = await pageFormDefs({ pageNum: 1, pageSize: 200 })
+    // BF20261013-020：交易动作目标是业务表单——审批意见表单归流程管理，不进入候选
+    const page = await pageFormDefs({ pageNum: 1, pageSize: 200 }, undefined, 'BUSINESS')
     forms.value = page.list
       .filter((f) => f.status === 'PUBLISHED')
       .map((f) => ({ id: f.id, name: f.name || f.formKey }))

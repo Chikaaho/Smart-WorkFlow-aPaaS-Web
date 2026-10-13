@@ -703,6 +703,20 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
         permission: 'workflow:cc:view',
         hidden: false,
       },
+      {
+        // BF20261013-020：审批意见表单维护（对齐真实后端 R__p64_approval_form_menu 菜单种子）
+        id: '9111',
+        parentId: '3',
+        name: 'WorkflowApprovalForm',
+        title: '审批意见表单',
+        path: 'workflow/approval-form',
+        component: 'workflow/views/ApprovalFormList',
+        icon: 'Document',
+        sort: 40,
+        menuType: 1,
+        permission: 'workflow:approvalForm:list',
+        hidden: false,
+      },
     ],
   },
   {

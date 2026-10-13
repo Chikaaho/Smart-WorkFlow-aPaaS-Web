@@ -49,9 +49,11 @@ const selectedFormKey = ref<string | null>(null)
 async function loadList() {
   loading.value = true
   try {
+    // BF20261013-020：引用源只取业务表单——审批意见表单归流程管理，不作为引用目标
     const result = await pageFormDefs(
       { pageNum: pageNum.value, pageSize: pageSize.value },
       currentKeyword.value || undefined,
+      'BUSINESS',
     )
     // 客户端过滤：只展示已发布（PUBLISHED）表单（引用草稿表单无意义）
     const published = result.list.filter((item) => item.status === 'PUBLISHED')

@@ -650,7 +650,8 @@ async function loadPublishedTargetOptions() {
   try {
     const [defsPage, formsPage] = await Promise.all([
       pageProcessDefs({ pageNum: 1, pageSize: 200 }),
-      pageFormDefs({ pageNum: 1, pageSize: 200 }),
+      // BF20261013-020：触发动作目标是业务表单——审批意见表单归流程管理，不进入候选
+      pageFormDefs({ pageNum: 1, pageSize: 200 }, undefined, 'BUSINESS'),
     ])
     // 后端分页实际承载字段为 records（PageResult.list 兼容别名），此处按运行时形态归一
     const defRows = ((defsPage as unknown as { records?: ProcessDef[] }).records ??
@@ -2448,8 +2449,9 @@ function nodeLabelLines(label: string) {
               <el-form-item v-if="nodeMeta.approveMode" :label="t('workflow.approveModeLabel')">
                 <el-input :model-value="nodeMeta.approveMode" disabled />
               </el-form-item>
-              <!-- ═══ P64 阶段Ⅰ：节点业务表单绑定（APPROVAL/CONSENSUS/DYNAMIC_PARALLEL） ═══ -->
-              <el-form-item v-if="nodeFormCapable" label="节点业务表单">
+              <!-- ═══ P64 阶段Ⅰ：节点业务表单绑定（APPROVAL/CONSENSUS/DYNAMIC_PARALLEL）；
+                   BF20261013-020：节点绑定的是审批意见表单（独立类型，流程管理单独维护） ═══ -->
+              <el-form-item v-if="nodeFormCapable" label="审批意见表单">
                 <div class="nodeform-row">
                   <el-input :model-value="selectedNodeFormKey || '未绑定'" disabled />
                   <el-button size="small" @click="nodeFormSelectVisible = true">
