@@ -159,10 +159,41 @@ export interface TableField extends BaseField {
   subFields: TableSubField[]
 }
 
-/** 多选：候选选项（字符串列表），提交值为选中的字符串数组。 */
+/**
+ * 候选选项键值对：key=提交/存储的稳定标识（不含空白字符、同字段内不重复），
+ * value=展示名。BF20261013-008 起 options 为键值对结构。
+ */
+export interface FormFieldOption {
+  key: string
+  value: string
+}
+
+/**
+ * 解析字段定义里的 options（容忍历史 string[] 形状：字符串 s → { key: s, value: s }）。
+ * 保留空行（编辑器增量输入的中间态），渲染方按需过滤；非字符串/非对象垃圾行丢弃。
+ */
+export function parseFormFieldOptions(raw: unknown): FormFieldOption[] {
+  if (!Array.isArray(raw)) return []
+  const rows: FormFieldOption[] = []
+  for (const item of raw) {
+    if (typeof item === 'string') {
+      rows.push({ key: item, value: item })
+    } else if (
+      item !== null &&
+      typeof item === 'object' &&
+      typeof (item as { key?: unknown }).key === 'string' &&
+      typeof (item as { value?: unknown }).value === 'string'
+    ) {
+      rows.push({ key: (item as { key: string }).key, value: (item as { value: string }).value })
+    }
+  }
+  return rows
+}
+
+/** 多选：候选选项为键值对列表，提交值为选中的 key 字符串数组。 */
 export interface MultiSelectField extends BaseField {
   type: 'MULTISELECT'
-  options?: string[]
+  options?: FormFieldOption[]
 }
 
 /** 附件：值 = AttachmentItem[]（[{storageKey,name}]）。 */

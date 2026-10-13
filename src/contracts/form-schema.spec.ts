@@ -5,6 +5,7 @@ import {
   fieldLabelPositionClass,
   isFieldLabelPosition,
   isFieldTextAlign,
+  parseFormFieldOptions,
 } from './form-schema'
 
 /**
@@ -55,5 +56,41 @@ describe('form-schema 文字对齐', () => {
     for (const illegal of ['justify', 'CENTER', '', 1, null, undefined, {}]) {
       expect(isFieldTextAlign(illegal)).toBe(false)
     }
+  })
+})
+
+/**
+ * BF20261013-008：候选选项键值对解析。
+ * 新形状 {key,value} 原样保留（含空行=编辑中间态）；历史 string[] 兼容为 key=value=原串；
+ * 垃圾行丢弃、非数组归空——设计态编辑器与运行时控件共用同一解析。
+ */
+describe('form-schema 候选选项解析', () => {
+  it('键值对数组原样保留（含空行）', () => {
+    expect(
+      parseFormFieldOptions([
+        { key: 'canyin', value: '餐饮' },
+        { key: '', value: '' },
+        { key: 'jiaotong', value: '交通' },
+      ]),
+    ).toEqual([
+      { key: 'canyin', value: '餐饮' },
+      { key: '', value: '' },
+      { key: 'jiaotong', value: '交通' },
+    ])
+  })
+
+  it('历史字符串数组兼容为 key=value=原字符串', () => {
+    expect(parseFormFieldOptions(['餐饮', '交通'])).toEqual([
+      { key: '餐饮', value: '餐饮' },
+      { key: '交通', value: '交通' },
+    ])
+  })
+
+  it('非字符串/非对象垃圾行丢弃，非数组归空', () => {
+    expect(parseFormFieldOptions(['餐饮', 42, null, { key: 1, value: 'x' }])).toEqual([
+      { key: '餐饮', value: '餐饮' },
+    ])
+    expect(parseFormFieldOptions(undefined)).toEqual([])
+    expect(parseFormFieldOptions('餐饮')).toEqual([])
   })
 })

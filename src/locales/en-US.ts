@@ -994,8 +994,12 @@ export default {
     maxLength: 'Max length',
     unlimited: 'Unlimited',
     multiselectOptions: 'Candidate options',
-    multiselectOptionsPlaceholder:
-      'Comma-separated options, for example: Meals, Transport, Accommodation',
+    optionKeyPlaceholder: 'Key',
+    optionValuePlaceholder: 'Value',
+    optionAddRow: 'Add',
+    optionRemoveRow: 'Remove this row',
+    optionKeyEmpty: 'Rows with a value must set a key',
+    optionKeyDuplicate: 'Duplicate key, please revise',
     labelBody: 'Text content',
     labelBodyPlaceholder: 'Text content shown to the person filling in the form',
     labelColor: 'Text color',
@@ -1049,7 +1053,7 @@ export default {
     configSeamDefaultOnOff: 'Default on / off',
     configSeamVisibleFields: 'Visible fields',
     configSeamCustomFilter: 'Custom filter condition',
-    arrayDefaultPlaceholder: 'Comma-separated default options',
+    arrayDefaultPlaceholder: 'Comma-separated default keys (keys of candidate options)',
     createDefaultPlaceholder: 'Default value for new submissions',
     formulaPlaceholder:
       "e.g. ROUND(${'{'}price{'}'} * ${'{'}qty{'}'}, 2); supports + - * / and ABS/ROUND/MIN/MAX/DAYS",

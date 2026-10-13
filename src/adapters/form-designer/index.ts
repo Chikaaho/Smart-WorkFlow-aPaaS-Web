@@ -3,6 +3,8 @@ import {
   fieldLabelPositionClass,
   isFieldLabelPosition,
   isFieldTextAlign,
+  parseFormFieldOptions,
+  type FormFieldOption,
   type FormSchema,
   type FormSchemaField,
   type FieldType,
@@ -47,7 +49,8 @@ interface RawSubFieldDef {
   renderAs?: string
   targetFormId?: string
   defaultValue?: unknown
-  options?: string[]
+  /** MULTISELECT 候选选项：键值对（新）或 string[]（历史定义，parseFormFieldOptions 兼容）。 */
+  options?: FormFieldOption[] | string[]
   text?: string
   color?: string
   fontSize?: number
@@ -120,7 +123,8 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     return {
       ...base,
       type,
-      ...(raw.options !== undefined ? { options: raw.options } : {}),
+      // 键值对归一（历史 string[] 定义经 parseFormFieldOptions 兼容，key=value=原字符串）
+      ...(raw.options !== undefined ? { options: parseFormFieldOptions(raw.options) } : {}),
     }
   }
 
@@ -353,11 +357,13 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     }
 
     case 'MULTISELECT': {
-      // 多选：checkbox-group，选项来自字段定义 options（字符串列表）
+      // 多选：checkbox-group，选项来自字段定义 options（键值对：展示 value、提交 key）
       const multiField = field as import('@/contracts/form-schema').MultiSelectField
       rule.type = 'checkbox'
       rule.value = []
-      rule.options = (multiField.options ?? []).map((opt) => ({ value: opt, label: opt }))
+      rule.options = parseFormFieldOptions(multiField.options)
+        .filter((opt) => opt.key !== '')
+        .map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
       break
     }
 

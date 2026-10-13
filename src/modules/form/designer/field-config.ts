@@ -26,8 +26,8 @@ export interface FieldPatch {
   targetFormId?: string
   /** 静态默认值（v0.0.2 契约已落 BaseField.defaultValue）。 */
   defaultValue?: unknown
-  /** MULTISELECT 候选选项（v0.0.2 契约已落 MultiSelectField.options）。 */
-  options?: string[]
+  /** MULTISELECT 候选选项（键值对，BF20261013-008 起；key=提交标识，value=展示名）。 */
+  options?: import('@/contracts/form-schema').FormFieldOption[]
   /** LABEL 说明正文（v0.0.2 契约已落 LabelField.text）。 */
   text?: string
   /** LABEL 文字颜色（契约 LabelField.color）。 */

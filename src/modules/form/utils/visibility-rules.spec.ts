@@ -8,7 +8,14 @@ describe('visibility-rules（渲染侧显隐求值）', () => {
     fields: [
       { name: 'a', type: 'TEXT' },
       { name: 'b', type: 'TEXT' },
-      { name: 'c', type: 'MULTISELECT', options: ['x', 'y'] },
+      {
+        name: 'c',
+        type: 'MULTISELECT',
+        options: [
+          { key: 'x', value: 'x' },
+          { key: 'y', value: 'y' },
+        ],
+      },
     ],
     rules: {
       visibility: [
