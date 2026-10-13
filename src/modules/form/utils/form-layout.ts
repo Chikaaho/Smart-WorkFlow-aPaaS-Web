@@ -40,25 +40,3 @@ export function packFormGridRows(
   if (current.length > 0) rows.push(current)
   return rows
 }
-
-/**
- * 插入 index 处所在行的剩余列数（新字段可占的最大宽度）。
- *
- * 按 fields[0..index-1] 顺序流式累计：跨行起点的字段把累计清零后再加自身。
- * 返回 24-used；行满（used=24）返回 24（作为新行整行插入）。
- * BF20261013-004：拖入预览与落库宽度按此取值，使「拖到两格之间=并排插入」所见即所得。
- */
-export function remainingSpanAtInsert(
-  fields: readonly Pick<FormSchemaField, 'type' | 'colSpan'>[],
-  index: number,
-): number {
-  let used = 0
-  const end = Math.max(0, Math.min(index, fields.length))
-  for (let i = 0; i < end; i++) {
-    const span = getFormFieldColSpan(fields[i])
-    if (used + span > FORM_GRID_COLUMNS) used = 0
-    used += span
-  }
-  const remaining = FORM_GRID_COLUMNS - used
-  return remaining > 0 ? remaining : FORM_GRID_COLUMNS
-}

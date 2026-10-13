@@ -167,11 +167,9 @@ function startPaletteDrag(item: DesignerItem) {
 }
 
 /** 放置落点确认：把候选字段插到画布算出的下标（24 栅格流式顺序，不做自由定位）。 */
-function addDroppedItem(item: DesignerItem, index: number, span?: number) {
+function addDroppedItem(item: DesignerItem, index: number) {
   draggingItem.value = null
   if (isPublished.value) return
-  // BF20261013-004：落点行内剩余列数回写字段宽度——拖到两格之间=以并排宽度插入（所见即所得）
-  if (span && span > 0) item.field.colSpan = span
   const at = Math.min(Math.max(index, 0), items.value.length)
   items.value.splice(at, 0, item)
   selectedId.value = item.id

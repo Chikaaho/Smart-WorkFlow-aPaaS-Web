@@ -23,7 +23,7 @@ import { computed, ref, watch } from 'vue'
 import type { DesignerItem } from './types'
 import type { FormSchema } from '@/contracts/form-schema'
 import FormPreview from '@/adapters/form-designer/FormPreview.vue'
-import { getFormFieldColSpan, remainingSpanAtInsert } from '@/modules/form/utils/form-layout'
+import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 import { resolveDropIndex, type DropPoint, type DropRect } from './drop-index'
 import type { CanvasElement, DragLikeEvent } from './dnd'
 
@@ -51,12 +51,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   /** 点 TABLE 占位块的「编辑子表」入口：宿主据此打开盖层子画布编辑该子表的子字段。 */
   editTable: [id: string]
-  /**
-   * 放置落点确认：宿主把 item 插到 index（24 栅格流式顺序，不做自由定位）。
-   * span=落点行内剩余列数（BF20261013-004）：预览与落库均按它定宽，
-   * 「拖到两格之间=以并排宽度插入」，所见即所得；缺省时保持字段自身宽度。
-   */
-  add: [item: DesignerItem, index: number, span?: number]
+  /** 放置落点确认：宿主把 item 插到 index（24 栅格流式顺序，不做自由定位）。 */
+  add: [item: DesignerItem, index: number]
 }>()
 
 /** TABLE 字段当前子字段数（占位块展示「N 个子字段」）；非 TABLE 恒 0。 */
@@ -136,16 +132,6 @@ function currentScrollOffset(): number {
  * 渲染列表 = 真实字段 + （指针在画布上时的）预览格。
  * 预览格复用同一个壳与同一个 FormPreview，故「拖到哪儿 = 松手后长什么样」在松手前即见。
  */
-/** 预览格宽度=插入点的行内剩余列数（dropIndex 有效时），实现「拖到哪=以可用宽度长在哪」。 */
-const pendingSpan = computed(() =>
-  dropIndex.value === null
-    ? null
-    : remainingSpanAtInsert(
-        items.value.map((it) => it.field),
-        dropIndex.value,
-      ),
-)
-
 const shellEntries = computed<ShellEntry[]>(() => {
   const list: ShellEntry[] = items.value.map((item) => ({ item, pending: false }))
   const pending = props.pendingItem
@@ -243,11 +229,9 @@ function onDrop(event: DragLikeEvent) {
   if (props.readonly || !pending) return
   event.preventDefault()
   const at = Math.min(Math.max(dropIndex.value ?? items.value.length, 0), items.value.length)
-  // 先取预览宽度再清落点：pendingSpan 依赖 dropIndex
-  const span = pendingSpan.value ?? undefined
   dropIndex.value = null
   dragGeometry = null
-  emit('add', pending, at, span)
+  emit('add', pending, at)
 }
 
 /** 预览格不是真实字段：点击不改变选中态。 */
@@ -286,9 +270,7 @@ function onShellClick(entry: ShellEntry) {
           'field-shell--active': !entry.pending && entry.item.id === selectedId,
           'field-shell--pending': entry.pending,
         }"
-        :style="{
-          gridColumn: `span ${entry.pending && pendingSpan ? pendingSpan : getFormFieldColSpan(entry.item.field)}`,
-        }"
+        :style="{ gridColumn: `span ${getFormFieldColSpan(entry.item.field)}` }"
         :data-col-span="getFormFieldColSpan(entry.item.field)"
         :data-field-type="entry.item.field.type"
         :data-field-name="entry.item.field.name"
