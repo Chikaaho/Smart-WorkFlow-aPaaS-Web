@@ -1048,10 +1048,7 @@ export default {
     paletteAgent: 'Agent result',
     paletteDragHint:
       'Drag components onto the canvas; new fields fill the row by default — adjust width in the panel.',
-    canvasDeviceLabel: 'Desktop',
     canvasGridMeta: '12-column grid · snap · 100%',
-    canvasFootSelected: 'Current field: {label} / {type} · span {span} / 24',
-    canvasFootEmpty: 'No field selected. Click a field on the canvas to see its grid info.',
     publishedNoRepublish: 'This form is already published and cannot be published again.',
     preview: 'Form preview',
     dateFormatExample: 'Year-Month-Day (YYYY-MM-DD)',

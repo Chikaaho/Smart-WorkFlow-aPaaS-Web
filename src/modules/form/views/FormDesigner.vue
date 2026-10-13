@@ -51,8 +51,7 @@ import {
   type WorkbenchTab,
 } from '../designer/workbench'
 import { applyFieldPatch, type FieldPatch } from '../designer/field-config'
-import { getFieldTypeDescriptor, getFieldTypeStorage } from '../designer/field-types'
-import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
+import { getFieldTypeStorage } from '../designer/field-types'
 import { ApiError } from '@/foundation/request'
 import { itemsToDefinition, definitionToItems } from '../designer/definition-convert'
 import { getFormDefinitionById, getFormDefById, type FormDefStatus } from '../api/form-def'
@@ -125,17 +124,6 @@ const selectedItem = computed(() => items.value.find((it) => it.id === selectedI
 const otherNames = computed(() =>
   items.value.filter((it) => it.id !== selectedId.value).map((it) => it.field.name),
 )
-
-/** 画布底部状态行（节点 07）：当前选中字段的真实 label / 类型名 / 24 栅格跨度。 */
-const selectedFoot = computed(() => {
-  const item = selectedItem.value
-  if (!item) return null
-  return {
-    label: item.field.label || item.field.name,
-    type: getFieldTypeDescriptor(item.field.type)?.label ?? item.field.type,
-    span: getFormFieldColSpan(item.field),
-  }
-})
 
 /** 控件库点击添加与拖入使用同一 DesignerItem 形态，点击后立即选中新字段。 */
 function addPaletteItem(item: DesignerItem) {
@@ -762,6 +750,8 @@ async function loadBreadcrumbCategory() {
         <el-button :disabled="!formId" @click="historyVisible = true">{{
           t('form.draftHistoryEntry')
         }}</el-button>
+        <!-- BF20261013-015：预览自画布头部行上收至工具条动作组 -->
+        <el-button @click="previewVisible = true">{{ t('common.preview') }}</el-button>
         <!-- V011-BUG-015：已发布表单以「发布新版本」替代 保存/发布（原子落库，不经草稿） -->
         <el-button
           v-if="isPublished"
@@ -809,19 +799,8 @@ async function loadBreadcrumbCategory() {
         </div>
 
         <div class="designer__canvascol">
-          <div class="designer__canvas-meta">
-            <b class="designer__canvas-device">{{ t('form.canvasDeviceLabel') }}</b>
-            <el-button
-              link
-              type="primary"
-              class="designer__canvas-fields"
-              @click="fieldsDialogVisible = true"
-              >{{ t('fieldList.button') }}</el-button
-            >
-            <el-button class="designer__canvas-preview" @click="previewVisible = true">{{
-              t('common.preview')
-            }}</el-button>
-          </div>
+          <!-- BF20261013-015：去掉「桌面端」头部行（预览已上收工具条，字段清单入口保留在「设置」下拉），
+               画布白板直接占满中栏 -->
           <!-- V011-BUG-006：画布内不再渲染「未命名表单」标题块与 12 栏标尺（Owner 2026-09-22）；
                表单名称在新建时输入（V011-BUG-014），设计态名称见面包屑 -->
           <div class="designer__sheet">
@@ -834,11 +813,6 @@ async function loadBreadcrumbCategory() {
               @edit-table="openTableEditor"
             />
           </div>
-          <p class="designer__canvas-foot">
-            {{
-              selectedFoot ? t('form.canvasFootSelected', selectedFoot) : t('form.canvasFootEmpty')
-            }}
-          </p>
         </div>
 
         <FieldConfigPanel
@@ -1200,71 +1174,25 @@ async function loadBreadcrumbCategory() {
   color: #9aa6bd;
 }
 
-/* ── 中栏：画布（meta 条 + 白底表单卡 + 字段栅格 + 底部状态行）；V011-BUG-009 画布随中栏填满 ── */
+/* ── 中栏：画布（BF20261013-015 白板占满中栏，四周留 12px 细边；无头部/底部条） ── */
 .designer__canvascol {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 8px 24px 12px 24px;
+  padding: 12px;
   background: #f4f6fc;
 }
 
-.designer__canvas-meta {
-  height: 36px;
-  flex: 0 0 36px;
-  display: flex;
-  align-items: center;
-  gap: 40px;
-  color: #8794ae;
-  font-size: 12px;
-}
-
-.designer__canvas-device {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 17px;
-  margin-top: -6px;
-  color: var(--sw-text-regular, #303a55);
-}
-
-.designer__canvas-preview {
-  margin-left: auto;
-  width: 88px;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 6px;
-  justify-content: flex-start;
-  text-align: left;
-  transform: translate(-2px, -6px);
-}
-
-.designer__canvas-fields {
-  display: none;
-  height: 22px;
-  padding: 0 4px;
-  font-size: 12px;
-  color: #5f6f92;
-}
-
-.designer__canvas-fields + .designer__canvas-preview {
-  margin-left: auto;
-  width: 88px;
-}
-
-/* V011-BUG-009：画布白卡随中栏剩余高度填满（不再固定 740px） */
+/* V011-BUG-009 / BF20261013-015：白板随中栏满幅（去外边距与卡片边框，边缘与两栏分隔线齐平） */
 .designer__sheet {
   flex: 1 1 auto;
   min-height: 520px;
   overflow-y: auto;
   box-sizing: border-box;
-  margin-top: 12px;
   padding: 21px 23px 20px;
   background: #fff;
-  border: 1px solid #dde3ef;
-  border-radius: 12px;
-  box-shadow: 0 2px 9px rgba(58, 75, 110, 0.08);
 }
 
 /* 画布内嵌：去掉独立底色/内边距，滚动交给白底表单卡 */
@@ -1324,13 +1252,6 @@ async function loadBreadcrumbCategory() {
 .designer-main-canvas :deep(.canvas__list) {
   row-gap: 21px;
   column-gap: 12px;
-}
-
-.designer__canvas-foot {
-  flex: 0 0 auto;
-  margin: 12px 0 0;
-  font-size: 12px;
-  color: #8a96ae;
 }
 
 /* ── 右栏：组件属性（336 白底，标题 + 类型徽标） ── */
