@@ -110,3 +110,40 @@ describe('FieldPalette 选择类入口（BF20261013-009）', () => {
     expect(item.field.renderAs).toBeUndefined()
   })
 })
+
+/**
+ * BF20261013-010：库内显示名 = 拖出后的默认字段名（注册表 descriptor 单一名称源）。
+ */
+describe('FieldPalette 名称一致性（BF20261013-010）', () => {
+  const REGISTRY_TYPES = [
+    'TEXT',
+    'RICH_TEXT',
+    'NUMBER',
+    'DICT',
+    'BOOL',
+    'MULTISELECT',
+    'DATE',
+    'ATTACHMENT',
+    'LABEL',
+    'USER',
+    'DEPT',
+    'TABLE',
+    'FORMULA',
+    'DATASOURCE',
+  ]
+
+  it('每个注册表入口：库内名称与点击添加后的默认字段名一致', async () => {
+    for (const type of REGISTRY_TYPES) {
+      const wrapper = mountPalette()
+      const button = wrapper.find(`.palette__item[data-field-type="${type}"]`)
+      expect(button.exists(), `${type} 入口应存在`).toBe(true)
+      const paletteName = button.find('.palette__label').text()
+
+      await button.trigger('click')
+      const emitted = wrapper.emitted('add')
+      expect(emitted, `${type} 应产出画布项`).toBeTruthy()
+      const item = emitted![0][0] as { field: { label?: string; type: string } }
+      expect(item.field.label, `${type} 库内名称与默认字段名应一致`).toBe(paletteName)
+    }
+  })
+})

@@ -2,13 +2,17 @@
 /**
  * 多选（MULTISELECT）控件：候选选项来自字段定义 options（键值对，兼容历史 string[]）；
  * BF20261013-009：数据来源 source=dict 时改用绑定字典项（dictType）。
+ * BF20261013-010：数据源未配置时渲染禁用占位提示「请配置数据」。
  * 展示 value/label、提交 key/code；空键行（编辑中间态）不渲染。
  * 主渲染与子表单元格共用（subField=true → size=small）。
  */
 import { computed } from 'vue'
+import { useI18n } from '@/locales'
 import { parseFormFieldOptions, type MultiSelectField } from '@/contracts/form-schema'
 import { useDict } from '@/foundation/dict'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
+
+const { t } = useI18n()
 
 const props = defineProps<DynamicFieldControlProps>()
 const emit = defineEmits<{ 'update:modelValue': [value: unknown] }>()
@@ -36,6 +40,11 @@ const options = computed<NamedOption[]>(() => {
     .map((o) => ({ key: o.key, label: o.value || o.key }))
 })
 
+/** 数据源是否已配置（未配置 → 禁用占位提示）。 */
+const configured = computed(() =>
+  field.value?.source === 'dict' ? !!field.value.dictType?.trim() : options.value.length > 0,
+)
+
 const value = computed<string[]>(() =>
   Array.isArray(props.modelValue) ? (props.modelValue as string[]) : [],
 )
@@ -46,7 +55,16 @@ function onChange(next: unknown) {
 </script>
 
 <template>
+  <!-- BF20261013-010：未配置数据源 → 禁用占位提示 -->
   <el-select
+    v-if="!configured"
+    :size="subField ? 'small' : undefined"
+    disabled
+    :placeholder="t('form.configureDataPrompt')"
+  />
+
+  <el-select
+    v-else
     :size="subField ? 'small' : undefined"
     multiple
     :model-value="value"

@@ -46,6 +46,11 @@ const options = computed<NamedOption[]>(() =>
     : dictItems.value.map((i) => ({ key: String(i.value), label: i.label })),
 )
 
+/** 数据源是否已配置（BF20261013-010：未配置时渲染禁用占位提示「请配置数据」）。 */
+const configured = computed(() =>
+  source.value === 'custom' ? customOptions.value.length > 0 : !!dictType.value.trim(),
+)
+
 const modelValue = computed<string | string[]>(() => {
   if (multiple.value) {
     return Array.isArray(props.modelValue) ? (props.modelValue as string[]) : []
@@ -68,8 +73,23 @@ function onChange(next: unknown) {
 </script>
 
 <template>
+  <!-- BF20261013-010：未配置数据源 → 禁用占位提示（radio 组无 placeholder 能力，用禁用输入呈现） -->
   <el-select
-    v-if="renderAs === 'select'"
+    v-if="!configured && renderAs === 'select'"
+    :size="subField ? 'small' : undefined"
+    disabled
+    :placeholder="t('form.configureDataPrompt')"
+  />
+
+  <el-input
+    v-else-if="!configured"
+    :size="subField ? 'small' : undefined"
+    disabled
+    :placeholder="t('form.configureDataPrompt')"
+  />
+
+  <el-select
+    v-else-if="renderAs === 'select'"
     :size="subField ? 'small' : undefined"
     :model-value="modelValue"
     :multiple="multiple"

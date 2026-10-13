@@ -105,4 +105,25 @@ describe('MultiSelectControl 候选选项键值对', () => {
       .map((o) => ({ label: o.props('label'), value: o.props('value') }))
     expect(optionProps).toEqual([{ label: '字典甲', value: 'd1' }])
   })
+
+  it('未配置数据源（候选为空）：渲染禁用占位提示「请配置数据」', async () => {
+    const wrapper = mountControl(multiField([]))
+    await nextTick()
+    const select = wrapper.findComponent({ name: 'ElSelect' })
+    expect(select.props('disabled')).toBe(true)
+    expect(select.props('placeholder')).toBe('请配置数据')
+  })
+
+  it('字典来源未绑定字典：渲染禁用占位提示', async () => {
+    const field = {
+      name: 'field_multi',
+      type: 'MULTISELECT',
+      label: '多选',
+      source: 'dict',
+      dictType: '',
+    } as unknown as DynamicFieldSchema
+    const wrapper = mountControl(field)
+    await nextTick()
+    expect(wrapper.findComponent({ name: 'ElSelect' }).props('placeholder')).toBe('请配置数据')
+  })
 })

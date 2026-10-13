@@ -67,20 +67,7 @@ function onSelectMode(value: string | number | boolean | undefined) {
       />
     </div>
 
-    <div class="row">
-      <label class="row__label">{{ t('form.displayMode') }}</label>
-      <el-radio-group
-        :model-value="renderAs"
-        @update:model-value="
-          (v: string | number | boolean | undefined) =>
-            emit('update', { renderAs: v === 'radio' ? 'radio' : 'select' })
-        "
-      >
-        <el-radio value="select">{{ t('form.renderSelect') }}</el-radio>
-        <el-radio value="radio">{{ t('form.renderRadio') }}</el-radio>
-      </el-radio-group>
-    </div>
-
+    <!-- BF20261013-010：下拉/单选框为两个独立组件，渲染形态由控件库入口决定，属性面板不再提供切换 -->
     <div v-if="renderAs === 'select'" class="row">
       <label class="row__label">{{ t('form.selectMode') }}</label>
       <el-radio-group

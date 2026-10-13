@@ -78,25 +78,16 @@ type PaletteEntry = {
 /** 控件库条目引用：字符串=注册表原样；对象=DICT 的显示变体（同类型双入口）。 */
 type PaletteTypeRef = string | { type: string; variant: 'dropdown' | 'radio' }
 
-const LABELS: Record<string, string> = {
-  TEXT: 'form.paletteSingleLine',
-  RICH_TEXT: 'form.paletteMultiLine',
-  NUMBER: 'form.paletteNumberInput',
-  DICT: 'form.paletteDropdown',
-  BOOL: 'form.paletteSwitch',
-  MULTISELECT: 'form.paletteCheckbox',
-  DATE: 'form.paletteDateTime',
-  ATTACHMENT: 'form.paletteUpload',
-  LABEL: 'form.paletteText',
-  USER: 'form.palettePerson',
-  DEPT: 'form.paletteDepartment',
+/**
+ * BF20261013-010：库内名称一律取注册表 descriptor.label（单一名称源）——
+ * 拖出后的默认字段名与库内显示名天然一致，杜绝两套名称漂移。
+ * 此处仅保留「设计锁定、未进注册表」的占位条目显示名。
+ */
+const PLACEHOLDER_LABELS: Record<string, string> = {
   SERIAL: 'form.paletteSerial',
-  DATASOURCE: 'form.paletteRelatedData',
   GRID: 'form.paletteGrid',
   GROUP: 'form.paletteGroupPanel',
   DIVIDER: 'form.paletteDivider',
-  TABLE: 'form.paletteSubTable',
-  FORMULA: 'form.paletteFormula',
   IOT: 'form.paletteIot',
   AGENT: 'form.paletteAgent',
 }
@@ -157,21 +148,17 @@ const paletteGrouped = computed(() => {
   // P63 G01：TABLE（子表）进入可用入口——表格列人员/部门来源是本轮验收合同范围；
   // 子字段编辑走画布盖层子画布（SubFieldDesigner）。GRID/GROUP/DIVIDER 仍为锁定占位。
   const unavailable = new Set(['SERIAL', 'GRID', 'GROUP', 'DIVIDER', 'IOT', 'AGENT'])
-  const entries = (ref: PaletteTypeRef, groupKey: string): PaletteEntry | null => {
+  const entries = (ref: PaletteTypeRef, _groupKey: string): PaletteEntry | null => {
     const type = typeof ref === 'string' ? ref : ref.type
     const variant = typeof ref === 'string' ? undefined : ref.variant
     const descriptor = descriptorByType.value.get(type as FieldType)
     if (props.allowedTypes && (!descriptor || !props.allowedTypes.includes(descriptor.type)))
       return null
-    const labelKey =
+    // BF20261013-010：注册表内类型一律 descriptor.label；单选框变体用入口名；占位条目查映射
+    const label =
       variant === 'radio'
-        ? 'form.paletteRadio'
-        : variant === 'dropdown'
-          ? 'form.paletteDropdown'
-          : groupKey === 'form.paletteGroupAdvanced' && type === 'RICH_TEXT'
-            ? 'form.fieldTypeRichText'
-            : (LABELS[type] ?? type)
-    const label = t(labelKey)
+        ? t('form.paletteRadio')
+        : (descriptor?.label ?? t(PLACEHOLDER_LABELS[type] ?? type))
     const entryKey = variant ? `${type}#${variant}` : type
     if (
       keyword &&

@@ -107,4 +107,28 @@ describe('DictControl 数据来源（BF20261013-009）', () => {
     const radios = wrapper.findAll('.el-radio')
     expect(radios.map((r) => r.text())).toEqual(['男'])
   })
+
+  it('未配置数据源（下拉）：渲染禁用占位提示「请配置数据」', async () => {
+    const wrapper = mountControl(dictField({ source: 'custom', options: [] }))
+    await nextTick()
+    const select = wrapper.findComponent({ name: 'ElSelect' })
+    expect(select.props('disabled')).toBe(true)
+    expect(select.props('placeholder')).toBe('请配置数据')
+  })
+
+  it('未配置数据源（单选框）：渲染禁用输入占位提示', async () => {
+    const wrapper = mountControl(dictField({ source: 'custom', renderAs: 'radio', options: [] }))
+    await nextTick()
+    expect(wrapper.findComponent({ name: 'ElRadioGroup' }).exists()).toBe(false)
+    const input = wrapper.findComponent({ name: 'ElInput' })
+    expect(input.exists()).toBe(true)
+    expect(input.props('disabled')).toBe(true)
+    expect(input.props('placeholder')).toBe('请配置数据')
+  })
+
+  it('字典来源未绑定字典：渲染禁用占位提示', async () => {
+    const wrapper = mountControl(dictField({ source: 'dict', dictType: '' }))
+    await nextTick()
+    expect(wrapper.findComponent({ name: 'ElSelect' }).props('placeholder')).toBe('请配置数据')
+  })
 })

@@ -353,6 +353,13 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
       const dictBound = !customSource && !!dictField.dictType?.trim()
       const configured = customSource ? customOptions.length > 0 : dictBound
       if (dictField.renderAs === 'radio') {
+        // BF20261013-010：未配置数据源的单选框以禁用输入占位提示（radio 组无 placeholder 能力）
+        if (!configured) {
+          rule.type = 'input'
+          rule.value = ''
+          rule.props = { disabled: true, placeholder: i18n.global.t('form.configureDataPrompt') }
+          break
+        }
         rule.type = 'radio'
         rule.value = ''
         rule.options = customSource
@@ -396,17 +403,26 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
 
     case 'MULTISELECT': {
       // 多选：checkbox-group；BF20261013-009 数据来源 dict=绑字典（元数据运行时装载）、
-      // custom=候选键值对（展示 value、提交 key）
+      // custom=候选键值对（展示 value、提交 key）；BF20261013-010 未配置数据源以禁用输入占位提示
       const multiField = field as import('@/contracts/form-schema').MultiSelectField
+      const sourceDict = multiField.source === 'dict'
+      const customOptions = parseFormFieldOptions(multiField.options).filter(
+        (opt) => opt.key !== '',
+      )
+      const configured = sourceDict ? !!multiField.dictType?.trim() : customOptions.length > 0
+      if (!configured) {
+        rule.type = 'input'
+        rule.value = ''
+        rule.props = { disabled: true, placeholder: i18n.global.t('form.configureDataPrompt') }
+        break
+      }
       rule.type = 'checkbox'
       rule.value = []
-      if (multiField.source === 'dict') {
+      if (sourceDict) {
         rule.options = []
         ;(rule as Record<string, unknown>).__dictType__ = multiField.dictType ?? ''
       } else {
-        rule.options = parseFormFieldOptions(multiField.options)
-          .filter((opt) => opt.key !== '')
-          .map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
+        rule.options = customOptions.map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
       }
       break
     }
@@ -529,6 +545,13 @@ function mapSubFieldToCreateRule(sf: TableSubField): Record<string, unknown> {
       const customSource = sf.source === 'custom'
       const customOptions = parseFormFieldOptions(sf.options).filter((o) => o.key !== '')
       const configured = customSource ? customOptions.length > 0 : !!sf.dictType?.trim()
+      if (sf.renderAs === 'radio' && !configured) {
+        // BF20261013-010：未配置数据源的单选框以禁用输入占位提示
+        rule.type = 'input'
+        rule.value = ''
+        rule.props = { disabled: true, placeholder: i18n.global.t('form.configureDataPrompt') }
+        break
+      }
       if (sf.renderAs === 'radio') {
         rule.type = 'radio'
         rule.value = ''

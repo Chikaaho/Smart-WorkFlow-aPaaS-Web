@@ -361,6 +361,28 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     expect((r as Record<string, unknown>).__dictType__).toBe('sys_user_sex')
   })
 
+  it('DICT 单选框未配置数据源：映射禁用输入占位「请配置数据」', () => {
+    const schema = {
+      title: 'F',
+      fields: [{ name: 'pick', type: 'DICT' as const, dictType: '', renderAs: 'radio' as const }],
+    }
+    const r = toFormCreateRule(schema)[0] as Record<string, unknown>
+    expect(r.type).toBe('input')
+    expect((r.props as Record<string, unknown>).disabled).toBe(true)
+    expect((r.props as Record<string, unknown>).placeholder).toBe('请配置数据')
+  })
+
+  it('MULTISELECT 未配置数据源（自定义空候选）：映射禁用输入占位', () => {
+    const schema = {
+      title: 'F',
+      fields: [{ name: 'm', type: 'MULTISELECT' as const, source: 'custom' as const, options: [] }],
+    }
+    const r = toFormCreateRule(schema)[0] as Record<string, unknown>
+    expect(r.type).toBe('input')
+    expect((r.props as Record<string, unknown>).disabled).toBe(true)
+    expect((r.props as Record<string, unknown>).placeholder).toBe('请配置数据')
+  })
+
   it('MULTISELECT 字典来源：空选项 + __dictType__ 元数据；custom 来源保持键值对映射', () => {
     const schema = {
       title: 'F',
