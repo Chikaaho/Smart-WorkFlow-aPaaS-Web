@@ -19,6 +19,7 @@ import { isColumnNameUnique } from './column-name'
 import type { DesignerItem } from './types'
 import type { FieldPatch } from './field-config'
 import RulesEditor from './config/RulesEditor.vue'
+import ScriptConfig from './ScriptConfig.vue'
 import { WIDTH_COL_STEPS, widthStepPercent } from './width-steps'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 import {
@@ -256,6 +257,13 @@ function onFieldKeySuffix(raw: string) {
       <p v-else-if="!readonly" class="config__placeholder">
         「{{ descriptor?.label ?? t('form.thisField') }}」配置项待接入（后续刀）
       </p>
+
+      <!-- BF20261013-021：高级编辑（脚本）——值变更时执行的字段脚本（已发布只读不回显可编辑面板） -->
+      <ScriptConfig
+        v-if="field.field.type !== 'LABEL'"
+        :field="field.field"
+        @update="(p: FieldPatch) => emit('update', p)"
+      />
 
       <p class="config__note">
         {{ keyLocked ? t('form.fieldKeyLockedNote') : t('form.fieldKeySuffixHint') }}

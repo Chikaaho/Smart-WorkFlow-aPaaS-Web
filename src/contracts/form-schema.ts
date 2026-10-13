@@ -105,6 +105,18 @@ export interface TableSubField {
   options?: FormFieldOption[]
 }
 
+/**
+ * 字段脚本（BF20261013-021「高级编辑」）：挂在字段上的 JS 片段，
+ * 支持 `#函数名` 语法糖（获取/设置字段值、设置必填/隐藏/只读、提示消息、当前用户）。
+ * 该字段值变化时执行；onLoad = true 时表单加载/回显完成后也执行一次。
+ * 客户端行为语义；服务端不做脚本复算（隐藏/必填为填报端效果）。
+ */
+export interface FieldScript {
+  code: string
+  /** 表单加载（新建初始化/回显）后是否执行一次；缺省 false（仅值变更时执行）。 */
+  onLoad?: boolean
+}
+
 interface BaseField {
   name: string
   label?: string
@@ -123,6 +135,8 @@ interface BaseField {
   defaultValue?: unknown
   /** USER/DEPT 多选（P63，主字段同义透传）：值=稳定对象 ID 字符串列表；缺省单选。 */
   multiple?: boolean
+  /** 高级编辑脚本（BF20261013-021）；无脚本时不产生任何行为。 */
+  script?: FieldScript
 }
 
 export interface TextField extends BaseField {

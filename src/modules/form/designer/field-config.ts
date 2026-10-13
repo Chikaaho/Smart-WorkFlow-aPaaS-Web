@@ -48,6 +48,8 @@ export interface FieldPatch {
   multiple?: boolean
   /** DATE 日期时间格式（P63 契约已落 DateField.format）。 */
   format?: string
+  /** 高级编辑脚本（BF20261013-021 契约已落 BaseField.script）：值变更时执行，onLoad 时装载后也执行。 */
+  script?: import('@/contracts/form-schema').FieldScript
 }
 
 /**

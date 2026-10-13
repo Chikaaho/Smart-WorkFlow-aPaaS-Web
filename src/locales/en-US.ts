@@ -925,6 +925,15 @@ export default {
     fieldKeyLockedNote: 'The field key cannot be changed directly after publishing',
     fieldKeySuffixHint: 'Enter the suffix only — the system prefix is fixed as field_',
     fieldKeyDuplicate: 'This field key duplicates an existing field. Choose another.',
+    scriptTitle: 'Advanced editing (script)',
+    scriptPlaceholder:
+      'Runs when the value changes; call built-in functions with #name (field names need no quotes), e.g. #设置字段值(field_b, "fixed")',
+    scriptOnLoad: 'Also run when the form opens',
+    scriptInvalid: 'Script error: {msg}',
+    scriptFunctions: 'Available functions',
+    scriptInsert: 'Insert',
+    scriptHint:
+      'Examples: #获取字段值(field_a) · #设置必填(field_b, true) · #提示消息("please complete")',
     newFormTitle: 'New form',
     newFormNameRequired: 'Please enter the form name',
     publishNewVersion: 'Publish new version',

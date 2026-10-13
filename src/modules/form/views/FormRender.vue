@@ -19,7 +19,7 @@ const { t } = useI18n()
  * - REFERENCE 显示名：resolveReferenceDisplay → referenceLabels[name]
  *   显示名单独注入 DynamicField 的 referenceLabel prop，不污染 v-model
  */
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { SubTableRowAction, SubTableRowActionType } from '@/modules/form/api/form'
@@ -35,6 +35,7 @@ import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import DynamicField from '@/components/DynamicField.vue'
 import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-display'
 import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
+import { createFieldScripts } from '@/modules/form/utils/field-scripts'
 import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
 
@@ -65,9 +66,40 @@ const referenceLabels = reactive<Record<string, string>>({})
 const hiddenFields = computed(() =>
   schema.value ? hiddenFieldNames(parseVisibilityRules(schema.value), formData) : new Set<string>(),
 )
+/** BF20261013-021：字段脚本运行时（值变更触发字段脚本；onLoad 脚本在数据装载后执行）。 */
+const fieldScripts = createFieldScripts({
+  getSchema: () => schema.value,
+  model: formData,
+  // 只读查看态不执行脚本（不产生任何写入/状态变化）
+  enabled: () => !isViewMode.value,
+})
+onUnmounted(() => fieldScripts.dispose())
+/** 脚本隐藏与声明式隐藏合并：脚本 true 加隐藏、false 显式放行（提交与渲染同口径）。 */
+const hiddenAll = computed(() => {
+  const merged = new Set(hiddenFields.value)
+  for (const [name, hidden] of Object.entries(fieldScripts.overrides.hidden)) {
+    if (hidden) merged.add(name)
+    else merged.delete(name)
+  }
+  return merged
+})
 /** 渲染列表：过滤隐藏字段（LABEL 说明文字照常渲染）。 */
 const visibleSchemaFields = computed(() =>
-  schema.value ? schema.value.fields.filter((f) => !hiddenFields.value.has(f.name)) : [],
+  schema.value ? schema.value.fields.filter((f) => !hiddenAll.value.has(f.name)) : [],
+)
+/** 有效必填 / 有效只读（脚本覆盖优先，静态配置兜底）。 */
+function fieldRequired(field: FormSchemaField): boolean {
+  return fieldScripts.overrides.required[field.name] ?? field.required ?? false
+}
+function fieldReadonly(field: FormSchemaField): boolean {
+  return isViewMode.value || (fieldScripts.overrides.readonly[field.name] ?? false)
+}
+/** 渲染用字段（必填覆盖写回字段对象，供 DynamicField 星标与校验同源）。 */
+const renderFields = computed(() =>
+  visibleSchemaFields.value.map((f) => {
+    const required = fieldRequired(f)
+    return required === (f.required ?? false) ? f : ({ ...f, required } as FormSchemaField)
+  }),
 )
 /** 乐观锁版本号（编辑回显时从 GET 详情获取，保存时 PUT 回传） */
 const version = ref<number>(0)
@@ -168,6 +200,8 @@ async function loadSchema() {
     } else {
       for (const field of schema.value.fields) initField(field)
     }
+    // BF20261013-021：数据装载完成后执行 onLoad 字段脚本（新建/草稿/回显三态同口径）
+    fieldScripts.runOnLoad()
   } catch {
     errorMsg.value = t('form.definitionLoadFailed')
   } finally {
@@ -324,8 +358,9 @@ function validateRequiredFields(): boolean {
   if (!schema.value) return true
 
   for (const field of schema.value.fields) {
-    if (hiddenFields.value.has(field.name)) continue // 隐藏字段不参与本次必填校验
-    if (field.required && isEmptyRequiredValue(formData[field.name])) {
+    // BF021：脚本隐藏字段与声明式隐藏同口径，不参与本次必填校验
+    if (hiddenAll.value.has(field.name)) continue
+    if (fieldRequired(field) && isEmptyRequiredValue(formData[field.name])) {
       validationErrors[field.name] = t('form.fieldRequired')
     }
   }
@@ -387,7 +422,7 @@ async function handleSubmit() {
   try {
     const submitData: Record<string, unknown> = {}
     for (const field of schema.value?.fields ?? []) {
-      if (!hiddenFields.value.has(field.name)) {
+      if (!hiddenAll.value.has(field.name)) {
         submitData[field.name] = formData[field.name]
       }
     }
@@ -670,7 +705,7 @@ onMounted(() => {
               <h2 class="form-render-page__card-title">{{ t('formSide.formTitle') }}</h2>
               <div class="form-render-page__group">
                 <div
-                  v-for="field in visibleSchemaFields"
+                  v-for="field in renderFields"
                   :key="field.name"
                   class="form-render-page__field"
                   :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
@@ -681,7 +716,7 @@ onMounted(() => {
                   <DynamicField
                     :field="field"
                     :model-value="formData[field.name]"
-                    :readonly="isViewMode"
+                    :readonly="fieldReadonly(field)"
                     :reference-label="referenceLabels[field.name] ?? ''"
                     @update:model-value="formData[field.name] = $event"
                   />

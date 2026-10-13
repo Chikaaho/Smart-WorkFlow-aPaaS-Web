@@ -4,6 +4,7 @@ import {
   isFieldLabelPosition,
   isFieldTextAlign,
   parseFormFieldOptions,
+  type FieldScript,
   type FormFieldOption,
   type FormSchema,
   type FormSchemaField,
@@ -11,6 +12,23 @@ import {
   type TableSubField,
 } from '@/contracts/form-schema'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
+
+/**
+ * BF20261013-021：字段脚本形状校验（code 必须为非空字符串；onLoad 可选布尔）。
+ * 非法形状按“无脚本”处理（不阻塞其余字段解析）。
+ */
+function parseFieldScript(raw: unknown): FieldScript | undefined {
+  if (!raw || typeof raw !== 'object') {
+    return undefined
+  }
+  const candidate = raw as { code?: unknown; onLoad?: unknown }
+  if (typeof candidate.code !== 'string' || candidate.code.trim() === '') {
+    return undefined
+  }
+  return candidate.onLoad === true
+    ? { code: candidate.code, onLoad: true }
+    : { code: candidate.code }
+}
 
 /**
  * form-designer 防腐层。
@@ -62,6 +80,8 @@ interface RawSubFieldDef {
   /** P63：USER/DEPT 多选、DATE 日期时间格式（definition 契约键透传）。 */
   multiple?: boolean
   format?: string
+  /** BF20261013-021：高级编辑脚本（definition 契约键透传；形状在 mapRawField 校验）。 */
+  script?: unknown
   dsBinding?: {
     queryKey: string
     version?: number
@@ -100,6 +120,8 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     ...(raw.placeholder !== undefined ? { placeholder: raw.placeholder } : {}),
     colSpan: normalizeFormFieldColSpan(raw.colSpan, raw.type),
     ...(raw.defaultValue !== undefined ? { defaultValue: raw.defaultValue } : {}),
+    // BF20261013-021：高级编辑脚本（形状校验后透传；缺省不携带）
+    ...(parseFieldScript(raw.script) !== undefined ? { script: parseFieldScript(raw.script) } : {}),
   }
 
   const type = raw.type as FieldType

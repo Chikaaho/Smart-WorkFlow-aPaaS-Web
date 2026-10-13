@@ -2505,7 +2505,9 @@ function nodeLabelLines(label: string) {
                       />
                     </el-select>
                   </el-form-item>
-                  <el-form-item label="是否发起（判断脚本：读取变量返回 是/否；留空 = 总是发起）">
+                  <el-form-item
+                    label="是否发起（判断脚本：返回 是/否；可用 #获取流程变量(变量标识) 等内置函数；留空 = 总是发起）"
+                  >
                     <el-input
                       v-model="subflowForm.script"
                       type="textarea"
@@ -3463,10 +3465,20 @@ function nodeLabelLines(label: string) {
           </el-form-item>
         </div>
         <el-form-item
-          label="判断脚本（只做判断、不改数据；用 流程变量取值('变量标识') 读取变量，返回 数字/文本/是-否/空）"
+          label="判断脚本（只做判断；用 #函数名 调用内置函数读取数据，返回 数字/文本/是-否/空）"
         >
           <el-input v-model="triggerDraft.script" type="textarea" :rows="7" spellcheck="false" />
         </el-form-item>
+        <div class="script-help">
+          <p class="script-help__title">
+            可用函数（字段名/变量名无需加引号）：#获取流程变量(变量标识) · #设置流程变量(变量标识,
+            值) · #获取部门负责人(部门ID) · #获取分管领导(部门ID) · #获取上级部门(部门ID)
+          </p>
+          <p class="script-help__item">
+            示例：<code>#设置流程变量(dept_leader, #获取部门负责人(#获取流程变量(dept)))</code>
+            ——读出流程变量里的部门，取该部门负责人写入新变量（本实例内后续脚本与节点可读）
+          </p>
+        </div>
         <div class="p64-toolbar">
           <span class="p64-subtitle">结果分支（按返回值匹配）</span>
           <el-button size="small" @click="addTriggerBranch">添加分支</el-button>
@@ -5057,6 +5069,29 @@ function nodeLabelLines(label: string) {
   font-size: 13px;
   font-weight: 600;
   color: #7e306b;
+}
+/* BF20261013-021：脚本内置函数参考（触发器判断脚本下方） */
+.script-help {
+  margin: -6px 0 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f6f4fb;
+  border: 1px solid #e8e3f5;
+}
+.script-help__title {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: #5b5470;
+  line-height: 18px;
+}
+.script-help__item {
+  margin: 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 18px;
+}
+.script-help__item code {
+  color: #6d5bd0;
 }
 .p64-table {
   width: 100%;

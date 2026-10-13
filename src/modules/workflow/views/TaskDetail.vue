@@ -9,7 +9,7 @@ const { t } = useI18n()
  * 展示任务详情信息、流程变量、审批历史，提供通过/驳回操作。
  * 路由参数：taskId
  */
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Paperclip } from '@element-plus/icons-vue'
@@ -35,6 +35,7 @@ import type { TaskNodeFormView } from '@/contracts/p64'
 import { getTaskNodeForm, saveTaskNodeFormDraft } from '@/modules/workflow/api/p64'
 import DynamicField from '@/components/DynamicField.vue'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
+import { createFieldScripts } from '@/modules/form/utils/field-scripts'
 import { deriveProcessTrace } from '../utils/process-trace'
 
 const router = useRouter()
@@ -223,11 +224,52 @@ const nodeFormSubmitted = computed(() => nodeForm.value?.status === 'SUBMITTED')
 /** 待办且未最终提交时可编辑；已提交或历史任务只读回看。 */
 const nodeFormEditable = computed(() => nodeFormBound.value && !nodeFormSubmitted.value)
 
+// BF20261013-021：节点表单字段脚本（值变更触发；onLoad 在装载后执行；只读回看不执行）
+const nodeFieldScripts = createFieldScripts({
+  getSchema: () =>
+    nodeForm.value ? ({ title: '', fields: nodeFormFields.value } as unknown as FormSchema) : null,
+  model: () => nodeFormModel.value,
+  enabled: () => nodeFormEditable.value,
+})
+onUnmounted(() => nodeFieldScripts.dispose())
+
+/** 脚本隐藏的节点字段集合（隐藏不渲染、不参与必填校验、最终提交不携带）。 */
+const nodeFormHiddenAll = computed(() => {
+  const hidden = new Set<string>()
+  for (const [name, flag] of Object.entries(nodeFieldScripts.overrides.hidden)) {
+    if (flag) hidden.add(name)
+  }
+  return hidden
+})
+
+/** 渲染用节点字段（脚本隐藏过滤 + 必填覆盖写回，星标/校验同源）。 */
+const nodeFormRenderFields = computed(() =>
+  nodeFormFields.value
+    .filter((f) => !nodeFormHiddenAll.value.has(f.name))
+    .map((f) => {
+      const required = nodeFieldScripts.overrides.required[f.name] ?? f.required ?? false
+      return required === (f.required ?? false)
+        ? f
+        : ({ ...f, required } as FormSchema['fields'][number])
+    }),
+)
+
+function nodeFieldRequired(field: FormSchema['fields'][number]): boolean {
+  return nodeFieldScripts.overrides.required[field.name] ?? field.required ?? false
+}
+
+function nodeFieldReadonly(field: FormSchema['fields'][number]): boolean {
+  return !nodeFormEditable.value || (nodeFieldScripts.overrides.readonly[field.name] ?? false)
+}
+
 async function loadNodeForm() {
   try {
     const view = await getTaskNodeForm(taskId)
     nodeForm.value = view
     nodeFormModel.value = { ...(view.data ?? {}) }
+    // 装载整体替换模型：重置基线避免装载被当作“值变更”，随后执行 onLoad 脚本
+    nodeFieldScripts.resetBaseline()
+    nodeFieldScripts.runOnLoad()
   } catch {
     nodeForm.value = null
   }
@@ -269,7 +311,8 @@ function validateNodeFormRequired(): boolean {
   nodeFormErrors.value = []
   if (!nodeFormBound.value || nodeFormSubmitted.value) return true
   for (const field of nodeFormFields.value) {
-    if (!field.required) continue
+    if (nodeFormHiddenAll.value.has(field.name)) continue
+    if (!nodeFieldRequired(field)) continue
     const value = nodeFormModel.value[field.name]
     const empty =
       value == null ||
@@ -436,7 +479,12 @@ function actionPayload(
   // 无意见表单且无备注时 base 为 undefined，节点表单数据仍必须随动作提交
   // （否则后端读不到节点表单值 → 节点数据丢失/触发变量缺失）。
   if (action === 'APPROVE' && nodeFormBound.value && !nodeFormSubmitted.value) {
-    return { ...(base ?? { action }), nodeFormData: nodeFormModel.value }
+    // BF021：脚本隐藏字段不进入最终提交载荷（草稿保存仍保留全部数据）
+    const nodeFormData: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(nodeFormModel.value)) {
+      if (!nodeFormHiddenAll.value.has(key)) nodeFormData[key] = value
+    }
+    return { ...(base ?? { action }), nodeFormData }
   }
   return base
 }
@@ -1328,9 +1376,11 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
               <template v-if="nodeFormSubmitted"> · 数据已生效，可读变量与历史回看</template>
             </small>
             <div class="nodeform-fields">
-              <div v-for="field in nodeFormFields" :key="field.name" class="nodeform-field">
+              <div v-for="field in nodeFormRenderFields" :key="field.name" class="nodeform-field">
                 <div class="nodeform-field__label">
-                  <span v-if="field.required && nodeFormEditable" class="nodeform-field__required"
+                  <span
+                    v-if="nodeFieldRequired(field) && nodeFormEditable"
+                    class="nodeform-field__required"
                     >*</span
                   >
                   {{ field.label || field.name }}
@@ -1338,7 +1388,7 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
                 <DynamicField
                   :field="field"
                   :model-value="nodeFormModel[field.name]"
-                  :readonly="!nodeFormEditable"
+                  :readonly="nodeFieldReadonly(field)"
                   @update:model-value="nodeFormModel[field.name] = $event"
                 />
               </div>
