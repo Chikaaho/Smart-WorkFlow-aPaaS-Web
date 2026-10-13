@@ -39,10 +39,8 @@ function onFormSelected(formKey: string, formName: string) {
 <template>
   <div>
     <CommonConfigRows
-      :label="props.field.label ?? ''"
-      :name="props.field.name"
-      :required="props.field.required ?? false"
-      :other-names="props.otherNames"
+      :field-type="props.field.type"
+      :default-value="props.field.defaultValue"
       @update="(p) => emit('update', p)"
     />
 

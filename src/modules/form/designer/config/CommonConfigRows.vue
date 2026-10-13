@@ -3,47 +3,26 @@ import { useI18n } from '@/locales'
 
 const { t } = useI18n()
 /**
- * 通用配置行：标签 + 列名（带 UX 校验）+ 必填 + 默认值（v0.0.2）。
+ * 通用配置行（BF20261013-012 精简）：仅保留「默认值」。
  *
- * 简单字段面板共用这一块，避免每类重写。改动经 @update 抛 FieldPatch 上交，
- * 由设计器宿主就地写回选中字段（单一数据源，面板不存第二份）。
- *
- * 列名校验复用 column-name.ts（合法字符 + 同表单内不重名），**前端只做 UX 提示，
- * 真把关在后端发布**。BOOL 等无「必填」语义的类型传 :show-required="false" 隐藏该行。
- * 默认值按字段类型给输入形态（数组型=逗号分隔），仅新建填报无值时应用。
+ * 标签/列名/必填/占位提示等身份行由 FieldConfigPanel 统一承载（主字段与子字段同一面板），
+ * 类型配置组件再渲染一遍会造成「两个必填」等重复，故此处只负责默认值。
+ * 默认值按字段类型给输入形态（数组型=逗号分隔、布尔=下拉、其余=文本），仅新建填报无值时应用。
  */
 import { computed } from 'vue'
-import { isValidColumnName, isColumnNameUnique } from '../column-name'
 import type { FieldPatch } from '../field-config'
 
 const props = withDefaults(
   defineProps<{
-    label: string
-    name: string
-    required: boolean
-    /** 同表单内**其它**字段的列名（不含本字段自身），用于重名校验。 */
-    otherNames: string[]
-    showRequired?: boolean
     /** 字段类型（决定默认值输入形态）。 */
     fieldType?: string
     /** 现有默认值。 */
     defaultValue?: unknown
   }>(),
-  { showRequired: true, fieldType: 'TEXT', defaultValue: undefined },
+  { fieldType: 'TEXT', defaultValue: undefined },
 )
 
 const emit = defineEmits<{ update: [patch: FieldPatch] }>()
-
-/** 列名 UX 校验信息（仅提示，不拦死操作；后端发布才是真校验）。 */
-const nameError = computed(() => {
-  if (!isValidColumnName(props.name)) {
-    return t('form.columnNameFormat')
-  }
-  if (!isColumnNameUnique(props.name, props.otherNames)) {
-    return t('form.columnNameDuplicate')
-  }
-  return ''
-})
 
 /** 默认值输入形态：数组型=逗号分隔文本；布尔=下拉；其余=文本。 */
 const defaultMode = computed<'array' | 'bool' | 'text'>(() => {
@@ -87,35 +66,6 @@ function onDefaultBool(v: string | number | boolean) {
 </script>
 
 <template>
-  <div class="row">
-    <label class="row__label">{{ t('form.fieldLabel') }}</label>
-    <el-input
-      :model-value="label"
-      :placeholder="t('form.fieldLabelPlaceholder')"
-      @update:model-value="(v: string) => emit('update', { label: v })"
-    />
-  </div>
-
-  <div class="row">
-    <label class="row__label">{{ t('form.columnName') }}</label>
-    <el-input
-      :model-value="name"
-      :placeholder="t('form.columnNamePlaceholder')"
-      @update:model-value="(v: string) => emit('update', { name: v })"
-    />
-    <p v-if="nameError" class="row__error">{{ nameError }}</p>
-  </div>
-
-  <div v-if="showRequired" class="row row--inline">
-    <label class="row__label">{{ t('form.required') }}</label>
-    <el-switch
-      :model-value="required"
-      @update:model-value="
-        (v: string | number | boolean) => emit('update', { required: Boolean(v) })
-      "
-    />
-  </div>
-
   <div v-if="defaultMode === 'bool'" class="row row--inline">
     <label class="row__label">{{ t('form.defaultValue') }}</label>
     <el-select
@@ -163,11 +113,5 @@ function onDefaultBool(v: string | number | boolean) {
 
 .row--inline .row__label {
   margin-bottom: 0;
-}
-
-.row__error {
-  margin: var(--sw-space-4) 0 0;
-  font-size: var(--sw-font-caption);
-  color: var(--sw-danger);
 }
 </style>

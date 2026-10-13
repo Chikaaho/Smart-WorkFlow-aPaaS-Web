@@ -42,10 +42,8 @@ function onFormatSwitch(value: string | number | boolean) {
 <template>
   <div>
     <CommonConfigRows
-      :label="props.field.label ?? ''"
-      :name="props.field.name"
-      :required="props.field.required ?? false"
-      :other-names="props.otherNames"
+      :field-type="props.field.type"
+      :default-value="props.field.defaultValue"
       @update="(p) => emit('update', p)"
     />
 

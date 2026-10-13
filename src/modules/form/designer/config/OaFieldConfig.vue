@@ -109,13 +109,8 @@ function onPickerMultiple(value: string | number | boolean) {
 
 <template>
   <CommonConfigRows
-    :label="field.label ?? field.name"
-    :name="field.name"
-    :required="Boolean(field.required)"
-    :other-names="otherNames"
     :field-type="field.type"
     :default-value="field.defaultValue"
-    :show-required="field.type !== 'LABEL'"
     @update="(p) => emit('update', p)"
   />
 

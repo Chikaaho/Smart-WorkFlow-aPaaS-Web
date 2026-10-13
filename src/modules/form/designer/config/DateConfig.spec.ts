@@ -7,7 +7,7 @@ import type { DateField } from '@/contracts/form-schema'
  * P63：DATE 配置面板「日期 / 日期时间」开关——开写 format='datetime'（值含时间部分），
  * 关写 undefined（缺省 date，语义不变）；子字段上下文（subfield）不渲染该开关
  * （服务端 subFields 契约未落 format 键，开关在子画布出现会造成可配不可存的假入口）。
- * 注意：CommonConfigRows 的必填行也是一枚 el-switch，断言须用 data-testid 定位格式开关。
+ * 注意：BF20261013-012 后通用行仅剩默认值，格式开关按 data-testid 精确定位。
  */
 function dateField(overrides: Partial<DateField> = {}): DateField {
   return {

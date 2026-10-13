@@ -351,6 +351,10 @@ function onShellClick(entry: ShellEntry) {
   position: relative;
   /* BF20261013-011：左右空隙加大且相等（16px）；最外圈默认无边框（透明占位保持盒尺寸，选中态仍显主色环） */
   padding: 8px 16px 9px;
+  /* BF20261013-012：内容垂直居中——左/右标题位置时不再顶部贴齐、下方留大片空白 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   background: #fff;
   border: 1px solid transparent;
   border-radius: var(--sw-radius-card);

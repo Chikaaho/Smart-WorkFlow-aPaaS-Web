@@ -37,10 +37,6 @@ function onVersion(value: string) {
 
 <template>
   <CommonConfigRows
-    :label="field.label ?? field.name"
-    :name="field.name"
-    :required="Boolean(field.required)"
-    :other-names="otherNames"
     :field-type="field.type"
     :default-value="field.defaultValue"
     @update="(p) => emit('update', p)"

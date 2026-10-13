@@ -15,7 +15,6 @@ import type { FieldPatch } from '../field-config'
 import CommonConfigRows from './CommonConfigRows.vue'
 import DictTypeSelect from './DictTypeSelect.vue'
 import OptionsKvEditor from './OptionsKvEditor.vue'
-import ConfigSeamNote from './ConfigSeamNote.vue'
 
 const props = defineProps<{ field: DictField; otherNames: string[] }>()
 const emit = defineEmits<{ update: [patch: FieldPatch] }>()
@@ -37,10 +36,8 @@ function onSelectMode(value: string | number | boolean | undefined) {
 <template>
   <div>
     <CommonConfigRows
-      :label="props.field.label ?? ''"
-      :name="props.field.name"
-      :required="props.field.required ?? false"
-      :other-names="props.otherNames"
+      :field-type="props.field.type"
+      :default-value="props.field.defaultValue"
       @update="(p) => emit('update', p)"
     />
 
@@ -78,8 +75,6 @@ function onSelectMode(value: string | number | boolean | undefined) {
         <el-radio value="multiple">{{ t('form.selectModeMulti') }}</el-radio>
       </el-radio-group>
     </div>
-
-    <ConfigSeamNote :items="[t('form.defaultValue')]" />
   </div>
 </template>
 

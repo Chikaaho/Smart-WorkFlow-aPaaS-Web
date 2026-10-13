@@ -30,13 +30,8 @@ function onExpression(value: string) {
 
 <template>
   <CommonConfigRows
-    :label="field.label ?? field.name"
-    :name="field.name"
-    :required="false"
-    :other-names="otherNames"
     :field-type="field.type"
     :default-value="field.defaultValue"
-    :show-required="false"
     @update="(p) => emit('update', p)"
   />
 
