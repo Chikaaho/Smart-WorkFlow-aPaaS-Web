@@ -3912,26 +3912,36 @@ function nodeLabelLines(label: string) {
   margin-bottom: 15px;
 }
 
-/* BF20261013-013：节点属性页签与字段三态表 */
+/* BF20261013-014：节点属性页签——一行占满的分段式切换（替代独立药丸按钮） */
 .props-tabs {
   display: flex;
-  gap: 8px;
-  margin: 4px 0 14px;
+  width: 100%;
+  margin: 0 0 16px;
+  border: 1px solid #e3e8f4;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f7f9fe;
 }
 .props-tab {
-  padding: 4px 14px;
-  border: 1px solid #cbd5e7;
-  border-radius: 6px;
-  background: #fff;
-  color: #344164;
-  font-size: 12px;
+  flex: 1 1 0;
+  padding: 7px 0;
+  border: 0;
+  background: transparent;
+  color: #8795ad;
+  font-size: 13px;
   line-height: 18px;
   cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.props-tab + .props-tab {
+  border-left: 1px solid #e3e8f4;
 }
 .props-tab.is-active {
-  border-color: var(--sw-color-primary);
-  color: var(--sw-color-primary);
   background: var(--el-color-primary-light-9, #ece9ff);
+  color: var(--sw-color-primary);
+  font-weight: 500;
 }
 .field-states__table {
   width: 100%;
