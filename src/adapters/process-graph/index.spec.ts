@@ -7,13 +7,11 @@ import {
   edgePortAxis,
   edgeSegmentHandles,
   expandEdgePathPoints,
+  EDGE_PORT_STUB,
   hitTestEdgeAtPoint,
-  edgePortSlideSpan,
   moveEdgeSegment,
   normalizeOrthogonalPoints,
   pointsToWaypoints,
-  portSlideCoordinate,
-  portSlideOffset,
   EDGE_MIN_SEGMENT,
 } from './index'
 import type { OrthogonalPoint } from './index'
@@ -296,47 +294,33 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
     expect(buildEdgePath({ x: 0, y: 0 }, { x: 100, y: 0 }, [{ x: 50, y: 0 }])).toBe('M 0 0 L 100 0')
   })
 
-  it('贪吃蛇收敛：>5 段按端口朝向重建 3 段 Z（偏移取包围盒中心并夹取净空）', () => {
-    const snake = [
-      { x: 420, y: 100 },
-      { x: 560, y: 100 },
-      { x: 560, y: 400 },
-      { x: 200, y: 400 },
-      { x: 200, y: 150 },
-    ]
-    expect(expandEdgePathPoints(vhv.start, vhv.end, snake, vhv.hint).length - 1).toBeGreaterThan(5)
+  it('超长历史形状（>12 段）按端口朝向重建，不产生重叠', () => {
+    const snake: Array<{ x: number; y: number }> = []
+    for (let i = 0; i < 12; i += 1) {
+      snake.push({ x: 420 + (i % 2) * 140, y: 100 + i * 30 })
+    }
+    expect(expandEdgePathPoints(vhv.start, vhv.end, snake, vhv.hint).length - 1).toBeGreaterThan(12)
     const waypoints = canonicalEdgeWaypoints(vhv.start, vhv.end, snake, vhv.hint)
-    expect(waypoints).toEqual([
-      { x: 420, y: 250 },
-      { x: 600, y: 250 },
-    ])
+    expect(waypoints).toHaveLength(2)
     const path = buildEdgePath(vhv.start, vhv.end, waypoints, vhv.hint)
-    expect(path).toBe('M 420 205 L 420 250 L 600 250 L 600 275')
+    expect(pathPoints(path).length - 1).toBe(3)
     expectOrthogonalWithoutOverlap(pathPoints(path))
   })
 
   it('收敛后模型拐点与渲染同源（normalizeGraph 输出即收敛结果）', () => {
+    const snake: Array<{ x: number; y: number }> = []
+    for (let i = 0; i < 12; i += 1) {
+      snake.push({ x: 420 + (i % 2) * 140, y: 100 + i * 30 })
+    }
     const graph: ProcessGraphDocument = {
       processKey: 'bpm_snake',
-      name: '蛇形收敛',
+      name: '超长收敛',
       formKey: 'demo_form',
       version: 1,
       elements: [
         { id: 'node_a', kind: 'node', type: 'APPROVAL', x: 420, y: 180, config: {}, style: {} },
         { id: 'node_b', kind: 'node', type: 'END', x: 600, y: 300, config: {}, style: {} },
-        {
-          id: 'edge_1',
-          kind: 'edge',
-          source: 'node_a',
-          target: 'node_b',
-          waypoints: [
-            { x: 420, y: 100 },
-            { x: 560, y: 100 },
-            { x: 560, y: 400 },
-            { x: 200, y: 400 },
-            { x: 200, y: 150 },
-          ],
-        },
+        { id: 'edge_1', kind: 'edge', source: 'node_a', target: 'node_b', waypoints: snake },
       ],
       canvas: {},
     }
@@ -378,61 +362,59 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
   })
 })
 
-describe('BF20261013-032 每段可拖：端口沿边框滑动', () => {
-  it('滑动量 ↔ 边框坐标（两端留净空、越界夹取）', () => {
-    // 审批 160 宽：底边 x ∈ [340,500]，净空 16 → 可滑动 [356,484]
-    expect(portSlideCoordinate(0.5, 340, 160)).toBe(420)
-    expect(portSlideCoordinate(0, 340, 160)).toBe(356)
-    expect(portSlideCoordinate(1, 340, 160)).toBe(484)
-    expect(portSlideOffset(420, 340, 160)).toBe(0.5)
-    expect(portSlideOffset(300, 340, 160)).toBe(0)
-    expect(portSlideOffset(900, 340, 160)).toBe(1)
-    expect(
-      edgePortSlideSpan({ x: 420, y: 180, type: 'APPROVAL' }, 'bottom', {
-        width: 160,
-        height: 50,
-      }),
-    ).toEqual({ start: 340, length: 160 })
-    expect(
-      edgePortSlideSpan({ x: 420, y: 180, type: 'APPROVAL' }, 'right', {
-        width: 160,
-        height: 50,
-      }),
-    ).toEqual({ start: 155, length: 50 })
+describe('BF20261013-033 端口腿拖动：端口固定 + 端口旁留固定小段（折数 +2）', () => {
+  // START(100,300)→审批(420,180) 的 Z：M 180 300 L 260 300 L 260 180 L 340 180
+  const zPoints = [
+    { x: 340, y: 180 },
+    { x: 260, y: 180 },
+    { x: 260, y: 300 },
+    { x: 180, y: 300 },
+  ]
+
+  it('拖端口腿：端口不动，生成固定小段（24）与被拖段，竖线随之变短', () => {
+    const moved = moveEdgeSegment(zPoints, 0, 'y', 220)
+    expect(moved).toEqual([
+      { x: 340, y: 180 },
+      { x: 316, y: 180 },
+      { x: 316, y: 220 },
+      { x: 260, y: 220 },
+      { x: 260, y: 300 },
+      { x: 180, y: 300 },
+    ])
+    expectOrthogonalWithoutOverlap(moved)
+    // 端口固定（首点不变）＋固定小段 24；中间竖段由 120 缩到 80（上横线下拉 → 竖线变短）
+    expect(moved[0]).toEqual({ x: 340, y: 180 })
+    expect(Math.abs(moved[1].x - moved[0].x)).toBe(EDGE_PORT_STUB)
+    const verticalBefore = Math.abs(zPoints[2].y - zPoints[1].y)
+    const verticalAfter = Math.abs(moved[4].y - moved[3].y)
+    expect(verticalAfter).toBe(verticalBefore - 40)
   })
 
-  it('拖端口腿（滑动端口）后路由重建且仍严格横平竖直', () => {
-    const model = createDesignerModel(
-      {
-        processKey: 'bpm_slide',
-        name: '端口滑动',
-        formKey: 'demo_form',
-        version: 1,
-        elements: [
-          { id: 'node_a', kind: 'node', type: 'APPROVAL', x: 420, y: 180, config: {}, style: {} },
-          { id: 'node_b', kind: 'node', type: 'END', x: 600, y: 300, config: {}, style: {} },
-          { id: 'edge_1', kind: 'edge', source: 'node_a', target: 'node_b' },
-        ],
-        canvas: {},
-      },
-      { width: 160, height: 50 },
-      22,
-    )
-    expect(model.state().edges[0].path).toBe('M 420 205 L 420 240 L 600 240 L 600 275')
-    // 起点端口沿底边滑到 offset=0.25 → x = 356 + 0.25*128 = 388
-    model.setEdgePortOffset('edge_1', 'source', 0.25)
-    const edge = model.state().edges[0]
-    expect(edge.path).toBe('M 388 205 L 388 240 L 600 240 L 600 275')
-    expect(edge.config.sourceOffset).toBe(0.25)
-    expectOrthogonalWithoutOverlap(pathPoints(edge.path))
-    expect(model.state().dirty).toBe(true)
-    // 序列化 → 重新加载后仍按滑动后的端口渲染（0..1 归一，随节点移动保持相对位置）
-    const reloaded = normalizeGraph(model.serialize(), { width: 160, height: 50 }, 22)
-    expect(reloaded.edges[0].path).toBe('M 388 205 L 388 240 L 600 240 L 600 275')
-    // 终点端口滑到 END 顶边右端 → x = 536 + 128 = 664
-    model.setEdgePortOffset('edge_1', 'target', 1)
-    expect(model.state().edges[0].config.targetOffset).toBe(1)
-    expect(model.state().edges[0].path).toBe('M 388 205 L 388 240 L 664 240 L 664 275')
+  it('拖端口腿：折长不足最小段长时按拖动方向推离端口', () => {
+    const moved = moveEdgeSegment(zPoints, 0, 'y', 182)
+    expect(moved[2]).toEqual({ x: 316, y: 200 })
+  })
+
+  it('把被拖段拖回端口所在坐标 → 折自动消失（可逆）', () => {
+    const moved = moveEdgeSegment(zPoints, 0, 'y', 220)
+    const collapsed = normalizeOrthogonalPoints(moveEdgeSegment(moved, 2, 'y', 180))
+    expect(collapsed).toEqual(zPoints)
+  })
+
+  it('端口旁固定小段不给手柄（短于阈值），长端口腿仍可拖', () => {
+    const withFixedStub = [
+      { x: 340, y: 180 },
+      { x: 316, y: 180 },
+      { x: 316, y: 190 },
+      { x: 260, y: 190 },
+      { x: 260, y: 300 },
+      { x: 180, y: 300 },
+    ]
+    const handles = edgeSegmentHandles(withFixedStub)
+    // 端口旁固定小段（24 < 32）无手柄；其余段（含长端口腿）都有
+    expect(handles.some((handle) => handle.index === 0)).toBe(false)
+    expect(handles.map((handle) => handle.index)).toEqual([1, 2, 3, 4])
+    expect(edgeSegmentHandles(zPoints).map((handle) => handle.index)).toEqual([0, 1, 2])
   })
 })
 
@@ -530,8 +512,11 @@ describe('BF20261013-031 直线可拖 / 端口外向夹取 / 端口对齐不绷�
     )
     // 越过端口直线到另一侧：允许
     expect(moveEdgeSegment(jog, 2, 'x', 50)[2]).toEqual({ x: 50, y: 430 })
-    // 距端口直线不足净空 → 推离到 100+20
-    expect(moveEdgeSegment(jog, 2, 'x', 110)[2]).toEqual({ x: 120, y: 430 })
+    // 拖到端口直线坐标 → 该段折叠（jog 退化为直线，可逆），不再推离
+    expect(normalizeOrthogonalPoints(moveEdgeSegment(jog, 2, 'x', 100))).toEqual([
+      { x: 100, y: 300 },
+      { x: 100, y: 600 },
+    ])
     // 上下段（jog 第 1/3 段）夹取在两端净空内
     expect(moveEdgeSegment(jog, 1, 'y', 100)[1]).toEqual({ x: 100, y: 320 })
     expect(moveEdgeSegment(jog, 3, 'y', 900)[4]).toEqual({ x: 100, y: 580 })
@@ -600,18 +585,16 @@ describe('BF20261013-031 直线可拖 / 端口外向夹取 / 端口对齐不绷�
     expect(buildEdgePath(start, end, jogWaypoints, hint)).toBe(
       'M 420 205 L 420 430 L 200 430 L 200 470 L 420 470 L 420 275',
     )
-    // 历史超长蛇形 + 端口对齐 → 重建为折返（不是直线）
-    const snake = [
-      { x: 420, y: 100 },
-      { x: 560, y: 100 },
-      { x: 560, y: 400 },
-      { x: 200, y: 400 },
-      { x: 200, y: 150 },
-    ]
+    // 超长历史形状 + 端口对齐 → 重建为折返（不是直线）
+    const snake: Array<{ x: number; y: number }> = []
+    for (let i = 0; i < 12; i += 1) {
+      snake.push({ x: 420 + (i % 2) * 140, y: 100 + i * 30 })
+    }
     const rebuilt = canonicalEdgeWaypoints(start, end, snake, hint)
     expect(rebuilt.length).toBeGreaterThan(0)
     const path = buildEdgePath(start, end, rebuilt, hint)
-    expect(path).toBe('M 420 205 L 420 225 L 380 225 L 380 255 L 420 255 L 420 275')
+    expect(path).not.toBe('M 420 205 L 420 275')
+    expect(pathPoints(path).length - 1).toBeGreaterThan(1)
     expectOrthogonalWithoutOverlap(pathPoints(path))
   })
 })

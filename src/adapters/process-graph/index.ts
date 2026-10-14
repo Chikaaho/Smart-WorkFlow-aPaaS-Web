@@ -253,68 +253,16 @@ function resolveEdgeRoute(
   const end = configAnchor(config.targetAnchor)
   if (start && end) return { start, end, hint: {} }
   const axis = edgePortAxis(source, target, nodeSize)
-  // BF20261013-032：端口可沿边框滑动（config.sourceOffset/targetOffset，0..1 归一，随节点移动保持相对位置）
-  const [portStart, portEnd] = edgeEndpoints(source, target, nodeSize, gatewayRadius, {
-    source: configSlideOffset(config.sourceOffset),
-    target: configSlideOffset(config.targetOffset),
-  })
+  const [portStart, portEnd] = edgeEndpoints(source, target, nodeSize, gatewayRadius)
   return { start: portStart, end: portEnd, hint: { sourceAxis: axis, targetAxis: axis } }
 }
 
-/** 端口滑动量（0..1）：非法值返回 undefined（按边框中点）。 */
-function configSlideOffset(value: unknown): number | undefined {
-  const parsed = numberOrUndefined(value)
-  if (parsed === undefined) return undefined
-  return Math.min(1, Math.max(0, parsed))
-}
-
-/** 端口沿边框滑动时两端保留的净空（避免贴角出线）。 */
-export const EDGE_PORT_MARGIN = 16
-
-/** 边框可滑动区间（沿边框轴）：start=边框起点坐标，length=边框长度。 */
-export function edgePortSlideSpan(
-  node: Pick<PositionedNode, 'x' | 'y' | 'type'>,
-  side: 'left' | 'right' | 'top' | 'bottom',
-  nodeSize: { width: number; height: number },
-): { start: number; length: number } {
-  if (side === 'left' || side === 'right') {
-    return { start: node.y - nodeSize.height / 2, length: nodeSize.height }
-  }
-  return { start: node.x - nodeSize.width / 2, length: nodeSize.width }
-}
-
-/** 滑动量 → 边框坐标（两端留 EDGE_PORT_MARGIN 净空；边框过短时退回中点）。 */
-export function portSlideCoordinate(
-  offset: number,
-  start: number,
-  length: number,
-  margin: number = EDGE_PORT_MARGIN,
-): number {
-  const usable = length - margin * 2
-  if (usable <= 0) return start + length / 2
-  return start + margin + Math.min(1, Math.max(0, offset)) * usable
-}
-
-/** 边框坐标 → 滑动量（夹取到 0..1）。 */
-export function portSlideOffset(
-  coordinate: number,
-  start: number,
-  length: number,
-  margin: number = EDGE_PORT_MARGIN,
-): number {
-  const usable = length - margin * 2
-  if (usable <= 0) return 0.5
-  return Math.min(1, Math.max(0, (coordinate - start - margin) / usable))
-}
-
-/** 端口坐标：水平边取左右缘，垂直边取上下缘；网关取菱形顶点（半径与渲染的菱形一致）。
- * BF20261013-032：非网关节点按滑动量沿边框偏移（缺省 0.5=中点）。 */
+/** 端口坐标：水平边取左右缘中心，垂直边取上下缘中心；网关取菱形顶点（半径与渲染的菱形一致）。 */
 function portPoint(
   node: Pick<PositionedNode, 'x' | 'y' | 'type'>,
   side: 'left' | 'right' | 'top' | 'bottom',
   nodeSize: { width: number; height: number },
   gatewayRadius: number,
-  offset = 0.5,
 ): { x: number; y: number } {
   if (node.type === 'GATEWAY') {
     const r = gatewayRadius
@@ -323,18 +271,10 @@ function portPoint(
     if (side === 'top') return { x: node.x, y: node.y - r }
     return { x: node.x, y: node.y + r }
   }
-  if (side === 'left' || side === 'right') {
-    const span = edgePortSlideSpan(node, side, nodeSize)
-    return {
-      x: side === 'left' ? node.x - nodeSize.width / 2 : node.x + nodeSize.width / 2,
-      y: portSlideCoordinate(offset, span.start, span.length),
-    }
-  }
-  const span = edgePortSlideSpan(node, side, nodeSize)
-  return {
-    x: portSlideCoordinate(offset, span.start, span.length),
-    y: side === 'top' ? node.y - nodeSize.height / 2 : node.y + nodeSize.height / 2,
-  }
+  if (side === 'left') return { x: node.x - nodeSize.width / 2, y: node.y }
+  if (side === 'right') return { x: node.x + nodeSize.width / 2, y: node.y }
+  if (side === 'top') return { x: node.x, y: node.y - nodeSize.height / 2 }
+  return { x: node.x, y: node.y + nodeSize.height / 2 }
 }
 
 /**
@@ -358,19 +298,18 @@ export function edgeEndpoints(
   target: Pick<PositionedNode, 'x' | 'y' | 'type'>,
   nodeSize: { width: number; height: number },
   gatewayRadius = Math.min(nodeSize.width, nodeSize.height) / 2,
-  offsets: { source?: number; target?: number } = {},
 ): [{ x: number; y: number }, { x: number; y: number }] {
   const dx = target.x - source.x
   const dy = target.y - source.y
   if (edgePortAxis(source, target, nodeSize) === 'h') {
     return [
-      portPoint(source, dx >= 0 ? 'right' : 'left', nodeSize, gatewayRadius, offsets.source ?? 0.5),
-      portPoint(target, dx >= 0 ? 'left' : 'right', nodeSize, gatewayRadius, offsets.target ?? 0.5),
+      portPoint(source, dx >= 0 ? 'right' : 'left', nodeSize, gatewayRadius),
+      portPoint(target, dx >= 0 ? 'left' : 'right', nodeSize, gatewayRadius),
     ]
   }
   return [
-    portPoint(source, dy >= 0 ? 'bottom' : 'top', nodeSize, gatewayRadius, offsets.source ?? 0.5),
-    portPoint(target, dy >= 0 ? 'top' : 'bottom', nodeSize, gatewayRadius, offsets.target ?? 0.5),
+    portPoint(source, dy >= 0 ? 'bottom' : 'top', nodeSize, gatewayRadius),
+    portPoint(target, dy >= 0 ? 'top' : 'bottom', nodeSize, gatewayRadius),
   ]
 }
 
@@ -390,12 +329,16 @@ export interface EdgeRouteHint {
 /** BF20261013-030：连线最小段长（拖动夹取用）——端口腿保持净空，杜绝贴边与折返。 */
 export const EDGE_MIN_SEGMENT = 20
 /**
- * 连线最多段数（BF20261013-031 由 3 放宽到 5）：直线拖出的滑移折返（jog）本身即 5 段，
- * 3 段上限会把 jog 压回直线（Owner 反馈「拖动线会绷直」）；超出仍按端口朝向重建。
+ * 连线段数安全上限（BF20261013-031 3→5、BF20261013-033 5→12）：拖端口腿会逐次加折，
+ * 正常使用远达不到 12；超过才按端口朝向重建（仅作历史异常数据兜底，不再压平用户形状）。
  */
-export const EDGE_MAX_SEGMENTS = 5
+export const EDGE_MAX_SEGMENTS = 12
 /** BF20261013-031：直线拖成滑移折返时的默认跨度（沿线路轴）。 */
 export const EDGE_JOG_SPAN = 40
+/** BF20261013-033：拖端口腿时端口旁保留的固定端口腿长度（端口本身不动）。 */
+export const EDGE_PORT_STUB = 24
+/** BF20261013-033：端口腿短于该长度不再给手柄（固定段不可拖，对齐 WPS 参考）。 */
+export const EDGE_STUB_HANDLE_MIN = 32
 
 export interface OrthogonalPoint {
   x: number
@@ -538,10 +481,12 @@ export function edgeSegmentHandles(points: OrthogonalPoint[], minLength = 8): Ed
   for (let index = 0; index <= points.length - 2; index += 1) {
     const from = points[index]
     const to = points[index + 1]
-    if (Math.abs(to.x - from.x) + Math.abs(to.y - from.y) < minLength) continue
-    const vertical = from.x === to.x
+    const length = Math.abs(to.x - from.x) + Math.abs(to.y - from.y)
     const port: 'source' | 'target' | null =
       index === 0 ? 'source' : index === points.length - 2 ? 'target' : null
+    // BF20261013-033：端口旁固定小段不给手柄（拖端口腿会生成该固定段）
+    if (length < (port ? Math.max(minLength, EDGE_STUB_HANDLE_MIN) : minLength)) continue
+    const vertical = from.x === to.x
     handles.push({
       index,
       x: (from.x + to.x) / 2,
@@ -573,6 +518,10 @@ export function moveEdgeSegment(
 ): OrthogonalPoint[] {
   const minSegment = context.minSegment ?? EDGE_MIN_SEGMENT
   if (points.length === 2) return straightDragPoints(points, axis, value, minSegment)
+  // BF20261013-033：端口腿拖动——端口不动，端口旁保留固定小段，被拖段移到指针处（折数 +2）
+  if (index === 0 || index === points.length - 2) {
+    return portLegDragPoints(points, index, axis, value, minSegment)
+  }
   if (index < 1 || index > points.length - 3) return points
   const from = points[index]
   const to = points[index + 1]
@@ -590,14 +539,9 @@ export function moveEdgeSegment(
   if (targetSign > 0) low = Math.max(low, next[axis] + minSegment)
   else if (targetSign < 0) high = Math.min(high, next[axis] - minSegment)
   if (low > high) return points
-  let clamped = Math.min(Math.max(value, low), high)
-  const pushOut = (coordinate: number) => {
-    if (Math.abs(clamped - coordinate) >= minSegment) return
-    clamped = from[axis] >= coordinate ? coordinate + minSegment : coordinate - minSegment
-    clamped = Math.min(Math.max(clamped, low), high)
-  }
-  if (!sourceStub) pushOut(prev[axis])
-  if (!targetStub) pushOut(next[axis])
+  // BF20261013-033：内段可拖到相邻段坐标（该段折叠消失，形状随之简化），
+  // 只保留端口腿外向约束（不反向穿入节点）；折叠不会产生重叠（归一保证）
+  const clamped = Math.min(Math.max(value, low), high)
   if (clamped === from[axis]) return points
   return points.map((point, currentIndex) =>
     currentIndex === index || currentIndex === index + 1 ? { ...point, [axis]: clamped } : point,
@@ -652,6 +596,42 @@ function straightDragPoints(
     { x: secondAlong, y },
     end,
   ]
+}
+
+/**
+ * 端口腿拖动（BF20261013-033，Owner 口径）：**端口落点不动**，端口旁保留固定小段
+ * （EDGE_PORT_STUB），被拖的段移到指针坐标（因此折数 +2，如「上面的横线往下拉」→
+ * 竖线随之变短）。拖回端口所在坐标时折自动消失（归一折叠）。
+ */
+function portLegDragPoints(
+  points: OrthogonalPoint[],
+  index: number,
+  axis: 'x' | 'y',
+  value: number,
+  minSegment: number,
+): OrthogonalPoint[] {
+  const last = points.length - 1
+  const source = index === 0
+  const port = source ? points[0] : points[last]
+  const inner = source ? points[1] : points[last - 1]
+  if (port[axis] !== inner[axis]) return points
+  const stubAxis: 'x' | 'y' = axis === 'x' ? 'y' : 'x'
+  if (port[stubAxis] === inner[stubAxis]) return points
+  const direction = Math.sign(inner[stubAxis] - port[stubAxis])
+  const stubEnd: OrthogonalPoint = {
+    ...port,
+    [stubAxis]: port[stubAxis] + direction * EDGE_PORT_STUB,
+  }
+  // 折长（固定小段 → 被拖段）不得短于最小段长：按拖动方向推离端口
+  const target =
+    Math.abs(value - port[axis]) < minSegment
+      ? port[axis] + (value >= port[axis] ? minSegment : -minSegment)
+      : value
+  const bend: OrthogonalPoint = { ...stubEnd, [axis]: target }
+  const movedInner: OrthogonalPoint = { ...inner, [axis]: target }
+  if (source)
+    return normalizeOrthogonalPoints([port, stubEnd, bend, movedInner, ...points.slice(2)])
+  return normalizeOrthogonalPoints([...points.slice(0, last - 1), movedInner, bend, stubEnd, port])
 }
 
 /**
@@ -935,8 +915,6 @@ export interface DesignerModel {
   setEdgeWaypoints(id: string, waypoints: ProcessGraphWaypoint[]): void
   /** V011-BUG-025：拖动端点改接其他节点（自环/重复边校验；空放回退由调用方处理）。 */
   setEdgeEndpoint(id: string, which: 'source' | 'target', nodeId: string): string | null
-  /** BF20261013-032：端口沿边框滑动（0..1 归一；拖端口腿即此操作）。 */
-  setEdgePortOffset(id: string, which: 'source' | 'target', offset: number): void
   undo(): void
   canUndo(): boolean
   serialize(): ProcessGraphDocument
@@ -1167,41 +1145,6 @@ export function createDesignerModel(
           return {
             ...edge,
             ...rebuildEdge(edge, source, target, designerNodeSize, gatewayRadius, waypoints),
-          }
-        }),
-        dirty: true,
-      }
-      emit()
-    },
-    /**
-     * BF20261013-032：端口沿边框滑动（拖端口腿）——写 config.sourceOffset/targetOffset
-     * （0..1 归一，随节点移动保持相对位置），随后按新端口重建路由。
-     * 改接侧若有显式锚点则清除（锚点优先，滑动与之互斥）。
-     */
-    setEdgePortOffset(id, which, offset) {
-      const clamped = Math.min(1, Math.max(0, offset))
-      const byId = new Map(current.nodes.map((node) => [node.id, node] as const))
-      current = {
-        ...current,
-        edges: current.edges.map((edge) => {
-          if (edge.id !== id) return edge
-          const config = { ...edge.config }
-          delete config[which === 'source' ? 'sourceAnchor' : 'targetAnchor']
-          config[which === 'source' ? 'sourceOffset' : 'targetOffset'] = clamped
-          const nextEdge = { ...edge, config }
-          const source = byId.get(edge.sourceId)
-          const target = byId.get(edge.targetId)
-          if (!source || !target) return nextEdge
-          return {
-            ...nextEdge,
-            ...rebuildEdge(
-              nextEdge,
-              source,
-              target,
-              designerNodeSize,
-              gatewayRadius,
-              edge.waypoints,
-            ),
           }
         }),
         dirty: true,

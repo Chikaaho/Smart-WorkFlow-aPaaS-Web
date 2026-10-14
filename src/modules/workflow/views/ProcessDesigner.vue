@@ -69,13 +69,11 @@ import {
   createDesignerModel,
   buildEdgePath,
   edgeEndpoints,
-  edgePortSlideSpan,
   edgeSegmentHandles,
   hitTestEdgeAtPoint,
   moveEdgeSegment,
   parsePathPoints,
   pointsToWaypoints,
-  portSlideOffset,
   DESIGNER_NODE_WIDTH,
   DESIGNER_NODE_HEIGHT,
 } from '@/adapters/process-graph'
@@ -855,30 +853,6 @@ function onPointerMove(event: PointerEvent) {
       const edge = model.state().edges.find((candidate) => candidate.id === edit.edgeId)
       if (!edge) return
       const points = pathPoints(edge.path)
-      // BF20261013-032：端口腿拖动 → 端口沿节点边框滑动（其余段拖动 = 移动该段本身）
-      if (edit.port) {
-        const nodes = new Map(canvasNodes.value.map((node) => [node.id, node] as const))
-        const node = nodes.get(edit.port === 'source' ? edge.sourceId : edge.targetId)
-        if (!node) return
-        const port = edit.port === 'source' ? points[0] : points[points.length - 1]
-        const vertical =
-          edit.port === 'source'
-            ? points[0].x === points[1].x
-            : points[points.length - 1].x === points[points.length - 2].x
-        const side = portSlideSide(port, node, vertical)
-        const span = edgePortSlideSpan(node, side, {
-          width: P53_NODE_WIDTH,
-          height: P53_NODE_HEIGHT,
-        })
-        const coordinate = edit.axis === 'x' ? p.x : p.y
-        model.setEdgePortOffset(
-          edge.id,
-          edit.port,
-          portSlideOffset(coordinate, span.start, span.length),
-        )
-        snapshot()
-        return
-      }
       const moved = moveEdgeSegment(
         points,
         edit.segmentIndex,
@@ -889,6 +863,11 @@ function onPointerMove(event: PointerEvent) {
       if (moved === points) return
       // 直线首次拖动生成滑移折返（jog）：后续拖动接管其中段（下标 2）
       if (points.length === 2 && moved.length === 6) edit.segmentIndex = 2
+      // BF20261013-033：端口腿拖动在端口旁生成固定小段+折（折数 +2），后续拖动接管被拖段
+      // （源/目标两侧的被拖段都落在新折线的倒数第 4 段下标：newLen-4）
+      if (moved.length === points.length + 2) {
+        edit.segmentIndex = moved.length - 4
+      }
       model.setEdgeWaypoints(edge.id, pointsToWaypoints(moved))
       snapshot()
       return
@@ -1190,16 +1169,6 @@ function edgeSegmentHandlesOf(edge: PositionedEdge): EdgeSegmentHandle[] {
 function edgeHandleAt(points: PathPoint[], point: PathPoint): EdgeSegmentHandle | null {
   const index = nearestSegment(points, point)
   return edgeSegmentHandles(points).find((handle) => handle.index === index) ?? null
-}
-
-/** 端口腿所在边框（由端口相对节点中心的方位判定：垂直腿取上下缘、水平腿取左右缘）。 */
-function portSlideSide(
-  port: PathPoint,
-  node: PositionedNode,
-  vertical: boolean,
-): 'left' | 'right' | 'top' | 'bottom' {
-  if (vertical) return port.y >= node.y ? 'bottom' : 'top'
-  return port.x >= node.x ? 'right' : 'left'
 }
 
 /**
