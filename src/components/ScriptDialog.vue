@@ -8,6 +8,9 @@
  */
 import { computed, ref, watch } from 'vue'
 import { QuestionFilled } from '@element-plus/icons-vue'
+import JsCodeEditor from './JsCodeEditor.vue'
+import { parseScript, runScript } from '@/modules/form/utils/script-interpreter'
+import { transpileScriptSugar } from '@/modules/form/utils/script-sugar'
 import type { ScriptFunctionDoc } from './script-catalog'
 
 const props = defineProps<{
@@ -46,6 +49,72 @@ function insertFunction(fn: ScriptFunctionDoc) {
   working.value = working.value.trimEnd()
     ? `${working.value.replace(/\s*$/, '')}\n${fn.snippet};`
     : `${fn.snippet};`
+}
+
+/* ── BF20261013-028：模拟运行（本地解释器执行；宿主函数返回示例值并记录调用） ── */
+
+interface SimResult {
+  ok: boolean
+  value?: unknown
+  log: string[]
+  error?: string
+}
+
+const simResult = ref<SimResult | null>(null)
+
+function formatValue(value: unknown): string {
+  if (value === undefined) return 'undefined'
+  if (typeof value === 'string') return `"${value}"`
+  if (value === null) return 'null'
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
+  }
+}
+
+/** 模拟宿主：获取类返回示例值（真实值运行时由服务端解析），设置/提示类记录调用。 */
+function buildSimulationHost(log: string[]): Record<string, (...args: unknown[]) => unknown> {
+  const host: Record<string, (...args: unknown[]) => unknown> = {}
+  const argsText = (args: unknown[]) => args.map((arg) => formatValue(arg)).join(', ')
+  for (const fn of props.functions) {
+    const name = fn.name.replace(/^#/, '')
+    if (name === 'String' || name === 'Number' || name === 'Boolean') continue
+    if (
+      name.startsWith('设置') ||
+      name.startsWith('提示') ||
+      name.startsWith('显示') ||
+      name.startsWith('隐藏')
+    ) {
+      host[name] = (...args: unknown[]) => {
+        log.push(`${name}(${argsText(args)}) → 已记录`)
+        return null
+      }
+      continue
+    }
+    host[name] = (...args: unknown[]) => {
+      const key = String(args[0] ?? '')
+      let sample: unknown = '示例值'
+      if (/当前用户姓名/.test(name)) sample = '示例用户'
+      else if (/用户|部门负责人|分管领导|上级部门|当前部门/.test(name)) sample = 1001
+      else if (/流程变量|字段值/.test(name)) sample = key ? `示例值(${key})` : '示例值'
+      log.push(`${name}(${argsText(args)}) → ${formatValue(sample)}`)
+      return sample
+    }
+  }
+  return host
+}
+
+function simulate() {
+  simResult.value = null
+  try {
+    const program = parseScript(transpileScriptSugar(working.value ?? ''))
+    const log: string[] = []
+    const value = runScript(program, { hostFunctions: buildSimulationHost(log) })
+    simResult.value = { ok: true, value, log }
+  } catch (e) {
+    simResult.value = { ok: false, log: [], error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 function onCancel() {
@@ -88,17 +157,29 @@ function onSave() {
         </section>
       </aside>
       <div class="script-dialog__editor">
-        <el-input
+        <JsCodeEditor
           v-model="working"
-          type="textarea"
-          :rows="16"
-          spellcheck="false"
-          class="script-dialog__code"
+          :functions="props.functions"
           :placeholder="placeholder ?? '在此编写脚本；用 #函数名 调用内置函数（名字无需引号）'"
         />
+        <!-- BF20261013-028：模拟运行结果（本地解释器；获取类为示例值） -->
+        <div v-if="simResult" class="script-dialog__sim" data-testid="script-sim-result">
+          <p class="script-dialog__sim-title">模拟运行结果</p>
+          <p v-if="simResult.error" class="script-dialog__sim-error">{{ simResult.error }}</p>
+          <template v-else>
+            <p class="script-dialog__sim-line">
+              返回值：<code>{{ formatValue(simResult.value) }}</code>
+            </p>
+            <ul v-if="simResult.log.length" class="script-dialog__sim-log">
+              <li v-for="(item, index) in simResult.log" :key="index">{{ item }}</li>
+            </ul>
+            <p v-else class="script-dialog__sim-note">未调用内置函数</p>
+          </template>
+        </div>
       </div>
     </div>
     <template #footer>
+      <el-button @click="simulate">模拟运行</el-button>
       <el-button @click="onCancel">取消</el-button>
       <el-button type="primary" @click="onSave">应用</el-button>
     </template>
@@ -173,15 +254,37 @@ function onSave() {
   min-width: 0;
 }
 
-.script-dialog__code :deep(textarea) {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 13px;
-  line-height: 19px;
-}
-
-.script-dialog__hint {
-  margin: 6px 0 0;
+/* BF20261013-028：模拟运行结果面板 */
+.script-dialog__sim {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
+  background: #f7f9fc;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: #1f2a44;
+}
+.script-dialog__sim-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+.script-dialog__sim-line code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #0a7d33;
+}
+.script-dialog__sim-log {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #4b5563;
+}
+.script-dialog__sim-note {
+  margin: 4px 0 0;
+  color: #8a9099;
+}
+.script-dialog__sim-error {
+  margin: 0;
+  color: #c2185b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 </style>

@@ -2701,61 +2701,6 @@ function nodeLabelLines(label: string) {
               <el-form-item v-if="nodeMeta.approveMode" :label="t('workflow.approveModeLabel')">
                 <el-input :model-value="nodeMeta.approveMode" disabled />
               </el-form-item>
-              <!-- ═══ P64 阶段Ⅰ：节点业务表单绑定（APPROVAL/CONSENSUS/DYNAMIC_PARALLEL）；
-                   BF20261013-020：节点绑定的是审批意见表单（独立类型，流程管理单独维护） ═══ -->
-              <el-form-item v-if="nodeFormCapable" label="审批意见表单">
-                <div class="nodeform-row">
-                  <el-input :model-value="selectedNodeFormKey || '未绑定'" disabled />
-                  <el-button size="small" @click="nodeFormSelectVisible = true">
-                    {{ selectedNodeFormKey ? '更换' : '选择表单' }}
-                  </el-button>
-                  <el-button v-if="selectedNodeFormKey" size="small" @click="clearNodeForm"
-                    >清除</el-button
-                  >
-                </div>
-              </el-form-item>
-              <!-- ═══ BF20261013-022①：节点触发器（开始前 / 结束），脚本经统一弹窗编写 ═══ -->
-              <template v-if="nodeTriggerCapable">
-                <div class="props-section props-section--advanced">节点触发器</div>
-                <el-form-item label="节点开始前">
-                  <div class="participant-picker-row">
-                    <el-button @click="openNodeTriggerScriptDialog('NODE_ENTERING')">
-                      {{ nodeTriggerOf('NODE_ENTERING')?.script?.trim() ? '编辑脚本' : '编写脚本' }}
-                    </el-button>
-                    <small class="participant-hint">{{
-                      nodeTriggerSummary('NODE_ENTERING')
-                    }}</small>
-                  </div>
-                </el-form-item>
-                <el-form-item label="节点结束">
-                  <div class="participant-picker-row">
-                    <el-button @click="openNodeTriggerScriptDialog('NODE_ROUND_COMPLETED')">
-                      {{
-                        nodeTriggerOf('NODE_ROUND_COMPLETED')?.script?.trim()
-                          ? '编辑脚本'
-                          : '编写脚本'
-                      }}
-                    </el-button>
-                    <small class="participant-hint">{{
-                      nodeTriggerSummary('NODE_ROUND_COMPLETED')
-                    }}</small>
-                  </div>
-                </el-form-item>
-              </template>
-              <!-- ═══ BF20261013-019/027：发起子流程（开关 + 向导弹窗；等待块由设计器自动生成） ═══ -->
-              <template v-if="selectedNode.type === 'APPROVAL'">
-                <el-form-item label="发起子流程">
-                  <div class="participant-picker-row">
-                    <el-switch v-model="subflowForm.enabled" @change="onSubflowSwitch" />
-                    <el-button v-if="subflowForm.enabled" size="small" @click="openSubflowWizard">
-                      {{ subflowForm.targetProcessDefKey ? '修改配置' : '配置子流程' }}
-                    </el-button>
-                    <small v-if="subflowSummary" class="participant-hint">{{
-                      subflowSummary
-                    }}</small>
-                  </div>
-                </el-form-item>
-              </template>
               <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
               <template v-if="participantField">
                 <el-form-item label="审批人策略">
@@ -2945,8 +2890,63 @@ function nodeLabelLines(label: string) {
                   class="participant-legacy-note"
                 />
               </template>
+              <!-- ═══ P64 阶段Ⅰ：节点业务表单绑定（APPROVAL/CONSENSUS/DYNAMIC_PARALLEL）；
+                   BF20261013-020：节点绑定的是审批意见表单（独立类型，流程管理单独维护） ═══ -->
+              <el-form-item v-if="nodeFormCapable" label="审批意见表单">
+                <div class="nodeform-row">
+                  <el-input :model-value="selectedNodeFormKey || '未绑定'" disabled />
+                  <el-button size="small" @click="nodeFormSelectVisible = true">
+                    {{ selectedNodeFormKey ? '更换' : '选择表单' }}
+                  </el-button>
+                  <el-button v-if="selectedNodeFormKey" size="small" @click="clearNodeForm"
+                    >清除</el-button
+                  >
+                </div>
+              </el-form-item>
+              <!-- ═══ BF20261013-022①：节点触发器（开始前 / 结束），脚本经统一弹窗编写 ═══ -->
+              <template v-if="nodeTriggerCapable">
+                <div class="props-section props-section--advanced">节点触发器</div>
+                <el-form-item label="节点开始前">
+                  <div class="participant-picker-row">
+                    <el-button @click="openNodeTriggerScriptDialog('NODE_ENTERING')">
+                      {{ nodeTriggerOf('NODE_ENTERING')?.script?.trim() ? '编辑脚本' : '编写脚本' }}
+                    </el-button>
+                    <small class="participant-hint">{{
+                      nodeTriggerSummary('NODE_ENTERING')
+                    }}</small>
+                  </div>
+                </el-form-item>
+                <el-form-item label="节点结束">
+                  <div class="participant-picker-row">
+                    <el-button @click="openNodeTriggerScriptDialog('NODE_ROUND_COMPLETED')">
+                      {{
+                        nodeTriggerOf('NODE_ROUND_COMPLETED')?.script?.trim()
+                          ? '编辑脚本'
+                          : '编写脚本'
+                      }}
+                    </el-button>
+                    <small class="participant-hint">{{
+                      nodeTriggerSummary('NODE_ROUND_COMPLETED')
+                    }}</small>
+                  </div>
+                </el-form-item>
+              </template>
+              <!-- ═══ BF20261013-019/027：发起子流程（开关 + 向导弹窗；等待块由设计器自动生成） ═══ -->
+              <template v-if="selectedNode.type === 'APPROVAL'">
+                <el-form-item label="发起子流程">
+                  <div class="participant-picker-row">
+                    <el-switch v-model="subflowForm.enabled" @change="onSubflowSwitch" />
+                    <el-button v-if="subflowForm.enabled" size="small" @click="openSubflowWizard">
+                      {{ subflowForm.targetProcessDefKey ? '修改配置' : '配置子流程' }}
+                    </el-button>
+                    <small v-if="subflowSummary" class="participant-hint">{{
+                      subflowSummary
+                    }}</small>
+                  </div>
+                </el-form-item>
+              </template>
               <!-- ═══ P63 动态并行专属面板（semanticVersion 开关 = 新语义按对象分支） ═══ -->
-              <template v-else-if="dynamicParallelActive">
+              <template v-if="dynamicParallelActive">
                 <el-form-item label="分支来源类型">
                   <el-select
                     v-model="dynamicParallelForm.sourceType"
