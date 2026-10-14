@@ -1429,9 +1429,9 @@ const participantStrategyOptions = computed(() => {
 const participantLegacyNote = computed(() => {
   switch (participantShape.value) {
     case 'legacy':
-      return '检测到旧版参与人配置，已做兼容展示；保存后将升级为 strategy 取值形状。'
+      return '检测到旧版审批人配置，已做兼容展示；保存后将升级为策略取值形状。'
     case 'unparsed':
-      return '当前参与人配置无法识别；重新选择策略并保存后将覆盖旧值。'
+      return '当前审批人配置无法识别；重新选择策略并保存后将覆盖旧值。'
     default:
       return ''
   }
@@ -1657,7 +1657,7 @@ function upsertNodeTriggerScript(event: TriggerConfig['event'], code: string) {
 
 /** ④参与人表达式：打开脚本弹窗（表达式=脚本，运行期由 SCRIPT 解析器求值）。 */
 function openExpressionScriptDialog() {
-  openProcessScriptDialog('参与人表达式脚本', participantForm.value.genericValue, {
+  openProcessScriptDialog('审批人表达式脚本', participantForm.value.genericValue, {
     kind: 'expression',
   })
 }
@@ -2550,7 +2550,7 @@ function nodeLabelLines(label: string) {
               </template>
               <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
               <template v-if="participantField">
-                <el-form-item label="参与人策略">
+                <el-form-item label="审批人策略">
                   <el-select v-model="participantForm.strategy" @change="applyParticipant">
                     <el-option
                       v-for="option in participantStrategyOptions"
@@ -2567,7 +2567,7 @@ function nodeLabelLines(label: string) {
                       {{
                         participantForm.userIds.length > 0
                           ? `已选 ${participantForm.userIds.length} 人（点击修改）`
-                          : '选择人员'
+                          : '选择审批人'
                       }}
                     </el-button>
                     <small v-if="nodeMeta.approverName" class="participant-hint">
@@ -2922,7 +2922,7 @@ function nodeLabelLines(label: string) {
               </template>
               <template v-for="field in genericConfigFields" :key="field.key">
                 <!-- BF20261013-022③④：object 型 JSON 配置与「审批人（兼容）」不再渲染
-                     （参与人统一由「参与人策略」结构化面板承载） -->
+                     （审批人统一由「审批人策略」结构化面板承载） -->
                 <el-form-item v-if="field.type === 'string'" :label="field.label">
                   <el-input
                     v-model="propForm[field.key] as string"

@@ -2096,7 +2096,7 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
             <UserRemoteSelect
               :model-value="csvToIds(lifecycleDialog.participants)"
               multiple
-              :placeholder="t('workflow.pickParticipants')"
+              :placeholder="t('workflow.pickConfirmers')"
               style="width: 100%"
               @update:model-value="
                 (v: number | number[] | null) => {

@@ -62,7 +62,7 @@ export const MOCK_WORKFLOW_NODE_CAPABILITIES: BpmNodeCapability[] = [
     version: 'p58-v1',
     topology: { minIncoming: 1, maxIncoming: 1, minOutgoing: 1, maxOutgoing: 1 },
     configFields: [
-      { key: 'participant', label: '参与人', type: 'PARTICIPANT', required: true },
+      { key: 'participant', label: '审批人', type: 'PARTICIPANT', required: true },
       {
         key: 'mode',
         label: '结算方式',
