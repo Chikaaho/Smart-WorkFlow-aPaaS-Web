@@ -278,8 +278,8 @@ export default {
   },
   approverPicker: {
     button: 'Candidates',
-    title: 'Pick an approver',
-    subtitle: 'Supports users, departments, roles and dynamic approver rules',
+    title: 'Select participants',
+    titleDept: 'Select departments',
     tabUser: 'Users',
     tabDept: 'Departments',
     tabRole: 'Roles',
@@ -287,18 +287,12 @@ export default {
     orgTitle: 'Organization',
     defaultWorkspace: 'Default workspace',
     searchPlaceholder: 'Search name, account or ID',
-    pickedTitle: 'Selected approvers ({count})',
+    pickedTitle: 'Selected participants ({count})',
     remove: 'Remove',
-    strategyLabel: 'Approval strategy',
-    strategyAny: 'Any one approver',
-    deptHint:
-      'Selecting a department filters candidates; department approval rules are resolved by the server at runtime.',
     ruleInitiator: 'Initiator',
     ruleDeptLeader: 'Department leader',
     ruleRoleMember: 'Role members',
     ruleExpression: 'Expression',
-    footnote:
-      'Confirming writes the selected approvers back to the node basic properties; process-level listeners are unchanged.',
     confirm: 'Confirm',
     searchPlaceholderTable: 'Search username or name',
     colUser: 'User',
@@ -307,9 +301,6 @@ export default {
     pick: 'Pick',
     picked: 'Written to the field',
     empty: 'No matching candidates',
-    note: 'Candidates come from the server approver-candidates API; picking writes the user ID into the node approver field.',
-    deptTabHidden:
-      'Department / role / dynamic rules have no server contract yet and are not offered.',
   },
   auth: {
     signIn: 'Sign in',
@@ -2451,7 +2442,6 @@ export default {
     nodePropsTitle: 'Node Properties',
     nodeKeyLabel: 'Node key',
     approveModeLabel: 'Approval mode',
-    selectApprover: 'Select approver',
     approverSupportHint: 'Supports user / dept / role / expression',
     listenerSectionTitle: 'Advanced · Listener configuration',
     listenerBefore: 'before',

@@ -224,8 +224,7 @@ const RULE_TYPES = [
   >
     <template #header>
       <div class="approver-dialog__heading">
-        <h2>{{ t('approverPicker.title') }}</h2>
-        <p>{{ t('approverPicker.subtitle') }}</p>
+        <h2>{{ isDeptMode ? t('approverPicker.titleDept') : t('approverPicker.title') }}</h2>
       </div>
     </template>
 
@@ -312,8 +311,6 @@ const RULE_TYPES = [
             &nbsp;{{ t('approverPicker.remove') }}&nbsp;&nbsp;
           </el-button>
         </div>
-        <p class="approver-picked__strategy-label">{{ t('approverPicker.strategyLabel') }}</p>
-        <p class="approver-picked__strategy">{{ t('approverPicker.strategyAny') }}</p>
       </div>
     </div>
 
@@ -334,13 +331,6 @@ const RULE_TYPES = [
             isDeptMode ? undefined : (deptId = String(node.id) === deptId ? null : String(node.id))
         "
       />
-      <p class="approver-pane__note">
-        {{
-          isDeptMode
-            ? '勾选部门作为「部门负责人」策略取值，运行期由服务端解析各部门唯一负责人。'
-            : t('approverPicker.deptHint')
-        }}
-      </p>
     </div>
 
     <!-- ── 角色 ── -->
@@ -381,12 +371,6 @@ const RULE_TYPES = [
   font-size: 22px;
   font-weight: 600;
   color: #1f2a44;
-}
-
-.approver-dialog__heading p {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: #8c9ab1;
 }
 
 .approver-dialog__tabs {
@@ -505,19 +489,6 @@ const RULE_TYPES = [
   background: #fff;
 }
 
-.approver-picked__strategy-label {
-  margin: 14px 0 4px;
-  font-size: 12px;
-  color: #8393b5;
-}
-
-.approver-picked__strategy {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f2a44;
-}
-
 .approver-picked__note {
   margin: 12px 0 0;
   font-size: 12px;
@@ -542,18 +513,6 @@ const RULE_TYPES = [
   padding: 10px 12px;
   font-size: 14px;
   color: #303a55;
-}
-
-.approver-pane__note {
-  margin: 12px 0 0;
-  font-size: 12px;
-  color: #8c99b0;
-}
-
-.approver-dialog__footnote {
-  margin: 14px 2px 0;
-  font-size: 12px;
-  color: #8c9ab1;
 }
 
 .approver-dialog__footer {

@@ -1107,66 +1107,6 @@ function isApproverSelectionField(field: Pick<BpmNodeConfigField, 'type' | 'vali
   return field.type === 'APPROVER' || (Array.isArray(approverTypes) && approverTypes.length > 0)
 }
 
-const approverPickerVisible = ref(false)
-const approverTargetKey = ref('')
-
-function onApproverPicked(candidates: ApproverCandidate[]) {
-  const fieldKey = approverTargetKey.value
-  if (!fieldKey || candidates.length === 0) return
-  const field = selectedCapability.value?.configFields.find((f) => f.key === fieldKey)
-  if (field && field.type === 'object') {
-    // 真实契约兼容 object 字段：回填服务端官方对象形状 {type: DESIGNATED, value: [userId…]}
-    // （服务端发布校验与运行时解析均按该形状读取；approvalTypes 取自契约 validation）。
-    // 节点12：多选候选 → value = 用户 id 数组（任一人同意语义由策略字段承载）。
-    const approverTypes = field.validation?.['approverTypes']
-    const approverType =
-      Array.isArray(approverTypes) && approverTypes.length > 0
-        ? String(approverTypes[0])
-        : 'DESIGNATED'
-    propForm.value[fieldKey] = JSON.stringify({
-      type: approverType,
-      value: candidates.map((candidate) => String(candidate.id)),
-    })
-  } else {
-    // mock 结构化 APPROVER 字段保持既有「用户 ID 字符串」语义（隔离测试契约不变）。
-    propForm.value[fieldKey] = candidates.map((candidate) => String(candidate.id)).join(',')
-  }
-  applyProps()
-}
-
-/** 当前节点审批人字段已存 id（节点12：选择器打开时回显预选）。 */
-const currentApproverIds = computed<number[]>(() => {
-  const fieldKey = approverTargetKey.value
-  const node = selectionId.value
-    ? (canvasNodes.value.find((n) => n.id === selectionId.value) ?? null)
-    : null
-  if (!fieldKey || !node) return []
-  const raw: unknown = (node.config as Record<string, unknown> | undefined)?.[fieldKey]
-  let value: unknown = raw
-  if (typeof raw === 'string' && raw.trim().startsWith('{')) {
-    try {
-      value = (JSON.parse(raw) as { value?: unknown }).value
-    } catch {
-      value = raw
-    }
-  }
-  // P63 参与人面板写入的是对象而非 JSON 文本（{strategy, value}），同样取 value 回显
-  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw) && 'value' in raw) {
-    value = (raw as { value?: unknown }).value
-  }
-  if (typeof value === 'string') {
-    value = value
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean)
-  }
-  if (Array.isArray(value)) {
-    return value.map((v) => Number(v)).filter((n) => Number.isFinite(n))
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) return [value]
-  return []
-})
-
 const selectedNode = computed(() =>
   selectionId.value ? (canvasNodes.value.find((n) => n.id === selectionId.value) ?? null) : null,
 )
@@ -2627,7 +2567,7 @@ function nodeLabelLines(label: string) {
                       {{
                         participantForm.userIds.length > 0
                           ? `已选 ${participantForm.userIds.length} 人（点击修改）`
-                          : t('workflow.selectApprover')
+                          : '选择人员'
                       }}
                     </el-button>
                     <small v-if="nodeMeta.approverName" class="participant-hint">
@@ -3608,15 +3548,6 @@ function nodeLabelLines(label: string) {
       :current-form-key="selectedNodeFormKey"
       @select="onNodeFormSelected"
     />
-
-    <!-- 审批人候选选择弹窗（节点 12 受限真实组件） -->
-    <div class="approver-dialog-host">
-      <ApproverCandidatesDialog
-        v-model:visible="approverPickerVisible"
-        :initial-ids="currentApproverIds"
-        @pick="onApproverPicked"
-      />
-    </div>
 
     <!-- P63 参与人策略「部门负责人」部门多选弹窗（复用同一组件的部门勾选模式） -->
     <div class="approver-dialog-host">
