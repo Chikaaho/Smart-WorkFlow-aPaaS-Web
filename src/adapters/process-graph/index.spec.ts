@@ -8,9 +8,12 @@ import {
   edgeSegmentHandles,
   expandEdgePathPoints,
   hitTestEdgeAtPoint,
+  edgePortSlideSpan,
   moveEdgeSegment,
   normalizeOrthogonalPoints,
   pointsToWaypoints,
+  portSlideCoordinate,
+  portSlideOffset,
   EDGE_MIN_SEGMENT,
 } from './index'
 import type { OrthogonalPoint } from './index'
@@ -163,7 +166,7 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
     hint: { sourceAxis: 'v' as const, targetAxis: 'v' as const },
   }
 
-  it('内段手柄：V-H-V 只暴露中段（水平→上下拖 ns-resize）', () => {
+  it('段手柄：V-H-V 每段都可拖（中段上下、端口腿左右）', () => {
     const points = expandEdgePathPoints(vhv.start, vhv.end, [], vhv.hint)
     expect(points).toEqual([
       { x: 420, y: 205 },
@@ -173,6 +176,16 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
     ])
     expect(edgeSegmentHandles(points)).toEqual([
       {
+        index: 0,
+        x: 420,
+        y: 222.5,
+        orientation: 'v',
+        axis: 'x',
+        cursor: 'ew-resize',
+        straight: false,
+        port: 'source',
+      },
+      {
         index: 1,
         x: 510,
         y: 240,
@@ -180,11 +193,22 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
         axis: 'y',
         cursor: 'ns-resize',
         straight: false,
+        port: null,
+      },
+      {
+        index: 2,
+        x: 600,
+        y: 257.5,
+        orientation: 'v',
+        axis: 'x',
+        cursor: 'ew-resize',
+        straight: false,
+        port: 'target',
       },
     ])
   })
 
-  it('内段手柄：H-V-H 中段垂直（左右拖 ew-resize）', () => {
+  it('段手柄：H-V-H 每段都可拖（中段左右、端口腿上下）', () => {
     const points = expandEdgePathPoints({ x: 180, y: 300 }, { x: 340, y: 180 }, [], {
       sourceAxis: 'h',
       targetAxis: 'h',
@@ -197,6 +221,16 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
     ])
     expect(edgeSegmentHandles(points)).toEqual([
       {
+        index: 0,
+        x: 220,
+        y: 300,
+        orientation: 'h',
+        axis: 'y',
+        cursor: 'ns-resize',
+        straight: false,
+        port: 'source',
+      },
+      {
         index: 1,
         x: 260,
         y: 240,
@@ -204,6 +238,17 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
         axis: 'x',
         cursor: 'ew-resize',
         straight: false,
+        port: null,
+      },
+      {
+        index: 2,
+        x: 300,
+        y: 180,
+        orientation: 'h',
+        axis: 'y',
+        cursor: 'ns-resize',
+        straight: false,
+        port: 'target',
       },
     ])
   })
@@ -333,6 +378,64 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
   })
 })
 
+describe('BF20261013-032 每段可拖：端口沿边框滑动', () => {
+  it('滑动量 ↔ 边框坐标（两端留净空、越界夹取）', () => {
+    // 审批 160 宽：底边 x ∈ [340,500]，净空 16 → 可滑动 [356,484]
+    expect(portSlideCoordinate(0.5, 340, 160)).toBe(420)
+    expect(portSlideCoordinate(0, 340, 160)).toBe(356)
+    expect(portSlideCoordinate(1, 340, 160)).toBe(484)
+    expect(portSlideOffset(420, 340, 160)).toBe(0.5)
+    expect(portSlideOffset(300, 340, 160)).toBe(0)
+    expect(portSlideOffset(900, 340, 160)).toBe(1)
+    expect(
+      edgePortSlideSpan({ x: 420, y: 180, type: 'APPROVAL' }, 'bottom', {
+        width: 160,
+        height: 50,
+      }),
+    ).toEqual({ start: 340, length: 160 })
+    expect(
+      edgePortSlideSpan({ x: 420, y: 180, type: 'APPROVAL' }, 'right', {
+        width: 160,
+        height: 50,
+      }),
+    ).toEqual({ start: 155, length: 50 })
+  })
+
+  it('拖端口腿（滑动端口）后路由重建且仍严格横平竖直', () => {
+    const model = createDesignerModel(
+      {
+        processKey: 'bpm_slide',
+        name: '端口滑动',
+        formKey: 'demo_form',
+        version: 1,
+        elements: [
+          { id: 'node_a', kind: 'node', type: 'APPROVAL', x: 420, y: 180, config: {}, style: {} },
+          { id: 'node_b', kind: 'node', type: 'END', x: 600, y: 300, config: {}, style: {} },
+          { id: 'edge_1', kind: 'edge', source: 'node_a', target: 'node_b' },
+        ],
+        canvas: {},
+      },
+      { width: 160, height: 50 },
+      22,
+    )
+    expect(model.state().edges[0].path).toBe('M 420 205 L 420 240 L 600 240 L 600 275')
+    // 起点端口沿底边滑到 offset=0.25 → x = 356 + 0.25*128 = 388
+    model.setEdgePortOffset('edge_1', 'source', 0.25)
+    const edge = model.state().edges[0]
+    expect(edge.path).toBe('M 388 205 L 388 240 L 600 240 L 600 275')
+    expect(edge.config.sourceOffset).toBe(0.25)
+    expectOrthogonalWithoutOverlap(pathPoints(edge.path))
+    expect(model.state().dirty).toBe(true)
+    // 序列化 → 重新加载后仍按滑动后的端口渲染（0..1 归一，随节点移动保持相对位置）
+    const reloaded = normalizeGraph(model.serialize(), { width: 160, height: 50 }, 22)
+    expect(reloaded.edges[0].path).toBe('M 388 205 L 388 240 L 600 240 L 600 275')
+    // 终点端口滑到 END 顶边右端 → x = 536 + 128 = 664
+    model.setEdgePortOffset('edge_1', 'target', 1)
+    expect(model.state().edges[0].config.targetOffset).toBe(1)
+    expect(model.state().edges[0].path).toBe('M 388 205 L 388 240 L 664 240 L 664 275')
+  })
+})
+
 describe('BF20261013-031 直线可拖 / 端口外向夹取 / 端口对齐不绷直', () => {
   it('整条直线给出合成中点手柄（垂直→左右拖，水平→上下拖）', () => {
     expect(
@@ -349,6 +452,7 @@ describe('BF20261013-031 直线可拖 / 端口外向夹取 / 端口对齐不绷�
         axis: 'x',
         cursor: 'ew-resize',
         straight: true,
+        port: null,
       },
     ])
     expect(
@@ -365,6 +469,7 @@ describe('BF20261013-031 直线可拖 / 端口外向夹取 / 端口对齐不绷�
         axis: 'y',
         cursor: 'ns-resize',
         straight: true,
+        port: null,
       },
     ])
   })

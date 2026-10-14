@@ -69,11 +69,13 @@ import {
   createDesignerModel,
   buildEdgePath,
   edgeEndpoints,
+  edgePortSlideSpan,
   edgeSegmentHandles,
   hitTestEdgeAtPoint,
   moveEdgeSegment,
   parsePathPoints,
   pointsToWaypoints,
+  portSlideOffset,
   DESIGNER_NODE_WIDTH,
   DESIGNER_NODE_HEIGHT,
 } from '@/adapters/process-graph'
@@ -853,6 +855,30 @@ function onPointerMove(event: PointerEvent) {
       const edge = model.state().edges.find((candidate) => candidate.id === edit.edgeId)
       if (!edge) return
       const points = pathPoints(edge.path)
+      // BF20261013-032：端口腿拖动 → 端口沿节点边框滑动（其余段拖动 = 移动该段本身）
+      if (edit.port) {
+        const nodes = new Map(canvasNodes.value.map((node) => [node.id, node] as const))
+        const node = nodes.get(edit.port === 'source' ? edge.sourceId : edge.targetId)
+        if (!node) return
+        const port = edit.port === 'source' ? points[0] : points[points.length - 1]
+        const vertical =
+          edit.port === 'source'
+            ? points[0].x === points[1].x
+            : points[points.length - 1].x === points[points.length - 2].x
+        const side = portSlideSide(port, node, vertical)
+        const span = edgePortSlideSpan(node, side, {
+          width: P53_NODE_WIDTH,
+          height: P53_NODE_HEIGHT,
+        })
+        const coordinate = edit.axis === 'x' ? p.x : p.y
+        model.setEdgePortOffset(
+          edge.id,
+          edit.port,
+          portSlideOffset(coordinate, span.start, span.length),
+        )
+        snapshot()
+        return
+      }
       const moved = moveEdgeSegment(
         points,
         edit.segmentIndex,
@@ -1101,6 +1127,8 @@ const edgeEdit = ref<null | {
   originalWaypoints: ProcessGraphWaypoint[]
   segmentIndex: number
   axis: 'x' | 'y'
+  /** BF20261013-032：被拖的是端口腿时标记所属端口——拖动即沿节点边框滑动端口落点。 */
+  port: 'source' | 'target' | null
   startScreen: { x: number; y: number }
   /** 拖动阈值（≥3px 才生效）：点击选中连线不再改变形状。 */
   armed: boolean
@@ -1120,6 +1148,7 @@ function beginEndpointDrag(event: PointerEvent, edge: PositionedEdge, which: 'so
     originalWaypoints: [...edge.waypoints],
     segmentIndex: -1,
     axis: 'x',
+    port: null,
     startScreen: { x: event.clientX, y: event.clientY },
     armed: false,
   }
@@ -1128,7 +1157,8 @@ function beginEndpointDrag(event: PointerEvent, edge: PositionedEdge, which: 'so
 }
 
 /**
- * BF20261013-030 内段拖动：按住内段（或段中点手柄）——垂直段左右拖、水平段上下拖。
+ * BF20261013-030/032 段拖动：按住任意一段——垂直段左右拖、水平段上下拖。
+ * 内段移动该段本身；端口腿（贴节点的一段）沿节点边框滑动端口落点。
  * 形状只在指针移动超过阈值后实时落模型；单击（含再次点击已选中连线）不改形。
  */
 function beginSegmentDrag(
@@ -1136,6 +1166,7 @@ function beginSegmentDrag(
   edge: PositionedEdge,
   index: number,
   axis: 'x' | 'y',
+  port: 'source' | 'target' | null = null,
 ) {
   edgeEdit.value = {
     edgeId: edge.id,
@@ -1144,20 +1175,31 @@ function beginSegmentDrag(
     originalWaypoints: edge.waypoints.map((point) => ({ ...point })),
     segmentIndex: index,
     axis,
+    port,
     startScreen: { x: event.clientX, y: event.clientY },
     armed: false,
   }
 }
 
-/** 选中连线内段手柄（首尾端口腿不可拖；BF031 起整条直线也给合成手柄）。 */
+/** 选中连线段手柄（每一段都可拖；整条直线给合成中点手柄）。 */
 function edgeSegmentHandlesOf(edge: PositionedEdge): EdgeSegmentHandle[] {
   return edgeSegmentHandles(pathPoints(edgePathOf(edge)))
 }
 
-/** 命中最近的可拖段手柄：端口腿返回 null（不可拖）。 */
+/** 命中最近的可拖段手柄（每段都有，含端口腿）。 */
 function edgeHandleAt(points: PathPoint[], point: PathPoint): EdgeSegmentHandle | null {
   const index = nearestSegment(points, point)
   return edgeSegmentHandles(points).find((handle) => handle.index === index) ?? null
+}
+
+/** 端口腿所在边框（由端口相对节点中心的方位判定：垂直腿取上下缘、水平腿取左右缘）。 */
+function portSlideSide(
+  port: PathPoint,
+  node: PositionedNode,
+  vertical: boolean,
+): 'left' | 'right' | 'top' | 'bottom' {
+  if (vertical) return port.y >= node.y ? 'bottom' : 'top'
+  return port.x >= node.x ? 'right' : 'left'
 }
 
 /**
@@ -1186,7 +1228,7 @@ function beginSegmentDragFromHandle(
   edge: PositionedEdge,
   handle: EdgeSegmentHandle,
 ) {
-  beginSegmentDrag(event, edge, handle.index, handle.axis)
+  beginSegmentDrag(event, edge, handle.index, handle.axis, handle.port)
 }
 
 /** 连线按下：未选中→仅选中（不改形）；已选中→端点改接 / 内段拖动会话，点击本身不产生形状变化。 */
@@ -1209,7 +1251,7 @@ function onEdgePointerDown(event: PointerEvent, edge: PositionedEdge) {
   }
   const handle = edgeHandleAt(points, p)
   if (!handle) return
-  beginSegmentDrag(event, edge, handle.index, handle.axis)
+  beginSegmentDrag(event, edge, handle.index, handle.axis, handle.port)
 }
 
 /** 选中连线上悬停可拖段 → 按拖动轴展示方向光标（左右可拖=ew-resize / 上下可拖=ns-resize）。 */

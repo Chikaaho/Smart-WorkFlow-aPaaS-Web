@@ -253,16 +253,68 @@ function resolveEdgeRoute(
   const end = configAnchor(config.targetAnchor)
   if (start && end) return { start, end, hint: {} }
   const axis = edgePortAxis(source, target, nodeSize)
-  const [portStart, portEnd] = edgeEndpoints(source, target, nodeSize, gatewayRadius)
+  // BF20261013-032：端口可沿边框滑动（config.sourceOffset/targetOffset，0..1 归一，随节点移动保持相对位置）
+  const [portStart, portEnd] = edgeEndpoints(source, target, nodeSize, gatewayRadius, {
+    source: configSlideOffset(config.sourceOffset),
+    target: configSlideOffset(config.targetOffset),
+  })
   return { start: portStart, end: portEnd, hint: { sourceAxis: axis, targetAxis: axis } }
 }
 
-/** 端口坐标：水平边取左右缘中心，垂直边取上下缘中心；网关取菱形顶点（半径与渲染的菱形一致）。 */
+/** 端口滑动量（0..1）：非法值返回 undefined（按边框中点）。 */
+function configSlideOffset(value: unknown): number | undefined {
+  const parsed = numberOrUndefined(value)
+  if (parsed === undefined) return undefined
+  return Math.min(1, Math.max(0, parsed))
+}
+
+/** 端口沿边框滑动时两端保留的净空（避免贴角出线）。 */
+export const EDGE_PORT_MARGIN = 16
+
+/** 边框可滑动区间（沿边框轴）：start=边框起点坐标，length=边框长度。 */
+export function edgePortSlideSpan(
+  node: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  side: 'left' | 'right' | 'top' | 'bottom',
+  nodeSize: { width: number; height: number },
+): { start: number; length: number } {
+  if (side === 'left' || side === 'right') {
+    return { start: node.y - nodeSize.height / 2, length: nodeSize.height }
+  }
+  return { start: node.x - nodeSize.width / 2, length: nodeSize.width }
+}
+
+/** 滑动量 → 边框坐标（两端留 EDGE_PORT_MARGIN 净空；边框过短时退回中点）。 */
+export function portSlideCoordinate(
+  offset: number,
+  start: number,
+  length: number,
+  margin: number = EDGE_PORT_MARGIN,
+): number {
+  const usable = length - margin * 2
+  if (usable <= 0) return start + length / 2
+  return start + margin + Math.min(1, Math.max(0, offset)) * usable
+}
+
+/** 边框坐标 → 滑动量（夹取到 0..1）。 */
+export function portSlideOffset(
+  coordinate: number,
+  start: number,
+  length: number,
+  margin: number = EDGE_PORT_MARGIN,
+): number {
+  const usable = length - margin * 2
+  if (usable <= 0) return 0.5
+  return Math.min(1, Math.max(0, (coordinate - start - margin) / usable))
+}
+
+/** 端口坐标：水平边取左右缘，垂直边取上下缘；网关取菱形顶点（半径与渲染的菱形一致）。
+ * BF20261013-032：非网关节点按滑动量沿边框偏移（缺省 0.5=中点）。 */
 function portPoint(
   node: Pick<PositionedNode, 'x' | 'y' | 'type'>,
   side: 'left' | 'right' | 'top' | 'bottom',
   nodeSize: { width: number; height: number },
   gatewayRadius: number,
+  offset = 0.5,
 ): { x: number; y: number } {
   if (node.type === 'GATEWAY') {
     const r = gatewayRadius
@@ -271,10 +323,18 @@ function portPoint(
     if (side === 'top') return { x: node.x, y: node.y - r }
     return { x: node.x, y: node.y + r }
   }
-  if (side === 'left') return { x: node.x - nodeSize.width / 2, y: node.y }
-  if (side === 'right') return { x: node.x + nodeSize.width / 2, y: node.y }
-  if (side === 'top') return { x: node.x, y: node.y - nodeSize.height / 2 }
-  return { x: node.x, y: node.y + nodeSize.height / 2 }
+  if (side === 'left' || side === 'right') {
+    const span = edgePortSlideSpan(node, side, nodeSize)
+    return {
+      x: side === 'left' ? node.x - nodeSize.width / 2 : node.x + nodeSize.width / 2,
+      y: portSlideCoordinate(offset, span.start, span.length),
+    }
+  }
+  const span = edgePortSlideSpan(node, side, nodeSize)
+  return {
+    x: portSlideCoordinate(offset, span.start, span.length),
+    y: side === 'top' ? node.y - nodeSize.height / 2 : node.y + nodeSize.height / 2,
+  }
 }
 
 /**
@@ -298,18 +358,19 @@ export function edgeEndpoints(
   target: Pick<PositionedNode, 'x' | 'y' | 'type'>,
   nodeSize: { width: number; height: number },
   gatewayRadius = Math.min(nodeSize.width, nodeSize.height) / 2,
+  offsets: { source?: number; target?: number } = {},
 ): [{ x: number; y: number }, { x: number; y: number }] {
   const dx = target.x - source.x
   const dy = target.y - source.y
   if (edgePortAxis(source, target, nodeSize) === 'h') {
     return [
-      portPoint(source, dx >= 0 ? 'right' : 'left', nodeSize, gatewayRadius),
-      portPoint(target, dx >= 0 ? 'left' : 'right', nodeSize, gatewayRadius),
+      portPoint(source, dx >= 0 ? 'right' : 'left', nodeSize, gatewayRadius, offsets.source ?? 0.5),
+      portPoint(target, dx >= 0 ? 'left' : 'right', nodeSize, gatewayRadius, offsets.target ?? 0.5),
     ]
   }
   return [
-    portPoint(source, dy >= 0 ? 'bottom' : 'top', nodeSize, gatewayRadius),
-    portPoint(target, dy >= 0 ? 'top' : 'bottom', nodeSize, gatewayRadius),
+    portPoint(source, dy >= 0 ? 'bottom' : 'top', nodeSize, gatewayRadius, offsets.source ?? 0.5),
+    portPoint(target, dy >= 0 ? 'top' : 'bottom', nodeSize, gatewayRadius, offsets.target ?? 0.5),
   ]
 }
 
@@ -355,6 +416,8 @@ export interface EdgeSegmentHandle {
   cursor: 'ew-resize' | 'ns-resize'
   /** BF20261013-031：整条连线为直线时的合成手柄——拖动生成滑移折返（jog）。 */
   straight: boolean
+  /** BF20261013-032：端口腿（贴节点边框的一段）——拖动即沿边框滑动端口落点；null=内段/直线。 */
+  port: 'source' | 'target' | null
 }
 
 /** 内段拖动上下文（BF20261013-031）：端口腿方向以端口几何为准，缺省回退折线当前方向。 */
@@ -446,9 +509,10 @@ export function pointsToWaypoints(points: OrthogonalPoint[]): ProcessGraphWaypoi
 }
 
 /**
- * 内段手柄：首尾端口腿不可拖动（方向由端口决定），只暴露内段。
- * BF20261013-031：整条连线为直线（无内段）时给出**合成手柄**（段中点），
- * 拖动即生成滑移折返（jog）——解决「完全直线无法拖动」。
+ * 段手柄：**每一段都可拖**——垂直段左右拖、水平段上下拖。
+ * - 内段（BF030）：移动该段本身；
+ * - 端口腿（BF20261013-032）：沿节点边框滑动端口落点（贴节点的两段也能拖）；
+ * - 整条直线（BF031）：合成中点手柄，拖动生成滑移折返（jog）。
  */
 export function edgeSegmentHandles(points: OrthogonalPoint[], minLength = 8): EdgeSegmentHandle[] {
   if (points.length === 2) {
@@ -466,15 +530,18 @@ export function edgeSegmentHandles(points: OrthogonalPoint[], minLength = 8): Ed
         axis: vertical ? 'x' : 'y',
         cursor: vertical ? 'ew-resize' : 'ns-resize',
         straight: true,
+        port: null,
       },
     ]
   }
   const handles: EdgeSegmentHandle[] = []
-  for (let index = 1; index <= points.length - 3; index += 1) {
+  for (let index = 0; index <= points.length - 2; index += 1) {
     const from = points[index]
     const to = points[index + 1]
     if (Math.abs(to.x - from.x) + Math.abs(to.y - from.y) < minLength) continue
     const vertical = from.x === to.x
+    const port: 'source' | 'target' | null =
+      index === 0 ? 'source' : index === points.length - 2 ? 'target' : null
     handles.push({
       index,
       x: (from.x + to.x) / 2,
@@ -483,6 +550,7 @@ export function edgeSegmentHandles(points: OrthogonalPoint[], minLength = 8): Ed
       axis: vertical ? 'x' : 'y',
       cursor: vertical ? 'ew-resize' : 'ns-resize',
       straight: false,
+      port,
     })
   }
   return handles
@@ -867,6 +935,8 @@ export interface DesignerModel {
   setEdgeWaypoints(id: string, waypoints: ProcessGraphWaypoint[]): void
   /** V011-BUG-025：拖动端点改接其他节点（自环/重复边校验；空放回退由调用方处理）。 */
   setEdgeEndpoint(id: string, which: 'source' | 'target', nodeId: string): string | null
+  /** BF20261013-032：端口沿边框滑动（0..1 归一；拖端口腿即此操作）。 */
+  setEdgePortOffset(id: string, which: 'source' | 'target', offset: number): void
   undo(): void
   canUndo(): boolean
   serialize(): ProcessGraphDocument
@@ -1097,6 +1167,41 @@ export function createDesignerModel(
           return {
             ...edge,
             ...rebuildEdge(edge, source, target, designerNodeSize, gatewayRadius, waypoints),
+          }
+        }),
+        dirty: true,
+      }
+      emit()
+    },
+    /**
+     * BF20261013-032：端口沿边框滑动（拖端口腿）——写 config.sourceOffset/targetOffset
+     * （0..1 归一，随节点移动保持相对位置），随后按新端口重建路由。
+     * 改接侧若有显式锚点则清除（锚点优先，滑动与之互斥）。
+     */
+    setEdgePortOffset(id, which, offset) {
+      const clamped = Math.min(1, Math.max(0, offset))
+      const byId = new Map(current.nodes.map((node) => [node.id, node] as const))
+      current = {
+        ...current,
+        edges: current.edges.map((edge) => {
+          if (edge.id !== id) return edge
+          const config = { ...edge.config }
+          delete config[which === 'source' ? 'sourceAnchor' : 'targetAnchor']
+          config[which === 'source' ? 'sourceOffset' : 'targetOffset'] = clamped
+          const nextEdge = { ...edge, config }
+          const source = byId.get(edge.sourceId)
+          const target = byId.get(edge.targetId)
+          if (!source || !target) return nextEdge
+          return {
+            ...nextEdge,
+            ...rebuildEdge(
+              nextEdge,
+              source,
+              target,
+              designerNodeSize,
+              gatewayRadius,
+              edge.waypoints,
+            ),
           }
         }),
         dirty: true,
