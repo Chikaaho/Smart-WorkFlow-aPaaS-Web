@@ -5,6 +5,7 @@ import {
   buildEdgePath,
   canonicalEdgeWaypoints,
   parsePathPoints,
+  edgeDragCursor,
   edgePortAxis,
   edgeSegmentHandles,
   expandEdgePathPoints,
@@ -406,6 +407,47 @@ describe('BF20261013-035 端点拖动预览与落下同源', () => {
     expect(portSideOf({ x: 20, y: 300 }, node, size)).toBe('left')
     expect(portSideOf({ x: 100, y: 275 }, node, size)).toBe('top')
     expect(portSideOf({ x: 100, y: 325 }, node, size)).toBe('bottom')
+  })
+})
+
+describe('BF20261013-036 拖动光标固定 + 目标端预览不镜像', () => {
+  const size = { width: 160, height: 50 }
+  const doc: ProcessGraphDocument = {
+    processKey: 'bpm_cursor',
+    name: '拖动光标',
+    formKey: 'demo_form',
+    version: 1,
+    elements: [
+      { id: 'node_a', kind: 'node', type: 'START', x: 100, y: 300, config: {}, style: {} },
+      { id: 'node_b', kind: 'node', type: 'APPROVAL', x: 420, y: 180, config: {}, style: {} },
+      { id: 'node_c', kind: 'node', type: 'END', x: 100, y: 80, config: {}, style: {} },
+      { id: 'edge_1', kind: 'edge', source: 'node_a', target: 'node_b' },
+    ],
+    canvas: {},
+  }
+
+  it('拖动会话光标固定：端点=grabbing（与拖动轴无关），内段=按拖动轴', () => {
+    expect(edgeDragCursor('endpoint', 'x')).toBe('grabbing')
+    expect(edgeDragCursor('endpoint', 'y')).toBe('grabbing')
+    expect(edgeDragCursor('segment', 'x')).toBe('ew-resize')
+    expect(edgeDragCursor('segment', 'y')).toBe('ns-resize')
+  })
+
+  it('被拖端为 target：预览起点=固定端端口、终点=命中节点端口（不镜像），且等于落下后 path', () => {
+    const model = createDesignerModel(doc, size, 22)
+    const state = model.state()
+    const edge = state.edges[0]
+    const byId = new Map(state.nodes.map((node) => [node.id, node] as const))
+    const fixed = byId.get('node_a') as (typeof state.nodes)[number]
+    const hovered = byId.get('node_c') as (typeof state.nodes)[number]
+    const preview = previewEdgePath(edge, fixed, hovered, size, 22, { target: 'right' })
+    const points = pathPoints(preview)
+    // 固定端（START 顶边端口）在前、命中节点（END 右边端口）在后 —— 与改接方向一致
+    expect(points[0]).toEqual({ x: 100, y: 275 })
+    expect(points[points.length - 1]).toEqual({ x: 180, y: 80 })
+    expectOrthogonalWithoutOverlap(points)
+    model.setEdgeEndpoint('edge_1', 'target', 'node_c', 'right')
+    expect(model.state().edges[0].path).toBe(preview)
   })
 })
 

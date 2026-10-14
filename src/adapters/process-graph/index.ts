@@ -345,6 +345,16 @@ export function previewEdgePath(
 }
 
 /**
+ * BF20261013-036：连线拖动会话期间的**固定光标**。拖动中预览几何每帧变化，光标若仍由命中检测决定，
+ * 指针就会在「节点盒 move / 命中路径 pointer / 空白 default」之间随帧切换，观感上光标乱跳。
+ * 端点拖动=grabbing（握住端点），内段拖动=按拖动轴（左右可拖 ew-resize / 上下可拖 ns-resize）。
+ */
+export function edgeDragCursor(kind: 'endpoint' | 'segment', axis: 'x' | 'y'): string {
+  if (kind === 'segment') return axis === 'x' ? 'ew-resize' : 'ns-resize'
+  return 'grabbing'
+}
+
+/**
  * 端口轴向（BF20261013-029）：按两盒间**空隙更大的轴**行走——空隙小的那一轴若作为主行走轴，
  * 其中线会紧贴节点边框、与边框平行（出口视觉贴边）。空隙更大的一轴保证中线有足够净空。
  */

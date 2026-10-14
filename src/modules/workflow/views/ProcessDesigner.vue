@@ -68,6 +68,7 @@ import type { ProcessGraphDocument, ProcessGraphWaypoint } from '@/contracts/pro
 import {
   createDesignerModel,
   buildEdgePath,
+  edgeDragCursor,
   edgeSegmentHandles,
   hitTestEdgeAtPoint,
   portSideOf,
@@ -1064,9 +1065,12 @@ function edgePathOf(edge: PositionedEdge): string {
   // 且端口腿轴向稳定（不随指针来回切换折向），避免拖动中整条线「漂移」。
   if (hovered && hovered.id !== edit.otherEndId) {
     // 只指定被拖端端口侧，固定端沿用其配置/自动侧 —— 与落下后的重排完全同源
+    // BF20261013-036：被拖端是 target 时必须把 hovered 传在 target 位——此前一律按 source 传入，
+    // 预览被镜像成「命中节点 → 固定端」（甚至绕出画布），与松手后的实际改接方向相反。
     const movingSide = nearestPortSide(pointer, hovered)
-    const sides = edit.which === 'source' ? { source: movingSide } : { target: movingSide }
-    return previewEdgePath(edge, hovered, fixedNode, size, P53_GATEWAY_RADIUS, sides)
+    return edit.which === 'source'
+      ? previewEdgePath(edge, hovered, fixedNode, size, P53_GATEWAY_RADIUS, { source: movingSide })
+      : previewEdgePath(edge, fixedNode, hovered, size, P53_GATEWAY_RADIUS, { target: movingSide })
   }
   const fixedSide = portSideOf(fixedPort, fixedNode, size)
   const axis = sideAxis(fixedSide)
@@ -1115,9 +1119,32 @@ const edgeEdit = ref<null | {
 const edgeEditPoint = ref<PathPoint | null>(null)
 const edgeEditHoverId = ref<string | null>(null)
 
+/**
+ * BF20261013-036：拖动会话期间固定光标。拖动中预览几何每帧重算，指针下方的元素在
+ * 「节点盒(move) / 命中路径(pointer) / 空白(default) / 端点圆(grab)」之间不断切换，
+ * 光标就跟着乱跳；拖动期间改为整个画布统一用一个会话光标（吸附时不再闪烁）。
+ */
+const activeDragCursor = computed(() =>
+  edgeEdit.value ? edgeDragCursor(edgeEdit.value.kind, edgeEdit.value.axis) : null,
+)
+
+/**
+ * BF20261013-036：连线拖动期间捕获指针——指针滑出画布（如到右侧属性面板）时仍能收到
+ * pointermove/pointerup，拖动会话不会悬空（松手不生效、光标停在拖动态）。
+ * 合成事件没有活动指针，setPointerCapture 会抛 NotFoundError，忽略即可。
+ */
+function captureEdgeDragPointer(event: PointerEvent) {
+  try {
+    svgRef.value?.setPointerCapture(event.pointerId)
+  } catch {
+    // 无活动指针（合成事件）时无需捕获
+  }
+}
+
 function beginEndpointDrag(event: PointerEvent, edge: PositionedEdge, which: 'source' | 'target') {
   const points = pathPoints(edge.path)
   if (points.length < 2) return
+  captureEdgeDragPointer(event)
   edgeEdit.value = {
     edgeId: edge.id,
     kind: 'endpoint',
@@ -1146,6 +1173,7 @@ function beginSegmentDrag(
   axis: 'x' | 'y',
   port: 'source' | 'target' | null = null,
 ) {
+  captureEdgeDragPointer(event)
   edgeEdit.value = {
     edgeId: edge.id,
     kind: 'segment',
@@ -2589,6 +2617,8 @@ function nodeLabelLines(label: string) {
         <svg
           ref="svgRef"
           class="pg-svg"
+          :class="{ 'pg-svg-dragging': activeDragCursor !== null }"
+          :style="activeDragCursor ? { '--pg-drag-cursor': activeDragCursor } : undefined"
           :width="'100%'"
           :height="'100%'"
           :viewBox="`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`"
@@ -4564,6 +4594,12 @@ function nodeLabelLines(label: string) {
 }
 .designer-edge-endpoint:active {
   cursor: grabbing;
+}
+/* BF20261013-036：拖动会话期间统一光标——拖动中预览几何每帧变化，命中检测会让光标在
+   小手/箭头/移动之间来回闪；拖动期间整块画布固定用会话光标（端点=grabbing，内段=按轴方向）。 */
+.pg-svg-dragging,
+.pg-svg-dragging :deep(*) {
+  cursor: var(--pg-drag-cursor, grabbing) !important;
 }
 
 /* ── 连线（fixture：#A4ADBE 1.6 + 同色箭头） ── */
