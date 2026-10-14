@@ -813,10 +813,7 @@ onMounted(loadList)
   height: 42px;
   font-size: 12px;
   font-weight: 400;
-  /* BF20261013-039：表头底色直接落到 th（与标准列表页 ListTable 的 #fafbfe 一致）。
-     变量 --el-table-header-bg-color 在 Element Plus 里由 .el-table 自身重声明，页面级设置不生效；
-     而 fixture 原值 #f6f7fb 与页面底色 #f4f6fb 几乎同色，表头看着像"背景色"。 */
-  background-color: #fafbfe;
+  /* 表头底色不在此声明：BF20261013-040 起由 tokens.css 全局统一 #fafbfe（#app .el-table th） */
 }
 /* BF20261013-037：去掉 fixture 迁移期的 translate 位移（曾把单元格内容上移 8px、把末列表头右移
    33px，导致状态徽标顶部被 .cell 的 overflow:hidden 裁掉、表头与内容错位），改为标准内距。 */

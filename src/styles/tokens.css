@@ -287,6 +287,14 @@ body {
   background-color: var(--sw-surface-page);
 }
 
+/* BF20261013-040：表头底色全局统一 #fafbfe（= ListTable 原值）。
+   上方 --el-table-header-bg-color 变量实际不生效——Element Plus 在 .el-table 作用域重新声明了它，
+   比 :root 更近；因此直接落 th（含固定列），未走 ListTable 的页面也拿到同一底色，
+   避免"表头白底压在白卡片上=看不见"与"表头色≈页面底色"两类撞色。 */
+#app .el-table th.el-table__cell {
+  background-color: #fafbfe;
+}
+
 /* P53 设计弹窗遮罩：设计 SVG 三层 #10182F@0.116 叠加的等效合成 32%，全局统一弹层背板
    （实测设计 11 白底经罩 rgb(174,176,184) 反解 α≈0.32；覆盖 Element 默认黑罩） */
 .el-overlay {

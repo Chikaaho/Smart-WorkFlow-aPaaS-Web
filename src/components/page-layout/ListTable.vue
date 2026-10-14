@@ -34,8 +34,11 @@ defineProps<{}>()
   height: var(--sw-table-row-height-compact);
 }
 
-.list-table :deep(.el-table td),
-.list-table :deep(.el-table th) {
+/* BF20261013-040：单元格左右内距 = 标准 16px，**替换** Element Plus 的 .cell 默认 12px。
+   此前写在 td/th 上，与 .cell 的 12px 叠加成 28px/侧，窄列表头放不下文字就换行
+   （70px 列放不下 2 字标签、100px 列放不下 4 字标签）。 */
+.list-table :deep(.el-table td .cell),
+.list-table :deep(.el-table th .cell) {
   padding-left: var(--sw-cell-padding-x);
   padding-right: var(--sw-cell-padding-x);
 }

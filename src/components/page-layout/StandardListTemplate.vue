@@ -46,8 +46,8 @@ const emit = defineEmits<{
       </template>
     </ListToolbar>
 
-    <!-- 筛选区 -->
-    <ListFilterBar>
+    <!-- 筛选区（BF20261013-040：两个槽都为空时不渲染——否则会留一条 48px 的空白白条） -->
+    <ListFilterBar v-if="$slots.filter || $slots['filter-actions']">
       <slot name="filter" />
       <template v-if="$slots['filter-actions']" #actions>
         <slot name="filter-actions" />
