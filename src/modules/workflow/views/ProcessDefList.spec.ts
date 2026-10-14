@@ -4,6 +4,8 @@ import { nextTick } from 'vue'
 
 vi.mock('@/modules/workflow/api', () => ({
   pageProcessDefs: vi.fn(),
+  getProcessDefThemeRule: vi.fn(),
+  updateProcessDefThemeRule: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -29,6 +31,20 @@ const stubs = {
       '<div class="col" :data-label="label" :data-width="width" :data-align="align" :data-prop="prop" />',
   },
   'el-tag': { template: '<span class="el-tag"><slot/></span>' },
+  'el-button': {
+    // emits 必须声明：否则父级 @click 会同时作为原生监听落到根元素，点击被触发两次
+    emits: ['click'],
+    template: '<button class="el-button" @click="$emit(\'click\')"><slot/></button>',
+  },
+  'el-option': { template: '<div class="el-option" />', props: ['label', 'value'] },
+  'el-select': {
+    template: '<div class="el-select"><slot/></div>',
+    props: ['modelValue'],
+  },
+  'el-dialog': {
+    template: '<div class="el-dialog"><slot/><slot name="footer"/></div>',
+    props: ['modelValue', 'title'],
+  },
 }
 
 const mockDefs: ProcessDef[] = [
@@ -152,6 +168,47 @@ describe('ProcessDefList.vue', () => {
     expect(labelOf('更新时间')).not.toBeNull()
     expect(cols.map((col) => col.attributes('data-label'))).not.toContain('更新人 / 时间')
     expect(labelOf('操作')?.attributes('data-width')).toBe('240')
+  })
+
+  // BF20261013-041：流程编号规则编辑器——变量在输入框内以灰底标识展示，示例随规则实时更新
+  it('流程编号规则编辑器：灰底标识回显 + 点按钮带入变量 + 示例预览', async () => {
+    vi.mocked(pageProcessDefs).mockResolvedValueOnce({
+      list: mockDefs,
+      total: 2,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const { getProcessDefThemeRule } = await import('@/modules/workflow/api')
+    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('JRZX_{YYYYMMDDHHMMSS}_{SEQ:3}')
+    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as { openThemeRule: (row: ProcessDef) => void }
+    vm.openThemeRule(mockDefs[0])
+    await nextTick()
+    await nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await nextTick()
+
+    // 回显：固定文字 + 两个灰底标识（标识带 data-token，展示文字取文案）
+    const chips = wrapper.findAll('.theme-editor__chip')
+    expect(chips.map((chip) => chip.attributes('data-token'))).toEqual([
+      '{YYYYMMDDHHMMSS}',
+      '{SEQ:3}',
+    ])
+    expect(wrapper.find('.theme-editor').text()).toContain('JRZX_')
+
+    // 点「自增序号」按钮：按当前位数（3）带入 {SEQ:3} 标识
+    const buttons = wrapper.findAll('.el-button')
+    const seqButton = buttons.find((button) => button.text().includes('自增序号'))
+    expect(seqButton).toBeTruthy()
+    await seqButton?.trigger('click')
+    await nextTick()
+    expect(wrapper.findAll('.theme-editor__chip').length).toBe(3)
+
+    // 示例：规则文本 → 演示值（发起时间补足 14 位、序号补零到 3 位）
+    const preview = wrapper.find('.theme-dialog__preview').text()
+    expect(preview).toMatch(/\d{14}_001/)
   })
 
   it('displays empty state when list is empty', async () => {
