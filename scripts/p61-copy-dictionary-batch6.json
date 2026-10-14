@@ -153,6 +153,7 @@
   "事项": { "key": "workflow.item", "en": "Item" },
   "分类列表": { "key": "workflow.categoryList", "en": "Categories" },
   "事项数": { "key": "workflow.itemCount", "en": "Items" },
+  "更新人": { "key": "workflow.updatedBy", "en": "Updated by" },
 
   "加载监控列表失败": {
     "key": "workflow.monitorLoadFailed",

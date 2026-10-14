@@ -784,12 +784,14 @@ onMounted(loadList)
 
 /* ── 表格区：卡片白底 ──
    BF20261013-037：表格与卡片同宽（表头灰底 + 行分隔线一直铺到卡片圆角边，左右不留白），
-   仅分页行保留 24px 左右内距；单元格左右内距统一取标准 16px。 */
+   单元格左右内距统一取标准 16px。
+   BF20261013-038：去掉卡片上下内距——表头即卡片首行，不再在表头上方留一条空白行；
+   分页行自带 16px 纵向内距 + 24px 左右内距。 */
 .p53-admin-defs__table-card {
   box-sizing: border-box;
   margin-top: 24px;
   min-height: 524px;
-  padding: 24px 0;
+  padding: 0;
   border-radius: 14px; /* 设计精确值 */
   background: var(--sw-surface-card);
   overflow: hidden;

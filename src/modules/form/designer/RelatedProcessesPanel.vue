@@ -442,10 +442,12 @@ function statusTagType(status: ProcessDef['status']) {
   line-height: 17px;
 }
 
+/* BF20261013-038 全局巡检：去掉 24px 23px 0 内距——表格即卡片首行，表头上方不再留空白行、
+   左右不再留白（边框/圆角/固定高度保持）。 */
 .related-processes__table-card {
   height: 518px;
   margin-top: 23px;
-  padding: 24px 23px 0;
+  padding: 0;
   box-sizing: border-box;
   overflow: hidden;
   border: 1px solid var(--sw-border-light, #e7ebf1);

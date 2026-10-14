@@ -515,11 +515,14 @@ onMounted(() => {
   padding: var(--sw-space-24);
 }
 
+/* BF20261013-038 全局巡检：卡片不再包住表格留 16px 内距（表头灰底与行分隔线随卡片圆角铺满，
+   左右不留白）；空态自带内距，不贴卡片边缘。 */
 .dept-list__table-card {
   background: var(--sw-bg-white, #fff);
   border-radius: var(--sw-radius-card);
   box-shadow: var(--sw-shadow-card);
-  padding: var(--sw-space-16);
+  overflow: hidden;
+  padding: 0;
 }
 
 .dept-list__filter {
@@ -531,7 +534,7 @@ onMounted(() => {
 
 .dept-list__empty {
   text-align: center;
-  padding: var(--sw-space-40) 0;
+  padding: var(--sw-space-40) var(--sw-space-16);
   color: var(--sw-text-tertiary);
 }
 
