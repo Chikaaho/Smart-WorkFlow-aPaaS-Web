@@ -202,8 +202,8 @@ function makePositionedEdge(
   const target = nodeById.get(edge.target)
   if (!source || !target) return null
   const waypoints = edge.waypoints ?? []
-  const [start, end] = resolveEdgeEnds(edge, source, target, nodeSize, gatewayRadius)
-  const path = buildEdgePath(start, end, waypoints)
+  const { start, end, hint } = resolveEdgeRoute(edge, source, target, nodeSize, gatewayRadius)
+  const path = buildEdgePath(start, end, waypoints, hint)
   return {
     id: edge.id,
     sourceId: edge.source,
@@ -226,18 +226,20 @@ function configAnchor(value: unknown): { x: number; y: number } | null {
  * 边端点解析：config.sourceAnchor/targetAnchor 显式锚点优先（设计稿精确落点，
  * 如网关扇出汇入节点左下角、汇聚边入底边中点），否则按端口规则计算。
  */
-function resolveEdgeEnds(
+function resolveEdgeRoute(
   edge: Pick<ProcessGraphElement, 'config'>,
   source: Pick<PositionedNode, 'x' | 'y' | 'type'>,
   target: Pick<PositionedNode, 'x' | 'y' | 'type'>,
   nodeSize: { width: number; height: number },
   gatewayRadius: number,
-): [{ x: number; y: number }, { x: number; y: number }] {
+): { start: { x: number; y: number }; end: { x: number; y: number }; hint: EdgeRouteHint } {
   const config = (edge.config ?? {}) as Record<string, unknown>
   const start = configAnchor(config.sourceAnchor)
   const end = configAnchor(config.targetAnchor)
-  if (start && end) return [start, end]
-  return edgeEndpoints(source, target, nodeSize, gatewayRadius)
+  if (start && end) return { start, end, hint: {} }
+  const axis = edgePortAxis(source, target, nodeSize)
+  const [portStart, portEnd] = edgeEndpoints(source, target, nodeSize, gatewayRadius)
+  return { start: portStart, end: portEnd, hint: { sourceAxis: axis, targetAxis: axis } }
 }
 
 /** 端口坐标：水平边取左右缘中心，垂直边取上下缘中心；网关取菱形顶点（半径与渲染的菱形一致）。 */
@@ -260,7 +262,23 @@ function portPoint(
   return { x: node.x, y: node.y + nodeSize.height / 2 }
 }
 
-function edgeEndpoints(
+/**
+ * 端口轴向（BF20261013-029）：按两盒间**空隙更大的轴**行走——空隙小的那一轴若作为主行走轴，
+ * 其中线会紧贴节点边框、与边框平行（出口视觉贴边）。空隙更大的一轴保证中线有足够净空。
+ */
+export function edgePortAxis(
+  source: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  target: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  nodeSize: { width: number; height: number },
+): 'h' | 'v' {
+  const dx = Math.abs(target.x - source.x)
+  const dy = Math.abs(target.y - source.y)
+  const horizontalGap = dx - nodeSize.width
+  const verticalGap = dy - nodeSize.height
+  return verticalGap > horizontalGap ? 'v' : 'h'
+}
+
+export function edgeEndpoints(
   source: Pick<PositionedNode, 'x' | 'y' | 'type'>,
   target: Pick<PositionedNode, 'x' | 'y' | 'type'>,
   nodeSize: { width: number; height: number },
@@ -268,7 +286,7 @@ function edgeEndpoints(
 ): [{ x: number; y: number }, { x: number; y: number }] {
   const dx = target.x - source.x
   const dy = target.y - source.y
-  if (Math.abs(dx) >= Math.abs(dy)) {
+  if (edgePortAxis(source, target, nodeSize) === 'h') {
     return [
       portPoint(source, dx >= 0 ? 'right' : 'left', nodeSize, gatewayRadius),
       portPoint(target, dx >= 0 ? 'left' : 'right', nodeSize, gatewayRadius),
@@ -280,15 +298,64 @@ function edgeEndpoints(
   ]
 }
 
-/** 相邻/共用节点中心 → SVG path（M L 或先横后竖肘线）。 */
+/**
+ * 相邻/共用节点中心 → SVG path（M/L 折线；BF20261013-029：横平竖直曼哈顿路由）。
+ *
+ * 端口连线按主导方向走三肘：水平主导=横-纵-横（竖段居中）、垂直主导=纵-横-纵（横段居中），
+ * 保证进出端口方向正确且全部线段横平竖直；用户拐点之间的斜段按该段主导方向单肘折成直角。
+ */
+export interface EdgeRouteHint {
+  /** 起点端口朝向：h=左右缘出线（先横后纵），v=上下缘出线（先纵后横）。 */
+  sourceAxis?: 'h' | 'v'
+  /** 终点端口朝向：h=左右缘入线，v=上下缘入线。 */
+  targetAxis?: 'h' | 'v'
+}
+
 export function buildEdgePath(
   source: Pick<PositionedNode, 'x' | 'y'>,
   target: Pick<PositionedNode, 'x' | 'y'>,
   waypoints: ProcessGraphWaypoint[],
+  hint: EdgeRouteHint = {},
 ): string {
-  const points = [{ x: source.x, y: source.y }, ...waypoints, { x: target.x, y: target.y }]
-  if (points.length < 2) return ''
-  return points.map((p, index) => `${index === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const raw: Array<{ x: number; y: number }> = [
+    { x: source.x, y: source.y },
+    ...waypoints.map((point) => ({ x: point.x, y: point.y })),
+    { x: target.x, y: target.y },
+  ]
+  if (raw.length < 2) return ''
+  const points: Array<{ x: number; y: number }> = [raw[0]]
+  for (let index = 1; index < raw.length; index++) {
+    const from = points[points.length - 1]
+    const to = raw[index]
+    if (from.x === to.x || from.y === to.y) {
+      points.push(to)
+      continue
+    }
+    const isPortLeg = index === 1 || index === raw.length - 1
+    const axis = isPortLeg
+      ? index === 1
+        ? (hint.sourceAxis ?? defaultAxis(from, to))
+        : (hint.targetAxis ?? defaultAxis(from, to))
+      : defaultAxis(from, to)
+    const horizontal = axis === 'h'
+    if (isPortLeg && horizontal) {
+      const midX = (from.x + to.x) / 2
+      points.push({ x: midX, y: from.y }, { x: midX, y: to.y })
+    } else if (isPortLeg) {
+      const midY = (from.y + to.y) / 2
+      points.push({ x: from.x, y: midY }, { x: to.x, y: midY })
+    } else if (horizontal) {
+      points.push({ x: to.x, y: from.y })
+    } else {
+      points.push({ x: from.x, y: to.y })
+    }
+    points.push(to)
+  }
+  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
+}
+
+function defaultAxis(from: { x: number; y: number }, to: { x: number; y: number }): 'h' | 'v' {
+  return Math.abs(to.x - from.x) >= Math.abs(to.y - from.y) ? 'h' : 'v'
 }
 
 /**
@@ -516,14 +583,14 @@ export function createDesignerModel(
           const source = byId.get(edge.sourceId)
           const target = byId.get(edge.targetId)
           if (!source || !target) return edge
-          const [start, end] = resolveEdgeEnds(
+          const { start, end, hint } = resolveEdgeRoute(
             edge,
             source,
             target,
             designerNodeSize,
             gatewayRadius,
           )
-          return { ...edge, path: buildEdgePath(start, end, edge.waypoints) }
+          return { ...edge, path: buildEdgePath(start, end, edge.waypoints, hint) }
         })
         current = { ...current, nodes, edges, dirty: true }
       }
@@ -652,14 +719,14 @@ export function createDesignerModel(
                   const source = byId.get(edge.sourceId)
                   const target = byId.get(edge.targetId)
                   if (!source || !target) return edge.path
-                  const [start, end] = resolveEdgeEnds(
+                  const { start, end, hint } = resolveEdgeRoute(
                     edge,
                     source,
                     target,
                     designerNodeSize,
                     gatewayRadius,
                   )
-                  return buildEdgePath(start, end, waypoints)
+                  return buildEdgePath(start, end, waypoints, hint)
                 })(),
               }
             : edge,
@@ -705,14 +772,14 @@ export function createDesignerModel(
                 ...nextEdge,
                 path: (() => {
                   if (!source || !target) return candidate.path
-                  const [start, end] = resolveEdgeEnds(
+                  const { start, end, hint } = resolveEdgeRoute(
                     nextEdge,
                     source,
                     target,
                     designerNodeSize,
                     gatewayRadius,
                   )
-                  return buildEdgePath(start, end, nextEdge.waypoints)
+                  return buildEdgePath(start, end, nextEdge.waypoints, hint)
                 })(),
               }
             : candidate,

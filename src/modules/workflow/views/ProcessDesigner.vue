@@ -65,7 +65,14 @@ import type {
   ParticipantShapeKind,
 } from '@/modules/workflow/utils/node-capabilities'
 import type { ProcessGraphDocument, ProcessGraphWaypoint } from '@/contracts/process-graph'
-import { createDesignerModel, buildEdgePath, hitTestEdgeAtPoint } from '@/adapters/process-graph'
+import {
+  createDesignerModel,
+  buildEdgePath,
+  edgeEndpoints,
+  hitTestEdgeAtPoint,
+  DESIGNER_NODE_WIDTH,
+  DESIGNER_NODE_HEIGHT,
+} from '@/adapters/process-graph'
 import {
   effectiveFieldState,
   setFieldState,
@@ -836,6 +843,7 @@ function onPointerMove(event: PointerEvent) {
       return
     }
     edgeEditPoint.value = p
+    edgeEditHoverId.value = resolveConnectDropTarget(event)
   }
 }
 
@@ -881,8 +889,8 @@ function onPointerUp(event: PointerEvent) {
       if (applied) snapshot()
     }
     edgeEdit.value = null
-    edgeEditFrom.value = null
     edgeEditPoint.value = null
+    edgeEditHoverId.value = null
     panSession.value = null
     dragState.value = null
     return
@@ -1000,6 +1008,52 @@ function pointDist(a: PathPoint, b: PathPoint) {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }
 
+/**
+ * BF20261013-029：连线渲染路径——端点拖拽中按固定端端口 → 命中节点端口（无命中则指针）
+ * 实时重算曼哈顿路由，真实连线跟随指针改形（不再虚线预览）；其余情况用模型路径。
+ */
+function edgePathOf(edge: PositionedEdge): string {
+  const edit = edgeEdit.value
+  if (
+    !edit ||
+    edit.kind !== 'endpoint' ||
+    edit.edgeId !== edge.id ||
+    !edgeEditPoint.value ||
+    !canvasNodes.value.length
+  ) {
+    return edge.path
+  }
+  const byId = new Map(canvasNodes.value.map((node) => [node.id, node] as const))
+  const fixedNode = byId.get(edit.otherEndId)
+  if (!fixedNode) return edge.path
+  const size = { width: DESIGNER_NODE_WIDTH, height: DESIGNER_NODE_HEIGHT }
+  const hovered = edit.otherEndId
+    ? edgeEditHoverId.value
+      ? byId.get(edgeEditHoverId.value)
+      : undefined
+    : undefined
+  if (hovered && hovered.id !== edit.otherEndId) {
+    const [start, end] =
+      edit.which === 'source'
+        ? edgeEndpoints(hovered, fixedNode, size)
+        : edgeEndpoints(fixedNode, hovered, size)
+    return buildEdgePath(start, end, edge.waypoints)
+  }
+  const [start] =
+    edit.which === 'source'
+      ? edgeEndpoints(
+          { x: edgeEditPoint.value.x, y: edgeEditPoint.value.y, type: 'TASK' },
+          fixedNode,
+          size,
+        )
+      : edgeEndpoints(
+          fixedNode,
+          { x: edgeEditPoint.value.x, y: edgeEditPoint.value.y, type: 'TASK' },
+          size,
+        )
+  return buildEdgePath(start, edgeEditPoint.value, edge.waypoints)
+}
+
 /** 点到线段距离与所在段下标（points[i]→points[i+1] 为第 i 段）。 */
 function nearestSegment(points: PathPoint[], p: PathPoint) {
   let best = Number.MAX_SAFE_INTEGER
@@ -1029,9 +1083,9 @@ const edgeEdit = ref<null | {
   originalWaypoints: ProcessGraphWaypoint[]
   activeIndex: number
 }>(null)
-/** 端点拖拽预览：起点（对端固定点）与指针跟随点。 */
-const edgeEditFrom = ref<PathPoint | null>(null)
+/** BF20261013-029：端点拖拽实时改形——固定端节点 + 指针 + 命中节点（真实连线跟随，不再是虚线预览）。 */
 const edgeEditPoint = ref<PathPoint | null>(null)
+const edgeEditHoverId = ref<string | null>(null)
 
 function beginEndpointDrag(event: PointerEvent, edge: PositionedEdge, which: 'source' | 'target') {
   const points = pathPoints(edge.path)
@@ -1044,8 +1098,8 @@ function beginEndpointDrag(event: PointerEvent, edge: PositionedEdge, which: 'so
     originalWaypoints: [...edge.waypoints],
     activeIndex: -1,
   }
-  edgeEditFrom.value = which === 'source' ? points[points.length - 1] : points[0]
   edgeEditPoint.value = screenToGraph(event)
+  edgeEditHoverId.value = null
 }
 
 function beginWaypointDragFrom(edge: PositionedEdge, index: number) {
@@ -2454,7 +2508,7 @@ function nodeLabelLines(label: string) {
           <rect class="pg-bg" x="-100000" y="-100000" width="200000" height="200000" />
           <template v-for="edge in canvasEdges" :key="edge.id">
             <path
-              :d="edge.path"
+              :d="edgePathOf(edge)"
               fill="none"
               class="designer-edge"
               :class="{ 'designer-edge-selected': selectionId === edge.id }"
@@ -2464,7 +2518,7 @@ function nodeLabelLines(label: string) {
               @pointerdown.stop="onEdgePointerDown($event, edge)"
             />
             <path
-              :d="edge.path"
+              :d="edgePathOf(edge)"
               fill="none"
               class="designer-edge-visual"
               :class="{ 'designer-edge-selected': selectionId === edge.id }"
@@ -2481,14 +2535,6 @@ function nodeLabelLines(label: string) {
                 [],
               )
             "
-            fill="none"
-            class="designer-edge-pending"
-            stroke-dasharray="6 4"
-          />
-          <!-- V011-BUG-025：端点拖拽预览（对端固定 → 指针） -->
-          <path
-            v-if="edgeEdit?.kind === 'endpoint' && edgeEditFrom && edgeEditPoint"
-            :d="buildEdgePath(edgeEditFrom, edgeEditPoint, [])"
             fill="none"
             class="designer-edge-pending"
             stroke-dasharray="6 4"

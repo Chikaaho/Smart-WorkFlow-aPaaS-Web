@@ -93,6 +93,17 @@ const BUILTINS = [
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const preRef = ref<HTMLElement | null>(null)
 
+/** 自动配对表（BF20261013-029）：左括号/引号 → 右半。 */
+const PAIRS: Record<string, string> = {
+  '(': ')',
+  '[': ']',
+  '{': '}',
+  '"': '"',
+  "'": "'",
+  '`': '`',
+}
+const CLOSERS = new Set([')', ']', '}', '"', "'", '`'])
+
 const isIdentChar = (ch: string): boolean => /[A-Za-z0-9_$\u4e00-\u9fa5]/.test(ch)
 
 interface Token {
@@ -309,6 +320,51 @@ function onKeydown(event: KeyboardEvent) {
     const next = `${ta.value.slice(0, caret)}  ${ta.value.slice(ta.selectionEnd ?? caret)}`
     emit('update:modelValue', next)
     void nextTick(() => ta.setSelectionRange(caret + 2, caret + 2))
+    return
+  }
+  // BF20261013-029：括号/引号自动配对（选中文本则包裹，成对退格一次删净，右括号已存在则跳过）
+  const closer = PAIRS[event.key]
+  const ta = textareaRef.value
+  if (closer && ta) {
+    event.preventDefault()
+    suggestionOpen.value = false
+    const start = ta.selectionStart ?? 0
+    const end = ta.selectionEnd ?? 0
+    const selected = ta.value.slice(start, end)
+    const next = `${ta.value.slice(0, start)}${event.key}${selected}${closer}${ta.value.slice(end)}`
+    emit('update:modelValue', next)
+    const caret = selected ? start + selected.length + 2 : start + 1
+    void nextTick(() => {
+      ta.setSelectionRange(caret, caret)
+      ta.focus()
+    })
+    return
+  }
+  if (CLOSERS.has(event.key) && ta) {
+    const caret = ta.selectionStart ?? 0
+    if (ta.selectionStart === ta.selectionEnd && ta.value[caret] === event.key) {
+      event.preventDefault()
+      void nextTick(() => {
+        ta.setSelectionRange(caret + 1, caret + 1)
+        ta.focus()
+      })
+    }
+    return
+  }
+  if (event.key === 'Backspace' && ta) {
+    const caret = ta.selectionStart ?? 0
+    if (ta.selectionStart === ta.selectionEnd && caret > 0) {
+      const before = ta.value[caret - 1]
+      const after = ta.value[caret]
+      if (PAIRS[before] === after) {
+        event.preventDefault()
+        emit('update:modelValue', ta.value.slice(0, caret - 1) + ta.value.slice(caret + 1))
+        void nextTick(() => {
+          ta.setSelectionRange(caret - 1, caret - 1)
+          ta.focus()
+        })
+      }
+    }
   }
 }
 

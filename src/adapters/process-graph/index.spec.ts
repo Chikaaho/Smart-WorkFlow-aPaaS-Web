@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
-import { normalizeGraph, createDesignerModel, buildEdgePath, hitTestEdgeAtPoint } from './index'
+import {
+  normalizeGraph,
+  createDesignerModel,
+  buildEdgePath,
+  edgePortAxis,
+  hitTestEdgeAtPoint,
+} from './index'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 
 function baseGraph(): ProcessGraphDocument {
@@ -59,9 +65,50 @@ describe('normalizeGraph', () => {
 })
 
 describe('buildEdgePath', () => {
-  it('生成 M/L 折线命令', () => {
+  it('BF20261013-029：横平竖直曼哈顿路由（斜段按端口朝向折成直角）', () => {
     const path = buildEdgePath({ x: 0, y: 0 }, { x: 100, y: 100 }, [{ x: 50, y: 0 }])
-    expect(path).toBe('M 0 0 L 50 0 L 100 100')
+    expect(path).toBe('M 0 0 L 50 0 L 50 50 L 100 50 L 100 100')
+    // 每一段都必须水平或垂直
+    const points = path
+      .split(' ')
+      .reduce<Array<{ x: number; y: number }>>((acc, token, index, all) => {
+        if (token === 'M' || token === 'L')
+          acc.push({ x: Number(all[index + 1]), y: Number(all[index + 2]) })
+        return acc
+      }, [])
+    for (let i = 0; i < points.length - 1; i++) {
+      const axisAligned = points[i].x === points[i + 1].x || points[i].y === points[i + 1].y
+      expect(axisAligned).toBe(true)
+    }
+  })
+
+  it('BF20261013-029：端口腿按端口朝向出线（上下缘出线先纵后横，不沿边框平行）', () => {
+    const path = buildEdgePath({ x: 100, y: 300 }, { x: 386, y: 492 }, [], {
+      sourceAxis: 'v',
+      targetAxis: 'v',
+    })
+    expect(path).toBe('M 100 300 L 100 396 L 386 396 L 386 492')
+  })
+})
+
+describe('edgePortAxis', () => {
+  it('BF20261013-029：两盒空隙更大的轴作主行走轴（右下目标走纵向出口，避免贴边平行）', () => {
+    // 右下方目标：水平空隙 134 < 垂直空隙 146 → 纵向出口
+    expect(
+      edgePortAxis(
+        { x: 100, y: 300, type: 'APPROVAL' },
+        { x: 386, y: 492, type: 'END' },
+        { width: 152, height: 46 },
+      ),
+    ).toBe('v')
+    // 近水平目标：水平空隙更大 → 横向出口
+    expect(
+      edgePortAxis(
+        { x: 100, y: 300, type: 'START' },
+        { x: 500, y: 340, type: 'APPROVAL' },
+        { width: 152, height: 46 },
+      ),
+    ).toBe('h')
   })
 })
 
@@ -70,8 +117,9 @@ describe('createDesignerModel', () => {
     const model = createDesignerModel(baseGraph())
     model.moveNode('node_end', 700, 500)
     const edge = model.state().edges[0]
-    // P53 设计（节点19）：边线连接节点边框端口（右缘中心 → 左缘中心），不再是中心连线
-    expect(edge.path).toBe('M 176 300 L 624 500')
+    // P53 设计（节点19）：边线连接节点边框端口（右缘中心 → 左缘中心）；
+    // BF20261013-029：横平竖直曼哈顿路由（竖段居中）
+    expect(edge.path).toBe('M 176 300 L 400 300 L 400 500 L 624 500')
   })
 
   it('节点与连线操作更新状态并标记脏', () => {
