@@ -13,6 +13,8 @@ import {
   moveEdgeSegment,
   normalizeOrthogonalPoints,
   pointsToWaypoints,
+  portSideOf,
+  previewEdgePath,
   EDGE_MIN_SEGMENT,
 } from './index'
 import type { OrthogonalPoint } from './index'
@@ -360,6 +362,50 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
       { x: 600, y: 252 },
     ])
     expect(model.state().dirty).toBe(true)
+  })
+})
+
+describe('BF20261013-035 端点拖动预览与落下同源', () => {
+  it('previewEdgePath 结果 = 落下后 path（指定被拖端端口侧）', () => {
+    const model = createDesignerModel(
+      {
+        processKey: 'bpm_preview',
+        name: '预览同源',
+        formKey: 'demo_form',
+        version: 1,
+        elements: [
+          { id: 'node_a', kind: 'node', type: 'START', x: 100, y: 300, config: {}, style: {} },
+          { id: 'node_b', kind: 'node', type: 'APPROVAL', x: 420, y: 180, config: {}, style: {} },
+          { id: 'node_c', kind: 'node', type: 'END', x: 100, y: 80, config: {}, style: {} },
+          { id: 'edge_1', kind: 'edge', source: 'node_a', target: 'node_b' },
+        ],
+        canvas: {},
+      },
+      { width: 160, height: 50 },
+      22,
+    )
+    const state = model.state()
+    const edge = state.edges[0]
+    const byId = new Map(state.nodes.map((node) => [node.id, node] as const))
+    const preview = previewEdgePath(
+      edge,
+      byId.get('node_c') as (typeof state.nodes)[number],
+      byId.get('node_b') as (typeof state.nodes)[number],
+      { width: 160, height: 50 },
+      22,
+      { source: 'bottom' },
+    )
+    model.setEdgeEndpoint('edge_1', 'source', 'node_c', 'bottom')
+    expect(model.state().edges[0].path).toBe(preview)
+  })
+
+  it('portSideOf 判定端点所在边', () => {
+    const node = { x: 100, y: 300, type: 'START' }
+    const size = { width: 160, height: 50 }
+    expect(portSideOf({ x: 180, y: 300 }, node, size)).toBe('right')
+    expect(portSideOf({ x: 20, y: 300 }, node, size)).toBe('left')
+    expect(portSideOf({ x: 100, y: 275 }, node, size)).toBe('top')
+    expect(portSideOf({ x: 100, y: 325 }, node, size)).toBe('bottom')
   })
 })
 

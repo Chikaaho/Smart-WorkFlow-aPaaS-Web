@@ -68,14 +68,14 @@ import type { ProcessGraphDocument, ProcessGraphWaypoint } from '@/contracts/pro
 import {
   createDesignerModel,
   buildEdgePath,
-  edgeEndpoints,
   edgeSegmentHandles,
   hitTestEdgeAtPoint,
+  portSideOf,
+  previewEdgePath,
+  sideAxis,
   moveEdgeSegment,
   parsePathPoints,
   pointsToWaypoints,
-  DESIGNER_NODE_WIDTH,
-  DESIGNER_NODE_HEIGHT,
 } from '@/adapters/process-graph'
 import {
   effectiveFieldState,
@@ -1055,33 +1055,25 @@ function edgePathOf(edge: PositionedEdge): string {
   const byId = new Map(canvasNodes.value.map((node) => [node.id, node] as const))
   const fixedNode = byId.get(edit.otherEndId)
   if (!fixedNode) return edge.path
-  const size = { width: DESIGNER_NODE_WIDTH, height: DESIGNER_NODE_HEIGHT }
-  const hovered = edit.otherEndId
-    ? edgeEditHoverId.value
-      ? byId.get(edgeEditHoverId.value)
-      : undefined
-    : undefined
+  const size = { width: P53_NODE_WIDTH, height: P53_NODE_HEIGHT }
+  const pointer = edgeEditPoint.value
+  const path = pathPoints(edge.path)
+  const fixedPort = edit.which === 'source' ? path[path.length - 1] : path[0]
+  const hovered = edgeEditHoverId.value ? byId.get(edgeEditHoverId.value) : undefined
+  // BF20261013-035：预览与落下同源（命中节点 → 该节点 + 落点最近边；未命中 → 指针作为落点），
+  // 且端口腿轴向稳定（不随指针来回切换折向），避免拖动中整条线「漂移」。
   if (hovered && hovered.id !== edit.otherEndId) {
-    const [start, end] =
-      edit.which === 'source'
-        ? edgeEndpoints(hovered, fixedNode, size)
-        : edgeEndpoints(fixedNode, hovered, size)
-    // BF20261013-034：预览不沿用旧拐点（改接后旧拐点已失效，沿用会画出乱线）
-    return buildEdgePath(start, end, [])
+    // 只指定被拖端端口侧，固定端沿用其配置/自动侧 —— 与落下后的重排完全同源
+    const movingSide = nearestPortSide(pointer, hovered)
+    const sides = edit.which === 'source' ? { source: movingSide } : { target: movingSide }
+    return previewEdgePath(edge, hovered, fixedNode, size, P53_GATEWAY_RADIUS, sides)
   }
-  const [start] =
-    edit.which === 'source'
-      ? edgeEndpoints(
-          { x: edgeEditPoint.value.x, y: edgeEditPoint.value.y, type: 'TASK' },
-          fixedNode,
-          size,
-        )
-      : edgeEndpoints(
-          fixedNode,
-          { x: edgeEditPoint.value.x, y: edgeEditPoint.value.y, type: 'TASK' },
-          size,
-        )
-  return buildEdgePath(start, edgeEditPoint.value, [])
+  const fixedSide = portSideOf(fixedPort, fixedNode, size)
+  const axis = sideAxis(fixedSide)
+  if (edit.which === 'source') {
+    return buildEdgePath(pointer, fixedPort, [], { sourceAxis: axis, targetAxis: axis })
+  }
+  return buildEdgePath(fixedPort, pointer, [], { sourceAxis: axis, targetAxis: axis })
 }
 
 /** 点到线段距离与所在段下标（points[i]→points[i+1] 为第 i 段）。 */

@@ -311,6 +311,39 @@ function portPoint(
   return { x: node.x, y: node.y + nodeSize.height / 2 }
 }
 
+/** BF20261013-035：判定端点落在节点哪条边（用于拖动预览与落点同口径）。 */
+export function portSideOf(
+  point: OrthogonalPoint,
+  node: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  nodeSize: { width: number; height: number },
+): PortSide {
+  const halfWidth = nodeSize.width / 2
+  const halfHeight = nodeSize.height / 2
+  const distances: Array<[PortSide, number]> = [
+    ['left', Math.abs(point.x - (node.x - halfWidth))],
+    ['right', Math.abs(point.x - (node.x + halfWidth))],
+    ['top', Math.abs(point.y - (node.y - halfHeight))],
+    ['bottom', Math.abs(point.y - (node.y + halfHeight))],
+  ]
+  return distances.reduce((best, current) => (current[1] < best[1] ? current : best))[0]
+}
+
+/** BF20261013-035：拖动预览与落下同源——同一 resolveEdgeRoute + 展开，改接前所见即落点结果。 */
+export function previewEdgePath(
+  edge: Pick<ProcessGraphElement, 'config'>,
+  source: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  target: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  nodeSize: { width: number; height: number },
+  gatewayRadius: number,
+  sides: { source?: PortSide; target?: PortSide } = {},
+): string {
+  const config = { ...(edge.config ?? {}) }
+  if (sides.source) config.sourceSide = sides.source
+  if (sides.target) config.targetSide = sides.target
+  const { start, end, hint } = resolveEdgeRoute({ config }, source, target, nodeSize, gatewayRadius)
+  return buildEdgePath(start, end, [], hint)
+}
+
 /**
  * 端口轴向（BF20261013-029）：按两盒间**空隙更大的轴**行走——空隙小的那一轴若作为主行走轴，
  * 其中线会紧贴节点边框、与边框平行（出口视觉贴边）。空隙更大的一轴保证中线有足够净空。
