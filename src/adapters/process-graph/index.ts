@@ -252,9 +252,43 @@ function resolveEdgeRoute(
   const start = configAnchor(config.sourceAnchor)
   const end = configAnchor(config.targetAnchor)
   if (start && end) return { start, end, hint: {} }
-  const axis = edgePortAxis(source, target, nodeSize)
-  const [portStart, portEnd] = edgeEndpoints(source, target, nodeSize, gatewayRadius)
-  return { start: portStart, end: portEnd, hint: { sourceAxis: axis, targetAxis: axis } }
+  // BF20261013-034：端口侧可由用户指定（拖端点换端口），缺省按几何自动选择
+  const sides = {
+    source: configPortSide(config.sourceSide) ?? edgePortSides(source, target, nodeSize).source,
+    target: configPortSide(config.targetSide) ?? edgePortSides(source, target, nodeSize).target,
+  }
+  const [portStart, portEnd] = edgeEndpoints(source, target, nodeSize, gatewayRadius, sides)
+  const manualSource = configPortSide(config.sourceSide)
+  const manualTarget = configPortSide(config.targetSide)
+  return {
+    start: portStart,
+    end: portEnd,
+    hint: {
+      sourceAxis: sideAxis(sides.source),
+      targetAxis: sideAxis(sides.target),
+      sourceStubOutward: manualSource ? sideOutward(manualSource) : undefined,
+      targetStubOutward: manualTarget ? sideOutward(manualTarget) : undefined,
+    },
+  }
+}
+
+/** 端口侧外向（沿该侧轴向）：right/bottom=+1，left/top=-1。 */
+export function sideOutward(side: PortSide): number {
+  return side === 'right' || side === 'bottom' ? 1 : -1
+}
+
+/** 端口侧（BF20261013-034）：节点四条边。 */
+export type PortSide = 'left' | 'right' | 'top' | 'bottom'
+
+function configPortSide(value: unknown): PortSide | undefined {
+  return value === 'left' || value === 'right' || value === 'top' || value === 'bottom'
+    ? value
+    : undefined
+}
+
+/** 端口侧轴向：左右缘=h（先横后纵），上下缘=v（先纵后横）。 */
+export function sideAxis(side: PortSide): 'h' | 'v' {
+  return side === 'left' || side === 'right' ? 'h' : 'v'
 }
 
 /** 端口坐标：水平边取左右缘中心，垂直边取上下缘中心；网关取菱形顶点（半径与渲染的菱形一致）。 */
@@ -293,23 +327,31 @@ export function edgePortAxis(
   return verticalGap > horizontalGap ? 'v' : 'h'
 }
 
+/** 自动端口侧：按端口轴向（空隙更大的轴）决定两端的边。 */
+export function edgePortSides(
+  source: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  target: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  nodeSize: { width: number; height: number },
+): { source: PortSide; target: PortSide } {
+  const dx = target.x - source.x
+  const dy = target.y - source.y
+  if (edgePortAxis(source, target, nodeSize) === 'h') {
+    return { source: dx >= 0 ? 'right' : 'left', target: dx >= 0 ? 'left' : 'right' }
+  }
+  return { source: dy >= 0 ? 'bottom' : 'top', target: dy >= 0 ? 'top' : 'bottom' }
+}
+
 export function edgeEndpoints(
   source: Pick<PositionedNode, 'x' | 'y' | 'type'>,
   target: Pick<PositionedNode, 'x' | 'y' | 'type'>,
   nodeSize: { width: number; height: number },
   gatewayRadius = Math.min(nodeSize.width, nodeSize.height) / 2,
+  sides?: { source?: PortSide; target?: PortSide },
 ): [{ x: number; y: number }, { x: number; y: number }] {
-  const dx = target.x - source.x
-  const dy = target.y - source.y
-  if (edgePortAxis(source, target, nodeSize) === 'h') {
-    return [
-      portPoint(source, dx >= 0 ? 'right' : 'left', nodeSize, gatewayRadius),
-      portPoint(target, dx >= 0 ? 'left' : 'right', nodeSize, gatewayRadius),
-    ]
-  }
+  const auto = edgePortSides(source, target, nodeSize)
   return [
-    portPoint(source, dy >= 0 ? 'bottom' : 'top', nodeSize, gatewayRadius),
-    portPoint(target, dy >= 0 ? 'top' : 'bottom', nodeSize, gatewayRadius),
+    portPoint(source, sides?.source ?? auto.source, nodeSize, gatewayRadius),
+    portPoint(target, sides?.target ?? auto.target, nodeSize, gatewayRadius),
   ]
 }
 
@@ -324,6 +366,10 @@ export interface EdgeRouteHint {
   sourceAxis?: 'h' | 'v'
   /** 终点端口朝向：h=左右缘入线，v=上下缘入线。 */
   targetAxis?: 'h' | 'v'
+  /** BF20261013-034：用户指定端口侧时，端口腿用固定小段垂直出入（±1=沿端口轴向的外向），
+   *  避免自动居中的肘点落到节点内部或贴着边框走。 */
+  sourceStubOutward?: number
+  targetStubOutward?: number
 }
 
 /** BF20261013-030：连线最小段长（拖动夹取用）——端口腿保持净空，杜绝贴边与折返。 */
@@ -385,10 +431,44 @@ export function expandEdgePathPoints(
     { x: target.x, y: target.y },
   ]
   if (raw.length < 2) return []
+  // 两端直连且至少一端为用户指定端口侧：端口旁固定小段 + 单肘连接（朝向互相满足）
+  if (raw.length === 2 && (hint.sourceStubOutward || hint.targetStubOutward)) {
+    return normalizeOrthogonalPoints(directLegWithStubs(raw[0], raw[1], hint))
+  }
   const points: OrthogonalPoint[] = [raw[0]]
+  const stubOf = (index: number): number | undefined => {
+    if (index === 1) return hint.sourceStubOutward
+    if (index === raw.length - 1) return hint.targetStubOutward
+    return undefined
+  }
   for (let index = 1; index < raw.length; index++) {
     const from = points[points.length - 1]
     const to = raw[index]
+    // 用户指定端口侧：端口旁固定小段垂直出入，再单肘接下一段（不穿节点、不贴边）
+    const stub = stubOf(index)
+    if (stub !== undefined && stub !== 0) {
+      const axis: 'x' | 'y' =
+        index === 1 ? (hint.sourceAxis === 'h' ? 'x' : 'y') : hint.targetAxis === 'h' ? 'x' : 'y'
+      if (index === 1) {
+        // 起点端口腿：小段挂起点端口；连接段末端若落在终点端口，按终点朝向接近
+        const stubEnd: OrthogonalPoint = { ...from, [axis]: from[axis] + stub * EDGE_PORT_STUB }
+        points.push(stubEnd)
+        if (stubEnd.x !== to.x && stubEnd.y !== to.y) {
+          const approachAxis = index === raw.length - 1 ? hint.targetAxis : undefined
+          const horizontal = approachAxis ? approachAxis === 'h' : defaultAxis(stubEnd, to) === 'h'
+          points.push(horizontal ? { x: stubEnd.x, y: to.y } : { x: to.x, y: stubEnd.y })
+        }
+        points.push(to)
+      } else {
+        // 终点端口腿：小段挂终点端口，连接段垂直于该小段
+        const stubEnd: OrthogonalPoint = { ...to, [axis]: to[axis] + stub * EDGE_PORT_STUB }
+        if (from.x !== stubEnd.x && from.y !== stubEnd.y) {
+          points.push({ x: from.x, y: stubEnd.y })
+        }
+        points.push(stubEnd, to)
+      }
+      continue
+    }
     if (from.x === to.x || from.y === to.y) {
       points.push(to)
       continue
@@ -413,6 +493,64 @@ export function expandEdgePathPoints(
     }
     points.push(to)
   }
+  return points
+}
+
+/**
+ * 两端直连（无拐点）时按端口侧生成：端口旁固定小段 + 连接段（首段/末段轴向各自满足，
+ * 不穿节点、不贴边框）。用户指定侧用固定小段，自动侧沿用居中的端口腿。
+ */
+function directLegWithStubs(
+  start: OrthogonalPoint,
+  end: OrthogonalPoint,
+  hint: EdgeRouteHint,
+): OrthogonalPoint[] {
+  const points: OrthogonalPoint[] = [start]
+  let current = start
+  if (hint.sourceStubOutward) {
+    const axis: 'x' | 'y' = hint.sourceAxis === 'h' ? 'x' : 'y'
+    const stubEnd: OrthogonalPoint = {
+      ...start,
+      [axis]: start[axis] + hint.sourceStubOutward * EDGE_PORT_STUB,
+    }
+    points.push(stubEnd)
+    current = stubEnd
+  }
+  let goal = end
+  if (hint.targetStubOutward) {
+    const axis: 'x' | 'y' = hint.targetAxis === 'h' ? 'x' : 'y'
+    goal = { ...end, [axis]: end[axis] + hint.targetStubOutward * EDGE_PORT_STUB }
+  }
+  // 连接段首/末段轴向：有固定小段时垂直于小段，否则沿该端端口轴向
+  const firstAxis: 'h' | 'v' = hint.sourceStubOutward
+    ? hint.sourceAxis === 'h'
+      ? 'v'
+      : 'h'
+    : (hint.sourceAxis ?? 'h')
+  const lastAxis: 'h' | 'v' = hint.targetStubOutward
+    ? hint.targetAxis === 'h'
+      ? 'v'
+      : 'h'
+    : (hint.targetAxis ?? 'h')
+  if (current.x !== goal.x || current.y !== goal.y) {
+    if (firstAxis === lastAxis) {
+      if (firstAxis === 'h') {
+        if (current.y !== goal.y) {
+          const midX = (current.x + goal.x) / 2
+          points.push({ x: midX, y: current.y }, { x: midX, y: goal.y })
+        }
+      } else if (current.x !== goal.x) {
+        const midY = (current.y + goal.y) / 2
+        points.push({ x: current.x, y: midY }, { x: goal.x, y: midY })
+      }
+    } else if (firstAxis === 'h') {
+      points.push({ x: goal.x, y: current.y })
+    } else {
+      points.push({ x: current.x, y: goal.y })
+    }
+  }
+  if (goal !== end) points.push(goal)
+  points.push(end)
   return points
 }
 
@@ -913,8 +1051,13 @@ export interface DesignerModel {
   select(id: string | null): void
   updateNodeConfig(id: string, patch: Record<string, unknown>): void
   setEdgeWaypoints(id: string, waypoints: ProcessGraphWaypoint[]): void
-  /** V011-BUG-025：拖动端点改接其他节点（自环/重复边校验；空放回退由调用方处理）。 */
-  setEdgeEndpoint(id: string, which: 'source' | 'target', nodeId: string): string | null
+  /** V011-BUG-025/034：拖动端点改接节点或换端口侧（自环/重复边校验；空放回退由调用方处理）。 */
+  setEdgeEndpoint(
+    id: string,
+    which: 'source' | 'target',
+    nodeId: string,
+    side?: PortSide,
+  ): string | null
   undo(): void
   canUndo(): boolean
   serialize(): ProcessGraphDocument
@@ -1151,10 +1294,15 @@ export function createDesignerModel(
       }
       emit()
     },
-    /** V011-BUG-025：端点改接。校验：目标存在、不接向对端（自环禁止）、
-     * 改接后不得与既有边重复（双向判定）；改接侧显式锚点失效（config 清除，
-     * 走几何端口规则重算）；既有 waypoints 保留。 */
-    setEdgeEndpoint(edgeId, which, nodeId) {
+    /**
+     * V011-BUG-025/034：端点改接。校验：目标存在、不接向对端（自环禁止）、
+     * 改接后不得与既有边重复（双向判定）；改接侧显式锚点失效（config 清除）。
+     * BF20261013-034：
+     * - 可指定端口侧（拖端点换到节点其他端口）；同节点且同侧 = 无变化；
+     * - **改接到另一个节点时丢弃原拐点**（旧拐点基于旧几何，保留会画出乱线）；
+     *   同节点换端口侧保留拐点（几何相近，用户形状仍有效）。
+     */
+    setEdgeEndpoint(edgeId, which, nodeId, side) {
       const edge = current.edges.find((candidate) => candidate.id === edgeId)
       if (!edge) return null
       const otherEnd = which === 'source' ? edge.targetId : edge.sourceId
@@ -1169,14 +1317,32 @@ export function createDesignerModel(
             (candidate.sourceId === otherEnd && candidate.targetId === nodeId)),
       )
       if (exists) return null
+      const currentEndId = which === 'source' ? edge.sourceId : edge.targetId
+      const sideKey = which === 'source' ? 'sourceSide' : 'targetSide'
+      const currentEndNode = byId.get(currentEndId)
+      // 有效当前侧 = 显式配置 ?? 按当前几何自动选择（避免「同侧」被误判为变化）
+      const autoSide = currentEndNode
+        ? edgePortSides(
+            which === 'source' ? node : (byId.get(edge.sourceId) as PositionedNode),
+            which === 'source' ? (byId.get(edge.targetId) as PositionedNode) : node,
+            designerNodeSize,
+          )[which]
+        : undefined
+      const currentSide = configPortSide(edge.config[sideKey]) ?? autoSide
+      const nodeChanged = nodeId !== currentEndId
+      const sideChanged = side !== undefined && side !== currentSide
+      if (!nodeChanged && !sideChanged) return null
       pushHistory()
       const config = { ...edge.config }
       delete config[which === 'source' ? 'sourceAnchor' : 'targetAnchor']
+      if (side) config[sideKey] = side
       const nextEdge = {
         ...edge,
         sourceId: which === 'source' ? nodeId : edge.sourceId,
         targetId: which === 'target' ? nodeId : edge.targetId,
         config,
+        // 端点/端口侧一变，旧拐点即基于旧几何：一律丢弃重排（否则会画出乱线或穿节点）
+        waypoints: [],
       }
       const source = byId.get(nextEdge.sourceId)
       const target = byId.get(nextEdge.targetId)

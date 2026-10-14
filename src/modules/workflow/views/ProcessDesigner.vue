@@ -911,12 +911,18 @@ function onPointerUp(event: PointerEvent) {
   if (edgeEdit.value && model) {
     const edit = edgeEdit.value
     if (edit.kind === 'endpoint' && edit.armed) {
-      const edge = model.state().edges.find((candidate) => candidate.id === edit.edgeId)
-      const currentEndId = edge ? (edit.which === 'source' ? edge.sourceId : edge.targetId) : null
+      // BF20261013-034：落下即按落点所在边切换端口侧（同节点换端口也生效）
       const targetId = resolveConnectDropTarget(event)
+      const nodes = new Map(canvasNodes.value.map((node) => [node.id, node] as const))
+      const targetNode = targetId ? nodes.get(targetId) : undefined
       const applied =
-        targetId && targetId !== edit.otherEndId && targetId !== currentEndId
-          ? model.setEdgeEndpoint(edit.edgeId, edit.which ?? 'target', targetId)
+        targetId && targetId !== edit.otherEndId && targetNode
+          ? model.setEdgeEndpoint(
+              edit.edgeId,
+              edit.which ?? 'target',
+              targetId,
+              nearestPortSide(screenToGraph(event), targetNode),
+            )
           : null
       if (applied) snapshot()
     }
@@ -1060,7 +1066,8 @@ function edgePathOf(edge: PositionedEdge): string {
       edit.which === 'source'
         ? edgeEndpoints(hovered, fixedNode, size)
         : edgeEndpoints(fixedNode, hovered, size)
-    return buildEdgePath(start, end, edge.waypoints)
+    // BF20261013-034：预览不沿用旧拐点（改接后旧拐点已失效，沿用会画出乱线）
+    return buildEdgePath(start, end, [])
   }
   const [start] =
     edit.which === 'source'
@@ -1074,7 +1081,7 @@ function edgePathOf(edge: PositionedEdge): string {
           { x: edgeEditPoint.value.x, y: edgeEditPoint.value.y, type: 'TASK' },
           size,
         )
-  return buildEdgePath(start, edgeEditPoint.value, edge.waypoints)
+  return buildEdgePath(start, edgeEditPoint.value, [])
 }
 
 /** 点到线段距离与所在段下标（points[i]→points[i+1] 为第 i 段）。 */
@@ -1190,6 +1197,26 @@ function edgeDragContext(edge: PositionedEdge, points: PathPoint[]) {
     sourceOutward: outward(points[0], source, points[0].x === points[1].x ? 'y' : 'x'),
     targetOutward: outward(last, target, beforeLast.x === last.x ? 'y' : 'x'),
   }
+}
+
+/** BF20261013-034：落点最近的端口侧（拖端点换到节点其他端口）。 */
+function nearestPortSide(
+  point: PathPoint,
+  node: PositionedNode,
+): 'left' | 'right' | 'top' | 'bottom' {
+  const halfWidth = P53_NODE_WIDTH / 2
+  const halfHeight = P53_NODE_HEIGHT / 2
+  const distances = {
+    left: Math.abs(point.x - (node.x - halfWidth)),
+    right: Math.abs(point.x - (node.x + halfWidth)),
+    top: Math.abs(point.y - (node.y - halfHeight)),
+    bottom: Math.abs(point.y - (node.y + halfHeight)),
+  }
+  let best: 'left' | 'right' | 'top' | 'bottom' = 'left'
+  for (const side of ['right', 'top', 'bottom'] as const) {
+    if (distances[side] < distances[best]) best = side
+  }
+  return best
 }
 
 function beginSegmentDragFromHandle(

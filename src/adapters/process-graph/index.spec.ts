@@ -4,6 +4,7 @@ import {
   createDesignerModel,
   buildEdgePath,
   canonicalEdgeWaypoints,
+  parsePathPoints,
   edgePortAxis,
   edgeSegmentHandles,
   expandEdgePathPoints,
@@ -359,6 +360,89 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
       { x: 600, y: 252 },
     ])
     expect(model.state().dirty).toBe(true)
+  })
+})
+
+describe('BF20261013-034 端点改接：换端口侧 + 丢弃失效拐点', () => {
+  const base: ProcessGraphDocument = {
+    processKey: 'bpm_endpoint',
+    name: '改接',
+    formKey: 'demo_form',
+    version: 1,
+    elements: [
+      { id: 'node_a', kind: 'node', type: 'START', x: 100, y: 300, config: {}, style: {} },
+      { id: 'node_b', kind: 'node', type: 'APPROVAL', x: 420, y: 180, config: {}, style: {} },
+      { id: 'node_c', kind: 'node', type: 'END', x: 420, y: 500, config: {}, style: {} },
+      { id: 'edge_1', kind: 'edge', source: 'node_a', target: 'node_b' },
+    ],
+    canvas: {},
+  }
+  const size = { width: 160, height: 50 }
+
+  it('拖端点落到同节点另一条边 → 换端口侧（左右→上下），固定小段垂直出入', () => {
+    const model = createDesignerModel(base, size, 22)
+    expect(model.state().edges[0].path).toBe('M 180 300 L 260 300 L 260 180 L 340 180')
+    // 先造一个折（端口腿拖动，与真实交互同一路径）
+    const points = parsePathPoints(model.state().edges[0].path)
+    model.setEdgeWaypoints('edge_1', pointsToWaypoints(moveEdgeSegment(points, 0, 'y', 250)))
+    expect(model.state().edges[0].path).toBe(
+      'M 180 300 L 204 300 L 204 250 L 260 250 L 260 180 L 340 180',
+    )
+    // 起点改挂到 START 上缘（同节点换侧）：旧拐点丢弃重排，起点垂直向上固定小段 24
+    expect(model.setEdgeEndpoint('edge_1', 'source', 'node_a', 'top')).toBe('edge_1')
+    const after = model.state().edges[0]
+    expect(after.config.sourceSide).toBe('top')
+    expect(after.waypoints).toEqual([])
+    const path = parsePathPoints(after.path)
+    // 起点垂直向上固定小段 24 → 连接段（水平→垂直）→ 终点从左侧水平进入
+    expect(path[0]).toEqual({ x: 100, y: 275 })
+    expect(path[1]).toEqual({ x: 100, y: 275 - EDGE_PORT_STUB })
+    expect(path[path.length - 1]).toEqual({ x: 340, y: 180 })
+    expect(path[path.length - 2].y).toBe(180)
+    expectOrthogonalWithoutOverlap(path)
+  })
+
+  it('同节点同侧 = 无变化；改接到另一节点丢弃旧拐点', () => {
+    const model = createDesignerModel(base, size, 22)
+    const points = parsePathPoints(model.state().edges[0].path)
+    model.setEdgeWaypoints('edge_1', pointsToWaypoints(moveEdgeSegment(points, 0, 'y', 250)))
+    const edge = model.state().edges[0]
+    expect(edge.waypoints.length).toBeGreaterThan(0)
+    // 同节点同侧：无变化
+    expect(model.setEdgeEndpoint('edge_1', 'source', 'node_a', 'right')).toBeNull()
+    // 改接到 END（node_c）：旧拐点失效 → 丢弃并重排为干净路由
+    expect(model.setEdgeEndpoint('edge_1', 'source', 'node_c', 'bottom')).toBe('edge_1')
+    const after = model.state().edges[0]
+    expect(after.sourceId).toBe('node_c')
+    expect(after.waypoints).toEqual([])
+    expect(after.config.sourceSide).toBe('bottom')
+    expect(parsePathPoints(after.path)[0]).toEqual({ x: 420, y: 525 })
+    expectOrthogonalWithoutOverlap(parsePathPoints(after.path))
+    // 自环/重复边仍拒绝
+    expect(model.setEdgeEndpoint('edge_1', 'source', 'node_b')).toBeNull()
+  })
+
+  it('终点换端口侧（自动起点 + 指定终点）：终点固定小段垂直出入', () => {
+    const model = createDesignerModel(base, size, 22)
+    expect(model.setEdgeEndpoint('edge_1', 'target', 'node_b', 'top')).toBe('edge_1')
+    const after = model.state().edges[0]
+    expect(after.config.targetSide).toBe('top')
+    const path = parsePathPoints(after.path)
+    // 审批 上缘中点 (420,155)，固定小段向上 24 → 连接段水平接近
+    expect(path[path.length - 1]).toEqual({ x: 420, y: 155 })
+    expect(path[path.length - 2]).toEqual({ x: 420, y: 131 })
+    expect(path[path.length - 3].y).toBe(131)
+    expectOrthogonalWithoutOverlap(path)
+  })
+
+  it('端口侧进入序列化并可回读（normalizeGraph 按指定侧渲染）', () => {
+    const model = createDesignerModel(base, size, 22)
+    model.setEdgeEndpoint('edge_1', 'target', 'node_b', 'top')
+    const graph = model.serialize()
+    const edgeElement = graph.elements.find((element) => element.id === 'edge_1')
+    expect(edgeElement?.config?.targetSide).toBe('top')
+    const reloaded = normalizeGraph(graph, size, 22)
+    expect(reloaded.edges[0].path).toBe(model.state().edges[0].path)
   })
 })
 
