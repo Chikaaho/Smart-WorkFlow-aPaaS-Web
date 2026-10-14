@@ -201,18 +201,32 @@ function makePositionedEdge(
   const source = nodeById.get(edge.source)
   const target = nodeById.get(edge.target)
   if (!source || !target) return null
-  const { start, end, hint } = resolveEdgeRoute(edge, source, target, nodeSize, gatewayRadius)
-  // BF20261013-030：模型与渲染同源——拐点先归一/收敛（严格横平竖直、不重叠、不贪吃蛇）
-  const waypoints = canonicalEdgeWaypoints(start, end, edge.waypoints ?? [], hint)
-  const path = buildEdgePath(start, end, waypoints, hint)
   return {
     id: edge.id,
     sourceId: edge.source,
     targetId: edge.target,
-    path,
-    waypoints,
     config: edge.config ?? {},
+    ...rebuildEdge(edge, source, target, nodeSize, gatewayRadius, edge.waypoints ?? []),
   }
+}
+
+/**
+ * BF20261013-030/031：折线重建（模型与渲染同源）——端点/拐点先归一收敛再生成 path。
+ * 节点移动、拐点写入、端点改接共用同一入口，避免任一路径绕过收敛产生「贪吃蛇」或绷直。
+ * 输入无拐点（自动路由）时保持无拐点：默认路由随节点位置重算，不因移动节点被钉在旧几何上。
+ */
+function rebuildEdge(
+  edge: Pick<ProcessGraphElement, 'config'>,
+  source: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  target: Pick<PositionedNode, 'x' | 'y' | 'type'>,
+  nodeSize: { width: number; height: number },
+  gatewayRadius: number,
+  waypoints: ProcessGraphWaypoint[],
+): { path: string; waypoints: ProcessGraphWaypoint[] } {
+  const { start, end, hint } = resolveEdgeRoute(edge, source, target, nodeSize, gatewayRadius)
+  const canonical = canonicalEdgeWaypoints(start, end, waypoints, hint)
+  const stored = waypoints.length === 0 ? [] : canonical
+  return { path: buildEdgePath(start, end, canonical, hint), waypoints: stored }
 }
 
 /** 读取 config 中的显式锚点 [x,y]（图内绝对坐标）；非法值返回 null。 */
@@ -314,8 +328,13 @@ export interface EdgeRouteHint {
 
 /** BF20261013-030：连线最小段长（拖动夹取用）——端口腿保持净空，杜绝贴边与折返。 */
 export const EDGE_MIN_SEGMENT = 20
-/** BF20261013-030：连线最多段数（超出按端口朝向重建 3 段 Z，杜绝「贪吃蛇」）。 */
-export const EDGE_MAX_SEGMENTS = 3
+/**
+ * 连线最多段数（BF20261013-031 由 3 放宽到 5）：直线拖出的滑移折返（jog）本身即 5 段，
+ * 3 段上限会把 jog 压回直线（Owner 反馈「拖动线会绷直」）；超出仍按端口朝向重建。
+ */
+export const EDGE_MAX_SEGMENTS = 5
+/** BF20261013-031：直线拖成滑移折返时的默认跨度（沿线路轴）。 */
+export const EDGE_JOG_SPAN = 40
 
 export interface OrthogonalPoint {
   x: number
@@ -334,6 +353,17 @@ export interface EdgeSegmentHandle {
   /** 拖动轴：垂直段→x，水平段→y。 */
   axis: 'x' | 'y'
   cursor: 'ew-resize' | 'ns-resize'
+  /** BF20261013-031：整条连线为直线时的合成手柄——拖动生成滑移折返（jog）。 */
+  straight: boolean
+}
+
+/** 内段拖动上下文（BF20261013-031）：端口腿方向以端口几何为准，缺省回退折线当前方向。 */
+export interface EdgeSegmentDragContext {
+  /** 起点端口外向（沿端口腿轴 +1/-1）。 */
+  sourceOutward?: number
+  /** 终点端口外向（沿端口腿轴 +1/-1）。 */
+  targetOutward?: number
+  minSegment?: number
 }
 
 /** 展开折线（BF20261013-029 曼哈顿几何体）：端口腿三肘、拐点之间单肘。 */
@@ -415,8 +445,30 @@ export function pointsToWaypoints(points: OrthogonalPoint[]): ProcessGraphWaypoi
   return points.slice(1, -1).map((point) => ({ x: point.x, y: point.y }))
 }
 
-/** 内段手柄：首尾端口腿不可拖动（方向由端口决定），只暴露内段。 */
+/**
+ * 内段手柄：首尾端口腿不可拖动（方向由端口决定），只暴露内段。
+ * BF20261013-031：整条连线为直线（无内段）时给出**合成手柄**（段中点），
+ * 拖动即生成滑移折返（jog）——解决「完全直线无法拖动」。
+ */
 export function edgeSegmentHandles(points: OrthogonalPoint[], minLength = 8): EdgeSegmentHandle[] {
+  if (points.length === 2) {
+    const [from, to] = points
+    const vertical = from.x === to.x
+    const horizontal = from.y === to.y
+    if (vertical === horizontal) return []
+    if (Math.abs(to.x - from.x) + Math.abs(to.y - from.y) < minLength * 2) return []
+    return [
+      {
+        index: 0,
+        x: (from.x + to.x) / 2,
+        y: (from.y + to.y) / 2,
+        orientation: vertical ? 'v' : 'h',
+        axis: vertical ? 'x' : 'y',
+        cursor: vertical ? 'ew-resize' : 'ns-resize',
+        straight: true,
+      },
+    ]
+  }
   const handles: EdgeSegmentHandle[] = []
   for (let index = 1; index <= points.length - 3; index += 1) {
     const from = points[index]
@@ -430,39 +482,54 @@ export function edgeSegmentHandles(points: OrthogonalPoint[], minLength = 8): Ed
       orientation: vertical ? 'v' : 'h',
       axis: vertical ? 'x' : 'y',
       cursor: vertical ? 'ew-resize' : 'ns-resize',
+      straight: false,
     })
   }
   return handles
 }
 
 /**
- * 拖动内段（BF20261013-030）：垂直段左右拖（axis=x）、水平段上下拖（axis=y）。
- * 夹取规则：两条相邻段保持原方向且不短于 minSegment（端口腿因此不会反向穿入节点），
- * 拖动只改变该段自身坐标 → 全程严格横平竖直、不产生折返/重叠。无可行区间时原样返回。
+ * 拖动内段（BF20261013-030 / BF20261013-031）：垂直段左右拖（axis=x）、水平段上下拖（axis=y）。
+ * 夹取规则（031 修订）：
+ * - 端口腿（首尾段）保持**端口外向**（方向取自端口几何，不再取自折线当前方向——节点移动后
+ *   折线方向可能已反向，会把可拖区间锁成单向，Owner 反馈「只能移动一个方向」）；
+ * - 非端口腿的相邻段只禁止塌缩（可越过固定端，按拖动前一侧推离）；
+ * - 拖动只改变该段自身坐标 → 全程严格横平竖直、不产生重叠。无可行区间时原样返回。
  */
 export function moveEdgeSegment(
   points: OrthogonalPoint[],
   index: number,
   axis: 'x' | 'y',
   value: number,
-  minSegment: number = EDGE_MIN_SEGMENT,
+  context: EdgeSegmentDragContext = {},
 ): OrthogonalPoint[] {
+  const minSegment = context.minSegment ?? EDGE_MIN_SEGMENT
+  if (points.length === 2) return straightDragPoints(points, axis, value, minSegment)
   if (index < 1 || index > points.length - 3) return points
   const from = points[index]
   const to = points[index + 1]
   if (from[axis] !== to[axis]) return points
   const prev = points[index - 1]
   const next = points[index + 2]
+  const sourceStub = index === 1
+  const targetStub = index === points.length - 3
+  const sourceSign = sourceStub ? context.sourceOutward || Math.sign(from[axis] - prev[axis]) : 0
+  const targetSign = targetStub ? context.targetOutward || Math.sign(to[axis] - next[axis]) : 0
   let low = Number.NEGATIVE_INFINITY
   let high = Number.POSITIVE_INFINITY
-  const prevDirection = Math.sign(from[axis] - prev[axis])
-  if (prevDirection > 0) low = Math.max(low, prev[axis] + minSegment)
-  else if (prevDirection < 0) high = Math.min(high, prev[axis] - minSegment)
-  const nextDirection = Math.sign(next[axis] - to[axis])
-  if (nextDirection > 0) high = Math.min(high, next[axis] - minSegment)
-  else if (nextDirection < 0) low = Math.max(low, next[axis] + minSegment)
+  if (sourceSign > 0) low = Math.max(low, prev[axis] + minSegment)
+  else if (sourceSign < 0) high = Math.min(high, prev[axis] - minSegment)
+  if (targetSign > 0) low = Math.max(low, next[axis] + minSegment)
+  else if (targetSign < 0) high = Math.min(high, next[axis] - minSegment)
   if (low > high) return points
-  const clamped = Math.min(Math.max(value, low), high)
+  let clamped = Math.min(Math.max(value, low), high)
+  const pushOut = (coordinate: number) => {
+    if (Math.abs(clamped - coordinate) >= minSegment) return
+    clamped = from[axis] >= coordinate ? coordinate + minSegment : coordinate - minSegment
+    clamped = Math.min(Math.max(clamped, low), high)
+  }
+  if (!sourceStub) pushOut(prev[axis])
+  if (!targetStub) pushOut(next[axis])
   if (clamped === from[axis]) return points
   return points.map((point, currentIndex) =>
     currentIndex === index || currentIndex === index + 1 ? { ...point, [axis]: clamped } : point,
@@ -470,9 +537,59 @@ export function moveEdgeSegment(
 }
 
 /**
- * 拐点收敛（BF20261013-030）：连线最多 EDGE_MAX_SEGMENTS 段。
- * 超出（历史点击插入产生的「贪吃蛇」）按端口朝向重建 3 段 Z：偏移取折线包围盒中心并夹取净空；
- * 端口对齐退化为直线，两端朝向不同退化为 L。
+ * 直线拖动（BF20261013-031）：端口对齐的整条直线没有可拖内段，拖动其合成手柄生成
+ * 滑移折返（jog，5 段）：两端端口腿保持垂直出入，中段滑移跟随指针，跨度默认 EDGE_JOG_SPAN。
+ * 线路过短（容不下两端净空 + 跨度）时原样返回。
+ */
+function straightDragPoints(
+  points: OrthogonalPoint[],
+  axis: 'x' | 'y',
+  value: number,
+  minSegment: number,
+): OrthogonalPoint[] {
+  const [start, end] = points
+  const vertical = start.x === end.x
+  if (vertical === (start.y === end.y)) return points
+  if ((vertical && axis !== 'x') || (!vertical && axis !== 'y')) return points
+  const along: 'x' | 'y' = vertical ? 'y' : 'x'
+  const low = Math.min(start[along], end[along]) + minSegment
+  const high = Math.max(start[along], end[along]) - minSegment
+  if (high - low < minSegment) return points
+  const span = Math.min(EDGE_JOG_SPAN, high - low)
+  const middle = (start[along] + end[along]) / 2
+  const first = Math.min(Math.max(middle - span / 2, low), high - span)
+  const second = first + span
+  const firstAlong = start[along] <= end[along] ? first : second
+  const secondAlong = start[along] <= end[along] ? second : first
+  const base = start[axis]
+  const offset =
+    Math.abs(value - base) < minSegment ? base + (value >= base ? minSegment : -minSegment) : value
+  if (vertical) {
+    const x = start.x
+    return [
+      start,
+      { x, y: firstAlong },
+      { x: offset, y: firstAlong },
+      { x: offset, y: secondAlong },
+      { x, y: secondAlong },
+      end,
+    ]
+  }
+  const y = start.y
+  return [
+    start,
+    { x: firstAlong, y },
+    { x: firstAlong, y: offset },
+    { x: secondAlong, y: offset },
+    { x: secondAlong, y },
+    end,
+  ]
+}
+
+/**
+ * 拐点收敛（BF20261013-030/031）：连线最多 EDGE_MAX_SEGMENTS（=5）段。
+ * 超出按端口朝向重建：两端朝向不同 → L；端口对齐 → 保留滑移折返（jog，不绷直成直线）；
+ * 其余 → 3 段 Z（偏移取折线包围盒中心并夹取净空）。
  */
 export function canonicalEdgeWaypoints(
   start: OrthogonalPoint,
@@ -502,7 +619,7 @@ function canonicalRoutePoints(
   }
   const center = boundsCenter(points)
   if (sourceAxis === 'v') {
-    if (start.x === end.x) return [start, end]
+    if (start.x === end.x) return alignedJogPoints(start, end, center.x, minSegment, 'v')
     const midY = clampValue(
       center.y,
       Math.min(start.y, end.y) + minSegment,
@@ -510,13 +627,61 @@ function canonicalRoutePoints(
     )
     return [start, { x: start.x, y: midY }, { x: end.x, y: midY }, end]
   }
-  if (start.y === end.y) return [start, end]
+  if (start.y === end.y) return alignedJogPoints(start, end, center.y, minSegment, 'h')
   const midX = clampValue(
     center.x,
     Math.min(start.x, end.x) + minSegment,
     Math.max(start.x, end.x) - minSegment,
   )
   return [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end]
+}
+
+/**
+ * 端口对齐时的滑移折返（BF20261013-031）：两端端口腿保持垂直出入，中段按滑移量横向偏移。
+ * 不再退化成直线（Owner 反馈「拖动线会绷直」）；线路过短容不下折返时只能直线。
+ */
+function alignedJogPoints(
+  start: OrthogonalPoint,
+  end: OrthogonalPoint,
+  offsetCoordinate: number,
+  minSegment: number,
+  axis: 'v' | 'h',
+): OrthogonalPoint[] {
+  const along: 'x' | 'y' = axis === 'v' ? 'y' : 'x'
+  const low = Math.min(start[along], end[along]) + minSegment
+  const high = Math.max(start[along], end[along]) - minSegment
+  if (high - low < minSegment) return [start, end]
+  const span = Math.min(EDGE_JOG_SPAN, high - low)
+  const middle = (start[along] + end[along]) / 2
+  const first = Math.min(Math.max(middle - span / 2, low), high - span)
+  const second = first + span
+  const firstAlong = start[along] <= end[along] ? first : second
+  const secondAlong = start[along] <= end[along] ? second : first
+  const base = start[axis === 'v' ? 'x' : 'y']
+  const offset =
+    Math.abs(offsetCoordinate - base) < minSegment
+      ? base + (offsetCoordinate >= base ? minSegment : -minSegment)
+      : offsetCoordinate
+  if (axis === 'v') {
+    const x = start.x
+    return [
+      start,
+      { x, y: firstAlong },
+      { x: offset, y: firstAlong },
+      { x: offset, y: secondAlong },
+      { x, y: secondAlong },
+      end,
+    ]
+  }
+  const y = start.y
+  return [
+    start,
+    { x: firstAlong, y },
+    { x: firstAlong, y: offset },
+    { x: secondAlong, y: offset },
+    { x: secondAlong, y },
+    end,
+  ]
 }
 
 function segmentAxis(from: OrthogonalPoint, to: OrthogonalPoint): 'h' | 'v' {
@@ -783,14 +948,10 @@ export function createDesignerModel(
           const source = byId.get(edge.sourceId)
           const target = byId.get(edge.targetId)
           if (!source || !target) return edge
-          const { start, end, hint } = resolveEdgeRoute(
-            edge,
-            source,
-            target,
-            designerNodeSize,
-            gatewayRadius,
-          )
-          return { ...edge, path: buildEdgePath(start, end, edge.waypoints, hint) }
+          return {
+            ...edge,
+            ...rebuildEdge(edge, source, target, designerNodeSize, gatewayRadius, edge.waypoints),
+          }
         })
         current = { ...current, nodes, edges, dirty: true }
       }
@@ -915,16 +1076,11 @@ export function createDesignerModel(
           const source = byId.get(edge.sourceId)
           const target = byId.get(edge.targetId)
           if (!source || !target) return edge
-          const { start, end, hint } = resolveEdgeRoute(
-            edge,
-            source,
-            target,
-            designerNodeSize,
-            gatewayRadius,
-          )
-          // BF20261013-030：写入前收敛（≤3 段、严格横平竖直），模型与渲染始终一致
-          const canonical = canonicalEdgeWaypoints(start, end, waypoints, hint)
-          return { ...edge, waypoints: canonical, path: buildEdgePath(start, end, canonical, hint) }
+          // BF20261013-030/031：写入前收敛（段数上限 + 严格横平竖直），模型与渲染始终一致
+          return {
+            ...edge,
+            ...rebuildEdge(edge, source, target, designerNodeSize, gatewayRadius, waypoints),
+          }
         }),
         dirty: true,
       }
@@ -961,24 +1117,21 @@ export function createDesignerModel(
       const target = byId.get(nextEdge.targetId)
       current = {
         ...current,
-        edges: current.edges.map((candidate) =>
-          candidate.id === edgeId
-            ? {
-                ...nextEdge,
-                path: (() => {
-                  if (!source || !target) return candidate.path
-                  const { start, end, hint } = resolveEdgeRoute(
-                    nextEdge,
-                    source,
-                    target,
-                    designerNodeSize,
-                    gatewayRadius,
-                  )
-                  return buildEdgePath(start, end, nextEdge.waypoints, hint)
-                })(),
-              }
-            : candidate,
-        ),
+        edges: current.edges.map((candidate) => {
+          if (candidate.id !== edgeId) return candidate
+          if (!source || !target) return nextEdge
+          return {
+            ...nextEdge,
+            ...rebuildEdge(
+              nextEdge,
+              source,
+              target,
+              designerNodeSize,
+              gatewayRadius,
+              nextEdge.waypoints,
+            ),
+          }
+        }),
         dirty: true,
       }
       emit()

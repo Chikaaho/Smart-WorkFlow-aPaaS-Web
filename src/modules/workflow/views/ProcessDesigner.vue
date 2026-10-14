@@ -857,8 +857,11 @@ function onPointerMove(event: PointerEvent) {
         edit.segmentIndex,
         edit.axis,
         edit.axis === 'x' ? p.x : p.y,
+        edgeDragContext(edge, points),
       )
       if (moved === points) return
+      // 直线首次拖动生成滑移折返（jog）：后续拖动接管其中段（下标 2）
+      if (points.length === 2 && moved.length === 6) edit.segmentIndex = 2
       model.setEdgeWaypoints(edge.id, pointsToWaypoints(moved))
       snapshot()
       return
@@ -1154,9 +1157,36 @@ function beginSegmentDrag(
   }
 }
 
-/** 选中连线内段手柄（首尾端口腿不可拖，不显示手柄）。 */
+/** 选中连线内段手柄（首尾端口腿不可拖；BF031 起整条直线也给合成手柄）。 */
 function edgeSegmentHandlesOf(edge: PositionedEdge): EdgeSegmentHandle[] {
   return edgeSegmentHandles(pathPoints(edgePathOf(edge)))
+}
+
+/** 命中最近的可拖段手柄：端口腿返回 null（不可拖）。 */
+function edgeHandleAt(points: PathPoint[], point: PathPoint): EdgeSegmentHandle | null {
+  const index = nearestSegment(points, point)
+  return edgeSegmentHandles(points).find((handle) => handle.index === index) ?? null
+}
+
+/**
+ * BF20261013-031 拖动上下文：端口腿外向取自**端口几何**（节点中心 → 端口方向），
+ * 不再取自折线当前方向——节点移动后折线方向可能已反向，会把可拖区间锁成单向。
+ */
+function edgeDragContext(edge: PositionedEdge, points: PathPoint[]) {
+  const nodes = new Map(canvasNodes.value.map((node) => [node.id, node] as const))
+  const source = nodes.get(edge.sourceId)
+  const target = nodes.get(edge.targetId)
+  if (!source || !target || points.length < 2) return {}
+  const outward = (port: PathPoint, node: PositionedNode, axis: 'x' | 'y') => {
+    const delta = axis === 'x' ? port.x - node.x : port.y - node.y
+    return delta >= 0 ? 1 : -1
+  }
+  const last = points[points.length - 1]
+  const beforeLast = points[points.length - 2]
+  return {
+    sourceOutward: outward(points[0], source, points[0].x === points[1].x ? 'y' : 'x'),
+    targetOutward: outward(last, target, beforeLast.x === last.x ? 'y' : 'x'),
+  }
 }
 
 function beginSegmentDragFromHandle(
@@ -1185,12 +1215,12 @@ function onEdgePointerDown(event: PointerEvent, edge: PositionedEdge) {
     beginEndpointDrag(event, edge, 'target')
     return
   }
-  const index = nearestSegment(points, p)
-  if (index < 1 || index > points.length - 3) return
-  beginSegmentDrag(event, edge, index, points[index].x === points[index + 1].x ? 'x' : 'y')
+  const handle = edgeHandleAt(points, p)
+  if (!handle) return
+  beginSegmentDrag(event, edge, handle.index, handle.axis)
 }
 
-/** 选中连线上悬停内段 → 按拖动轴展示方向光标（左右可拖=ew-resize / 上下可拖=ns-resize）。 */
+/** 选中连线上悬停可拖段 → 按拖动轴展示方向光标（左右可拖=ew-resize / 上下可拖=ns-resize）。 */
 const edgeHoverAxis = ref<{ edgeId: string; axis: 'x' | 'y' } | null>(null)
 
 function onEdgeHoverMove(event: PointerEvent, edge: PositionedEdge) {
@@ -1199,14 +1229,13 @@ function onEdgeHoverMove(event: PointerEvent, edge: PositionedEdge) {
     return
   }
   const points = pathPoints(edge.path)
-  const index = nearestSegment(points, screenToGraph(event))
-  if (index < 1 || index > points.length - 3) {
+  const handle = edgeHandleAt(points, screenToGraph(event))
+  if (!handle) {
     edgeHoverAxis.value = null
     return
   }
-  const axis: 'x' | 'y' = points[index].x === points[index + 1].x ? 'x' : 'y'
-  if (edgeHoverAxis.value?.edgeId !== edge.id || edgeHoverAxis.value.axis !== axis) {
-    edgeHoverAxis.value = { edgeId: edge.id, axis }
+  if (edgeHoverAxis.value?.edgeId !== edge.id || edgeHoverAxis.value.axis !== handle.axis) {
+    edgeHoverAxis.value = { edgeId: edge.id, axis: handle.axis }
   }
 }
 

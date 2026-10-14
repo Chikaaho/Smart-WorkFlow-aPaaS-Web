@@ -27,7 +27,10 @@ function pathPoints(d: string): OrthogonalPoint[] {
   return points
 }
 
-/** BF20261013-030 不变量：严格横平竖直 + 任意两段不共线（共线即重叠风险）。 */
+/**
+ * BF20261013-030/031 不变量：严格横平竖直 + 任意两段不重叠。
+ * 共线但区间不相交（滑移折返 jog 的两条平行段）是合法形状，只有区间相交才算重叠。
+ */
 function expectOrthogonalWithoutOverlap(points: OrthogonalPoint[]) {
   for (let i = 0; i < points.length - 1; i++) {
     const axisAligned = points[i].x === points[i + 1].x || points[i].y === points[i + 1].y
@@ -38,7 +41,12 @@ function expectOrthogonalWithoutOverlap(points: OrthogonalPoint[]) {
       const verticalI = points[i].x === points[i + 1].x
       const verticalJ = points[j].x === points[j + 1].x
       if (verticalI !== verticalJ) continue
-      expect(verticalI ? points[i].x === points[j].x : points[i].y === points[j].y).toBe(false)
+      const sameLine = verticalI ? points[i].x === points[j].x : points[i].y === points[j].y
+      if (!sameLine) continue
+      const key = verticalI ? 'y' : 'x'
+      const [a1, a2] = [points[i][key], points[i + 1][key]].sort((left, right) => left - right)
+      const [b1, b2] = [points[j][key], points[j + 1][key]].sort((left, right) => left - right)
+      expect(a2 <= b1 || b2 <= a1).toBe(true)
     }
   }
 }
@@ -164,11 +172,19 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
       { x: 600, y: 275 },
     ])
     expect(edgeSegmentHandles(points)).toEqual([
-      { index: 1, x: 510, y: 240, orientation: 'h', axis: 'y', cursor: 'ns-resize' },
+      {
+        index: 1,
+        x: 510,
+        y: 240,
+        orientation: 'h',
+        axis: 'y',
+        cursor: 'ns-resize',
+        straight: false,
+      },
     ])
   })
 
-  it('内段手柄：H-V-H 中段垂直（左右拖 ew-resize）；直线无手柄', () => {
+  it('内段手柄：H-V-H 中段垂直（左右拖 ew-resize）', () => {
     const points = expandEdgePathPoints({ x: 180, y: 300 }, { x: 340, y: 180 }, [], {
       sourceAxis: 'h',
       targetAxis: 'h',
@@ -180,14 +196,16 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
       { x: 340, y: 180 },
     ])
     expect(edgeSegmentHandles(points)).toEqual([
-      { index: 1, x: 260, y: 240, orientation: 'v', axis: 'x', cursor: 'ew-resize' },
+      {
+        index: 1,
+        x: 260,
+        y: 240,
+        orientation: 'v',
+        axis: 'x',
+        cursor: 'ew-resize',
+        straight: false,
+      },
     ])
-    expect(
-      edgeSegmentHandles([
-        { x: 100, y: 300 },
-        { x: 600, y: 300 },
-      ]),
-    ).toEqual([])
   })
 
   it('拖动内段夹取端口净空：不越出两端、不反向、不产生重叠', () => {
@@ -233,14 +251,15 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
     expect(buildEdgePath({ x: 0, y: 0 }, { x: 100, y: 0 }, [{ x: 50, y: 0 }])).toBe('M 0 0 L 100 0')
   })
 
-  it('贪吃蛇收敛：>3 段按端口朝向重建 3 段 Z（偏移取包围盒中心并夹取净空）', () => {
+  it('贪吃蛇收敛：>5 段按端口朝向重建 3 段 Z（偏移取包围盒中心并夹取净空）', () => {
     const snake = [
       { x: 420, y: 100 },
       { x: 560, y: 100 },
       { x: 560, y: 400 },
-      { x: 600, y: 400 },
+      { x: 200, y: 400 },
+      { x: 200, y: 150 },
     ]
-    expect(expandEdgePathPoints(vhv.start, vhv.end, snake, vhv.hint).length - 1).toBeGreaterThan(3)
+    expect(expandEdgePathPoints(vhv.start, vhv.end, snake, vhv.hint).length - 1).toBeGreaterThan(5)
     const waypoints = canonicalEdgeWaypoints(vhv.start, vhv.end, snake, vhv.hint)
     expect(waypoints).toEqual([
       { x: 420, y: 250 },
@@ -269,7 +288,8 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
             { x: 420, y: 100 },
             { x: 560, y: 100 },
             { x: 560, y: 400 },
-            { x: 600, y: 400 },
+            { x: 200, y: 400 },
+            { x: 200, y: 150 },
           ],
         },
       ],
@@ -310,6 +330,184 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
       { x: 600, y: 252 },
     ])
     expect(model.state().dirty).toBe(true)
+  })
+})
+
+describe('BF20261013-031 直线可拖 / 端口外向夹取 / 端口对齐不绷直', () => {
+  it('整条直线给出合成中点手柄（垂直→左右拖，水平→上下拖）', () => {
+    expect(
+      edgeSegmentHandles([
+        { x: 100, y: 300 },
+        { x: 100, y: 600 },
+      ]),
+    ).toEqual([
+      {
+        index: 0,
+        x: 100,
+        y: 450,
+        orientation: 'v',
+        axis: 'x',
+        cursor: 'ew-resize',
+        straight: true,
+      },
+    ])
+    expect(
+      edgeSegmentHandles([
+        { x: 100, y: 300 },
+        { x: 600, y: 300 },
+      ]),
+    ).toEqual([
+      {
+        index: 0,
+        x: 350,
+        y: 300,
+        orientation: 'h',
+        axis: 'y',
+        cursor: 'ns-resize',
+        straight: true,
+      },
+    ])
+  })
+
+  it('拖动直线生成滑移折返（jog）：两端端口腿仍垂直出入、跨度 40、滑移跟随指针', () => {
+    const straight = [
+      { x: 100, y: 300 },
+      { x: 100, y: 600 },
+    ]
+    const jog = moveEdgeSegment(straight, 0, 'x', 200)
+    expect(jog).toEqual([
+      { x: 100, y: 300 },
+      { x: 100, y: 430 },
+      { x: 200, y: 430 },
+      { x: 200, y: 470 },
+      { x: 100, y: 470 },
+      { x: 100, y: 600 },
+    ])
+    expectOrthogonalWithoutOverlap(jog)
+    // 滑移量小于净空 → 推到净空边界（不塌缩到端口直线）
+    expect(moveEdgeSegment(straight, 0, 'x', 105)[2]).toEqual({ x: 120, y: 430 })
+    // 水平直线对称
+    const horizontal = moveEdgeSegment(
+      [
+        { x: 100, y: 300 },
+        { x: 600, y: 300 },
+      ],
+      0,
+      'y',
+      200,
+    )
+    expect(horizontal).toEqual([
+      { x: 100, y: 300 },
+      { x: 330, y: 300 },
+      { x: 330, y: 200 },
+      { x: 370, y: 200 },
+      { x: 370, y: 300 },
+      { x: 600, y: 300 },
+    ])
+    expectOrthogonalWithoutOverlap(horizontal)
+    // 线路过短容不下折返 → 原样返回（同一引用）
+    const short = [
+      { x: 100, y: 300 },
+      { x: 100, y: 340 },
+    ]
+    expect(moveEdgeSegment(short, 0, 'x', 200)).toBe(short)
+  })
+
+  it('jog 内段可越过端口直线（四向可拖动），仅禁止塌缩', () => {
+    const jog = moveEdgeSegment(
+      [
+        { x: 100, y: 300 },
+        { x: 100, y: 600 },
+      ],
+      0,
+      'x',
+      200,
+    )
+    // 越过端口直线到另一侧：允许
+    expect(moveEdgeSegment(jog, 2, 'x', 50)[2]).toEqual({ x: 50, y: 430 })
+    // 距端口直线不足净空 → 推离到 100+20
+    expect(moveEdgeSegment(jog, 2, 'x', 110)[2]).toEqual({ x: 120, y: 430 })
+    // 上下段（jog 第 1/3 段）夹取在两端净空内
+    expect(moveEdgeSegment(jog, 1, 'y', 100)[1]).toEqual({ x: 100, y: 320 })
+    expect(moveEdgeSegment(jog, 3, 'y', 900)[4]).toEqual({ x: 100, y: 580 })
+    for (let value = -100; value <= 700; value += 23) {
+      expectOrthogonalWithoutOverlap(moveEdgeSegment(jog, 2, 'x', value))
+    }
+  })
+
+  it('端口腿夹取以端口几何外向为准：节点移动后的「错位」不再只能单向拖', () => {
+    // 审批底边端口 (884,602) 外向 +y；结束顶边端口 (1004,761) 外向 -y；
+    // 中段已被拖到 764（在终点端口下方）——旧口径按折线方向锁成只能向下
+    const misaligned = [
+      { x: 884, y: 602 },
+      { x: 884, y: 764 },
+      { x: 1004, y: 764 },
+      { x: 1004, y: 761 },
+    ]
+    expect(moveEdgeSegment(misaligned, 1, 'y', 700)[1].y).toBe(781)
+    expect(
+      moveEdgeSegment(misaligned, 1, 'y', 700, { sourceOutward: 1, targetOutward: -1 })[1].y,
+    ).toBe(700)
+    expect(
+      moveEdgeSegment(misaligned, 1, 'y', 800, { sourceOutward: 1, targetOutward: -1 })[1].y,
+    ).toBe(741)
+    expect(
+      moveEdgeSegment(misaligned, 1, 'y', 600, { sourceOutward: 1, targetOutward: -1 })[1].y,
+    ).toBe(622)
+  })
+
+  it('自动路由（无拐点）移动节点后仍无拐点：默认路由随节点位置重算', () => {
+    const model = createDesignerModel(
+      {
+        processKey: 'bpm_auto',
+        name: '自动路由',
+        formKey: 'demo_form',
+        version: 1,
+        elements: [
+          { id: 'node_a', kind: 'node', type: 'APPROVAL', x: 420, y: 180, config: {}, style: {} },
+          { id: 'node_b', kind: 'node', type: 'END', x: 600, y: 300, config: {}, style: {} },
+          { id: 'edge_1', kind: 'edge', source: 'node_a', target: 'node_b' },
+        ],
+        canvas: {},
+      },
+      { width: 160, height: 50 },
+      22,
+    )
+    model.moveNode('node_b', 420, 300)
+    expect(model.state().edges[0].waypoints).toEqual([])
+    expect(model.state().edges[0].path).toBe('M 420 205 L 420 275')
+    model.moveNode('node_b', 600, 300)
+    expect(model.state().edges[0].waypoints).toEqual([])
+    expect(model.state().edges[0].path).toBe('M 420 205 L 420 240 L 600 240 L 600 275')
+  })
+
+  it('端口对齐时保留滑移折返（不绷直成直线）', () => {
+    const start = { x: 420, y: 205 }
+    const end = { x: 420, y: 275 }
+    const hint = { sourceAxis: 'v' as const, targetAxis: 'v' as const }
+    const jogWaypoints = [
+      { x: 420, y: 430 },
+      { x: 200, y: 430 },
+      { x: 200, y: 470 },
+      { x: 420, y: 470 },
+    ]
+    expect(canonicalEdgeWaypoints(start, end, jogWaypoints, hint)).toEqual(jogWaypoints)
+    expect(buildEdgePath(start, end, jogWaypoints, hint)).toBe(
+      'M 420 205 L 420 430 L 200 430 L 200 470 L 420 470 L 420 275',
+    )
+    // 历史超长蛇形 + 端口对齐 → 重建为折返（不是直线）
+    const snake = [
+      { x: 420, y: 100 },
+      { x: 560, y: 100 },
+      { x: 560, y: 400 },
+      { x: 200, y: 400 },
+      { x: 200, y: 150 },
+    ]
+    const rebuilt = canonicalEdgeWaypoints(start, end, snake, hint)
+    expect(rebuilt.length).toBeGreaterThan(0)
+    const path = buildEdgePath(start, end, rebuilt, hint)
+    expect(path).toBe('M 420 205 L 420 225 L 380 225 L 380 255 L 420 255 L 420 275')
+    expectOrthogonalWithoutOverlap(pathPoints(path))
   })
 })
 
