@@ -803,15 +803,20 @@ onMounted(loadList)
 
 /* 表格几何对齐 fixture：表头 42px / 行高 76px / 12px 字号 */
 .defs-table {
-  --el-table-header-bg-color: #f6f7fb; /* 设计精确值（表头底色，无对应 token） */
-  --el-table-header-text-color: #6b7280;
+  /* BF20261013-039：表头底色/字色/悬浮底色不再页面级覆盖——沿用全局标准
+     （tokens.css：表头 #fafbfe、字色 --sw-text-secondary、悬浮 #f7f9fd），与「审批意见表单」等
+     标准列表页一致；此前 fixture 的 #f6f7fb 与页面底色 #f4f6fb 几乎同色，表头看着像"背景色"。
+     仅保留本页行分隔线色。 */
   --el-table-border-color: #f0f2f7; /* 设计精确值（行分隔线色） */
-  --el-table-row-hover-bg-color: #f7f9fd;
 }
 .defs-table :deep(th.el-table__cell) {
   height: 42px;
   font-size: 12px;
   font-weight: 400;
+  /* BF20261013-039：表头底色直接落到 th（与标准列表页 ListTable 的 #fafbfe 一致）。
+     变量 --el-table-header-bg-color 在 Element Plus 里由 .el-table 自身重声明，页面级设置不生效；
+     而 fixture 原值 #f6f7fb 与页面底色 #f4f6fb 几乎同色，表头看着像"背景色"。 */
+  background-color: #fafbfe;
 }
 /* BF20261013-037：去掉 fixture 迁移期的 translate 位移（曾把单元格内容上移 8px、把末列表头右移
    33px，导致状态徽标顶部被 .cell 的 overflow:hidden 裁掉、表头与内容错位），改为标准内距。 */
