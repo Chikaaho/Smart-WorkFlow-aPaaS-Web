@@ -23,7 +23,11 @@ const stubs = {
   },
   'el-alert': { template: '<div class="el-alert">{{ title }}</div>', props: ['title', 'type'] },
   'el-table': { template: '<div><slot/></div>' },
-  'el-table-column': { template: '<div/>' },
+  'el-table-column': {
+    props: ['label', 'width', 'align', 'prop'],
+    template:
+      '<div class="col" :data-label="label" :data-width="width" :data-align="align" :data-prop="prop" />',
+  },
   'el-tag': { template: '<span class="el-tag"><slot/></span>' },
 }
 
@@ -127,6 +131,27 @@ describe('ProcessDefList.vue', () => {
       'errorMsg',
       '加载流程定义列表失败',
     )
+  })
+
+  // BF20261013-037：列口径回归——状态居中、更新人与更新时间分列、操作列四格宽度
+  it('renders 状态 centered / 更新人+更新时间 split / 操作列 240', async () => {
+    vi.mocked(pageProcessDefs).mockResolvedValueOnce({
+      list: mockDefs,
+      total: 2,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    await nextTick()
+    const cols = wrapper.findAll('.col')
+    const labelOf = (label: string) =>
+      cols.find((col) => col.attributes('data-label') === label) ?? null
+
+    expect(labelOf('状态')?.attributes('data-align')).toBe('center')
+    expect(labelOf('更新人')).not.toBeNull()
+    expect(labelOf('更新时间')).not.toBeNull()
+    expect(cols.map((col) => col.attributes('data-label'))).not.toContain('更新人 / 时间')
+    expect(labelOf('操作')?.attributes('data-width')).toBe('240')
   })
 
   it('displays empty state when list is empty', async () => {

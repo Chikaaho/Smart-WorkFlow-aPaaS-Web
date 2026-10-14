@@ -2148,7 +2148,7 @@ export default {
     metricTotalDefs: 'Total processes',
     categoryName: 'Category',
     instanceCount: 'Instances',
-    updatedByTime: 'Updated by / time',
+    updatedBy: 'Updated by',
     processDefCapabilityNote:
       'Process node capabilities: approval / countersign / condition branch / parallel / notification / IoT command / Agent invocation',
     selectForm: 'Select a form',

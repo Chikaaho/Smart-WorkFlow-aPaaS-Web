@@ -536,7 +536,8 @@ onMounted(loadList)
               >
             </template>
           </el-table-column>
-          <el-table-column prop="status" :label="t('common.status')" width="120">
+          <!-- BF20261013-037：状态值水平+垂直居中（与版本/实例数列一致，徽标不再被单元格裁切） -->
+          <el-table-column prop="status" :label="t('common.status')" width="120" align="center">
             <template #default="{ row }">
               <span class="status" :class="getStatusClass(statusRow(row).status)">{{
                 getStatusLabel(statusRow(row).status)
@@ -564,12 +565,16 @@ onMounted(loadList)
           <el-table-column :label="t('workflow.instanceCount')" width="114" align="center">
             <template #default="{ row }">{{ statusRow(row).instanceCount ?? '—' }}</template>
           </el-table-column>
-          <el-table-column prop="updateTime" :label="t('workflow.updatedByTime')" width="246">
-            <template #default="{ row }">
-              {{ statusRow(row).updatedBy || '—' }} · {{ formatDefTime(row.updateTime) }}
-            </template>
+          <!-- BF20261013-037：更新人与更新时间是两个字段，分列展示（不再合并成「更新人 / 时间」） -->
+          <el-table-column prop="updatedBy" :label="t('workflow.updatedBy')" width="130">
+            <template #default="{ row }">{{ statusRow(row).updatedBy || '—' }}</template>
           </el-table-column>
-          <ListActionsColumn :actions="rowActions" :width="170" />
+          <el-table-column prop="updateTime" :label="t('common.updateTime')" width="170">
+            <template #default="{ row }">{{ formatDefTime(row.updateTime) }}</template>
+          </el-table-column>
+          <!-- 240：四格末位「更多」标准（V012-BUG-015）——设计/查看流程图/发布/更多 四格完整可见
+               （实测所需宽度：中文 195 / 英文 237，170 会裁掉末位更多） -->
+          <ListActionsColumn :actions="rowActions" :width="240" />
         </el-table>
         <ListPagination
           :total="total"
@@ -777,17 +782,24 @@ onMounted(loadList)
   color: #344164;
 }
 
-/* ── 表格区：卡片白底 ── */
+/* ── 表格区：卡片白底 ──
+   BF20261013-037：表格与卡片同宽（表头灰底 + 行分隔线一直铺到卡片圆角边，左右不留白），
+   仅分页行保留 24px 左右内距；单元格左右内距统一取标准 16px。 */
 .p53-admin-defs__table-card {
   box-sizing: border-box;
   margin-top: 24px;
   min-height: 524px;
-  padding: 24px;
+  padding: 24px 0;
   border-radius: 14px; /* 设计精确值 */
   background: var(--sw-surface-card);
+  overflow: hidden;
+}
+.p53-admin-defs__table-card :deep(.list-pagination) {
+  padding-left: 24px;
+  padding-right: 24px;
 }
 
-/* 表格几何对齐 fixture：表头 42px / 行高 62px / 12px 字号 */
+/* 表格几何对齐 fixture：表头 42px / 行高 76px / 12px 字号 */
 .defs-table {
   --el-table-header-bg-color: #f6f7fb; /* 设计精确值（表头底色，无对应 token） */
   --el-table-header-text-color: #6b7280;
@@ -799,21 +811,16 @@ onMounted(loadList)
   font-size: 12px;
   font-weight: 400;
 }
-.defs-table :deep(th.el-table__cell .cell) {
-  padding: 0;
-  transform: translateY(0);
-}
-.defs-table :deep(th.el-table__cell:last-child .cell) {
-  transform: translate(33px, 0);
+/* BF20261013-037：去掉 fixture 迁移期的 translate 位移（曾把单元格内容上移 8px、把末列表头右移
+   33px，导致状态徽标顶部被 .cell 的 overflow:hidden 裁掉、表头与内容错位），改为标准内距。 */
+.defs-table :deep(th.el-table__cell .cell),
+.defs-table :deep(.el-table__row td.el-table__cell .cell) {
+  padding: 0 var(--sw-cell-padding-x);
 }
 .defs-table :deep(.el-table__row td.el-table__cell) {
   height: 76px;
   font-size: 12px;
   color: #6b7280;
-}
-.defs-table :deep(.el-table__row td.el-table__cell .cell) {
-  padding: 0;
-  transform: translateY(-8px);
 }
 .defs-table :deep(td.defs-table__col-name .cell) {
   font-size: 14px;
@@ -840,7 +847,8 @@ onMounted(loadList)
   color: var(--el-color-warning);
 }
 
-/* 状态徽标：fixture 胶囊样式原样移植 */
+/* 状态徽标：fixture 胶囊样式原样移植（BF20261013-037：去掉 -8px 位移，随单元格垂直居中，
+   底色不再被 .cell 裁切） */
 .status {
   display: inline-block;
   min-width: 46px;
@@ -849,7 +857,6 @@ onMounted(loadList)
   text-align: center;
   font-size: 12px;
   line-height: 14px;
-  transform: translateY(-8px);
 }
 .status.is-published {
   background: #eafbf7;
