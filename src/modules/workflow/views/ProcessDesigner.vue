@@ -69,7 +69,10 @@ import {
   createDesignerModel,
   buildEdgePath,
   edgeEndpoints,
+  edgeSegmentHandles,
   hitTestEdgeAtPoint,
+  moveEdgeSegment,
+  pointsToWaypoints,
   DESIGNER_NODE_WIDTH,
   DESIGNER_NODE_HEIGHT,
 } from '@/adapters/process-graph'
@@ -79,7 +82,12 @@ import {
   type NodeFieldState,
   type NodeFieldStates,
 } from '@/modules/workflow/utils/node-field-states'
-import type { DesignerModel, PositionedEdge, PositionedNode } from '@/adapters/process-graph'
+import type {
+  DesignerModel,
+  EdgeSegmentHandle,
+  PositionedEdge,
+  PositionedNode,
+} from '@/adapters/process-graph'
 import FormSelectDialog from './FormSelectDialog.vue'
 import type { BpmVariableDef, TriggerConfig } from '@/contracts/p64'
 import {
@@ -795,6 +803,8 @@ function onBgPointerDown(event: PointerEvent) {
     pendingConnectNode.value = null
     pendingConnectTarget.value = null
     pendingConnectStartScreen.value = null
+    // BF20261013-030：空白处按下与模型同口径取消选中（此前视觉选中态残留，连线手柄不消失）
+    selectionId.value = null
     model?.select(null)
     panSession.value = { px: event.clientX, py: event.clientY, vb: { ...viewBox.value } }
   }
@@ -828,18 +838,29 @@ function onPointerMove(event: PointerEvent) {
   if (pendingConnectNode.value) {
     pendingConnectTarget.value = screenToGraph(event)
   }
-  // V011-BUG-025 连线编辑：端点拖拽预览 / 拐点拖动实时改形
+  // BF20261013-030 连线编辑：端点拖拽预览 / 内段拖动实时改形（移动超阈值才生效，单击不改形）
   if (edgeEdit.value && model) {
     const edit = edgeEdit.value
-    const p = screenToGraph(event)
-    if (edit.kind === 'waypoint') {
-      const edge = model.state().edges.find((candidate) => candidate.id === edit.edgeId)
-      if (edge) {
-        const next = [...edge.waypoints]
-        next[edit.activeIndex] = p
-        model.setEdgeWaypoints(edge.id, next)
-        snapshot()
+    if (!edit.armed) {
+      if (Math.hypot(event.clientX - edit.startScreen.x, event.clientY - edit.startScreen.y) < 3) {
+        return
       }
+      edit.armed = true
+    }
+    const p = screenToGraph(event)
+    if (edit.kind === 'segment') {
+      const edge = model.state().edges.find((candidate) => candidate.id === edit.edgeId)
+      if (!edge) return
+      const points = pathPoints(edge.path)
+      const moved = moveEdgeSegment(
+        points,
+        edit.segmentIndex,
+        edit.axis,
+        edit.axis === 'x' ? p.x : p.y,
+      )
+      if (moved === points) return
+      model.setEdgeWaypoints(edge.id, pointsToWaypoints(moved))
+      snapshot()
       return
     }
     edgeEditPoint.value = p
@@ -877,13 +898,15 @@ function resolveConnectDropTarget(event: PointerEvent): string | null {
 }
 
 function onPointerUp(event: PointerEvent) {
-  // V011-BUG-025：连线编辑收尾——端点落点改接（自环/重复边/空放均还原），拐点已实时落模型
+  // V011-BUG-025：连线编辑收尾——端点落点改接（未拖动/自环/重复边/空放均不改动），内段已实时落模型
   if (edgeEdit.value && model) {
     const edit = edgeEdit.value
-    if (edit.kind === 'endpoint') {
+    if (edit.kind === 'endpoint' && edit.armed) {
+      const edge = model.state().edges.find((candidate) => candidate.id === edit.edgeId)
+      const currentEndId = edge ? (edit.which === 'source' ? edge.sourceId : edge.targetId) : null
       const targetId = resolveConnectDropTarget(event)
       const applied =
-        targetId && targetId !== edit.otherEndId
+        targetId && targetId !== edit.otherEndId && targetId !== currentEndId
           ? model.setEdgeEndpoint(edit.edgeId, edit.which ?? 'target', targetId)
           : null
       if (applied) snapshot()
@@ -1077,11 +1100,15 @@ function nearestSegment(points: PathPoint[], p: PathPoint) {
 
 const edgeEdit = ref<null | {
   edgeId: string
-  kind: 'endpoint' | 'waypoint'
+  kind: 'endpoint' | 'segment'
   which?: 'source' | 'target'
   otherEndId: string
   originalWaypoints: ProcessGraphWaypoint[]
-  activeIndex: number
+  segmentIndex: number
+  axis: 'x' | 'y'
+  startScreen: { x: number; y: number }
+  /** 拖动阈值（≥3px 才生效）：点击选中连线不再改变形状。 */
+  armed: boolean
 }>(null)
 /** BF20261013-029：端点拖拽实时改形——固定端节点 + 指针 + 命中节点（真实连线跟随，不再是虚线预览）。 */
 const edgeEditPoint = ref<PathPoint | null>(null)
@@ -1096,30 +1123,56 @@ function beginEndpointDrag(event: PointerEvent, edge: PositionedEdge, which: 'so
     which,
     otherEndId: which === 'source' ? edge.targetId : edge.sourceId,
     originalWaypoints: [...edge.waypoints],
-    activeIndex: -1,
+    segmentIndex: -1,
+    axis: 'x',
+    startScreen: { x: event.clientX, y: event.clientY },
+    armed: false,
   }
   edgeEditPoint.value = screenToGraph(event)
   edgeEditHoverId.value = null
 }
 
-function beginWaypointDragFrom(edge: PositionedEdge, index: number) {
+/**
+ * BF20261013-030 内段拖动：按住内段（或段中点手柄）——垂直段左右拖、水平段上下拖。
+ * 形状只在指针移动超过阈值后实时落模型；单击（含再次点击已选中连线）不改形。
+ */
+function beginSegmentDrag(
+  event: PointerEvent,
+  edge: PositionedEdge,
+  index: number,
+  axis: 'x' | 'y',
+) {
   edgeEdit.value = {
     edgeId: edge.id,
-    kind: 'waypoint',
+    kind: 'segment',
     otherEndId: '',
     originalWaypoints: edge.waypoints.map((point) => ({ ...point })),
-    activeIndex: index,
+    segmentIndex: index,
+    axis,
+    startScreen: { x: event.clientX, y: event.clientY },
+    armed: false,
   }
 }
 
-// （模板拐点手柄与线内命中复用 beginWaypointDragFrom；originalWaypoints 供空放还原）
+/** 选中连线内段手柄（首尾端口腿不可拖，不显示手柄）。 */
+function edgeSegmentHandlesOf(edge: PositionedEdge): EdgeSegmentHandle[] {
+  return edgeSegmentHandles(pathPoints(edgePathOf(edge)))
+}
 
-/** 选中连线按下：端点命中→改接拖拽；拐点命中→移动；否则最近线段插入拐点
- * （插入点在线上，形状先不变，拖动才变形）。 */
+function beginSegmentDragFromHandle(
+  event: PointerEvent,
+  edge: PositionedEdge,
+  handle: EdgeSegmentHandle,
+) {
+  beginSegmentDrag(event, edge, handle.index, handle.axis)
+}
+
+/** 连线按下：未选中→仅选中（不改形）；已选中→端点改接 / 内段拖动会话，点击本身不产生形状变化。 */
 function onEdgePointerDown(event: PointerEvent, edge: PositionedEdge) {
-  const alreadySelected = selectionId.value === edge.id
-  selectEdge(event, edge.id)
-  if (!alreadySelected) return
+  if (selectionId.value !== edge.id) {
+    selectEdge(event, edge.id)
+    return
+  }
   if (!model) return
   const p = screenToGraph(event)
   const points = pathPoints(edge.path)
@@ -1132,28 +1185,46 @@ function onEdgePointerDown(event: PointerEvent, edge: PositionedEdge) {
     beginEndpointDrag(event, edge, 'target')
     return
   }
-  for (let i = 0; i < edge.waypoints.length; i++) {
-    if (pointDist(p, edge.waypoints[i]) < 10) {
-      beginWaypointDragFrom(edge, i)
-      return
-    }
-  }
-  const segIdx = nearestSegment(points, p)
-  const next = [...edge.waypoints]
-  next.splice(segIdx, 0, p)
-  const originalWaypoints = edge.waypoints.map((point) => ({ ...point }))
-  model.setEdgeWaypoints(edge.id, next)
-  edgeEdit.value = {
-    edgeId: edge.id,
-    kind: 'waypoint',
-    otherEndId: '',
-    originalWaypoints,
-    activeIndex: segIdx,
-  }
-  snapshot()
+  const index = nearestSegment(points, p)
+  if (index < 1 || index > points.length - 3) return
+  beginSegmentDrag(event, edge, index, points[index].x === points[index + 1].x ? 'x' : 'y')
 }
 
-// （命中既有拐点直接复用 beginWaypointDragFrom：保留 originalWaypoints 供空放还原）
+/** 选中连线上悬停内段 → 按拖动轴展示方向光标（左右可拖=ew-resize / 上下可拖=ns-resize）。 */
+const edgeHoverAxis = ref<{ edgeId: string; axis: 'x' | 'y' } | null>(null)
+
+function onEdgeHoverMove(event: PointerEvent, edge: PositionedEdge) {
+  if (selectionId.value !== edge.id) {
+    edgeHoverAxis.value = null
+    return
+  }
+  const points = pathPoints(edge.path)
+  const index = nearestSegment(points, screenToGraph(event))
+  if (index < 1 || index > points.length - 3) {
+    edgeHoverAxis.value = null
+    return
+  }
+  const axis: 'x' | 'y' = points[index].x === points[index + 1].x ? 'x' : 'y'
+  if (edgeHoverAxis.value?.edgeId !== edge.id || edgeHoverAxis.value.axis !== axis) {
+    edgeHoverAxis.value = { edgeId: edge.id, axis }
+  }
+}
+
+function onEdgeHoverLeave(edge: PositionedEdge) {
+  if (edgeHoverAxis.value?.edgeId === edge.id) edgeHoverAxis.value = null
+}
+
+function edgeHitCursor(edge: PositionedEdge): string {
+  const edit = edgeEdit.value
+  if (edit?.kind === 'segment' && edit.edgeId === edge.id) {
+    return edit.axis === 'x' ? 'ew-resize' : 'ns-resize'
+  }
+  const hover = edgeHoverAxis.value
+  if (hover?.edgeId === edge.id) {
+    return hover.axis === 'x' ? 'ew-resize' : 'ns-resize'
+  }
+  return 'pointer'
+}
 
 /* ─────────── 面板/属性 ─────────── */
 
@@ -2514,8 +2585,11 @@ function nodeLabelLines(label: string) {
               :class="{ 'designer-edge-selected': selectionId === edge.id }"
               stroke-width="10"
               stroke="transparent"
+              :style="{ cursor: edgeHitCursor(edge) }"
               :data-edge-id="edge.id"
               @pointerdown.stop="onEdgePointerDown($event, edge)"
+              @pointermove="onEdgeHoverMove($event, edge)"
+              @pointerleave="onEdgeHoverLeave(edge)"
             />
             <path
               :d="edgePathOf(edge)"
@@ -2666,17 +2740,21 @@ function nodeLabelLines(label: string) {
               {{ node.label }}
             </text>
           </g>
-          <!-- V011-BUG-025：把连线编辑手柄放在节点之后，确保端点不被节点盒遮挡。 -->
+          <!-- V011-BUG-025 / BF20261013-030：把连线编辑手柄放在节点之后，确保端点不被节点盒遮挡。 -->
           <template v-for="edge in canvasEdges" :key="'handles-' + edge.id">
             <template v-if="selectionId === edge.id">
-              <circle
-                v-for="(wp, wpIndex) in edge.waypoints"
-                :key="'wp-' + edge.id + '-' + wpIndex"
-                :cx="wp.x"
-                :cy="wp.y"
-                r="4.5"
-                class="designer-edge-waypoint"
-                @pointerdown.stop="beginWaypointDragFrom(edge, wpIndex)"
+              <!-- BF20261013-030：内段中点手柄（垂直段左右拖 / 水平段上下拖，方向光标随轴） -->
+              <rect
+                v-for="handle in edgeSegmentHandlesOf(edge)"
+                :key="'seg-' + edge.id + '-' + handle.index"
+                :x="handle.x - 4.5"
+                :y="handle.y - 4.5"
+                width="9"
+                height="9"
+                rx="1.5"
+                class="designer-edge-segment-handle"
+                :style="{ cursor: handle.cursor }"
+                @pointerdown.stop="beginSegmentDragFromHandle($event, edge, handle)"
               />
               <circle
                 :cx="pathPoints(edge.path)[0]?.x ?? 0"
@@ -4419,21 +4497,22 @@ function nodeLabelLines(label: string) {
   stroke-width: 1.5;
   cursor: crosshair;
 }
-.designer-edge-waypoint,
-.designer-edge-endpoint {
-  fill: #fff;
-  stroke: #6f2dff;
-  stroke-width: 1.8;
+/* BF20261013-030：内段中点手柄——实心方块（方向光标由拖动轴内联给出） */
+.designer-edge-segment-handle {
+  fill: #6f2dff;
+  stroke: #fff;
+  stroke-width: 1.5;
   pointer-events: all;
-  cursor: grab;
-}
-.designer-edge-waypoint:active,
-.designer-edge-endpoint:active {
-  cursor: grabbing;
 }
 .designer-edge-endpoint {
   fill: #f7f2ff;
+  stroke: #6f2dff;
   stroke-width: 2;
+  pointer-events: all;
+  cursor: grab;
+}
+.designer-edge-endpoint:active {
+  cursor: grabbing;
 }
 
 /* ── 连线（fixture：#A4ADBE 1.6 + 同色箭头） ── */

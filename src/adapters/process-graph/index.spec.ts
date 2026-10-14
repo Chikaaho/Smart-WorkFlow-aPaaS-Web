@@ -3,10 +3,45 @@ import {
   normalizeGraph,
   createDesignerModel,
   buildEdgePath,
+  canonicalEdgeWaypoints,
   edgePortAxis,
+  edgeSegmentHandles,
+  expandEdgePathPoints,
   hitTestEdgeAtPoint,
+  moveEdgeSegment,
+  normalizeOrthogonalPoints,
+  pointsToWaypoints,
+  EDGE_MIN_SEGMENT,
 } from './index'
+import type { OrthogonalPoint } from './index'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
+
+function pathPoints(d: string): OrthogonalPoint[] {
+  const points: OrthogonalPoint[] = []
+  const re = /[ML]\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g
+  let match = re.exec(d)
+  while (match) {
+    points.push({ x: Number(match[1]), y: Number(match[2]) })
+    match = re.exec(d)
+  }
+  return points
+}
+
+/** BF20261013-030 不变量：严格横平竖直 + 任意两段不共线（共线即重叠风险）。 */
+function expectOrthogonalWithoutOverlap(points: OrthogonalPoint[]) {
+  for (let i = 0; i < points.length - 1; i++) {
+    const axisAligned = points[i].x === points[i + 1].x || points[i].y === points[i + 1].y
+    expect(axisAligned).toBe(true)
+  }
+  for (let i = 0; i < points.length - 1; i++) {
+    for (let j = i + 1; j < points.length - 1; j++) {
+      const verticalI = points[i].x === points[i + 1].x
+      const verticalJ = points[j].x === points[j + 1].x
+      if (verticalI !== verticalJ) continue
+      expect(verticalI ? points[i].x === points[j].x : points[i].y === points[j].y).toBe(false)
+    }
+  }
+}
 
 function baseGraph(): ProcessGraphDocument {
   return {
@@ -109,6 +144,172 @@ describe('edgePortAxis', () => {
         { width: 152, height: 46 },
       ),
     ).toBe('h')
+  })
+})
+
+describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪吃蛇）', () => {
+  // 审批(420,180)→结束(600,300)：上下缘出线 V-H-V，中段水平可上下拖
+  const vhv = {
+    start: { x: 420, y: 205 },
+    end: { x: 600, y: 275 },
+    hint: { sourceAxis: 'v' as const, targetAxis: 'v' as const },
+  }
+
+  it('内段手柄：V-H-V 只暴露中段（水平→上下拖 ns-resize）', () => {
+    const points = expandEdgePathPoints(vhv.start, vhv.end, [], vhv.hint)
+    expect(points).toEqual([
+      { x: 420, y: 205 },
+      { x: 420, y: 240 },
+      { x: 600, y: 240 },
+      { x: 600, y: 275 },
+    ])
+    expect(edgeSegmentHandles(points)).toEqual([
+      { index: 1, x: 510, y: 240, orientation: 'h', axis: 'y', cursor: 'ns-resize' },
+    ])
+  })
+
+  it('内段手柄：H-V-H 中段垂直（左右拖 ew-resize）；直线无手柄', () => {
+    const points = expandEdgePathPoints({ x: 180, y: 300 }, { x: 340, y: 180 }, [], {
+      sourceAxis: 'h',
+      targetAxis: 'h',
+    })
+    expect(points).toEqual([
+      { x: 180, y: 300 },
+      { x: 260, y: 300 },
+      { x: 260, y: 180 },
+      { x: 340, y: 180 },
+    ])
+    expect(edgeSegmentHandles(points)).toEqual([
+      { index: 1, x: 260, y: 240, orientation: 'v', axis: 'x', cursor: 'ew-resize' },
+    ])
+    expect(
+      edgeSegmentHandles([
+        { x: 100, y: 300 },
+        { x: 600, y: 300 },
+      ]),
+    ).toEqual([])
+  })
+
+  it('拖动内段夹取端口净空：不越出两端、不反向、不产生重叠', () => {
+    const points = expandEdgePathPoints(vhv.start, vhv.end, [], vhv.hint)
+    // 越界 → 夹到端口净空边界（起点端口 205+20 / 终点端口 275-20）
+    expect(moveEdgeSegment(points, 1, 'y', 100)).toEqual([
+      { x: 420, y: 205 },
+      { x: 420, y: 225 },
+      { x: 600, y: 225 },
+      { x: 600, y: 275 },
+    ])
+    expect(moveEdgeSegment(points, 1, 'y', 400)).toEqual([
+      { x: 420, y: 205 },
+      { x: 420, y: 255 },
+      { x: 600, y: 255 },
+      { x: 600, y: 275 },
+    ])
+    // 区间内精确落点 + 全程不变量（横平竖直、任意两段不共线）
+    expect(moveEdgeSegment(points, 1, 'y', 250)[1]).toEqual({ x: 420, y: 250 })
+    for (let value = -200; value <= 600; value += 17) {
+      expectOrthogonalWithoutOverlap(moveEdgeSegment(points, 1, 'y', value))
+    }
+    // 端口腿（首尾段）不可拖：原样返回同一引用
+    expect(moveEdgeSegment(points, 0, 'y', 100)).toBe(points)
+    expect(moveEdgeSegment(points, points.length - 2, 'y', 100)).toBe(points)
+    expect(EDGE_MIN_SEGMENT).toBe(20)
+  })
+
+  it('归一：去重合点 + 折叠共线中点（同轴同向不再相邻）', () => {
+    expect(
+      normalizeOrthogonalPoints([
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 50, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 50 },
+      ]),
+    ).toEqual([
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 50 },
+    ])
+    expect(buildEdgePath({ x: 0, y: 0 }, { x: 100, y: 0 }, [{ x: 50, y: 0 }])).toBe('M 0 0 L 100 0')
+  })
+
+  it('贪吃蛇收敛：>3 段按端口朝向重建 3 段 Z（偏移取包围盒中心并夹取净空）', () => {
+    const snake = [
+      { x: 420, y: 100 },
+      { x: 560, y: 100 },
+      { x: 560, y: 400 },
+      { x: 600, y: 400 },
+    ]
+    expect(expandEdgePathPoints(vhv.start, vhv.end, snake, vhv.hint).length - 1).toBeGreaterThan(3)
+    const waypoints = canonicalEdgeWaypoints(vhv.start, vhv.end, snake, vhv.hint)
+    expect(waypoints).toEqual([
+      { x: 420, y: 250 },
+      { x: 600, y: 250 },
+    ])
+    const path = buildEdgePath(vhv.start, vhv.end, waypoints, vhv.hint)
+    expect(path).toBe('M 420 205 L 420 250 L 600 250 L 600 275')
+    expectOrthogonalWithoutOverlap(pathPoints(path))
+  })
+
+  it('收敛后模型拐点与渲染同源（normalizeGraph 输出即收敛结果）', () => {
+    const graph: ProcessGraphDocument = {
+      processKey: 'bpm_snake',
+      name: '蛇形收敛',
+      formKey: 'demo_form',
+      version: 1,
+      elements: [
+        { id: 'node_a', kind: 'node', type: 'APPROVAL', x: 420, y: 180, config: {}, style: {} },
+        { id: 'node_b', kind: 'node', type: 'END', x: 600, y: 300, config: {}, style: {} },
+        {
+          id: 'edge_1',
+          kind: 'edge',
+          source: 'node_a',
+          target: 'node_b',
+          waypoints: [
+            { x: 420, y: 100 },
+            { x: 560, y: 100 },
+            { x: 560, y: 400 },
+            { x: 600, y: 400 },
+          ],
+        },
+      ],
+      canvas: {},
+    }
+    const spec = normalizeGraph(graph)
+    const edge = spec.edges[0]
+    expect(edge.waypoints).toHaveLength(2)
+    expect(pathPoints(edge.path).length - 1).toBeLessThanOrEqual(3)
+    expectOrthogonalWithoutOverlap(pathPoints(edge.path))
+  })
+
+  it('拖动内段后写入拐点：模型路径与折线逐点一致', () => {
+    const model = createDesignerModel(
+      {
+        processKey: 'bpm_drag',
+        name: '拖动',
+        formKey: 'demo_form',
+        version: 1,
+        elements: [
+          { id: 'node_a', kind: 'node', type: 'APPROVAL', x: 420, y: 180, config: {}, style: {} },
+          { id: 'node_b', kind: 'node', type: 'END', x: 600, y: 300, config: {}, style: {} },
+          { id: 'edge_1', kind: 'edge', source: 'node_a', target: 'node_b' },
+        ],
+        canvas: {},
+      },
+      { width: 160, height: 50 },
+      22,
+    )
+    const edge = model.state().edges[0]
+    const points = pathPoints(edge.path)
+    const moved = moveEdgeSegment(points, 1, 'y', 252)
+    model.setEdgeWaypoints(edge.id, pointsToWaypoints(moved))
+    const after = model.state().edges[0]
+    expect(pathPoints(after.path)).toEqual(moved)
+    expect(after.waypoints).toEqual([
+      { x: 420, y: 252 },
+      { x: 600, y: 252 },
+    ])
+    expect(model.state().dirty).toBe(true)
   })
 })
 

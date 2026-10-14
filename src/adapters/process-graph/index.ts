@@ -201,8 +201,9 @@ function makePositionedEdge(
   const source = nodeById.get(edge.source)
   const target = nodeById.get(edge.target)
   if (!source || !target) return null
-  const waypoints = edge.waypoints ?? []
   const { start, end, hint } = resolveEdgeRoute(edge, source, target, nodeSize, gatewayRadius)
+  // BF20261013-030：模型与渲染同源——拐点先归一/收敛（严格横平竖直、不重叠、不贪吃蛇）
+  const waypoints = canonicalEdgeWaypoints(start, end, edge.waypoints ?? [], hint)
   const path = buildEdgePath(start, end, waypoints, hint)
   return {
     id: edge.id,
@@ -311,19 +312,44 @@ export interface EdgeRouteHint {
   targetAxis?: 'h' | 'v'
 }
 
-export function buildEdgePath(
+/** BF20261013-030：连线最小段长（拖动夹取用）——端口腿保持净空，杜绝贴边与折返。 */
+export const EDGE_MIN_SEGMENT = 20
+/** BF20261013-030：连线最多段数（超出按端口朝向重建 3 段 Z，杜绝「贪吃蛇」）。 */
+export const EDGE_MAX_SEGMENTS = 3
+
+export interface OrthogonalPoint {
+  x: number
+  y: number
+}
+
+/** 连线段手柄（BF20261013-030）：选中连线内段（首尾端口腿除外）的可拖动中点。 */
+export interface EdgeSegmentHandle {
+  /** 段下标（points[index] → points[index+1]）。 */
+  index: number
+  /** 段中点（手柄落点）。 */
+  x: number
+  y: number
+  /** 段自身朝向：v=垂直段（左右拖），h=水平段（上下拖）。 */
+  orientation: 'h' | 'v'
+  /** 拖动轴：垂直段→x，水平段→y。 */
+  axis: 'x' | 'y'
+  cursor: 'ew-resize' | 'ns-resize'
+}
+
+/** 展开折线（BF20261013-029 曼哈顿几何体）：端口腿三肘、拐点之间单肘。 */
+export function expandEdgePathPoints(
   source: Pick<PositionedNode, 'x' | 'y'>,
   target: Pick<PositionedNode, 'x' | 'y'>,
   waypoints: ProcessGraphWaypoint[],
   hint: EdgeRouteHint = {},
-): string {
-  const raw: Array<{ x: number; y: number }> = [
+): OrthogonalPoint[] {
+  const raw: OrthogonalPoint[] = [
     { x: source.x, y: source.y },
     ...waypoints.map((point) => ({ x: point.x, y: point.y })),
     { x: target.x, y: target.y },
   ]
-  if (raw.length < 2) return ''
-  const points: Array<{ x: number; y: number }> = [raw[0]]
+  if (raw.length < 2) return []
+  const points: OrthogonalPoint[] = [raw[0]]
   for (let index = 1; index < raw.length; index++) {
     const from = points[points.length - 1]
     const to = raw[index]
@@ -351,6 +377,180 @@ export function buildEdgePath(
     }
     points.push(to)
   }
+  return points
+}
+
+/**
+ * 归一折线（BF20261013-030）：去重合点（<epsilon）+ 折叠共线中点。
+ * 归一后同向段不再相邻、平行段坐标互不相同 → 折线不可能自重叠。
+ */
+export function normalizeOrthogonalPoints(
+  points: OrthogonalPoint[],
+  epsilon = 0.5,
+): OrthogonalPoint[] {
+  const deduped: OrthogonalPoint[] = []
+  for (const point of points) {
+    const last = deduped[deduped.length - 1]
+    if (last && Math.abs(last.x - point.x) < epsilon && Math.abs(last.y - point.y) < epsilon) {
+      continue
+    }
+    deduped.push({ x: point.x, y: point.y })
+  }
+  const merged: OrthogonalPoint[] = []
+  for (const point of deduped) {
+    while (merged.length >= 2) {
+      const a = merged[merged.length - 2]
+      const b = merged[merged.length - 1]
+      const collinear = (a.x === b.x && b.x === point.x) || (a.y === b.y && b.y === point.y)
+      if (!collinear) break
+      merged.pop()
+    }
+    merged.push(point)
+  }
+  return merged
+}
+
+/** 折线 → 拐点：内部点即 waypoints（首尾为端口落点，不写入）。 */
+export function pointsToWaypoints(points: OrthogonalPoint[]): ProcessGraphWaypoint[] {
+  return points.slice(1, -1).map((point) => ({ x: point.x, y: point.y }))
+}
+
+/** 内段手柄：首尾端口腿不可拖动（方向由端口决定），只暴露内段。 */
+export function edgeSegmentHandles(points: OrthogonalPoint[], minLength = 8): EdgeSegmentHandle[] {
+  const handles: EdgeSegmentHandle[] = []
+  for (let index = 1; index <= points.length - 3; index += 1) {
+    const from = points[index]
+    const to = points[index + 1]
+    if (Math.abs(to.x - from.x) + Math.abs(to.y - from.y) < minLength) continue
+    const vertical = from.x === to.x
+    handles.push({
+      index,
+      x: (from.x + to.x) / 2,
+      y: (from.y + to.y) / 2,
+      orientation: vertical ? 'v' : 'h',
+      axis: vertical ? 'x' : 'y',
+      cursor: vertical ? 'ew-resize' : 'ns-resize',
+    })
+  }
+  return handles
+}
+
+/**
+ * 拖动内段（BF20261013-030）：垂直段左右拖（axis=x）、水平段上下拖（axis=y）。
+ * 夹取规则：两条相邻段保持原方向且不短于 minSegment（端口腿因此不会反向穿入节点），
+ * 拖动只改变该段自身坐标 → 全程严格横平竖直、不产生折返/重叠。无可行区间时原样返回。
+ */
+export function moveEdgeSegment(
+  points: OrthogonalPoint[],
+  index: number,
+  axis: 'x' | 'y',
+  value: number,
+  minSegment: number = EDGE_MIN_SEGMENT,
+): OrthogonalPoint[] {
+  if (index < 1 || index > points.length - 3) return points
+  const from = points[index]
+  const to = points[index + 1]
+  if (from[axis] !== to[axis]) return points
+  const prev = points[index - 1]
+  const next = points[index + 2]
+  let low = Number.NEGATIVE_INFINITY
+  let high = Number.POSITIVE_INFINITY
+  const prevDirection = Math.sign(from[axis] - prev[axis])
+  if (prevDirection > 0) low = Math.max(low, prev[axis] + minSegment)
+  else if (prevDirection < 0) high = Math.min(high, prev[axis] - minSegment)
+  const nextDirection = Math.sign(next[axis] - to[axis])
+  if (nextDirection > 0) high = Math.min(high, next[axis] - minSegment)
+  else if (nextDirection < 0) low = Math.max(low, next[axis] + minSegment)
+  if (low > high) return points
+  const clamped = Math.min(Math.max(value, low), high)
+  if (clamped === from[axis]) return points
+  return points.map((point, currentIndex) =>
+    currentIndex === index || currentIndex === index + 1 ? { ...point, [axis]: clamped } : point,
+  )
+}
+
+/**
+ * 拐点收敛（BF20261013-030）：连线最多 EDGE_MAX_SEGMENTS 段。
+ * 超出（历史点击插入产生的「贪吃蛇」）按端口朝向重建 3 段 Z：偏移取折线包围盒中心并夹取净空；
+ * 端口对齐退化为直线，两端朝向不同退化为 L。
+ */
+export function canonicalEdgeWaypoints(
+  start: OrthogonalPoint,
+  end: OrthogonalPoint,
+  waypoints: ProcessGraphWaypoint[],
+  hint: EdgeRouteHint = {},
+  minSegment: number = EDGE_MIN_SEGMENT,
+): ProcessGraphWaypoint[] {
+  const points = normalizeOrthogonalPoints(expandEdgePathPoints(start, end, waypoints, hint))
+  if (points.length <= EDGE_MAX_SEGMENTS + 1) return pointsToWaypoints(points)
+  return pointsToWaypoints(canonicalRoutePoints(start, end, points, hint, minSegment))
+}
+
+function canonicalRoutePoints(
+  start: OrthogonalPoint,
+  end: OrthogonalPoint,
+  points: OrthogonalPoint[],
+  hint: EdgeRouteHint,
+  minSegment: number,
+): OrthogonalPoint[] {
+  const sourceAxis = hint.sourceAxis ?? segmentAxis(points[0], points[1])
+  const targetAxis =
+    hint.targetAxis ?? segmentAxis(points[points.length - 2], points[points.length - 1])
+  if (sourceAxis !== targetAxis) {
+    const corner = sourceAxis === 'v' ? { x: start.x, y: end.y } : { x: end.x, y: start.y }
+    return [start, corner, end]
+  }
+  const center = boundsCenter(points)
+  if (sourceAxis === 'v') {
+    if (start.x === end.x) return [start, end]
+    const midY = clampValue(
+      center.y,
+      Math.min(start.y, end.y) + minSegment,
+      Math.max(start.y, end.y) - minSegment,
+    )
+    return [start, { x: start.x, y: midY }, { x: end.x, y: midY }, end]
+  }
+  if (start.y === end.y) return [start, end]
+  const midX = clampValue(
+    center.x,
+    Math.min(start.x, end.x) + minSegment,
+    Math.max(start.x, end.x) - minSegment,
+  )
+  return [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end]
+}
+
+function segmentAxis(from: OrthogonalPoint, to: OrthogonalPoint): 'h' | 'v' {
+  return from.y === to.y ? 'h' : 'v'
+}
+
+function boundsCenter(points: OrthogonalPoint[]): OrthogonalPoint {
+  let minX = Number.MAX_SAFE_INTEGER
+  let minY = Number.MAX_SAFE_INTEGER
+  let maxX = Number.MIN_SAFE_INTEGER
+  let maxY = Number.MIN_SAFE_INTEGER
+  for (const point of points) {
+    minX = Math.min(minX, point.x)
+    maxX = Math.max(maxX, point.x)
+    minY = Math.min(minY, point.y)
+    maxY = Math.max(maxY, point.y)
+  }
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }
+}
+
+/** 区间为空（端口过近）时取区间中点，保证仍落在净空范围中心。 */
+function clampValue(value: number, low: number, high: number): number {
+  if (low > high) return (low + high) / 2
+  return Math.min(Math.max(value, low), high)
+}
+
+export function buildEdgePath(
+  source: Pick<PositionedNode, 'x' | 'y'>,
+  target: Pick<PositionedNode, 'x' | 'y'>,
+  waypoints: ProcessGraphWaypoint[],
+  hint: EdgeRouteHint = {},
+): string {
+  const points = normalizeOrthogonalPoints(expandEdgePathPoints(source, target, waypoints, hint))
+  if (points.length < 2) return ''
   return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
 }
 
@@ -710,27 +910,22 @@ export function createDesignerModel(
       const byId = new Map(current.nodes.map((node) => [node.id, node] as const))
       current = {
         ...current,
-        edges: current.edges.map((edge) =>
-          edge.id === id
-            ? {
-                ...edge,
-                waypoints,
-                path: (() => {
-                  const source = byId.get(edge.sourceId)
-                  const target = byId.get(edge.targetId)
-                  if (!source || !target) return edge.path
-                  const { start, end, hint } = resolveEdgeRoute(
-                    edge,
-                    source,
-                    target,
-                    designerNodeSize,
-                    gatewayRadius,
-                  )
-                  return buildEdgePath(start, end, waypoints, hint)
-                })(),
-              }
-            : edge,
-        ),
+        edges: current.edges.map((edge) => {
+          if (edge.id !== id) return edge
+          const source = byId.get(edge.sourceId)
+          const target = byId.get(edge.targetId)
+          if (!source || !target) return edge
+          const { start, end, hint } = resolveEdgeRoute(
+            edge,
+            source,
+            target,
+            designerNodeSize,
+            gatewayRadius,
+          )
+          // BF20261013-030：写入前收敛（≤3 段、严格横平竖直），模型与渲染始终一致
+          const canonical = canonicalEdgeWaypoints(start, end, waypoints, hint)
+          return { ...edge, waypoints: canonical, path: buildEdgePath(start, end, canonical, hint) }
+        }),
         dirty: true,
       }
       emit()
