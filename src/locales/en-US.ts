@@ -2270,7 +2270,6 @@ export default {
     locateCurrent: 'Locate current',
     notArrived: 'Not arrived',
     scopeDept: 'This department',
-    propsUpdated: 'Properties updated (applied after saving)',
     validationPassedNoErrors: 'Validation passed: 0 actionable errors',
     graphValidationFailed: 'Validation failed',
     publishConfirmMessage:

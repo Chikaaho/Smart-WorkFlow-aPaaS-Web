@@ -2197,7 +2197,6 @@ export default {
     locateCurrent: '定位当前',
     notArrived: '未到达',
     scopeDept: '本部门',
-    propsUpdated: '属性已更新（保存后生效）',
     validationPassedNoErrors: '校验通过：可判定错误 0 条',
     graphValidationFailed: '校验失败',
     publishConfirmMessage:
