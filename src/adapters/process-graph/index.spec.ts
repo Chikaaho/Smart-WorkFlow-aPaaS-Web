@@ -577,13 +577,40 @@ describe('createDesignerModel', () => {
     expect(hitTestEdgeAtPoint(state.nodes, state.edges, 400, 300)).toBe('edge_1')
     // 容差外空白点不命中
     expect(hitTestEdgeAtPoint(state.nodes, state.edges, 400, 500)).toBeNull()
-    // 插入审批节点后画布中心出现两条相邻边，命中其中距点位最近的一条
+    // 插入审批节点后：可见连线上仍命中（BF031 起按真实渲染折线判定）
     model.insertNodeOnEdge('edge_1', 'APPROVAL', '审批', 400, 300)
     const after = model.state()
-    const hit = hitTestEdgeAtPoint(after.nodes, after.edges, 400, 300)
+    const hit = hitTestEdgeAtPoint(after.nodes, after.edges, 250, 300)
     expect(hit).not.toBeNull()
     const hitEdge = after.edges.find((candidate) => candidate.id === hit)
     expect(hitEdge).toBeDefined()
+    // 节点盒内（画布中心）不是连线（旧口径按源-目标直连虚位会误命中）
+    expect(hitTestEdgeAtPoint(after.nodes, after.edges, 400, 300)).toBeNull()
+  })
+
+  it('BF20261013-031：命中检测按真实渲染折线（自动路由折线可命中，直连虚位不命中）', () => {
+    const model = createDesignerModel(
+      {
+        processKey: 'bpm_hit',
+        name: '命中',
+        formKey: 'demo_form',
+        version: 1,
+        elements: [
+          { id: 'node_a', kind: 'node', type: 'APPROVAL', x: 420, y: 180, config: {}, style: {} },
+          { id: 'node_b', kind: 'node', type: 'END', x: 600, y: 300, config: {}, style: {} },
+          { id: 'edge_1', kind: 'edge', source: 'node_a', target: 'node_b' },
+        ],
+        canvas: {},
+      },
+      { width: 160, height: 50 },
+      22,
+    )
+    const state = model.state()
+    // 渲染折线 M 420 205 L 420 240 L 600 240 L 600 275：首段（x=420）上命中
+    expect(state.edges[0].path).toBe('M 420 205 L 420 240 L 600 240 L 600 275')
+    expect(hitTestEdgeAtPoint(state.nodes, state.edges, 420, 220)).toBe('edge_1')
+    // 源-目标中心直连虚位（无可见连线）不命中
+    expect(hitTestEdgeAtPoint(state.nodes, state.edges, 470, 213)).toBeNull()
   })
 
   it('P62 FD01：点击添加命中连线时与拖放同语义插入（addNode 路径不再产生断连节点）', () => {

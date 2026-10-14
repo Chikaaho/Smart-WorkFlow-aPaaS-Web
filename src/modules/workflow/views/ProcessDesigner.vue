@@ -72,6 +72,7 @@ import {
   edgeSegmentHandles,
   hitTestEdgeAtPoint,
   moveEdgeSegment,
+  parsePathPoints,
   pointsToWaypoints,
   DESIGNER_NODE_WIDTH,
   DESIGNER_NODE_HEIGHT,
@@ -1018,17 +1019,8 @@ function selectEdge(event: PointerEvent, edgeId: string) {
 
 type PathPoint = { x: number; y: number }
 
-/** 解析折线 path d（M/L 序列）为点序列。 */
-function pathPoints(d: string): PathPoint[] {
-  const points: PathPoint[] = []
-  const re = /[ML]\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g
-  let match = re.exec(d)
-  while (match) {
-    points.push({ x: Number(match[1]), y: Number(match[2]) })
-    match = re.exec(d)
-  }
-  return points
-}
+/** 折线 path 解析统一走适配器（命中检测/手柄/拖拽同一几何口径）。 */
+const pathPoints = parsePathPoints
 
 function pointDist(a: PathPoint, b: PathPoint) {
   return Math.hypot(a.x - b.x, a.y - b.y)

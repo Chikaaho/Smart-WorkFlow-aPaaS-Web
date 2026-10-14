@@ -730,7 +730,8 @@ function defaultAxis(from: { x: number; y: number }, to: { x: number; y: number 
  * 节点被视觉压在连线上但图中无任何边，发布校验报 2004/2005（断连节点）。
  * 修复语义：点击落点命中既有连线（点到折线段距离 ≤ tolerance）时按连线插入处理，
  * 与拖放到连线（insertNodeOnEdge）一致；未命中才落到画布空白处新增孤立节点。
- * 距离按节点中心与 waypoints 展开的折线段计算（与 buildEdgePath 同一几何）。
+ * BF20261013-031：按**真实渲染折线**（edge.path）判定——自动路由折线的中段同样可命中，
+ * 视觉上不存在连线的「源-目标直连虚位」不再命中；path 缺失时回退 源-拐点-目标。
  */
 export function hitTestEdgeAtPoint(
   nodes: PositionedNode[],
@@ -742,10 +743,14 @@ export function hitTestEdgeAtPoint(
   const byId = new Map(nodes.map((node) => [node.id, node] as const))
   let best: { id: string; distance: number } | null = null
   for (const edge of edges) {
-    const source = byId.get(edge.sourceId)
-    const target = byId.get(edge.targetId)
-    if (!source || !target) continue
-    const points = [source, ...edge.waypoints, target]
+    const rendered = parsePathPoints(edge.path)
+    let points: OrthogonalPoint[] = rendered
+    if (points.length < 2) {
+      const source = byId.get(edge.sourceId)
+      const target = byId.get(edge.targetId)
+      if (!source || !target) continue
+      points = [source, ...edge.waypoints, target]
+    }
     for (let index = 0; index < points.length - 1; index += 1) {
       const distance = pointToSegmentDistance(x, y, points[index], points[index + 1])
       if (distance <= tolerance && (best === null || distance < best.distance)) {
@@ -754,6 +759,18 @@ export function hitTestEdgeAtPoint(
     }
   }
   return best?.id ?? null
+}
+
+/** 解析折线 path d（M/L 序列）为点序列（命中检测与手柄几何共用）。 */
+export function parsePathPoints(d: string): OrthogonalPoint[] {
+  const points: OrthogonalPoint[] = []
+  const re = /[ML]\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g
+  let match = re.exec(d)
+  while (match) {
+    points.push({ x: Number(match[1]), y: Number(match[2]) })
+    match = re.exec(d)
+  }
+  return points
 }
 
 function pointToSegmentDistance(
