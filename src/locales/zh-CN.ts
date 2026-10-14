@@ -888,6 +888,10 @@ export default {
     fieldKeySuffixHint: '仅需输入后缀，系统前缀固定为 field_',
     fieldKeyDuplicate: '字段标识与已有字段重复，请换一个',
     scriptTitle: '高级编辑（脚本）',
+    scriptDialogTitle: '编辑字段脚本',
+    scriptEmpty: '尚未编写脚本',
+    scriptEdit: '编辑脚本',
+    scriptWrite: '编写脚本',
     scriptPlaceholder:
       '值变化时执行；用 #函数名 调用内置函数（字段名无需加引号），例如 #设置字段值(field_b, "固定值")',
     scriptOnLoad: '表单打开时也执行',

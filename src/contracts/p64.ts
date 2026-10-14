@@ -106,8 +106,14 @@ export interface TriggerBranch {
 export interface TriggerConfig {
   triggerId: string
   name?: string
-  event: 'TASK_SUBMITTED' | 'NODE_ROUND_COMPLETED' | 'PROCESS_COMPLETED'
-  /** TASK_SUBMITTED / NODE_ROUND_COMPLETED 必填源节点。 */
+  /** BF20261013-022：新增 节点开始前(NODE_ENTERING) / 流程发起(PROCESS_START)；全局触发器=流程发起/结束，节点触发器=开始前/结束。 */
+  event:
+    | 'TASK_SUBMITTED'
+    | 'NODE_ROUND_COMPLETED'
+    | 'PROCESS_COMPLETED'
+    | 'NODE_ENTERING'
+    | 'PROCESS_START'
+  /** 节点级事件（TASK_SUBMITTED / NODE_ROUND_COMPLETED / NODE_ENTERING）必填源节点。 */
   nodeKey?: string
   /** 函数体脚本（顶层 return），经 流程变量取值(name) 读取授权变量。 */
   script: string

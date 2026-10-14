@@ -237,7 +237,8 @@ export function emptyTriggerDraft(): TriggerDraft {
   return {
     triggerId: '',
     name: '',
-    event: 'NODE_ROUND_COMPLETED',
+    // BF20261013-022⑥：全局触发器默认「流程发起」
+    event: 'PROCESS_START',
     nodeKey: '',
     script:
       "const v = 流程变量取值('请替换为变量标识');\nif (v === 'PASS') {\n  return 1;\n}\nreturn null;",

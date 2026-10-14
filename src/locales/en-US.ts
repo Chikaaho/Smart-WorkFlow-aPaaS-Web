@@ -926,6 +926,10 @@ export default {
     fieldKeySuffixHint: 'Enter the suffix only — the system prefix is fixed as field_',
     fieldKeyDuplicate: 'This field key duplicates an existing field. Choose another.',
     scriptTitle: 'Advanced editing (script)',
+    scriptDialogTitle: 'Edit field script',
+    scriptEmpty: 'No script yet',
+    scriptEdit: 'Edit script',
+    scriptWrite: 'Write script',
     scriptPlaceholder:
       'Runs when the value changes; call built-in functions with #name (field names need no quotes), e.g. #设置字段值(field_b, "fixed")',
     scriptOnLoad: 'Also run when the form opens',

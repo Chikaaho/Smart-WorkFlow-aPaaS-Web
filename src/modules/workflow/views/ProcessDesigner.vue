@@ -23,7 +23,7 @@ const { t } = useI18n()
  * 图契约 = ProcessGraph（contractVersion=2 显式坐标），保存/校验/发布/查看同权威。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
 import {
@@ -36,6 +36,8 @@ import {
   pageProcessDefs,
 } from '@/modules/workflow/api'
 import { pageFormDefs } from '@/modules/form/api/form-def'
+import ScriptDialog from '@/components/ScriptDialog.vue'
+import { PROCESS_SCRIPT_FUNCTIONS } from '@/components/script-catalog'
 import type {
   FormSchemaField,
   GraphValidationError,
@@ -73,9 +75,6 @@ import type { DesignerModel, PositionedEdge, PositionedNode } from '@/adapters/p
 import FormSelectDialog from './FormSelectDialog.vue'
 import type { BpmVariableDef, TriggerConfig } from '@/contracts/p64'
 import {
-  BPM_VARIABLE_SOURCES,
-  BPM_VARIABLE_TYPES,
-  BPM_SYSTEM_FIELDS,
   buildTriggerConfig,
   buildVariableDef,
   emptyActionDraft,
@@ -86,7 +85,6 @@ import {
   toVariableDraft,
   validateTriggerDraft,
   validateVariableDraft,
-  compatibleVariableTypes,
   CHILD_WAIT_POLICIES,
   DEFAULT_MAX_DISPATCH,
 } from '@/modules/workflow/utils/p64-orchestration'
@@ -216,7 +214,6 @@ const advancedConfigVisible = ref(false)
 const savedAtText = ref('')
 const dirty = ref(false)
 let lastSavedJson = ''
-let autoSaveTimer: number | null = null
 function formatClock(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return pad(d.getHours()) + ':' + pad(d.getMinutes())
@@ -228,19 +225,35 @@ function currentGraphJson(): string {
     return ''
   }
 }
-function scheduleAutoSave() {
-  if (autoSaveTimer !== null) window.clearTimeout(autoSaveTimer)
-  autoSaveTimer = window.setTimeout(() => {
-    autoSaveTimer = null
-    if (dirty.value) void save()
-  }, 1500)
-}
 function onModelChanged() {
   const json = currentGraphJson()
   if (!json || json === lastSavedJson) return
+  // BF20261013-022⑤：关闭自动保存，仅标记未保存状态（离开时提醒）
   dirty.value = true
-  scheduleAutoSave()
 }
+
+/** BF20261013-022⑤：未保存离开提醒——路由离开弹确认框；刷新/关闭走浏览器原生确认。 */
+// DOM 全局类型按仓库约定用结构类型（.vue 内不裸引 DOM 全局）
+function beforeUnloadGuard(event: { preventDefault(): void; returnValue: string }) {
+  if (!dirty.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+async function confirmLeaveIfDirty(): Promise<boolean> {
+  if (!dirty.value) return true
+  try {
+    await ElMessageBox.confirm('您还有未保存的内容，是否退出', '提示', {
+      confirmButtonText: '退出',
+      cancelButtonText: '继续编辑',
+      type: 'warning',
+    })
+    dirty.value = false
+    return true
+  } catch {
+    return false
+  }
+}
+onBeforeRouteLeave(() => confirmLeaveIfDirty())
 
 /** 高级配置元数据（定义 payload 的 advancedConfig 扩展；缺省展示占位符）。 */
 interface GraphAdvancedConfig {
@@ -278,6 +291,13 @@ const nodeFormCapable = computed(
     selectedNode.value != null && NODE_FORM_CAPABLE_TYPES.includes(selectedNode.value.type ?? ''),
 )
 const nodeFormSelectVisible = ref(false)
+/** BF20261013-022①：节点触发器支持的节点（排除网关/开始/结束/校验等非业务节点）。 */
+const NODE_TRIGGER_EXCLUDED_TYPES = ['START', 'END', 'CONDITION', 'GATEWAY', 'P57_VERIFY']
+const nodeTriggerCapable = computed(
+  () =>
+    selectedNode.value != null &&
+    !NODE_TRIGGER_EXCLUDED_TYPES.includes(selectedNode.value.type ?? ''),
+)
 
 /** 选中节点已绑定的节点业务表单 formKey（回显）。 */
 const selectedNodeFormKey = computed(() => {
@@ -390,18 +410,6 @@ const nodeFormBindings = computed<Array<{ nodeKey: string; formKey: string; node
   },
 )
 
-/** 来源节点选项文案：业务名(nodeKey)，未命名/同名时仅 nodeKey。 */
-function nodeBindingLabel(item: { nodeKey: string; nodeName: string }) {
-  return item.nodeName === item.nodeKey ? item.nodeKey : `${item.nodeName}(${item.nodeKey})`
-}
-
-/** 变量表来源列：节点业务名（未绑定/未命名回退 nodeKey）。 */
-function nodeFormBindingName(nodeKey?: string) {
-  if (!nodeKey) return ''
-  const hit = nodeFormBindings.value.find((item) => item.nodeKey === nodeKey)
-  return hit ? nodeBindingLabel(hit) : nodeKey
-}
-
 /** 表单字段缓存（节点表单/主表/动作目标表单的字段选择器共用；按 formKey 惰性加载）。 */
 const formFieldCache = ref<Record<string, Array<{ name: string; type: string; label?: string }>>>(
   {},
@@ -439,33 +447,6 @@ function formFieldOptions(formKey?: string) {
 
 function formFieldLabel(field: { name: string; label?: string }) {
   return field.label ? `${field.label}(${field.name})` : field.name
-}
-
-function nodeFormFieldOptions(nodeKey: string) {
-  const binding = nodeFormBindings.value.find((item) => item.nodeKey === nodeKey)
-  return binding ? formFieldOptions(binding.formKey) : []
-}
-
-/** 变量表来源列：主表字段业务名（未加载/未知回退字段键）。 */
-function mainFormFieldLabel(fieldName?: string) {
-  if (!fieldName) return ''
-  const field = mainFormFields.value.find((item) => item.name === fieldName)
-  return field ? formFieldLabel(field) : fieldName
-}
-
-/** 变量表来源列：节点表单字段业务名（未加载/未知回退字段键）。 */
-function nodeFormFieldLabel(nodeKey: string | undefined, fieldName?: string) {
-  if (!fieldName) return ''
-  if (!nodeKey) return fieldName
-  const field = nodeFormFieldOptions(nodeKey).find((item) => item.name === fieldName)
-  return field ? formFieldLabel(field) : fieldName
-}
-
-/** 打开节点表单字段选择器时自愈加载对应表单字段（瞬时失败可重试）。 */
-function ensureNodeFormFields(nodeKey?: string) {
-  if (!nodeKey) return
-  const binding = nodeFormBindings.value.find((item) => item.nodeKey === nodeKey)
-  if (binding) void ensureFormFields(binding.formKey)
 }
 
 const graphNodes = computed(() => {
@@ -518,6 +499,10 @@ function editVariable(index: number) {
 }
 
 function saveVariable() {
+  // BF20261013-022⑦：变量固定 var_ 开头（未输入前缀时自动补齐）
+  if (variableDraft.value.varId && !variableDraft.value.varId.startsWith('var_')) {
+    variableDraft.value.varId = `var_${variableDraft.value.varId}`
+  }
   const existing = (graph.value?.variables ?? []).map((item) => item.varId)
   const pool =
     variableEditIndex.value === null
@@ -548,59 +533,15 @@ function removeVariable(index: number) {
   onModelChanged()
 }
 
-/** 主表字段可映射的变量类型（服务端发布校验同口径）。 */
-function variableTypeOptions(sourceField: string) {
-  const field = mainFormFields.value.find((item) => item.name === sourceField)
-  if (!field) return BPM_VARIABLE_TYPES
-  const compatible = compatibleVariableTypes(field.type, Boolean(field.multiple))
-  return compatible.length > 0 ? compatible : BPM_VARIABLE_TYPES
-}
-
 /* ─── BF20261013-018：P64 配置面板业务化文案（枚举值不变，仅展示中文化） ─── */
-
-/** 变量数据类型展示名。 */
-const VARIABLE_TYPE_LABELS: Record<string, string> = {
-  NUMBER: '数字',
-  STRING: '文本',
-  BOOLEAN: '是/否',
-  USER: '人员',
-  DEPT: '部门',
-  USER_SET: '人员集合',
-  DEPT_SET: '部门集合',
-  ROWS: '表格行集合',
-}
-
-/** 变量数据来源展示名。 */
-const VARIABLE_SOURCE_LABELS: Record<string, string> = {
-  MAIN_FORM: '主表字段',
-  NODE_FORM: '节点表单字段',
-  SYSTEM: '系统字段',
-}
-
-/** 系统字段白名单展示名（键 → 业务名）。 */
-const SYSTEM_FIELD_LABELS: Record<string, string> = {
-  processInstanceId: '流程实例编号',
-  processDefKey: '流程标识',
-  businessKey: '业务单号',
-  formKey: '表单标识',
-  initiatorId: '发起人',
-  tenantId: '租户',
-  currentNodeKey: '当前节点',
-  roundNo: '办理轮次',
-}
-
-/** 集合汇总方式展示名。 */
-const AGGREGATION_LABELS: Record<string, string> = {
-  NONE: '不汇总（单值）',
-  UNION: '合并去重',
-  CONCAT: '逐行拼接',
-}
 
 /** 触发时机展示名。 */
 const TRIGGER_EVENT_LABELS: Record<string, string> = {
   TASK_SUBMITTED: '任务提交时',
-  NODE_ROUND_COMPLETED: '节点本轮完成时',
-  PROCESS_COMPLETED: '流程完成时',
+  NODE_ROUND_COMPLETED: '节点结束',
+  PROCESS_COMPLETED: '流程结束',
+  NODE_ENTERING: '节点开始前',
+  PROCESS_START: '流程发起',
 }
 
 /** 判断结果类型展示名。 */
@@ -744,53 +685,6 @@ function removeTrigger(index: number) {
 }
 
 /** JSON 批量导入（模板/批量配置场景）：解析后整体替换，发布校验仍为权威。 */
-async function importVariablesJson() {
-  try {
-    const { value } = await ElMessageBox.prompt(
-      '粘贴变量定义 JSON 数组（ProcessVariableDef[]）',
-      '导入变量 JSON',
-      {
-        inputType: 'textarea',
-        inputPlaceholder: '[{"varId":"v_example", ...}]',
-        inputValue: JSON.stringify(graph.value?.variables ?? [], null, 2),
-      },
-    )
-    const parsed = JSON.parse(value)
-    if (!Array.isArray(parsed)) {
-      ElMessage.error('导入失败：JSON 必须是数组')
-      return
-    }
-    graph.value = { ...(graph.value ?? {}), variables: parsed } as DesignerGraph
-    onModelChanged()
-    ElMessage.success(`已导入 ${parsed.length} 个变量定义（保存并经发布校验生效）`)
-  } catch {
-    // 用户取消或 JSON 解析失败由 catch 吞掉；解析错误单独提示
-  }
-}
-
-async function importTriggersJson() {
-  try {
-    const { value } = await ElMessageBox.prompt(
-      '粘贴触发器配置 JSON 数组（TriggerConfig[]）',
-      '导入触发器 JSON',
-      {
-        inputType: 'textarea',
-        inputPlaceholder: '[{"triggerId":"trg_example", ...}]',
-        inputValue: JSON.stringify(graph.value?.triggers ?? [], null, 2),
-      },
-    )
-    const parsed = JSON.parse(value)
-    if (!Array.isArray(parsed)) {
-      ElMessage.error('导入失败：JSON 必须是数组')
-      return
-    }
-    graph.value = { ...(graph.value ?? {}), triggers: parsed } as DesignerGraph
-    onModelChanged()
-    ElMessage.success(`已导入 ${parsed.length} 个触发器（保存并经发布校验生效）`)
-  } catch {
-    // 用户取消
-  }
-}
 
 function addTriggerBranch() {
   triggerDraft.value.branches.push(emptyBranchDraft())
@@ -1214,10 +1108,7 @@ function isApproverSelectionField(field: Pick<BpmNodeConfigField, 'type' | 'vali
 
 const approverPickerVisible = ref(false)
 const approverTargetKey = ref('')
-function openApproverPicker(fieldKey: string) {
-  approverTargetKey.value = fieldKey
-  approverPickerVisible.value = true
-}
+
 function onApproverPicked(candidates: ApproverCandidate[]) {
   const fieldKey = approverTargetKey.value
   if (!fieldKey || candidates.length === 0) return
@@ -1512,16 +1403,19 @@ const PARTICIPANT_PANEL_NODE_TYPES = ['APPROVAL', 'CONSENSUS']
 
 /** 参与人策略展示名（本批改动文件域不含 locale 资源，文案先落在设计器，后续可迁 locale 键）。 */
 const PARTICIPANT_STRATEGY_LABELS: Record<ParticipantStrategy, string> = {
-  FIXED_USER: '指定人员',
-  ROLE: '指定角色',
-  DEPT_LEADER: '部门负责人',
-  POST: '指定岗位',
+  FIXED_USER: '选择人员',
+  ROLE: '选择角色',
+  DEPT_LEADER: '选择部门',
+  POST: '选择岗位',
   DEPT_POST: '部门岗位',
   EXPRESSION: '表达式',
   ADAPTER: '外部适配器',
   FORM_FIELD: '表单字段',
   NODE_FORM_AGGREGATE: '节点表单聚合',
 }
+
+/** BF20261013-022④：参与人策略收敛为五项（其余仅作旧数据回显，不再提供新选）。 */
+const ALLOWED_PARTICIPANT_STRATEGIES = ['FIXED_USER', 'DEPT_LEADER', 'ROLE', 'POST', 'EXPRESSION']
 
 /** 参与人字段：真实契约的 participant、mock APPROVAL 的 approver，或带 approverTypes 的兼容 object 字段。 */
 const participantField = computed<BpmNodeConfigField | null>(() => {
@@ -1579,10 +1473,12 @@ const participantShape = ref<ParticipantShapeKind>('empty')
 const participantStrategyOptions = computed(() => {
   // 策略全集以服务端 validation.strategies 优先；未下发时回退契约常量（含 P63 FORM_FIELD）
   const declared = participantField.value?.validation?.['strategies']
-  const strategies =
+  const declaredList =
     Array.isArray(declared) && declared.length > 0
       ? declared.map((item) => String(item))
       : [...PARTICIPANT_STRATEGIES]
+  // BF20261013-022④：只提供五项业务策略
+  const strategies = declaredList.filter((item) => ALLOWED_PARTICIPANT_STRATEGIES.includes(item))
   return strategies.map((strategy) => ({
     value: strategy,
     label: PARTICIPANT_STRATEGY_LABELS[strategy as ParticipantStrategy] ?? strategy,
@@ -1724,6 +1620,105 @@ function subflowWaitNodeId(nodeKey: string): string {
 }
 function subflowActionId(nodeKey: string): string {
   return `act_subflow_${nodeKey}`
+}
+
+/* ─────────── BF20261013-022②：统一脚本编辑弹窗 ─────────── */
+
+const scriptDialogVisible = ref(false)
+const scriptDialogTitle = ref('编辑脚本')
+const scriptDialogCode = ref('')
+/** 弹窗应用目标：触发器草稿 / 子流程判断脚本 / 参与人表达式 / 节点触发器。 */
+type ScriptDialogTarget =
+  | { kind: 'triggerDraft' }
+  | { kind: 'subflow' }
+  | { kind: 'expression' }
+  | { kind: 'nodeTrigger'; event: string }
+let scriptDialogTarget: ScriptDialogTarget | null = null
+
+function openProcessScriptDialog(title: string, code: string, target: ScriptDialogTarget) {
+  scriptDialogTitle.value = title
+  scriptDialogCode.value = code ?? ''
+  scriptDialogTarget = target
+  scriptDialogVisible.value = true
+}
+
+function onScriptDialogSave(code: string) {
+  const target = scriptDialogTarget
+  if (!target) return
+  if (target.kind === 'triggerDraft') {
+    triggerDraft.value.script = code
+  } else if (target.kind === 'subflow') {
+    subflowForm.value.script = code
+    applySubflow()
+  } else if (target.kind === 'expression') {
+    participantForm.value.genericValue = code
+    applyParticipant()
+  } else if (target.kind === 'nodeTrigger') {
+    upsertNodeTriggerScript(target.event as TriggerConfig['event'], code)
+  }
+}
+
+/** ①节点触发器：取该节点指定事件的触发器（不存在即未配置）。 */
+function nodeTriggerOf(event: string): TriggerConfig | null {
+  const node = selectedNode.value
+  if (!node) return null
+  const found = (graph.value?.triggers ?? []).find(
+    (item) => item.event === event && item.nodeKey === node.id,
+  )
+  return found ?? null
+}
+
+/** ①节点触发器：状态文案（已配置显示脚本摘要）。 */
+function nodeTriggerSummary(event: string): string {
+  const trigger = nodeTriggerOf(event)
+  if (!trigger || !trigger.script?.trim()) return '未配置'
+  const firstLine = trigger.script.trim().split('\n')[0] ?? ''
+  return `已配置 · ${firstLine.slice(0, 40)}`
+}
+
+/** ①节点触发器：打开脚本弹窗（无则应用时创建；变量授权=全部已定义变量）。 */
+function openNodeTriggerScriptDialog(event: string) {
+  const node = selectedNode.value
+  if (!node) return
+  const existing = nodeTriggerOf(event)
+  const title = event === 'NODE_ENTERING' ? '节点开始前触发脚本' : '节点结束触发脚本'
+  openProcessScriptDialog(title, existing?.script ?? '', { kind: 'nodeTrigger', event })
+}
+
+/** ①节点触发器：应用脚本（存在则更新；不存在则创建无动作触发器——脚本副作用即用途）。 */
+function upsertNodeTriggerScript(event: TriggerConfig['event'], code: string) {
+  const node = selectedNode.value
+  if (!graph.value || !node) return
+  const triggerId = event === 'NODE_ENTERING' ? `node_enter_${node.id}` : `node_end_${node.id}`
+  const triggers = (graph.value.triggers ?? []).filter((item) => item.triggerId !== triggerId)
+  const trimmed = code.trim()
+  const existing = nodeTriggerOf(event)
+  if (!trimmed && !existing) {
+    // 清空脚本且原无触发器：无需创建
+    return
+  }
+  const name = event === 'NODE_ENTERING' ? '节点开始前触发' : '节点结束触发'
+  triggers.push({
+    triggerId,
+    name,
+    event,
+    nodeKey: node.id,
+    script: trimmed || 'return null;',
+    variables: (graph.value.variables ?? []).map((item) => item.varId),
+    branches: [],
+    // 节点触发器无动作分支：脚本副作用即用途，返回值不参与匹配（执行记录 UNMATCHED 属正常）
+    unmatchedDisposition: 'IGNORE',
+    errorDisposition: 'IGNORE',
+  })
+  graph.value = { ...(graph.value ?? {}), triggers } as DesignerGraph
+  dirty.value = true
+}
+
+/** ④参与人表达式：打开脚本弹窗（表达式=脚本，运行期由 SCRIPT 解析器求值）。 */
+function openExpressionScriptDialog() {
+  openProcessScriptDialog('参与人表达式脚本', participantForm.value.genericValue, {
+    kind: 'expression',
+  })
 }
 
 /** ROWS 集合变量选项（按表格行逐条发起的数据源，来自「变量」登记）。 */
@@ -1918,7 +1913,10 @@ const genericConfigFields = computed(() => {
       field.key !== 'name' &&
       field.key !== participantKey &&
       field.key !== 'nodeForm' &&
-      field.key !== 'waitActionIds',
+      field.key !== 'waitActionIds' &&
+      // BF20261013-022③④：object 型 JSON 文本配置与「审批人（兼容）」不再渲染
+      field.type !== 'object' &&
+      !isApproverSelectionField(field),
   )
 })
 
@@ -1979,6 +1977,8 @@ watch(defId, () => void load(), { immediate: true })
 let canvasObserver: ResizeObserver | null = null
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
+  // BF20261013-022⑤：未保存时刷新/关闭走浏览器原生确认
+  window.addEventListener('beforeunload', beforeUnloadGuard)
   // 画布尺寸变化时重新锚定适配（字体/布局就绪后初适配有偏差）
   canvasObserver = new ResizeObserver(() => {
     if (svgRef.value && svgRef.value.clientWidth > 0) fitViewport()
@@ -1988,12 +1988,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('beforeunload', beforeUnloadGuard)
   canvasObserver?.disconnect()
   canvasObserver = null
-  if (autoSaveTimer !== null) {
-    window.clearTimeout(autoSaveTimer)
-    autoSaveTimer = null
-  }
 })
 
 function onKeydown(event: KeyboardEvent) {
@@ -2465,6 +2462,37 @@ function nodeLabelLines(label: string) {
                   >办理人填报的业务字段按任务/轮次独立保存；变量可读本轮已最终提交数据。</small
                 >
               </el-form-item>
+              <!-- ═══ BF20261013-022①：节点触发器（开始前 / 结束），脚本经统一弹窗编写 ═══ -->
+              <template v-if="nodeTriggerCapable">
+                <div class="props-section props-section--advanced">节点触发器</div>
+                <el-form-item label="节点开始前">
+                  <div class="participant-picker-row">
+                    <el-button @click="openNodeTriggerScriptDialog('NODE_ENTERING')">
+                      {{ nodeTriggerOf('NODE_ENTERING')?.script?.trim() ? '编辑脚本' : '编写脚本' }}
+                    </el-button>
+                    <small class="participant-hint">{{
+                      nodeTriggerSummary('NODE_ENTERING')
+                    }}</small>
+                  </div>
+                </el-form-item>
+                <el-form-item label="节点结束">
+                  <div class="participant-picker-row">
+                    <el-button @click="openNodeTriggerScriptDialog('NODE_ROUND_COMPLETED')">
+                      {{
+                        nodeTriggerOf('NODE_ROUND_COMPLETED')?.script?.trim()
+                          ? '编辑脚本'
+                          : '编写脚本'
+                      }}
+                    </el-button>
+                    <small class="participant-hint">{{
+                      nodeTriggerSummary('NODE_ROUND_COMPLETED')
+                    }}</small>
+                  </div>
+                </el-form-item>
+                <small class="participant-hint"
+                  >开始前=任务创建时、办理人办理前；结束=节点本轮完成时。脚本可读写流程变量，返回值不用于匹配。</small
+                >
+              </template>
               <!-- ═══ BF20261013-019：发起子流程（子流程并入审批节点；等待块由设计器自动生成） ═══ -->
               <template v-if="selectedNode.type === 'APPROVAL'">
                 <el-form-item label="发起子流程">
@@ -2488,33 +2516,24 @@ function nodeLabelLines(label: string) {
                       />
                     </el-select>
                   </el-form-item>
-                  <el-form-item label="目标表单">
-                    <el-select
-                      v-model="subflowForm.targetFormKey"
-                      filterable
-                      allow-create
-                      default-first-option
-                      placeholder="选择已发布表单（或输入表单标识）"
-                      @change="applySubflow"
-                    >
-                      <el-option
-                        v-for="item in publishedTargetOptions.forms"
-                        :key="item.key"
-                        :label="`${item.name}(${item.key})`"
-                        :value="item.key"
-                      />
-                    </el-select>
-                  </el-form-item>
-                  <el-form-item
-                    label="是否发起（判断脚本：返回 是/否；可用 #获取流程变量(变量标识) 等内置函数；留空 = 总是发起）"
+                  <small class="participant-hint"
+                    >子流程使用其自身绑定的审批意见表单，无需在此选择表单。</small
                   >
-                    <el-input
-                      v-model="subflowForm.script"
-                      type="textarea"
-                      :rows="4"
-                      spellcheck="false"
-                      @blur="applySubflow"
-                    />
+                  <el-form-item label="是否发起（判断脚本：返回 是/否；留空 = 总是发起）">
+                    <div class="participant-picker-row">
+                      <el-button
+                        @click="
+                          openProcessScriptDialog('是否发起判断脚本', subflowForm.script, {
+                            kind: 'subflow',
+                          })
+                        "
+                      >
+                        {{ subflowForm.script?.trim() ? '编辑脚本' : '编写脚本' }}
+                      </el-button>
+                      <small v-if="subflowForm.script?.trim()" class="participant-hint">
+                        {{ subflowForm.script.trim().split('\n')[0].slice(0, 50) }}
+                      </small>
+                    </div>
                   </el-form-item>
                   <el-form-item label="可读取的变量（判断脚本只能用这里勾选的变量）">
                     <el-select
@@ -2760,25 +2779,24 @@ function nodeLabelLines(label: string) {
                     </el-radio-group>
                   </el-form-item>
                 </template>
-                <!-- ROLE/POST/DEPT_POST/EXPRESSION：通用取值（保存为 {strategy, value}） -->
+                <!-- BF20261013-022②④：表达式走脚本弹窗；ROLE/POST 保留逗号取值 -->
                 <el-form-item
-                  v-else
-                  :label="participantForm.strategy === 'EXPRESSION' ? '表达式' : '取值'"
+                  v-else-if="participantForm.strategy === 'EXPRESSION'"
+                  label="表达式（脚本）"
                 >
+                  <div class="participant-picker-row">
+                    <el-button @click="openExpressionScriptDialog">
+                      {{ participantForm.genericValue ? '编辑脚本' : '编写脚本' }}
+                    </el-button>
+                    <small v-if="participantForm.genericValue" class="participant-hint">
+                      {{ participantForm.genericValue.slice(0, 60) }}
+                    </small>
+                  </div>
+                </el-form-item>
+                <el-form-item v-else label="取值">
                   <el-input
                     v-model="participantForm.genericValue"
-                    :placeholder="
-                      participantForm.strategy === 'EXPRESSION'
-                        ? '请输入表达式'
-                        : '多个取值用英文逗号分隔'
-                    "
-                    @change="applyParticipant"
-                    @blur="applyParticipant"
-                  />
-                </el-form-item>
-                <el-form-item v-if="participantForm.strategy === 'ADAPTER'" label="适配器 ID">
-                  <el-input
-                    v-model="participantForm.adapterId"
+                    placeholder="多个取值用英文逗号分隔"
                     @change="applyParticipant"
                     @blur="applyParticipant"
                   />
@@ -2982,40 +3000,9 @@ function nodeLabelLines(label: string) {
                 </el-form-item>
               </template>
               <template v-for="field in genericConfigFields" :key="field.key">
-                <!-- name 已由顶部「节点名称」编辑项承载，能力注册表同名项不再重复渲染 -->
-                <el-form-item v-if="isApproverSelectionField(field)" :label="field.label">
-                  <!-- 设计09：已解析审批人（config.approverName）以 chip+按钮呈现；未解析回退输入框 -->
-                  <div v-if="nodeMeta.approverName" class="approver-card">
-                    <div class="approver-card__row">
-                      <span class="approver-card__chip">{{ nodeMeta.approverName }}</span>
-                      <el-button
-                        size="small"
-                        class="approver-card__pick"
-                        @click="openApproverPicker(field.key)"
-                      >
-                        {{ t('workflow.selectApprover') }}
-                      </el-button>
-                    </div>
-                    <small class="approver-card__hint">{{
-                      t('workflow.approverSupportHint')
-                    }}</small>
-                  </div>
-                  <!-- V012-BUG-019：未解析时同样以选择器选人，移除手填用户 ID 输入框 -->
-                  <div v-else class="approver-field">
-                    <el-button @click="openApproverPicker(field.key)">
-                      {{ t('workflow.selectApprover') }}
-                    </el-button>
-                  </div>
-                </el-form-item>
-                <el-form-item v-else-if="field.type === 'object'" :label="field.label">
-                  <el-input
-                    v-model="propForm[field.key] as string"
-                    :placeholder="t('workflow.objectConfigJsonPlaceholder')"
-                    @change="applyProps"
-                    @blur="applyProps"
-                  />
-                </el-form-item>
-                <el-form-item v-else-if="field.type === 'string'" :label="field.label">
+                <!-- BF20261013-022③④：object 型 JSON 配置与「审批人（兼容）」不再渲染
+                     （参与人统一由「参与人策略」结构化面板承载） -->
+                <el-form-item v-if="field.type === 'string'" :label="field.label">
                   <el-input
                     v-model="propForm[field.key] as string"
                     @change="applyProps"
@@ -3214,6 +3201,15 @@ function nodeLabelLines(label: string) {
       </template>
     </el-dialog>
 
+    <!-- ═══ BF20261013-022②：统一脚本编辑弹窗（流程脚本函数目录） ═══ -->
+    <ScriptDialog
+      v-model:visible="scriptDialogVisible"
+      :title="scriptDialogTitle"
+      :code="scriptDialogCode"
+      :functions="PROCESS_SCRIPT_FUNCTIONS"
+      @save="onScriptDialogSave"
+    />
+
     <!-- ═══ P64 阶段Ⅰ：流程变量配置弹窗 ═══ -->
     <el-dialog
       v-model="variablesVisible"
@@ -3224,34 +3220,14 @@ function nodeLabelLines(label: string) {
     >
       <div class="p64-toolbar">
         <el-button size="small" type="primary" @click="resetVariableDraft">新增变量</el-button>
-        <el-button size="small" @click="importVariablesJson">批量导入</el-button>
         <span class="p64-hint"
-          >变量是给判断规则取数用的：来源可选主表字段、节点表单字段或系统字段；集合类变量需选一种汇总方式；设为必填的变量取不到值时，不会触发后续动作。</span
+          >变量固定 var_
+          开头。默认由脚本赋值（#设置流程变量）；也可与主表单或审批意见表单字段同名自动取值（审批意见取最新一轮）；取不到值按空处理，不阻止触发。</span
         >
       </div>
       <el-table :data="graph?.variables ?? []" size="small" class="p64-table">
-        <el-table-column prop="varId" label="变量标识" width="150" />
-        <el-table-column prop="name" label="名称" width="140" />
-        <el-table-column label="数据类型" width="100">
-          <template #default="{ row }">{{ labelOf(VARIABLE_TYPE_LABELS, row.type) }}</template>
-        </el-table-column>
-        <el-table-column label="数据来源" min-width="220">
-          <template #default="{ row }">
-            {{ labelOf(VARIABLE_SOURCE_LABELS, row.source) }}
-            <template v-if="row.source === 'MAIN_FORM'"
-              >· {{ mainFormFieldLabel(row.sourceField) }}</template
-            >
-            <template v-else-if="row.source === 'NODE_FORM'">
-              · {{ nodeFormBindingName(row.sourceNodeKey) }}/{{
-                nodeFormFieldLabel(row.sourceNodeKey, row.sourceFormField)
-              }}</template
-            >
-            <template v-else>· {{ row.sourceField }}</template>
-          </template>
-        </el-table-column>
-        <el-table-column label="汇总方式" width="110">
-          <template #default="{ row }">{{ labelOf(AGGREGATION_LABELS, row.aggregation) }}</template>
-        </el-table-column>
+        <el-table-column prop="varId" label="变量标识" width="200" />
+        <el-table-column prop="name" label="名称" min-width="160" />
         <el-table-column label="操作" width="140">
           <template #default="{ $index }">
             <el-button size="small" link type="primary" @click="editVariable($index)"
@@ -3266,7 +3242,7 @@ function nodeLabelLines(label: string) {
       <el-divider />
       <el-form label-position="top" size="small">
         <div class="p64-grid">
-          <el-form-item label="变量标识（创建后不可修改，改名不影响已引用处）">
+          <el-form-item label="变量标识（var_ 开头；创建后不可修改）">
             <el-input
               v-model="variableDraft.varId"
               placeholder="var_example"
@@ -3276,93 +3252,11 @@ function nodeLabelLines(label: string) {
           <el-form-item label="变量名称">
             <el-input v-model="variableDraft.name" />
           </el-form-item>
-          <el-form-item label="数据类型">
-            <el-select v-model="variableDraft.type">
-              <el-option
-                v-for="item in variableTypeOptions(variableDraft.sourceField)"
-                :key="item"
-                :label="labelOf(VARIABLE_TYPE_LABELS, item)"
-                :value="item"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="数据来源">
-            <el-select v-model="variableDraft.source">
-              <el-option
-                v-for="item in BPM_VARIABLE_SOURCES"
-                :key="item"
-                :label="labelOf(VARIABLE_SOURCE_LABELS, item)"
-                :value="item"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item v-if="variableDraft.source === 'MAIN_FORM'" label="主表字段">
-            <el-select v-model="variableDraft.sourceField" filterable>
-              <el-option
-                v-for="field in mainFormFields"
-                :key="field.name"
-                :label="field.label ? `${field.label}(${field.name})` : field.name"
-                :value="field.name"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item
-            v-if="variableDraft.source === 'NODE_FORM'"
-            label="来源节点（已绑定节点表单）"
-          >
-            <el-select v-model="variableDraft.sourceNodeKey">
-              <el-option
-                v-for="item in nodeFormBindings"
-                :key="item.nodeKey"
-                :label="nodeBindingLabel(item)"
-                :value="item.nodeKey"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item v-if="variableDraft.source === 'NODE_FORM'" label="节点表单字段">
-            <el-select
-              v-model="variableDraft.sourceFormField"
-              filterable
-              @visible-change="
-                (visible: boolean) => visible && ensureNodeFormFields(variableDraft.sourceNodeKey)
-              "
-            >
-              <el-option
-                v-for="field in nodeFormFieldOptions(variableDraft.sourceNodeKey)"
-                :key="field.name"
-                :label="formFieldLabel(field)"
-                :value="field.name"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item v-if="variableDraft.source === 'SYSTEM'" label="系统字段">
-            <el-select v-model="variableDraft.sourceField">
-              <el-option
-                v-for="item in BPM_SYSTEM_FIELDS"
-                :key="item"
-                :label="labelOf(SYSTEM_FIELD_LABELS, item)"
-                :value="item"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="汇总方式">
-            <el-select v-model="variableDraft.aggregation">
-              <el-option
-                v-for="item in ['NONE', 'UNION', 'CONCAT']"
-                :key="item"
-                :label="labelOf(AGGREGATION_LABELS, item)"
-                :value="item"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="取不到值时">
-            <el-switch
-              v-model="variableDraft.nullable"
-              active-text="允许为空（由判断规则自行处理）"
-              inactive-text="视为必填（不触发后续动作）"
-            />
-          </el-form-item>
         </div>
+        <p class="p64-hint" style="margin: 0 0 8px">
+          按 JS
+          类型使用（数字/文本/是-否/数组），无需选择数据类型；数据来源无需维护——脚本可赋值，也可与主表单/审批意见表单字段同名自动取值（审批意见取最新一轮）。
+        </p>
         <div v-if="variableErrors.length" class="p64-errors">
           <p v-for="item in variableErrors" :key="item" role="alert">{{ item }}</p>
         </div>
@@ -3375,17 +3269,16 @@ function nodeLabelLines(label: string) {
     <!-- ═══ P64 阶段Ⅰ：触发规则配置弹窗 ═══ -->
     <el-dialog
       v-model="triggersVisible"
-      title="触发规则（判断后自动发起流程）"
+      title="流程触发器（流程发起 / 流程结束）"
       width="min(980px, 94vw)"
       class="p64-dialog"
       append-to-body
     >
       <div class="p64-toolbar">
         <el-button size="small" type="primary" @click="resetTriggerDraft">新增触发器</el-button>
-        <el-button size="small" @click="importTriggersJson">批量导入</el-button>
         <span class="p64-hint"
-          >判断脚本只做判断、不改数据：读取勾选的变量并返回一个结果值（数字、文本、是/否 或 空）；
-          每个结果值对应一个动作（自动发起关联流程）；未匹配或出错时不会自动执行动作。</span
+          >全局触发器只有两类：流程发起、流程结束（节点开始前/结束的触发器在节点属性里配置）。
+          判断脚本经「编写脚本」弹窗撰写，读取勾选的变量并返回一个结果值；每个结果值对应一个动作。</span
         >
       </div>
       <el-table :data="graph?.triggers ?? []" size="small" class="p64-table">
@@ -3436,20 +3329,10 @@ function nodeLabelLines(label: string) {
           <el-form-item label="触发时机">
             <el-select v-model="triggerDraft.event">
               <el-option
-                v-for="item in ['TASK_SUBMITTED', 'NODE_ROUND_COMPLETED', 'PROCESS_COMPLETED']"
+                v-for="item in ['PROCESS_START', 'PROCESS_COMPLETED']"
                 :key="item"
                 :label="labelOf(TRIGGER_EVENT_LABELS, item)"
                 :value="item"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item v-if="triggerDraft.event !== 'PROCESS_COMPLETED'" label="源节点">
-            <el-select v-model="triggerDraft.nodeKey" filterable>
-              <el-option
-                v-for="node in graphNodes"
-                :key="node.id"
-                :label="graphNodeLabel(node)"
-                :value="node.id"
               />
             </el-select>
           </el-form-item>
@@ -3464,21 +3347,22 @@ function nodeLabelLines(label: string) {
             </el-select>
           </el-form-item>
         </div>
-        <el-form-item
-          label="判断脚本（只做判断；用 #函数名 调用内置函数读取数据，返回 数字/文本/是-否/空）"
-        >
-          <el-input v-model="triggerDraft.script" type="textarea" :rows="7" spellcheck="false" />
+        <el-form-item label="判断脚本（返回 数字/文本/是-否/空；函数在弹窗内点选插入）">
+          <div class="participant-picker-row">
+            <el-button
+              @click="
+                openProcessScriptDialog('触发器判断脚本', triggerDraft.script, {
+                  kind: 'triggerDraft',
+                })
+              "
+            >
+              {{ triggerDraft.script?.trim() ? '编辑脚本' : '编写脚本' }}
+            </el-button>
+            <small v-if="triggerDraft.script?.trim()" class="p64-hint">
+              {{ triggerDraft.script.trim().split('\n')[0].slice(0, 60) }}
+            </small>
+          </div>
         </el-form-item>
-        <div class="script-help">
-          <p class="script-help__title">
-            可用函数（字段名/变量名无需加引号）：#获取流程变量(变量标识) · #设置流程变量(变量标识,
-            值) · #获取部门负责人(部门ID) · #获取分管领导(部门ID) · #获取上级部门(部门ID)
-          </p>
-          <p class="script-help__item">
-            示例：<code>#设置流程变量(dept_leader, #获取部门负责人(#获取流程变量(dept)))</code>
-            ——读出流程变量里的部门，取该部门负责人写入新变量（本实例内后续脚本与节点可读）
-          </p>
-        </div>
         <div class="p64-toolbar">
           <span class="p64-subtitle">结果分支（按返回值匹配）</span>
           <el-button size="small" @click="addTriggerBranch">添加分支</el-button>
