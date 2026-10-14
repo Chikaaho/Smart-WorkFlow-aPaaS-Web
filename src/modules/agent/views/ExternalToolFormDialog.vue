@@ -209,7 +209,6 @@ async function handleSubmit() {
               :placeholder="t('agent.toolNamePlaceholder')"
               maxlength="128"
             />
-            <div class="form-field__hint">{{ t('agent.toolNameHint') }}</div>
           </div>
           <div class="form-field form-field--required">
             <label class="form-field__label">{{ t('common.descriptionField') }}</label>
@@ -239,7 +238,6 @@ async function handleSubmit() {
               placeholder="https://api.example.com/v1/tool"
               maxlength="1024"
             />
-            <div class="form-field__hint">{{ t('agent.requestUrlHint') }}</div>
           </div>
           <div class="form-field form-field--required">
             <label class="form-field__label">{{ t('agent.httpMethod') }}</label>
@@ -277,7 +275,6 @@ async function handleSubmit() {
               :placeholder="t('agent.jsonSchemaPlaceholderQuery')"
               style="font-family: monospace"
             />
-            <div class="form-field__hint">{{ t('agent.inputSchemaOptionalHint') }}</div>
           </div>
         </FormGrid>
       </FormSection>

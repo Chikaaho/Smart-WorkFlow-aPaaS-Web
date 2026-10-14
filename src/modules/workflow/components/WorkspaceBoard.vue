@@ -953,7 +953,6 @@ onBeforeUnmount(() => {
 
     <div v-if="editing" class="wsd-toolbar">
       <span v-if="!custom" class="wsd-toolbar__badge">{{ t('workspace.defaultLayout') }}</span>
-      <p class="wsd-toolbar__hint">{{ t('workspace.canvasHint') }}</p>
       <div class="wsd-toolbar__actions">
         <button class="wsd-btn" type="button" @click="resetConfig">
           {{ t('common.restoreDefault') }}
@@ -978,7 +977,6 @@ onBeforeUnmount(() => {
           <h4>{{ t('workspace.componentLibrary') }}</h4>
           <span>{{ t('workspace.basicComponent') }}</span>
         </div>
-        <p class="wsd-palette__hint">{{ t('workspace.componentLibraryHint') }}</p>
         <div class="wsd-palette-list">
           <div
             v-for="type in cardTypes"
@@ -1176,7 +1174,6 @@ onBeforeUnmount(() => {
             >
               <div class="wsd-panel__head">
                 <h3 class="wsd-panel__title">{{ t('workspace.activityTitle') }}</h3>
-                <span class="wsd-panel__hint">{{ t('workspace.activityHint') }}</span>
               </div>
               <div class="wsd-chiprow wsd-chiprow--activity">
                 <button
@@ -1210,7 +1207,6 @@ onBeforeUnmount(() => {
             >
               <div class="wsd-panel__head">
                 <h3 class="wsd-panel__title">{{ t('workspace.efficiencyTitle') }}</h3>
-                <span class="wsd-panel__hint">{{ t('workspace.effHint') }}</span>
               </div>
               <div class="wsd-eff-hero">
                 <div class="wsd-eff-hero__main">

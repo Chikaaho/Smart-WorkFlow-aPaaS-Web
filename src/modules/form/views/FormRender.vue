@@ -696,7 +696,6 @@ onMounted(() => {
 
         <!-- 页标题 -->
         <h1 class="form-render-page__title">{{ pageTitle }}</h1>
-        <p v-if="!isViewMode" class="form-render-page__hint">{{ t('form.requiredHint') }}</p>
 
         <div class="form-render-page__layout">
           <div class="form-render-page__main">
@@ -741,9 +740,6 @@ onMounted(() => {
                   maxlength="100"
                   class="form-render-page__draft-title"
                 />
-                <span class="form-render-page__draft-process-hint">
-                  {{ t('form.processResolvedByBinding') }}
-                </span>
                 <el-checkbox v-if="draftId" v-model="draftRefreshVersion">{{
                   t('form.rebindLatest')
                 }}</el-checkbox>
@@ -947,11 +943,6 @@ onMounted(() => {
 
 .form-render-page__draft-title {
   width: 220px;
-}
-
-.form-render-page__draft-process-hint {
-  color: var(--sw-color-text-secondary);
-  font-size: var(--sw-font-size-sm);
 }
 
 .form-render-page__action-bar {

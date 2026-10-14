@@ -168,8 +168,8 @@ describe('NotifyBatchSend R2c-N 批量结果面板', () => {
     expect(vm.batchResult?.totalCount).toBe(3)
   })
 
-  it('零失败时给出成功提示，处理中 0 有显式说明', async () => {
-    const { wrapper } = await sendWith({
+  it('零失败时给出成功提示', async () => {
+    await sendWith({
       recipientCount: 3,
       phase: 'SEND_RESULT',
       totalCount: 3,
@@ -180,9 +180,6 @@ describe('NotifyBatchSend R2c-N 批量结果面板', () => {
     })
 
     expect(ElMessage.success).toHaveBeenCalledWith('成功向 3 人发送通知')
-    expect(wrapper.get('[data-testid="batch-result-processing-note"]').text()).toContain(
-      '本次批次没有处理中的接收人',
-    )
   })
 
   it('失败明细渲染文本零原始异常特征', async () => {

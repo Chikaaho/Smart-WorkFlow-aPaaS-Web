@@ -178,7 +178,6 @@ async function restoreSelected() {
       <p class="history-dialog__summary-time">
         {{ t('form.selectedSnapshotPrefix', { time: selectedSnapshot.createTime }) }}
       </p>
-      <p class="history-dialog__summary-note">{{ t('form.restoreDraftNote') }}</p>
     </div>
 
     <template #footer>

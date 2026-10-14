@@ -446,7 +446,6 @@ onMounted(() => {
           >
             {{ t('agent.debugStop') }}
           </el-button>
-          <span v-if="!isPaused" class="controls-hint">{{ t('agent.debugPausedOnly') }}</span>
         </div>
         <el-alert
           v-if="versionConflictTip"
@@ -710,12 +709,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.controls-hint {
-  font-size: 12px;
-  color: #909399;
-  margin-left: 8px;
 }
 
 .breakpoints-list {

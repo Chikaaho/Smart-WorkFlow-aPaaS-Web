@@ -795,7 +795,6 @@ async function loadBreadcrumbCategory() {
             @drag-start="startPaletteDrag"
             @drag-end="draggingItem = null"
           />
-          <p class="designer__palette-note">{{ t('form.paletteDragHint') }}</p>
         </div>
 
         <div class="designer__canvascol">
@@ -891,7 +890,6 @@ async function loadBreadcrumbCategory() {
           <template #default="{ row }">{{ constraintOf(row as FormSchemaField) }}</template>
         </el-table-column>
       </el-table>
-      <p class="fields-dialog__note">{{ t('fieldList.note') }}</p>
       <template #footer>
         <el-button type="primary" class="fields-dialog__close" @click="fieldsDialogVisible = false"
           >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{

@@ -171,13 +171,6 @@ async function handleSubmit() {
               maxlength="100"
               :disabled="isEdit"
             />
-            <div class="form-field__hint">
-              发送标识，同租户唯一；{{
-                isEdit
-                  ? t('notify.templateCodeImmutableEdit')
-                  : t('notify.templateCodeImmutableNew')
-              }}
-            </div>
           </div>
           <div class="form-field form-field--required">
             <label class="form-field__label">{{ t('common.name') }}</label>
@@ -194,7 +187,6 @@ async function handleSubmit() {
               :active-text="t('common.enable')"
               :inactive-text="t('common.disable')"
             />
-            <div class="form-field__hint">{{ t('notify.disableHint') }}</div>
           </div>
         </FormGrid>
       </FormSection>
@@ -209,7 +201,6 @@ async function handleSubmit() {
               maxlength="200"
               style="font-family: monospace"
             />
-            <div class="form-field__hint">{{ t('notify.variableNameFormat') }}</div>
           </div>
           <div class="form-field form-field--required">
             <label class="form-field__label">{{ t('notify.contentTemplate') }}</label>
@@ -220,9 +211,6 @@ async function handleSubmit() {
               :placeholder="t('notify.contentPlaceholder')"
               style="font-family: monospace"
             />
-            <div class="form-field__hint">
-              {{ t('notify.templateLimitNote') }}
-            </div>
           </div>
         </FormGrid>
       </FormSection>
@@ -274,10 +262,5 @@ async function handleSubmit() {
 .form-field--required .form-field__label::before {
   content: '* ';
   color: var(--sw-danger);
-}
-
-.form-field__hint {
-  font-size: var(--sw-font-caption);
-  color: var(--sw-text-secondary);
 }
 </style>

@@ -265,7 +265,6 @@ describe('DebugSessionView.vue — P7/M07-F02-04 图单步调试视图测试', (
     for (const btn of controlButtons) {
       expect(btn.attributes('disabled')).toBeDefined()
     }
-    expect(wrapper.text()).toContain('仅 PAUSED 状态可操作')
     wrapper.unmount()
   })
 

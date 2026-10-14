@@ -65,20 +65,6 @@ const PROTOCOL_OPTIONS = [
   },
 ] as const
 
-const PROTOCOL_HINTS: Record<string, string> = {
-  get openai() {
-    return t('agent.protocolHintOpenAi')
-  },
-  get ollama() {
-    return t('agent.protocolHintOllama')
-  },
-  get other() {
-    return t('agent.protocolHintOther')
-  },
-}
-
-const protocolHint = computed(() => PROTOCOL_HINTS[form.protocolType] ?? '')
-
 // ─── 表单状态（数值字段可被 el-input-number 清空为 null，提交时兜底默认值） ───
 
 const form = reactive({
@@ -321,14 +307,6 @@ async function handleSubmit() {
                 :value="opt.value"
               />
             </el-select>
-            <el-alert
-              v-if="protocolHint"
-              :title="protocolHint"
-              type="info"
-              :closable="false"
-              show-icon
-              class="form-field__protocol-hint"
-            />
           </div>
           <div class="form-field form-field--required">
             <label class="form-field__label">{{ t('agent.apiUrl') }}</label>
@@ -515,9 +493,5 @@ async function handleSubmit() {
 .form-field__hint {
   font-size: var(--sw-font-caption);
   color: var(--sw-text-secondary);
-}
-
-.form-field__protocol-hint {
-  margin-top: var(--sw-space-8);
 }
 </style>

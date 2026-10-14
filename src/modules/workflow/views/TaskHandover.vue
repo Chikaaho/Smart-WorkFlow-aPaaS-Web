@@ -140,7 +140,6 @@ function resultLabel(resultValue: HandoverItem['result']) {
         </el-form-item>
         <el-form-item :label="t('workflow.carryOverDelegateRules')">
           <el-switch v-model="includeProxyRules" />
-          <span class="hint">{{ t('workflow.carryOverDelegateHint') }}</span>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="submitting" @click="submit">{{

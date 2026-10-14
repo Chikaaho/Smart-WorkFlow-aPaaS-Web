@@ -513,7 +513,6 @@ onBeforeUnmount(() => {
           </el-button>
         </div>
       </el-alert>
-      <div class="execute-hint">{{ t('agent.executionResultPersisted') }}</div>
     </div>
   </div>
 </template>
@@ -646,11 +645,5 @@ onBeforeUnmount(() => {
 
 .execute-detail-link {
   margin-top: 4px;
-}
-
-.execute-hint {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
 }
 </style>

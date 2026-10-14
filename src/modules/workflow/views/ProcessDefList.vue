@@ -612,7 +612,6 @@ onMounted(loadList)
       maxlength="200"
       clearable
     />
-    <p class="theme-dialog__hint">{{ t('workflow.themeRuleHint') }}</p>
     <template #footer>
       <el-button @click="themeDialogVisible = false">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :loading="themeSaving" @click="saveThemeRule">{{

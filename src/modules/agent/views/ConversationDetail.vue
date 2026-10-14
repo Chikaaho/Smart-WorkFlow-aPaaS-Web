@@ -152,9 +152,6 @@ onMounted(() => {
           <span class="token-value">{{ formatTokenCount(tokenSummary.totalTokens) }}</span>
         </div>
       </div>
-      <div class="token-footnote">
-        {{ t('agent.tokenUsageSessionNote') }}
-      </div>
     </el-card>
 
     <!-- 加载中骨架屏 -->

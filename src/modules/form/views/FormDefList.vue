@@ -469,9 +469,6 @@ onMounted(loadList)
       :placeholder="t('form.startVisibilityPlaceholder')"
       style="width: 100%"
     />
-    <p class="visibility-form__hint">
-      {{ t('form.initiationScopeNote') }}
-    </p>
     <template #footer>
       <el-button @click="visibilityDialogVisible = false">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :loading="visibilitySaving" @click="saveVisibility">{{

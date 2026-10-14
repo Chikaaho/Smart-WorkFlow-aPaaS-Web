@@ -333,7 +333,6 @@ onMounted(() => {
             <span class="token-value">{{ formatTokenCount(totalTokens) }}</span>
           </div>
         </div>
-        <div class="token-footnote">{{ t('agent.tokenUsageExecNote') }}</div>
       </el-card>
 
       <!-- 节点轨迹子视图 -->

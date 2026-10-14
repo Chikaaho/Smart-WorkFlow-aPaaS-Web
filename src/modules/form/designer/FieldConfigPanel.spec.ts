@@ -43,13 +43,12 @@ describe('FieldConfigPanel 字段标识（V011-BUG-016）', () => {
     expect(wrapper.emitted('update')).toBeUndefined()
   })
 
-  it('已发布（keyLocked）：输入禁用且提示不可直接修改', () => {
+  it('已发布（keyLocked）：输入禁用', () => {
     const wrapper = mountPanel('field_username', true)
     const keyInput = wrapper
       .findAll('.config__row input')
       .find((i) => (i.element as HTMLInputElement).value === 'username')!
     expect((keyInput.element as HTMLInputElement).disabled).toBe(true)
-    expect(wrapper.text()).toContain('字段标识发布后不可直接修改')
   })
 })
 

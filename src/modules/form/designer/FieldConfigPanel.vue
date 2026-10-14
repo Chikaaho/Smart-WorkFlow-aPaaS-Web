@@ -143,7 +143,7 @@ function onFieldKeySuffix(raw: string) {
       <span v-if="field" class="config__type">{{ descriptor?.label ?? field.field.type }}</span>
     </div>
 
-    <p v-if="!field" class="config__hint">{{ t('form.selectFieldHint') }}</p>
+    <div v-if="!field" class="config__empty" />
 
     <template v-else>
       <!-- ═══ 基础信息 ═══ -->
@@ -265,15 +265,10 @@ function onFieldKeySuffix(raw: string) {
         @update="(p: FieldPatch) => emit('update', p)"
       />
 
-      <p class="config__note">
-        {{ keyLocked ? t('form.fieldKeyLockedNote') : t('form.fieldKeySuffixHint') }}
-      </p>
-
       <!-- ═══ 其他信息 ═══ -->
       <h3 class="config__section">{{ t('form.sectionOtherInfo') }}</h3>
       <div class="config__extension">
         <p class="config__extension-title">{{ t('form.extensionAreaTitle') }}</p>
-        <p class="config__extension-hint">{{ t('form.extensionAreaHint') }}</p>
       </div>
 
       <!-- v0.0.2 P2：显隐联动规则（LABEL 非输入字段也可控显隐）；置于其他信息之后 -->
@@ -422,12 +417,6 @@ function onFieldKeySuffix(raw: string) {
 .width-option__pct {
   font-size: var(--sw-font-emphasis, 13px);
   color: var(--sw-text-regular, #303a55);
-}
-
-.config__note {
-  margin: var(--sw-space-8) 0 33px;
-  font-size: var(--sw-font-caption);
-  color: var(--sw-text-secondary);
 }
 
 /* BF20261013-007：类型徽标不换行、无底色；超长省略号兜底（不再固定宽度导致折行） */

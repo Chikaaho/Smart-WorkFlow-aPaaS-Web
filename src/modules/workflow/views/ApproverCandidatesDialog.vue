@@ -314,7 +314,6 @@ const RULE_TYPES = [
         </div>
         <p class="approver-picked__strategy-label">{{ t('approverPicker.strategyLabel') }}</p>
         <p class="approver-picked__strategy">{{ t('approverPicker.strategyAny') }}</p>
-        <p class="approver-picked__note">{{ t('approverPicker.strategyNote') }}</p>
       </div>
     </div>
 
@@ -349,7 +348,6 @@ const RULE_TYPES = [
       <ul class="approver-roles">
         <li v-for="role in roles" :key="role.id">{{ role.name }}</li>
       </ul>
-      <p class="approver-pane__note">{{ t('approverPicker.roleHint') }}</p>
     </div>
 
     <!-- ── 动态规则 ── -->
@@ -357,10 +355,7 @@ const RULE_TYPES = [
       <ul class="approver-roles">
         <li v-for="rule in RULE_TYPES" :key="rule.key">{{ t(rule.labelKey) }}</li>
       </ul>
-      <p class="approver-pane__note">{{ t('approverPicker.ruleHint') }}</p>
     </div>
-
-    <p class="approver-dialog__footnote">{{ t('approverPicker.footnote') }}</p>
 
     <template #footer>
       <div class="approver-dialog__footer">

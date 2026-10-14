@@ -131,22 +131,6 @@ describe('ModelFormDialog.vue', () => {
     expect(vm.lockedUntil).toBeNull()
   })
 
-  it('协议切换：显示与协议对应的差异提示文案', async () => {
-    const wrapper = mountCreate()
-    await nextTick()
-    const vm = wrapper.vm as unknown as DialogVm
-
-    expect(wrapper.text()).toContain('OpenAI 兼容协议：需配置 API Key')
-
-    vm.form.protocolType = 'ollama'
-    await nextTick()
-    expect(wrapper.text()).toContain('Ollama 本地协议：本地服务无需 API Key')
-
-    vm.form.protocolType = 'other'
-    await nextTick()
-    expect(wrapper.text()).toContain('其他协议：仅做可达性探测')
-  })
-
   it('校验拦截：必填缺失 / URL 非法 / 数值越界时不提交', async () => {
     const wrapper = mountCreate()
     await nextTick()

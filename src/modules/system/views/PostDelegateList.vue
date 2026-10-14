@@ -209,12 +209,6 @@ onMounted(async () => {
           <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
         </div>
       </template>
-      <el-alert
-        class="page-hint"
-        type="info"
-        :closable="false"
-        :title="t('system.postDelegateHint')"
-      />
       <el-table v-loading="loading" :data="rows" border>
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column :label="t('system.postDelegateSource')" min-width="200">
@@ -333,9 +327,6 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-.page-hint {
-  margin-bottom: 12px;
 }
 .page-pagination {
   margin-top: 12px;

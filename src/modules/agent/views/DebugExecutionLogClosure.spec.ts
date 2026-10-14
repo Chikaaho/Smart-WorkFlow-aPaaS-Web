@@ -454,7 +454,6 @@ describe('DebugExecutionLogClosure — G11 既有日志闭环', () => {
     )
     expect(controlBtns.length).toBe(3)
     for (const btn of controlBtns) expect(btn.attributes('disabled')).toBeDefined()
-    expect(dbgText).toContain('仅 PAUSED 状态可操作')
     debugWrapper.unmount()
     wrapper.unmount()
   })

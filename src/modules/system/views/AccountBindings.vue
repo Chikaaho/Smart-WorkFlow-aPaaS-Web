@@ -71,7 +71,6 @@ onMounted(() => {
 <template>
   <div class="account-bindings">
     <h2>{{ t('auth.accountBindings') }}</h2>
-    <p class="desc">{{ t('auth.ssoBindingNote') }}</p>
     <div v-loading="loading" class="provider-list">
       <div v-for="p in SSO_PROVIDERS" :key="p.key" class="provider-row">
         <div class="provider-name">{{ p.label }}</div>
@@ -115,11 +114,6 @@ h2 {
   font-weight: 600;
   color: #303133;
   margin: 0 0 8px;
-}
-.desc {
-  font-size: 13px;
-  color: #909399;
-  margin: 0 0 20px;
 }
 .provider-list {
   background: #fff;

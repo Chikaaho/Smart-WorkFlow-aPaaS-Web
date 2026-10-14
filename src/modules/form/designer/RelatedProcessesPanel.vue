@@ -269,8 +269,6 @@ function statusTagType(status: ProcessDef['status']) {
             </template>
           </el-table-column>
         </el-table>
-
-        <p class="related-processes__footnote">{{ t('form.relatedProcessFootnote') }}</p>
       </section>
 
       <!-- V011-BUG-019：版本信息弹窗（当前行真实版本数据） -->

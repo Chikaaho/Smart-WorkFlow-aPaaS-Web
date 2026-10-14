@@ -200,9 +200,6 @@ onMounted(loadList)
         show-icon
         style="margin-bottom: 12px"
       />
-      <p class="approval-form-page__hint">
-        审批意见表单供流程审批节点绑定使用（办理人填报审批意见与业务字段），与业务表单分类维护、互不混用。
-      </p>
       <el-table v-loading="loading" :data="list" stripe>
         <el-table-column prop="name" label="表单名称" min-width="180" />
         <el-table-column prop="createByName" label="创建人" width="120">

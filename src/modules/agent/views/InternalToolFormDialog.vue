@@ -184,7 +184,6 @@ async function handleSubmit() {
               :placeholder="t('agent.toolNamePlaceholderInternal')"
               maxlength="128"
             />
-            <div class="form-field__hint">{{ t('agent.toolNameHint') }}</div>
           </div>
           <div class="form-field form-field--required">
             <label class="form-field__label">{{ t('common.descriptionField') }}</label>
@@ -214,7 +213,6 @@ async function handleSubmit() {
               :placeholder="t('agent.beanNamePlaceholder')"
               maxlength="128"
             />
-            <div class="form-field__hint">{{ t('agent.beanNameHint') }}</div>
           </div>
           <div class="form-field form-field--required">
             <label class="form-field__label">{{ t('agent.methodName') }}</label>
@@ -223,9 +221,6 @@ async function handleSubmit() {
               :placeholder="t('agent.methodNamePlaceholder')"
               maxlength="128"
             />
-            <div class="form-field__hint">
-              {{ t('agent.beanMethodHint') }}
-            </div>
           </div>
         </FormGrid>
       </FormSection>
@@ -241,7 +236,6 @@ async function handleSubmit() {
               :placeholder="t('agent.jsonSchemaPlaceholderCity')"
               style="font-family: monospace"
             />
-            <div class="form-field__hint">{{ t('agent.inputSchemaOptionalHint') }}</div>
           </div>
         </FormGrid>
       </FormSection>

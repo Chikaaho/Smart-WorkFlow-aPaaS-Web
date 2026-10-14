@@ -555,11 +555,6 @@ function goToInbox() {
       </div>
     </div>
 
-    <!-- 处理中为 0 是同步原子契约的定义，明说而不是留白 -->
-    <p class="result-note" data-testid="batch-result-processing-note">
-      {{ t('notify.batchResultProcessingNote') }}
-    </p>
-
     <div v-if="(batchResult?.failures.length ?? 0) > 0" class="result-failures">
       <h4 class="result-failures__title">{{ t('form.importErrorRows') }}</h4>
       <el-table
@@ -684,12 +679,6 @@ function goToInbox() {
 
 .result-cell__value--danger {
   color: #f56c6c;
-}
-
-.result-note {
-  margin: 12px 0 0;
-  font-size: 12px;
-  color: #909399;
 }
 
 .result-failures {

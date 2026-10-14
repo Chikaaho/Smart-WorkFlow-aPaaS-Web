@@ -477,9 +477,6 @@ onMounted(loadList)
       </FormSection>
 
       <FormSection :title="t('system.members')">
-        <div class="member-hint">
-          {{ t('system.memberCandidateNote') }}
-        </div>
         <el-checkbox-group v-model="memberIds">
           <el-checkbox v-for="user in candidateOptions" :key="user.id" :value="user.id">
             {{ user.realName || user.username }}（{{ user.username }}）

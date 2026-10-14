@@ -157,7 +157,6 @@ async function handleSubmit() {
                 {{ t('workflow.selectForm') }}
               </el-button>
             </div>
-            <div class="form-field__hint">{{ t('workflow.linkPublishedFormHint') }}</div>
           </div>
         </FormGrid>
       </FormSection>

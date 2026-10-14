@@ -8,10 +8,9 @@
  * 待核实（UNKNOWN 边界外露为失败原因与死信）在行级与汇总级均可区分。
  * 查看 workflow:resource:view 仅本租户；跨租户查询需 workflow:resource:manage。
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { hasPerm } from '@/foundation/permission'
 import { StandardFormTemplate } from '@/components/page-layout'
 import {
   getBacklogSummary,
@@ -21,9 +20,6 @@ import {
   type ResourceCommandRow,
   type ResourceRejectRow,
 } from '@/modules/workflow/api/resource-ops'
-
-const MANAGE_PERM = 'workflow:resource:manage'
-const canManage = computed(() => hasPerm(MANAGE_PERM))
 
 const summary = ref<ResourceBacklogSummary | null>(null)
 const loadingSummary = ref(false)
@@ -312,7 +308,6 @@ onMounted(() => {
         data-test="reject-pagination"
         @current-change="refreshRejects"
       />
-      <p v-if="!canManage" class="res-note">当前仅显示本租户数据；跨租户运维需独立管理授权。</p>
     </section>
   </StandardFormTemplate>
 </template>
@@ -367,10 +362,5 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   margin-bottom: 12px;
-}
-
-.res-note {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
 }
 </style>

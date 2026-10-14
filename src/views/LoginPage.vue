@@ -245,7 +245,6 @@ function onSsoProviderSelect(key: SsoProvider): void {
           </div>
           <p v-if="ssoError" class="login-page__error" role="alert">{{ ssoError }}</p>
         </div>
-        <p class="login-page__sso-hint">{{ t('login.tenantSecurityNote') }}</p>
         <p class="login-page__legal">登录即表示同意《用户协议》与《隐私政策》</p>
       </form>
     </section>

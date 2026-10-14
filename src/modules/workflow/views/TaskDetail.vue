@@ -1936,9 +1936,6 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
         </template>
       </div>
       <template #footer>
-        <small class="p53-opinion-dialog__note">
-          {{ t('taskDetailUi.opinionReadonlyNote') }}
-        </small>
         <el-button type="primary" class="p53-dialog-close" @click="opinionDetailVisible = false">
           {{ t('common.close') }}
         </el-button>

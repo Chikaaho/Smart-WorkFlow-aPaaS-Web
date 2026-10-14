@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import HintTip from '@/components/HintTip.vue'
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
@@ -18,15 +20,17 @@ import {
 } from '@/modules/agent/utils/graphAdapter'
 import type { NodePanelProps } from './node-panel-registry'
 
-/** 用户 Prompt 模板 hint 中的变量引用语法示例（避免模板内写 `{{ '{{xxx}}' }}` 触发解析错误） */
-const VAR_SYNTAX_EXAMPLE = '{{variableName}}'
-
 defineProps<NodePanelProps>()
 
 const emit = defineEmits<{
   updateNodeData: [key: string, value: unknown]
   varNameChange: [key: string, value: unknown]
 }>()
+
+/** 变量引用语法示例：悬停展示，避免模板内写 `{{ '{{xxx}}' }}` 触发解析错误。 */
+const userPromptHint = computed(
+  () => `${t('agent.userPromptHintLead')} {{variableName}} ${t('agent.userPromptHintTail')}`,
+)
 
 /** prompt 文本回写：空白 → emit undefined（GraphDesigner.updateNodeData 删键）；非空白原样 */
 function onPromptChange(key: string, val: unknown) {
@@ -55,7 +59,6 @@ function onPromptChange(key: string, val: unknown) {
   <div class="field-row">
     <div class="field-label">
       {{ t('agent.systemPromptLabel') }}
-      <span class="field-hint">{{ t('agent.systemPromptHint') }}</span>
     </div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_SYSTEM_PROMPT] as string | undefined) ?? ''"
@@ -69,11 +72,7 @@ function onPromptChange(key: string, val: unknown) {
   <div class="field-row">
     <div class="field-label">
       {{ t('agent.userPromptLabel') }}
-      <span class="field-hint">
-        {{ t('agent.userPromptHintLead') }}
-        <code v-text="VAR_SYNTAX_EXAMPLE" />
-        {{ t('agent.userPromptHintTail') }}
-      </span>
+      <HintTip :content="userPromptHint" />
     </div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE] as string | undefined) ?? ''"
@@ -113,20 +112,5 @@ function onPromptChange(key: string, val: unknown) {
 .field-label {
   font-size: 13px;
   color: var(--el-text-color-regular);
-}
-
-.field-hint {
-  display: block;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  margin-top: 2px;
-  line-height: 1.4;
-}
-
-.field-hint code {
-  background: var(--el-fill-color);
-  padding: 0 4px;
-  border-radius: 2px;
-  font-family: monospace;
 }
 </style>

@@ -215,7 +215,6 @@ onMounted(() => {
         </el-button>
       </div>
     </div>
-    <p class="desc">{{ t('view.ssoConfig.desc') }}</p>
 
     <el-table v-loading="loading" :data="rows" class="config-table">
       <el-table-column :label="t('view.ssoConfig.provider')" width="170">
@@ -351,9 +350,7 @@ onMounted(() => {
             :placeholder="t('view.ssoConfig.enterpriseIdPlaceholder')"
           />
         </el-form-item>
-        <el-form-item v-else>
-          <span class="mode-hint">{{ t('view.ssoConfig.personalHint') }}</span>
-        </el-form-item>
+        <el-form-item v-else> </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="editDialog.visible = false">{{ t('common.cancel') }}</el-button>
@@ -378,9 +375,7 @@ onMounted(() => {
             :placeholder="t('view.ssoConfig.newSecretPlaceholder')"
           />
         </el-form-item>
-        <el-form-item>
-          <span class="mode-hint">{{ t('view.ssoConfig.secretHint') }}</span>
-        </el-form-item>
+        <el-form-item> </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="secretDialog.visible = false">{{ t('common.cancel') }}</el-button>
@@ -409,7 +404,6 @@ onMounted(() => {
           </div>
         </div>
         <p class="check-summary">{{ checkDialog.result.summary }}</p>
-        <p class="check-note">{{ t('view.ssoConfig.checkNote') }}</p>
       </template>
       <template #footer>
         <el-button @click="checkDialog.visible = false">{{ t('common.close') }}</el-button>
@@ -474,11 +468,6 @@ h2 {
   font-weight: 600;
   color: #303133;
   margin: 0;
-}
-.desc {
-  font-size: 13px;
-  color: #909399;
-  margin: 8px 0 16px;
 }
 .config-table {
   background: #fff;

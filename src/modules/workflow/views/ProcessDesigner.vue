@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ApproverCandidatesDialog from './ApproverCandidatesDialog.vue'
+import HintTip from '@/components/HintTip.vue'
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
@@ -2401,7 +2402,6 @@ function nodeLabelLines(label: string) {
             {{ t('workflow.fitView') }}
           </button>
         </div>
-        <div class="canvas-hint">{{ t('workflow.canvasInteractionHint') }}</div>
       </div>
 
       <!-- 属性面板：字段由服务端能力 configFields + 参与人策略驱动 -->
@@ -2458,9 +2458,6 @@ function nodeLabelLines(label: string) {
                     >清除</el-button
                   >
                 </div>
-                <small class="nodeform-hint"
-                  >办理人填报的业务字段按任务/轮次独立保存；变量可读本轮已最终提交数据。</small
-                >
               </el-form-item>
               <!-- ═══ BF20261013-022①：节点触发器（开始前 / 结束），脚本经统一弹窗编写 ═══ -->
               <template v-if="nodeTriggerCapable">
@@ -2489,9 +2486,6 @@ function nodeLabelLines(label: string) {
                     }}</small>
                   </div>
                 </el-form-item>
-                <small class="participant-hint"
-                  >开始前=任务创建时、办理人办理前；结束=节点本轮完成时。脚本可读写流程变量，返回值不用于匹配。</small
-                >
               </template>
               <!-- ═══ BF20261013-019：发起子流程（子流程并入审批节点；等待块由设计器自动生成） ═══ -->
               <template v-if="selectedNode.type === 'APPROVAL'">
@@ -2505,7 +2499,7 @@ function nodeLabelLines(label: string) {
                       filterable
                       allow-create
                       default-first-option
-                      placeholder="选择已发布流程（或输入流程标识）"
+                      placeholder="选择流程"
                       @change="applySubflow"
                     >
                       <el-option
@@ -2516,10 +2510,7 @@ function nodeLabelLines(label: string) {
                       />
                     </el-select>
                   </el-form-item>
-                  <small class="participant-hint"
-                    >子流程使用其自身绑定的审批意见表单，无需在此选择表单。</small
-                  >
-                  <el-form-item label="是否发起（判断脚本：返回 是/否；留空 = 总是发起）">
+                  <el-form-item label="是否发起">
                     <div class="participant-picker-row">
                       <el-button
                         @click="
@@ -2535,7 +2526,7 @@ function nodeLabelLines(label: string) {
                       </small>
                     </div>
                   </el-form-item>
-                  <el-form-item label="可读取的变量（判断脚本只能用这里勾选的变量）">
+                  <el-form-item label="可读取变量">
                     <el-select
                       v-model="subflowForm.variables"
                       multiple
@@ -2552,11 +2543,11 @@ function nodeLabelLines(label: string) {
                   </el-form-item>
                   <el-form-item label="发起范围">
                     <el-select v-model="subflowForm.mode" @change="applySubflow">
-                      <el-option label="发起一个（按整表数据）" value="SINGLE" />
-                      <el-option label="按表格行逐条发起（每行一个）" value="EACH" />
+                      <el-option label="发起一个" value="SINGLE" />
+                      <el-option label="按表格行逐条发起" value="EACH" />
                     </el-select>
                   </el-form-item>
-                  <el-form-item v-if="subflowForm.mode === 'EACH'" label="集合变量（表格行集合）">
+                  <el-form-item v-if="subflowForm.mode === 'EACH'" label="集合变量">
                     <el-select
                       v-model="subflowForm.sourceVariable"
                       filterable
@@ -2615,9 +2606,6 @@ function nodeLabelLines(label: string) {
                       >
                     </el-form-item>
                   </div>
-                  <small class="nodeform-hint"
-                    >保存后自动生成发起与等待：本节点任务提交时按条件发起子流程；全部子流程完成后流程才继续；判断为「不发起」时直接继续。</small
-                  >
                 </template>
               </template>
               <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
@@ -2841,9 +2829,6 @@ function nodeLabelLines(label: string) {
                           : '选择部门'
                       }}
                     </el-button>
-                    <small class="participant-hint">
-                      直接选择对象并保存稳定 ID：人员逐人分支，部门逐部门分支（服务端解析负责人）。
-                    </small>
                   </div>
                   <el-input
                     v-else
@@ -2971,8 +2956,8 @@ function nodeLabelLines(label: string) {
                     v-model="dynamicParallelForm.emptyStrategy"
                     @change="applyDynamicParallel"
                   >
-                    <el-option label="阻断（BLOCK）" value="BLOCK" />
-                    <el-option label="放行（PROCEED）" value="PROCEED" />
+                    <el-option label="阻断" value="BLOCK" />
+                    <el-option label="放行" value="PROCEED" />
                   </el-select>
                 </el-form-item>
                 <el-form-item label="无效值处置">
@@ -2980,8 +2965,8 @@ function nodeLabelLines(label: string) {
                     v-model="dynamicParallelForm.invalidStrategy"
                     @change="applyDynamicParallel"
                   >
-                    <el-option label="阻断（BLOCK）" value="BLOCK" />
-                    <el-option label="跳过（SKIP）" value="SKIP" />
+                    <el-option label="阻断" value="BLOCK" />
+                    <el-option label="跳过" value="SKIP" />
                   </el-select>
                 </el-form-item>
                 <el-form-item label="分支语义">
@@ -2993,10 +2978,6 @@ function nodeLabelLines(label: string) {
                       新语义（按对象分支）
                     </el-checkbox>
                   </div>
-                  <small class="participant-hint">
-                    勾选后写入
-                    semanticVersion=2：人员来源逐人分支、部门来源逐部门分支（同负责人不同部门独立分支）、表格列来源逐行可追溯；不勾选保持旧语义（按负责人合并，行为不变）。
-                  </small>
                 </el-form-item>
               </template>
               <template v-for="field in genericConfigFields" :key="field.key">
@@ -3129,7 +3110,6 @@ function nodeLabelLines(label: string) {
             <span class="advanced-rows__cap">{{ t('workflow.advAfterComplete') }}</span>
             <span class="advanced-rows__bean">{{ advConfig?.completeListener || '—' }}</span>
           </div>
-          <p class="advanced-card__note">{{ t('workflow.advListenerNote') }}</p>
           <div class="advanced-card__add">{{ t('workflow.advAddListener') }}</div>
         </section>
         <section class="advanced-card">
@@ -3179,7 +3159,6 @@ function nodeLabelLines(label: string) {
           <p class="advanced-card__meta">{{ advConfig?.postFailure || '—' }}</p>
         </section>
       </div>
-      <p class="advanced-config-footnote">{{ t('workflow.advFootnote') }}</p>
       <template #footer>
         <div class="advanced-config-footer">
           <el-button size="small" @click="advancedConfigVisible = false"
@@ -3220,10 +3199,9 @@ function nodeLabelLines(label: string) {
     >
       <div class="p64-toolbar">
         <el-button size="small" type="primary" @click="resetVariableDraft">新增变量</el-button>
-        <span class="p64-hint"
-          >变量固定 var_
-          开头。默认由脚本赋值（#设置流程变量）；也可与主表单或审批意见表单字段同名自动取值（审批意见取最新一轮）；取不到值按空处理，不阻止触发。</span
-        >
+        <HintTip
+          content="变量固定 var_ 开头。按 JS 类型使用（数字/文本/是-否/数组），无需选择数据类型；默认由脚本赋值（#设置流程变量），也可与主表单或审批意见表单字段同名自动取值（审批意见取最新一轮）；取不到值按空处理，不阻止触发。"
+        />
       </div>
       <el-table :data="graph?.variables ?? []" size="small" class="p64-table">
         <el-table-column prop="varId" label="变量标识" width="200" />
@@ -3242,7 +3220,7 @@ function nodeLabelLines(label: string) {
       <el-divider />
       <el-form label-position="top" size="small">
         <div class="p64-grid">
-          <el-form-item label="变量标识（var_ 开头；创建后不可修改）">
+          <el-form-item label="变量标识">
             <el-input
               v-model="variableDraft.varId"
               placeholder="var_example"
@@ -3253,10 +3231,6 @@ function nodeLabelLines(label: string) {
             <el-input v-model="variableDraft.name" />
           </el-form-item>
         </div>
-        <p class="p64-hint" style="margin: 0 0 8px">
-          按 JS
-          类型使用（数字/文本/是-否/数组），无需选择数据类型；数据来源无需维护——脚本可赋值，也可与主表单/审批意见表单字段同名自动取值（审批意见取最新一轮）。
-        </p>
         <div v-if="variableErrors.length" class="p64-errors">
           <p v-for="item in variableErrors" :key="item" role="alert">{{ item }}</p>
         </div>
@@ -3269,17 +3243,16 @@ function nodeLabelLines(label: string) {
     <!-- ═══ P64 阶段Ⅰ：触发规则配置弹窗 ═══ -->
     <el-dialog
       v-model="triggersVisible"
-      title="流程触发器（流程发起 / 流程结束）"
+      title="触发器"
       width="min(980px, 94vw)"
       class="p64-dialog"
       append-to-body
     >
       <div class="p64-toolbar">
         <el-button size="small" type="primary" @click="resetTriggerDraft">新增触发器</el-button>
-        <span class="p64-hint"
-          >全局触发器只有两类：流程发起、流程结束（节点开始前/结束的触发器在节点属性里配置）。
-          判断脚本经「编写脚本」弹窗撰写，读取勾选的变量并返回一个结果值；每个结果值对应一个动作。</span
-        >
+        <HintTip
+          content="全局触发器只有两类：流程发起、流程结束（节点开始前/结束的触发器在节点属性里配置）。判断脚本经「编写脚本」弹窗撰写，读取勾选的变量并返回一个结果值；每个结果值对应一个动作。"
+        />
       </div>
       <el-table :data="graph?.triggers ?? []" size="small" class="p64-table">
         <el-table-column prop="triggerId" label="规则标识" width="130" />
@@ -3316,7 +3289,7 @@ function nodeLabelLines(label: string) {
       <el-divider />
       <el-form label-position="top" size="small">
         <div class="p64-grid">
-          <el-form-item label="规则标识（创建后不可修改）">
+          <el-form-item label="规则标识">
             <el-input
               v-model="triggerDraft.triggerId"
               :disabled="triggerEditIndex !== null"
@@ -3336,7 +3309,7 @@ function nodeLabelLines(label: string) {
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="可读取的变量（判断脚本只能用这里勾选的变量）">
+          <el-form-item label="可读取变量">
             <el-select v-model="triggerDraft.variables" multiple filterable>
               <el-option
                 v-for="item in graph?.variables ?? []"
@@ -3347,7 +3320,7 @@ function nodeLabelLines(label: string) {
             </el-select>
           </el-form-item>
         </div>
-        <el-form-item label="判断脚本（返回 数字/文本/是-否/空；函数在弹窗内点选插入）">
+        <el-form-item label="判断脚本">
           <div class="participant-picker-row">
             <el-button
               @click="
@@ -3364,7 +3337,7 @@ function nodeLabelLines(label: string) {
           </div>
         </el-form-item>
         <div class="p64-toolbar">
-          <span class="p64-subtitle">结果分支（按返回值匹配）</span>
+          <span class="p64-subtitle">结果分支</span>
           <el-button size="small" @click="addTriggerBranch">添加分支</el-button>
         </div>
         <div
@@ -3437,7 +3410,7 @@ function nodeLabelLines(label: string) {
                   filterable
                   allow-create
                   default-first-option
-                  placeholder="选择已发布流程（或输入流程标识）"
+                  placeholder="选择流程"
                 >
                   <el-option
                     v-for="item in publishedTargetOptions.defs"
@@ -4928,13 +4901,6 @@ function nodeLabelLines(label: string) {
   display: flex;
   gap: 8px;
   width: 100%;
-}
-.nodeform-hint {
-  display: block;
-  width: 100%;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.5;
 }
 .p64-toolbar {
   display: flex;

@@ -108,16 +108,6 @@ const importResult = ref<{
 /** 处理中取服务端同步契约的显式值（恒为 0），不由前端臆算。 */
 const importProcessingCount = computed(() => importResult.value?.processing ?? 0)
 
-/**
- * 整批回滚判定：失败行数多于实际不合法明细时，说明其余行是被整批原子策略连带
- * 回滚的，而不是本身有问题。页面必须把这件事讲清楚，不用「失败 N」冒充 N 行都错。
- */
-const importRolledBack = computed(() => {
-  const failed = importResult.value?.errorCount ?? 0
-  const invalid = importResult.value?.errors?.length ?? 0
-  return failed > invalid
-})
-
 // ── 加载 definition ──
 async function loadDefinition() {
   try {
@@ -646,26 +636,11 @@ onMounted(async () => {
             <span data-testid="import-result-processing">{{ importProcessingCount }}</span>
           </el-descriptions-item>
         </el-descriptions>
-        <p class="import-processing-note" data-testid="import-result-processing-note">
-          {{ t('form.importProcessingNote') }}
-        </p>
         <!--
           整批原子契约：任一行不合法则整批不落库。此时「失败」= 未落库的行数，
           而明细只列出真正不合法的行；两者数量不同必须解释，否则用户会把
           「失败 3」读成「3 行都有问题」。
         -->
-        <p
-          v-if="importRolledBack"
-          class="import-rollback-note"
-          data-testid="import-result-rollback-note"
-        >
-          {{
-            t('form.importAtomicRollbackNote', {
-              failed: importResult?.errorCount ?? 0,
-              invalid: importResult?.errors?.length ?? 0,
-            })
-          }}
-        </p>
         <template v-if="(importResult?.errors?.length ?? 0) > 0">
           <div class="import-errors__title">{{ t('form.importErrorRows') }}</div>
           <el-table :data="importResult?.errors ?? []" size="small" max-height="260">

@@ -69,7 +69,7 @@ function onSave() {
   >
     <div class="script-dialog__body">
       <aside class="script-dialog__catalog">
-        <p class="script-dialog__catalog-title">可用函数（点击插入）</p>
+        <p class="script-dialog__catalog-title">可用函数</p>
         <section v-for="group in categories" :key="group.name" class="script-dialog__group">
           <p class="script-dialog__group-name">{{ group.name }}</p>
           <div v-for="fn in group.items" :key="fn.name" class="script-dialog__fn">
@@ -96,10 +96,6 @@ function onSave() {
           class="script-dialog__code"
           :placeholder="placeholder ?? '在此编写脚本；用 #函数名 调用内置函数（名字无需引号）'"
         />
-        <p class="script-dialog__hint">
-          裸字段名/变量名自动按名字处理（无需引号）；需要动态值时用表达式，如 #获取流程变量("" +
-          name)。
-        </p>
       </div>
     </div>
     <template #footer>

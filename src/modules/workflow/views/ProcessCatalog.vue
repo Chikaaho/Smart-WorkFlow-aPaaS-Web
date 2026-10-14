@@ -453,8 +453,6 @@ onMounted(() => {
             </div>
           </section>
         </div>
-
-        <p class="catalog-page__note">{{ t('catalog.permissionNote') }}</p>
       </div>
     </div>
 

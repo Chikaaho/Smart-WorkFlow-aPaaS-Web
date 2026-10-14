@@ -74,9 +74,6 @@ function onVersion(value: string) {
       @update:model-value="(v: string) => patchBinding({ displayField: v })"
     />
   </div>
-  <p class="row__hint">
-    {{ t('form.datasourceValueNote') }}
-  </p>
 </template>
 
 <style scoped>

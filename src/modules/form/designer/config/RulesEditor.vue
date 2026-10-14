@@ -130,7 +130,6 @@ function needsValue(op: VisibilityCondition['op']): boolean {
       <el-button size="small" text type="primary" @click="addCondition">{{
         t('form.addCondition')
       }}</el-button>
-      <p class="rules-editor__note">{{ t('form.visibilityRuleNote') }}</p>
     </template>
   </div>
 </template>

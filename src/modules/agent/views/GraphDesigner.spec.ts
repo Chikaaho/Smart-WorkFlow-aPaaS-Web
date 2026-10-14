@@ -720,11 +720,7 @@ describe('GraphDesigner.vue', () => {
     expect(inputs[1].attributes('data-type')).toBe('textarea')
     expect(inputs[1].attributes('data-value')).toBe('请根据以下内容生成摘要：{{input}}')
     expect(inputs[1].attributes('data-placeholder')).toContain('请根据以下内容生成摘要')
-    // hint 文案：{{variableName}} 提示与未定义变量失败提示
-    const text = wrapper.find('.property-panel').text()
-    expect(text).toContain('定义模型在该节点的角色')
-    expect(text).toContain('{{variableName}}')
-    expect(text).toContain('引用未定义变量将导致执行失败')
+    // BF20261013-023：解释性 hint 文案已全局瘦身移除，此处仅断言回填与 placeholder 行为
     wrapper.unmount()
   })
 

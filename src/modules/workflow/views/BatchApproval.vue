@@ -161,9 +161,6 @@ onMounted(loadList)
           <span data-testid="batch-approval-processing">{{ summary.processing }}</span>
         </el-descriptions-item>
       </el-descriptions>
-      <p class="batch-processing-note" data-testid="batch-approval-processing-note">
-        {{ t('workflow.batchProcessingNote') }}
-      </p>
       <el-table :data="results" size="small">
         <el-table-column prop="taskId" :label="t('common.taskId')" min-width="170" />
         <el-table-column :label="t('common.result')" width="90">

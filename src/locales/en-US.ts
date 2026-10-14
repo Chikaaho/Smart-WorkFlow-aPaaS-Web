@@ -22,12 +22,6 @@ export default {
     noConversations: 'No conversations',
     protocolOpenAi: 'OpenAI (compatible protocol)',
     protocolOllama: 'Ollama (local)',
-    protocolHintOpenAi:
-      'OpenAI-compatible: an API key is required; the Bearer token is added to the request headers automatically.',
-    protocolHintOllama:
-      'Local Ollama: the local service needs no API key, so the key can be left empty.',
-    protocolHintOther:
-      'Other protocols: only reachability is probed; no authentication header is added.',
     modelDetailLoadFailed: 'Could not load the model configuration. Please try again.',
     configNameRequired: 'Name is required.',
     selectProtocol: 'Select a protocol type',
@@ -75,15 +69,11 @@ export default {
     selectHttpMethod: 'Select an HTTP method',
     inputSchemaInvalidJson: 'The input schema is not valid JSON.',
     toolNamePlaceholder: 'Lowercase words separated by underscores, e.g. web_search',
-    toolNameHint:
-      'The tool identifier passed to the LLM; it must use lowercase letters and underscores',
     toolDescriptionHint: 'Describe what the tool does so the LLM can understand it',
     httpSectionTitle: 'HTTP settings',
     requestUrl: 'Request URL',
-    requestUrlHint: 'Full HTTP request address, including the path',
     httpMethod: 'HTTP method',
     inputSchemaOptional: 'Input schema (optional)',
-    inputSchemaOptionalHint: 'Optional; if provided, it must be a valid JSON Schema',
     internalToolLoadFailed: 'Could not load the internal tool. Please try again.',
     beanNameRequired: 'Bean name is required.',
     methodNameRequired: 'Method name is required.',
@@ -91,7 +81,6 @@ export default {
     invocationSectionTitle: 'Invocation settings',
     beanName: 'Bean name',
     beanNamePlaceholder: 'Spring bean name',
-    beanNameHint: 'The bean name in the Spring container (must be on the allowlist)',
     methodName: 'Method name',
     methodNamePlaceholder: 'Expected signature: String execute(String params)',
     conversationMessagesLoadFailed: 'Could not load the conversation messages. Please try again.',
@@ -105,7 +94,6 @@ export default {
     noMessages: 'No messages yet',
     modelConfig: 'Model configuration',
     selectModelConfig: 'Select a model configuration',
-    systemPromptHint: "Describe the model's role, rules or context for this node",
     systemPromptEmptyHint: 'Leave empty to send no system message',
     inputVariableName: 'Input variable name',
     outputVariableName: 'Output variable name',
@@ -174,8 +162,6 @@ export default {
     clickNodeToEditHint: 'Click a node on the canvas to edit its properties',
     runTest: 'Run test',
     testTextPlaceholder: 'Enter test text (the graph must be published)',
-    executionResultPersisted:
-      'The execution result has been saved; use the button above to open its execution details.',
     joinNodeHint:
       'Join node: the number of incoming edges equals the number of joined branches (≥ 2); execution waits for all branches to arrive and then continues from a single merged point',
     debugSessionLoadFailed: 'Could not load the debug session',
@@ -196,7 +182,6 @@ export default {
     debugExpiresAt: 'Expires at:',
     debugVariables: 'Variables:',
     debugControls: 'Debug controls',
-    debugPausedOnly: 'Available only when the status is PAUSED',
     debugBreakpoints: 'Breakpoints',
     debugBreakpointPlaceholder: 'Enter a node ID to add a breakpoint',
     debugNoErrorDetail: 'No error details',
@@ -237,10 +222,6 @@ export default {
     newExternalHttpTool: 'New external HTTP tool',
     newInternalTool: 'New internal tool',
     tokenUsageStats: 'Token usage',
-    tokenUsageSessionNote:
-      "Taken from the model provider's usage response for this conversation. Observable usage only, not a billing statement.",
-    tokenUsageExecNote:
-      "Taken from the model provider's usage response for this execution. Observable usage only, not a billing statement; unexposed attempts such as failed retries are not counted.",
     debugStep: 'Step',
     debugResume: 'Resume',
     debugStop: 'Stop',
@@ -249,7 +230,6 @@ export default {
     deleteNode: 'Delete node',
     run: 'Run',
     viewExecution: 'View details →',
-    beanMethodHint: 'Method name on the bean; expected signature String execute(String params)',
     connectivityTest: 'Connectivity test',
     deleteEdge: 'Delete edge',
     systemPromptLabel: 'System prompt',
@@ -311,18 +291,12 @@ export default {
     remove: 'Remove',
     strategyLabel: 'Approval strategy',
     strategyAny: 'Any one approver',
-    strategyNote:
-      'Dynamic rules support: initiator, department leader, role members and expressions.',
     deptHint:
       'Selecting a department filters candidates; department approval rules are resolved by the server at runtime.',
-    roleHint:
-      'Roles come from system role registry; role-based approval is registered as a dynamic rule on the node.',
     ruleInitiator: 'Initiator',
     ruleDeptLeader: 'Department leader',
     ruleRoleMember: 'Role members',
     ruleExpression: 'Expression',
-    ruleHint:
-      'Dynamic rules are registered on the node as a type/expression and resolved by the server at runtime.',
     footnote:
       'Confirming writes the selected approvers back to the node basic properties; process-level listeners are unchanged.',
     confirm: 'Confirm',
@@ -358,15 +332,11 @@ export default {
     menuSpaceHintPortal: 'Admin console appears only for accounts with admin access',
     menuSpaceHintAdmin: 'You are in the admin console',
     notSignedIn: 'Not signed in',
-    ssoBindingNote:
-      'After binding an enterprise identity (WeCom / Feishu / DingTalk) you can sign in through the corporate identity entry. Binding does not change local roles or permissions.',
     digestPrefixLabel: 'Identity digest {digest}…',
   },
   catalog: {
     launch: 'Start process',
     countHint: '{count} processes available to you',
-    permissionNote:
-      'Categories and counts reflect your account permissions; unauthorized or disabled processes are hidden.',
     frequentlyStarted: 'Frequently started',
     recentlyUsed: 'Recently used',
     favorite: 'Favorite',
@@ -827,7 +797,6 @@ export default {
     draftCreated: 'Draft created',
     draftSubmitFailed: 'Failed to submit the draft',
     notFoundOrLoadFailed: 'The form does not exist or failed to load.',
-    requiredHint: 'Fields marked with * are required',
     draftTitleOptional: 'Draft title (optional)',
     rebindLatest: 'Rebind to the latest version',
     backToMyDrafts: 'Back to my drafts',
@@ -860,8 +829,6 @@ export default {
     opIsNotEmpty: 'Is not empty',
     removeCondition: 'Remove',
     addCondition: '+ Add condition',
-    visibilityRuleNote:
-      'On final submission the server recalculates the rule and filters out hidden fields; drafts keep the original input.',
     columnNameFormat:
       'The column name must start with a lowercase letter or an underscore and contain only lowercase letters, digits and underscores.',
     columnNameDuplicate: 'This column name is already used in this form.',
@@ -922,8 +889,6 @@ export default {
     sectionAdvancedInfo: 'Advanced info',
     sectionOtherInfo: 'Other info',
     fieldKeyLabel: 'Field key',
-    fieldKeyLockedNote: 'The field key cannot be changed directly after publishing',
-    fieldKeySuffixHint: 'Enter the suffix only — the system prefix is fixed as field_',
     fieldKeyDuplicate: 'This field key duplicates an existing field. Choose another.',
     scriptTitle: 'Advanced editing (script)',
     scriptDialogTitle: 'Edit field script',
@@ -955,8 +920,6 @@ export default {
     labelPositionTopLeft: 'Top',
     defaultValueExprPlaceholder: 'Empty / expression supported',
     extensionAreaTitle: 'Extension attribute area',
-    extensionAreaHint: 'Reserved for component extensions',
-    selectFieldHint: 'Select a field',
     columnWidth: 'Column width',
     columnWidthHint:
       'After adjustment, fields are packed automatically from left to right and top to bottom.',
@@ -1059,8 +1022,6 @@ export default {
     paletteFormula: 'Formula field',
     paletteIot: 'IoT device',
     paletteAgent: 'Agent result',
-    paletteDragHint:
-      'Drag components onto the canvas; new fields fill the row by default — adjust width in the panel.',
     canvasGridMeta: '12-column grid · snap · 100%',
     publishedNoRepublish: 'This form is already published and cannot be published again.',
     preview: 'Form preview',
@@ -1082,8 +1043,6 @@ export default {
     importErrorRows: 'Failed rows',
     importRowNumber: 'Row',
     confirmSelection: 'Confirm selection',
-    datasourceValueNote:
-      'The stored value is a stable object identifier. On submit the server resolves and freezes value/display per contract; forged or unauthorized objects are rejected.',
     clearSelection: 'Clear selection',
     editSubTable: 'Edit sub-table',
     historyPreviewNote:
@@ -1093,16 +1052,11 @@ export default {
       'The form is not saved yet, so there is no stable form key. Save a draft in the design area before managing related processes.',
     openInAdmin: 'Manage / edit',
     initiationScope: 'Initiation scope',
-    initiationScopeNote:
-      'This setting only controls whether ordinary users can start the form. It grants no admin, data or approval permission.',
     publishedFrozenNote:
       'This form is published: table name and fields are frozen and cannot be edited.',
-    processResolvedByBinding:
-      'The process is resolved by the system from the published form binding.',
     backToProcessCenter: 'Back to process center',
     launch: 'Start process',
     submitDraft: 'Submit draft',
-    importProcessingNote: 'Import validates synchronously, so no rows are still in progress.',
     titleWithKey: 'Form — {formKey}',
     initiateTitle: 'Start {title}',
     draftEntryTitle: '{title} (draft entry)',
@@ -1135,8 +1089,6 @@ export default {
     colSpanLabel: '{colSpan} / 24 columns',
     subFieldEditorTitle: 'Sub-table field editor · {tableLabel}',
     subFieldCountLabel: '{count} sub-fields',
-    importAtomicRollbackNote:
-      'No rows were imported: {invalid} of the {failed} unapplied rows were invalid; the rest were rolled back with the batch.',
   },
   'form-designer': {
     referenceFieldSelector: 'Reference field selector',
@@ -1458,8 +1410,6 @@ export default {
     secureBadge: 'Secure sign-in',
     ssoDivider: 'SSO single sign-on',
     tenantHint: 'SSO authorization needs a tenant ID; password sign-in does not.',
-    tenantSecurityNote:
-      'The tenant identifier is used only for authentication and is never exposed.',
   },
   menu: {
     workflow: 'Process management',
@@ -1606,13 +1556,8 @@ export default {
     titleTemplateRequired: 'Title template is required',
     contentTemplateRequired: 'Content template is required',
     templateCodePlaceholder: 'For example, WELCOME_MAIL',
-    templateCodeImmutableEdit: 'Cannot be changed after creation',
-    templateCodeImmutableNew: 'Cannot be modified after creation',
     templateDisplayNamePlaceholder: 'Template display name',
-    disableHint: 'A disabled template cannot be previewed or sent',
     templateContent: 'Template content',
-    variableNameFormat:
-      'Variable names must start with a letter or underscore and contain only letters, digits and underscores',
     contentTemplate: 'Content template',
     editTemplate: 'Edit message template',
     subjectPlaceholder:
@@ -1627,11 +1572,7 @@ export default {
     markRead: 'Mark as read',
     jump: 'Go',
     resend: 'Resend',
-    templateLimitNote:
-      'Simple variable substitution only: no expressions, conditions or scripts. Variable values are treated as plain text.',
     batchResultTitle: 'Batch send result',
-    batchResultProcessingNote:
-      'In-app delivery is synchronous, so this batch has no recipients in progress.',
     batchResultGoInbox: 'Go to inbox',
     confirmDeleteRule: 'Delete notification rule {ruleCode}?',
     ruleDialogTitle: "editing ? 'Edit rule' : 'New rule'",
@@ -1928,8 +1869,6 @@ export default {
     unbind: 'Unbind',
     postListLoadFailed: 'Could not load the posts',
     postDelegateTitle: 'Position delegation',
-    postDelegateHint:
-      'Configure source post → delegated post relations: the workflow resolves actual handlers from the delegated post in the organizational context; exact department scope takes precedence over the organization default; up to 4 hops; self/cycle/cross-tenant/over-scope/same-priority-overlap are rejected; enable/disable takes effect immediately while already-frozen rounds keep their participant snapshots.',
     postDelegateSource: 'Source post',
     postDelegateTarget: 'Delegated post',
     postDelegateScope: 'Scope',
@@ -1948,8 +1887,6 @@ export default {
     postNameRequired: 'Post name is required',
     postManagement: 'Post management',
     dictItemManagement: 'Dictionary items',
-    memberCandidateNote:
-      'Lists enabled users within your data scope only; disabled or invisible members are marked separately when displayed.',
     deleteDictTypeConfirm:
       'Delete dictionary type "{name}"? Items under this type will become unavailable.',
     confirmDeleteUser: 'Delete user "{username}"? This cannot be undone.',
@@ -2009,7 +1946,6 @@ export default {
     recordEvent: 'Event / result',
     opinionFormTitle: 'Approval opinion form {formId}',
     opinionCommentLabel: 'Approval comment',
-    opinionReadonlyNote: 'Original data under the form version at approval time · read-only',
     signRejected: 'rejected',
     signGroupNote:
       'Pending participants have not submitted their opinion forms; each processed opinion can be viewed in its original form.',
@@ -2038,7 +1974,6 @@ export default {
       'Third-party sign-in is temporarily unavailable. Please contact your administrator to verify the account information.',
     ssoConfig: {
       title: 'SSO Configuration',
-      desc: 'Tenant-level third-party sign-in settings. Changes apply to subsequent authorizations; disabling a provider does not sign out existing sessions (managed by local session rules).',
       loadFailed: 'Failed to load configuration',
       provider: 'Provider',
       providers: { wecom: 'WeCom', feishu: 'Feishu', dingtalk: 'DingTalk' },
@@ -2050,8 +1985,6 @@ export default {
       enterpriseId: 'Allowed enterprise ID',
       enterpriseIdPlaceholder: 'Required for enterprise mode (DingTalk corpId / Feishu tenant_key)',
       enterpriseIdRequired: 'Enterprise mode requires the allowed enterprise ID',
-      personalHint:
-        'Personal mode still requires the user to pre-exist in the current tenant organization (trusted phone admission).',
       credential: 'Credential',
       secretConfigured: 'Configured',
       secretMissing: 'Not set',
@@ -2073,13 +2006,9 @@ export default {
       secretRequired: 'Enter a valid new credential (leave empty to keep the old one)',
       secretSaved: 'App credential updated',
       secretFailed: 'Failed to update the credential',
-      secretHint:
-        'Write-only credential: it is never displayed after saving; leave empty to keep the old value. Unrelated to the system master-key rotation.',
       check: 'Check',
       checkTitle: '{provider} configuration check',
       checkFailed: 'Configuration check failed',
-      checkNote:
-        'The check only validates completeness and decryptability; it does not prove a real sign-in has passed.',
       checks: {
         configExists: 'Configuration registered',
         appIdValid: 'App ID valid (not a placeholder)',
@@ -2232,8 +2161,6 @@ export default {
     processDefCapabilityNote:
       'Process node capabilities: approval / countersign / condition branch / parallel / notification / IoT command / Agent invocation',
     selectForm: 'Select a form',
-    linkPublishedFormHint:
-      'Link a published form definition so the form can be loaded when the process starts.',
     batchApproval: 'Batch approval',
     batchCommentHint:
       'Batch comment (required when rejecting; nodes with a mandatory comment form still need individual comment forms)',
@@ -2275,8 +2202,6 @@ export default {
     themeRuleUnset: 'Not set',
     themeRuleTitle: 'Theme generation rule',
     themeRulePlaceholder: 'Enter the theme generation rule',
-    themeRuleHint:
-      'Combine fixed text, timestamps (date / full datetime) and a per-process auto-increment number. Required; applies to new launches',
     themeRuleRequired: 'Theme generation rule is required',
     themeRuleSaved: 'Theme generation rule saved',
     themeRuleSaveFailed: 'Failed to save theme generation rule',
@@ -2330,8 +2255,6 @@ export default {
     processScopeAll: 'All flows (leave empty)',
     pickSourceUser: 'Search and pick the source user',
     carryOverDelegateRules: 'Carry over delegate rules',
-    carryOverDelegateHint:
-      'Only future delegate rules within their validity period are carried over; history, CC, and completed items are never migrated.',
     runHandover: 'Run handover',
     previousOwner: 'Previous owner',
     newOwner: 'New owner',
@@ -2372,7 +2295,7 @@ export default {
     nodeName: 'Node name',
     objectConfigJsonPlaceholder: 'Object configuration (JSON text)',
     validationIssues: 'Validation issues',
-    selectNodeToConfigure: 'Select or drag in a node to configure its properties',
+    selectNodeToConfigure: 'No node selected',
     ccListLoadFailed: 'Failed to load the CC items',
     ccDetailLoadFailed: 'Failed to load the CC details',
     instanceIdExactPlaceholder: 'Process instance ID (exact match)',
@@ -2501,7 +2424,6 @@ export default {
     advExecutorListener: 'Executor / listener',
     advBeforeStart: 'Before start',
     advAfterComplete: 'After completion',
-    advListenerNote: 'Bean reference · parameter mapping · failure strategy',
     advAddListener: 'Add unified listener',
     advNotifyTitle: 'Notifications',
     advNotifyTargets: 'Notify targets',
@@ -2535,8 +2457,6 @@ export default {
     listenerBefore: 'before',
     listenerAfter: 'after',
     listenerAdd: 'Add listener',
-    canvasInteractionHint:
-      'Click or drag to place nodes · drop onto a connection to insert · drag any of the four anchors to connect · drag an endpoint to re-attach · hold a line to bend · Delete removes',
     design: 'Design',
     deleteSelected: 'Delete selected',
     activeNode: 'Active nodes',
@@ -2546,8 +2466,6 @@ export default {
     consultTask: 'Consult',
     copyCreateDefinition: 'Copy to create definition',
     handle: 'Handle',
-    batchProcessingNote:
-      'Batch handling runs item by item synchronously, so no items are in progress.',
     categoryDialogTitle: "categoryEditing ? 'Edit category' : 'New category'",
     deleteCategoryConfirm:
       'Delete category "{name}"? Any items assigned to it must be unassigned first.',
@@ -2615,10 +2533,7 @@ export default {
     configureWorkspace: 'Configure workspace',
     componentLibrary: 'Basic component library',
     basicComponent: 'Basic component',
-    componentLibraryHint: 'Click to add a component, or drag it onto the canvas.',
     canvasTitle: 'Workspace canvas',
-    canvasHint:
-      'Drag the title bar to move a card and drag edges or corners to resize; dashed guides appear on alignment.',
     defaultLayout: 'Default layout',
     dragToCanvas: 'Drag to canvas',
     added: 'Added',
@@ -2630,8 +2545,6 @@ export default {
     moreItems: 'More items',
     quickFooter: 'Drag to reorder · Pin up to 20 favorite items',
     activityTitle: 'Activity',
-    activityHint: 'In the last 7 days',
-    effHint: 'Last 7 days',
     noActivity: 'No recent activity',
     efficiencyTitle: 'Process efficiency',
     avgDuration: 'Avg. handling time',
