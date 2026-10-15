@@ -662,6 +662,13 @@ function preValidateBeforePublish(list: DesignerItem[]): string | null {
 }
 
 function backToList() {
+  // 从应用管理「表单上下文」进入时，保存/返回回到同一上下文（应用内的该表单）
+  const from = route.query.from
+  const appId = route.query.appId
+  if (from === 'app-form' && typeof appId === 'string' && appId && formId.value) {
+    router.push({ name: 'form-app-manage-form', params: { appId, formId: formId.value } })
+    return
+  }
   router.push({ name: 'form-def-list' })
 }
 

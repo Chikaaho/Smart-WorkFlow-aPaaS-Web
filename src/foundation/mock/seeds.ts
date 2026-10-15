@@ -1323,6 +1323,98 @@ export const MOCK_FORM_DEF_STORE: Map<
   }
 > = new Map()
 
+// ─── 应用中心（应用 → 目录 → 表单）──────────────────────────
+// 临时数据：dev:mock 下应用中心/应用管理页面的数据源；真实端点就绪后下线。
+
+export interface MockAppFormItem {
+  formId: string
+  formKey: string
+  name: string
+  status: 'DRAFT' | 'PUBLISHED' | 'DISABLED'
+  dirId: string | null
+}
+
+export interface MockAppDir {
+  id: string
+  appId: string
+  name: string
+  sortNo: number
+  forms: MockAppFormItem[]
+}
+
+export interface MockApp {
+  id: string
+  name: string
+  icon: string | null
+  color: string | null
+  sortNo: number
+  visibleScopeType: 'ALL' | 'SPECIFIED'
+  visibleUserIds: number[] | null
+  status: 'ENABLED' | 'DISABLED'
+  source: 'MANUAL' | 'LEGACY_CATEGORY' | 'LEGACY_UNCATEGORIZED'
+  legacyCategoryId?: number | null
+  dirs: MockAppDir[]
+  directForms: MockAppFormItem[]
+}
+
+export const MOCK_APP_SEEDS: MockApp[] = [
+  {
+    id: 'mock-app-001',
+    name: '人事应用',
+    icon: 'User',
+    color: '#7e306b',
+    sortNo: 1,
+    visibleScopeType: 'ALL',
+    visibleUserIds: null,
+    status: 'ENABLED',
+    source: 'MANUAL',
+    dirs: [
+      {
+        id: 'mock-dir-001',
+        appId: 'mock-app-001',
+        name: '入职与请假',
+        sortNo: 1,
+        forms: [
+          {
+            formId: 'seed-def-001',
+            formKey: 'leave-request',
+            name: '请假申请单',
+            status: 'PUBLISHED',
+            dirId: 'mock-dir-001',
+          },
+        ],
+      },
+    ],
+    directForms: [
+      {
+        formId: 'seed-def-002',
+        formKey: 'onboarding-form',
+        name: '入职登记表',
+        status: 'PUBLISHED',
+        dirId: null,
+      },
+    ],
+  },
+  {
+    id: 'mock-app-002',
+    name: '行政应用',
+    icon: 'Tickets',
+    color: '#409eff',
+    sortNo: 2,
+    visibleScopeType: 'SPECIFIED',
+    visibleUserIds: [1],
+    status: 'ENABLED',
+    source: 'MANUAL',
+    dirs: [],
+    directForms: [],
+  },
+]
+
+/** 可变 store：后台新建/编辑/删除在此生效（dev:mock 验收）。 */
+export const MOCK_APP_STORE: Map<string, MockApp> = new Map(
+  MOCK_APP_SEEDS.map((item) => [item.id, JSON.parse(JSON.stringify(item)) as MockApp]),
+)
+
 // ─── MOCK_FORM_DEF_STORE 种子数据 ───────────────────────────
 // 临时数据，对齐分页接口 handler 的响应形状预期。
 // 与第四刀 create handler 共用同一 store：设计器新建的草稿自动出现在列表。

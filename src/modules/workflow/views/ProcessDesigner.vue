@@ -118,6 +118,14 @@ const returnFormId = computed(() =>
     ? route.query.formId
     : '',
 )
+/** 从应用管理「表单上下文」进入时，返回同一上下文（应用/表单级）。 */
+const returnAppForm = computed(() =>
+  route.query?.from === 'app-form' &&
+  typeof route.query?.appId === 'string' &&
+  typeof route.query?.formId === 'string'
+    ? { appId: route.query.appId, formId: route.query.formId }
+    : null,
+)
 
 const loading = ref(false)
 const errorMsg = ref('')
@@ -2469,6 +2477,13 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 function backToList() {
+  if (returnAppForm.value) {
+    void router.push({
+      name: 'form-app-manage-form',
+      params: { appId: returnAppForm.value.appId, formId: returnAppForm.value.formId },
+    })
+    return
+  }
   if (returnFormId.value) {
     void router.push({ path: `/form/designer/${returnFormId.value}`, query: { tab: 'processes' } })
     return

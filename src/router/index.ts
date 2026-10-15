@@ -172,6 +172,74 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // 应用中心（后台应用管理）。独立命名，避免被菜单动态路由（name=FormAppManage）按名替换。
+        path: 'form/app-manage',
+        name: 'form-app-manage',
+        component: () => import('@/modules/form/views/AppManageList.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('form.appCenter.manageTitle')
+          },
+          authority: ['form:app:manage'],
+        },
+      },
+      {
+        // 应用管理上下文：应用内目录与表单（含新建/归属调整）。
+        path: 'form/app-manage/:appId',
+        name: 'form-app-manage-workspace',
+        component: () => import('@/modules/form/views/AppWorkspace.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('form.appCenter.workspaceTitle')
+          },
+          authority: ['form:app:manage'],
+        },
+      },
+      {
+        // 表单管理上下文：表单设计 / 流程设计入口（进入设计器定位当前表单及其关联流程）。
+        path: 'form/app-manage/:appId/form/:formId',
+        name: 'form-app-manage-form',
+        component: () => import('@/modules/form/views/AppFormDetail.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('form.appCenter.formContextTitle')
+          },
+          authority: ['form:app:manage'],
+        },
+      },
+      {
+        // 应用中心（用户端）：登录即可直达；应用可见性由服务端按范围过滤。
+        path: 'form/app-center',
+        name: 'form-app-center',
+        component: () => import('@/modules/form/views/AppCenter.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('form.appCenter.centerTitle')
+          },
+        },
+      },
+      {
+        path: 'form/app-center/:appId',
+        name: 'form-app-center-detail',
+        component: () => import('@/modules/form/views/AppCenterDetail.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('form.appCenter.centerTitle')
+          },
+        },
+      },
+      {
+        // 用户端表单数据列表（应用中心内表单入口）；数据读取口径与既有 form:data:query 一致。
+        path: 'form/app-form/:formKey',
+        name: 'app-form-data',
+        component: () => import('@/modules/form/views/AppFormData.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('router.formData')
+          },
+        },
+      },
+      {
         // P62：事务动作管理（静态路由保证直达；命名与菜单动态路由（name=FormTxnAction）不同名，避免被顶掉）
         path: 'form/txn-action',
         name: 'form-txn-action',

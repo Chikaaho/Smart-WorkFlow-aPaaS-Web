@@ -18,6 +18,10 @@ export interface FormCreateReq {
   name: string
   /** 表单类型（BF20261013-020）：缺省 BUSINESS；APPROVAL_COMMENT=审批意见表单（流程节点专用）。 */
   formType?: 'BUSINESS' | 'APPROVAL_COMMENT'
+  /** 归属应用 ID（应用中心；可空=不归属）。 */
+  appId?: string | null
+  /** 归属目录 ID（可空=直接归属应用）。 */
+  dirId?: string | null
 }
 
 /** 表单定义 DTO（后端返回）。 */
@@ -31,6 +35,10 @@ export interface FormDefDTO {
   /** 服务端可选的展示版本标签（例如 3.3）；缺省时回退 formVersion。 */
   versionLabel?: string | null
   visibilityScope?: string | null
+  /** 归属应用 ID（应用中心；null=未归属）。 */
+  appId?: string | null
+  /** 归属目录 ID（null=直接归属应用或未归属）。 */
+  dirId?: string | null
 }
 
 /**
@@ -49,6 +57,10 @@ export interface FormDefListItem {
   formVersion: number
   description: string
   visibilityScope?: string | null
+  /** 归属应用 ID（应用中心；null=未归属）。 */
+  appId?: string | null
+  /** 归属目录 ID（null=直接归属应用或未归属）。 */
+  dirId?: string | null
   createTime: string
   updateTime: string
   /** 创建人展示名；后端解析失败/缺失时为 null（V012-BUG-015）。 */

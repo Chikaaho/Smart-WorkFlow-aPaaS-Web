@@ -189,6 +189,7 @@ import {
   MOCK_EXTERNAL_TOOLS,
   type MockToolInternalEntry,
   type MockToolExternalEntry,
+  MOCK_APP_STORE,
 } from './seeds'
 
 // ─── 模型 handler 内部辅助（与真实后端语义对齐） ─────────────────
@@ -2448,6 +2449,136 @@ export const mockRegistrations: MockRegistration[] = [
           name: existing.name,
           status: existing.status,
           formVersion: existing.formVersion,
+        },
+      }
+    },
+  },
+
+  // ── 应用中心（应用 → 目录 → 表单）：用户端可见应用 ──────────
+  // GET /api/form/app/center/apps → R<FormApp[]>（启用 + 可见范围命中的最小投影）
+  {
+    method: 'GET',
+    pattern: '/api/form/app/center/apps',
+    handler: () => {
+      const rows = Array.from(MOCK_APP_STORE.values())
+        .filter((app) => app.status === 'ENABLED')
+        .map((app) => ({
+          id: app.id,
+          name: app.name,
+          icon: app.icon,
+          color: app.color,
+          sortNo: app.sortNo,
+          visibleScopeType: app.visibleScopeType,
+          status: app.status,
+          source: app.source,
+          formCount:
+            app.directForms.filter((f) => f.status === 'PUBLISHED').length +
+            app.dirs.reduce(
+              (acc, dir) => acc + dir.forms.filter((f) => f.status === 'PUBLISHED').length,
+              0,
+            ),
+          dirCount: app.dirs.length,
+        }))
+      return { code: 0, message: 'ok', data: rows }
+    },
+  },
+
+  // ── 应用中心：应用内容（用户端只下发可用表单） ──────────────
+  // GET /api/form/app/center/apps/:id → R<FormAppContent>
+  {
+    method: 'GET',
+    pattern: '/api/form/app/center/apps/:id',
+    handler: (params) => {
+      const { id } = params as Record<string, string>
+      const app = MOCK_APP_STORE.get(id)
+      if (!app || app.status !== 'ENABLED') {
+        return { code: 1700, message: '应用不存在或不可见', data: null }
+      }
+      const usable = (f: { status: string }) => f.status === 'PUBLISHED'
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          app: {
+            id: app.id,
+            name: app.name,
+            icon: app.icon,
+            color: app.color,
+            sortNo: app.sortNo,
+            visibleScopeType: app.visibleScopeType,
+            status: app.status,
+            source: app.source,
+            formCount:
+              app.directForms.filter(usable).length +
+              app.dirs.reduce((acc, dir) => acc + dir.forms.filter(usable).length, 0),
+            dirCount: app.dirs.length,
+          },
+          dirs: app.dirs.map((dir) => ({ ...dir, forms: dir.forms.filter(usable) })),
+          directForms: app.directForms.filter(usable),
+        },
+      }
+    },
+  },
+
+  // ── 应用管理：应用列表（管理端含停用与可见范围） ────────────
+  // GET /api/form/app/manage/list → R<FormApp[]>
+  {
+    method: 'GET',
+    pattern: '/api/form/app/manage/list',
+    handler: (_params, query) => {
+      const keyword = String(query.keyword ?? '').trim()
+      const rows = Array.from(MOCK_APP_STORE.values())
+        .filter((app) => !keyword || app.name.includes(keyword))
+        .map((app) => ({
+          id: app.id,
+          name: app.name,
+          icon: app.icon,
+          color: app.color,
+          sortNo: app.sortNo,
+          visibleScopeType: app.visibleScopeType,
+          visibleUserIds: app.visibleUserIds,
+          status: app.status,
+          source: app.source,
+          legacyCategoryId: app.legacyCategoryId ?? null,
+          formCount:
+            app.directForms.length + app.dirs.reduce((acc, dir) => acc + dir.forms.length, 0),
+          dirCount: app.dirs.length,
+        }))
+      return { code: 0, message: 'ok', data: rows }
+    },
+  },
+
+  // ── 应用管理：应用内容（管理视角含草稿/停用/不可见） ────────
+  // GET /api/form/app/manage/:id/content → R<FormAppContent>
+  {
+    method: 'GET',
+    pattern: '/api/form/app/manage/:id/content',
+    handler: (params) => {
+      const { id } = params as Record<string, string>
+      const app = MOCK_APP_STORE.get(id)
+      if (!app) {
+        return { code: 1700, message: '应用不存在或不可见', data: null }
+      }
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          app: {
+            id: app.id,
+            name: app.name,
+            icon: app.icon,
+            color: app.color,
+            sortNo: app.sortNo,
+            visibleScopeType: app.visibleScopeType,
+            visibleUserIds: app.visibleUserIds,
+            status: app.status,
+            source: app.source,
+            formCount:
+              app.directForms.length + app.dirs.reduce((acc, dir) => acc + dir.forms.length, 0),
+            dirCount: app.dirs.length,
+          },
+          dirs: app.dirs,
+          directForms: app.directForms,
         },
       }
     },

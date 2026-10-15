@@ -10,9 +10,9 @@ const { t } = useI18n()
  *
  * 本页面不碰第四刀核心逻辑（draft-actions / definition-convert / FormDesigner 灰化逻辑）。
  */
-import { ref, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import {
   pageFormDefs,
@@ -27,12 +27,8 @@ import type { PageQuery } from '@/contracts/common'
 import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
-import {
-  listCategories,
-  queryAdminCatalogItems,
-  type CatalogCategory,
-  type CatalogItem,
-} from '@/modules/workflow/api/oa'
+import { listFormApps, getFormAppContent } from '@/modules/form/api/app-center'
+import type { FormApp, FormAppContent } from '@/contracts/app-center'
 
 const router = useRouter()
 
@@ -45,126 +41,129 @@ const pageSize = ref(10)
 const loading = ref(false)
 const errorMsg = ref('')
 
-/* ── 左侧分类树：分类（多级）→ 表单 ──
- * 分类沿用流程中心事项目录（分类/事项归属在「流程归属管理」维护），
- * 表单与分类的绑定关系由事项的 formKey 反查，未绑定任何事项的表单归入「未分类」。
- * 树只做导航与过滤，不新增后端模型，不改动列表分页契约。*/
-const categories = ref<CatalogCategory[]>([])
-const catalogItems = ref<CatalogItem[]>([])
+/* ── 左侧分类树：应用（一级分类）→ 目录（二级分类）→ 表单 ──
+ * 分类来源=应用中心（应用承担原表单一级分类职责），表单归属由服务端 app_id/dir_id
+ * 唯一确定（不再从事项 formKey 反查取首项）。未归属表单（存量歧义对象/旧入口未归属）
+ * 归「未归属」节点。树只做导航与过滤，不改动列表分页契约。*/
+const apps = ref<FormApp[]>([])
+const appContents = ref<Map<string, FormAppContent>>(new Map())
 const allForms = ref<FormDefListItem[]>([])
-/** null=全部；0=未分类；其余=分类 id。 */
-const selectedCategoryId = ref<number | null>(null)
+/** null=全部；'unassigned'=未归属；'app:<id>'；'dir:<id>'。 */
+const selectedNodeKey = ref<string | null>(null)
 
-interface FormTreeLeaf {
+interface AppTreeNode {
   key: string
   label: string
-  formId: string
-}
-interface CategoryTreeNode {
-  key: string
-  label: string
-  categoryId: number | null
-  count: number
-  leaves: FormTreeLeaf[]
+  count?: number
+  children: AppTreeNode[]
+  /** 有 formId 的是表单叶子（点击进设计器）。 */
+  formId?: string
 }
 
-/** 表单 formKey → 分类 id（同一 formKey 取首个绑定项）。 */
-const formCategoryMap = computed(() => {
-  const map = new Map<string, number | null>()
-  for (const item of catalogItems.value) {
-    if (item.formKey && !map.has(item.formKey)) map.set(item.formKey, item.categoryId ?? 0)
+function formLeaf(def: {
+  id?: string
+  formId?: string
+  name?: string
+  formKey?: string
+}): AppTreeNode {
+  const formId = def.id ?? def.formId ?? ''
+  return {
+    key: `form:${formId}`,
+    label: def.name || def.formKey || formId,
+    children: [],
+    formId,
   }
-  return map
-})
+}
 
-const categoryTree = computed<CategoryTreeNode[]>(() => {
-  const leavesOf = (predicate: (def: FormDefListItem) => boolean): FormTreeLeaf[] =>
-    allForms.value
-      .filter(predicate)
-      .map((def) => ({ key: `form:${def.id}`, label: def.name || def.formKey, formId: def.id }))
-
-  const unclassified = leavesOf((def) => !formCategoryMap.value.has(def.formKey))
-  const nodes: CategoryTreeNode[] = [
-    {
-      key: 'all',
-      label: t('form.categoryAll'),
-      categoryId: null,
-      count: allForms.value.length,
-      leaves: leavesOf(() => true),
-    },
+const categoryTree = computed<AppTreeNode[]>(() => {
+  const nodes: AppTreeNode[] = [
+    { key: 'all', label: t('form.categoryAll'), count: allForms.value.length, children: [] },
   ]
-  for (const category of categories.value) {
-    const leaves = leavesOf((def) => formCategoryMap.value.get(def.formKey) === category.id)
+  for (const app of apps.value) {
+    const content = appContents.value.get(app.id)
+    const dirNodes: AppTreeNode[] = (content?.dirs ?? []).map((dir) => {
+      const leaves = (dir.forms ?? []).map(formLeaf)
+      return { key: `dir:${dir.id}`, label: dir.name, count: leaves.length, children: leaves }
+    })
+    const directLeaves = (content?.directForms ?? []).map(formLeaf)
     nodes.push({
-      key: `cat:${category.id}`,
-      label: category.name,
-      categoryId: category.id,
-      count: leaves.length,
-      leaves,
+      key: `app:${app.id}`,
+      label: app.name,
+      count: dirNodes.reduce((acc, d) => acc + (d.count ?? 0), 0) + directLeaves.length,
+      children: [...dirNodes, ...directLeaves],
     })
   }
-  nodes.push({
-    key: 'cat:0',
-    label: t('form.categoryUnclassified'),
-    categoryId: 0,
-    count: unclassified.length,
-    leaves: unclassified,
-  })
+  const unassigned = allForms.value.filter((def) => !def.appId).map(formLeaf)
+  if (unassigned.length > 0) {
+    nodes.push({
+      key: 'unassigned',
+      label: t('form.appCenter.unassigned'),
+      count: unassigned.length,
+      children: unassigned,
+    })
+  }
   return nodes
 })
 
-/** 当前分类选中的表单集合：null=不过滤（走服务端分页）。 */
-const categoryFormIds = computed<Set<string> | null>(() => {
-  const selected = selectedCategoryId.value
-  if (selected === null) return null
-  const node = categoryTree.value.find(
-    (item) => item.key === (selected === 0 ? 'cat:0' : `cat:${selected}`),
-  )
-  return new Set((node?.leaves ?? []).map((leaf) => leaf.formId))
+/** 选中节点的表单集合：null=全部（走服务端分页）。 */
+const selectedFormIds = computed<Set<string> | null>(() => {
+  const key = selectedNodeKey.value
+  if (!key) return null
+  if (key === 'unassigned') {
+    return new Set(allForms.value.filter((def) => !def.appId).map((def) => def.id))
+  }
+  if (key.startsWith('app:')) {
+    const appId = key.slice(4)
+    return new Set(allForms.value.filter((def) => def.appId === appId).map((def) => def.id))
+  }
+  if (key.startsWith('dir:')) {
+    const dirId = key.slice(4)
+    return new Set(allForms.value.filter((def) => def.dirId === dirId).map((def) => def.id))
+  }
+  return new Set()
 })
 
-/** 表格数据：分类过滤时用本地集合（不改变服务端分页语义）。 */
+/** 表格数据：节点过滤时用本地集合（不改变服务端分页语义）。 */
 const displayList = computed(() => {
-  const ids = categoryFormIds.value
+  const ids = selectedFormIds.value
   if (!ids) return list.value
   return allForms.value.filter((def) => ids.has(def.id)).slice(0, 200)
 })
 
 const displayTotal = computed(() =>
-  categoryFormIds.value ? displayList.value.length : total.value,
+  selectedFormIds.value ? displayList.value.length : total.value,
 )
 
 async function loadCategoryTree() {
   try {
-    const [cats, items, defs] = await Promise.all([
-      listCategories(),
-      queryAdminCatalogItems({ pageNum: 1, pageSize: 500 }),
-      pageFormDefs({ pageNum: 1, pageSize: 500 }, undefined, 'BUSINESS'),
-    ])
-    categories.value = cats
-    catalogItems.value = items.list
+    const appList = await listFormApps()
+    apps.value = appList
+    const contents = new Map<string, FormAppContent>()
+    await Promise.all(
+      appList.slice(0, 100).map(async (app) => {
+        try {
+          contents.set(app.id, await getFormAppContent(app.id))
+        } catch {
+          // 单个应用内容加载失败不阻塞整棵树
+        }
+      }),
+    )
+    appContents.value = contents
+    const defs = await pageFormDefs({ pageNum: 1, pageSize: 500 }, undefined, 'BUSINESS')
     allForms.value = defs.list
   } catch {
-    // 分类目录不可用时不阻塞表单列表（列表仍按服务端分页展示全部表单）
+    // 应用目录不可用时不阻塞表单列表（列表仍按服务端分页展示全部表单）
   }
 }
 
-function onCategorySelect(node: CategoryTreeNode) {
-  selectedCategoryId.value = node.categoryId
-  pageNum.value = 1
-}
-
-function onFormLeafOpen(leaf: FormTreeLeaf) {
-  void router.push(`/form/designer/${leaf.formId}`)
-}
-
-/** 树节点点击：分类节点 = 过滤列表；表单叶子 = 打开设计器。 */
-function onTreeNodeClick(node: CategoryTreeNode | FormTreeLeaf) {
-  if ('leaves' in node) {
-    onCategorySelect(node)
+/** 树节点点击：分类/目录节点 = 过滤列表；表单叶子 = 打开设计器。 */
+function onTreeNodeClick(data: AppTreeNode) {
+  if (data.formId) {
+    void router.push(`/form/designer/${data.formId}`)
     return
   }
-  onFormLeafOpen(node)
+  selectedNodeKey.value = data.key === 'all' ? null : data.key
+  pageNum.value = 1
 }
 
 void loadCategoryTree()
@@ -216,29 +215,46 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
  * GET /definition 对无定义草稿返回 CONFIG_NOT_FOUND，需先落一份空 schema）→
  * 进入设计器。取消/关闭不产生任何数据。
  */
-async function goCreate() {
-  let name: string
-  try {
-    const { value } = await ElMessageBox.prompt(t('common.formName'), t('form.newFormTitle'), {
-      confirmButtonText: t('common.confirm'),
-      cancelButtonText: t('common.cancel'),
-      inputPlaceholder: t('common.formName'),
-      inputValidator: (v: string) => (v && v.trim() ? true : t('form.newFormNameRequired')),
-    })
-    name = value.trim()
-  } catch {
-    return // 用户取消/关闭
+/** 新建表单：名称 + 应用归属（应用/目录可选；应用停用或目录不属于应用由服务端拒绝）。 */
+const createDialogVisible = ref(false)
+const createSaving = ref(false)
+const createForm = reactive({ name: '', appId: '', dirId: '' })
+
+const createDirOptions = computed(() => {
+  const content = createForm.appId ? appContents.value.get(createForm.appId) : undefined
+  return content?.dirs ?? []
+})
+
+function goCreate() {
+  Object.assign(createForm, { name: '', appId: apps.value[0]?.id ?? '', dirId: '' })
+  createDialogVisible.value = true
+}
+
+async function submitCreate() {
+  const name = createForm.name.trim()
+  if (!name) {
+    ElMessage.warning(t('form.newFormNameRequired'))
+    return
   }
+  createSaving.value = true
   try {
     // formKey 是关联流程/目录绑定的稳定标识，建单时即生成（对齐设计器保存链路）
-    const created = await createFormDef({ formKey: 'form_' + Date.now().toString(36), name })
+    const created = await createFormDef({
+      formKey: 'form_' + Date.now().toString(36),
+      name,
+      appId: createForm.appId || null,
+      dirId: createForm.dirId || null,
+    })
     await saveFormConfig(created.id, JSON.stringify({ title: name, fields: [] }))
     ElMessage.success(t('common.draftSaved'))
+    createDialogVisible.value = false
     // P52：用 path 而非 name —— 菜单动态路由与工作台静态路由不同名，
     // path 直达带 :id 的工作台路由，避免同名替换导致的参数丢失。
     void router.push(`/form/designer/${created.id}`)
   } catch (err) {
     ElMessage.error(err instanceof ApiError ? err.msg : t('common.saveFailed'))
+  } finally {
+    createSaving.value = false
   }
 }
 
@@ -346,7 +362,7 @@ onMounted(loadList)
       <el-tree
         :data="categoryTree"
         node-key="key"
-        :props="{ label: 'label', children: 'leaves' }"
+        :props="{ label: 'label', children: 'children' }"
         :expand-on-click-node="false"
         :default-expanded-keys="['all']"
         highlight-current
@@ -442,6 +458,36 @@ onMounted(loadList)
     <template #footer>
       <el-button @click="visibilityDialogVisible = false">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :loading="visibilitySaving" @click="saveVisibility">{{
+        t('common.save')
+      }}</el-button>
+    </template>
+  </el-dialog>
+
+  <el-dialog v-model="createDialogVisible" :title="t('form.newFormTitle')" width="440px">
+    <el-form label-width="90px">
+      <el-form-item :label="t('common.formName')" required>
+        <el-input v-model="createForm.name" data-testid="def-create-name" maxlength="200" />
+      </el-form-item>
+      <el-form-item :label="t('form.appCenter.moveTargetApp')">
+        <el-select
+          v-model="createForm.appId"
+          clearable
+          style="width: 100%"
+          @change="createForm.dirId = ''"
+        >
+          <el-option v-for="a in apps" :key="a.id" :label="a.name" :value="a.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="t('form.appCenter.moveTargetDir')">
+        <el-select v-model="createForm.dirId" clearable style="width: 100%">
+          <el-option :label="t('form.appCenter.directForms')" value="" />
+          <el-option v-for="d in createDirOptions" :key="d.id" :label="d.name" :value="d.id" />
+        </el-select>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="createDialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="createSaving" @click="submitCreate">{{
         t('common.save')
       }}</el-button>
     </template>

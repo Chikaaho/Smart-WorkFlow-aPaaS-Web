@@ -28,10 +28,16 @@ export const PORTAL_MENU_PATHS: ReadonlySet<string> = new Set([
   'workflow/my-processed',
   'workflow/processed',
   'notify/inbox',
+  'form/app-center',
 ])
 
 /** 前台静态深链路由（非菜单下发）的段前缀。 */
-const PORTAL_STATIC_PREFIXES = ['/workflow/task/', '/form/form-render/']
+const PORTAL_STATIC_PREFIXES = [
+  '/workflow/task/',
+  '/form/form-render/',
+  '/form/app-center/',
+  '/form/app-form/',
+]
 
 /** 判定路由全路径（含前导 /）归属前台还是后台。 */
 export function resolveArea(path: string): Area {
