@@ -406,7 +406,8 @@ function onSsoProviderSelect(key: SsoProvider): void {
 .login-page__form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  /* 行距 12px：与下方 1280+ 面板内距共同保证备案行落在 1280×768/1024×768 类常用视口内 */
+  gap: 12px;
   width: 100%;
   box-sizing: border-box;
   /* 无全局 border-box 复位：显式声明，保证 max-width 将内边距计入视口内 */
@@ -772,10 +773,11 @@ img.login-page__captcha {
   .login-page__footnote-dot {
     background: #3dd6a5;
   }
-  /* 表单面板 600px 定宽并居中；表单卡流式布局，高度随内容自适应（矮视口不再裁切） */
+  /* 表单面板 600px 定宽并居中；表单卡流式布局，高度随内容自适应（矮视口不再裁切）。
+     垂直内距 24px：让卡片底部的备案行在 768 高视口内可见，无需滚动即可点击。 */
   .login-page__panel {
     flex: 0 0 600px;
-    padding: 48px 40px;
+    padding: 24px 40px;
     background: #f5f7fc;
   }
   .login-page__form {
