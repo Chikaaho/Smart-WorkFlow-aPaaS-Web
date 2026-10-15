@@ -7,7 +7,7 @@ import './styles/tokens.css'
 import App from './App.vue'
 import { pinia } from './stores'
 import { router } from './router'
-import { applyDocumentTitle } from './router/page-title'
+import { refreshDocumentTitle, syncDocumentTitle } from './router/page-title'
 import { i18n } from './locales'
 import { permissionDirective } from './foundation/permission'
 import { installCompositionEscapeGuard } from './foundation/keyboard/composition-escape-guard'
@@ -29,10 +29,11 @@ async function bootstrap(): Promise<void> {
   // BF20261013-017：全局弹窗 ESC 关闭的输入法保护（组合态 ESC 只取消候选、不关弹窗）
   installCompositionEscapeGuard()
 
-  // BF20261013-047：页签标题 = 当前页面所属一级页签功能（路由切换与语言切换同步刷新）
-  router.afterEach((to) => applyDocumentTitle(to))
-  watch(i18n.global.locale, () => applyDocumentTitle(router.currentRoute.value))
-  applyDocumentTitle(router.currentRoute.value)
+  // BF20261013-047：页签标题 = 一级页签功能（双入口页随进入控制台：后台进=流程管理，前台/直接链入=用户视角）；
+  // 路由切换推进控制台（首帧不推进——冷启动落在 '/' 不代表后台），语言切换按同一口径重算
+  router.afterEach((to) => syncDocumentTitle(to))
+  watch(i18n.global.locale, () => refreshDocumentTitle(router.currentRoute.value))
+  refreshDocumentTitle(router.currentRoute.value)
 
   app.mount('#app')
 }

@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { APP_TITLE, applyDocumentTitle, documentTitleFor, sectionTitleKey } from './page-title'
+import {
+  APP_TITLE,
+  currentConsoleOf,
+  documentTitleFor,
+  isDualConsolePath,
+  nextConsole,
+  refreshDocumentTitle,
+  sectionTitleKey,
+  syncDocumentTitle,
+} from './page-title'
 
 /**
  * BF20261013-047 页签标题单测。
@@ -63,12 +72,56 @@ describe('page-title', () => {
     ).toBe('T:menu.lowcode')
   })
 
-  it('applyDocumentTitle 落到 document.title（中文本地化）', () => {
-    applyDocumentTitle({ path: '/system/user' })
-    expect(document.title).toBe('系统管理')
-    applyDocumentTitle({ path: '/workflow/defs' })
+  it('双入口页：后台进入显示「流程管理」，前台进入/直接链入显示用户视角', () => {
+    const catalog = { path: '/workflow/catalog', meta: { title: '流程中心' } }
+    expect(isDualConsolePath('/workflow/catalog')).toBe(true)
+    expect(isDualConsolePath('/workflow/task/t1')).toBe(true)
+    expect(isDualConsolePath('/form/form-render/f1')).toBe(true)
+    expect(isDualConsolePath('/workspace/todo')).toBe(false)
+    // 后台进入 → 管理命名
+    expect(documentTitleFor(catalog, translate, 'admin')).toBe('T:menu.workflow')
+    expect(
+      documentTitleFor(
+        { path: '/workflow/task/t1', meta: { title: '任务详情' } },
+        translate,
+        'admin',
+      ),
+    ).toBe('T:menu.workflow')
+    // 前台进入 / 直接链入（默认前台）→ 用户视角
+    expect(documentTitleFor(catalog, translate, 'portal')).toBe('流程中心')
+    expect(documentTitleFor(catalog, translate)).toBe('流程中心')
+  })
+
+  it('进入控制台推进：管理端 → 后台；双入口页保持当前控制台；纯前台页回前台', () => {
+    // 直接链入双入口页 → 默认前台（用户视角）
+    expect(nextConsole({ path: '/workflow/catalog' }, 'portal')).toBe('portal')
+    // 管理端页面 → 后台
+    expect(nextConsole({ path: '/workflow/defs' }, 'portal')).toBe('admin')
+    // 后台里继续点双入口页 → 保持后台（一串页面命名一致）
+    expect(nextConsole({ path: '/workflow/catalog' }, 'admin')).toBe('admin')
+    expect(nextConsole({ path: '/workflow/task/t1' }, 'admin')).toBe('admin')
+    // 回到纯前台页（工作台/我的门户）→ 回前台
+    expect(nextConsole({ path: '/workspace' }, 'admin')).toBe('portal')
+    expect(nextConsole({ path: '/portal' }, 'admin')).toBe('portal')
+  })
+
+  it('syncDocumentTitle 落到 document.title：直接链入=用户视角，后台进入=管理', () => {
+    syncDocumentTitle({ path: '/workflow/catalog', meta: { title: '流程中心' } })
+    expect(document.title).toBe('流程中心')
+    syncDocumentTitle({ path: '/workflow/defs' })
     expect(document.title).toBe('流程管理')
-    applyDocumentTitle({ path: '/unknown/path' })
+    expect(currentConsoleOf()).toBe('admin')
+    // 后台里点「流程中心」→ 显示管理
+    syncDocumentTitle({ path: '/workflow/catalog', meta: { title: '流程中心' } })
+    expect(document.title).toBe('流程管理')
+    // 回工作台 → 前台
+    syncDocumentTitle({ path: '/workspace', meta: { title: '工作台' } })
+    expect(document.title).toBe('工作台')
+    expect(currentConsoleOf()).toBe('portal')
+    // 语言切换口径：refresh 不改控制台
+    refreshDocumentTitle({ path: '/workspace', meta: { title: '工作台' } })
+    expect(document.title).toBe('工作台')
+    syncDocumentTitle({ path: '/unknown/path' })
     expect(document.title).toBe(APP_TITLE)
   })
 })
