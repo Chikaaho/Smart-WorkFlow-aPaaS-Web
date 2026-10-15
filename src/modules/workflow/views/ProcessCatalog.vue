@@ -12,16 +12,12 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import {
   queryCatalogItems,
   queryCategoryCounts,
   queryCatalogItem,
   listPortalCategories,
-  listCategories,
-  createCategory,
-  updateCategory,
-  deleteCategory,
   listMyFavorites,
   favoriteProcess,
   unfavoriteProcess,
@@ -32,10 +28,8 @@ import {
   type FavoriteItem,
 } from '@/modules/workflow/api/oa'
 import { ApiError } from '@/foundation/request'
-import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
-const userStore = useUserStore()
 
 const items = ref<CatalogItem[]>([])
 const total = ref(0)
@@ -53,10 +47,6 @@ const favorites = ref<FavoriteItem[]>([])
 const frequentItems = ref<FavoriteItem[]>([])
 const recentItems = ref<FavoriteItem[]>([])
 const toggling = ref('')
-
-const canManageCategories = computed(
-  () => userStore.superAdmin || userStore.permissions.has('workflow:catalog:manage'),
-)
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && items.value.length === 0)
 
@@ -208,86 +198,6 @@ async function openByKey(entry: FavoriteItem) {
   ElMessage.info(t('catalog.itemUnavailable'))
 }
 
-// ─── 分类维护（workflow:catalog:manage） ───
-const manageVisible = ref(false)
-const manageList = ref<CatalogCategory[]>([])
-const manageLoading = ref(false)
-const newCategoryName = ref('')
-const creatingCategory = ref(false)
-const editingCategoryId = ref<number | null>(null)
-const editingCategoryName = ref('')
-
-async function openManage() {
-  manageVisible.value = true
-  manageLoading.value = true
-  try {
-    manageList.value = await listCategories()
-  } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : t('catalog.categoryLoadFailed'))
-  } finally {
-    manageLoading.value = false
-  }
-}
-
-async function addCategory() {
-  // BF20261013-049：空名称原来静默 return（点「新建」看着完全没反应）——
-  // 与「流程归属管理」的 submitCategory 对齐：先给必填提示；按钮另按空值禁用。
-  const name = newCategoryName.value.trim()
-  if (!name) {
-    ElMessage.warning(t('workflow.categoryNameRequired'))
-    return
-  }
-  if (creatingCategory.value) return
-  creatingCategory.value = true
-  try {
-    await createCategory({ name })
-    newCategoryName.value = ''
-    manageList.value = await listCategories()
-    await loadCatalog()
-    ElMessage.success(t('catalog.categoryCreated'))
-  } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : t('catalog.categorySaveFailed'))
-  } finally {
-    creatingCategory.value = false
-  }
-}
-
-async function renameCategory() {
-  if (editingCategoryId.value == null || !editingCategoryName.value.trim()) return
-  try {
-    await updateCategory(editingCategoryId.value, { name: editingCategoryName.value.trim() })
-    editingCategoryId.value = null
-    manageList.value = await listCategories()
-    await loadCatalog()
-    ElMessage.success(t('catalog.categoryUpdated'))
-  } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : t('catalog.categorySaveFailed'))
-  }
-}
-
-function startRename(category: CatalogCategory) {
-  editingCategoryId.value = category.id
-  editingCategoryName.value = category.name
-}
-
-async function removeCategory(category: CatalogCategory) {
-  try {
-    await ElMessageBox.confirm(t('catalog.categoryDeleteConfirm', { name: category.name }), {
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
-  try {
-    await deleteCategory(category.id)
-    manageList.value = await listCategories()
-    await loadCatalog()
-    ElMessage.success(t('catalog.categoryDeleted'))
-  } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : t('catalog.categoryDeleteFailed'))
-  }
-}
-
 onMounted(() => {
   void loadCatalog()
   void loadUsageSections()
@@ -332,14 +242,6 @@ onMounted(() => {
         >
           <span>{{ t('workflow.uncategorized') }}</span>
           <span class="catalog-tree__count">{{ itemCountOf(0) }}</span>
-        </button>
-        <button
-          v-if="canManageCategories"
-          type="button"
-          class="catalog-tree__manage"
-          @click="openManage"
-        >
-          {{ t('catalog.manageCategories') }}
         </button>
       </aside>
 
@@ -465,54 +367,6 @@ onMounted(() => {
         </div>
       </div>
     </div>
-
-    <!-- 分类维护（workflow:catalog:manage） -->
-    <el-dialog v-model="manageVisible" :title="t('catalog.manageCategories')" width="560px">
-      <div class="category-manage">
-        <div class="category-manage__new">
-          <el-input
-            v-model="newCategoryName"
-            :placeholder="t('catalog.newCategoryName')"
-            maxlength="32"
-            @keyup.enter="addCategory"
-          />
-          <el-button
-            type="primary"
-            :disabled="!newCategoryName.trim()"
-            :loading="creatingCategory"
-            @click="addCategory"
-            >{{ t('common.create') }}</el-button
-          >
-        </div>
-        <div v-loading="manageLoading" class="category-manage__list">
-          <div v-for="category in manageList" :key="category.id" class="category-manage__row">
-            <template v-if="editingCategoryId === category.id">
-              <el-input v-model="editingCategoryName" maxlength="32" size="small" />
-              <el-button size="small" type="primary" @click="renameCategory">{{
-                t('common.save')
-              }}</el-button>
-              <el-button size="small" @click="editingCategoryId = null">{{
-                t('common.cancel')
-              }}</el-button>
-            </template>
-            <template v-else>
-              <span class="category-manage__name">{{ category.name }}</span>
-              <el-button link type="primary" size="small" @click="startRename(category)">{{
-                t('common.rename')
-              }}</el-button>
-              <el-button link type="danger" size="small" @click="removeCategory(category)">{{
-                t('common.delete')
-              }}</el-button>
-            </template>
-          </div>
-          <el-empty
-            v-if="!manageLoading && manageList.length === 0"
-            :description="t('catalog.noCategories')"
-            :image-size="72"
-          />
-        </div>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
@@ -822,32 +676,5 @@ onMounted(() => {
   margin: 16px 0 0;
   font-size: 12px;
   color: var(--sw-text-secondary);
-}
-.category-manage__new {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.category-manage__list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 120px;
-  max-height: 320px;
-  overflow-y: auto;
-}
-.category-manage__row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-base);
-}
-.category-manage__name {
-  flex: 1 1 auto;
-  font-size: 13px;
-  color: var(--sw-text-primary);
 }
 </style>

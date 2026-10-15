@@ -45,10 +45,6 @@ const pageSize = ref(10)
 const loading = ref(false)
 const errorMsg = ref('')
 
-// 搜索
-const keyword = ref('')
-const currentKeyword = ref('')
-
 /* ── 左侧分类树：分类（多级）→ 表单 ──
  * 分类沿用流程中心事项目录（分类/事项归属在「流程归属管理」维护），
  * 表单与分类的绑定关系由事项的 formKey 反查，未绑定任何事项的表单归入「未分类」。
@@ -179,7 +175,7 @@ async function loadList() {
   try {
     const pageQuery: PageQuery = { pageNum: pageNum.value, pageSize: pageSize.value }
     // BF20261013-020：本列表是「业务表单」维护面——审批意见表单归流程管理，不混入
-    const result = await pageFormDefs(pageQuery, currentKeyword.value || undefined, 'BUSINESS')
+    const result = await pageFormDefs(pageQuery, undefined, 'BUSINESS')
     list.value = result.list
     total.value = result.total
   } catch (err) {
@@ -193,23 +189,10 @@ async function loadList() {
   }
 }
 
-function handleQuery() {
-  currentKeyword.value = keyword.value.trim()
-  pageNum.value = 1
-  void loadList()
-}
-
 /** 展示层时间格式：ISO → YYYY-MM-DD HH:mm（仅显示，不改数据） */
 function formatDateTime(value: string | null): string {
   if (!value) return '-'
   return value.replace('T', ' ').slice(0, 16)
-}
-
-function handleReset() {
-  keyword.value = ''
-  currentKeyword.value = ''
-  pageNum.value = 1
-  void loadList()
 }
 
 function handlePageNumChange(p: number) {
@@ -394,20 +377,7 @@ onMounted(loadList)
         <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
       </template>
 
-      <!-- 筛选区：名称搜索 -->
-      <template #filter>
-        <el-input
-          v-model="keyword"
-          :placeholder="t('form.searchFormPlaceholder')"
-          clearable
-          style="width: 240px"
-          @keyup.enter="handleQuery"
-        />
-      </template>
-      <template #filter-actions>
-        <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
-        <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
-      </template>
+      <!-- BF20261013-050：本页不再放名称搜索（Owner：表单管理搜索框去掉；流程中心的搜索保留） -->
 
       <!-- 表格 -->
       <el-alert
@@ -486,15 +456,19 @@ onMounted(loadList)
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 16px;
   align-items: flex-start;
+  /* BF20261013-050：撑满内容区——左列据此成为整列面板，而非左上角一小块孤立卡片。
+     底部留 16px：面板的底部圆角落在视口内可见（不留白则圆角贴着窗口下沿）。 */
+  box-sizing: border-box;
+  min-height: 100%;
+  padding-bottom: 16px;
 }
 
 .form-def-page__tree {
-  /* BF20261013-048：分类树卡片不参与拉伸、也不许吃满竖直空间。
-     旧 max-height:100% 在自动行高的网格里等于没有上限（实测 21 行树时卡片一路撑到 600px、
-     无内部滚动、下方不留空白），长树就会「拉伸填满竖直区域」。
-     现按视口封顶：内容少时卡片只裹内容、下方保持空白；内容超高时卡片内滚动。 */
-  align-self: start;
-  max-height: min(60vh, 480px);
+  /* BF20261013-050（Owner：整个这一列跟右侧一样）：
+     左列 = 整列面板——高度随内容区撑开（align-self: stretch）、底部同样圆角、右侧同为卡片面
+     （描边 + 卡片投影，与右侧列表卡同 token）；树比面板长时面板内滚动（Owner：可以滚动）。 */
+  align-self: stretch;
+  min-height: 0;
   padding: 12px;
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
