@@ -454,12 +454,17 @@ onMounted(loadList)
      用列轨道定位更稳（flex 下曾出现模板被挤到下方、页面看起来“崩了”）。 */
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
+  /* BF20261013-052：行高取内容区高度（minmax(0,1fr)）而不是由内容撑——
+     左列面板据此封顶在列高内，树比面板长时在面板内滚动（Owner：树单独面板内滚动）。 */
+  grid-template-rows: minmax(0, 1fr);
   gap: 16px;
   align-items: flex-start;
   /* BF20261013-050：撑满内容区——左列据此成为整列面板，而非左上角一小块孤立卡片。
-     底部留 16px：面板的底部圆角落在视口内可见（不留白则圆角贴着窗口下沿）。 */
+     底部留 16px：面板的底部圆角落在视口内可见（不留白则圆角贴着窗口下沿）。
+     BF20261013-052：用 height（定值，由内容区高度解析）而不是 min-height——行高 `minmax(0,1fr)`
+     只有在容器高度确定时才夹住面板；min-height 会被内容顶高，长树就不再面板内滚动。 */
   box-sizing: border-box;
-  min-height: 100%;
+  height: 100%;
   padding-bottom: 16px;
 }
 
