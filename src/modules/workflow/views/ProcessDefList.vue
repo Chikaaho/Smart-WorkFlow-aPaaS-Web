@@ -2,12 +2,6 @@
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
-/* global HTMLElement,
-  Range,
-  Node,
-  ClipboardEvent,
-  window,
-  document */
 /**
  * ProcessDefList — 流程定义列表页（页型 B）。
  *
@@ -18,22 +12,13 @@ const { t } = useI18n()
  * I3：查看流程图走自研渲染内核（ProcessGraphView）；设计入口进入第一方设计器；
  * 发布/删除沿用；分页/空态/加载/错误行为保持。
  */
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  THEME_RULE_TOKENS,
-  SEQ_DIGIT_OPTIONS,
-  chipText,
-  parseRuleSegments,
-  seqToken,
-  themeRulePreview,
-} from '@/modules/workflow/utils/theme-rule'
+import { themeRuleDisplay } from '@/modules/workflow/utils/theme-rule'
 import { ListActionsColumn, ListEmpty, ListPagination } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
-  getProcessDefThemeRule,
   pageProcessDefs,
-  updateProcessDefThemeRule,
   getProcessDefDefinition,
   publishProcessDef,
   deleteProcessDef,
@@ -46,6 +31,7 @@ import { ElMessage } from 'element-plus'
 import { CircleCheck, EditPen, Plus, Tickets, VideoPause } from '@element-plus/icons-vue'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import CreateProcessDefDialog from './CreateProcessDefDialog.vue'
+import ThemeRuleDialog from './ThemeRuleDialog.vue'
 
 // ─── 状态映射（与 FormDefStatus 完全对称；徽标底/字色走 .status.is-* 类，见样式区） ───
 
@@ -312,163 +298,19 @@ function rowActions(row: unknown): ListAction[] {
   ]
 }
 
-// ── V012-BUG-010 / BF20261013-041：流程编号（主题）规则——必填配置，变量按钮带入 ──
+// ── V012-BUG-010 / BF20261013-041/042：流程编号（主题）规则——必填配置，
+//    编辑器见 ThemeRuleDialog（变量按钮同框带入、手写 {xxx} 当普通字符串） ──
 const themeDialogVisible = ref(false)
 const themeDef = ref<ProcessDef | null>(null)
-const themeRuleInput = ref('')
-const themeSaving = ref(false)
-/** 自增编号位数（0 = 不补零）：点「自增序号」按钮时按此位数带入 {SEQ:n} */
-const themeSeqDigits = ref(3)
-/** 规则输入框（contenteditable）：变量在框内直接显示成灰底文字标识 */
-const themeEditorRef = ref<HTMLElement | null>(null)
-/** 编辑器内最近一次光标（点下方按钮时焦点已离开编辑器，用它定位插入点） */
-let themeCaret: Range | null = null
 
-/** 示例预览：把规则里的变量替换成演示值，用户直接看到编号长什么样 */
-const themePreview = computed(() => themeRulePreview(themeRuleInput.value))
-
-/** 预览里变量的展示文字（含自增位数），输入框内的灰底标识同源 */
-function themeChipText(token: string): string {
-  return chipText(token, (key, params) => (params ? t(key, params) : t(key)))
-}
-
-function rememberThemeCaret() {
-  const el = themeEditorRef.value
-  const selection = window.getSelection()
-  if (!el || !selection || selection.rangeCount === 0) return
-  const range = selection.getRangeAt(0)
-  if (el.contains(range.startContainer)) themeCaret = range.cloneRange()
-}
-
-function themeCaretRange(): Range {
-  const el = themeEditorRef.value as HTMLElement
-  if (themeCaret && el.contains(themeCaret.startContainer)) return themeCaret
-  const range = document.createRange()
-  range.selectNodeContents(el)
-  range.collapse(false)
-  return range
-}
-
-/** 在光标处插入一个灰底标识（选中内容会被替换），并把光标落到标识之后 */
-function appendThemeToken(token: string) {
-  const el = themeEditorRef.value
-  if (!el) return
-  el.focus()
-  const chip = document.createElement('span')
-  chip.className = 'theme-editor__chip'
-  chip.contentEditable = 'false'
-  chip.dataset.token = token
-  chip.textContent = `[${themeChipText(token)}]`
-  const range = themeCaretRange()
-  range.deleteContents()
-  range.insertNode(chip)
-  const after = document.createRange()
-  after.setStartAfter(chip)
-  after.collapse(true)
-  const selection = window.getSelection()
-  selection?.removeAllRanges()
-  selection?.addRange(after)
-  themeCaret = after.cloneRange()
-  syncThemeRule()
-}
-
-/** 光标处插入纯文本（粘贴统一降级为纯文本，避免带入外部格式） */
-function pasteThemeText(event: ClipboardEvent) {
-  const text = event.clipboardData?.getData('text/plain') ?? ''
-  const el = themeEditorRef.value
-  if (!el || !text) return
-  el.focus()
-  const range = themeCaretRange()
-  range.deleteContents()
-  const node = document.createTextNode(text)
-  range.insertNode(node)
-  const after = document.createRange()
-  after.setStartAfter(node)
-  after.collapse(true)
-  const selection = window.getSelection()
-  selection?.removeAllRanges()
-  selection?.addRange(after)
-  themeCaret = after.cloneRange()
-  syncThemeRule()
-}
-
-/** 编辑器 DOM → 规则文本（文字节点原样、灰底标识取 data-token，标识内的展示文字不参与） */
-function ruleFromThemeEditor(): string {
-  const el = themeEditorRef.value
-  if (!el) return themeRuleInput.value
-  let out = ''
-  for (const node of Array.from(el.childNodes)) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      out += node.textContent ?? ''
-      continue
-    }
-    const element = node as HTMLElement
-    if (element.dataset?.token) out += element.dataset.token
-    else out += element.textContent ?? ''
-  }
-  return out
-}
-
-function syncThemeRule() {
-  themeRuleInput.value = ruleFromThemeEditor()
-}
-
-/** 规则文本 → 编辑器 DOM（打开弹窗与清空后回显；输入过程不重绘，避免光标跳动） */
-function renderThemeEditor() {
-  const el = themeEditorRef.value
-  if (!el) return
-  el.textContent = ''
-  for (const segment of parseRuleSegments(themeRuleInput.value)) {
-    if (segment.kind === 'text') {
-      el.appendChild(document.createTextNode(segment.value))
-      continue
-    }
-    const chip = document.createElement('span')
-    chip.className = 'theme-editor__chip'
-    chip.contentEditable = 'false'
-    chip.dataset.token = segment.value
-    chip.textContent = `[${themeChipText(segment.value)}]`
-    el.appendChild(chip)
-  }
+/** 规则展示文字：变量显示成 [发起时间] 这类标识，不暴露占位记法 */
+function themeRuleText(rule: string): string {
+  return themeRuleDisplay(rule, (key, params) => (params ? t(key, params) : t(key)))
 }
 
 function openThemeRule(item: ProcessDef) {
   themeDef.value = item
-  themeRuleInput.value = ''
   themeDialogVisible.value = true
-  themeCaret = null
-  void getProcessDefThemeRule(item.id).then(async (rule) => {
-    themeRuleInput.value = rule ?? ''
-    themeSeqDigits.value = seqDigitsOf(rule ?? '')
-    await nextTick()
-    renderThemeEditor()
-  })
-}
-
-/** 从既有规则里回显自增位数（{SEQ:n} → n；{SEQ} → 0；无序号 → 保持默认 3） */
-function seqDigitsOf(rule: string): number {
-  const matched = /\{SEQ:(\d{1,2})\}/.exec(rule)
-  if (matched) return Number(matched[1])
-  return /\{SEQ\}/.test(rule) ? 0 : 3
-}
-
-async function saveThemeRule() {
-  if (!themeDef.value) return
-  const rule = themeRuleInput.value.trim()
-  if (!rule) {
-    ElMessage.warning(t('workflow.themeRuleRequired'))
-    return
-  }
-  themeSaving.value = true
-  try {
-    await updateProcessDefThemeRule(themeDef.value.id, rule)
-    ElMessage.success(t('workflow.themeRuleSaved'))
-    themeDialogVisible.value = false
-  } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.themeRuleSaveFailed'))
-  } finally {
-    themeSaving.value = false
-  }
 }
 
 /** 重置筛选：仅清空过滤条件（列表经 visibleList 客户端过滤，无需重新请求） */
@@ -683,15 +525,15 @@ onMounted(loadList)
               }}</span>
             </template>
           </el-table-column>
-          <!-- V012-BUG-010：主题规则列内联入口（点击即设置，不再只藏在「更多」） -->
+          <!-- V012-BUG-010 / BF20261013-042：流程编号列内联入口（点击即设置；展示不暴露占位记法） -->
           <el-table-column :label="t('workflow.themeRuleColumn')" width="180">
             <template #default="{ row }">
               <span
                 v-if="statusRow(row).themeRule"
                 class="defs-table__theme"
-                :title="statusRow(row).themeRule ?? undefined"
+                :title="themeRuleText(statusRow(row).themeRule ?? '')"
                 @click="openThemeRule(statusRow(row))"
-                >{{ statusRow(row).themeRule }}</span
+                >{{ themeRuleText(statusRow(row).themeRule ?? '') }}</span
               >
               <span
                 v-else
@@ -745,66 +587,8 @@ onMounted(loadList)
       <ProcessGraphView v-else :graph="viewerGraph" :height="480" />
     </div>
   </el-dialog>
-  <!-- V012-BUG-010 / BF20261013-041：流程编号（主题）规则设置——变量按钮带入，不用手写 {yyyyMMdd} -->
-  <el-dialog v-model="themeDialogVisible" :title="t('workflow.themeRuleTitle')" width="620px">
-    <p v-if="themeDef" class="theme-dialog__meta">
-      {{ themeDef.name + '（' + themeDef.processKey + '）' }}
-    </p>
-    <p class="theme-dialog__desc">{{ t('workflow.themeRuleDesc') }}</p>
-    <!-- BF20261013-041：变量在输入框内直接显示成灰底文字标识，可与其间固定文字混排
-         （例：JRZX_[发起时间]_[自增序号 3位]） -->
-    <div
-      ref="themeEditorRef"
-      class="theme-editor"
-      :data-placeholder="t('workflow.themeRulePlaceholder')"
-      contenteditable="true"
-      role="textbox"
-      aria-label="workflow-theme-rule"
-      @input="syncThemeRule"
-      @keyup="rememberThemeCaret"
-      @mouseup="rememberThemeCaret"
-      @keydown.enter.prevent
-      @paste.prevent="pasteThemeText"
-    />
-    <div class="theme-dialog__tokens">
-      <span class="theme-dialog__tokens-label">{{ t('workflow.themeRuleTokens') }}</span>
-      <el-button
-        v-for="token in THEME_RULE_TOKENS"
-        :key="token.key"
-        size="small"
-        @click="appendThemeToken(token.token)"
-      >
-        {{ t(token.labelKey) }}
-      </el-button>
-      <span class="theme-dialog__seq">
-        <el-button size="small" @click="appendThemeToken(seqToken(themeSeqDigits))">
-          {{ t('workflow.themeRuleTokenSeq') }}
-        </el-button>
-        <el-select v-model="themeSeqDigits" size="small" class="theme-dialog__seq-digits">
-          <el-option
-            v-for="digits in SEQ_DIGIT_OPTIONS"
-            :key="digits"
-            :value="digits"
-            :label="
-              digits === 0
-                ? t('workflow.themeRuleSeqNoPad')
-                : t('workflow.themeRuleSeqDigits', { n: digits })
-            "
-          />
-        </el-select>
-      </span>
-    </div>
-    <p class="theme-dialog__preview">
-      {{ t('workflow.themeRulePreview') }}：<strong>{{ themePreview || '—' }}</strong>
-    </p>
-    <p class="theme-dialog__hint">{{ t('workflow.themeRuleRequiredHint') }}</p>
-    <template #footer>
-      <el-button @click="themeDialogVisible = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="themeSaving" @click="saveThemeRule">{{
-        t('common.save')
-      }}</el-button>
-    </template>
-  </el-dialog>
+  <!-- V012-BUG-010 / BF20261013-041/042：流程编号（主题）规则设置——变量按钮同框带入 -->
+  <ThemeRuleDialog v-model:visible="themeDialogVisible" :def="themeDef" @saved="loadList" />
 
   <!-- 创建流程定义对话框 -->
   <CreateProcessDefDialog v-model:visible="createDialogVisible" @saved="loadList" />
@@ -1076,80 +860,7 @@ onMounted(loadList)
   line-height: 18px;
 }
 
-/* BF20261013-041 流程编号规则构建器：输入框内灰底标识 + 变量按钮行 + 示例 + 必填提示 */
-.theme-dialog__desc {
-  margin: 0 0 12px;
-  color: #687386;
-  font-size: 13px;
-  line-height: 20px;
-}
-/* 规则输入框（contenteditable）：外形与 el-input 对齐，变量以灰底标识内联展示 */
-.theme-editor {
-  box-sizing: border-box;
-  min-height: 32px;
-  padding: 5px 11px;
-  border: 1px solid var(--el-border-color, #dcdfe6);
-  border-radius: var(--el-border-radius-base, 4px);
-  background: var(--el-fill-color-blank, #fff);
-  color: var(--el-text-color-regular, #606266);
-  font-size: 14px;
-  line-height: 20px;
-  word-break: break-all;
-  cursor: text;
-}
-.theme-editor:focus {
-  border-color: var(--el-color-primary, #6f2dff);
-  outline: none;
-}
-.theme-editor:empty::before {
-  content: attr(data-placeholder);
-  color: var(--el-text-color-placeholder, #a8abb2);
-}
-.theme-editor__chip {
-  display: inline-block;
-  margin: 0 1px;
-  padding: 0 6px;
-  border-radius: 4px;
-  background: #eef1f7;
-  color: #46506a;
-  font-size: 12px;
-  line-height: 18px;
-  white-space: nowrap;
-}
-.theme-dialog__tokens {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 12px 0 0;
-}
-.theme-dialog__tokens-label {
-  color: #8690ae;
-  font-size: 12px;
-}
-.theme-dialog__seq {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.theme-dialog__seq-digits {
-  width: 108px;
-}
-.theme-dialog__preview {
-  margin: 14px 0 0;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: #f7f9fd;
-  color: #344164;
-  font-size: 13px;
-  line-height: 20px;
-}
-.theme-dialog__hint {
-  margin: 10px 0 0;
-  color: #8690ae;
-  font-size: 12px;
-  line-height: 18px;
-}
+/* BF20261013-041/042 流程编号规则构建器样式已移入 ThemeRuleDialog 组件（列表页与表单工作台共用） */
 
 /* 操作列禁用态按钮：与可点链接形成清晰视觉反差 */
 :deep(.el-button.is-link.is-disabled) {

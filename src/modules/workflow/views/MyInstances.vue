@@ -419,12 +419,11 @@ onMounted(loadList)
           {{ row.processName ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column
-        prop="businessKey"
-        :label="t('common.processNo')"
-        min-width="200"
-        show-overflow-tooltip
-      />
+      <!-- BF20261013-044：流程编号列展示发起时按编号规则生成的实例编号（主题），
+           不再错绑业务标识（businessKey 仍在详情弹窗以「业务单号」展示） -->
+      <el-table-column :label="t('common.processNo')" min-width="200" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.theme || '—' }}</template>
+      </el-table-column>
       <el-table-column :label="t('common.currentNode')" min-width="160">
         <template #default="{ row }">
           {{ row.currentNode ?? t('common.dash') }}
@@ -731,7 +730,8 @@ onMounted(loadList)
   display: block;
   width: 86px;
   line-height: 38px;
-  text-align: left;
+  /* BF20261013-046：按钮文字居中（原 fixture 左对齐，＋ 新建 贴按钮左缘） */
+  text-align: center;
 }
 
 .my-instances-table :deep(th.el-table__cell),
@@ -761,6 +761,8 @@ onMounted(loadList)
   display: block;
   width: 72px;
   line-height: 28px;
+  /* BF20261013-046：状态徽标文字居中（原定宽 72px + 左对齐，文字贴左） */
+  text-align: center;
 }
 </style>
 

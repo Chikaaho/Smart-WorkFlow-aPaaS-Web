@@ -1,23 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { i18n } from '@/locales'
 
 /**
- * RelatedProcessesPanel 单测（P52 关联流程工作区）。
+ * RelatedProcessesPanel 单测（P52 关联流程工作区；BF20261013-043 流程编号设置入口）。
  *
  * mock workflow api 层，验证：
  *   - 以 formKey 向后端请求过滤（前端不做本地筛选）；
  *   - 创建关联流程自动带入当前表单身份（服务端持久化契约）；
  *   - 无 formKey（未保存草稿）不发起请求并显示引导态；
- *   - formKey 变化时重置分页重新请求（切表单防串位）。
+ *   - formKey 变化时重置分页重新请求（切表单防串位）；
+ *   - 流程编号设置：单流程直接进入规则编辑器（多流程先选择）。
  */
 
 const mockPageProcessDefs = vi.fn()
 const mockCreateProcessDef = vi.fn()
+const mockGetProcessDefThemeRule = vi.fn()
 
 vi.mock('@/modules/workflow/api', () => ({
   pageProcessDefs: (...args: unknown[]) => mockPageProcessDefs(...args),
   createProcessDef: (...args: unknown[]) => mockCreateProcessDef(...args),
+  getProcessDefThemeRule: (...args: unknown[]) => mockGetProcessDefThemeRule(...args),
+  updateProcessDefThemeRule: vi.fn(),
 }))
 
 import RelatedProcessesPanel from './RelatedProcessesPanel.vue'
@@ -29,6 +34,9 @@ const overlayStubs = {
     props: ['modelValue'],
   },
 }
+
+/** 流程编号弹窗（ThemeRuleDialog）依赖用户会话 store，统一注入 pinia */
+const globalOpts = () => ({ stubs: overlayStubs, plugins: [createPinia()] })
 
 const pageResult = {
   list: [
@@ -57,7 +65,7 @@ describe('RelatedProcessesPanel', () => {
   it('mount 时以 formKey 请求后端过滤的流程列表', async () => {
     const wrapper = mount(RelatedProcessesPanel, {
       props: { formId: 'uuid-1', formKey: 'leave-request' },
-      global: { stubs: overlayStubs },
+      global: globalOpts(),
     })
     await flushPromises()
 
@@ -69,7 +77,7 @@ describe('RelatedProcessesPanel', () => {
   it('无 formKey（未保存草稿）不发起请求，显示保存引导', async () => {
     const wrapper = mount(RelatedProcessesPanel, {
       props: { formId: '', formKey: '' },
-      global: { stubs: overlayStubs },
+      global: globalOpts(),
     })
     await flushPromises()
 
@@ -81,7 +89,7 @@ describe('RelatedProcessesPanel', () => {
     mockCreateProcessDef.mockResolvedValueOnce({ defId: 9, graph: {} })
     const wrapper = mount(RelatedProcessesPanel, {
       props: { formId: 'uuid-1', formKey: 'leave-request' },
-      global: { stubs: overlayStubs },
+      global: globalOpts(),
     })
     await flushPromises()
 
@@ -114,7 +122,7 @@ describe('RelatedProcessesPanel', () => {
   it('formKey 变化时重置分页并重新请求（切表单防串位）', async () => {
     const wrapper = mount(RelatedProcessesPanel, {
       props: { formId: 'uuid-1', formKey: 'leave-request' },
-      global: { stubs: overlayStubs },
+      global: globalOpts(),
     })
     await flushPromises()
     expect(mockPageProcessDefs).toHaveBeenCalledTimes(1)
@@ -126,5 +134,27 @@ describe('RelatedProcessesPanel', () => {
       { pageNum: 1, pageSize: 10 },
       'purchase-order',
     )
+  })
+
+  // BF20261013-043：流程编号设置入口（单流程直接进入规则编辑器，变量按钮同框带入）
+  it('流程编号设置：单流程时直接打开规则编辑器并回显当前规则', async () => {
+    mockGetProcessDefThemeRule.mockResolvedValueOnce('JRZX_{SEQ:3}')
+    const wrapper = mount(RelatedProcessesPanel, {
+      props: { formId: 'uuid-1', formKey: 'leave-request' },
+      global: globalOpts(),
+    })
+    await flushPromises()
+
+    const numberLabel = i18n.global.t('form.relatedProcessNumberSetting')
+    const numberBtn = wrapper.findAll('button').find((b) => b.text().includes(numberLabel))
+    expect(numberBtn).toBeTruthy()
+    await numberBtn!.trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    expect(mockGetProcessDefThemeRule).toHaveBeenCalledWith(2)
+    const chips = wrapper.findAll('.theme-editor__chip')
+    expect(chips.map((chip) => chip.attributes('data-token'))).toEqual(['{SEQ:3}'])
+    expect(wrapper.find('.theme-editor').findAll('.theme-editor__add').length).toBe(5)
   })
 })

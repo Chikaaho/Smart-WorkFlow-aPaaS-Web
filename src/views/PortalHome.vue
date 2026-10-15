@@ -656,10 +656,7 @@ function searchPortal(): void {
   justify-content: center;
   margin-left: auto;
 }
-.portal-focus :deep(.el-button > span) {
-  position: relative;
-  left: 18px;
-}
+/* BF20261013-046：移除 .el-button > span 的 left:18px 位移 hack（曾把「查看」推离按钮中心） */
 @media (max-width: 767px) {
   .portal__hero {
     flex-direction: column;

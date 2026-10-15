@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { nextTick } from 'vue'
 
 // Mock API 层：I3 起查看流程图消费已保存 ProcessGraph（自研渲染内核），不再使用 BPMN XML
@@ -55,6 +56,9 @@ const stubs = {
 }
 
 // ─── 造数据 ───
+
+/** 流程编号弹窗（ThemeRuleDialog）依赖用户会话 store，统一注入 pinia */
+const globalOpts = () => ({ stubs, plugins: [createPinia()] })
 
 const PUBLISHED_DEF: ProcessDef = {
   id: 1,
@@ -127,7 +131,7 @@ describe('ProcessDefList.vue', () => {
   // ─── 1. onMounted 调用 pageProcessDefs ───
 
   it('calls pageProcessDefs on mount', async () => {
-    mount(ProcessDefList, { global: { stubs } })
+    mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
 
     expect(pageProcessDefs).toHaveBeenCalledTimes(1)
@@ -137,7 +141,7 @@ describe('ProcessDefList.vue', () => {
   // ─── 2. 列表数据渲染 ───
 
   it('populates list from API result', async () => {
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     await nextTick()
 
@@ -150,7 +154,7 @@ describe('ProcessDefList.vue', () => {
   // ─── 3. openViewer 设置对话框状态 ───
 
   it('openViewer sets viewer state correctly', async () => {
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     await nextTick()
 
@@ -167,7 +171,7 @@ describe('ProcessDefList.vue', () => {
   // ─── 4. openViewer 消费已保存 ProcessGraph ───
 
   it('openViewer consumes saved ProcessGraph via getProcessDefDefinition', async () => {
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     await nextTick()
 
@@ -190,7 +194,7 @@ describe('ProcessDefList.vue', () => {
   it('sets viewerError on definition load failure', async () => {
     vi.mocked(getProcessDefDefinition).mockRejectedValueOnce({ msg: '流程定义不存在' })
 
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     await nextTick()
 
@@ -205,7 +209,7 @@ describe('ProcessDefList.vue', () => {
   it('sets viewerError from Error.message fallback', async () => {
     vi.mocked(getProcessDefDefinition).mockRejectedValueOnce(new Error('网络错误'))
 
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     await nextTick()
 
@@ -220,7 +224,7 @@ describe('ProcessDefList.vue', () => {
   // ─── 6. closeViewer 重置状态 ───
 
   it('closeViewer resets state', async () => {
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     await nextTick()
 
@@ -241,7 +245,7 @@ describe('ProcessDefList.vue', () => {
   // ─── 7. viewerLoading 在 finally 中被置 false ───
 
   it('viewerLoading is false after openViewer completes', async () => {
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     await nextTick()
 

@@ -154,9 +154,10 @@
   "分类列表": { "key": "workflow.categoryList", "en": "Categories" },
   "事项数": { "key": "workflow.itemCount", "en": "Items" },
   "更新人": { "key": "workflow.updatedBy", "en": "Updated by" },
-  "流程编号规则：固定文字 + 下方变量拼接，生成的即该流程实例的编号（主题）": {
+  "流程编号设置": { "key": "form.relatedProcessNumberSetting", "en": "Process number rule" },
+  "点击下方按钮带入变量，与固定文字拼成该流程实例的编号": {
     "key": "workflow.themeRuleDesc",
-    "en": "Process number rule: literal text plus the variables below; the result is the number (theme) of each instance"
+    "en": "Click a button below to insert a variable; variables combine with fixed text to form the instance number"
   },
   "点击带入变量": { "key": "workflow.themeRuleTokens", "en": "Insert a variable" },
   "发起日期": { "key": "workflow.themeRuleTokenDate", "en": "Started date" },

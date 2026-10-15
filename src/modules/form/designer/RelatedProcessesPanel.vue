@@ -18,7 +18,9 @@ import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import { createProcessDef, pageProcessDefs, deleteProcessDef } from '@/modules/workflow/api'
+import { themeRuleDisplay } from '@/modules/workflow/utils/theme-rule'
 import type { ProcessDef } from '@/contracts/bpm'
+import ThemeRuleDialog from '@/modules/workflow/views/ThemeRuleDialog.vue'
 
 const props = defineProps<{ formId: string; formKey: string }>()
 const emit = defineEmits<{ (e: 'enter-process', def: ProcessDef): void }>()
@@ -131,7 +133,8 @@ async function removeProcess(row: ProcessDef) {
   try {
     await ElMessageBox.confirm(
       t('form.relatedProcessDeleteConfirm', { name: row.name }),
-      t('common.warningTitle'),
+      // 复用既有「删除确认」标题键（原 common.warningTitle 不存在，实景里标题显示为键名）
+      t('common.deleteConfirmTitle'),
       {
         type: 'warning',
         confirmButtonText: t('common.delete'),
@@ -161,6 +164,35 @@ function statusTagType(status: ProcessDef['status']) {
   if (status === 'DRAFT') return 'info'
   return 'warning'
 }
+
+/* ── BF20261013-043：流程编号设置（发布前必填；规则编辑器与流程定义列表共用） ── */
+
+/** 目标流程（弹窗编辑对象） */
+const ruleTarget = ref<ProcessDef | null>(null)
+const ruleDialogVisible = ref(false)
+/** 多个流程时的选择弹窗 */
+const rulePickerVisible = ref(false)
+
+/** 编号规则展示文字：变量显示成 [发起时间] 这类标识，不暴露占位记法 */
+function ruleTextOf(row: ProcessDef): string {
+  return themeRuleDisplay(row.themeRule ?? '', (key, params) => (params ? t(key, params) : t(key)))
+}
+
+function openRuleDialog(row: ProcessDef) {
+  ruleTarget.value = row
+  rulePickerVisible.value = false
+  ruleDialogVisible.value = true
+}
+
+/** 流程编号设置：单流程直接进入规则编辑器；多个流程先选择 */
+function openNumberSettings() {
+  if (records.value.length === 0) return
+  if (records.value.length === 1) {
+    openRuleDialog(records.value[0])
+    return
+  }
+  rulePickerVisible.value = true
+}
 </script>
 
 <template>
@@ -173,6 +205,14 @@ function statusTagType(status: ProcessDef['status']) {
       <header class="related-processes__head">
         <h1 class="related-processes__title">{{ t('form.relatedProcessTitle') }}</h1>
         <p class="related-processes__subtitle">{{ t('form.relatedProcessDescription') }}</p>
+        <!-- BF20261013-043：流程编号设置（发布前必填的编号规则入口，设计器/列表两处共用同一弹窗） -->
+        <el-button
+          class="related-processes__number"
+          :disabled="records.length === 0"
+          @click="openNumberSettings"
+        >
+          {{ t('form.relatedProcessNumberSetting') }}
+        </el-button>
         <el-button class="related-processes__create" type="primary" @click="openCreate">
           {{ t('form.createProcess') }}
         </el-button>
@@ -333,6 +373,33 @@ function statusTagType(status: ProcessDef['status']) {
         }}</el-button>
       </template>
     </el-dialog>
+
+    <!-- BF20261013-043：多个流程时的编号设置选择 -->
+    <el-dialog
+      v-model="rulePickerVisible"
+      :title="t('form.relatedProcessNumberSetting')"
+      width="520px"
+      append-to-body
+    >
+      <ul class="related-processes__rule-list">
+        <li v-for="row in records" :key="row.id" class="related-processes__rule-row">
+          <span class="related-processes__rule-name">{{ row.name }}</span>
+          <span
+            v-if="row.themeRule"
+            class="related-processes__rule-value"
+            :title="ruleTextOf(row)"
+            >{{ ruleTextOf(row) }}</span
+          >
+          <span v-else class="related-processes__rule-value related-processes__rule-value--unset">{{
+            t('workflow.themeRuleUnset')
+          }}</span>
+          <el-button size="small" @click="openRuleDialog(row)">{{ t('common.edit') }}</el-button>
+        </li>
+      </ul>
+    </el-dialog>
+
+    <!-- 流程编号规则编辑（与流程定义列表共用同一弹窗） -->
+    <ThemeRuleDialog v-model:visible="ruleDialogVisible" :def="ruleTarget" @saved="load" />
   </div>
 </template>
 
@@ -374,8 +441,61 @@ function statusTagType(status: ProcessDef['status']) {
   margin: 0;
   padding: 0 12px;
   line-height: 17px;
-  text-align: left;
-  justify-content: flex-start;
+  /* BF20261013-046：按钮文字居中（原 fixture 左对齐，文字明显偏左） */
+  text-align: center;
+  justify-content: center;
+}
+
+/* BF20261013-043：流程编号设置入口（在「新建流程」左侧，多个流程时先选择） */
+.related-processes__number {
+  position: absolute;
+  top: 8px;
+  right: 154px;
+  height: 36px;
+  margin: 0;
+  padding: 0 16px;
+  line-height: 17px;
+}
+
+.related-processes__rule-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.related-processes__rule-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--sw-border-light, #e7ebf1);
+}
+
+.related-processes__rule-row:last-child {
+  border-bottom: none;
+}
+
+.related-processes__rule-name {
+  flex: 0 0 160px;
+  overflow: hidden;
+  color: var(--sw-text-primary, #1f2937);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.related-processes__rule-value {
+  flex: 1;
+  overflow: hidden;
+  color: var(--sw-text-secondary, #687386);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.related-processes__rule-value--unset {
+  color: var(--el-color-warning, #e6a23c);
 }
 
 .related-processes__filter {
@@ -429,8 +549,9 @@ function statusTagType(status: ProcessDef['status']) {
   height: 36px;
   padding: 0 12px;
   line-height: 17px;
-  text-align: left;
-  justify-content: flex-start;
+  /* BF20261013-046：按钮文字居中（原 fixture 左对齐，文字明显偏左） */
+  text-align: center;
+  justify-content: center;
 }
 
 .related-processes__total {
@@ -484,11 +605,12 @@ function statusTagType(status: ProcessDef['status']) {
 .related-processes__status-tag {
   min-width: 84px;
   height: 24px;
-  justify-content: flex-start;
+  /* BF20261013-046：徽标文字居中（原 fixture 左对齐，84px 底纹里文字贴左） */
+  justify-content: center;
   padding: 0 8px;
   box-sizing: border-box;
   line-height: 15px;
-  text-align: left;
+  text-align: center;
   border: none;
 }
 .related-processes__status-tag.el-tag--success,

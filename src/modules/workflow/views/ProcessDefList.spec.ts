@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { nextTick } from 'vue'
 
 vi.mock('@/modules/workflow/api', () => ({
@@ -70,6 +71,9 @@ const mockDefs: ProcessDef[] = [
   },
 ]
 
+/** 流程编号弹窗（ThemeRuleDialog）依赖用户会话 store，统一注入 pinia */
+const globalOpts = () => ({ stubs, plugins: [createPinia()] })
+
 describe('ProcessDefList.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -82,7 +86,7 @@ describe('ProcessDefList.vue', () => {
       pageNum: 1,
       pageSize: 10,
     })
-    mount(ProcessDefList, { global: { stubs } })
+    mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     expect(pageProcessDefs).toHaveBeenCalledOnce()
     expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 })
@@ -95,7 +99,7 @@ describe('ProcessDefList.vue', () => {
       pageNum: 1,
       pageSize: 10,
     })
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
 
     vi.mocked(pageProcessDefs).mockClear()
@@ -120,7 +124,7 @@ describe('ProcessDefList.vue', () => {
       pageNum: 1,
       pageSize: 10,
     })
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
 
     vi.mocked(pageProcessDefs).mockClear()
@@ -140,7 +144,7 @@ describe('ProcessDefList.vue', () => {
 
   it('shows fallback error message when API fails with non-ApiError', async () => {
     vi.mocked(pageProcessDefs).mockRejectedValueOnce(new Error('Network error'))
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     await nextTick()
     expect(wrapper.vm as unknown as { errorMsg: string }).toHaveProperty(
@@ -157,7 +161,7 @@ describe('ProcessDefList.vue', () => {
       pageNum: 1,
       pageSize: 10,
     })
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     const cols = wrapper.findAll('.col')
     const labelOf = (label: string) =>
@@ -170,7 +174,8 @@ describe('ProcessDefList.vue', () => {
     expect(labelOf('操作')?.attributes('data-width')).toBe('240')
   })
 
-  // BF20261013-041：流程编号规则编辑器——变量在输入框内以灰底标识展示，示例随规则实时更新
+  // BF20261013-041/042：流程编号编辑器（ThemeRuleDialog）——变量在输入框内以灰底标识展示，
+  // 按钮同框带入，示例随规则实时更新
   it('流程编号规则编辑器：灰底标识回显 + 点按钮带入变量 + 示例预览', async () => {
     vi.mocked(pageProcessDefs).mockResolvedValueOnce({
       list: mockDefs,
@@ -180,7 +185,7 @@ describe('ProcessDefList.vue', () => {
     })
     const { getProcessDefThemeRule } = await import('@/modules/workflow/api')
     vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('JRZX_{YYYYMMDDHHMMSS}_{SEQ:3}')
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
 
     const vm = wrapper.vm as unknown as { openThemeRule: (row: ProcessDef) => void }
@@ -198,9 +203,10 @@ describe('ProcessDefList.vue', () => {
     ])
     expect(wrapper.find('.theme-editor').text()).toContain('JRZX_')
 
-    // 点「自增序号」按钮：按当前位数（3）带入 {SEQ:3} 标识
-    const buttons = wrapper.findAll('.el-button')
-    const seqButton = buttons.find((button) => button.text().includes('自增序号'))
+    // 点框内「自增序号」按钮：按当前位数（3）带入 {SEQ:3} 标识
+    const seqButton = wrapper
+      .findAll('.theme-editor__add')
+      .find((button) => button.text().includes('自增序号'))
     expect(seqButton).toBeTruthy()
     await seqButton?.trigger('click')
     await nextTick()
@@ -218,7 +224,7 @@ describe('ProcessDefList.vue', () => {
       pageNum: 1,
       pageSize: 10,
     })
-    const wrapper = mount(ProcessDefList, { global: { stubs } })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     await nextTick()
     expect(wrapper.vm as unknown as { isEmpty: boolean }).toHaveProperty('isEmpty', true)
