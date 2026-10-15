@@ -213,6 +213,7 @@ const manageVisible = ref(false)
 const manageList = ref<CatalogCategory[]>([])
 const manageLoading = ref(false)
 const newCategoryName = ref('')
+const creatingCategory = ref(false)
 const editingCategoryId = ref<number | null>(null)
 const editingCategoryName = ref('')
 
@@ -229,8 +230,15 @@ async function openManage() {
 }
 
 async function addCategory() {
+  // BF20261013-049：空名称原来静默 return（点「新建」看着完全没反应）——
+  // 与「流程归属管理」的 submitCategory 对齐：先给必填提示；按钮另按空值禁用。
   const name = newCategoryName.value.trim()
-  if (!name) return
+  if (!name) {
+    ElMessage.warning(t('workflow.categoryNameRequired'))
+    return
+  }
+  if (creatingCategory.value) return
+  creatingCategory.value = true
   try {
     await createCategory({ name })
     newCategoryName.value = ''
@@ -239,6 +247,8 @@ async function addCategory() {
     ElMessage.success(t('catalog.categoryCreated'))
   } catch (err) {
     ElMessage.error(err instanceof ApiError ? err.msg : t('catalog.categorySaveFailed'))
+  } finally {
+    creatingCategory.value = false
   }
 }
 
@@ -466,7 +476,13 @@ onMounted(() => {
             maxlength="32"
             @keyup.enter="addCategory"
           />
-          <el-button type="primary" @click="addCategory">{{ t('common.create') }}</el-button>
+          <el-button
+            type="primary"
+            :disabled="!newCategoryName.trim()"
+            :loading="creatingCategory"
+            @click="addCategory"
+            >{{ t('common.create') }}</el-button
+          >
         </div>
         <div v-loading="manageLoading" class="category-manage__list">
           <div v-for="category in manageList" :key="category.id" class="category-manage__row">
@@ -491,7 +507,8 @@ onMounted(() => {
           </div>
           <el-empty
             v-if="!manageLoading && manageList.length === 0"
-            :description="t('workflow.noCatalogItems')"
+            :description="t('catalog.noCategories')"
+            :image-size="72"
           />
         </div>
       </div>

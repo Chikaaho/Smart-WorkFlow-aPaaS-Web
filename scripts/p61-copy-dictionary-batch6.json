@@ -445,5 +445,7 @@
     "en": "The following settings will be wired up once the contract is extended (no ad-hoc keys in this change)"
   },
 
+  "暂无分类": { "key": "catalog.noCategories", "en": "No categories yet" },
+
   "出错了": { "key": "view.errorTitle", "en": "Something went wrong" }
 }

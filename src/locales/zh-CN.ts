@@ -324,6 +324,7 @@ export default {
     itemUnavailable: '该流程暂不可用或已下线',
     manageCategories: '管理分类',
     newCategoryName: '新分类名称',
+    noCategories: '暂无分类',
     categoryCreated: '分类已创建',
     categoryUpdated: '分类已更新',
     categoryDeleted: '分类已删除',

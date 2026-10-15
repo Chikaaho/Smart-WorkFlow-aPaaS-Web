@@ -339,6 +339,7 @@ export default {
     itemUnavailable: 'This process is unavailable or retired',
     manageCategories: 'Manage categories',
     newCategoryName: 'New category name',
+    noCategories: 'No categories yet',
     categoryCreated: 'Category created',
     categoryUpdated: 'Category updated',
     categoryDeleted: 'Category deleted',

@@ -489,11 +489,17 @@ onMounted(loadList)
 }
 
 .form-def-page__tree {
-  max-height: 100%;
+  /* BF20261013-048：分类树卡片不参与拉伸、也不许吃满竖直空间。
+     旧 max-height:100% 在自动行高的网格里等于没有上限（实测 21 行树时卡片一路撑到 600px、
+     无内部滚动、下方不留空白），长树就会「拉伸填满竖直区域」。
+     现按视口封顶：内容少时卡片只裹内容、下方保持空白；内容超高时卡片内滚动。 */
+  align-self: start;
+  max-height: min(60vh, 480px);
   padding: 12px;
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
   background: #fff;
+  box-shadow: var(--sw-shadow-card);
   overflow: auto;
 }
 
