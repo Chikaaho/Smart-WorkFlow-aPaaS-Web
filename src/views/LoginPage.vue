@@ -246,6 +246,13 @@ function onSsoProviderSelect(key: SsoProvider): void {
           <p v-if="ssoError" class="login-page__error" role="alert">{{ ssoError }}</p>
         </div>
         <p class="login-page__legal">登录即表示同意《用户协议》与《隐私政策》</p>
+        <a
+          class="login-page__icp"
+          href="https://beian.miit.gov.cn/"
+          target="_blank"
+          rel="noopener noreferrer"
+          >粤ICP备2026093622号-1</a
+        >
       </form>
     </section>
   </div>
@@ -657,6 +664,18 @@ img.login-page__captcha {
   color: var(--sw-text-secondary);
   font-size: 12px;
   text-align: center;
+}
+/* R015-01 备案链接：legal 行下方独立一行，窄屏不挤压表单 */
+.login-page__icp {
+  margin: -4px 0 0;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  text-align: center;
+  text-decoration: none;
+}
+.login-page__icp:hover {
+  color: var(--sw-color-primary);
+  text-decoration: underline;
 }
 /* 375 视口：品牌区隐藏，表单满宽可用（方向 §4.5） */
 @media (max-width: 767px) {
