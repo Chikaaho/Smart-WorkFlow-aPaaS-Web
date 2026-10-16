@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Menu } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { StandardListTemplate, LoadErrorState, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import DictSelect from '@/foundation/dict/DictSelect.vue'
@@ -25,14 +27,32 @@ import { useI18n } from '@/locales'
  * 权限口径与详情一致：读取走 form:data:query 与既有行权限（ALL/SELF/DEPT/...），
  * 无查询权限时不请求数据并给出可读受限态，同时保留已获授权的填写/发起入口；
  * 查询结果为零时显示空列表，不用静态演示数据代替。
+ *
+ * 两种用法（原型 2026-10-16）：
+ * - 应用内页嵌入（AppCenterDetail）：传入 formKey/appId 并置 embedded，隐藏「返回应用中心」；
+ * - 数据列表深链（/form/app-form/:formKey）：无 props，表单标识与来源应用取自路由。
  */
+const props = withDefaults(
+  defineProps<{
+    /** 表单业务标识；缺省取路由参数 */
+    formKey?: string
+    /** 来源应用 ID（决定返回目标）；缺省取路由 query.appId */
+    appId?: string
+    /** 嵌入应用内页时为 true：不再渲染「返回应用中心」（由应用内页统一提供） */
+    embedded?: boolean
+  }>(),
+  { formKey: undefined, appId: undefined, embedded: false },
+)
+
 const { t } = useI18n()
 const { hasPerm } = usePermission()
 const route = useRoute()
 const router = useRouter()
 
-const formKey = computed(() => String(route.params.formKey ?? ''))
-const appId = computed(() => (typeof route.query.appId === 'string' ? route.query.appId : ''))
+const formKey = computed(() => props.formKey ?? String(route.params.formKey ?? ''))
+const appId = computed(
+  () => props.appId ?? (typeof route.query.appId === 'string' ? route.query.appId : ''),
+)
 
 const canQuery = computed(() => hasPerm('form:data:query'))
 const canEdit = computed(() => hasPerm('form:data:edit'))
@@ -89,6 +109,104 @@ const isEmpty = computed(
   () =>
     !loading.value && !errorMsg.value && !loadError.value && (result.value?.list.length ?? 0) === 0,
 )
+
+/* ── 表头设置：哪些列展示 + 顺序（本机个人偏好，不落服务端） ── */
+
+interface ColumnPref {
+  hidden: string[]
+  order: string[]
+}
+
+const COLUMN_PREF_PREFIX = 'sw:app-form-columns:'
+
+function readColumnPref(key: string): ColumnPref {
+  const raw = globalThis.localStorage?.getItem(`${COLUMN_PREF_PREFIX}${key}`)
+  if (!raw) return { hidden: [], order: [] }
+  try {
+    const parsed = JSON.parse(raw) as Partial<ColumnPref>
+    return {
+      hidden: Array.isArray(parsed.hidden)
+        ? parsed.hidden.filter((x): x is string => typeof x === 'string')
+        : [],
+      order: Array.isArray(parsed.order)
+        ? parsed.order.filter((x): x is string => typeof x === 'string')
+        : [],
+    }
+  } catch {
+    // 损坏的本地偏好按「未调整」处理，不阻塞列表
+    return { hidden: [], order: [] }
+  }
+}
+
+const columnPref = ref<ColumnPref>({ hidden: [], order: [] })
+
+/** 全部列按当前偏好排序（含被隐藏列，供设置面板保持位置稳定）。 */
+const orderedColumns = computed(() => {
+  const rest = new Map(columns.value.map((c) => [c.prop, c]))
+  const ordered: typeof columns.value = []
+  for (const prop of columnPref.value.order) {
+    const col = rest.get(prop)
+    if (col) {
+      ordered.push(col)
+      rest.delete(prop)
+    }
+  }
+  for (const col of columns.value) {
+    if (rest.has(col.prop)) {
+      ordered.push(col)
+      rest.delete(col.prop)
+    }
+  }
+  return ordered
+})
+
+const displayColumns = computed(() =>
+  orderedColumns.value.filter((c) => !columnPref.value.hidden.includes(c.prop)),
+)
+
+const columnDialogVisible = ref(false)
+const draftColumns = ref<Array<{ prop: string; label: string; visible: boolean }>>([])
+
+function openColumnSettings() {
+  draftColumns.value = orderedColumns.value.map((c) => ({
+    prop: c.prop,
+    label: c.label,
+    visible: !columnPref.value.hidden.includes(c.prop),
+  }))
+  columnDialogVisible.value = true
+}
+
+function moveDraftColumn(index: number, delta: -1 | 1) {
+  const target = index + delta
+  if (target < 0 || target >= draftColumns.value.length) return
+  const next = draftColumns.value.slice()
+  const [moved] = next.splice(index, 1)
+  if (!moved) return
+  next.splice(target, 0, moved)
+  draftColumns.value = next
+}
+
+function applyColumnSettings() {
+  if (!draftColumns.value.some((c) => c.visible)) {
+    ElMessage.warning(t('form.appCenter.columnRequired'))
+    return
+  }
+  const next: ColumnPref = {
+    order: draftColumns.value.map((c) => c.prop),
+    hidden: draftColumns.value.filter((c) => !c.visible).map((c) => c.prop),
+  }
+  columnPref.value = next
+  globalThis.localStorage?.setItem(`${COLUMN_PREF_PREFIX}${formKey.value}`, JSON.stringify(next))
+  columnDialogVisible.value = false
+}
+
+function resetColumnSettings() {
+  draftColumns.value = orderedColumns.value.map((c) => ({
+    prop: c.prop,
+    label: c.label,
+    visible: true,
+  }))
+}
 
 async function loadDefinition() {
   try {
@@ -298,7 +416,29 @@ function backToApp() {
   }
 }
 
+/** 切换表单（应用内页选择另一个表单）时重建定义、列偏好与数据。 */
+async function reload() {
+  pageNum.value = 1
+  result.value = null
+  filterValues.value = {}
+  dateRange.value = null
+  schema.value = null
+  schemaLoaded.value = false
+  idLabelMaps.value = null
+  columnPref.value = readColumnPref(formKey.value)
+  columnDialogVisible.value = false
+  await loadDefinition()
+  if (canQuery.value) {
+    await loadData()
+  }
+}
+
+watch(formKey, () => {
+  void reload()
+})
+
 onMounted(async () => {
+  columnPref.value = readColumnPref(formKey.value)
   await loadDefinition()
   if (canQuery.value) {
     await loadData()
@@ -318,7 +458,18 @@ onMounted(async () => {
     @update:page-size="handlePageSizeChange"
   >
     <template #toolbar-actions>
-      <el-button @click="backToApp">{{ t('form.appCenter.backToCenter') }}</el-button>
+      <el-button v-if="!embedded" @click="backToApp">{{
+        t('form.appCenter.backToCenter')
+      }}</el-button>
+      <el-button
+        v-if="canQuery && columns.length > 0"
+        data-testid="form-column-settings"
+        :icon="Menu"
+        :title="t('form.appCenter.columnSettingsHint')"
+        @click="openColumnSettings"
+      >
+        {{ t('form.appCenter.columnSettings') }}
+      </el-button>
       <el-button type="primary" data-testid="form-data-create" @click="handleCreate">
         {{ t('form.appCenter.createRecord') }}
       </el-button>
@@ -389,7 +540,7 @@ onMounted(async () => {
         :show-overflow-tooltip="true"
       >
         <el-table-column
-          v-for="col in columns"
+          v-for="col in displayColumns"
           :key="col.prop"
           :prop="col.prop"
           :label="col.label"
@@ -423,22 +574,79 @@ onMounted(async () => {
       }}</el-button>
     </template>
   </StandardListTemplate>
+
+  <!-- 表头设置：勾选展示列 + 调整顺序（原型：表头右侧「设置」） -->
+  <el-dialog
+    v-model="columnDialogVisible"
+    :title="t('form.appCenter.columnSettings')"
+    width="420px"
+    append-to-body
+  >
+    <div class="column-settings" data-testid="column-settings-list">
+      <div v-for="(col, index) in draftColumns" :key="col.prop" class="column-settings__row">
+        <el-checkbox v-model="col.visible">{{ col.label }}</el-checkbox>
+        <span class="column-settings__actions">
+          <el-button
+            size="small"
+            :disabled="index === 0"
+            :title="t('form.appCenter.moveUp')"
+            @click="moveDraftColumn(index, -1)"
+          >
+            ↑
+          </el-button>
+          <el-button
+            size="small"
+            :disabled="index === draftColumns.length - 1"
+            :title="t('form.appCenter.moveDown')"
+            @click="moveDraftColumn(index, 1)"
+          >
+            ↓
+          </el-button>
+        </span>
+      </div>
+    </div>
+    <template #footer>
+      <el-button data-testid="column-settings-reset" @click="resetColumnSettings">{{
+        t('form.appCenter.restoreDefault')
+      }}</el-button>
+      <el-button @click="columnDialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" data-testid="column-settings-apply" @click="applyColumnSettings">
+        {{ t('common.confirm') }}
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
 .data-forbidden {
-  padding: 48px 24px;
-  text-align: center;
+  padding: 24px 0;
+  color: #606266;
 }
 .data-forbidden__title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #303133;
-  margin: 0 0 8px;
+  margin: 0 0 6px;
 }
 .data-forbidden__desc {
   font-size: 13px;
   color: #909399;
-  margin: 0 0 16px;
+  margin: 0 0 12px;
+}
+.column-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.column-settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.column-settings__actions {
+  display: inline-flex;
+  gap: 4px;
 }
 </style>

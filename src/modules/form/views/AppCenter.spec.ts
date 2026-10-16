@@ -77,4 +77,41 @@ describe('AppCenter（用户端）', () => {
     expect(wrapper.find('[data-testid="app-center-empty"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('加载失败')
   })
+
+  it('搜索应用：按名称过滤卡片，无匹配时给出区分空态', async () => {
+    vi.mocked(listAppCenterApps).mockResolvedValue([
+      app({ id: 'a1', name: '报销应用' }),
+      app({ id: 'a2', name: '合同应用' }),
+    ])
+    const wrapper = mount(AppCenter, { global: { stubs: minimalStubs } })
+    await nextTick()
+    await nextTick()
+
+    await wrapper.find('input').setValue('合同')
+    await nextTick()
+    expect(wrapper.findAll('[data-testid="app-card"]')).toHaveLength(1)
+    expect(wrapper.text()).toContain('合同应用')
+
+    await wrapper.find('input').setValue('不存在')
+    await nextTick()
+    expect(wrapper.findAll('[data-testid="app-card"]')).toHaveLength(0)
+    expect(wrapper.find('[data-testid="app-center-empty"]').text()).toContain('没有匹配的应用')
+  })
+
+  it('每行应用数量设置：写入本机偏好并驱动网格列数', async () => {
+    vi.mocked(listAppCenterApps).mockResolvedValue([app({ id: 'a1', name: '报销应用' })])
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    const wrapper = mount(AppCenter, { global: { stubs: minimalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const group = wrapper.findComponent({ name: 'ElRadioGroup' })
+    expect(group.exists()).toBe(true)
+    group.vm.$emit('update:modelValue', 3)
+    await nextTick()
+
+    expect(wrapper.find('.app-center__grid').attributes('style')).toContain('--per-row: 3')
+    expect(setItem).toHaveBeenCalledWith('sw:app-center:per-row', '3')
+    setItem.mockRestore()
+  })
 })

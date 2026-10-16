@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { nextTick } from 'vue'
 
 const { granted } = vi.hoisted(() => ({ granted: new Set<string>() }))
 
@@ -108,5 +109,60 @@ describe('AppFormData（用户端数据列表）', () => {
     await flushPromises()
     const vm = wrapper.vm as unknown as { isEmpty: boolean }
     expect(vm.isEmpty).toBe(false)
+  })
+
+  it('表头设置：隐藏列与顺序写入本机偏好，表格按偏好渲染', async () => {
+    granted.add('form:data:query')
+    vi.mocked(getFormDefinition).mockResolvedValue({
+      title: '请假申请',
+      fields: [
+        { name: 'days', label: '天数', type: 'NUMBER' },
+        { name: 'reason', label: '事由', type: 'TEXT' },
+      ],
+    } as never)
+    vi.mocked(queryFormData).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 10 })
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    const wrapper = mount(AppFormData, { global: { stubs: minimalStubs } })
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as {
+      openColumnSettings: () => void
+      applyColumnSettings: () => void
+      draftColumns: Array<{ prop: string; label: string; visible: boolean }>
+      displayColumns: Array<{ prop: string }>
+    }
+    vm.openColumnSettings()
+    await nextTick()
+    expect(vm.draftColumns.map((c) => c.label)).toEqual(['天数', '事由', '创建时间'])
+
+    vm.draftColumns[1]!.visible = false
+    vm.applyColumnSettings()
+    await nextTick()
+    expect(vm.displayColumns.map((c) => c.prop)).toEqual(['days', 'create_time'])
+    expect(setItem).toHaveBeenCalledWith(
+      'sw:app-form-columns:leave_request',
+      expect.stringContaining('"reason"'),
+    )
+    setItem.mockRestore()
+  })
+
+  it('表头设置：至少保留一列（全部取消不生效）', async () => {
+    granted.add('form:data:query')
+    vi.mocked(queryFormData).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 10 })
+    const wrapper = mount(AppFormData, { global: { stubs: minimalStubs } })
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as {
+      openColumnSettings: () => void
+      applyColumnSettings: () => void
+      draftColumns: Array<{ prop: string; label: string; visible: boolean }>
+      displayColumns: Array<{ prop: string }>
+    }
+    vm.openColumnSettings()
+    await nextTick()
+    for (const col of vm.draftColumns) col.visible = false
+    vm.applyColumnSettings()
+    await nextTick()
+    expect(vm.displayColumns.length).toBeGreaterThan(0)
   })
 })
