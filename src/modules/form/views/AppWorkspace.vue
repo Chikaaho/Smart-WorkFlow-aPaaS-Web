@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Folder, MoreFilled, Plus } from '@element-plus/icons-vue'
 import AppIcon from '@/modules/form/components/AppIcon.vue'
+import AppFormData from '@/modules/form/views/AppFormData.vue'
 import {
   createFormAppDir,
   deleteFormAppDir,
@@ -20,8 +21,9 @@ import { getErrorMessage } from '@/foundation/request/error-code-map'
  * 去掉通用侧边栏（BasicLayout 对 /form/app-manage/:appId 隐藏），改为应用专属侧边栏——
  * 与用户端应用内页同一棵目录/表单树，多一个左下角「新建」（目录 / 表单）；
  * 目录与表单行尾三个点：修改（仅名称）/ 删除，目录多一项「新建表单」。
- * 新建表单只收集名称、不落库——进入设计器新建态，首次保存才创建记录（回归01b：
- * 未保存不新建记录）；树点击表单直达设计器（已发布表单的修改入口），保存/返回回到本页。
+ * 新建表单只收集名称、不落库——进入设计器新建态，首次保存才创建记录（回归01b）。
+ * 树点击表单 → 右侧展示其数据列表（回归01c：点行看数据，数据列表不能丢）；
+ * 「表单设计」入口在表单行三点菜单里（已发布表单同样可改，配合 #14 保存+发布新版本）。
  * 空应用中间只展示「暂无数据」，不渲染其它噪音。
  */
 const { t } = useI18n()
@@ -41,8 +43,20 @@ const isEmpty = computed(
     !loading.value && !errorMsg.value && dirs.value.length === 0 && directForms.value.length === 0,
 )
 
-/** 树点击表单 → 直达表单设计器（0.1.7 回归01b：已发布表单的修改入口）。 */
+/** 当前选中表单（路由 query.formKey 持久化，刷新后保持）。 */
+const selectedFormKey = computed(() => {
+  const fromQuery = typeof route.query.formKey === 'string' ? route.query.formKey : ''
+  if (fromQuery) return fromQuery
+  return ''
+})
+
+/** 树点击表单 → 右侧展示数据列表（回归01c：点行看数据）。 */
 function selectForm(item: FormAppFormItem) {
+  void router.replace({ query: { ...route.query, formKey: item.formKey } })
+}
+
+/** 表单设计 → 设计器（回归01c：修改入口收进三点菜单）。 */
+function enterFormDesigner(item: FormAppFormItem) {
   void router.push({
     path: `/form/designer/${item.formId}`,
     query: { from: 'app-form', appId: appId.value },
@@ -218,6 +232,10 @@ async function handleRenameForm() {
 }
 
 function onFormCommand(command: string, item: FormAppFormItem) {
+  if (command === 'design') {
+    enterFormDesigner(item)
+    return
+  }
   if (command === 'rename') {
     openRenameForm(item)
     return
@@ -317,6 +335,7 @@ onMounted(() => {
               :key="item.formId"
               type="button"
               class="app-ws__form"
+              :class="{ 'is-active': item.formKey === selectedFormKey }"
               data-testid="app-tree-form"
               :data-form-key="item.formKey"
               @click="selectForm(item)"
@@ -332,6 +351,9 @@ onMounted(() => {
                 </span>
                 <template #dropdown>
                   <el-dropdown-menu>
+                    <el-dropdown-item command="design">
+                      {{ t('form.appCenter.enterFormDesign') }}
+                    </el-dropdown-item>
                     <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
                     <el-dropdown-item command="delete" divided>
                       {{ t('common.delete') }}
@@ -347,6 +369,7 @@ onMounted(() => {
             :key="item.formId"
             type="button"
             class="app-ws__form app-ws__form--root"
+            :class="{ 'is-active': item.formKey === selectedFormKey }"
             data-testid="app-tree-form"
             :data-form-key="item.formKey"
             @click="selectForm(item)"
@@ -362,6 +385,9 @@ onMounted(() => {
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item command="design">
+                    {{ t('form.appCenter.enterFormDesign') }}
+                  </el-dropdown-item>
                   <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
                   <el-dropdown-item command="delete" divided>{{
                     t('common.delete')
@@ -391,11 +417,18 @@ onMounted(() => {
         </div>
       </aside>
 
-      <!-- 右侧内容：空应用只展示「暂无数据」；非空提示从左侧进入设计 -->
+      <!-- 右侧内容：空应用只展示「暂无数据」；选中表单展示其数据列表（回归01c） -->
       <section class="app-ws__panel">
         <p v-if="isEmpty" class="app-ws__empty" data-testid="app-ws-empty">
           {{ t('form.appCenter.emptyAppContent') }}
         </p>
+        <AppFormData
+          v-else-if="selectedFormKey"
+          :key="selectedFormKey"
+          :form-key="selectedFormKey"
+          :app-id="appId"
+          embedded
+        />
         <p v-else class="app-ws__empty">{{ t('form.appCenter.pickForm') }}</p>
       </section>
     </div>
