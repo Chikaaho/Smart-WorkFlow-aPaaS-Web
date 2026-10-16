@@ -4,19 +4,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Folder, MoreFilled, Plus } from '@element-plus/icons-vue'
 import AppIcon from '@/modules/form/components/AppIcon.vue'
-import AppFormData from '@/modules/form/views/AppFormData.vue'
 import {
   createFormAppDir,
   deleteFormAppDir,
   getFormAppContent,
   updateFormAppDir,
 } from '@/modules/form/api/app-center'
-import {
-  createFormDef,
-  deleteFormDef,
-  renameFormDef,
-  saveFormConfig,
-} from '@/modules/form/api/form-def'
+import { deleteFormDef, renameFormDef } from '@/modules/form/api/form-def'
 import type { FormAppContent, FormAppFormItem } from '@/contracts/app-center'
 import { useI18n } from '@/locales'
 import { getErrorMessage } from '@/foundation/request/error-code-map'
@@ -26,7 +20,8 @@ import { getErrorMessage } from '@/foundation/request/error-code-map'
  * 去掉通用侧边栏（BasicLayout 对 /form/app-manage/:appId 隐藏），改为应用专属侧边栏——
  * 与用户端应用内页同一棵目录/表单树，多一个左下角「新建」（目录 / 表单）；
  * 目录与表单行尾三个点：修改（仅名称）/ 删除，目录多一项「新建表单」。
- * 新建表单成功后直达表单设计器（0.1.7 #12），标签页可切「流程设计」。
+ * 新建表单只收集名称、不落库——进入设计器新建态，首次保存才创建记录（回归01b：
+ * 未保存不新建记录）；树点击表单直达设计器（已发布表单的修改入口），保存/返回回到本页。
  * 空应用中间只展示「暂无数据」，不渲染其它噪音。
  */
 const { t } = useI18n()
@@ -46,15 +41,12 @@ const isEmpty = computed(
     !loading.value && !errorMsg.value && dirs.value.length === 0 && directForms.value.length === 0,
 )
 
-/** 当前选中表单（路由 query.formKey 持久化，刷新后保持）。 */
-const selectedFormKey = computed(() => {
-  const fromQuery = typeof route.query.formKey === 'string' ? route.query.formKey : ''
-  if (fromQuery) return fromQuery
-  return ''
-})
-
+/** 树点击表单 → 直达表单设计器（0.1.7 回归01b：已发布表单的修改入口）。 */
 function selectForm(item: FormAppFormItem) {
-  void router.replace({ query: { ...route.query, formKey: item.formKey } })
+  void router.push({
+    path: `/form/designer/${item.formId}`,
+    query: { from: 'app-form', appId: appId.value },
+  })
 }
 
 async function load() {
@@ -166,7 +158,6 @@ async function handleDeleteDir(dir: { id: string; name: string }) {
 // ==================== 表单 ====================
 
 const formDialogVisible = ref(false)
-const formSaving = ref(false)
 const formTarget = reactive<{ dirId: string | null }>({ dirId: null })
 const newForm = reactive({ name: '' })
 
@@ -176,37 +167,22 @@ function openCreateForm(dirId: string | null) {
   formDialogVisible.value = true
 }
 
-async function handleCreateForm() {
+function handleCreateForm() {
   const name = newForm.name.trim()
   if (!name) {
     ElMessage.warning(t('form.appCenter.nameRequired'))
     return
   }
-  formSaving.value = true
-  try {
-    const formKey = `form_${Date.now().toString(36)}`
-    const created = await createFormDef({
-      formKey,
-      name,
-      formType: 'BUSINESS',
-      appId: appId.value,
-      dirId: formTarget.dirId,
-    })
-    // 空 definition 先落一份：设计器 GET /definition 对无定义草稿返回 CONFIG_NOT_FOUND
-    await saveFormConfig(created.id, JSON.stringify({ title: name, fields: [] }))
-    ElMessage.success(t('form.appCenter.formCreated'))
-    formDialogVisible.value = false
-    // 0.1.7 #12：新建表单后自动进入表单设计器（工作台标签页可切「流程设计」）
-    void router.push({
-      path: `/form/designer/${created.id}`,
-      query: { from: 'app-form', appId: appId.value },
-    })
-  } catch (err: unknown) {
-    const errObj = err as { code?: number; message?: string }
-    ElMessage.error(getErrorMessage(errObj.code ?? 0, errObj.message))
-  } finally {
-    formSaving.value = false
+  // 回归01b：对话框只收集名称，不创建记录；设计器新建态首次保存才落库
+  // （携带应用/目录与预填名称，用户放弃设计则不产生任何记录）
+  const query: Record<string, string> = {
+    from: 'app-form',
+    appId: appId.value,
+    pendingName: name,
   }
+  if (formTarget.dirId) query.dirId = formTarget.dirId
+  formDialogVisible.value = false
+  void router.push({ path: '/form/designer', query })
 }
 
 // ==================== 表单改名 / 删除 ====================
@@ -264,9 +240,6 @@ async function handleDeleteForm(item: FormAppFormItem) {
   try {
     await deleteFormDef(item.formId)
     ElMessage.success(t('common.deleteSuccess'))
-    if (selectedFormKey.value === item.formKey) {
-      void router.replace({ query: { ...route.query, formKey: undefined } })
-    }
     await load()
   } catch (err: unknown) {
     const errObj = err as { code?: number; message?: string }
@@ -344,7 +317,6 @@ onMounted(() => {
               :key="item.formId"
               type="button"
               class="app-ws__form"
-              :class="{ 'is-active': item.formKey === selectedFormKey }"
               data-testid="app-tree-form"
               :data-form-key="item.formKey"
               @click="selectForm(item)"
@@ -375,7 +347,6 @@ onMounted(() => {
             :key="item.formId"
             type="button"
             class="app-ws__form app-ws__form--root"
-            :class="{ 'is-active': item.formKey === selectedFormKey }"
             data-testid="app-tree-form"
             :data-form-key="item.formKey"
             @click="selectForm(item)"
@@ -420,18 +391,11 @@ onMounted(() => {
         </div>
       </aside>
 
-      <!-- 右侧内容：空应用只展示「暂无数据」；选中表单展示其数据列表 -->
+      <!-- 右侧内容：空应用只展示「暂无数据」；非空提示从左侧进入设计 -->
       <section class="app-ws__panel">
         <p v-if="isEmpty" class="app-ws__empty" data-testid="app-ws-empty">
           {{ t('form.appCenter.emptyAppContent') }}
         </p>
-        <AppFormData
-          v-else-if="selectedFormKey"
-          :key="selectedFormKey"
-          :form-key="selectedFormKey"
-          :app-id="appId"
-          embedded
-        />
         <p v-else class="app-ws__empty">{{ t('form.appCenter.pickForm') }}</p>
       </section>
     </div>
@@ -460,7 +424,7 @@ onMounted(() => {
       </el-form>
       <template #footer>
         <el-button @click="formDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="formSaving" @click="handleCreateForm">
+        <el-button type="primary" @click="handleCreateForm">
           {{ t('common.save') }}
         </el-button>
       </template>

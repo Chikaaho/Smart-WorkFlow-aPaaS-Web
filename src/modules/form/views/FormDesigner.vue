@@ -299,6 +299,28 @@ function resetWorkbench() {
   savePhase.value = 'idle'
 }
 
+/** 新建态：首次保存创建草稿时携带的归属（应用内新建，回归01b 未保存不建记录）。 */
+const createExtras = ref<{ appId: string | null; dirId: string | null }>({
+  appId: null,
+  dirId: null,
+})
+
+function applyCreateContext() {
+  const q = route.query
+  if (q.from !== 'app-form') {
+    createExtras.value = { appId: null, dirId: null }
+    return
+  }
+  createExtras.value = {
+    appId: typeof q.appId === 'string' && q.appId ? q.appId : null,
+    dirId: typeof q.dirId === 'string' && q.dirId ? q.dirId : null,
+  }
+  const pendingName = typeof q.pendingName === 'string' ? q.pendingName.trim() : ''
+  if (pendingName) {
+    title.value = pendingName
+  }
+}
+
 onMounted(() => {
   globalThis.addEventListener('beforeunload', handleBeforeUnload)
   const idParam = route.params.id as string | undefined
@@ -306,7 +328,8 @@ onMounted(() => {
     formId.value = idParam
     loadForm(idParam)
   } else {
-    // 新建态：空白画布，基线为空设计
+    // 新建态：空白画布，基线为空设计；应用内新建携带归属与预填名称
+    applyCreateContext()
     baselineJson.value = JSON.stringify(buildDefinition())
   }
 })
@@ -321,6 +344,7 @@ watch(
     if ((idParam ?? null) === (current ?? null)) return
     if (!idParam) {
       resetWorkbench()
+      applyCreateContext()
       return
     }
     formId.value = idParam
@@ -432,7 +456,7 @@ async function doSave(): Promise<boolean> {
 
   savePhase.value = 'saving'
   try {
-    const result = await saveDraftDefinition(definition, formId.value, key)
+    const result = await saveDraftDefinition(definition, formId.value, key, createExtras.value)
     if (seq !== loadSeq) return true
     if (!formId.value && result.id) {
       formId.value = result.id
@@ -637,12 +661,14 @@ function preValidateBeforePublish(list: DesignerItem[]): string | null {
   return null
 }
 
+/** 是否从应用详情进入（0.1.7 回归01b：返回应用详情 + 新建归属携带）。 */
+const fromAppContext = computed(() => route.query.from === 'app-form')
+
 function backToList() {
-  // 从应用管理「表单上下文」进入时，保存/返回回到同一上下文（应用内的该表单）
-  const from = route.query.from
+  // 从应用详情进入时，保存/返回都回到应用详情（回归01b：不再落到表单上下文中转页）
   const appId = route.query.appId
-  if (from === 'app-form' && typeof appId === 'string' && appId && formId.value) {
-    router.push({ name: 'form-app-manage-form', params: { appId, formId: formId.value } })
+  if (fromAppContext.value && typeof appId === 'string' && appId) {
+    router.push({ name: 'form-app-manage-workspace', params: { appId } })
     return
   }
   router.push({ name: 'form-def-list' })
@@ -674,7 +700,9 @@ async function loadBreadcrumbCategory() {
         <!-- V011-BUG-017：返回表单列表放为显式入口，不再藏在设置下拉里 -->
         <el-button class="designer__back" @click="backToList">
           <el-icon><Back /></el-icon>
-          <span>{{ t('form.backToList') }}</span>
+          <span>{{
+            fromAppContext ? t('form.appCenter.backToWorkspace') : t('form.backToList')
+          }}</span>
         </el-button>
         <el-dropdown class="designer__settings-menu" trigger="click" @command="onSettingsCommand">
           <el-button class="designer__settings">

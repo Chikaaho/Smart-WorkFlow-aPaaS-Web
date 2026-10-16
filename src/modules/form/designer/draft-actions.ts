@@ -29,15 +29,19 @@ export async function saveDraftDefinition(
   definition: FormSchema,
   existingId: string | null,
   formKey: string,
+  /** 首次创建时携带的归属（0.1.7 回归01b：应用内新建，未保存不建记录） */
+  createExtras?: { appId?: string | null; dirId?: string | null },
 ): Promise<SaveDraftResult> {
   try {
     let id = existingId
 
     if (!id) {
-      // 新建态：先建草稿拿到 id
+      // 新建态：先建草稿拿到 id（应用内新建携带应用/目录归属）
       const created = await createFormDef({
         formKey,
         name: definition.title,
+        appId: createExtras?.appId ?? null,
+        dirId: createExtras?.dirId ?? null,
       })
       id = created.id
     }
