@@ -182,11 +182,13 @@ onMounted(() => {
   min-height: 0;
   gap: 0;
 }
-/* 左侧：目录/表单导航（原型：目录 → 目录内表单缩进，直接归属表单平级） */
+/* 左侧：目录/表单导航（原型：目录 → 目录内表单缩进，直接归属表单平级；
+   Owner 2026-10-16 裁决：本栏全白底纹） */
 .app-tree {
   flex: 0 0 220px;
   width: 220px;
   padding: 8px 12px 24px;
+  background: #ffffff;
   border-right: 1px solid #ebeef5;
   display: flex;
   flex-direction: column;
