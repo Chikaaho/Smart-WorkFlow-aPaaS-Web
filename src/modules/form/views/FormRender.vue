@@ -22,6 +22,7 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import type { SubTableRowAction, SubTableRowActionType } from '@/modules/form/api/form'
 import {
   getFormDefinition,
@@ -31,7 +32,6 @@ import {
   normalizeSubmitData,
 } from '@/modules/form/api/form'
 import { ApiError, getErrorMessage } from '@/foundation/request'
-import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import DynamicField from '@/components/DynamicField.vue'
 import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-display'
 import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
@@ -56,7 +56,6 @@ const schema = ref<FormSchema | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
 const errorMsg = ref('')
-const successMsg = ref('')
 const formData = reactive<Record<string, unknown>>({})
 /** 客户端提交校验提示：与字段同处网格单元，提示出现时自然撑高当前行。 */
 const validationErrors = reactive<Record<string, string>>({})
@@ -111,17 +110,21 @@ const draftRefreshVersion = ref(false) // 保存时是否重绑表单最新已�
 
 // 查看只读模式：有 recordId 且 mode=view；无 recordId 时永远是新建（可编辑）
 const isViewMode = computed(() => !!recordId && mode === 'view')
-const pageTitle = computed(() => {
-  if (!schema.value) return t('form.titleWithKey', { formKey })
-  if (!recordId && !isDraftMode.value) return t('form.initiateTitle', { title: schema.value.title })
-  if (isDraftMode.value) return t('form.draftEntryTitle', { title: schema.value.title })
-  const modeLabel = isViewMode.value
-    ? t('form.titleSuffixView')
-    : recordId
-      ? t('form.titleSuffixEdit')
-      : ''
-  return `${schema.value.title}${modeLabel}`
-})
+
+// ── 0.1.7 #16：提交成功 → 居中确认弹窗（用户点击确认后再离开） ──
+const submitDialogVisible = ref(false)
+const submitDialogText = ref('')
+/** 提交成功确认后的去向：已发起流程 → 我发起的；仅存数据 → 返回来源页 */
+const submitDialogGotoInstances = ref(false)
+
+function confirmSubmitDialog() {
+  submitDialogVisible.value = false
+  if (submitDialogGotoInstances.value) {
+    void router.push('/workflow/my-instances')
+  } else {
+    goBack()
+  }
+}
 
 /** 跨模块按需加载流程草稿接缝（动态 import，规避 modules 互引的静态依赖） */
 async function getProcessDraftApi() {
@@ -373,7 +376,6 @@ function validateRequiredFields(): boolean {
 async function handleSubmit() {
   submitting.value = true
   errorMsg.value = ''
-  successMsg.value = ''
 
   if (!validateRequiredFields()) {
     errorMsg.value = t('form.completeRequired')
@@ -386,7 +388,7 @@ async function handleSubmit() {
     try {
       const payload = buildUpdatePayload()
       await updateFormData(formKey, recordId, payload)
-      successMsg.value = t('common.saveSuccess')
+      ElMessage.success(t('common.saveSuccess'))
       // 保存成功后重新加载记录（版本号已变，拉取最新数据）
       if (schema.value) await loadRecord(schema.value)
     } catch (err) {
@@ -427,34 +429,16 @@ async function handleSubmit() {
       }
     }
     const id = await submitForm(formKey, submitData, schema.value?.fields)
-    successMsg.value = t('form.submitSuccessWithId', { id })
 
     // 按业务键（记录 ID）查询流程实例，只有实例真实创建才提示"流程已发起"。
     // 实例由表单提交事件在事务提交后异步创建，短暂轮询等待其可见（最多约 5s）。
     const started = await waitForInstanceByBusinessKey(id)
-    if (started) {
-      ElMessage.success({
-        get message() {
-          return t('form.submittedProcessStarted')
-        },
-        duration: 3000,
-      })
-      // 跳转到发起人可查看实例状态与流转记录的真实页面
-      // 注意：必须是**前台**页面（/workflow/my-instances = 我发起的）。
-      // 曾指向 /workflow/instances（后台「流程实例」管理页），前台发起完会被扔进管理后台。
-      // eslint-disable-next-line no-undef
-      window.setTimeout(() => {
-        router.push('/workflow/my-instances')
-      }, 1500)
-    } else {
-      // 未绑定流程/发起失败：如实提示仅保存数据，不声称流程已发起
-      ElMessage.info({
-        get message() {
-          return t('form.submittedDataOnly')
-        },
-        duration: 4000,
-      })
-    }
+    // 0.1.7 #16：提交结果以居中确认弹窗呈现，由用户点击确认后再离开本页
+    submitDialogText.value = started
+      ? t('form.submittedProcessStarted')
+      : t('form.submittedDataOnly')
+    submitDialogGotoInstances.value = started
+    submitDialogVisible.value = true
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = businessError(err.code, err.msg)
@@ -619,31 +603,7 @@ function backToDrafts() {
   void router.push('/workflow/my-drafts')
 }
 
-// ── V012-BUG-012：表单下方真实流程图（携带 process 参数时加载） ──
-const processKey = String(route.query.process ?? '')
-const flowGraph = ref<import('@/contracts/process-graph').ProcessGraphDocument | null>(null)
-
-async function loadFlowGraph() {
-  if (!processKey || flowGraph.value) return
-  try {
-    const { getProcessDefDefinitionByKey } = await import('@/adapters/process-runtime')
-    const definition = await getProcessDefDefinitionByKey(processKey)
-    flowGraph.value = {
-      processKey: definition.processKey,
-      name: definition.name ?? '',
-      formKey: definition.formKey ?? '',
-      version: definition.version,
-      contractVersion: (definition as { contractVersion?: number }).contractVersion,
-      elements: (definition.elements ??
-        []) as import('@/contracts/process-graph').ProcessGraphElement[],
-      canvas: definition.canvas ?? {},
-    }
-  } catch {
-    // 流程图加载失败静默：不阻断表单填写主流程
-  }
-}
-
-/** V012-BUG-012：左上精简返回——历史返回优先，兜底回流程中心 */
+/** 0.1.7 #13：左上圆角返回——历史返回优先，兜底回流程中心 */
 function goBack() {
   // eslint-disable-next-line no-undef
   if (window.history.length > 1) {
@@ -653,13 +613,9 @@ function goBack() {
   }
 }
 
-// ── P53 节点 27：模式标签（渲染期求值，避免语言固化） ──
-// V012-BUG-012：元信息去技术噪音（目录路径/流程标识不再展示）
-
 // ── 挂载 ──
 onMounted(() => {
   void loadSchema()
-  void loadFlowGraph()
 })
 </script>
 
@@ -667,7 +623,7 @@ onMounted(() => {
   <div class="form-render-page">
     <el-skeleton v-if="loading && !schema" :rows="4" animated />
     <template v-else>
-      <!-- 提示条 -->
+      <!-- 提示条（仅错误；提交结果走 0.1.7 #16 居中确认弹窗） -->
       <el-alert
         v-if="errorMsg"
         type="error"
@@ -676,241 +632,211 @@ onMounted(() => {
         :closable="false"
         class="form-render-page__alert"
       />
-      <el-alert
-        v-if="successMsg"
-        type="success"
-        :title="successMsg"
-        show-icon
-        :closable="false"
-        class="form-render-page__alert"
-      />
 
       <el-empty v-if="!schema && !errorMsg" :description="t('form.notFoundOrLoadFailed')" />
 
       <template v-else-if="schema">
-        <button class="form-render-page__back" type="button" @click="goBack">
-          <span aria-hidden="true">‹</span>
-          {{ t('common.backShort') }}
-        </button>
-
-        <!-- 页标题 -->
-        <h1 class="form-render-page__title">{{ pageTitle }}</h1>
-
-        <div class="form-render-page__layout">
-          <div class="form-render-page__main">
-            <!-- 字段渲染区 -->
-            <div class="form-render-page__card">
-              <h2 class="form-render-page__card-title">{{ t('formSide.formTitle') }}</h2>
-              <div class="form-render-page__group">
-                <div
-                  v-for="field in renderFields"
-                  :key="field.name"
-                  class="form-render-page__field"
-                  :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
-                  :data-col-span="getFormFieldColSpan(field)"
-                  :data-grid-field-type="field.type"
-                  :data-grid-field-name="field.name"
-                >
-                  <DynamicField
-                    :field="field"
-                    :model-value="formData[field.name]"
-                    :readonly="fieldReadonly(field)"
-                    :reference-label="referenceLabels[field.name] ?? ''"
-                    @update:model-value="formData[field.name] = $event"
-                  />
-                  <p
-                    v-if="validationErrors[field.name]"
-                    class="form-render-page__field-error"
-                    role="alert"
-                    :data-validation-error-for="field.name"
-                  >
-                    {{ validationErrors[field.name] }}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <!-- 操作按钮：草稿模式 -->
+        <!-- 0.1.7 #13：整个 top 导航栏——左上圆角返回，右上圆角保存草稿/提交；无表单名/流程名噪音 -->
+        <header class="form-render-page__top">
+          <button
+            class="form-render-page__back"
+            type="button"
+            data-testid="form-render-back"
+            :title="t('common.backShort')"
+            @click="goBack"
+          >
+            <el-icon><ArrowLeft /></el-icon>
+          </button>
+          <div v-if="!isViewMode" class="form-render-page__top-actions">
             <template v-if="isDraftMode">
-              <div class="form-render-page__draft-bar">
-                <el-input
-                  v-model="draftTitle"
-                  :placeholder="t('form.draftTitleOptional')"
-                  maxlength="100"
-                  class="form-render-page__draft-title"
-                />
-                <el-checkbox v-if="draftId" v-model="draftRefreshVersion">{{
-                  t('form.rebindLatest')
-                }}</el-checkbox>
-                <el-button :loading="draftSaving" @click="handleSaveDraft">{{
-                  t('common.saveDraft')
-                }}</el-button>
-                <el-button
-                  v-if="draftId"
-                  type="primary"
-                  :loading="draftSaving"
-                  @click="handleSubmitDraft"
-                >
-                  {{ t('form.submitDraft') }}
-                </el-button>
-                <el-button link @click="backToDrafts">{{ t('form.backToMyDrafts') }}</el-button>
-              </div>
+              <el-input
+                v-model="draftTitle"
+                :placeholder="t('form.draftTitleOptional')"
+                maxlength="100"
+                class="form-render-page__draft-title"
+              />
+              <el-checkbox v-if="draftId" v-model="draftRefreshVersion">{{
+                t('form.rebindLatest')
+              }}</el-checkbox>
+              <el-button round :loading="draftSaving" @click="handleSaveDraft">{{
+                t('common.saveDraft')
+              }}</el-button>
+              <el-button
+                v-if="draftId"
+                round
+                type="primary"
+                :loading="draftSaving"
+                @click="handleSubmitDraft"
+              >
+                {{ t('form.submitDraft') }}
+              </el-button>
+              <el-button link @click="backToDrafts">{{ t('form.backToMyDrafts') }}</el-button>
+            </template>
+            <template v-else>
+              <el-button
+                round
+                :loading="draftSaving"
+                data-testid="form-render-save-draft"
+                @click="handleSaveDraft"
+              >
+                {{ t('common.saveDraft') }}
+              </el-button>
+              <el-button
+                round
+                type="primary"
+                :loading="submitting"
+                data-testid="form-render-submit"
+                @click="handleSubmit"
+              >
+                {{ t('form.launch') }}
+              </el-button>
             </template>
           </div>
-        </div>
+        </header>
 
-        <!-- V012-BUG-012：表单下方真实流程图 -->
-        <div v-if="flowGraph" class="form-render-page__graph">
-          <ProcessGraphView :graph="flowGraph" />
-        </div>
-
-        <!-- 新建填报的持久操作栏：保存草稿与正式提交均绑定真实接口。 -->
-        <div v-if="!isViewMode && !isDraftMode" class="form-render-page__action-bar">
-          <el-button :loading="draftSaving" @click="handleSaveDraft">
-            {{ t('common.saveDraft') }}
-          </el-button>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">
-            {{ t('form.launch') }}
-          </el-button>
+        <!-- 0.1.7 #13/#18：画布——设计器里有什么就展示什么（24 栅格直出），无其它信息 -->
+        <div class="form-render-page__canvas">
+          <div class="form-render-page__sheet">
+            <div class="form-render-page__group">
+              <div
+                v-for="field in renderFields"
+                :key="field.name"
+                class="form-render-page__field"
+                :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
+                :data-col-span="getFormFieldColSpan(field)"
+                :data-grid-field-type="field.type"
+                :data-grid-field-name="field.name"
+              >
+                <DynamicField
+                  :field="field"
+                  :model-value="formData[field.name]"
+                  :readonly="fieldReadonly(field)"
+                  :reference-label="referenceLabels[field.name] ?? ''"
+                  @update:model-value="formData[field.name] = $event"
+                />
+                <p
+                  v-if="validationErrors[field.name]"
+                  class="form-render-page__field-error"
+                  role="alert"
+                  :data-validation-error-for="field.name"
+                >
+                  {{ validationErrors[field.name] }}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </template>
     </template>
+
+    <!-- 0.1.7 #16：提交成功居中确认弹窗（需用户点击确认） -->
+    <el-dialog
+      v-model="submitDialogVisible"
+      width="360px"
+      align-center
+      :close-on-click-modal="false"
+      class="form-render-page__submit-dialog"
+    >
+      <el-result icon="success" title="提交成功" :sub-title="submitDialogText" />
+      <template #footer>
+        <el-button
+          round
+          type="primary"
+          data-testid="submit-dialog-confirm"
+          @click="confirmSubmitDialog"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
-/* P53 节点 27：左表单右说明双栏；窄屏单列 */
-.form-render-page__layout {
-  /* V012-BUG-012：单栏布局（右侧说明栏已删，消除最右空白） */
-  display: block;
-}
-.form-render-page__main {
-  min-width: 0;
-}
-.form-render-page__aside-card {
-  padding: var(--sw-space-20);
-  background: var(--sw-surface-card);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-  box-shadow: var(--sw-shadow-card);
-}
-.form-render-page__aside-title {
-  margin: 0 0 var(--sw-space-12);
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--sw-text-primary);
-}
-.form-render-page__aside-row {
+/* ── 0.1.7 #13/#15/#18：统一数据表单画布 ──
+   全屏覆盖层：无通用侧边栏/页顶栏；顶部导航栏只留左上圆角返回与右上圆角动作；
+   画布主体为设计器同款白色画布 + 24 栅格，设计器里有什么就展示什么。 */
+.form-render-page {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--sw-border-lighter);
-  font-size: 13px;
-}
-.form-render-page__aside-row span {
-  color: var(--sw-text-secondary);
-}
-.form-render-page__aside-row strong {
-  color: var(--sw-text-primary);
-  word-break: break-all;
-}
-.form-render-page__aside-hint {
-  margin: var(--sw-space-12) 0 0;
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--sw-text-secondary);
-}
-@media (max-width: 991px) {
-  .form-render-page__layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-.form-render-page__alert {
-  margin-bottom: var(--sw-space-16);
-}
-
-.form-render-page__title {
-  font-size: 24px;
-  /* 固定 30px 高在长标题换行时会把第二行溢出到 meta 行上（375 重叠缺陷根因）；
-     单行场景 min-height 仍保持 30px，≥1280 设计栅格几何不变 */
-  min-height: 30px;
-  line-height: 24px;
+  overflow-y: auto;
   box-sizing: border-box;
-  font-weight: 600;
-  color: var(--sw-text-primary);
-  margin: 0 0 var(--sw-space-8);
+  max-width: none !important;
+  width: 100%;
+  padding: 0;
+  background: var(--sw-surface-page, #f5f7fa);
 }
 
-/* 375 移动边界：返回入口整行 40px 触控目标，标题自然换行不再与 meta 叠压 */
-@media (max-width: 767px) {
-  .form-render-page {
-    padding: 16px 12px;
-  }
-  .form-render-page__back {
-    display: flex;
-    width: 100%;
-    height: 40px;
-    margin-bottom: 10px;
-  }
-  .form-render-page__title {
-    height: auto;
-    line-height: 1.3;
-  }
+.form-render-page__top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  box-sizing: border-box;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid var(--sw-border-light, #ebeef5);
 }
 
 .form-render-page__back {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--sw-space-4);
-  height: 24px;
-  width: 140px;
-  box-sizing: border-box;
-  padding: 0 var(--sw-space-16);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-base);
-  background: var(--sw-surface-card);
-  color: var(--sw-text-primary);
-  font-size: var(--sw-font-secondary);
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--sw-border-base, #dcdfe6);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--sw-text-regular, #606266);
+  font-size: 16px;
   cursor: pointer;
 }
-
 .form-render-page__back:hover {
-  border-color: var(--sw-color-primary);
-  color: var(--sw-color-primary);
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary-light-7, #c6e2ff);
+  background: var(--el-color-primary-light-9, #ecf5ff);
 }
 
-.form-render-page__back span {
-  font-size: 16px;
-  line-height: 1;
+.form-render-page__top-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sw-space-8);
+  flex-wrap: wrap;
 }
 
-.form-render-page__meta {
-  margin: 0 0 var(--sw-space-16);
-  color: var(--sw-text-secondary);
-  font-size: var(--sw-font-secondary);
+.form-render-page__draft-title {
+  width: 220px;
 }
 
-.form-render-page__hint {
-  font-size: var(--sw-font-secondary);
-  color: var(--sw-text-secondary);
-  margin: 0 0 var(--sw-space-20);
+/* 画布：白色画布铺满数据展示区 */
+.form-render-page__canvas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 24px 24px;
 }
 
-/* V012-BUG-012：去掉表单外层卡片边框/阴影——一般表单形态（标签+带边框控件直接落在页面上） */
-.form-render-page__card {
-  padding: 0 0 var(--sw-space-8);
-  margin-bottom: var(--sw-space-8);
+.form-render-page__sheet {
+  flex: 1;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 320px;
+  padding: 28px 24px;
+  background: #fff;
+  border: 1px solid var(--sw-border-light, #ebeef5);
+  border-radius: var(--sw-radius-card, 8px);
 }
 
-.form-render-page__card-title {
-  margin: 0 0 var(--sw-space-16);
-  color: var(--sw-text-primary);
-  font-size: 16px;
-  line-height: 22px;
-  font-weight: 600;
+.form-render-page__alert {
+  margin: 12px 24px 0;
 }
 
 .form-render-page__group {
@@ -933,63 +859,16 @@ onMounted(() => {
   line-height: 1.5;
 }
 
-.form-render-page__draft-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--sw-space-8);
-  flex-wrap: wrap;
+/* 窄屏：画布与顶栏收紧 */
+@media (max-width: 767px) {
+  .form-render-page__canvas {
+    padding: 12px;
+  }
+  .form-render-page__sheet {
+    padding: 16px 12px;
+  }
 }
 
-.form-render-page__draft-title {
-  width: 220px;
-}
-
-.form-render-page__action-bar {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: var(--sw-space-12);
-  min-height: 55px;
-  margin-top: var(--sw-space-24);
-  padding: 0 var(--sw-space-24);
-  box-sizing: border-box;
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-  background: var(--sw-surface-card);
-}
-
-/* ── V012-BUG-012 接管覆盖：置于文件尾以覆盖既有与 media 规则 ── */
-.form-render-page {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  overflow-y: auto;
-  max-width: none !important;
-  width: 100%;
-  padding: 12px 14px;
-  background: #ffffff;
-}
-/* 流程图：带边框画布 + 网格底（与详情/查看图画布同款；图形层已定位绘制在网格之上） */
-.form-render-page__graph {
-  position: relative;
-  margin-top: 2px;
-}
-.form-render-page__graph :deep(.pg-view) {
-  border: 1px solid var(--sw-border-light);
-  border-radius: 10px;
-  background: #fbfdff;
-}
-.form-render-page__graph :deep(.pg-view)::before {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  content: '';
-  background-image:
-    linear-gradient(#e8edf6 1px, transparent 1px),
-    linear-gradient(90deg, #e8edf6 1px, transparent 1px);
-  background-size: 24px 24px;
-}
 .form-render-page :deep(input[readonly]),
 .form-render-page :deep(textarea[readonly]),
 .form-render-page :deep(.el-input.is-disabled .el-input__inner),

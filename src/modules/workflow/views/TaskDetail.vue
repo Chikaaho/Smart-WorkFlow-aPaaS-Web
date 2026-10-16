@@ -12,7 +12,7 @@ const { t } = useI18n()
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Paperclip } from '@element-plus/icons-vue'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import {
   queryTaskDetail,
@@ -37,6 +37,7 @@ import DynamicField from '@/components/DynamicField.vue'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { createFieldScripts } from '@/adapters/form-runtime'
 import { deriveProcessTrace } from '../utils/process-trace'
+import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 
 const router = useRouter()
 const route = useRoute()
@@ -64,79 +65,21 @@ const refDisplayMap = ref<Record<string, string>>({})
 /** P63 G01：USER/DEPT 字段可读显示缓存（字段名→姓名/部门名，多选顿号连接，取不到回退原值）。 */
 const userDeptDisplays = ref<Record<string, string>>({})
 
-/** 表单宽表的系统列：与业务数据无关，不在审批详情展示 */
-const SYSTEM_COLUMNS = new Set([
-  'id',
-  'create_by',
-  'create_time',
-  'update_by',
-  'update_time',
-  'del_flag',
-  'tenant_id',
-  'version',
-])
-
-/** 表单宽表系统列之外的子表行内部列：不进入业务值展示 */
-const SUBTABLE_INTERNAL_COLUMNS = new Set([...SYSTEM_COLUMNS, 'deleted', 'parent_record_id'])
-
-/** 子表行 → 单行业务值文本（表单声明的子字段按业务标签展示，未声明列回退列名；空对象回退原样） */
-function formatTableRowValue(item: unknown, field?: FormSchema['fields'][number]): string {
-  if (item == null || typeof item !== 'object') return String(item)
-  const row = item as Record<string, unknown>
-  const subFields = field && field.type === 'TABLE' ? (field.subFields ?? []) : []
-  if (subFields.length > 0) {
-    return subFields
-      .map((sf) => {
-        const v = row[sf.name]
-        return `${sf.label || sf.name}=${v == null || v === '' ? '-' : String(v)}`
-      })
-      .join('；')
-  }
-  const entries = Object.entries(row).filter(([k]) => !SUBTABLE_INTERNAL_COLUMNS.has(k))
-  if (entries.length === 0) return JSON.stringify(item)
-  return entries.map(([k, v]) => `${k}=${v == null || v === '' ? '-' : String(v)}`).join('；')
-}
-
-/** 业务字段值 → 可读文本：表格行数组逐行展示（按子字段业务名），普通值原样 */
-function formatFieldValue(v: unknown, field?: FormSchema['fields'][number]): string {
-  if (v == null || v === '') return '-'
-  if (Array.isArray(v)) {
-    return v.length === 0 ? '-' : v.map((item) => formatTableRowValue(item, field)).join('\n')
-  }
-  if (typeof v === 'object') return formatTableRowValue(v, field)
-  return String(v)
-}
-
-/** 表单数据行：按 schema 字段顺序输出业务标签，系统列与未定义字段不展示 */
-const formFieldRows = computed(() => {
-  if (!formRecord.value) return []
-  const rows: { key: string; label: string; value: string }[] = []
-  const seen = new Set<string>()
-  if (formSchema.value) {
-    for (const field of formSchema.value.fields) {
-      const recordKey = field.type === 'REFERENCE' ? 'ref_' + field.name + '_id' : field.name
-      if (SYSTEM_COLUMNS.has(field.name) || !(recordKey in formRecord.value)) continue
-      seen.add(field.name)
-      const v = formRecord.value[recordKey]
-      rows.push({
-        key: field.name,
-        label: field.label || field.name,
-        value:
-          v == null || v === ''
-            ? '-'
-            : field.type === 'REFERENCE'
-              ? (refDisplayMap.value[field.name] ?? String(v))
-              : field.type === 'USER' || field.type === 'DEPT'
-                ? (userDeptDisplays.value[field.name] ?? String(v))
-                : formatFieldValue(v, field),
-      })
+/**
+ * 0.1.7 #18：数据表单按设计器栅格直出——字段清单来自表单定义（LABEL 文字也展示），
+ * 值取本次提交记录；REFERENCE/USER/DEPT 用既有显示名缓存。设计器里有什么就展示什么。
+ */
+const formGridItems = computed(() => {
+  if (!formSchema.value) return []
+  return formSchema.value.fields.map((field) => {
+    const recordKey = field.type === 'REFERENCE' ? 'ref_' + field.name + '_id' : field.name
+    return {
+      field,
+      colSpan: normalizeFormFieldColSpan(field.colSpan, field.type),
+      value: formRecord.value?.[recordKey],
+      referenceLabel: field.type === 'REFERENCE' ? (refDisplayMap.value[field.name] ?? '') : '',
     }
-  }
-  for (const [k, v] of Object.entries(formRecord.value)) {
-    if (SYSTEM_COLUMNS.has(k) || seen.has(k)) continue
-    rows.push({ key: k, label: k, value: formatFieldValue(v) })
-  }
-  return rows
+  })
 })
 
 async function loadDetail() {
@@ -871,13 +814,6 @@ function getApprovalResultType(result: string | null): 'success' | 'danger' | 'i
   return APPROVAL_RESULT_MAP[result]?.type ?? 'info'
 }
 
-/** 附件型表单值：常见文档扩展名按设计呈现为附件链接样式（图标+主色文字）。 */
-function isAttachmentValue(value: unknown): boolean {
-  return (
-    typeof value === 'string' && /\.(pdf|docx?|xlsx?|pptx?|png|jpe?g|zip|txt)$/i.test(value.trim())
-  )
-}
-
 function opinionInputType(field: NonNullable<ApprovalOpinionConfig['fields']>[number]): string {
   if (field.type === 'DATETIME') return 'datetime-local'
   if (field.type === 'NUMBER') return 'number'
@@ -1059,17 +995,6 @@ const graphCanvasHeight = computed(() =>
   typeof window !== 'undefined' && window.innerHeight >= 1100 ? 784 : 740,
 )
 
-/** 流程状态卡脚部快捷审批：仅普通意见模式显示；自定义意见表单走底部完整操作卡。已办历史任务不呈现。 */
-const quickActionsVisible = computed(
-  () =>
-    detail.value != null &&
-    detail.value.taskStatus !== 'FINISHED' &&
-    opinionFields.value.length === 0,
-)
-
-/** 已办历史任务（后端 taskStatus=FINISHED）：详情整体只读，不含任何办理动作。 */
-const isFinishedTask = computed(() => detail.value?.taskStatus === 'FINISHED')
-
 /**
  * 服务端办理权限（canHandle）：仅待办且当前用户可办理时呈现审批动作，
  * 监控/发起人等只读身份不再展示通过/驳回按钮；后端动作接口仍是最终权威。
@@ -1077,28 +1002,6 @@ const isFinishedTask = computed(() => detail.value?.taskStatus === 'FINISHED')
 const canAct = computed(
   () => detail.value?.taskStatus !== 'FINISHED' && detail.value?.canHandle === true,
 )
-
-/** 页头状态标签：统一由真实实例状态驱动。后端 TaskDetailRespDTO 无 nodeKey 字段，
- *  旧 nodeKey 推断在真实接口下恒走"已通过"分支、运行中任务误显示已通过，故改为
- *  instanceStatus 优先（V012-BUG-001），nodeKey 仅作旧 mock 契约后备，均缺失时
- *  待办显示进行中、已办显示已终止。 */
-const headerTagType = computed<'primary' | 'success' | 'danger' | 'info'>(() => {
-  const status = detail.value?.instanceStatus
-  if (status === 'APPROVED') return 'success'
-  if (status === 'REJECTED') return 'danger'
-  if (status === 'RUNNING') return 'primary'
-  if (isFinishedTask.value) return 'info'
-  return detail.value?.nodeKey ? 'primary' : 'success'
-})
-
-const headerTagLabel = computed(() => {
-  const status = detail.value?.instanceStatus
-  if (status === 'APPROVED') return t('common.statusApproved')
-  if (status === 'REJECTED') return t('common.statusRejected')
-  if (status === 'RUNNING') return t('common.statusInProgress')
-  if (isFinishedTask.value) return t('common.statusTerminated')
-  return detail.value?.nodeKey ? t('common.statusInProgress') : t('common.statusApproved')
-})
 
 /** 催办仅对流程发起人呈现（真实契约：POST /workflow/my/instances/{id}/urge）。 */
 const isInitiator = computed(() => {
@@ -1182,25 +1085,6 @@ const opinionDetailAttachmentEntries = computed(() => {
     .filter((entry) => entry.value !== '')
 })
 
-// ─── 会签聚合：同一节点的多条历史聚合为真实统计 ───
-const signGroupVisible = ref(false)
-const signGroupKey = ref('')
-
-const signGroupRows = computed(() => {
-  const d = detail.value
-  if (!d) return []
-  const key = signGroupKey.value
-  return d.approvalHistory.filter(
-    (row) =>
-      ((typeof row.nodeKey === 'string' && row.nodeKey) || row.taskName) === key &&
-      // 会签派发通知行（无结果但有完成时间）不计入参与人
-      !(row.approvalResult == null && row.endTime != null),
-  )
-})
-
-/** 会签弹窗标题中的节点名：取该组真实历史的任务名，取不到回退分组键。 */
-const signGroupName = computed(() => signGroupRows.value[0]?.taskName ?? '')
-
 /** 审批详情列表：仅审批人行（排除提交动作与会签派发通知行） */
 const peopleRows = computed(() => {
   const d = detail.value
@@ -1212,25 +1096,6 @@ const peopleRows = computed(() => {
       !(r.approvalResult == null && r.endTime != null),
   )
 })
-
-const signGroupStats = computed(() => {
-  const rows = signGroupRows.value
-  const agreed = rows.filter((row) => row.approvalResult === 'APPROVED').length
-  const rejected = rows.filter((row) => row.approvalResult === 'REJECTED').length
-  const pending = rows.filter((row) => row.approvalResult == null).length
-  return { total: rows.length, agreed, rejected, pending }
-})
-
-function formatSignTime(value: string | null | undefined): string {
-  if (!value) return '-'
-  const match = value.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/)
-  return match ? `${match[1]}\n${match[2]}` : value
-}
-
-function openSignGroup(nodeKey: string) {
-  signGroupKey.value = nodeKey
-  signGroupVisible.value = true
-}
 
 /** P63 G05b：任务加载时回查本人最新命令，EXPIRED 则持久呈现原因与重试提示。 */
 async function loadLastExpired() {
@@ -1244,46 +1109,6 @@ async function loadLastExpired() {
 }
 
 onMounted(loadDetail)
-
-/** 后继节点（设计右栏第三块）：由真实流程图推导；仅在图可达时呈现。 */
-const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
-  const g = detailGraph.value
-  const currentName = currentRailEntry.value?.name
-  if (!g || !currentName) return null
-  const byName = (n: { kind: string; type?: string; config?: { name?: string } }) =>
-    n.kind === 'node' && n.config?.name === currentName
-  const start = g.elements.find(byName)
-  if (!start) return null
-  const outgoing = (id: string) =>
-    g.elements.filter((e) => e.kind === 'edge' && e.source === id).map((e) => e.target)
-  let frontier = outgoing(String(start.id))
-  const seen = new Set<string>([String(start.id)])
-  // 穿过网关找首个后继节点；无后继审批节点时回退结束节点
-  let endFallback: { name: string; hint: string } | null = null
-  while (frontier.length > 0) {
-    const next = frontier.shift()!
-    if (seen.has(next)) continue
-    seen.add(next)
-    const el = g.elements.find((e) => e.kind === 'node' && String(e.id) === next)
-    if (!el) continue
-    if (el.type === 'GATEWAY') {
-      frontier.push(...outgoing(next))
-      continue
-    }
-    const nodeName = String((el.config as { name?: unknown } | undefined)?.name ?? '')
-    if (el.type === 'END') {
-      endFallback = {
-        name: nodeName || t('taskDetailUi.endNode'),
-        hint: t('taskDetailUi.nextNodeEndHint'),
-      }
-      continue
-    }
-    if (el.type === 'APPROVAL') {
-      return { name: nodeName, hint: t('taskDetailUi.nextNodeHint') }
-    }
-  }
-  return endFallback
-})
 </script>
 
 <template>
@@ -1292,24 +1117,17 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
     class="task-detail"
     :class="{ 'task-detail--people-active': activeTab === 'people' }"
   >
-    <!-- 页头：返回 + 标题 + 状态 + 元信息 -->
+    <!-- 0.1.7 #18：页头只留左上角返回箭头，标题/状态/发起人等噪音全部去掉 -->
     <div class="detail-header">
-      <el-button class="detail-header__back" @click="goBack">{{ backLabel }}</el-button>
-      <div class="detail-header__body">
-        <div class="detail-header__title-row">
-          <h2 class="detail-header__title">
-            {{ detail?.processName ?? t('workflow.taskDetail') }}
-          </h2>
-          <el-tag v-if="detail" :type="headerTagType" size="small" class="detail-header__status">
-            {{ headerTagLabel }}
-          </el-tag>
-        </div>
-        <p v-if="detail?.theme" class="detail-header__theme">{{ detail.theme }}</p>
-        <p v-if="detail" class="detail-header__meta">
-          {{ t('common.initiator') }} {{ detail.initiatorName ?? detail.initiatorId }} ·
-          {{ detail.createTime?.slice(0, 16)?.replace('T', ' ') }}
-        </p>
-      </div>
+      <button
+        type="button"
+        class="detail-header__arrow"
+        data-testid="task-detail-back"
+        :title="backLabel"
+        @click="goBack"
+      >
+        <el-icon><ArrowLeft /></el-icon>
+      </button>
     </div>
 
     <!-- 错误提示 -->
@@ -1322,299 +1140,173 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
       style="margin-bottom: 16px"
     />
 
-    <!-- 主区双栏：左=数据表单/流程变量；右=流程状态+审批操作 -->
+    <!-- 0.1.7 #18：去掉右侧流程状态轨，主区单列——表单画布铺满，设计器里有什么就展示什么 -->
     <div v-if="detail" class="task-main">
-      <div class="task-main__left">
-        <!-- 本次提交的表单数据 -->
-        <el-card v-if="detail.formKey && detail.businessKey" class="detail-card">
-          <template #header>
-            <span>{{ t('taskDetailUi.dataForm') }}</span>
-          </template>
-          <div v-loading="formRecordLoading">
-            <el-alert
-              v-if="!formRecordLoading && !formRecord"
-              :title="t('workflow.formRecordUnavailable')"
-              type="warning"
-              :closable="false"
-              show-icon
-            />
-            <div v-else-if="formFieldRows.length > 0" class="data-rows">
-              <div v-for="row in formFieldRows" :key="row.key" class="data-row">
-                <span class="data-row__label">{{ row.label }}</span>
-                <span class="data-row__value">
-                  <span v-if="isAttachmentValue(row.value)" class="data-row__file">
-                    <el-icon :size="14"><Paperclip /></el-icon>{{ row.value }}
-                  </span>
-                  <template v-else>{{ row.value }}</template>
-                </span>
-              </div>
-            </div>
-            <el-descriptions v-else-if="formRecord" :column="1" border>
-              <el-descriptions-item :label="t('common.description')">{{
-                t('workflow.noDisplayableFields')
-              }}</el-descriptions-item>
-            </el-descriptions>
-          </div>
-        </el-card>
+      <el-alert
+        v-if="lastExpired"
+        class="g05b-expired-alert"
+        type="warning"
+        :closable="false"
+        show-icon
+      >
+        <p>
+          上次提交的审批命令已过期：{{ lastExpired.reason || '准入截止到期且未执行（效果未发生）' }}
+        </p>
+        <p>可直接重试本次操作（将重新提交审批命令，原过期记录保留可查）。</p>
+      </el-alert>
 
-        <!-- P64 阶段Ⅰ：节点业务表单（绑定节点可填报；草稿可存，最终提交随审批动作同事务生效；已提交只读回看） -->
-        <el-card v-if="nodeForm && nodeFormBound" class="detail-card detail-card--node-form">
-          <template #header>
-            <span>
-              节点业务表单
-              <el-tag v-if="nodeFormSubmitted" size="small" type="success" class="nodeform-tag"
-                >已最终提交</el-tag
-              >
-              <el-tag v-else size="small" type="info" class="nodeform-tag">草稿</el-tag>
-            </span>
-          </template>
-          <div class="nodeform-body">
-            <small class="nodeform-meta">
-              {{ nodeForm.formName
-              }}<template v-if="nodeForm.formVersion"> · v{{ nodeForm.formVersion }}</template>
-              <template v-if="nodeForm.roundNo"> · 第 {{ nodeForm.roundNo }} 轮</template>
-              <template v-if="nodeFormSubmitted"> · 数据已生效，可读变量与历史回看</template>
-            </small>
-            <div class="nodeform-fields">
-              <div v-for="field in nodeFormRenderFields" :key="field.name" class="nodeform-field">
-                <div class="nodeform-field__label">
-                  <span
-                    v-if="nodeFieldRequired(field) && nodeFormEditable"
-                    class="nodeform-field__required"
-                    >*</span
-                  >
-                  {{ field.label || field.name }}
-                </div>
-                <DynamicField
-                  :field="field"
-                  :model-value="nodeFormModel[field.name]"
-                  :readonly="nodeFieldReadonly(field)"
-                  @update:model-value="nodeFormModel[field.name] = $event"
-                />
-              </div>
-            </div>
-            <div v-if="nodeFormErrors.length > 0" class="nodeform-errors" role="alert">
-              <p v-for="item in nodeFormErrors" :key="item">{{ item }}</p>
-            </div>
-            <div v-if="nodeFormEditable" class="nodeform-actions">
-              <el-button
-                size="small"
-                :loading="nodeFormSavingDraft"
-                :disabled="acting !== null"
-                @click="handleNodeFormDraft"
-              >
-                保存草稿
-              </el-button>
-              <span class="nodeform-meta">最终提交与「同意」动作一并在服务端事务生效</span>
-            </div>
-          </div>
-        </el-card>
-
-        <!-- P63 IoT 预约（实例维度）：有数据才渲染；取消入口按 v-perm 显隐，服务端仍是最终权威 -->
-        <el-card v-if="reservations.length > 0" class="detail-card detail-card--iot-reservations">
-          <template #header>
-            <div class="card-head">
-              <span>IoT 预约</span>
-              <span class="card-head__hint">设备动作预约下发记录</span>
-            </div>
-          </template>
-          <div v-loading="reservationsLoading" class="iot-reservations">
-            <div v-for="row in reservations" :key="row.id" class="iot-reservation">
-              <div class="iot-reservation__head">
-                <span class="iot-reservation__device">{{
-                  row.deviceName || row.deviceKey || '-'
-                }}</span>
-                <el-tag :type="reservationStatusTag(row.status)" size="small">
-                  {{ reservationStatusLabel(row.status) }}
-                </el-tag>
-              </div>
-              <div class="iot-reservation__row">
-                <span class="iot-reservation__label">预约时间</span>
-                <span class="iot-reservation__value"
-                  >{{ row.dueLocalText || row.dueAtUtc }}（{{ row.timezoneId }}）</span
-                >
-              </div>
-              <div class="iot-reservation__row">
-                <span class="iot-reservation__label">迟到窗口</span>
-                <span class="iot-reservation__value">{{ row.lateWindowSeconds }} 秒</span>
-              </div>
-              <div class="iot-reservation__row">
-                <span class="iot-reservation__label">设备能力</span>
-                <span class="iot-reservation__value"
-                  >{{ row.commandKey || '-' }}（{{ row.commandType || '-' }}）</span
-                >
-              </div>
-              <div v-if="row.commandId != null" class="iot-reservation__row">
-                <span class="iot-reservation__label">命令记录</span>
-                <span class="iot-reservation__value"
-                  >命令 #{{ row.commandId }}（执行结果见「IoT 运行记录 · 设备命令」）</span
-                >
-              </div>
-              <div v-if="row.rejectReason" class="iot-reservation__row">
-                <span class="iot-reservation__label">失败原因</span>
-                <span class="iot-reservation__value">{{ row.rejectReason }}</span>
-              </div>
-              <div v-if="row.status === 'CANCELED'" class="iot-reservation__row">
-                <span class="iot-reservation__label">取消信息</span>
-                <span class="iot-reservation__value">
-                  {{ row.cancelBy || '-'
-                  }}<template v-if="row.cancelTime"> · {{ row.cancelTime }}</template
-                  ><template v-if="row.cancelReason"> · {{ row.cancelReason }}</template>
-                </span>
-              </div>
-              <div v-if="row.status === 'PENDING'" class="iot-reservation__actions">
-                <el-button
-                  v-perm="'iot:reservation:cancel'"
-                  size="small"
-                  type="danger"
-                  plain
-                  @click="openCancelReservation(row)"
-                >
-                  取消预约
-                </el-button>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </div>
-
-      <div class="task-main__right">
-        <!-- 流程状态卡：仅渲染真实可得的已完成/当前节点 -->
-        <el-card class="detail-card">
-          <template #header>
-            <div class="card-head">
-              <span>{{ t('taskDetailUi.flowStatus') }}</span>
-              <span class="card-head__hint">{{ t('taskDetailUi.byFlowPath') }}</span>
-            </div>
-          </template>
+      <!-- 本次提交的表单数据：按设计器栅格渲染（LABEL 文字也展示） -->
+      <el-card v-if="detail.formKey && detail.businessKey" class="detail-card detail-card--form">
+        <div v-loading="formRecordLoading" class="form-canvas">
           <el-alert
-            v-if="lastExpired"
-            class="g05b-expired-alert"
+            v-if="!formRecordLoading && !formRecord"
+            :title="t('workflow.formRecordUnavailable')"
             type="warning"
             :closable="false"
             show-icon
-          >
-            <p>
-              上次提交的审批命令已过期：{{
-                lastExpired.reason || '准入截止到期且未执行（效果未发生）'
-              }}
-            </p>
-            <p>可直接重试本次操作（将重新提交审批命令，原过期记录保留可查）。</p>
-          </el-alert>
-          <div class="flow-status">
+          />
+          <div v-else-if="formGridItems.length > 0" class="form-canvas__grid">
             <div
-              v-for="entry in flowRail"
-              :key="entry.key"
-              class="flow-node"
-              :class="{ 'flow-node--current': entry.state === 'current' }"
+              v-for="item in formGridItems"
+              :key="item.field.name"
+              class="form-canvas__field"
+              :style="{ gridColumn: `span ${item.colSpan}` }"
             >
-              <p class="flow-node__kicker">
+              <DynamicField
+                :field="item.field"
+                :model-value="item.value"
+                readonly
+                :reference-label="item.referenceLabel"
+              />
+            </div>
+          </div>
+          <el-descriptions v-else-if="formRecord" :column="1" border>
+            <el-descriptions-item :label="t('common.description')">{{
+              t('workflow.noDisplayableFields')
+            }}</el-descriptions-item>
+          </el-descriptions>
+        </div>
+      </el-card>
+
+      <!-- P64 阶段Ⅰ：节点业务表单（绑定节点可填报；草稿可存，最终提交随审批动作同事务生效；已提交只读回看） -->
+      <el-card v-if="nodeForm && nodeFormBound" class="detail-card detail-card--node-form">
+        <template #header>
+          <span>
+            节点业务表单
+            <el-tag v-if="nodeFormSubmitted" size="small" type="success" class="nodeform-tag"
+              >已最终提交</el-tag
+            >
+            <el-tag v-else size="small" type="info" class="nodeform-tag">草稿</el-tag>
+          </span>
+        </template>
+        <div class="nodeform-body">
+          <small class="nodeform-meta">
+            {{ nodeForm.formName
+            }}<template v-if="nodeForm.formVersion"> · v{{ nodeForm.formVersion }}</template>
+            <template v-if="nodeForm.roundNo"> · 第 {{ nodeForm.roundNo }} 轮</template>
+            <template v-if="nodeFormSubmitted"> · 数据已生效，可读变量与历史回看</template>
+          </small>
+          <div class="nodeform-fields">
+            <div v-for="field in nodeFormRenderFields" :key="field.name" class="nodeform-field">
+              <div class="nodeform-field__label">
                 <span
-                  class="flow-node__state"
-                  :class="
-                    entry.state === 'current'
-                      ? 'flow-node__state--current'
-                      : 'flow-node__state--done'
-                  "
+                  v-if="nodeFieldRequired(field) && nodeFormEditable"
+                  class="nodeform-field__required"
+                  >*</span
                 >
-                  {{
-                    entry.state === 'current'
-                      ? t('taskDetailUi.current')
-                      : t('taskDetailUi.prevNodeDone')
-                  }}
-                </span>
-                <span v-if="entry.state === 'current'" class="flow-node__prog">
-                  {{
-                    t('taskDetailUi.currentProgress', { done: entry.doneCount, total: entry.total })
-                  }}
-                </span>
-              </p>
-              <div class="flow-node__head">
-                <span class="flow-node__name">{{ entry.name }}</span>
+                {{ field.label || field.name }}
               </div>
-              <p v-if="entry.isSign" class="flow-node__sub">
-                {{ t('taskDetailUi.parallelSignRule') }}
-              </p>
-              <p v-if="entry.state === 'current'" class="flow-node__sub">
-                {{
-                  t('taskDetailUi.signDoneProgress', { done: entry.doneCount, total: entry.total })
-                }}<template v-if="entry.pendingNames">
-                  · {{ t('taskDetailUi.pendingNamesPrefix') }}{{ entry.pendingNames }}</template
-                >
-              </p>
-              <div v-else class="flow-node__meta-row">
-                <p class="flow-node__meta">
-                  {{ entry.who }} · {{ getApprovalResultLabel(entry.result) }} · {{ entry.when }}
-                </p>
-                <el-button
-                  size="small"
-                  type="primary"
-                  plain
-                  @click="openOpinionDetailRow(entry.row)"
-                >
-                  {{ t('taskDetailUi.viewDetail') }}
-                </el-button>
-              </div>
+              <DynamicField
+                :field="field"
+                :model-value="nodeFormModel[field.name]"
+                :readonly="nodeFieldReadonly(field)"
+                @update:model-value="nodeFormModel[field.name] = $event"
+              />
+            </div>
+          </div>
+          <div v-if="nodeFormErrors.length > 0" class="nodeform-errors" role="alert">
+            <p v-for="item in nodeFormErrors" :key="item">{{ item }}</p>
+          </div>
+          <div v-if="nodeFormEditable" class="nodeform-actions">
+            <el-button
+              size="small"
+              :loading="nodeFormSavingDraft"
+              :disabled="acting !== null"
+              @click="handleNodeFormDraft"
+            >
+              保存草稿
+            </el-button>
+            <span class="nodeform-meta">最终提交与「同意」动作一并在服务端事务生效</span>
+          </div>
+        </div>
+      </el-card>
+
+      <!-- P63 IoT 预约（实例维度）：有数据才渲染；取消入口按 v-perm 显隐，服务端仍是最终权威 -->
+      <el-card v-if="reservations.length > 0" class="detail-card detail-card--iot-reservations">
+        <template #header>
+          <div class="card-head">
+            <span>IoT 预约</span>
+            <span class="card-head__hint">设备动作预约下发记录</span>
+          </div>
+        </template>
+        <div v-loading="reservationsLoading" class="iot-reservations">
+          <div v-for="row in reservations" :key="row.id" class="iot-reservation">
+            <div class="iot-reservation__head">
+              <span class="iot-reservation__device">{{
+                row.deviceName || row.deviceKey || '-'
+              }}</span>
+              <el-tag :type="reservationStatusTag(row.status)" size="small">
+                {{ reservationStatusLabel(row.status) }}
+              </el-tag>
+            </div>
+            <div class="iot-reservation__row">
+              <span class="iot-reservation__label">预约时间</span>
+              <span class="iot-reservation__value"
+                >{{ row.dueLocalText || row.dueAtUtc }}（{{ row.timezoneId }}）</span
+              >
+            </div>
+            <div class="iot-reservation__row">
+              <span class="iot-reservation__label">迟到窗口</span>
+              <span class="iot-reservation__value">{{ row.lateWindowSeconds }} 秒</span>
+            </div>
+            <div class="iot-reservation__row">
+              <span class="iot-reservation__label">设备能力</span>
+              <span class="iot-reservation__value"
+                >{{ row.commandKey || '-' }}（{{ row.commandType || '-' }}）</span
+              >
+            </div>
+            <div v-if="row.commandId != null" class="iot-reservation__row">
+              <span class="iot-reservation__label">命令记录</span>
+              <span class="iot-reservation__value"
+                >命令 #{{ row.commandId }}（执行结果见「IoT 运行记录 · 设备命令」）</span
+              >
+            </div>
+            <div v-if="row.rejectReason" class="iot-reservation__row">
+              <span class="iot-reservation__label">失败原因</span>
+              <span class="iot-reservation__value">{{ row.rejectReason }}</span>
+            </div>
+            <div v-if="row.status === 'CANCELED'" class="iot-reservation__row">
+              <span class="iot-reservation__label">取消信息</span>
+              <span class="iot-reservation__value">
+                {{ row.cancelBy || '-'
+                }}<template v-if="row.cancelTime"> · {{ row.cancelTime }}</template
+                ><template v-if="row.cancelReason"> · {{ row.cancelReason }}</template>
+              </span>
+            </div>
+            <div v-if="row.status === 'PENDING'" class="iot-reservation__actions">
               <el-button
-                v-if="entry.state === 'current' && entry.isSign"
+                v-perm="'iot:reservation:cancel'"
                 size="small"
-                class="flow-node__allbtn"
-                @click="openSignGroup(entry.key)"
-              >
-                {{ t('taskDetailUi.viewAllSignRecords') }}
-              </el-button>
-            </div>
-            <div v-if="nextRailNode" class="flow-node flow-node--next">
-              <p class="flow-node__kicker">
-                <span class="flow-node__state flow-node__state--next">
-                  {{ t('taskDetailUi.nextNodePending') }}
-                </span>
-              </p>
-              <div class="flow-node__head">
-                <span class="flow-node__name">{{ nextRailNode.name }}</span>
-              </div>
-              <p class="flow-node__sub">{{ nextRailNode.hint }}</p>
-            </div>
-            <div v-if="quickActionsVisible" class="flow-actions">
-              <el-button
-                v-if="isInitiator"
-                class="flow-actions__urge"
-                :disabled="acting !== null"
-                @click="onUrge"
-              >
-                {{ t('taskDetailUi.urgeAction') }}
-              </el-button>
-              <el-button
-                v-if="canAct"
-                type="success"
-                :loading="acting === 'approve'"
-                :disabled="acting !== null"
-                @click="quickApprove"
-              >
-                {{ t('common.approve') }}
-              </el-button>
-              <el-button
-                v-if="canAct"
-                class="p53-reject-action"
                 type="danger"
                 plain
-                :loading="acting === 'reject'"
-                :disabled="acting !== null"
-                @click="quickReject"
+                @click="openCancelReservation(row)"
               >
-                {{ t('common.reject') }}
+                取消预约
               </el-button>
             </div>
-            <el-alert
-              v-if="flowRail.length === 0"
-              :title="t('workflow.noApprovalHistory')"
-              type="info"
-              :closable="false"
-              show-icon
-            />
           </div>
-        </el-card>
-      </div>
+        </div>
+      </el-card>
     </div>
 
     <!-- 底部 tab：流转记录 / 流程图 / 审批详情列表 -->
@@ -1756,35 +1448,9 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
       </el-tabs>
     </el-card>
 
-    <!-- 操作区（原操作栏移入右栏，审批逻辑不变）：置于记录卡之后，主审批入口在流程状态卡脚部；
-     仅待办且当前用户可办理（canHandle）时呈现，已办/只读身份不渲染任何办理动作 -->
-    <el-card v-if="detail && canAct" class="detail-card detail-card--actions">
-      <template #header>
-        <span>{{ t('workflow.taskDetail') }}</span>
-      </template>
+    <!-- 0.1.7 #18：审批意见在下方，全部操作按钮右下角；发起人常驻催办入口 -->
+    <el-card v-if="detail && (canAct || isInitiator)" class="detail-card detail-card--actions">
       <div class="detail-actions">
-        <div v-if="returnTargets.length > 0" class="return-config">
-          <span>{{ t('workflow.returnToLabel') }}</span>
-          <el-select
-            v-model="returnTargetNodeId"
-            :placeholder="t('workflow.selectApprovedNode')"
-            style="width: 180px"
-          >
-            <el-option
-              v-for="target in returnTargets"
-              :key="target.nodeKey"
-              :label="target.taskName"
-              :value="target.nodeKey"
-            />
-          </el-select>
-          <el-button
-            type="warning"
-            :loading="acting === 'return'"
-            :disabled="acting !== null"
-            @click="handleReturn"
-            >{{ t('common.returnBack') }}</el-button
-          >
-        </div>
         <div v-if="opinionFields.length > 0" class="opinion-form">
           <div class="opinion-form__title">
             审批意见{{
@@ -1861,28 +1527,75 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
           </div>
         </div>
         <textarea
-          v-if="opinionFields.length === 0"
+          v-if="opinionFields.length === 0 && canAct"
           v-model="opinionComment"
           class="opinion-input"
           rows="3"
           :placeholder="t('workflow.remarkOptional')"
         />
-        <div class="detail-actions__row detail-actions__row--lifecycle">
-          <el-button :disabled="acting !== null" @click="openLifecycle('TRANSFER')">
-            {{ t('workflow.transferOwnTask') }}
-          </el-button>
-          <el-button :disabled="acting !== null" @click="openLifecycle('DELEGATE')">
-            {{ t('workflow.delegateAction') }}
-          </el-button>
-          <el-button :disabled="acting !== null" @click="openLifecycle('COMMUNICATE')">
-            {{ t('workflow.consultTask') }}
-          </el-button>
-          <el-button :disabled="acting !== null" @click="openLifecycle('ADD_SIGN')">
-            {{ t('workflow.addSign') }}
-          </el-button>
-          <el-button :disabled="acting !== null" @click="openLifecycle('SUPPLEMENT_SIGN')">
-            {{ t('workflow.supplementSign') }}
-          </el-button>
+        <!-- 0.1.7 #18：所有操作按钮统一放右下角（退回/转办/委托/沟通/加签/补签/驳回/同意/催办） -->
+        <div class="detail-actions__bar">
+          <div v-if="canAct && returnTargets.length > 0" class="return-config">
+            <span>{{ t('workflow.returnToLabel') }}</span>
+            <el-select
+              v-model="returnTargetNodeId"
+              :placeholder="t('workflow.selectApprovedNode')"
+              style="width: 180px"
+            >
+              <el-option
+                v-for="target in returnTargets"
+                :key="target.nodeKey"
+                :label="target.taskName"
+                :value="target.nodeKey"
+              />
+            </el-select>
+            <el-button
+              type="warning"
+              :loading="acting === 'return'"
+              :disabled="acting !== null"
+              @click="handleReturn"
+              >{{ t('common.returnBack') }}</el-button
+            >
+          </div>
+          <div class="detail-actions__btns">
+            <el-button v-if="isInitiator" :disabled="acting !== null" @click="onUrge">
+              {{ t('taskDetailUi.urgeAction') }}
+            </el-button>
+            <template v-if="canAct">
+              <el-button :disabled="acting !== null" @click="openLifecycle('TRANSFER')">
+                {{ t('workflow.transferOwnTask') }}
+              </el-button>
+              <el-button :disabled="acting !== null" @click="openLifecycle('DELEGATE')">
+                {{ t('workflow.delegateAction') }}
+              </el-button>
+              <el-button :disabled="acting !== null" @click="openLifecycle('COMMUNICATE')">
+                {{ t('workflow.consultTask') }}
+              </el-button>
+              <el-button :disabled="acting !== null" @click="openLifecycle('ADD_SIGN')">
+                {{ t('workflow.addSign') }}
+              </el-button>
+              <el-button :disabled="acting !== null" @click="openLifecycle('SUPPLEMENT_SIGN')">
+                {{ t('workflow.supplementSign') }}
+              </el-button>
+              <el-button
+                type="danger"
+                plain
+                :loading="acting === 'reject'"
+                :disabled="acting !== null"
+                @click="quickReject"
+              >
+                {{ t('common.reject') }}
+              </el-button>
+              <el-button
+                type="success"
+                :loading="acting === 'approve'"
+                :disabled="acting !== null"
+                @click="quickApprove"
+              >
+                {{ t('common.approve') }}
+              </el-button>
+            </template>
+          </div>
         </div>
       </div>
     </el-card>
@@ -1937,83 +1650,6 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
       </div>
       <template #footer>
         <el-button type="primary" class="p53-dialog-close" @click="opinionDetailVisible = false">
-          {{ t('common.close') }}
-        </el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 会签聚合弹窗：统计与逐人记录均来自当前实例真实历史 -->
-    <el-dialog v-model="signGroupVisible" width="1018px" top="10vh" class="p53-sign-dialog">
-      <template #header>
-        <div class="p53-sign-dialog__head">
-          <h2>
-            <template v-if="signGroupName">{{ signGroupName }} · </template
-            >{{ t('taskDetailUi.signGroupTitle') }}
-          </h2>
-          <p v-if="signGroupKey && signGroupKey !== signGroupName">
-            {{ t('taskDetailUi.nodeKeyLabel') }} {{ signGroupKey }}
-          </p>
-        </div>
-      </template>
-      <p class="p53-sign-summary">
-        {{ signGroupStats.total }} {{ t('taskDetailUi.signParticipants') }}
-        {{ signGroupStats.agreed }} {{ t('taskDetailUi.signAgreed') }} {{ signGroupStats.pending }}
-        {{ t('taskDetailUi.signPending') }} {{ signGroupStats.rejected }}
-        {{ t('taskDetailUi.signRejected') }}
-      </p>
-      <el-table :data="signGroupRows" stripe class="p53-sign-table">
-        <el-table-column :label="t('workflow.approver')" width="112">
-          <template #default="{ row }">
-            <b>{{ row.assigneeName ?? row.assignee ?? '-' }}</b>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('taskDetailUi.deptLabel')" width="168">
-          <template #default="{ row }">
-            {{ row.assigneeDept ?? '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('common.status')" width="114">
-          <template #default="{ row }">
-            <span
-              class="people-status"
-              :class="`people-status--${getApprovalResultType(row.approvalResult)}`"
-            >
-              {{ getApprovalResultLabel(row.approvalResult) }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column width="198" :label="t('taskDetailUi.sentAt')">
-          <template #default="{ row }">
-            <span class="p53-sign-time">{{ formatSignTime(row.createTime) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column width="198" :label="t('taskDetailUi.processedAt')">
-          <template #default="{ row }">
-            <span class="p53-sign-time">{{ formatSignTime(row.endTime) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('taskDetailUi.opinionCommentLabel')" width="174" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              v-if="row.approvalResult != null"
-              size="small"
-              type="primary"
-              plain
-              @click="openOpinionDetailRow(row)"
-            >
-              {{ t('taskDetailUi.viewDetail') }}
-            </el-button>
-            <span v-else class="people-group__pending">{{
-              t('taskDetailUi.viewDetailPending')
-            }}</span>
-          </template>
-        </el-table-column>
-      </el-table>
-      <p v-if="signGroupStats.pending > 0" class="p53-sign-note">
-        {{ t('taskDetailUi.signGroupNote') }}
-      </p>
-      <template #footer>
-        <el-button type="primary" class="p53-dialog-close" @click="signGroupVisible = false">
           {{ t('common.close') }}
         </el-button>
       </template>
@@ -2155,76 +1791,50 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
 </template>
 
 <style scoped>
+/* 0.1.7 #18：全屏数据表单画布——不渲染通用侧边栏与页面自有顶栏，只留左上角返回箭头 */
 .task-detail {
-  /* V012-BUG-013：内容铺满内容区（去 1216 上限），页面纵向撑满视口让记录卡贴底不留白 */
+  position: fixed;
+  inset: 0;
+  z-index: 60;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  min-height: calc(100vh - var(--sw-layout-header-height));
-  padding: 6px 32px 24px;
+  overflow-y: auto;
+  padding: 12px 24px 24px;
+  background: var(--sw-surface-page, #f5f7fa);
 }
 .detail-header {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  margin-bottom: 19px;
-}
-.detail-header__back {
-  align-self: flex-start;
-  box-sizing: border-box;
-  width: 140px;
-  height: 24px;
-  padding: 0 31px;
-  font-size: 12px;
-}
-.detail-header__body {
-  min-width: 0;
-}
-.detail-header__title-row {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 8px;
+  padding: 4px 0 10px;
+  background: var(--sw-surface-page, #f5f7fa);
 }
-.detail-header__title {
-  margin: 0;
-  position: relative;
-  top: -6px;
-  font-size: 26px;
-  line-height: 30px;
-  font-weight: 700;
-  color: var(--sw-text-primary);
+.detail-header__arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--sw-border-base, #dcdfe6);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--sw-text-regular, #606266);
+  cursor: pointer;
 }
-.detail-header__status {
-  flex: 0 0 auto;
-}
-.detail-header__meta {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: var(--sw-text-secondary);
-}
-/* 主区双栏：左数据卡 / 右状态+操作 */
-/* 设计（节点10）：短视口下流程图 tab 聚焦呈现——隐藏双栏区，图区全宽加高（方向 §5.10 真实组件改造） */
-@media (max-height: 1099px) {
-  .task-main--graph-focus {
-    display: none;
-  }
+.detail-header__arrow:hover {
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary-light-7, #c6e2ff);
+  background: var(--el-color-primary-light-9, #ecf5ff);
 }
 .task-main {
-  display: grid;
-  /* V012-BUG-013：左表单区自适应铺满、右状态栏固定宽，两区间留出间距（原 gap:0 两卡贴死） */
-  grid-template-columns: minmax(0, 1fr) 420px;
-  gap: 16px;
-  align-items: start;
-  margin-bottom: 15px;
-}
-.task-main__left,
-.task-main__right {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-width: 0;
+  flex: 1;
+  min-height: 0;
 }
 .detail-card {
   margin-bottom: 0;
@@ -2232,22 +1842,17 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
 .detail-card :deep(.el-card__body) {
   padding: 28px 24px 24px;
 }
-
-.task-main__left > .detail-card:first-child :deep(.el-card__header) {
-  box-sizing: border-box;
-  padding: 23px 24px 13px;
+/* 数据表单画布：24 栅格与设计器同构（0.1.7 #18） */
+.form-canvas {
+  min-height: 120px;
 }
-/* 设计（数据详情）：主区两卡基线高度；真实内容超出时自然伸展，不裁切 */
-.task-main__left > .detail-card:first-child,
-.task-main__right > .detail-card:first-child {
-  box-sizing: border-box;
-  min-height: 476px;
+.form-canvas__grid {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  gap: 12px 16px;
 }
-
-/* 节点19/03：数据表单卡底部 11px（设计实测 kv 卡底 645/646） */
-.task-main__left > .detail-card:first-child :deep(.el-card__body) {
-  padding-right: 22px;
-  padding-bottom: 11px;
+.form-canvas__field {
+  min-width: 0;
 }
 .card-head {
   display: flex;
@@ -2302,170 +1907,31 @@ const nextRailNode = computed<{ name: string; hint: string } | null>(() => {
   color: var(--sw-color-primary);
 }
 /* 设计（节点20）：标题行状态标签为品牌紫底 */
-.detail-header__status.el-tag {
-  --el-tag-bg-color: var(--sw-color-primary-soft);
-  --el-tag-border-color: transparent;
-  --el-tag-text-color: var(--sw-color-primary);
-}
-/* 流程状态卡（真实可得节点）；设计（节点20）：prev 90 / current 152 / next 80 / gap 16 */
-.flow-status {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.flow-node {
-  box-sizing: border-box;
-  padding: 9px 5px 6px 11px;
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-base);
-  background: #f7fafc;
-}
-.flow-status .flow-node:nth-of-type(1) {
-  min-height: 96px;
-}
-.flow-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: -6px;
-  height: 34px;
-}
-.flow-actions .el-button {
-  flex: 1;
-  height: 34px;
-  margin: 0;
-}
-.flow-actions__urge {
-  --el-button-bg-color: #fff6e7;
-  --el-button-border-color: #f5d38e;
-  --el-button-text-color: #e89a19;
-}
-.flow-status .flow-node--next {
-  min-height: 92px;
-}
-.flow-node--current .flow-node__head {
-  margin-bottom: 4px;
-}
-.flow-node:nth-of-type(1) .flow-node__meta-row {
-  transform: translateY(-1px);
-}
-.flow-node--current .flow-node__kicker {
-  transform: translateY(-1px);
-}
-.flow-node--current .flow-node__sub {
-  transform: translateY(2px);
-}
-.flow-node--current .flow-node__allbtn {
-  width: 180px;
-  transform: translateY(6px);
-}
-.flow-node--next .flow-node__head,
-.flow-node--next .flow-node__sub {
-  transform: translateY(-1px);
-}
-.flow-node__head {
-  margin-bottom: 8px;
-}
-.flow-node__sub + .flow-node__sub {
-  margin-top: 10px;
-}
-.flow-node--current .flow-node__allbtn {
-  margin-top: 10px;
-  width: 180px;
-  height: 24px;
-  padding: 0 12px;
-  justify-content: center;
-  font-size: 12px;
-  color: var(--sw-color-primary);
-  background: #fff;
-  border-color: var(--sw-color-primary-soft, #ece9ff);
-  border-radius: 6px;
-}
-.flow-node__state--next {
-  color: var(--sw-text-secondary);
-  background: var(--sw-fill-base);
-}
-.flow-status .flow-node--current {
-  min-height: 150px;
-}
-/* 设计（节点20）：右栏卡头部 40 / 内容区 13..25 对位 */
-.task-main__right > .detail-card :deep(.el-card__header) {
-  box-sizing: border-box;
-  padding: 18px 22px 2px 24px;
-}
-.task-main__right > .detail-card :deep(.el-card__body) {
-  padding: 14px 22px 23px 24px;
-}
-.flow-node--current {
-  border-color: #d9caff;
-  background: #fcfaff;
-}
-.flow-node__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.flow-node__name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #19233b;
-}
-.flow-node__kicker {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 0 0 3px;
-  font-size: 12px;
-}
-.flow-node__state--done {
-  color: #12aa83;
-}
-.flow-node__state--current {
-  color: var(--sw-color-primary);
-  font-weight: 600;
-}
-.flow-node__meta-row .el-button {
-  box-sizing: border-box;
-  width: 76px;
-}
-.flow-node__prog {
-  color: var(--sw-color-primary);
-}
-.flow-node__sub {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--sw-text-secondary);
-}
-.flow-node__meta-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.flow-node__meta-row .flow-node__meta {
-  margin: 0;
-}
-.flow-node__allbtn {
-  margin: 8px 0 0;
-}
-.flow-node__meta {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--sw-text-secondary);
+/* 0.1.7 #18：操作卡吸底，按钮统一右下角 */
+.detail-card--actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06);
 }
 .detail-actions {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.detail-actions__row {
+.detail-actions__bar {
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 8px;
-}
-.detail-actions__row--lifecycle {
+  gap: 12px;
   border-top: 1px dashed var(--sw-border-lighter);
   padding-top: 10px;
+}
+.detail-actions__btns {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
 }
 .return-config {
   display: flex;

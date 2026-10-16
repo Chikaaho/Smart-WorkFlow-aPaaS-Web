@@ -110,7 +110,7 @@ describe('FormRender', () => {
     expect(fields).toHaveLength(5)
   })
 
-  it('renders form title from schema', async () => {
+  it('renders no form title (0.1.7 #13：填写画面不展示表单名等噪音)', async () => {
     vi.mocked(getFormDefinition).mockResolvedValueOnce({
       title: '我的业务表单',
       fields: [{ name: 'x', type: 'TEXT', required: false }],
@@ -121,7 +121,8 @@ describe('FormRender', () => {
     })
 
     await flushPromises()
-    expect(wrapper.text()).toContain('我的业务表单')
+    expect(wrapper.find('.form-render-page__title').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('我的业务表单')
   })
 
   it('renders DICT and TABLE field types', async () => {
@@ -178,8 +179,8 @@ describe('FormRender', () => {
 
     const field = wrapper.find('[data-field-name="x"]')
     expect(field.attributes('data-readonly')).toBe('true')
-    // 查看模式不显示提交/保存按钮
-    expect(wrapper.find('.form-render-page__action-bar').exists()).toBe(false)
+    // 查看模式不显示提交/保存按钮（0.1.7 #13：动作收进顶部导航栏）
+    expect(wrapper.find('.form-render-page__top-actions').exists()).toBe(false)
   })
 
   it('loads record and resolves REFERENCE display name in edit mode', async () => {
@@ -225,7 +226,7 @@ describe('FormRender', () => {
 
     await flushPromises()
 
-    expect(wrapper.find('.form-render-page__action-bar').text()).toContain('发起流程')
+    expect(wrapper.find('.form-render-page__top-actions').text()).toContain('发起流程')
   })
 
   it('shows required validation inline and keeps the next grid row below the error', async () => {
@@ -243,7 +244,7 @@ describe('FormRender', () => {
 
     await flushPromises()
     const submitButton = wrapper
-      .findAll('.form-render-page__action-bar button')
+      .findAll('.form-render-page__top-actions button')
       .find((button) => button.text().includes('发起流程'))
     expect(submitButton).toBeDefined()
     await submitButton!.trigger('click')
@@ -315,7 +316,6 @@ describe('FormRender draft mode', () => {
       '李四',
     )
     expect(wrapper.find('[data-field-name="days"]').attributes('data-model-value')).toBe('3')
-    expect(wrapper.text()).toContain('草稿填报')
     expect(wrapper.text()).toContain('保存草稿')
     expect(wrapper.text()).toContain('提交草稿')
   })
