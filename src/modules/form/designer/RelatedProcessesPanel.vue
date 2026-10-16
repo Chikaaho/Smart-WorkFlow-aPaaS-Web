@@ -14,13 +14,20 @@ const { t } = useI18n()
  *   - 复用现有流程创建 / 设计 / 发布能力，不建平行流程管理体系；
  *     本轮后端无挂起/激活能力，不提供对应按钮（不伪装支持）。
  */
-import { ref, computed, watch } from 'vue'
+import { defineAsyncComponent, ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { createProcessDef, pageProcessDefs, deleteProcessDef } from '@/modules/workflow/api'
-import { themeRuleDisplay } from '@/modules/workflow/utils/theme-rule'
+import {
+  createProcessDef,
+  pageProcessDefs,
+  deleteProcessDef,
+  themeRuleDisplay,
+  themeRuleDialogLoader,
+} from '@/adapters/process-catalog'
 import type { ProcessDef } from '@/contracts/bpm'
-import ThemeRuleDialog from '@/modules/workflow/views/ThemeRuleDialog.vue'
+
+/** 主题规则设置弹窗经接缝异步加载（跨模块组件不静态直引）。 */
+const ThemeRuleDialog = defineAsyncComponent(themeRuleDialogLoader)
 
 const props = defineProps<{ formId: string; formKey: string }>()
 const emit = defineEmits<{ (e: 'enter-process', def: ProcessDef): void }>()

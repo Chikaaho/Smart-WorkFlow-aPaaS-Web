@@ -11,7 +11,7 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { pageProcessDefs } from '@/modules/workflow/api'
+import { pageProcessDefs } from '@/adapters/process-catalog'
 import type { ProcessDef } from '@/contracts/bpm'
 import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'

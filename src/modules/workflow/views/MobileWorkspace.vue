@@ -24,7 +24,7 @@ import {
 import type { PageQuery } from '@/contracts/common'
 import type { TaskDetail } from '@/contracts/bpm'
 import { ApiError } from '@/foundation/request'
-import { getFormData, getFormDefinition } from '@/modules/form/api/form'
+import { getFormData, getFormDefinition } from '@/adapters/form-runtime'
 import type { FormSchema } from '@/contracts/form-schema'
 
 type MobileTab = 'todo' | 'initiated' | 'drafts'
@@ -102,7 +102,7 @@ async function loadTab(tab: MobileTab) {
 async function resolveRefDisplays() {
   refDisplayMap.value = {}
   if (!formSchema.value || !formRecord.value) return
-  const { resolveReferenceDisplay } = await import('@/modules/form/utils/resolve-reference-display')
+  const { resolveReferenceDisplay } = await import('@/adapters/form-runtime')
   for (const field of formSchema.value.fields) {
     if (field.type !== 'REFERENCE') continue
     const refId = formRecord.value['ref_' + field.name + '_id']

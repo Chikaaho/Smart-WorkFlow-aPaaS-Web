@@ -13,9 +13,8 @@ const { t } = useI18n()
  */
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { pageFormDefs } from '@/modules/form/api/form-def'
-import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/utils/form-def-status'
-import type { FormDefListItem } from '@/modules/form/api/form-def'
+import { pageFormDefs, getFormDefStatusLabel, getFormDefStatusType } from '@/adapters/form-catalog'
+import type { FormDefListItem } from '@/adapters/form-catalog'
 
 /* ── Props & emits ── */
 

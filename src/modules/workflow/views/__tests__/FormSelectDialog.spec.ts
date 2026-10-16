@@ -2,19 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
-// Mock API 层
-vi.mock('@/modules/form/api/form-def', () => ({
+// Mock 跨模块接缝层（form 模块经 adapters/form-catalog 出口）
+vi.mock('@/adapters/form-catalog', () => ({
   pageFormDefs: vi.fn(),
-}))
-
-vi.mock('@/modules/form/utils/form-def-status', () => ({
   getFormDefStatusLabel: (status: string) => (status === 'PUBLISHED' ? '已发布' : '草稿'),
   getFormDefStatusType: (status: string) => (status === 'PUBLISHED' ? 'success' : 'info'),
 }))
 
-import { pageFormDefs } from '@/modules/form/api/form-def'
+import { pageFormDefs } from '@/adapters/form-catalog'
 import FormSelectDialog from '@/modules/workflow/views/FormSelectDialog.vue'
-import type { FormDefListItem } from '@/modules/form/api/form-def'
+import type { FormDefListItem } from '@/adapters/form-catalog'
 
 // ─── 桩组件 ───
 

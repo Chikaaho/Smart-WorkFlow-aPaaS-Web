@@ -10,10 +10,16 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { pageFormDefs, createFormDef, saveFormConfig } from '@/modules/form/api/form-def'
-import { disableFormDef, enableFormDef } from '@/modules/form/api/i2-choices'
-import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/utils/form-def-status'
-import type { FormDefListItem } from '@/modules/form/api/form-def'
+import {
+  pageFormDefs,
+  createFormDef,
+  saveFormConfig,
+  disableFormDef,
+  enableFormDef,
+  getFormDefStatusLabel,
+  getFormDefStatusType,
+} from '@/adapters/form-catalog'
+import type { FormDefListItem } from '@/adapters/form-catalog'
 import type { PageQuery } from '@/contracts/common'
 import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'

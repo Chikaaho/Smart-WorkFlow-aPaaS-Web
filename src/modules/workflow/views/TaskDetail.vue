@@ -35,7 +35,7 @@ import type { TaskNodeFormView } from '@/contracts/p64'
 import { getTaskNodeForm, saveTaskNodeFormDraft } from '@/modules/workflow/api/p64'
 import DynamicField from '@/components/DynamicField.vue'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
-import { createFieldScripts } from '@/modules/form/utils/field-scripts'
+import { createFieldScripts } from '@/adapters/form-runtime'
 import { deriveProcessTrace } from '../utils/process-trace'
 
 const router = useRouter()
@@ -165,7 +165,7 @@ async function loadDetail() {
 async function resolveRefDisplays() {
   refDisplayMap.value = {}
   if (!formSchema.value || !formRecord.value) return
-  const { resolveReferenceDisplay } = await import('@/modules/form/utils/resolve-reference-display')
+  const { resolveReferenceDisplay } = await import('@/adapters/form-runtime')
   for (const field of formSchema.value.fields) {
     if (field.type !== 'REFERENCE') continue
     const refId = formRecord.value['ref_' + field.name + '_id']
@@ -186,7 +186,7 @@ async function loadFormRecord() {
   if (!d?.formKey || !d.businessKey) return
   formRecordLoading.value = true
   try {
-    const { getFormData, getFormDefinition } = await import('@/modules/form/api/form')
+    const { getFormData, getFormDefinition } = await import('@/adapters/form-runtime')
     formRecord.value = await getFormData(d.formKey, d.businessKey)
     try {
       formSchema.value = await getFormDefinition(d.formKey)
@@ -195,7 +195,7 @@ async function loadFormRecord() {
     }
     // P63 G01：USER/DEPT 字段保存回读显示为可读姓名/部门名（解析失败回退原值不阻断）
     if (formSchema.value && formRecord.value) {
-      const { buildUserDeptDisplays } = await import('@/modules/form/utils/user-dept-display')
+      const { buildUserDeptDisplays } = await import('@/adapters/form-runtime')
       userDeptDisplays.value = await buildUserDeptDisplays(
         formSchema.value,
         formRecord.value,

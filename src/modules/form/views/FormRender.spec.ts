@@ -20,13 +20,17 @@ vi.mock('@/modules/form/utils/resolve-reference-display', () => ({
   resolveReferenceDisplay: vi.fn().mockResolvedValue('ref-display'),
 }))
 
-vi.mock('@/modules/workflow/api', () => ({
+vi.mock('@/adapters/process-draft', () => ({
   getDraft: vi.fn(),
   createDraft: vi.fn(),
   updateDraft: vi.fn(),
   submitDraft: vi.fn(),
   pollCommandStatus: vi.fn(),
-  queryInstances: vi.fn(),
+}))
+
+vi.mock('@/adapters/process-runtime', () => ({
+  countProcessInstancesByBusinessKey: vi.fn().mockResolvedValue(0),
+  getProcessDefDefinitionByKey: vi.fn(),
 }))
 
 vi.mock('element-plus', async (importOriginal) => {
@@ -49,7 +53,7 @@ import {
   updateDraft,
   submitDraft,
   pollCommandStatus,
-} from '@/modules/workflow/api'
+} from '@/adapters/process-draft'
 import { ElMessage } from 'element-plus'
 import type { BpmDraft } from '@/contracts/bpm'
 import FormRender from './FormRender.vue'

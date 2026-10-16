@@ -40,7 +40,7 @@ import HistoryVersionsDialog from '../designer/HistoryVersionsDialog.vue'
 import RelatedProcessesPanel from '../designer/RelatedProcessesPanel.vue'
 import { saveDraftDefinition, publishDefinition as publishDef } from '../designer/draft-actions'
 import { publishNewFormVersion } from '../api/form-def'
-import { listCategories, queryCatalogItems } from '@/modules/workflow/api/oa'
+import { findCategoryNameByFormKey } from '@/adapters/oa-catalog'
 import {
   resolveSaveState,
   saveStateKey,
@@ -685,18 +685,7 @@ const breadcrumbLoadedFor = ref('')
 async function loadBreadcrumbCategory() {
   if (!formKey.value || breadcrumbLoadedFor.value === formKey.value) return
   breadcrumbLoadedFor.value = formKey.value
-  try {
-    const [categories, itemsPage] = await Promise.all([
-      listCategories(),
-      queryCatalogItems({ pageNum: 1, pageSize: 200 }),
-    ])
-    const item = itemsPage.list.find((it) => it.formKey === formKey.value)
-    categoryName.value = item?.categoryId
-      ? (categories.find((c) => c.id === item.categoryId)?.name ?? null)
-      : null
-  } catch {
-    categoryName.value = null
-  }
+  categoryName.value = await findCategoryNameByFormKey(formKey.value)
 }
 </script>
 

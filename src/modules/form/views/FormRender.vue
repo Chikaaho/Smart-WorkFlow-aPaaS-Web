@@ -123,9 +123,9 @@ const pageTitle = computed(() => {
   return `${schema.value.title}${modeLabel}`
 })
 
-/** 跨模块按需加载 workflow api（动态 import，规避 modules 互引的静态依赖） */
-async function getWorkflowApi() {
-  return import('@/modules/workflow/api')
+/** 跨模块按需加载流程草稿接缝（动态 import，规避 modules 互引的静态依赖） */
+async function getProcessDraftApi() {
+  return import('@/adapters/process-draft')
 }
 
 /* ── 字段默认值初始化 ── */
@@ -468,12 +468,11 @@ async function handleSubmit() {
 
 /** 按记录 ID 轮询查询流程实例是否真实创建（AFTER_COMMIT 异步创建存在短暂延迟） */
 async function waitForInstanceByBusinessKey(recordId: string): Promise<boolean> {
-  const { queryInstances } = await import('@/modules/workflow/api')
+  const { countProcessInstancesByBusinessKey } = await import('@/adapters/process-runtime')
   const maxAttempts = 10
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const page = await queryInstances({ pageNum: 1, pageSize: 1 }, { businessKey: recordId })
-      if (page.list.length > 0) return true
+      if ((await countProcessInstancesByBusinessKey(recordId)) > 0) return true
     } catch {
       // 查询失败不判定为未发起，继续重试直至超限
     }
@@ -490,7 +489,7 @@ async function waitForInstanceByBusinessKey(recordId: string): Promise<boolean> 
  * 与 DynamicField 的 update:model-value 走同一条赋值路径（formData[name] = value）。
  */
 async function loadDraftPayload(schema: FormSchema) {
-  const { getDraft } = await getWorkflowApi()
+  const { getDraft } = await getProcessDraftApi()
   try {
     const draft = await getDraft(draftId)
     draftTitle.value = draft.title ?? ''
@@ -556,7 +555,7 @@ async function handleSaveDraft() {
   draftSaving.value = true
   try {
     const payload = JSON.stringify(buildDraftPayloadObject())
-    const { createDraft, updateDraft } = await getWorkflowApi()
+    const { createDraft, updateDraft } = await getProcessDraftApi()
     if (draftId) {
       await updateDraft(draftId, {
         title: draftTitle.value.trim() || null,
@@ -589,7 +588,7 @@ async function handleSubmitDraft() {
   draftSaving.value = true
   errorMsg.value = ''
   try {
-    const { updateDraft, submitDraft, pollCommandStatus } = await getWorkflowApi()
+    const { updateDraft, submitDraft, pollCommandStatus } = await getProcessDraftApi()
     await updateDraft(draftId, {
       title: draftTitle.value.trim() || null,
       payload: JSON.stringify(buildDraftPayloadObject()),
@@ -627,7 +626,7 @@ const flowGraph = ref<import('@/contracts/process-graph').ProcessGraphDocument |
 async function loadFlowGraph() {
   if (!processKey || flowGraph.value) return
   try {
-    const { getProcessDefDefinitionByKey } = await import('@/modules/workflow/api')
+    const { getProcessDefDefinitionByKey } = await import('@/adapters/process-runtime')
     const definition = await getProcessDefDefinitionByKey(processKey)
     flowGraph.value = {
       processKey: definition.processKey,

@@ -36,7 +36,7 @@ import {
   publishedFormDefinition,
   pageProcessDefs,
 } from '@/modules/workflow/api'
-import { pageFormDefs } from '@/modules/form/api/form-def'
+import { pageFormDefs } from '@/adapters/form-catalog'
 import ScriptDialog from '@/components/ScriptDialog.vue'
 import { PROCESS_SCRIPT_FUNCTIONS } from '@/components/script-catalog'
 import type {
@@ -361,13 +361,13 @@ watch(
     mainFormFields.value = []
     if (!formKey) return
     try {
-      const { getFormDefinition } = await import('@/modules/form/api/form')
+      const { getFormDefinition } = await import('@/adapters/form-runtime')
       // BF20261013-013：草稿表单 by-key 端点不可用（仅发布后可用），
       // 从表单工作台进入时按 formId 直取草稿定义（by-id），否则回退 by-key。
       const workbenchFormId = graph.value?.formDefId || returnFormId.value
       let schema
       if (workbenchFormId) {
-        const { getFormDefinitionById } = await import('@/modules/form/api/form-def')
+        const { getFormDefinitionById } = await import('@/adapters/form-catalog')
         schema = await getFormDefinitionById(workbenchFormId)
       } else {
         schema = await getFormDefinition(formKey)
@@ -447,7 +447,7 @@ async function ensureFormFields(formKey?: string) {
   if (!formKey || formFieldCache.value[formKey] || loadingFormKeys.has(formKey)) return
   loadingFormKeys.add(formKey)
   try {
-    const { getFormDefinition } = await import('@/modules/form/api/form')
+    const { getFormDefinition } = await import('@/adapters/form-runtime')
     const schema = await getFormDefinition(formKey)
     formFieldCache.value = {
       ...formFieldCache.value,
@@ -1990,7 +1990,7 @@ async function loadSubflowTargetFields(defKey: string) {
   const formKey = def?.formKey || subflowForm.value.targetFormKey
   if (!formKey) return
   try {
-    const { getFormDefinition } = await import('@/modules/form/api/form')
+    const { getFormDefinition } = await import('@/adapters/form-runtime')
     const schema = await getFormDefinition(formKey)
     subflowTargetFields.value = (schema.fields ?? []) as Array<{
       name: string

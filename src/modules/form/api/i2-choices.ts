@@ -1,6 +1,6 @@
 import { request } from '@/foundation/request'
-import { listDeptTree } from '@/modules/system/api/dept'
-import type { SysDept } from '@/modules/system/types/dept'
+import { listDeptTree } from '@/adapters/org-dept'
+import type { SysDept } from '@/adapters/org-dept'
 
 /**
  * I2 表单收口 API 模块：
