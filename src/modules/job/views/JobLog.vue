@@ -144,7 +144,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('job.executionLog')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

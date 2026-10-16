@@ -191,7 +191,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('workflow.myDrafts')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

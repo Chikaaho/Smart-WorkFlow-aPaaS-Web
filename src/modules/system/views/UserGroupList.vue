@@ -343,7 +343,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('system.userGroupManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

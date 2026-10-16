@@ -303,7 +303,6 @@ onMounted(() => {
 
 <template>
   <StandardListTemplate
-    :title="t('router.toolManagement')"
     :total="currentTotal"
     :page-num="currentPageNum"
     :page-size="currentPageSize"

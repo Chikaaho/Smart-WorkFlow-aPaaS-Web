@@ -277,7 +277,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('notify.messagesTitle')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

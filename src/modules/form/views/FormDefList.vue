@@ -379,7 +379,6 @@ onMounted(loadList)
       </el-tree>
     </aside>
     <StandardListTemplate
-      :title="t('form.managementTitle')"
       large
       :total="displayTotal"
       :page-num="pageNum"

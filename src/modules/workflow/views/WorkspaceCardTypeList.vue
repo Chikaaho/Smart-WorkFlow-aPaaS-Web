@@ -194,7 +194,6 @@ onMounted(() => void loadList())
 
 <template>
   <StandardListTemplate
-    :title="t('workflow.workspaceCardTypesTitle')"
     :total="list.length"
     :page-num="pageNum"
     :page-size="pageSize"

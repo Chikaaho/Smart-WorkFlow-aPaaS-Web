@@ -208,7 +208,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('workflow.monitor')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

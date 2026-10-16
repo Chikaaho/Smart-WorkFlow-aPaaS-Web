@@ -321,7 +321,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('common.myInstancesPageTitle')"
     :show-toolbar-total="false"
     large
     :total="total"

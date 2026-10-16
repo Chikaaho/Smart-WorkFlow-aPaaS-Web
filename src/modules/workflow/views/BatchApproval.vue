@@ -104,7 +104,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('workflow.batchApproval')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

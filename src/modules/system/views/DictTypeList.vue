@@ -263,7 +263,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('system.dictManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

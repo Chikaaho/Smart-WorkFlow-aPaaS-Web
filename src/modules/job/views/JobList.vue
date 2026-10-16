@@ -386,7 +386,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('job.scheduledJobs')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

@@ -492,7 +492,6 @@ onMounted(async () => {
 
 <template>
   <StandardListTemplate
-    :title="schema?.title ?? t('form.dataDialogTitle', { formKey })"
     :total="result?.total ?? 0"
     :page-num="pageNum"
     :page-size="pageSize"

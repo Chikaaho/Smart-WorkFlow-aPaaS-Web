@@ -146,7 +146,6 @@ onMounted(() => {
 
 <template>
   <StandardListTemplate
-    :title="formName || t('form.appCenter.formContextTitle')"
     :show-toolbar-total="true"
     :total="processes.length"
     :page-num="1"

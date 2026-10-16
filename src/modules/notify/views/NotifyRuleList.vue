@@ -210,7 +210,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('notify.rules')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

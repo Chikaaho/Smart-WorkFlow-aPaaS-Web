@@ -149,7 +149,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('router.processTemplateCenter')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

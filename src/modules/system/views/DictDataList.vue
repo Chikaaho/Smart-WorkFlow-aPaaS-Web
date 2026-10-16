@@ -353,7 +353,6 @@ onMounted(() => {
   </div>
 
   <StandardListTemplate
-    :title="t('system.dictItemManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

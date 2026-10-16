@@ -35,8 +35,10 @@ const emit = defineEmits<{
 
 <template>
   <div class="standard-list">
-    <!-- 工具栏：标题 + 记录数 + 操作 -->
+    <!-- 工具栏：0.1.7 #10（Owner 回归裁决：全局所有列表页去左上角标题）——
+         无标题且无动作且不显示总数时不渲染，避免留一条空工具栏 -->
     <ListToolbar
+      v-if="props.title || $slots['toolbar-actions'] || props.showToolbarTotal"
       :title="props.title"
       :description="props.description"
       :large="props.large"

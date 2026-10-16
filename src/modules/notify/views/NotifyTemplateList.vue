@@ -249,7 +249,6 @@ defineExpose({ list, errorMsg, retryLoad: loadTemplates })
 
 <template>
   <StandardListTemplate
-    :title="t('router.messageTemplate')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

@@ -159,7 +159,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('notify.recordListTitle')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

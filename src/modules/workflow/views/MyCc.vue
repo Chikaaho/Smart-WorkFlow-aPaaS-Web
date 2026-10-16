@@ -138,7 +138,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('router.myCc')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

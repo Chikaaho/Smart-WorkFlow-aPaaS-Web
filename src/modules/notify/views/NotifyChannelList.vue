@@ -78,7 +78,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('notify.channelConfig')"
     :total="list.length"
     :page-num="1"
     :page-size="50"

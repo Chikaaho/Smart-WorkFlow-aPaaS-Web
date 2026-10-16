@@ -448,7 +448,6 @@ onMounted(async () => {
 
 <template>
   <StandardListTemplate
-    :title="schema?.title ?? t('form.dataDialogTitle', { formKey })"
     :show-toolbar-total="canQuery"
     :total="result?.total ?? 0"
     :page-num="pageNum"

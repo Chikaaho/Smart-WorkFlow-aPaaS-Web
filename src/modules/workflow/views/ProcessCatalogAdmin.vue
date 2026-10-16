@@ -213,7 +213,6 @@ onMounted(() => {
 
 <template>
   <StandardListTemplate
-    :title="t('workflow.itemManagementTitle')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

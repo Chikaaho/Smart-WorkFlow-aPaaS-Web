@@ -84,7 +84,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('workflow.processedTasks')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

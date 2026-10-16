@@ -110,7 +110,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('system.menuManagement')"
     :total="tree.length"
     :page-num="1"
     :page-size="10"

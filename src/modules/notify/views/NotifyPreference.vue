@@ -53,7 +53,6 @@ onMounted(loadPreferences)
 
 <template>
   <StandardListTemplate
-    :title="t('notify.subscriptionPreferences')"
     :total="items.length"
     :page-num="1"
     :page-size="50"

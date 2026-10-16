@@ -245,7 +245,6 @@ onMounted(() => {
 
 <template>
   <StandardListTemplate
-    :title="t('agent.modelManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

@@ -245,7 +245,6 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
-    :title="t('storage.fileManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

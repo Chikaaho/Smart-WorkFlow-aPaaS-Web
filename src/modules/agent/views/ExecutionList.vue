@@ -278,7 +278,6 @@ onMounted(() => {
 
 <template>
   <StandardListTemplate
-    :title="t('agent.executionHistory')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

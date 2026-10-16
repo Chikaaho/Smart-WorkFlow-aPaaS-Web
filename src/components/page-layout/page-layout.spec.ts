@@ -291,12 +291,14 @@ describe('StandardFormTemplate', () => {
 describe('StandardListTemplate', () => {
   const baseProps = { total: 100, pageNum: 1, pageSize: 10 }
 
-  it('empty=true → renders ListEmpty', () => {
+  it('empty=true → 表头仍在（0.1.7 #7：空列表保留表头，不再整表换 ListEmpty）', () => {
     const wrapper = mount(StandardListTemplate, {
       props: { ...baseProps, empty: true },
+      slots: { default: '<table class="data-table"><tr><th>列</th></tr></table>' },
       global: { stubs: { ElPagination: { template: '<div class="el-pagination" />' } } },
     })
-    expect(wrapper.find('.list-empty').exists()).toBe(true)
+    expect(wrapper.find('.list-empty').exists()).toBe(false)
+    expect(wrapper.find('.data-table').exists()).toBe(true)
   })
 
   it('empty=false → renders default slot (table area)', () => {

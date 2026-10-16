@@ -568,7 +568,6 @@ onMounted(async () => {
 <template>
   <div class="txn-action-page">
     <StandardListTemplate
-      :title="t('txnAction.title')"
       large
       :total="actions.length"
       :page-num="1"
