@@ -16,7 +16,8 @@ import type { MenuNode } from '@/contracts/menu'
  * - 菜单树节点带 topbar 投影序号时（服务端可下发），按序进入顶栏：叶子取自身
  *   路由，目录取首个可见叶子的路由——顶栏与侧栏是同一份菜单数据的两种投影；
  * - 无投影数据时走默认派生：
- *   - portal：工作台（常量路由）+ 菜单树中真实存在的流程中心 / 消息收件箱入口；
+ *   - portal：工作台（常量路由）+ 菜单树中真实存在的流程中心 / 消息收件箱入口，
+ *     以及常驻的用户端应用中心入口（见 APP_CENTER_PATH）；
  *   - admin：服务端下发菜单的顶层分组，点击进入该分组注册的首叶 redirect。
  * 数据只读 menu store（单一数据源），可达性以服务端过滤后的树为准。
  */
@@ -31,6 +32,13 @@ interface MainNavItem {
 const route = useRoute()
 const menuStore = useMenuStore()
 const { t } = useI18n()
+
+/**
+ * 用户端「应用中心」入口（与工作台/我的门户/流程中心同级）。
+ * 入口只依赖登录态与用户端区域：应用可见范围、表单与数据权限由服务端按当前用户过滤，
+ * 无可见应用时应用中心页面自身给空态；不要求具备后台表单管理权限，也不绕过服务端守卫。
+ */
+const APP_CENTER_PATH = '/form/app-center'
 
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 const area = computed(() => resolveArea(route.path))
@@ -95,6 +103,15 @@ function isActive(to: string): boolean {
       (route.path.startsWith('/form/designer/') && route.query.tab === 'processes')
     )
   }
+  // 应用中心：应用内容（/form/app-center/:appId）与表单数据列表（/form/app-form/:formKey）
+  // 都是该栏目的下钻页面，保持顶栏选中态。
+  if (to === APP_CENTER_PATH) {
+    return (
+      route.path === to ||
+      route.path.startsWith(`${to}/`) ||
+      route.path.startsWith('/form/app-form/')
+    )
+  }
   // P53：表单设计器工作台（/form/designer/:id）属于「表单管理」子树深链
   if (to === '/form/form-def-list') {
     return (
@@ -127,30 +144,36 @@ const items = computed<MainNavItem[]>(() => {
     ]
     const before = result.length
     collectTopbarItems(areaMenu.value, result)
-    if (result.length > before) {
-      // 顶栏不再放收件箱入口（V012-BUG-008）：铃铛面板「查看全部」是唯一列表入口，
-      // 无论服务端是否下发收件箱 topbar 投影，统一收敛。
-      return result.filter((item) => item.to !== '/notify/inbox')
-    }
-    // 默认派生（服务端未下发顶栏投影时）：门户常量 + 菜单树真实入口。
-    result.push({
-      key: 'portal',
-      label: t('portal.navLabel'),
-      to: '/portal',
-      active: route.path === '/portal',
-    })
-    const paths = new Set<string>()
-    collectPaths(visible, paths)
-    if (paths.has('/workflow/catalog')) {
+    if (result.length === before) {
+      // 默认派生（服务端未下发顶栏投影时）：门户常量 + 菜单树真实入口。
       result.push({
-        key: 'process-catalog',
-        label: t('workflow.processCenter'),
-        to: '/workflow/catalog',
-        active: isActive('/workflow/catalog'),
+        key: 'portal',
+        label: t('portal.navLabel'),
+        to: '/portal',
+        active: route.path === '/portal',
+      })
+      const paths = new Set<string>()
+      collectPaths(visible, paths)
+      if (paths.has('/workflow/catalog')) {
+        result.push({
+          key: 'process-catalog',
+          label: t('workflow.processCenter'),
+          to: '/workflow/catalog',
+          active: isActive('/workflow/catalog'),
+        })
+      }
+    }
+    if (!result.some((item) => item.to === APP_CENTER_PATH)) {
+      result.push({
+        key: 'app-center',
+        label: t('form.appCenter.centerTitle'),
+        to: APP_CENTER_PATH,
+        active: isActive(APP_CENTER_PATH),
       })
     }
-    // 收件箱项不再进入顶栏（V012-BUG-008）：铃铛面板「查看全部」直达通知列表。
-    return result
+    // 顶栏不放收件箱入口（V012-BUG-008）：铃铛面板「查看全部」是唯一列表入口，
+    // 无论服务端是否下发收件箱 topbar 投影，统一收敛。
+    return result.filter((item) => item.to !== '/notify/inbox')
   }
   const before: MainNavItem[] = []
   collectTopbarItems(areaMenu.value, before)
