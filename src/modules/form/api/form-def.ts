@@ -137,6 +137,30 @@ export async function saveFormConfig(id: string, definition: string): Promise<vo
 }
 
 /**
+ * 仅改名（0.1.7 #4 应用详情树上的「修改」）：不动 formKey、定义与物理列，
+ * 草稿/已发布/停用均可改。
+ * PUT /api/form/def/{id}/name
+ */
+export async function renameFormDef(id: string, name: string): Promise<void> {
+  return request<void>({
+    method: 'PUT',
+    url: `/form/def/${id}/name`,
+    data: { name },
+  })
+}
+
+/**
+ * 删除表单草稿（后端限制：已发布/已停用表单不可删除）。
+ * DELETE /api/form/def/{id}
+ */
+export async function deleteFormDef(id: string): Promise<void> {
+  return request<void>({
+    method: 'DELETE',
+    url: `/form/def/${id}`,
+  })
+}
+
+/**
  * 取已存表单定义。
  * GET /api/form/def/{id}/definition
  * 返 definition JSON 字符串，经防腐层 parseDefinition 解析为 FormSchema。

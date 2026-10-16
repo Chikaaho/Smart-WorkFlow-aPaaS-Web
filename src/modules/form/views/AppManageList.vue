@@ -2,15 +2,14 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate, LoadErrorState } from '@/components/page-layout'
-import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
+import { MoreFilled, Search } from '@element-plus/icons-vue'
+import { LoadErrorState } from '@/components/page-layout'
+import AppScopePicker, { type AppScopeValue } from '@/components/AppScopePicker.vue'
 import AppIcon from '@/modules/form/components/AppIcon.vue'
 import { APP_COLOR_PRESETS, APP_ICON_KEYS } from '@/modules/form/utils/app-icons'
 import {
   createFormApp,
   deleteFormApp,
-  disableFormApp,
-  enableFormApp,
   listFormApps,
   updateFormApp,
 } from '@/modules/form/api/app-center'
@@ -20,6 +19,11 @@ import { useI18n } from '@/locales'
 import { getErrorMessage } from '@/foundation/request/error-code-map'
 import { ApiError } from '@/foundation/request'
 
+/**
+ * 应用管理（0.1.7 #3）：网格式画布——卡片上图标下名称，右上角三点弹「修改 / 删除」，
+ * 最后一张固定为「新建应用」，点击直接新建；去掉分页与顶部新建按钮。
+ * 颜色仅提供预设色板（0.1.7 #2：禁止自由输入 RGB/HEX）。
+ */
 const { t } = useI18n()
 const router = useRouter()
 const userStore = useUserStore()
@@ -29,10 +33,6 @@ const keyword = ref('')
 const loading = ref(false)
 const errorMsg = ref('')
 const loadError = ref<ApiError | null>(null)
-
-const isEmpty = computed(
-  () => !loading.value && !errorMsg.value && !loadError.value && apps.value.length === 0,
-)
 
 async function loadList() {
   loading.value = true
@@ -49,16 +49,11 @@ async function loadList() {
   }
 }
 
-function handleQuery() {
+function handleSearch() {
   void loadList()
 }
 
-function handleReset() {
-  keyword.value = ''
-  void loadList()
-}
-
-// ==================== 编辑对话框 ====================
+// ==================== 新建 / 修改对话框 ====================
 
 const dialogVisible = ref(false)
 /** null=新建 */
@@ -71,6 +66,10 @@ const form = reactive<FormAppSaveReq>({
   sortNo: 0,
   visibleScopeType: 'SPECIFIED',
   userIds: [],
+  deptIds: [],
+  roleCodes: [],
+  postIds: [],
+  tenantIds: [],
 })
 
 const dialogTitle = computed(() =>
@@ -84,15 +83,18 @@ function openCreate() {
     icon: 'Folder',
     color: '#7e306b',
     sortNo: 0,
-    // 新建默认「指定用户」并预选创建者（保存时明确展示，不把空值误作全员）
+    // 新建默认「指定范围」并预选创建者（保存时明确展示，不把空值误作全员）
     visibleScopeType: 'SPECIFIED',
     userIds: userStore.user?.id ? [Number(userStore.user.id)] : [],
+    deptIds: [],
+    roleCodes: [],
+    postIds: [],
+    tenantIds: [],
   })
   dialogVisible.value = true
 }
 
-function openEdit(row: unknown) {
-  const app = row as FormApp
+function openEdit(app: FormApp) {
   editingId.value = app.id
   Object.assign(form, {
     name: app.name,
@@ -101,8 +103,29 @@ function openEdit(row: unknown) {
     sortNo: app.sortNo ?? 0,
     visibleScopeType: app.visibleScopeType,
     userIds: app.visibleUserIds ? [...app.visibleUserIds] : [],
+    deptIds: app.visibleDeptIds ? [...app.visibleDeptIds] : [],
+    roleCodes: app.visibleRoleCodes ? [...app.visibleRoleCodes] : [],
+    postIds: app.visiblePostIds ? [...app.visiblePostIds] : [],
+    tenantIds: app.visibleTenantIds ? [...app.visibleTenantIds] : [],
   })
   dialogVisible.value = true
+}
+
+/** 多维度可见范围选择器双向绑定（0.1.7 #1）。 */
+const scopeValue = computed<AppScopeValue>(() => ({
+  userIds: form.userIds ?? [],
+  deptIds: form.deptIds ?? [],
+  roleCodes: form.roleCodes ?? [],
+  postIds: form.postIds ?? [],
+  tenantIds: form.tenantIds ?? [],
+}))
+
+function applyScope(value: AppScopeValue) {
+  form.userIds = [...value.userIds]
+  form.deptIds = [...value.deptIds]
+  form.roleCodes = [...value.roleCodes]
+  form.postIds = [...value.postIds]
+  form.tenantIds = [...value.tenantIds]
 }
 
 async function handleSave() {
@@ -111,13 +134,18 @@ async function handleSave() {
     ElMessage.warning(t('form.appCenter.nameRequired'))
     return
   }
+  const specified = form.visibleScopeType === 'SPECIFIED'
   const payload: FormAppSaveReq = {
     name,
     icon: form.icon,
     color: form.color,
     sortNo: form.sortNo ?? 0,
     visibleScopeType: form.visibleScopeType,
-    userIds: form.visibleScopeType === 'SPECIFIED' ? (form.userIds ?? []) : [],
+    userIds: specified ? (form.userIds ?? []) : [],
+    deptIds: specified ? (form.deptIds ?? []) : [],
+    roleCodes: specified ? (form.roleCodes ?? []) : [],
+    postIds: specified ? (form.postIds ?? []) : [],
+    tenantIds: specified ? (form.tenantIds ?? []) : [],
   }
   saving.value = true
   try {
@@ -137,41 +165,23 @@ async function handleSave() {
   }
 }
 
-// ==================== 行操作 ====================
+// ==================== 卡片动作 ====================
 
-function enterWorkspace(row: unknown) {
-  const app = row as FormApp
+function enterWorkspace(app: FormApp) {
   void router.push({ name: 'form-app-manage-workspace', params: { appId: app.id } })
 }
 
-async function handleToggleStatus(row: unknown) {
-  const app = row as FormApp
-  const disabling = app.status === 'ENABLED'
-  try {
-    await ElMessageBox.confirm(
-      disabling ? t('form.appCenter.disableConfirm') : t('form.appCenter.enableConfirm'),
-      t('common.confirm'),
-      { type: 'warning' },
-    )
-  } catch {
+function onCardCommand(command: string, app: FormApp) {
+  if (command === 'edit') {
+    openEdit(app)
     return
   }
-  try {
-    if (disabling) {
-      await disableFormApp(app.id)
-    } else {
-      await enableFormApp(app.id)
-    }
-    ElMessage.success(t('common.saveSuccess'))
-    await loadList()
-  } catch (err: unknown) {
-    const errObj = err as { code?: number; message?: string }
-    ElMessage.error(getErrorMessage(errObj.code ?? 0, errObj.message))
+  if (command === 'delete') {
+    void handleDelete(app)
   }
 }
 
-async function handleDelete(row: unknown) {
-  const app = row as FormApp
+async function handleDelete(app: FormApp) {
   try {
     await ElMessageBox.confirm(
       t('form.appCenter.deleteConfirm', { name: app.name }),
@@ -191,215 +201,227 @@ async function handleDelete(row: unknown) {
   }
 }
 
-// ==================== 展示辅助 ====================
-
-function scopeLabel(row: unknown): string {
-  const app = row as FormApp
-  if (app.visibleScopeType === 'ALL') return t('form.appCenter.scopeAll')
-  const count = app.visibleUserIds?.length ?? 0
-  return count === 0 ? t('form.appCenter.scopeNobody') : t('form.appCenter.scopeUsers', { count })
-}
-
-function sourceLabel(row: unknown): string {
-  const app = row as FormApp
-  switch (app.source) {
-    case 'LEGACY_CATEGORY':
-      return t('form.appCenter.sourceLegacyCategory')
-    case 'LEGACY_UNCATEGORIZED':
-      return t('form.appCenter.sourceLegacyUncategorized')
-    default:
-      return t('form.appCenter.sourceManual')
-  }
-}
-
-const colorInvalid = computed(() => !/^#[0-9a-fA-F]{6}$/.test(form.color ?? ''))
-
 onMounted(() => {
   void loadList()
 })
 </script>
 
 <template>
-  <StandardListTemplate
-    :title="t('form.appCenter.manageTitle')"
-    :show-toolbar-total="true"
-    :total="apps.length"
-    :page-num="1"
-    :page-size="apps.length || 10"
-    :empty="isEmpty"
-  >
-    <template #toolbar-actions>
-      <el-button
+  <div class="app-manage">
+    <div class="app-manage__bar">
+      <h2 class="app-manage__title">{{ t('form.appCenter.manageTitle') }}</h2>
+      <el-input
+        v-model="keyword"
+        class="app-manage__search"
+        :placeholder="t('form.appCenter.searchPlaceholder')"
+        :prefix-icon="Search"
+        clearable
+        @keyup.enter="handleSearch"
+      />
+    </div>
+
+    <LoadErrorState v-if="loadError" :error="loadError" @retry="loadList" />
+    <div v-else-if="errorMsg" class="app-manage__error">{{ errorMsg }}</div>
+
+    <div v-else v-loading="loading" class="app-manage__grid">
+      <button
+        v-for="app in apps"
+        :key="app.id"
+        type="button"
+        class="app-card"
+        data-testid="app-card"
+        @click="enterWorkspace(app)"
+      >
+        <el-dropdown
+          class="app-card__more"
+          trigger="click"
+          @command="(cmd: string) => onCardCommand(cmd, app)"
+        >
+          <span class="app-card__more-trigger" data-testid="app-card-more" @click.stop>
+            <el-icon><MoreFilled /></el-icon>
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-perm="'form:app:manage'" command="edit">
+                {{ t('common.edit') }}
+              </el-dropdown-item>
+              <el-dropdown-item v-perm="'form:app:manage'" command="delete" divided>
+                {{ t('common.delete') }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <AppIcon :icon="app.icon" :color="app.color" :size="28" />
+        <span class="app-card__name" data-testid="app-name">{{ app.name }}</span>
+        <el-tag v-if="app.status === 'DISABLED'" class="app-card__tag" size="small" type="info">
+          {{ t('form.appCenter.statusDisabled') }}
+        </el-tag>
+      </button>
+
+      <button
         v-perm="'form:app:manage'"
-        type="primary"
+        type="button"
+        class="app-card app-card--create"
         data-testid="app-create"
         @click="openCreate"
       >
-        {{ t('form.appCenter.newApp') }}
-      </el-button>
-    </template>
+        <span class="app-card__plus">+</span>
+        <span class="app-card__name">{{ t('form.appCenter.newApp') }}</span>
+      </button>
+    </div>
 
-    <template #filter>
-      <el-input
-        v-model="keyword"
-        :placeholder="t('form.appCenter.searchPlaceholder')"
-        clearable
-        style="width: 220px"
-        @keyup.enter="handleQuery"
-      />
-    </template>
-    <template #filter-actions>
-      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
-      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
-    </template>
-
-    <LoadErrorState v-if="loadError" :error="loadError" @retry="loadList" />
-
-    <el-table v-loading="loading" :data="apps" stripe style="width: 100%" row-key="id">
-      <el-table-column :label="t('form.appCenter.colName')" min-width="220">
-        <template #default="{ row }">
-          <div class="app-name-cell">
-            <AppIcon :icon="row.icon" :color="row.color" :size="16" />
-            <div class="app-name-cell__text">
-              <span class="app-name-cell__title" data-testid="app-name">{{ row.name }}</span>
-              <el-tag v-if="row.status === 'DISABLED'" size="small" type="info">
-                {{ t('form.appCenter.statusDisabled') }}
-              </el-tag>
-            </div>
-          </div>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('form.appCenter.colScope')" min-width="140">
-        <template #default="{ row }">{{ scopeLabel(row) }}</template>
-      </el-table-column>
-      <el-table-column prop="formCount" :label="t('form.appCenter.colFormCount')" width="100" />
-      <el-table-column prop="dirCount" :label="t('form.appCenter.colDirCount')" width="100" />
-      <el-table-column :label="t('form.appCenter.colSource')" width="120">
-        <template #default="{ row }">{{ sourceLabel(row) }}</template>
-      </el-table-column>
-      <el-table-column :label="t('common.actions')" width="220" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="enterWorkspace(row)">
-            {{ t('form.appCenter.enterManage') }}
-          </el-button>
-          <el-button v-perm="'form:app:manage'" link type="primary" @click="openEdit(row)">
-            {{ t('common.edit') }}
-          </el-button>
-          <el-button
-            v-perm="'form:app:manage'"
-            link
-            :type="row.status === 'ENABLED' ? 'warning' : 'success'"
-            @click="handleToggleStatus(row)"
-          >
-            {{
-              row.status === 'ENABLED' ? t('form.appCenter.disable') : t('form.appCenter.enable')
-            }}
-          </el-button>
-          <el-button v-perm="'form:app:manage'" link type="danger" @click="handleDelete(row)">
-            {{ t('common.delete') }}
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <template #empty-action>
-      <el-button v-perm="'form:app:manage'" type="primary" @click="openCreate">
-        {{ t('form.appCenter.newApp') }}
-      </el-button>
-    </template>
-  </StandardListTemplate>
-
-  <el-dialog v-model="dialogVisible" :title="dialogTitle" width="560px">
-    <el-form label-width="90px">
-      <el-form-item :label="t('form.appCenter.fieldName')" required>
-        <el-input
-          v-model="form.name"
-          data-testid="app-name-input"
-          maxlength="100"
-          show-word-limit
-        />
-      </el-form-item>
-      <el-form-item :label="t('form.appCenter.fieldIcon')">
-        <div class="icon-picker">
-          <button
-            v-for="key in APP_ICON_KEYS"
-            :key="key"
-            type="button"
-            class="icon-picker__item"
-            :class="{ 'is-active': form.icon === key }"
-            @click="form.icon = key"
-          >
-            <AppIcon :icon="key" :color="form.color" :size="14" />
-          </button>
-        </div>
-      </el-form-item>
-      <el-form-item :label="t('form.appCenter.fieldColor')">
-        <div class="color-picker">
-          <button
-            v-for="c in APP_COLOR_PRESETS"
-            :key="c"
-            type="button"
-            class="color-picker__item"
-            :class="{ 'is-active': form.color === c }"
-            :style="{ background: c }"
-            @click="form.color = c"
-          />
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="560px">
+      <el-form label-width="90px">
+        <el-form-item :label="t('form.appCenter.fieldName')" required>
           <el-input
-            v-model="form.color"
-            size="small"
-            style="width: 120px"
-            :class="{ 'is-error': colorInvalid }"
+            v-model="form.name"
+            data-testid="app-name-input"
+            maxlength="100"
+            show-word-limit
           />
-        </div>
-      </el-form-item>
-      <el-form-item :label="t('form.appCenter.fieldSort')">
-        <el-input-number v-model="form.sortNo" :min="0" :max="9999" />
-      </el-form-item>
-      <el-form-item :label="t('form.appCenter.fieldScope')">
-        <el-radio-group v-model="form.visibleScopeType" data-testid="app-scope">
-          <el-radio value="SPECIFIED">{{ t('form.appCenter.scopeSpecified') }}</el-radio>
-          <el-radio value="ALL">{{ t('form.appCenter.scopeAllOption') }}</el-radio>
-        </el-radio-group>
-      </el-form-item>
-      <el-form-item
-        v-if="form.visibleScopeType === 'SPECIFIED'"
-        :label="t('form.appCenter.fieldUsers')"
-      >
-        <div class="scope-users">
-          <UserRemoteSelect v-model="form.userIds" multiple />
-          <div v-if="(form.userIds ?? []).length === 0" class="scope-users__hint">
-            {{ t('form.appCenter.scopeEmptyHint') }}
+        </el-form-item>
+        <el-form-item :label="t('form.appCenter.fieldIcon')">
+          <div class="icon-picker">
+            <button
+              v-for="key in APP_ICON_KEYS"
+              :key="key"
+              type="button"
+              class="icon-picker__item"
+              :class="{ 'is-active': form.icon === key }"
+              @click="form.icon = key"
+            >
+              <AppIcon :icon="key" :color="form.color" :size="14" />
+            </button>
           </div>
-        </div>
-      </el-form-item>
-    </el-form>
-    <template #footer>
-      <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="saving" :disabled="colorInvalid" @click="handleSave">
-        {{ t('common.save') }}
-      </el-button>
-    </template>
-  </el-dialog>
+        </el-form-item>
+        <!-- 0.1.7 #2：颜色固定预设几种，禁止自由输入 -->
+        <el-form-item :label="t('form.appCenter.fieldColor')">
+          <div class="color-picker">
+            <button
+              v-for="c in APP_COLOR_PRESETS"
+              :key="c"
+              type="button"
+              class="color-picker__item"
+              :class="{ 'is-active': form.color === c }"
+              :style="{ background: c }"
+              @click="form.color = c"
+            />
+          </div>
+        </el-form-item>
+        <el-form-item :label="t('form.appCenter.fieldScope')">
+          <el-radio-group v-model="form.visibleScopeType" data-testid="app-scope">
+            <el-radio value="SPECIFIED">{{ t('form.appCenter.scopeSpecified') }}</el-radio>
+            <el-radio value="ALL">{{ t('form.appCenter.scopeAllOption') }}</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <!-- 0.1.7 #1：可见范围按用户/部门/角色/岗位/租户多维度指定，任一维度命中即可见 -->
+        <el-form-item
+          v-if="form.visibleScopeType === 'SPECIFIED'"
+          :label="t('form.appCenter.fieldScope')"
+        >
+          <AppScopePicker :model-value="scopeValue" @update:model-value="applyScope" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="handleSave">
+          {{ t('common.save') }}
+        </el-button>
+      </template>
+    </el-dialog>
+  </div>
 </template>
 
 <style scoped>
-.app-name-cell {
+.app-manage {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 20px 24px;
+}
+.app-manage__bar {
   display: flex;
   align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.app-manage__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #303133;
+}
+.app-manage__search {
+  flex: 0 1 260px;
+  margin-left: auto;
+}
+.app-manage__error {
+  color: #f56c6c;
+}
+.app-manage__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+.app-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 10px;
+  min-height: 120px;
+  padding: 20px 16px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
 }
-.app-name-cell__text {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+.app-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
-.app-name-cell__title {
+.app-card--create {
+  border-style: dashed;
+  color: #909399;
+  background: #fafafa;
+}
+.app-card__plus {
+  font-size: 28px;
+  line-height: 1;
+  color: #a8abb2;
+}
+.app-card__name {
+  max-width: 100%;
+  font-size: 14px;
   font-weight: 500;
   color: #303133;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.app-card__tag {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+}
+.app-card__more {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+}
+.app-card__more-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: #909399;
+  cursor: pointer;
+}
+.app-card__more-trigger:hover {
+  background: #f5f7fa;
+  color: #303133;
 }
 .icon-picker {
   display: flex;

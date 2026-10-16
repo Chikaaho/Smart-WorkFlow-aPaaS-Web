@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import { StandardListTemplate } from '@/components/page-layout'
 import AppIcon from '@/modules/form/components/AppIcon.vue'
 import { getFormAppContent } from '@/modules/form/api/app-center'
@@ -153,12 +154,20 @@ onMounted(() => {
     :empty="isEmpty"
   >
     <template #toolbar-actions>
+      <!-- 0.1.7 #11：冗长「返回应用」按钮收敛为左上角返回箭头 -->
+      <el-button
+        class="context-back"
+        :icon="ArrowLeft"
+        circle
+        data-testid="app-form-back"
+        :title="t('form.appCenter.backToWorkspace')"
+        @click="backToWorkspace"
+      />
       <AppIcon v-if="app" :icon="app.icon" :color="app.color" :size="14" />
       <span class="context-path">
         {{ appName }}<template v-if="dirName"> / {{ dirName }}</template> /
         {{ formName }}
       </span>
-      <el-button @click="backToWorkspace">{{ t('form.appCenter.backToWorkspace') }}</el-button>
       <el-button data-testid="enter-form-design" @click="enterFormDesign">
         {{ t('form.appCenter.enterFormDesign') }}
       </el-button>

@@ -127,7 +127,6 @@ const otherNames = computed(() =>
 
 /** 控件库点击添加与拖入使用同一 DesignerItem 形态，点击后立即选中新字段。 */
 function addPaletteItem(item: DesignerItem) {
-  if (isPublished.value) return
   items.value.push(item)
   selectedId.value = item.id
   scrollSelectedShellIntoView()
@@ -150,14 +149,12 @@ function scrollSelectedShellIntoView() {
 const draggingItem = ref<DesignerItem | null>(null)
 
 function startPaletteDrag(item: DesignerItem) {
-  if (isPublished.value) return
   draggingItem.value = item
 }
 
 /** 放置落点确认：把候选字段插到画布算出的下标（24 栅格流式顺序，不做自由定位）。 */
 function addDroppedItem(item: DesignerItem, index: number) {
   draggingItem.value = null
-  if (isPublished.value) return
   const at = Math.min(Math.max(index, 0), items.value.length)
   items.value.splice(at, 0, item)
   selectedId.value = item.id
@@ -221,7 +218,6 @@ const editingTableField = computed(() => {
 })
 
 function openTableEditor(id: string) {
-  if (isPublished.value) return
   editingTableId.value = id
 }
 
@@ -343,28 +339,7 @@ onBeforeUnmount(() => {
  */
 async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
   if (!isDirty.value) return 'proceed'
-  // V011-BUG-015：已发布表单无草稿可存——离开只问「丢弃/留下」
-  if (isPublished.value) {
-    try {
-      await ElMessageBox.confirm(
-        t('form.unsavedPublishedLeaveWarning'),
-        t('form.unsavedChangesTitle'),
-        {
-          type: 'warning',
-          confirmButtonText: t('form.discardAndContinue'),
-          cancelButtonText: t('common.cancel'),
-        },
-      )
-      // 放弃修改：以基线还原，再放行导航
-      const baseline = JSON.parse(baselineJson.value) as FormSchema
-      items.value = definitionToItems(baseline)
-      if (baseline.title) title.value = baseline.title
-      baselineJson.value = currentJson.value
-      return 'proceed'
-    } catch {
-      return 'abort'
-    }
-  }
+  // 0.1.7 #14：已发布表单同样可保存工作定义，离开保护与草稿同一套「保存/丢弃/取消」
   let action: 'save' | 'discard' | 'cancel'
   try {
     await ElMessageBox.confirm(t(LEAVE_GUARD_MESSAGE_KEY), t('form.unsavedChangesTitle'), {
@@ -447,7 +422,8 @@ onBeforeRouteUpdate(routeDirtyGuard)
 /** @returns 保存是否成功。 */
 async function doSave(): Promise<boolean> {
   if (rejected.value) return false
-  if (isPublished.value) return false
+  // 0.1.7 #14：已发布表单同样可保存工作定义（运行时填写走已发布快照，
+  // 保存只更新草稿定义，经「发布新版本」才生效到线上版本与列结构）
   if (savePhase.value === 'saving') return false // 保存中防重复提交
 
   const definition = buildDefinition()
@@ -748,7 +724,11 @@ async function loadBreadcrumbCategory() {
         }}</el-button>
         <!-- BF20261013-015：预览自画布头部行上收至工具条动作组 -->
         <el-button @click="previewVisible = true">{{ t('common.preview') }}</el-button>
-        <!-- V011-BUG-015：已发布表单以「发布新版本」替代 保存/发布（原子落库，不经草稿） -->
+        <!-- 0.1.7 #14：已发布表单解锁画布编辑——「保存」持久化工作定义（运行时仍走已发布快照），
+             「发布新版本」原子落库（增量 DDL + 版本递增）后生效 -->
+        <el-button :disabled="saveState === 'saving'" @click="saveDraft">{{
+          t('common.save')
+        }}</el-button>
         <el-button
           v-if="isPublished"
           type="primary"
@@ -756,14 +736,9 @@ async function loadBreadcrumbCategory() {
           @click="publishNewVersion"
           >{{ t('form.publishNewVersion') }}</el-button
         >
-        <template v-else>
-          <el-button :disabled="saveState === 'saving'" @click="saveDraft">{{
-            t('common.save')
-          }}</el-button>
-          <el-button type="primary" :disabled="saveState === 'saving'" @click="publish">{{
-            t('common.publish')
-          }}</el-button>
-        </template>
+        <el-button v-else type="primary" :disabled="saveState === 'saving'" @click="publish">{{
+          t('common.publish')
+        }}</el-button>
       </div>
     </header>
 

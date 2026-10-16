@@ -2,23 +2,33 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
-import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
+import { ArrowLeft, Folder, MoreFilled, Plus } from '@element-plus/icons-vue'
 import AppIcon from '@/modules/form/components/AppIcon.vue'
+import AppFormData from '@/modules/form/views/AppFormData.vue'
 import {
-  assignFormMembership,
   createFormAppDir,
   deleteFormAppDir,
   getFormAppContent,
-  listFormApps,
   updateFormAppDir,
 } from '@/modules/form/api/app-center'
-import { createFormDef, saveFormConfig } from '@/modules/form/api/form-def'
-import { disableFormDef, enableFormDef } from '@/modules/form/api/i2-choices'
-import type { FormApp, FormAppContent, FormAppFormItem } from '@/contracts/app-center'
+import {
+  createFormDef,
+  deleteFormDef,
+  renameFormDef,
+  saveFormConfig,
+} from '@/modules/form/api/form-def'
+import type { FormAppContent, FormAppFormItem } from '@/contracts/app-center'
 import { useI18n } from '@/locales'
 import { getErrorMessage } from '@/foundation/request/error-code-map'
 
+/**
+ * 应用详情 / 应用工作台（0.1.7 #4）：
+ * 去掉通用侧边栏（BasicLayout 对 /form/app-manage/:appId 隐藏），改为应用专属侧边栏——
+ * 与用户端应用内页同一棵目录/表单树，多一个左下角「新建」（目录 / 表单）；
+ * 目录与表单行尾三个点：修改（仅名称）/ 删除，目录多一项「新建表单」。
+ * 新建表单成功后直达表单设计器（0.1.7 #12），标签页可切「流程设计」。
+ * 空应用中间只展示「暂无数据」，不渲染其它噪音。
+ */
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
@@ -36,6 +46,17 @@ const isEmpty = computed(
     !loading.value && !errorMsg.value && dirs.value.length === 0 && directForms.value.length === 0,
 )
 
+/** 当前选中表单（路由 query.formKey 持久化，刷新后保持）。 */
+const selectedFormKey = computed(() => {
+  const fromQuery = typeof route.query.formKey === 'string' ? route.query.formKey : ''
+  if (fromQuery) return fromQuery
+  return ''
+})
+
+function selectForm(item: FormAppFormItem) {
+  void router.replace({ query: { ...route.query, formKey: item.formKey } })
+}
+
 async function load() {
   loading.value = true
   errorMsg.value = ''
@@ -48,6 +69,17 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+function backToList() {
+  void router.push({ name: 'form-app-manage' })
+}
+
+// ==================== 新建（左下角入口） ====================
+
+function onCreateCommand(command: string) {
+  if (command === 'dir') openCreateDir()
+  if (command === 'form') openCreateForm(null)
 }
 
 // ==================== 目录 ====================
@@ -67,7 +99,7 @@ function openCreateDir() {
   dirDialogVisible.value = true
 }
 
-function openEditDir(dir: { id: string; name: string; sortNo: number }) {
+function openRenameDir(dir: { id: string; name: string; sortNo: number }) {
   editingDirId.value = dir.id
   Object.assign(dirForm, { name: dir.name, sortNo: dir.sortNo ?? 0 })
   dirDialogVisible.value = true
@@ -94,6 +126,20 @@ async function handleSaveDir() {
     ElMessage.error(getErrorMessage(errObj.code ?? 0, errObj.message))
   } finally {
     dirSaving.value = false
+  }
+}
+
+function onDirCommand(command: string, dir: { id: string; name: string; sortNo: number }) {
+  if (command === 'rename') {
+    openRenameDir(dir)
+    return
+  }
+  if (command === 'form') {
+    openCreateForm(dir.id)
+    return
+  }
+  if (command === 'delete') {
+    void handleDeleteDir(dir)
   }
 }
 
@@ -150,9 +196,10 @@ async function handleCreateForm() {
     await saveFormConfig(created.id, JSON.stringify({ title: name, fields: [] }))
     ElMessage.success(t('form.appCenter.formCreated'))
     formDialogVisible.value = false
+    // 0.1.7 #12：新建表单后自动进入表单设计器（工作台标签页可切「流程设计」）
     void router.push({
-      name: 'form-app-manage-form',
-      params: { appId: appId.value, formId: created.id },
+      path: `/form/designer/${created.id}`,
+      query: { from: 'app-form', appId: appId.value },
     })
   } catch (err: unknown) {
     const errObj = err as { code?: number; message?: string }
@@ -162,140 +209,69 @@ async function handleCreateForm() {
   }
 }
 
-function enterForm(item: FormAppFormItem) {
-  void router.push({
-    name: 'form-app-manage-form',
-    params: { appId: appId.value, formId: item.formId },
-  })
+// ==================== 表单改名 / 删除 ====================
+
+const renameDialogVisible = ref(false)
+const renameSaving = ref(false)
+const renameTarget = reactive<{ formId: string; name: string }>({ formId: '', name: '' })
+
+function openRenameForm(item: FormAppFormItem) {
+  renameTarget.formId = item.formId
+  renameTarget.name = item.name
+  renameDialogVisible.value = true
 }
 
-async function toggleFormStatus(item: FormAppFormItem) {
-  const disabling = item.status === 'PUBLISHED'
+async function handleRenameForm() {
+  const name = renameTarget.name.trim()
+  if (!name) {
+    ElMessage.warning(t('form.appCenter.nameRequired'))
+    return
+  }
+  renameSaving.value = true
+  try {
+    await renameFormDef(renameTarget.formId, name)
+    ElMessage.success(t('common.saveSuccess'))
+    renameDialogVisible.value = false
+    await load()
+  } catch (err: unknown) {
+    const errObj = err as { code?: number; message?: string }
+    ElMessage.error(getErrorMessage(errObj.code ?? 0, errObj.message))
+  } finally {
+    renameSaving.value = false
+  }
+}
+
+function onFormCommand(command: string, item: FormAppFormItem) {
+  if (command === 'rename') {
+    openRenameForm(item)
+    return
+  }
+  if (command === 'delete') {
+    void handleDeleteForm(item)
+  }
+}
+
+async function handleDeleteForm(item: FormAppFormItem) {
   try {
     await ElMessageBox.confirm(
-      disabling ? t('form.appCenter.disableFormConfirm') : t('form.appCenter.enableFormConfirm'),
-      t('common.confirm'),
+      t('form.appCenter.deleteFormConfirm', { name: item.name }),
+      t('common.deleteConfirmTitle'),
       { type: 'warning' },
     )
   } catch {
     return
   }
   try {
-    if (disabling) {
-      await disableFormDef(item.formId)
-    } else {
-      await enableFormDef(item.formId)
+    await deleteFormDef(item.formId)
+    ElMessage.success(t('common.deleteSuccess'))
+    if (selectedFormKey.value === item.formKey) {
+      void router.replace({ query: { ...route.query, formKey: undefined } })
     }
-    ElMessage.success(t('common.saveSuccess'))
     await load()
   } catch (err: unknown) {
     const errObj = err as { code?: number; message?: string }
     ElMessage.error(getErrorMessage(errObj.code ?? 0, errObj.message))
   }
-}
-
-// ==================== 归属调整 ====================
-
-const moveDialogVisible = ref(false)
-const movingForm = ref<FormAppFormItem | null>(null)
-const moveTarget = reactive<{ appId: string; dirId: string }>({ appId: '', dirId: '' })
-const moveApps = ref<FormApp[]>([])
-const moveDirs = ref<{ id: string; name: string }[]>([])
-const moveSaving = ref(false)
-
-async function openMove(item: FormAppFormItem) {
-  movingForm.value = item
-  moveTarget.appId = appId.value
-  moveTarget.dirId = item.dirId ?? ''
-  moveDialogVisible.value = true
-  try {
-    const apps = await listFormApps()
-    moveApps.value = apps.filter((a) => a.status === 'ENABLED')
-    await loadMoveDirs()
-  } catch {
-    moveApps.value = []
-    moveDirs.value = []
-  }
-}
-
-async function loadMoveDirs() {
-  moveDirs.value = []
-  if (!moveTarget.appId) return
-  if (moveTarget.appId === appId.value) {
-    moveDirs.value = dirs.value.map((d) => ({ id: d.id, name: d.name }))
-    return
-  }
-  try {
-    const target = await getFormAppContent(moveTarget.appId)
-    moveDirs.value = target.dirs.map((d) => ({ id: d.id, name: d.name }))
-  } catch {
-    moveDirs.value = []
-  }
-}
-
-async function handleMove() {
-  if (!movingForm.value || !moveTarget.appId) return
-  moveSaving.value = true
-  try {
-    await assignFormMembership(movingForm.value.formId, {
-      appId: moveTarget.appId,
-      dirId: moveTarget.dirId || null,
-    })
-    ElMessage.success(t('common.saveSuccess'))
-    moveDialogVisible.value = false
-    await load()
-  } catch (err: unknown) {
-    const errObj = err as { code?: number; message?: string }
-    ElMessage.error(getErrorMessage(errObj.code ?? 0, errObj.message))
-  } finally {
-    moveSaving.value = false
-  }
-}
-
-// ==================== 展示辅助 ====================
-
-function statusLabel(status: FormAppFormItem['status']): string {
-  switch (status) {
-    case 'PUBLISHED':
-      return t('form.appCenter.formStatusPublished')
-    case 'DISABLED':
-      return t('form.appCenter.formStatusDisabled')
-    default:
-      return t('form.appCenter.formStatusDraft')
-  }
-}
-
-function statusTagType(status: FormAppFormItem['status']): 'success' | 'info' | 'warning' {
-  if (status === 'PUBLISHED') return 'success'
-  if (status === 'DISABLED') return 'info'
-  return 'warning'
-}
-
-function formActions(r: unknown): ListAction[] {
-  const item = r as FormAppFormItem
-  const actions: ListAction[] = [
-    { key: 'enter', label: t('form.appCenter.enterForm'), onClick: () => enterForm(item) },
-    { key: 'move', label: t('form.appCenter.moveForm'), onClick: () => void openMove(item) },
-  ]
-  if (item.status === 'PUBLISHED') {
-    actions.push({
-      key: 'disable',
-      label: t('form.appCenter.disable'),
-      type: 'warning',
-      onClick: () => void toggleFormStatus(item),
-    })
-  } else if (item.status === 'DISABLED') {
-    actions.push({
-      key: 'enable',
-      label: t('form.appCenter.enable'),
-      onClick: () => void toggleFormStatus(item),
-    })
-  }
-  return actions
-}
-
-function backToList() {
-  void router.push({ name: 'form-app-manage' })
 }
 
 onMounted(() => {
@@ -304,200 +280,384 @@ onMounted(() => {
 </script>
 
 <template>
-  <StandardListTemplate
-    :title="content?.app.name ?? t('form.appCenter.workspaceTitle')"
-    :show-toolbar-total="true"
-    :total="dirs.length + directForms.length"
-    :page-num="1"
-    :page-size="dirs.length + directForms.length || 10"
-    :empty="isEmpty"
-  >
-    <template #toolbar-actions>
-      <AppIcon v-if="content" :icon="content.app.icon" :color="content.app.color" :size="16" />
-      <el-tag v-if="content?.app.status === 'DISABLED'" type="info" size="small">
-        {{ t('form.appCenter.statusDisabled') }}
-      </el-tag>
-      <el-button v-perm="'form:app:manage'" @click="backToList">
-        {{ t('form.appCenter.backToList') }}
-      </el-button>
-      <el-button v-perm="'form:app:manage'" data-testid="dir-create" @click="openCreateDir">
-        {{ t('form.appCenter.newDir') }}
-      </el-button>
-      <el-button
-        v-perm="'form:app:manage'"
-        type="primary"
-        data-testid="form-create"
-        @click="openCreateForm(null)"
-      >
-        {{ t('form.appCenter.newFormInApp') }}
-      </el-button>
-    </template>
+  <div class="app-ws">
+    <div v-if="errorMsg" class="app-ws__error">{{ errorMsg }}</div>
 
-    <div v-loading="loading" class="app-workspace">
-      <div v-if="errorMsg" class="app-workspace__error">{{ errorMsg }}</div>
+    <div v-else v-loading="loading" class="app-ws__body">
+      <!-- 应用专属侧边栏：返回箭头 + 应用身份 + 目录/表单树 + 左下角新建 -->
+      <aside class="app-ws__side">
+        <div class="app-ws__side-head">
+          <button
+            type="button"
+            class="app-ws__back"
+            data-testid="app-back"
+            :title="t('form.appCenter.backToList')"
+            @click="backToList"
+          >
+            <el-icon><ArrowLeft /></el-icon>
+          </button>
+          <AppIcon
+            v-if="content"
+            class="app-ws__app-icon"
+            :icon="content.app.icon"
+            :color="content.app.color"
+            :size="18"
+          />
+          <span class="app-ws__app-name" data-testid="app-detail-name">
+            {{ content?.app.name ?? t('form.appCenter.workspaceTitle') }}
+          </span>
+          <el-tag v-if="content?.app.status === 'DISABLED'" type="info" size="small">
+            {{ t('form.appCenter.statusDisabled') }}
+          </el-tag>
+        </div>
 
-      <!-- 目录（二级分类） -->
-      <el-card v-for="dir in dirs" :key="dir.id" class="dir-card" shadow="never">
-        <div class="dir-card__head">
-          <span class="dir-card__title" data-testid="dir-name">{{ dir.name }}</span>
-          <span class="dir-card__count">{{
-            t('form.appCenter.formCount', { count: dir.formCount ?? 0 })
-          }}</span>
-          <div class="dir-card__actions">
-            <el-button v-perm="'form:app:manage'" link type="primary" @click="openEditDir(dir)">
-              {{ t('common.edit') }}
-            </el-button>
-            <el-button v-perm="'form:app:manage'" link type="danger" @click="handleDeleteDir(dir)">
-              {{ t('common.delete') }}
-            </el-button>
-            <el-button
-              v-perm="'form:app:manage'"
-              link
-              type="primary"
-              @click="openCreateForm(dir.id)"
+        <nav v-if="!isEmpty" class="app-ws__tree" :aria-label="t('form.appCenter.appNavTitle')">
+          <template v-for="dir in dirs" :key="dir.id">
+            <div class="app-ws__dir" data-testid="app-tree-dir">
+              <el-icon class="app-ws__dir-icon"><Folder /></el-icon>
+              <span class="app-ws__dir-name">{{ dir.name }}</span>
+              <el-dropdown
+                class="app-ws__more"
+                trigger="click"
+                @command="(cmd: string) => onDirCommand(cmd, dir)"
+              >
+                <span class="app-ws__more-trigger" :data-testid="'dir-more-' + dir.id" @click.stop>
+                  <el-icon><MoreFilled /></el-icon>
+                </span>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-perm="'form:app:manage'" command="rename">
+                      {{ t('common.edit') }}
+                    </el-dropdown-item>
+                    <el-dropdown-item v-perm="'form:app:manage'" command="form">
+                      {{ t('form.appCenter.newFormInDir') }}
+                    </el-dropdown-item>
+                    <el-dropdown-item v-perm="'form:app:manage'" command="delete" divided>
+                      {{ t('common.delete') }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+            <button
+              v-for="item in dir.forms ?? []"
+              :key="item.formId"
+              type="button"
+              class="app-ws__form"
+              :class="{ 'is-active': item.formKey === selectedFormKey }"
+              data-testid="app-tree-form"
+              :data-form-key="item.formKey"
+              @click="selectForm(item)"
             >
-              {{ t('form.appCenter.newFormInDir') }}
-            </el-button>
-          </div>
-        </div>
-        <el-table :data="dir.forms ?? []" size="small" style="width: 100%">
-          <el-table-column prop="name" :label="t('form.appCenter.colFormName')" min-width="200" />
-          <el-table-column prop="formKey" :label="t('form.appCenter.colFormKey')" min-width="160" />
-          <el-table-column :label="t('form.appCenter.colFormStatus')" width="110">
-            <template #default="{ row }">
-              <el-tag :type="statusTagType(row.status)" size="small">{{
-                statusLabel(row.status)
-              }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('common.actions')" width="200" fixed="right">
-            <template #default>
-              <ListActionsColumn :actions="formActions" :width="200" />
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-card>
+              <span class="app-ws__form-name">{{ item.name }}</span>
+              <el-dropdown
+                class="app-ws__more"
+                trigger="click"
+                @command="(cmd: string) => onFormCommand(cmd, item)"
+              >
+                <span class="app-ws__more-trigger" @click.stop>
+                  <el-icon><MoreFilled /></el-icon>
+                </span>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
+                    <el-dropdown-item command="delete" divided>
+                      {{ t('common.delete') }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </button>
+          </template>
 
-      <!-- 应用内直接归属表单 -->
-      <el-card class="dir-card" shadow="never">
-        <div class="dir-card__head">
-          <span class="dir-card__title">{{ t('form.appCenter.directForms') }}</span>
-          <span class="dir-card__count">{{
-            t('form.appCenter.formCount', { count: directForms.length })
-          }}</span>
+          <button
+            v-for="item in directForms"
+            :key="item.formId"
+            type="button"
+            class="app-ws__form app-ws__form--root"
+            :class="{ 'is-active': item.formKey === selectedFormKey }"
+            data-testid="app-tree-form"
+            :data-form-key="item.formKey"
+            @click="selectForm(item)"
+          >
+            <span class="app-ws__form-name">{{ item.name }}</span>
+            <el-dropdown
+              class="app-ws__more"
+              trigger="click"
+              @command="(cmd: string) => onFormCommand(cmd, item)"
+            >
+              <span class="app-ws__more-trigger" @click.stop>
+                <el-icon><MoreFilled /></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>{{
+                    t('common.delete')
+                  }}</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </button>
+        </nav>
+
+        <div class="app-ws__side-foot">
+          <el-dropdown v-perm="'form:app:manage'" trigger="click" @command="onCreateCommand">
+            <el-button class="app-ws__create" data-testid="app-ws-create" :icon="Plus">
+              {{ t('form.appCenter.createAction') }}
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="dir" data-testid="dir-create">
+                  {{ t('form.appCenter.newDir') }}
+                </el-dropdown-item>
+                <el-dropdown-item command="form" data-testid="form-create">
+                  {{ t('form.appCenter.newForm') }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
-        <el-table :data="directForms" size="small" style="width: 100%">
-          <el-table-column prop="name" :label="t('form.appCenter.colFormName')" min-width="200" />
-          <el-table-column prop="formKey" :label="t('form.appCenter.colFormKey')" min-width="160" />
-          <el-table-column :label="t('form.appCenter.colFormStatus')" width="110">
-            <template #default="{ row }">
-              <el-tag :type="statusTagType(row.status)" size="small">{{
-                statusLabel(row.status)
-              }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('common.actions')" width="200" fixed="right">
-            <template #default>
-              <ListActionsColumn :actions="formActions" :width="200" />
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-card>
+      </aside>
+
+      <!-- 右侧内容：空应用只展示「暂无数据」；选中表单展示其数据列表 -->
+      <section class="app-ws__panel">
+        <p v-if="isEmpty" class="app-ws__empty" data-testid="app-ws-empty">
+          {{ t('form.appCenter.emptyAppContent') }}
+        </p>
+        <AppFormData
+          v-else-if="selectedFormKey"
+          :key="selectedFormKey"
+          :form-key="selectedFormKey"
+          :app-id="appId"
+          embedded
+        />
+        <p v-else class="app-ws__empty">{{ t('form.appCenter.pickForm') }}</p>
+      </section>
     </div>
 
-    <template #empty-action>
-      <el-button v-perm="'form:app:manage'" @click="openCreateDir">
-        {{ t('form.appCenter.newDir') }}
-      </el-button>
-      <el-button v-perm="'form:app:manage'" type="primary" @click="openCreateForm(null)">
-        {{ t('form.appCenter.newFormInApp') }}
-      </el-button>
-    </template>
-  </StandardListTemplate>
+    <!-- 目录新建/改名对话框（0.1.7 #4：修改只改名称） -->
+    <el-dialog v-model="dirDialogVisible" :title="dirDialogTitle" width="420px">
+      <el-form label-width="80px">
+        <el-form-item :label="t('form.appCenter.fieldName')" required>
+          <el-input v-model="dirForm.name" data-testid="dir-name-input" maxlength="100" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dirDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="dirSaving" @click="handleSaveDir">
+          {{ t('common.save') }}
+        </el-button>
+      </template>
+    </el-dialog>
 
-  <!-- 目录对话框 -->
-  <el-dialog v-model="dirDialogVisible" :title="dirDialogTitle" width="420px">
-    <el-form label-width="80px">
-      <el-form-item :label="t('form.appCenter.fieldName')" required>
-        <el-input v-model="dirForm.name" data-testid="dir-name-input" maxlength="100" />
-      </el-form-item>
-      <el-form-item :label="t('form.appCenter.fieldSort')">
-        <el-input-number v-model="dirForm.sortNo" :min="0" :max="9999" />
-      </el-form-item>
-    </el-form>
-    <template #footer>
-      <el-button @click="dirDialogVisible = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="dirSaving" @click="handleSaveDir">
-        {{ t('common.save') }}
-      </el-button>
-    </template>
-  </el-dialog>
+    <!-- 新建表单对话框 -->
+    <el-dialog v-model="formDialogVisible" :title="t('form.appCenter.newForm')" width="420px">
+      <el-form label-width="80px">
+        <el-form-item :label="t('form.appCenter.fieldName')" required>
+          <el-input v-model="newForm.name" data-testid="form-name-input" maxlength="200" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="formDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="formSaving" @click="handleCreateForm">
+          {{ t('common.save') }}
+        </el-button>
+      </template>
+    </el-dialog>
 
-  <!-- 新建表单对话框 -->
-  <el-dialog v-model="formDialogVisible" :title="t('form.appCenter.newForm')" width="420px">
-    <el-form label-width="80px">
-      <el-form-item :label="t('form.appCenter.fieldName')" required>
-        <el-input v-model="newForm.name" data-testid="form-name-input" maxlength="200" />
-      </el-form-item>
-    </el-form>
-    <template #footer>
-      <el-button @click="formDialogVisible = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="formSaving" @click="handleCreateForm">
-        {{ t('common.save') }}
-      </el-button>
-    </template>
-  </el-dialog>
-
-  <!-- 归属调整对话框 -->
-  <el-dialog v-model="moveDialogVisible" :title="t('form.appCenter.moveForm')" width="420px">
-    <el-form label-width="80px">
-      <el-form-item :label="t('form.appCenter.moveTargetApp')">
-        <el-select v-model="moveTarget.appId" style="width: 100%" @change="loadMoveDirs">
-          <el-option v-for="a in moveApps" :key="a.id" :label="a.name" :value="a.id" />
-        </el-select>
-      </el-form-item>
-      <el-form-item :label="t('form.appCenter.moveTargetDir')">
-        <el-select v-model="moveTarget.dirId" clearable style="width: 100%">
-          <el-option :label="t('form.appCenter.directForms')" value="" />
-          <el-option v-for="d in moveDirs" :key="d.id" :label="d.name" :value="d.id" />
-        </el-select>
-      </el-form-item>
-    </el-form>
-    <template #footer>
-      <el-button @click="moveDialogVisible = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="moveSaving" @click="handleMove">
-        {{ t('common.save') }}
-      </el-button>
-    </template>
-  </el-dialog>
+    <!-- 表单改名对话框 -->
+    <el-dialog v-model="renameDialogVisible" :title="t('common.edit')" width="420px">
+      <el-form label-width="80px">
+        <el-form-item :label="t('form.appCenter.fieldName')" required>
+          <el-input v-model="renameTarget.name" maxlength="200" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="renameDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="renameSaving" @click="handleRenameForm">
+          {{ t('common.save') }}
+        </el-button>
+      </template>
+    </el-dialog>
+  </div>
 </template>
 
 <style scoped>
-.app-workspace {
+.app-ws {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  min-height: 80px;
+  min-height: 100%;
 }
-.app-workspace__error {
+.app-ws__error {
   color: #f56c6c;
-  padding: 12px 0;
+  padding: 16px 24px;
 }
-.dir-card__head {
+.app-ws__body {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+}
+/* 应用专属侧边栏（0.1.7 #4）：与用户端应用内页同构的白底树 + 底部新建 */
+.app-ws__side {
+  flex: 0 0 240px;
+  width: 240px;
+  background: #ffffff;
+  border-right: 1px solid #ebeef5;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.app-ws__side-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid #f0f2f5;
 }
-.dir-card__title {
+.app-ws__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  background: #fff;
+  color: #606266;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.app-ws__back:hover {
+  color: #409eff;
+  border-color: #c6e2ff;
+  background: #ecf5ff;
+}
+.app-ws__app-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-ws__tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.app-ws__dir {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 2px;
+  font-size: 13px;
   font-weight: 600;
   color: #303133;
 }
-.dir-card__count {
-  font-size: 13px;
+.app-ws__dir:first-child {
+  margin-top: 0;
+}
+.app-ws__dir-icon {
   color: #909399;
 }
-.dir-card__actions {
+.app-ws__dir-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-ws__form {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 7px 26px 7px 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  color: #606266;
+  cursor: pointer;
+}
+.app-ws__form--root {
+  padding-left: 12px;
+  margin-top: 2px;
+}
+.app-ws__form:hover {
+  background: #f5f7fa;
+  color: #303133;
+}
+.app-ws__form.is-active {
+  background: #ecf5ff;
+  color: #409eff;
+  font-weight: 500;
+}
+.app-ws__form-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-ws__more {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  visibility: hidden;
+}
+.app-ws__dir .app-ws__more {
+  position: static;
+  transform: none;
   margin-left: auto;
+  visibility: hidden;
+}
+.app-ws__dir:hover .app-ws__more,
+.app-ws__form:hover .app-ws__more,
+.app-ws__more-trigger:focus-visible {
+  visibility: visible;
+}
+.app-ws__more-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  color: #909399;
+  cursor: pointer;
+}
+.app-ws__more-trigger:hover {
+  background: #ebeef5;
+  color: #303133;
+}
+.app-ws__side-foot {
+  padding: 10px 12px 14px;
+  border-top: 1px solid #f0f2f5;
+}
+.app-ws__create {
+  width: 100%;
+}
+.app-ws__panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.app-ws__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: #909399;
 }
 </style>

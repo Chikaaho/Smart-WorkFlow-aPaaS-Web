@@ -17,6 +17,20 @@ import type {
 
 // ==================== 后台管理 ====================
 
+/** 租户选项（0.1.7 #1：可见范围 TENANT 维度候选）。 */
+export interface TenantOption {
+  id: number
+  name: string
+}
+
+/** 租户选项列表（后端只读查询；失败由调用方兜底为空）。 */
+export async function listTenantOptions(): Promise<TenantOption[]> {
+  return request<TenantOption[]>({
+    method: 'GET',
+    url: '/form/app/manage/tenants',
+  })
+}
+
 /** 应用列表（含停用与承接应用）。 */
 export async function listFormApps(keyword?: string): Promise<FormApp[]> {
   return request<FormApp[]>({

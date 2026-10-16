@@ -14,10 +14,18 @@ export interface FormApp {
   icon?: string | null
   color?: string | null
   sortNo: number
-  /** ALL=本租户全部用户；SPECIFIED=指定用户（空集合=无人可见）。 */
+  /** ALL=本租户全部用户；SPECIFIED=按维度指定（维度集合全空=无人可见）。 */
   visibleScopeType: 'ALL' | 'SPECIFIED'
-  /** SPECIFIED 时的指定用户集合（ALL 时为 null）。 */
+  /** SPECIFIED 时的指定用户集合（USER 维度；ALL 时为 null）。 */
   visibleUserIds?: number[] | null
+  /** 指定可见部门集合（0.1.7 #1；DEPT 维度，按用户主属部门命中）。 */
+  visibleDeptIds?: number[] | null
+  /** 指定可见角色 code 集合（0.1.7 #1；ROLE 维度）。 */
+  visibleRoleCodes?: string[] | null
+  /** 指定可见岗位集合（0.1.7 #1；POST 维度）。 */
+  visiblePostIds?: number[] | null
+  /** 指定可见租户集合（0.1.7 #1；TENANT 维度，整租户可见）。 */
+  visibleTenantIds?: number[] | null
   status: 'ENABLED' | 'DISABLED'
   /** MANUAL=后台新建；LEGACY_CATEGORY/LEGACY_UNCATEGORIZED=存量承接（只读追溯）。 */
   source: 'MANUAL' | 'LEGACY_CATEGORY' | 'LEGACY_UNCATEGORIZED'
@@ -35,7 +43,16 @@ export interface FormAppSaveReq {
   color?: string | null
   sortNo?: number
   visibleScopeType: 'ALL' | 'SPECIFIED'
+  /** USER 维度：指定可见用户。 */
   userIds?: number[]
+  /** DEPT 维度：指定可见部门（0.1.7 #1）。 */
+  deptIds?: number[]
+  /** ROLE 维度：指定可见角色 code（0.1.7 #1）。 */
+  roleCodes?: string[]
+  /** POST 维度：指定可见岗位（0.1.7 #1）。 */
+  postIds?: number[]
+  /** TENANT 维度：指定可见租户（0.1.7 #1）。 */
+  tenantIds?: number[]
 }
 
 /** 应用内目录（二级分类）。 */

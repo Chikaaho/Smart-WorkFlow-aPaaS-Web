@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AppScopePicker: typeof import('./../components/AppScopePicker.vue')['default']
     AttachmentControl: typeof import('./../components/dynamic-field-controls/AttachmentControl.vue')['default']
     BlankPage: typeof import('./../components/BlankPage.vue')['default']
     BoolControl: typeof import('./../components/dynamic-field-controls/BoolControl.vue')['default']
