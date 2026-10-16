@@ -6,8 +6,18 @@ import importPlugin from 'eslint-plugin-import'
 import eslintConfigPrettier from 'eslint-config-prettier'
 import eslintPluginPrettier from 'eslint-plugin-prettier'
 
-// 业务模块清单：对齐后端 sw-biz-* 划分。模块间禁止互相 import。
-const MODULES = ['system', 'lowcode', 'workflow', 'notify', 'agent', 'iot', 'openapi']
+// 业务模块清单：对齐当前 src/modules 目录，模块间禁止互相 import。
+const MODULES = [
+  'system',
+  'form',
+  'workflow',
+  'notify',
+  'agent',
+  'iot',
+  'openapi',
+  'job',
+  'storage',
+]
 
 const crossModuleZones = MODULES.map((target) => ({
   target: `./src/modules/${target}/**/*`,
