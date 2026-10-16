@@ -92,12 +92,7 @@ onMounted(loadList)
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <!-- 工具栏操作按钮 -->
-    <template #toolbar-actions>
-      <el-button @click="router.push({ name: 'TodoList' })">{{
-        t('workflow.todoTasks')
-      }}</el-button>
-    </template>
+    <!-- 0.1.7 #9：去掉右上角「待办任务」按钮（噪音） -->
 
     <!-- 空态 -->
     <template #empty-action>

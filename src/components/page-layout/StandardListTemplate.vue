@@ -2,13 +2,14 @@
 /**
  * StandardListTemplate — 页型B（数据列表页）标准模板。
  *
- * 组合：ListToolbar + ListFilterBar + 主体（ListTable 或 ListEmpty） + ListPagination。
+ * 组合：ListToolbar + ListFilterBar + ListTable + ListPagination。
  * 数据外部进（props + slots），零 onMounted / 零路由耦合。
+ * 0.1.7 #7：空列表也保留表格表头，空态文案由 el-table 内建「暂无数据」展示；
+ * empty-action 槽（如「新建」按钮）移到表格卡片底部继续可用。
  */
 import ListToolbar from './ListToolbar.vue'
 import ListFilterBar from './ListFilterBar.vue'
 import ListTable from './ListTable.vue'
-import ListEmpty from './ListEmpty.vue'
 import ListPagination from './ListPagination.vue'
 
 const props = withDefaults(
@@ -59,14 +60,12 @@ const emit = defineEmits<{
       <slot name="table-title" />
     </div>
 
-    <!-- 主体：空态 或 表格 -->
-    <ListEmpty v-if="props.empty" :description="undefined">
-      <template v-if="$slots['empty-action']" #action>
-        <slot name="empty-action" />
-      </template>
-    </ListEmpty>
-    <ListTable v-else>
+    <!-- 主体：表格（0.1.7 #7：空列表同样渲染表头） -->
+    <ListTable>
       <slot />
+      <div v-if="props.empty && $slots['empty-action']" class="standard-list__empty-actions">
+        <slot name="empty-action" />
+      </div>
     </ListTable>
 
     <!-- 分页 -->
@@ -81,8 +80,22 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
+/* 0.1.7 #10：纵向 flex 画布——数据卡片撑满可视区，分页固定在画布右下角，
+   不随行数上下浮动；四周留白收敛让数据展示区尽量铺满。 */
 .standard-list {
-  padding: 40px 32px 32px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 20px 24px 12px;
+}
+.standard-list > .list-table {
+  flex: 1 0 auto;
+}
+.standard-list__empty-actions {
+  display: flex;
+  justify-content: center;
+  padding: 0 0 var(--sw-space-16);
 }
 .standard-list__panel-head {
   display: flex;

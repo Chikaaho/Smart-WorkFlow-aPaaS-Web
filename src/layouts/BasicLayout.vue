@@ -20,14 +20,16 @@ const collapsed = computed(() => appStore.sidebarCollapsed)
 const area = computed(() => resolveArea(route.path))
 /** 企业门户（节点05）为顶栏全宽；表单/流程设计器（节点07-14）为全宽三栏画布；
  *  应用中心（列表/应用内页/表单数据列表，Owner 2026-10-16 裁决）同样顶栏全宽——
- *  这三类页面均不渲染深色侧栏。 */
+ *  这三类页面均不渲染深色侧栏。0.1.7 #4：应用详情（管理工作台/表单上下文）改用
+ *  应用专属侧边栏，同样不渲染通用深色侧栏（列表页 /form/app-manage 精确路径除外）。 */
 const showAside = computed(
   () =>
     route.path !== '/portal' &&
     !route.path.startsWith('/form/designer') &&
     !route.path.endsWith('/design') &&
     !route.path.startsWith('/form/app-center') &&
-    !route.path.startsWith('/form/app-form/'),
+    !route.path.startsWith('/form/app-form/') &&
+    !/^\/form\/app-manage\/[^/]+/.test(route.path),
 )
 </script>
 

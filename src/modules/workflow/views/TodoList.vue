@@ -259,15 +259,7 @@ onMounted(loadList)
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <!-- 工具栏操作按钮 -->
-    <template #toolbar-actions>
-      <el-button @click="router.push({ name: 'ProcessedList' })">{{
-        t('workflow.processedTasks')
-      }}</el-button>
-      <el-button type="primary" plain @click="router.push('/workflow/batch-approval')">{{
-        t('workflow.batchApproval')
-      }}</el-button>
-    </template>
+    <!-- 0.1.7 #8：去掉右上角「已办任务 / 批量审批」按钮（噪音） -->
 
     <!-- 空态（无需操作按钮） -->
     <template #empty-action>

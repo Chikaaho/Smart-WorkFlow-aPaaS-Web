@@ -14,7 +14,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { myInstances, myInstanceDetail, withdrawInstance } from '@/modules/workflow/api'
-import { listTriggerExecs, listActionRefs } from '@/modules/workflow/api/p64'
 import { urgeMyInstance } from '@/modules/workflow/api/oa'
 import type { ProcessInstance, MyInstanceDetail } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
@@ -188,33 +187,30 @@ const p64Execs = ref<import('@/contracts/p64').TriggerExecView[]>([])
 const p64Refs = ref<import('@/contracts/p64').ActionRefView[]>([])
 
 async function openDetail(row: ProcessInstance) {
-  detailVisible.value = true
+  // 0.1.7 #17：进详情看的是表单本体——有表单绑定时直接打开统一数据表单页（只读），
+  // 元数据弹窗仅留给无表单绑定的实例兜底
   detailLoading.value = true
   detailError.value = ''
-  detail.value = null
-  p64Execs.value = []
-  p64Refs.value = []
-  void listTriggerExecs(row.id)
-    .then((items) => {
-      p64Execs.value = items
-    })
-    .catch(() => {
-      p64Execs.value = []
-    })
-  void listActionRefs(row.id)
-    .then((items) => {
-      p64Refs.value = items
-    })
-    .catch(() => {
-      p64Refs.value = []
-    })
   try {
-    detail.value = await myInstanceDetail(row.id)
+    const d = await myInstanceDetail(row.id)
+    if (d.formKey && d.businessKey) {
+      detailLoading.value = false
+      await router.push({
+        path: `/form/form-render/${d.formKey}`,
+        query: { recordId: d.businessKey, mode: 'view' },
+      })
+      return
+    }
+    detail.value = d
+    detailVisible.value = true
   } catch (err) {
     detailError.value = err instanceof ApiError ? err.msg : t('workflow.instanceDetailLoadFailed')
+    detailVisible.value = true
   } finally {
     detailLoading.value = false
   }
+  p64Execs.value = []
+  p64Refs.value = []
 }
 
 // ─── 流转记录映射 ───
@@ -326,7 +322,6 @@ onMounted(loadList)
 <template>
   <StandardListTemplate
     :title="t('common.myInstancesPageTitle')"
-    :description="t('workflow.myInstancesDescription')"
     :show-toolbar-total="false"
     large
     :total="total"

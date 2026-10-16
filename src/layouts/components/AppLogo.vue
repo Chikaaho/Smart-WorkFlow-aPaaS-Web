@@ -34,10 +34,12 @@ const brandAdminSuffix = computed(() =>
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  flex: 0 0 240px;
+  /* 0.1.7 #5：品牌列宽度与深色侧栏同源对齐（portal=--sw-layout-aside-width 224px），
+     多分辨率下跟随同一 token，不再用独立 240px 定宽错位 */
+  flex: 0 0 var(--sw-layout-aside-width);
   gap: 13px;
   height: 64px;
-  width: 240px;
+  width: var(--sw-layout-aside-width);
   padding: 0 0 0 24px;
   overflow: hidden;
 }
@@ -70,6 +72,9 @@ const brandAdminSuffix = computed(() =>
   white-space: nowrap;
 }
 .app-logo--admin {
+  /* 0.1.7 #5：管理端侧栏 236px（BasicLayout .basic-layout__aside--admin 同值） */
+  flex-basis: 236px;
+  width: 236px;
   gap: 12px;
 }
 .app-logo--admin .app-logo__wordmark {
