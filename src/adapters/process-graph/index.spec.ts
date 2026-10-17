@@ -284,7 +284,7 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
   // 审批(420,180)→结束(600,300)：上下缘出线 V-H-V，中段水平可上下拖
   const vhv = {
     start: { x: 420, y: 205 },
-    end: { x: 600, y: 275 },
+    end: { x: 600, y: 282 },
     hint: { sourceAxis: 'v' as const, targetAxis: 'v' as const },
   }
 
@@ -292,15 +292,15 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
     const points = expandEdgePathPoints(vhv.start, vhv.end, [], vhv.hint)
     expect(points).toEqual([
       { x: 420, y: 205 },
-      { x: 420, y: 240 },
-      { x: 600, y: 240 },
-      { x: 600, y: 275 },
+      { x: 420, y: 243.5 },
+      { x: 600, y: 243.5 },
+      { x: 600, y: 282 },
     ])
     expect(edgeSegmentHandles(points)).toEqual([
       {
         index: 0,
         x: 420,
-        y: 222.5,
+        y: 224.25,
         orientation: 'v',
         axis: 'x',
         cursor: 'ew-resize',
@@ -310,7 +310,7 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
       {
         index: 1,
         x: 510,
-        y: 240,
+        y: 243.5,
         orientation: 'h',
         axis: 'y',
         cursor: 'ns-resize',
@@ -320,7 +320,7 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
       {
         index: 2,
         x: 600,
-        y: 257.5,
+        y: 262.75,
         orientation: 'v',
         axis: 'x',
         cursor: 'ew-resize',
@@ -382,13 +382,13 @@ describe('BF20261013-030 连线内段编辑（横平竖直 / 不重叠 / 不贪�
       { x: 420, y: 205 },
       { x: 420, y: 225 },
       { x: 600, y: 225 },
-      { x: 600, y: 275 },
+      { x: 600, y: 282 },
     ])
     expect(moveEdgeSegment(points, 1, 'y', 400)).toEqual([
       { x: 420, y: 205 },
-      { x: 420, y: 255 },
-      { x: 600, y: 255 },
-      { x: 600, y: 275 },
+      { x: 420, y: 262 },
+      { x: 600, y: 262 },
+      { x: 600, y: 282 },
     ])
     // 区间内精确落点 + 全程不变量（横平竖直、任意两段不共线）
     expect(moveEdgeSegment(points, 1, 'y', 250)[1]).toEqual({ x: 420, y: 250 })
@@ -563,8 +563,8 @@ describe('BF20261013-036 拖动光标固定 + 目标端预览不镜像', () => {
     const preview = previewEdgePath(edge, fixed, hovered, size, 22, { target: 'right' })
     const points = pathPoints(preview)
     // 固定端（START 顶边端口）在前、命中节点（END 右边端口）在后 —— 与改接方向一致
-    expect(points[0]).toEqual({ x: 100, y: 275 })
-    expect(points[points.length - 1]).toEqual({ x: 180, y: 80 })
+    expect(points[0]).toEqual({ x: 100, y: 282 })
+    expect(points[points.length - 1]).toEqual({ x: 118, y: 80 })
     expectOrthogonalWithoutOverlap(points)
     model.setEdgeEndpoint('edge_1', 'target', 'node_c', 'right')
     expect(model.state().edges[0].path).toBe(preview)
@@ -589,12 +589,12 @@ describe('BF20261013-034 端点改接：换端口侧 + 丢弃失效拐点', () =
 
   it('拖端点落到同节点另一条边 → 换端口侧（左右→上下），固定小段垂直出入', () => {
     const model = createDesignerModel(base, size, 22)
-    expect(model.state().edges[0].path).toBe('M 180 300 L 260 300 L 260 180 L 340 180')
+    expect(model.state().edges[0].path).toBe('M 118 300 L 229 300 L 229 180 L 340 180')
     // 先造一个折（端口腿拖动，与真实交互同一路径）
     const points = parsePathPoints(model.state().edges[0].path)
     model.setEdgeWaypoints('edge_1', pointsToWaypoints(moveEdgeSegment(points, 0, 'y', 250)))
     expect(model.state().edges[0].path).toBe(
-      'M 180 300 L 204 300 L 204 250 L 260 250 L 260 180 L 340 180',
+      'M 118 300 L 142 300 L 142 250 L 229 250 L 229 180 L 340 180',
     )
     // 起点改挂到 START 上缘（同节点换侧）：旧拐点丢弃重排，起点垂直向上固定小段 24
     expect(model.setEdgeEndpoint('edge_1', 'source', 'node_a', 'top')).toBe('edge_1')
@@ -603,8 +603,8 @@ describe('BF20261013-034 端点改接：换端口侧 + 丢弃失效拐点', () =
     expect(after.waypoints).toEqual([])
     const path = parsePathPoints(after.path)
     // 起点垂直向上固定小段 24 → 连接段（水平→垂直）→ 终点从左侧水平进入
-    expect(path[0]).toEqual({ x: 100, y: 275 })
-    expect(path[1]).toEqual({ x: 100, y: 275 - EDGE_PORT_STUB })
+    expect(path[0]).toEqual({ x: 100, y: 282 })
+    expect(path[1]).toEqual({ x: 100, y: 282 - EDGE_PORT_STUB })
     expect(path[path.length - 1]).toEqual({ x: 340, y: 180 })
     expect(path[path.length - 2].y).toBe(180)
     expectOrthogonalWithoutOverlap(path)
@@ -624,7 +624,7 @@ describe('BF20261013-034 端点改接：换端口侧 + 丢弃失效拐点', () =
     expect(after.sourceId).toBe('node_c')
     expect(after.waypoints).toEqual([])
     expect(after.config.sourceSide).toBe('bottom')
-    expect(parsePathPoints(after.path)[0]).toEqual({ x: 420, y: 525 })
+    expect(parsePathPoints(after.path)[0]).toEqual({ x: 420, y: 518 })
     expectOrthogonalWithoutOverlap(parsePathPoints(after.path))
     // 自环/重复边仍拒绝
     expect(model.setEdgeEndpoint('edge_1', 'source', 'node_b')).toBeNull()
@@ -857,10 +857,10 @@ describe('BF20261013-031 直线可拖 / 端口外向夹取 / 端口对齐不绷�
     )
     model.moveNode('node_b', 420, 300)
     expect(model.state().edges[0].waypoints).toEqual([])
-    expect(model.state().edges[0].path).toBe('M 420 205 L 420 275')
+    expect(model.state().edges[0].path).toBe('M 420 205 L 420 282')
     model.moveNode('node_b', 600, 300)
     expect(model.state().edges[0].waypoints).toEqual([])
-    expect(model.state().edges[0].path).toBe('M 420 205 L 420 240 L 600 240 L 600 275')
+    expect(model.state().edges[0].path).toBe('M 420 205 L 420 243.5 L 600 243.5 L 600 282')
   })
 
   it('端口对齐时保留滑移折返（不绷直成直线）', () => {
@@ -898,7 +898,7 @@ describe('createDesignerModel', () => {
     const edge = model.state().edges[0]
     // P53 设计（节点19）：边线连接节点边框端口（右缘中心 → 左缘中心）；
     // BF20261013-029：横平竖直曼哈顿路由（竖段居中）
-    expect(edge.path).toBe('M 176 300 L 400 300 L 400 500 L 624 500')
+    expect(edge.path).toBe('M 118 300 L 400 300 L 400 500 L 682 500')
   })
 
   it('节点与连线操作更新状态并标记脏', () => {
@@ -986,8 +986,8 @@ describe('createDesignerModel', () => {
       22,
     )
     const state = model.state()
-    // 渲染折线 M 420 205 L 420 240 L 600 240 L 600 275：首段（x=420）上命中
-    expect(state.edges[0].path).toBe('M 420 205 L 420 240 L 600 240 L 600 275')
+    // 渲染折线 M 420 205 L 420 243.5 L 600 243.5 L 600 282：首段（x=420）上命中
+    expect(state.edges[0].path).toBe('M 420 205 L 420 243.5 L 600 243.5 L 600 282')
     expect(hitTestEdgeAtPoint(state.nodes, state.edges, 420, 220)).toBe('edge_1')
     // 源-目标中心直连虚位（无可见连线）不命中
     expect(hitTestEdgeAtPoint(state.nodes, state.edges, 470, 213)).toBeNull()

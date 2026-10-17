@@ -28,6 +28,9 @@ export const NODE_WIDTH = DESIGNER_NODE_WIDTH
 export const NODE_HEIGHT = DESIGNER_NODE_HEIGHT
 export const EDGE_CURVE_HEIGHT = 40
 
+/** 事件节点（开始/结束）图标半径：设计与只读渲染、端口计算共用同一值。 */
+export const EVENT_NODE_RADIUS = 18
+
 /** 默认流程图走向：自上而下（Owner 0.1.7 口径，取代旧的左右默认）。 */
 export const DEFAULT_LAYOUT_DIRECTION = 'TB'
 
@@ -382,13 +385,21 @@ export function sideAxis(side: PortSide): 'h' | 'v' {
   return side === 'left' || side === 'right' ? 'h' : 'v'
 }
 
-/** 端口坐标：水平边取左右缘中心，垂直边取上下缘中心；网关取菱形顶点（半径与渲染的菱形一致）。 */
+/** 端口坐标：水平边取左右缘中心，垂直边取上下缘中心；网关取菱形顶点、事件节点取圆周
+ *  （半径与各自渲染形状一致，避免连线悬空）。 */
 function portPoint(
   node: Pick<PositionedNode, 'x' | 'y' | 'type'>,
   side: 'left' | 'right' | 'top' | 'bottom',
   nodeSize: { width: number; height: number },
   gatewayRadius: number,
 ): { x: number; y: number } {
+  if (node.type === 'START' || node.type === 'END') {
+    const r = EVENT_NODE_RADIUS
+    if (side === 'left') return { x: node.x - r, y: node.y }
+    if (side === 'right') return { x: node.x + r, y: node.y }
+    if (side === 'top') return { x: node.x, y: node.y - r }
+    return { x: node.x, y: node.y + r }
+  }
   if (node.type === 'GATEWAY') {
     const r = gatewayRadius
     if (side === 'left') return { x: node.x - r, y: node.y }

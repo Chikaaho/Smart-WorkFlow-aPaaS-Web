@@ -150,7 +150,7 @@ const SNAP_Y = 20
 /** P53 设计稿专用节点几何；其它流程图继续使用适配器默认尺寸。 */
 const P53_NODE_WIDTH = 160
 const P53_NODE_HEIGHT = 50
-const P53_GATEWAY_RADIUS = 22
+const P53_GATEWAY_RADIUS = 18
 
 /**
  * 网关类节点（菱形渲染）：GATEWAY 为既有口径；P63 将 CONDITION 与

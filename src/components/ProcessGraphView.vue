@@ -57,8 +57,8 @@ const spec = computed(() =>
         props.graph,
         { width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT },
         22,
-        // 0.1.7：只读流程图统一按默认走向「自上而下」呈现（宽流程不再横排缩成一条线）
-        { layout: 'topDown' },
+        // 0.1.7：按图内坐标呈现（左右布局不废弃）；缺坐标的历史图回落默认走向「自上而下」
+        { layout: 'authored' },
       )
     : null,
 )
