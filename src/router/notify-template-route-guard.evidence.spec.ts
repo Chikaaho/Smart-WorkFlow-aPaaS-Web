@@ -260,8 +260,7 @@ describe('P36 R1: /notify/template 直达三身份真实导航证据', () => {
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/notify/template')
     expect(router.currentRoute.value.name).toBe('notify-template-list')
-    // 组件真实挂载：列表工具栏标题渲染 + 组件实例存在
-    expect(wrapper.find('.list-toolbar__title').text()).toContain('消息模板')
+    // 组件真实挂载：组件实例存在（0.1.7 #10/#25 起列表页不再渲染工具栏标题）
     expect(wrapper.findComponent(NotifyTemplateList).exists()).toBe(true)
     wrapper.unmount()
   })

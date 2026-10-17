@@ -373,10 +373,7 @@ onMounted(loadList)
   <section class="p53-admin-defs">
     <!-- 标题区：标题 + 副标题 + 右侧主操作（设计节点04 · 6:25 / 6:26 / 6:28） -->
     <header class="p53-admin-defs__heading">
-      <div class="p53-admin-defs__heading-text">
-        <h1>{{ t('common.processDef') }}</h1>
-        <p>{{ t('workflow.processDefListSubtitle') }}</p>
-      </div>
+      <!-- 0.1.7 #25：左上角标题/副标题为噪音，全部去除；动作按钮行右对齐保留 -->
       <div class="p53-admin-defs__heading-actions">
         <el-button v-if="returnFormId" @click="backToWorkbench">{{
           t('workflow.backToFormWorkbench')
@@ -566,31 +563,17 @@ onMounted(loadList)
 .p53-admin-defs {
   box-sizing: border-box;
   min-height: 100%;
-  padding: 32px;
+  padding: 12px 16px 8px;
   background: var(--sw-surface-page);
   color: #17213a;
 }
 
-/* ── 标题区 ── */
+/* ── 动作行（0.1.7 #25：标题/副标题已去噪，仅保留右对齐按钮行） ── */
 .p53-admin-defs__heading {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  min-height: 64px;
-}
-.p53-admin-defs__heading h1 {
-  margin: 0;
-  font-size: 28px;
-  line-height: 40px;
-  font-weight: 700;
-  color: #17213a;
-}
-.p53-admin-defs__heading p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 20px;
-  color: #8690ae; /* 设计精确值 */
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
 }
 .p53-admin-defs__heading-actions {
   display: flex;

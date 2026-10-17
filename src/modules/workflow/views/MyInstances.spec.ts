@@ -109,7 +109,7 @@ describe('MyInstances.vue', () => {
     expect(wrapper.vm).toHaveProperty('errorMsg', '无权查看')
   })
 
-  it('opens detail dialog and calls myInstanceDetail', async () => {
+  it('0.1.7 #17：有表单绑定的实例直达数据表单页（不弹元数据框）', async () => {
     vi.mocked(myInstances).mockResolvedValueOnce(mockPage)
     vi.mocked(myInstanceDetail).mockResolvedValueOnce(mockDetail)
     const wrapper = mount(MyInstances, { global: { stubs } })
@@ -121,9 +121,27 @@ describe('MyInstances.vue', () => {
     await nextTick()
 
     expect(myInstanceDetail).toHaveBeenCalledWith(1)
-    expect((wrapper.vm as unknown as { detail: MyInstanceDetail | null }).detail).toEqual(
-      mockDetail,
-    )
+    expect(mockPush).toHaveBeenCalledWith({
+      path: '/form/form-render/leave-request',
+      query: { recordId: 'rec-leave-001', mode: 'view' },
+    })
+    expect((wrapper.vm as unknown as { detail: MyInstanceDetail | null }).detail).toBeNull()
+  })
+
+  it('无表单绑定的实例回落元数据弹窗', async () => {
+    vi.mocked(myInstances).mockResolvedValueOnce(mockPage)
+    const unbound = { ...mockDetail, formKey: '', businessKey: '' }
+    vi.mocked(myInstanceDetail).mockResolvedValueOnce(unbound)
+    const wrapper = mount(MyInstances, { global: { stubs } })
+    await nextTick()
+
+    await (
+      wrapper.vm as unknown as { openDetail: (r: ProcessInstance) => Promise<void> }
+    ).openDetail(mockInstance)
+    await nextTick()
+
+    expect(mockPush).not.toHaveBeenCalled()
+    expect((wrapper.vm as unknown as { detail: MyInstanceDetail | null }).detail).toEqual(unbound)
   })
 
   it('reloads with status filter on search', async () => {

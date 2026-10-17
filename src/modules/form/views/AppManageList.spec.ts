@@ -41,12 +41,6 @@ import type { FormApp } from '@/contracts/app-center'
 import AppManageList from './AppManageList.vue'
 
 const minimalStubs = {
-  StandardListTemplate: {
-    template:
-      '<div><slot name="toolbar-actions"/><slot name="filter"/><slot name="filter-actions"/><slot/><slot name="empty-action"/></div>',
-    props: ['title', 'total', 'pageNum', 'pageSize', 'empty'],
-    emits: ['update:pageNum', 'update:pageSize'],
-  },
   LoadErrorState: { template: '<div/>', props: ['error'] },
   UserRemoteSelect: { template: '<div/>', props: ['modelValue', 'multiple'] },
   AppIcon: { template: '<i/>', props: ['icon', 'color', 'size'] },
@@ -90,41 +84,26 @@ describe('AppManageList', () => {
     expect(listFormApps).toHaveBeenCalledTimes(1)
   })
 
-  it('可见范围展示语义：全部用户 / 指定 N 人 / 无人可见', async () => {
+  it('网格画布：应用渲染为卡片（图标+名称+三点），最后固定「新建应用」卡', async () => {
     vi.mocked(listFormApps).mockResolvedValue([
-      app({ id: 'a1', name: '全员', visibleScopeType: 'ALL', visibleUserIds: null }),
-      app({ id: 'a2', name: '指定', visibleScopeType: 'SPECIFIED', visibleUserIds: [5, 8] }),
-      app({ id: 'a3', name: '空集', visibleScopeType: 'SPECIFIED', visibleUserIds: [] }),
+      app({ id: 'a1', name: '全员' }),
+      app({ id: 'a2', name: '指定' }),
     ])
     const wrapper = mount(AppManageList, { global: { stubs: minimalStubs } })
     await nextTick()
     await nextTick()
-    const vm = wrapper.vm as unknown as { scopeLabel: (row: FormApp) => string }
-    expect(vm.scopeLabel(app({ visibleScopeType: 'ALL' }))).toBe('全部用户')
-    expect(vm.scopeLabel(app({ visibleScopeType: 'SPECIFIED', visibleUserIds: [5, 8] }))).toBe(
-      '指定 2 人',
-    )
-    expect(vm.scopeLabel(app({ visibleScopeType: 'SPECIFIED', visibleUserIds: [] }))).toBe(
-      '无人可见',
-    )
+    const cards = wrapper.findAll('[data-testid="app-card"]')
+    expect(cards).toHaveLength(2)
+    expect(wrapper.find('[data-testid="app-create"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('全员')
   })
 
-  it('来源标注区分手动创建与存量承接', async () => {
-    vi.mocked(listFormApps).mockResolvedValue([])
-    const wrapper = mount(AppManageList, { global: { stubs: minimalStubs } })
-    await nextTick()
-    const vm = wrapper.vm as unknown as { sourceLabel: (row: FormApp) => string }
-    expect(vm.sourceLabel(app({ source: 'MANUAL' }))).toBe('手动创建')
-    expect(vm.sourceLabel(app({ source: 'LEGACY_CATEGORY' }))).toBe('存量分类承接')
-    expect(vm.sourceLabel(app({ source: 'LEGACY_UNCATEGORIZED' }))).toBe('存量未分类承接')
-  })
-
-  it('空列表时进入空态（不误报加载中）', async () => {
+  it('空列表仍渲染「新建应用」卡（网格画布不留空白）', async () => {
     vi.mocked(listFormApps).mockResolvedValue([])
     const wrapper = mount(AppManageList, { global: { stubs: minimalStubs } })
     await nextTick()
     await nextTick()
-    const vm = wrapper.vm as unknown as { isEmpty: boolean }
-    expect(vm.isEmpty).toBe(true)
+    expect(wrapper.findAll('[data-testid="app-card"]')).toHaveLength(0)
+    expect(wrapper.find('[data-testid="app-create"]').exists()).toBe(true)
   })
 })

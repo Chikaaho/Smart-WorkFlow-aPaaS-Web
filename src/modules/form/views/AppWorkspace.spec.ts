@@ -121,18 +121,11 @@ describe('AppWorkspace（应用管理上下文）', () => {
     expect(vm.dirs[0]?.forms?.map((f) => f.name)).toContain('差旅报销')
   })
 
-  it('目录表单状态标签语义正确', async () => {
+  it('0.1.7 #25：侧栏头只留返回箭头（应用名等左上角噪音移除）', async () => {
     const wrapper = mount(AppWorkspace, { global: { stubs: minimalStubs } })
     await nextTick()
-    const vm = wrapper.vm as unknown as {
-      statusLabel: (s: string) => string
-      statusTagType: (s: string) => string
-    }
-    expect(vm.statusLabel('PUBLISHED')).toBe('已发布')
-    expect(vm.statusLabel('DRAFT')).toBe('草稿')
-    expect(vm.statusLabel('DISABLED')).toBe('已停用')
-    expect(vm.statusTagType('PUBLISHED')).toBe('success')
-    expect(vm.statusTagType('DRAFT')).toBe('warning')
+    expect(wrapper.find('[data-testid="app-back"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="app-detail-name"]').exists()).toBe(false)
   })
 
   it('内容为空：进入空态', async () => {
@@ -153,6 +146,6 @@ describe('AppWorkspace（应用管理上下文）', () => {
     const wrapper = mount(AppWorkspace, { global: { stubs: minimalStubs } })
     await nextTick()
     await nextTick()
-    expect(wrapper.find('.app-workspace__error').exists()).toBe(true)
+    expect(wrapper.find('.app-ws__error').exists()).toBe(true)
   })
 })

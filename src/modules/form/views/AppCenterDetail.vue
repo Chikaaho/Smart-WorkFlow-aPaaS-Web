@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Folder } from '@element-plus/icons-vue'
-import AppIcon from '@/modules/form/components/AppIcon.vue'
+import { ArrowLeft, Folder } from '@element-plus/icons-vue'
 import AppFormData from '@/modules/form/views/AppFormData.vue'
 import { getAppCenterContent } from '@/modules/form/api/app-center'
 import type { FormAppContent, FormAppFormItem } from '@/contracts/app-center'
@@ -81,13 +80,16 @@ onMounted(() => {
 <template>
   <div class="app-detail">
     <div class="app-detail__head">
-      <AppIcon v-if="content" :icon="content.app.icon" :color="content.app.color" :size="18" />
-      <h1 class="app-detail__title" data-testid="app-detail-name">
-        {{ content?.app.name ?? t('form.appCenter.centerTitle') }}
-      </h1>
-      <el-button class="app-detail__back" data-testid="app-detail-back" @click="backToCenter">
-        {{ t('form.appCenter.backToCenter') }}
-      </el-button>
+      <!-- 0.1.7 #22/#25：左上角圆角返回箭头，应用名等左上角噪音全部去除 -->
+      <button
+        type="button"
+        class="app-detail__back"
+        data-testid="app-detail-back"
+        :title="t('common.backShort')"
+        @click="backToCenter"
+      >
+        <el-icon><ArrowLeft /></el-icon>
+      </button>
     </div>
 
     <div v-if="errorMsg" class="app-detail__error">{{ errorMsg }}</div>
@@ -159,17 +161,24 @@ onMounted(() => {
 .app-detail__head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 24px 12px;
-}
-.app-detail__title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0;
+  padding: 10px 16px 0;
 }
 .app-detail__back {
-  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--sw-border-base, #dcdfe6);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--sw-text-regular, #606266);
+  cursor: pointer;
+}
+.app-detail__back:hover {
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary-light-7, #c6e2ff);
+  background: var(--el-color-primary-light-9, #ecf5ff);
 }
 .app-detail__error {
   color: #f56c6c;

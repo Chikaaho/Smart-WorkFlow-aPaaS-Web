@@ -3,7 +3,6 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Folder, MoreFilled, Plus } from '@element-plus/icons-vue'
-import AppIcon from '@/modules/form/components/AppIcon.vue'
 import AppFormData from '@/modules/form/views/AppFormData.vue'
 import {
   createFormAppDir,
@@ -278,6 +277,7 @@ onMounted(() => {
       <!-- 应用专属侧边栏：返回箭头 + 应用身份 + 目录/表单树 + 左下角新建 -->
       <aside class="app-ws__side">
         <div class="app-ws__side-head">
+          <!-- 0.1.7 #25：左上角只留返回箭头（应用名/图标/状态是噪音） -->
           <button
             type="button"
             class="app-ws__back"
@@ -287,19 +287,6 @@ onMounted(() => {
           >
             <el-icon><ArrowLeft /></el-icon>
           </button>
-          <AppIcon
-            v-if="content"
-            class="app-ws__app-icon"
-            :icon="content.app.icon"
-            :color="content.app.color"
-            :size="18"
-          />
-          <span class="app-ws__app-name" data-testid="app-detail-name">
-            {{ content?.app.name ?? t('form.appCenter.workspaceTitle') }}
-          </span>
-          <el-tag v-if="content?.app.status === 'DISABLED'" type="info" size="small">
-            {{ t('form.appCenter.statusDisabled') }}
-          </el-tag>
         </div>
 
         <nav v-if="!isEmpty" class="app-ws__tree" :aria-label="t('form.appCenter.appNavTitle')">
@@ -530,14 +517,6 @@ onMounted(() => {
   color: #409eff;
   border-color: #c6e2ff;
   background: #ecf5ff;
-}
-.app-ws__app-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .app-ws__tree {
   flex: 1;

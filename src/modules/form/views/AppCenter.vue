@@ -81,11 +81,6 @@ onMounted(() => {
 
 <template>
   <div class="app-center">
-    <div class="app-center__head">
-      <h1 class="app-center__title">{{ t('form.appCenter.centerTitle') }}</h1>
-      <p class="app-center__subtitle">{{ t('form.appCenter.centerSubtitle') }}</p>
-    </div>
-
     <div class="app-center__bar">
       <el-input
         v-model="keyword"
@@ -145,21 +140,7 @@ onMounted(() => {
 
 <style scoped>
 .app-center {
-  padding: 20px 24px;
-}
-.app-center__head {
-  margin-bottom: 12px;
-}
-.app-center__title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0 0 4px;
-}
-.app-center__subtitle {
-  font-size: 13px;
-  color: #909399;
-  margin: 0;
+  padding: 12px 16px 8px;
 }
 /* 原型：搜索条占满、每行数量设置按钮贴右缘 */
 .app-center__bar {

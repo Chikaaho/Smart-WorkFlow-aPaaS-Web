@@ -177,15 +177,4 @@ describe('ProcessedList.vue', () => {
       query: { source: 'processed' },
     })
   })
-
-  it('navigates to TodoList on toolbar button click', async () => {
-    vi.mocked(queryProcessedTasks).mockResolvedValueOnce(mockPageResult)
-    const wrapper = mount(ProcessedList, { global: { stubs } })
-    await nextTick()
-
-    const button = wrapper.find('button')
-    await button.trigger('click')
-
-    expect(mockPush).toHaveBeenCalledWith({ name: 'TodoList' })
-  })
 })

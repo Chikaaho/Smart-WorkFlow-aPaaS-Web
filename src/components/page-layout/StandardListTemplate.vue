@@ -35,24 +35,22 @@ const emit = defineEmits<{
 
 <template>
   <div class="standard-list">
-    <!-- 工具栏：0.1.7 #10（Owner 回归裁决：全局所有列表页去左上角标题）——
-         无标题且无动作且不显示总数时不渲染，避免留一条空工具栏 -->
+    <!-- 0.1.7 #25：搜索/筛选栏是页面最顶部的元素——原「工具栏」动作按钮（新建等）
+         并入筛选栏动作区（toolbar-actions 在 filter-actions 之前），独立工具栏行取消；
+         ListToolbar 仅在显式传 title/total 的页面保留（0.1.7 #10 已全局去标题）。 -->
     <ListToolbar
-      v-if="props.title || $slots['toolbar-actions'] || props.showToolbarTotal"
+      v-if="props.title || props.showToolbarTotal"
       :title="props.title"
       :description="props.description"
       :large="props.large"
       :total="props.showToolbarTotal ? props.total : undefined"
-    >
-      <template v-if="$slots['toolbar-actions']" #actions>
-        <slot name="toolbar-actions" />
-      </template>
-    </ListToolbar>
+    />
 
-    <!-- 筛选区（BF20261013-040：两个槽都为空时不渲染——否则会留一条 48px 的空白白条） -->
-    <ListFilterBar v-if="$slots.filter || $slots['filter-actions']">
+    <!-- 筛选区（BF20261013-040：所有动作槽都为空时不渲染——否则会留一条空白白条） -->
+    <ListFilterBar v-if="$slots.filter || $slots['filter-actions'] || $slots['toolbar-actions']">
       <slot name="filter" />
-      <template v-if="$slots['filter-actions']" #actions>
+      <template v-if="$slots['filter-actions'] || $slots['toolbar-actions']" #actions>
+        <slot name="toolbar-actions" />
         <slot name="filter-actions" />
       </template>
     </ListFilterBar>
@@ -89,7 +87,7 @@ const emit = defineEmits<{
   flex-direction: column;
   box-sizing: border-box;
   min-height: 100%;
-  padding: 20px 24px 12px;
+  padding: 12px 16px 8px;
 }
 .standard-list > .list-table {
   flex: 1 0 auto;
@@ -103,6 +101,6 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 0 var(--sw-space-12);
+  margin: 0 0 var(--sw-space-8);
 }
 </style>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Menu } from '@element-plus/icons-vue'
+import { ArrowLeft, Menu } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { StandardListTemplate, LoadErrorState, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
@@ -164,8 +164,11 @@ const displayColumns = computed(() =>
   orderedColumns.value.filter((c) => !columnPref.value.hidden.includes(c.prop)),
 )
 
-const columnDialogVisible = ref(false)
+const columnDrawerVisible = ref(false)
 const draftColumns = ref<Array<{ prop: string; label: string; visible: boolean }>>([])
+/** 拖拽状态：仅允许通过 ≡ 手柄发起拖拽（0.1.7 #23） */
+const dragArmedIndex = ref<number | null>(null)
+const dragFromIndex = ref<number | null>(null)
 
 function openColumnSettings() {
   draftColumns.value = orderedColumns.value.map((c) => ({
@@ -173,19 +176,10 @@ function openColumnSettings() {
     label: c.label,
     visible: !columnPref.value.hidden.includes(c.prop),
   }))
-  columnDialogVisible.value = true
+  columnDrawerVisible.value = true
 }
 
-function moveDraftColumn(index: number, delta: -1 | 1) {
-  const target = index + delta
-  if (target < 0 || target >= draftColumns.value.length) return
-  const next = draftColumns.value.slice()
-  const [moved] = next.splice(index, 1)
-  if (!moved) return
-  next.splice(target, 0, moved)
-  draftColumns.value = next
-}
-
+/** 勾选/拖拽即时持久化（抽屉无确认按钮，改动即生效）。 */
 function applyColumnSettings() {
   if (!draftColumns.value.some((c) => c.visible)) {
     ElMessage.warning(t('form.appCenter.columnRequired'))
@@ -197,15 +191,54 @@ function applyColumnSettings() {
   }
   columnPref.value = next
   globalThis.localStorage?.setItem(`${COLUMN_PREF_PREFIX}${formKey.value}`, JSON.stringify(next))
-  columnDialogVisible.value = false
 }
 
-function resetColumnSettings() {
-  draftColumns.value = orderedColumns.value.map((c) => ({
-    prop: c.prop,
-    label: c.label,
-    visible: true,
-  }))
+function toggleDraftColumn(index: number, visible: boolean) {
+  const col = draftColumns.value[index]
+  if (!col) return
+  if (!visible && draftColumns.value.filter((c) => c.visible).length <= 1) {
+    ElMessage.warning(t('form.appCenter.columnRequired'))
+    return
+  }
+  col.visible = visible
+  applyColumnSettings()
+}
+
+function armColumnDrag(index: number) {
+  dragArmedIndex.value = index
+}
+
+/** 结构类型口径（dnd.ts 同因）：.vue 内不直书 DOM 全局名，真实 DragEvent 结构化匹配。 */
+function onColumnDragStart(
+  index: number,
+  event: {
+    dataTransfer: { setData: (format: string, data: string) => void } | null
+    preventDefault: () => void
+  },
+) {
+  if (dragArmedIndex.value !== index) {
+    event.preventDefault()
+    return
+  }
+  dragFromIndex.value = index
+  event.dataTransfer?.setData('text/plain', String(index))
+}
+
+function onColumnDrop(index: number) {
+  const from = dragFromIndex.value
+  dragArmedIndex.value = null
+  if (from === null || from === index) return
+  const next = draftColumns.value.slice()
+  const [moved] = next.splice(from, 1)
+  if (!moved) return
+  next.splice(index, 0, moved)
+  draftColumns.value = next
+  applyColumnSettings()
+}
+
+function onColumnDragEnd() {
+  dragArmedIndex.value = null
+  dragFromIndex.value = null
 }
 
 async function loadDefinition() {
@@ -426,7 +459,7 @@ async function reload() {
   schemaLoaded.value = false
   idLabelMaps.value = null
   columnPref.value = readColumnPref(formKey.value)
-  columnDialogVisible.value = false
+  columnDrawerVisible.value = false
   await loadDefinition()
   if (canQuery.value) {
     await loadData()
@@ -447,173 +480,184 @@ onMounted(async () => {
 </script>
 
 <template>
-  <StandardListTemplate
-    :show-toolbar-total="canQuery"
-    :total="result?.total ?? 0"
-    :page-num="pageNum"
-    :page-size="pageSize"
-    :empty="isEmpty"
-    @update:page-num="handlePageNumChange"
-    @update:page-size="handlePageSizeChange"
-  >
-    <template #toolbar-actions>
-      <el-button v-if="!embedded" @click="backToApp">{{
-        t('form.appCenter.backToCenter')
-      }}</el-button>
-      <el-button
-        v-if="canQuery && columns.length > 0"
-        data-testid="form-column-settings"
-        :icon="Menu"
-        :title="t('form.appCenter.columnSettingsHint')"
-        @click="openColumnSettings"
+  <div class="afd">
+    <!-- 0.1.7 #22：返回入口统一为左上角圆角箭头（仅深链/独立页渲染；嵌入态由宿主页提供） -->
+    <div v-if="!embedded" class="afd__back-row">
+      <button
+        type="button"
+        class="afd__back"
+        data-testid="form-data-back"
+        :title="t('common.backShort')"
+        @click="backToApp"
       >
-        {{ t('form.appCenter.columnSettings') }}
-      </el-button>
-      <el-button type="primary" data-testid="form-data-create" @click="handleCreate">
-        {{ t('form.appCenter.createRecord') }}
-      </el-button>
-    </template>
-
-    <!-- 筛选栏（有查询权限时可用） -->
-    <template v-if="canQuery" #filter>
-      <template v-for="ff in filterFields" :key="ff.field">
-        <el-input
-          v-if="ff.type === 'TEXT' || ff.type === 'NUMBER'"
-          v-model="filterValues[ff.field]"
-          :placeholder="ff.label"
-          clearable
-          style="width: 180px"
-          @keyup.enter="handleQuery"
-        />
-        <el-select
-          v-else-if="ff.type === 'BOOL'"
-          v-model="filterValues[ff.field]"
-          :placeholder="ff.label"
-          clearable
-          style="width: 120px"
-        >
-          <el-option :label="t('common.yes')" value="1" />
-          <el-option :label="t('common.no')" value="0" />
-        </el-select>
-        <DictSelect
-          v-else-if="ff.type === 'DICT'"
-          v-model="filterValues[ff.field]"
-          :type="ff.dictType ?? ''"
-          :placeholder="ff.label"
-          size="default"
-        />
-        <el-date-picker
-          v-else-if="ff.type === 'DATE'"
-          v-model="dateRange"
-          type="daterange"
-          :range-separator="t('common.to')"
-          :start-placeholder="t('common.startDate')"
-          :end-placeholder="t('common.endDate')"
-          value-format="YYYY-MM-DD"
-          style="width: 240px"
-        />
+        <el-icon><ArrowLeft /></el-icon>
+      </button>
+    </div>
+    <StandardListTemplate
+      :total="result?.total ?? 0"
+      :page-num="pageNum"
+      :page-size="pageSize"
+      :empty="isEmpty"
+      @update:page-num="handlePageNumChange"
+      @update:page-size="handlePageSizeChange"
+    >
+      <!-- 筛选栏（有查询权限时可用） -->
+      <template v-if="canQuery" #filter>
+        <template v-for="ff in filterFields" :key="ff.field">
+          <el-input
+            v-if="ff.type === 'TEXT' || ff.type === 'NUMBER'"
+            v-model="filterValues[ff.field]"
+            :placeholder="ff.label"
+            clearable
+            style="width: 180px"
+            @keyup.enter="handleQuery"
+          />
+          <el-select
+            v-else-if="ff.type === 'BOOL'"
+            v-model="filterValues[ff.field]"
+            :placeholder="ff.label"
+            clearable
+            style="width: 120px"
+          >
+            <el-option :label="t('common.yes')" value="1" />
+            <el-option :label="t('common.no')" value="0" />
+          </el-select>
+          <DictSelect
+            v-else-if="ff.type === 'DICT'"
+            v-model="filterValues[ff.field]"
+            :type="ff.dictType ?? ''"
+            :placeholder="ff.label"
+            size="default"
+          />
+          <el-date-picker
+            v-else-if="ff.type === 'DATE'"
+            v-model="dateRange"
+            type="daterange"
+            :range-separator="t('common.to')"
+            :start-placeholder="t('common.startDate')"
+            :end-placeholder="t('common.endDate')"
+            value-format="YYYY-MM-DD"
+            style="width: 240px"
+          />
+        </template>
       </template>
-    </template>
-    <template v-if="canQuery" #filter-actions>
-      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
-      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
-    </template>
+      <template v-if="canQuery" #filter-actions>
+        <el-button data-testid="form-data-create" @click="handleCreate">{{
+          t('form.appCenter.createRecord')
+        }}</el-button>
+        <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+        <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+      </template>
 
-    <!-- 无查询权限：明确受限态，保留已获授权的填写/发起入口 -->
-    <div v-if="!canQuery" class="data-forbidden" data-testid="data-forbidden">
-      <p class="data-forbidden__title">{{ t('form.appCenter.dataForbiddenTitle') }}</p>
-      <p class="data-forbidden__desc">{{ t('form.appCenter.dataForbiddenDesc') }}</p>
-      <el-button type="primary" @click="handleCreate">{{
-        t('form.appCenter.createRecord')
-      }}</el-button>
-    </div>
-
-    <LoadErrorState v-else-if="loadError" :error="loadError" @retry="loadData" />
-
-    <template v-else>
-      <el-table
-        v-loading="loading"
-        :data="result?.list ?? []"
-        stripe
-        style="width: 100%"
-        :show-overflow-tooltip="true"
-      >
-        <el-table-column
-          v-for="col in displayColumns"
-          :key="col.prop"
-          :prop="col.prop"
-          :label="col.label"
-          :min-width="col.type === 'DICT' || col.type === 'BOOL' ? 100 : 140"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            <DictTag
-              v-if="col.type === 'DICT' && col.dictType"
-              :type="col.dictType"
-              :value="String(row[col.prop] ?? '')"
-            />
-            <el-tag
-              v-else-if="col.type === 'BOOL'"
-              :type="row[col.prop] === 1 || row[col.prop] === true ? 'success' : 'info'"
-              size="small"
-            >
-              {{ formatCellValue(row, col) }}
-            </el-tag>
-            <span v-else>{{ formatCellValue(row, col) }}</span>
-          </template>
-        </el-table-column>
-
-        <ListActionsColumn :actions="rowActions" :width="140" />
-      </el-table>
-    </template>
-
-    <template #empty-action>
-      <el-button type="primary" @click="handleCreate">{{
-        t('form.appCenter.createRecord')
-      }}</el-button>
-    </template>
-  </StandardListTemplate>
-
-  <!-- 表头设置：勾选展示列 + 调整顺序（原型：表头右侧「设置」） -->
-  <el-dialog
-    v-model="columnDialogVisible"
-    :title="t('form.appCenter.columnSettings')"
-    width="420px"
-    append-to-body
-  >
-    <div class="column-settings" data-testid="column-settings-list">
-      <div v-for="(col, index) in draftColumns" :key="col.prop" class="column-settings__row">
-        <el-checkbox v-model="col.visible">{{ col.label }}</el-checkbox>
-        <span class="column-settings__actions">
-          <el-button
-            size="small"
-            :disabled="index === 0"
-            :title="t('form.appCenter.moveUp')"
-            @click="moveDraftColumn(index, -1)"
-          >
-            ↑
-          </el-button>
-          <el-button
-            size="small"
-            :disabled="index === draftColumns.length - 1"
-            :title="t('form.appCenter.moveDown')"
-            @click="moveDraftColumn(index, 1)"
-          >
-            ↓
-          </el-button>
-        </span>
+      <!-- 无查询权限：明确受限态，保留已获授权的填写/发起入口 -->
+      <div v-if="!canQuery" class="data-forbidden" data-testid="data-forbidden">
+        <p class="data-forbidden__title">{{ t('form.appCenter.dataForbiddenTitle') }}</p>
+        <p class="data-forbidden__desc">{{ t('form.appCenter.dataForbiddenDesc') }}</p>
+        <el-button type="primary" data-testid="form-data-create" @click="handleCreate">{{
+          t('form.appCenter.createRecord')
+        }}</el-button>
       </div>
-    </div>
-    <template #footer>
-      <el-button data-testid="column-settings-reset" @click="resetColumnSettings">{{
-        t('form.appCenter.restoreDefault')
-      }}</el-button>
-      <el-button @click="columnDialogVisible = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" data-testid="column-settings-apply" @click="applyColumnSettings">
-        {{ t('common.confirm') }}
-      </el-button>
-    </template>
-  </el-dialog>
+
+      <LoadErrorState v-else-if="loadError" :error="loadError" @retry="loadData" />
+
+      <template v-else>
+        <el-table
+          v-loading="loading"
+          :data="result?.list ?? []"
+          stripe
+          style="width: 100%"
+          :show-overflow-tooltip="true"
+        >
+          <el-table-column
+            v-for="col in displayColumns"
+            :key="col.prop"
+            :prop="col.prop"
+            :label="col.label"
+            :min-width="col.type === 'DICT' || col.type === 'BOOL' ? 100 : 140"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <DictTag
+                v-if="col.type === 'DICT' && col.dictType"
+                :type="col.dictType"
+                :value="String(row[col.prop] ?? '')"
+              />
+              <el-tag
+                v-else-if="col.type === 'BOOL'"
+                :type="row[col.prop] === 1 || row[col.prop] === true ? 'success' : 'info'"
+                size="small"
+              >
+                {{ formatCellValue(row, col) }}
+              </el-tag>
+              <span v-else>{{ formatCellValue(row, col) }}</span>
+            </template>
+          </el-table-column>
+
+          <ListActionsColumn :actions="rowActions" :width="150">
+            <template #header>
+              <span class="afd__cols-head">
+                {{ t('common.actions') }}
+                <button
+                  v-if="columns.length > 0"
+                  type="button"
+                  class="afd__cols-trigger"
+                  data-testid="form-column-settings"
+                  :title="t('form.appCenter.columnSettings')"
+                  @click.stop="openColumnSettings"
+                >
+                  <el-icon><Menu /></el-icon>
+                </button>
+              </span>
+            </template>
+          </ListActionsColumn>
+        </el-table>
+      </template>
+
+      <template #empty-action>
+        <el-button type="primary" @click="handleCreate">{{
+          t('form.appCenter.createRecord')
+        }}</el-button>
+      </template>
+    </StandardListTemplate>
+
+    <!-- 0.1.7 #23：表头设置 = 右侧抽屉；字段按当前顺序排列，右侧「显示」勾选 + ≡ 手柄拖拽排序，改动即时生效 -->
+    <el-drawer
+      v-model="columnDrawerVisible"
+      :title="t('form.appCenter.columnSettings')"
+      direction="rtl"
+      size="320px"
+      append-to-body
+    >
+      <ul class="afd-cols" data-testid="column-settings-list">
+        <li
+          v-for="(col, index) in draftColumns"
+          :key="col.prop"
+          class="afd-cols__row"
+          draggable="true"
+          @dragstart="onColumnDragStart(index, $event)"
+          @dragover.prevent
+          @drop="onColumnDrop(index)"
+          @dragend="onColumnDragEnd"
+        >
+          <span class="afd-cols__label">{{ col.label }}</span>
+          <span class="afd-cols__ops">
+            <el-checkbox
+              :model-value="col.visible"
+              @update:model-value="toggleDraftColumn(index, Boolean($event))"
+              >{{ t('form.appCenter.columnShow') }}</el-checkbox
+            >
+            <span
+              class="afd-cols__handle"
+              :title="t('form.appCenter.columnDragHint')"
+              @mousedown="armColumnDrag(index)"
+            >
+              <el-icon><Menu /></el-icon>
+            </span>
+          </span>
+        </li>
+      </ul>
+    </el-drawer>
+  </div>
 </template>
 
 <style scoped>
@@ -631,21 +675,80 @@ onMounted(async () => {
   color: #909399;
   margin: 0 0 12px;
 }
-.column-settings {
+.afd__back-row {
+  padding: 8px 16px 0;
+}
+.afd__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--sw-border-base, #dcdfe6);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--sw-text-regular, #606266);
+  cursor: pointer;
+}
+.afd__back:hover {
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary-light-7, #c6e2ff);
+  background: var(--el-color-primary-light-9, #ecf5ff);
+}
+.afd__cols-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.afd__cols-trigger {
+  display: inline-flex;
+  padding: 2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sw-text-secondary, #909399);
+  cursor: pointer;
+}
+.afd__cols-trigger:hover {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9, #ecf5ff);
+}
+.afd-cols {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: 320px;
-  overflow-y: auto;
+  gap: 4px;
 }
-.column-settings__row {
+.afd-cols__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fafbfe;
 }
-.column-settings__actions {
+.afd-cols__row:hover {
+  background: #f0f4fb;
+}
+.afd-cols__label {
+  font-size: 13px;
+  color: var(--sw-text-primary, #303133);
+}
+.afd-cols__ops {
   display: inline-flex;
-  gap: 4px;
+  align-items: center;
+  gap: 10px;
+}
+.afd-cols__handle {
+  display: inline-flex;
+  padding: 2px;
+  color: #909399;
+  cursor: grab;
+}
+.afd-cols__handle:active {
+  cursor: grabbing;
 }
 </style>

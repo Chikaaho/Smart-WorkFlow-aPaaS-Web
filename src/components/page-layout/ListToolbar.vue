@@ -37,7 +37,7 @@ defineProps<{ title?: string; total?: number; description?: string; large?: bool
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--sw-space-16);
+  margin-bottom: var(--sw-space-10, 10px);
 }
 
 .list-toolbar__left {

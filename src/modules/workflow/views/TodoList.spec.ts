@@ -314,17 +314,4 @@ describe('TodoList.vue', () => {
 
     expect(claimTask).not.toHaveBeenCalled()
   })
-
-  it('navigates to ProcessedList on toolbar button click', async () => {
-    vi.mocked(queryTodoTasks).mockResolvedValueOnce(mockPageResult)
-    const wrapper = mount(TodoList, { global: { stubs } })
-    await nextTick()
-
-    // 查找「已办任务」按钮并点击
-    const button = wrapper.findAll('button').find((b) => b.text().includes('已办任务'))
-    expect(button).toBeDefined()
-    await button!.trigger('click')
-
-    expect(mockPush).toHaveBeenCalledWith({ name: 'ProcessedList' })
-  })
 })

@@ -111,11 +111,11 @@
   --sw-control-height: 32px;
   --sw-control-height-sm: 28px;
   --sw-form-row-gap: 22px;
-  --sw-table-row-height: 50px;
-  --sw-table-row-height-compact: 40px;
+  --sw-table-row-height: 44px;
+  --sw-table-row-height-compact: 38px;
   --sw-cell-padding-x: 16px;
-  --sw-card-padding: 24px;
-  --sw-section-gap: 20px;
+  --sw-card-padding: 12px 16px;
+  --sw-section-gap: 10px;
 
   /* ── 布局（P53 设计：顶栏 64px 主导航 + 深色侧栏 220px） ── */
   --sw-layout-aside-width: 224px;
