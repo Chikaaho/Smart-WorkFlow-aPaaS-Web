@@ -16,6 +16,8 @@ export interface FieldPatch {
   name?: string
   required?: boolean
   length?: number
+  /** 字段描述（0.1.7 #38 契约已落 BaseField.description）：字段清单里可直接维护的说明。 */
+  description?: string
   /** 占位提示（P53 契约已落 BaseField.placeholder）。 */
   placeholder?: string
   /** 24 列布局中的合法横向列数。 */

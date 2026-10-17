@@ -62,6 +62,8 @@ interface RawSubFieldDef {
   label?: string
   required?: boolean
   length?: number
+  /** 字段描述（0.1.7 #38 定义契约键透传；纯元数据）。 */
+  description?: string
   placeholder?: string
   dictType?: string
   renderAs?: string
@@ -117,6 +119,8 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     ...(isFieldLabelPosition(raw.labelPosition) ? { labelPosition: raw.labelPosition } : {}),
     required: raw.required ?? false,
     ...(raw.length !== undefined ? { length: raw.length } : {}),
+    // 0.1.7 #38：字段描述（定义契约键透传；字段清单可直接维护）
+    ...(raw.description !== undefined ? { description: raw.description } : {}),
     ...(raw.placeholder !== undefined ? { placeholder: raw.placeholder } : {}),
     colSpan: normalizeFormFieldColSpan(raw.colSpan, raw.type),
     ...(raw.defaultValue !== undefined ? { defaultValue: raw.defaultValue } : {}),
@@ -216,6 +220,8 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
         ...(sf.label !== undefined ? { label: sf.label } : {}),
         ...(sf.required !== undefined ? { required: sf.required } : {}),
         ...(sf.length !== undefined ? { length: sf.length } : {}),
+        // 0.1.7 #38：子表字段描述（字段清单可直接维护）
+        ...(sf.description !== undefined ? { description: sf.description } : {}),
         ...(sf.dictType !== undefined ? { dictType: sf.dictType } : {}),
         ...(sf.renderAs !== undefined ? { renderAs: sf.renderAs as 'select' | 'radio' } : {}),
         ...(sf.targetFormId !== undefined ? { targetFormId: sf.targetFormId } : {}),

@@ -298,3 +298,15 @@ const FIELD_STORAGE_FAMILY: Record<string, string> = {
 export function getFieldTypeStorage(type: string): string {
   return FIELD_STORAGE_FAMILY[type] ?? 'VARCHAR'
 }
+
+/**
+ * 该类型是否有「字段长度」口径（0.1.7 #38 字段清单：仅字符串族可改长度）。
+ *
+ * 口径 = 存储族为 VARCHAR/TEXT 的字段（其余类型长度无落点：数字/日期/布尔/多选 JSON/
+ * 附件 JSON/关联 ID/计算列/子表本体），字段清单里对非字符串族显示「—」且不可编辑。
+ */
+const FIELD_LENGTH_TYPES = new Set(['TEXT', 'RICH_TEXT', 'DICT', 'DATASOURCE'])
+
+export function supportsFieldLength(type: string): boolean {
+  return FIELD_LENGTH_TYPES.has(type)
+}

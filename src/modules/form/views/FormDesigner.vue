@@ -23,7 +23,7 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
-import { Back, Setting } from '@element-plus/icons-vue'
+import { Back } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type {
   FormSchema,
@@ -34,6 +34,7 @@ import type {
 import FieldPalette from '../designer/FieldPalette.vue'
 import DesignerCanvas from '../designer/DesignerCanvas.vue'
 import FieldConfigPanel from '../designer/FieldConfigPanel.vue'
+import FieldListPanel from '../designer/FieldListPanel.vue'
 import SubFieldDesigner from '../designer/SubFieldDesigner.vue'
 import PreviewModal from '../designer/PreviewModal.vue'
 import HistoryVersionsDialog from '../designer/HistoryVersionsDialog.vue'
@@ -51,7 +52,6 @@ import {
   type WorkbenchTab,
 } from '../designer/workbench'
 import { applyFieldPatch, type FieldPatch } from '../designer/field-config'
-import { getFieldTypeStorage } from '../designer/field-types'
 import { ApiError } from '@/foundation/request'
 import { itemsToDefinition, definitionToItems } from '../designer/definition-convert'
 import { getFormDefinitionById, getFormDefById, type FormDefStatus } from '../api/form-def'
@@ -81,8 +81,6 @@ const selectedId = ref<string | null>(null)
 /** 显隐联动规则（v0.0.2 P2）：按 target 存储每字段至多一条。 */
 const visibilityRules = ref<VisibilityRule[]>([])
 const previewVisible = ref(false)
-// P53 节点 11：字段属性清单（受限只读，数据来自真实 schema computed）
-const fieldsDialogVisible = ref(false)
 const loading = ref(false)
 /** 草稿已保存时间（P53 工作台文案：草稿已保存 HH:mm）。 */
 const savedAtText = ref('')
@@ -580,32 +578,11 @@ function reloadAfterRestore() {
   if (formId.value) loadForm(formId.value)
 }
 
-/* ── 字段属性清单（节点 11）：搜索 / 导出 / 存储类型族展示，数据全部来自真实 schema ── */
-const fieldSearch = ref('')
-const filteredFields = computed(() => {
-  const kw = fieldSearch.value.trim().toLowerCase()
-  if (!kw) return previewSchema.value.fields
-  return previewSchema.value.fields.filter(
-    (f) => (f.label ?? '').toLowerCase().includes(kw) || f.name.toLowerCase().includes(kw),
-  )
-})
+/* ── 字段清单（0.1.7 #39：成为工作区页签，内容由 FieldListPanel 承载；此处只保留导出） ── */
 
-/** 字段类型 → 存储列类型族（展示语义，映射见 field-types 共享表）。 */
-function storageTypeOf(type: string): string {
-  return getFieldTypeStorage(type)
-}
-
-/** 约束 / 状态：按字段真实契约属性派生的只读标注。 */
-function constraintOf(field: FormSchemaField): string {
-  if (field.type === 'DICT') return t('fieldList.constraintDict')
-  if (field.type === 'DATE' || field.type === 'TIME') return t('fieldList.constraintDate')
-  if (field.type === 'DEPT') return t('fieldList.constraintDept')
-  if (field.type === 'ATTACHMENT' || field.type === 'IMAGE')
-    return t('fieldList.constraintAttachment')
-  if (field.type === 'REFERENCE') return t('fieldList.constraintReference')
-  if (field.type === 'FORMULA') return t('fieldList.constraintFormula')
-  if (field.required) return t('fieldList.constraintRequired')
-  return field.length ? t('fieldList.constraintLength') : t('fieldList.constraintPublished')
+/** 字段清单补丁回写（字段名 / 长度 / 描述）：直接改画布持有的字段对象，单一数据源。 */
+function patchListedField(payload: { field: FormSchemaField | TableSubField; patch: FieldPatch }) {
+  applyFieldPatch(payload.field as FormSchemaField, payload.patch)
 }
 
 /** 导出字段清单 JSON（真实下载，内容 = 当前 schema fields）。 */
@@ -683,12 +660,6 @@ function backToList() {
   router.push({ name: 'form-def-list' })
 }
 
-function onSettingsCommand(command: string) {
-  if (command === 'field-list') {
-    fieldsDialogVisible.value = true
-  }
-}
-
 /* ── V011-BUG-011：面包屑分类（可发起事项目录反查 formKey 所属分类） ── */
 const categoryName = ref<string | null>(null)
 const breadcrumbLoadedFor = ref('')
@@ -703,27 +674,17 @@ async function loadBreadcrumbCategory() {
 <template>
   <div class="designer">
     <!-- ═══ 顶部工作台（拒绝态下整体不渲染，操作区零暴露） ═══
-         P53 节点07：左「设置 + 面包屑」/ 中工作区页签 / 右保存状态与操作组 -->
+         0.1.7 #39：左「返回 + 保存状态 + 面包屑」/ 中三页签（字段清单·表单设计·流程设计，整组居中）
+         / 右保存状态与操作组；「设置」下拉已去除（其唯一入口「字段清单」上收为页签） -->
     <header v-if="!rejected" class="designer__workbench">
       <div class="designer__crumb">
-        <!-- V011-BUG-017：返回表单列表放为显式入口，不再藏在设置下拉里 -->
+        <!-- V011-BUG-017：返回表单列表放为显式入口 -->
         <el-button class="designer__back" @click="backToList">
           <el-icon><Back /></el-icon>
           <span>{{
             fromAppContext ? t('form.appCenter.backToWorkspace') : t('form.backToList')
           }}</span>
         </el-button>
-        <el-dropdown class="designer__settings-menu" trigger="click" @command="onSettingsCommand">
-          <el-button class="designer__settings">
-            <el-icon><Setting /></el-icon>
-            <span>{{ t('form.workbenchSettings') }}</span>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="field-list">{{ t('fieldList.button') }}</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
         <!-- V011-BUG-010：保存状态从动作组移到左侧信息簇，动作组只留可点按钮 -->
         <span class="designer__save-state" :class="'designer__save-state--' + saveState">
           {{
@@ -737,6 +698,14 @@ async function loadBreadcrumbCategory() {
       </div>
 
       <nav class="designer__tabs" aria-label="工作区切换">
+        <button
+          type="button"
+          class="designer__tab"
+          :class="{ 'is-active': activeTab === 'fields' }"
+          @click="onTabChange('fields' as WorkbenchTab)"
+        >
+          {{ t('fieldList.button') }}
+        </button>
         <button
           type="button"
           class="designer__tab"
@@ -800,6 +769,15 @@ async function loadBreadcrumbCategory() {
         <span>{{ t('common.loading') }}</span>
       </div>
 
+      <!-- ═══ 工作区：字段清单（0.1.7 #38/#39：主表 + 各子表字段的表清单，页签直达） ═══ -->
+      <FieldListPanel
+        v-else-if="activeTab === 'fields'"
+        :items="items"
+        :form-key="formKey"
+        @patch="patchListedField"
+        @export="exportFields"
+      />
+
       <!-- ═══ 工作区：表单设计（节点 07 三栏几何：252 组件库 / 弹性画布 / 336 属性面板） ═══
            V011-BUG-015：已发布表单解锁编辑（编辑 → 「发布新版本」原子落库，
            服务端 publish-version 增量 DDL + 版本递增），不再整体灰置 -->
@@ -815,8 +793,8 @@ async function loadBreadcrumbCategory() {
         </div>
 
         <div class="designer__canvascol">
-          <!-- BF20261013-015：去掉「桌面端」头部行（预览已上收工具条，字段清单入口保留在「设置」下拉），
-               画布白板直接占满中栏 -->
+          <!-- BF20261013-015：去掉「桌面端」头部行（预览已上收工具条）；
+               字段清单入口 0.1.7 #39 上收为工具条居中页签，画布白板直接占满中栏 -->
           <!-- V011-BUG-006：画布内不再渲染「未命名表单」标题块与 12 栏标尺（Owner 2026-09-22）；
                表单名称在新建时输入（V011-BUG-014），设计态名称见面包屑 -->
           <div class="designer__sheet">
@@ -861,62 +839,6 @@ async function loadBreadcrumbCategory() {
       :sub-fields="editingTableField.subFields"
       @close="closeTableEditor"
     />
-
-    <!-- 字段属性清单（节点 11 只读组件）：搜索/导出为真实能力；
-         列集与约束标注全部来自真实 schema 属性派生 -->
-    <el-dialog
-      v-model="fieldsDialogVisible"
-      :title="t('fieldList.title')"
-      width="1040px"
-      class="fields-dialog"
-    >
-      <p class="fields-dialog__sub">{{ t('fieldList.subtitle') }}</p>
-      <div class="fields-dialog__toolbar">
-        <el-input
-          v-model="fieldSearch"
-          class="fields-dialog__search"
-          :placeholder="t('fieldList.searchPlaceholder')"
-          clearable
-        />
-        <el-button class="fields-dialog__export" @click="exportFields">{{
-          t('fieldList.exportFields')
-        }}</el-button>
-      </div>
-      <el-table :data="filteredFields" size="small" max-height="448">
-        <el-table-column :label="t('fieldList.colName')" width="172">
-          <template #default="{ row }">{{ row.label || row.name }}</template>
-        </el-table-column>
-        <el-table-column :label="t('fieldList.colKey')" width="221">
-          <template #default="{ row }"
-            ><code class="fields-dialog__key">{{ row.name }}</code></template
-          >
-        </el-table-column>
-        <el-table-column :label="t('fieldList.colType')" width="140">
-          <template #default="{ row }">{{ storageTypeOf(row.type) }}</template>
-        </el-table-column>
-        <el-table-column :label="t('fieldList.colLength')" width="90">
-          <template #default="{ row }">{{ row.length ?? '—' }}</template>
-        </el-table-column>
-        <el-table-column :label="t('fieldList.colSpan')" width="103">
-          <template #default="{ row }">{{
-            t('fieldList.spanCell', { n: (row.colSpan ?? 12) / 2 })
-          }}</template>
-        </el-table-column>
-        <el-table-column :label="t('fieldList.colRequired')" width="57">
-          <template #default="{ row }">{{ row.required ? '是' : '否' }}</template>
-        </el-table-column>
-        <el-table-column :label="t('fieldList.colConstraint')" min-width="200">
-          <template #default="{ row }">{{ constraintOf(row as FormSchemaField) }}</template>
-        </el-table-column>
-      </el-table>
-      <template #footer>
-        <el-button type="primary" class="fields-dialog__close" @click="fieldsDialogVisible = false"
-          >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{
-            t('fieldList.backToDesigner')
-          }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</el-button
-        >
-      </template>
-    </el-dialog>
 
     <PreviewModal v-model:visible="previewVisible" :schema="previewSchema" />
 
@@ -973,24 +895,6 @@ async function loadBreadcrumbCategory() {
 }
 .designer__back :deep(.el-icon) {
   margin-right: 4px;
-}
-
-.designer__settings {
-  width: 110px;
-  height: 36px;
-  padding: 0 22px 0 26px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 19px;
-  color: #303a55;
-}
-
-.designer__settings-menu {
-  display: inline-flex;
-}
-
-.designer__settings :deep(.el-icon) {
-  margin-right: 8px;
 }
 
 .designer__crumb-path {
@@ -1322,132 +1226,13 @@ async function loadBreadcrumbCategory() {
   text-align: center;
   border-top: 1px solid var(--sw-border-light);
 }
-
-/* ── 字段清单弹窗（节点 11）：工具行 + 槽位内容文本 ── */
-.fields-dialog__sub {
-  /* 设计（节点11）：副标题紧随标题（-15 拉回 header 底距），工具行距其下 29px */
-  margin: -15px 0 32px;
-  font-size: 12px;
-  color: #8c9ab1;
-}
-.fields-dialog__toolbar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 0 0 20px;
-}
-.fields-dialog__search {
-  width: 420px;
-}
-.fields-dialog__search :deep(.el-input__wrapper) {
-  height: 36px;
-  min-height: 36px;
-  border-radius: 8px;
-}
-.fields-dialog__search :deep(.el-input__inner) {
-  position: relative;
-  left: -9px;
-  width: calc(100% + 9px);
-  padding-left: 12px !important;
-}
-.fields-dialog__export {
-  margin-left: auto;
-  width: 132px;
-  height: 36px;
-  padding: 0;
-  border-radius: 8px;
-}
-.fields-dialog__key {
-  font-size: 12px;
-  color: var(--sw-color-primary);
-}
-.fields-dialog__note {
-  margin: 18px 0 0;
-  font-size: 12px;
-  color: #8c99b0;
-}
-.fields-dialog__close {
-  width: 142px;
-  height: 36px;
-  border-radius: 6px;
-}
-.fields-dialog__close :deep(span) {
-  display: block;
-  width: 118px;
-  text-align: center;
-}
 </style>
 
 <style>
-/* ═══ P53 弹窗几何（节点 11 字段属性列表 / 节点 14 草稿历史版本） ═══
+/* ═══ P53 弹窗几何（节点 14 草稿历史版本） ═══
    el-dialog 内部节点（header/body/footer/表格）不带本组件 scoped 属性，
-   且历史弹窗 append-to-body，故该段使用全局作用域；两个类名均为本页专用。 */
-.el-dialog.fields-dialog {
-  --el-dialog-padding-primary: 0px;
-  --el-dialog-border-radius: 14px;
-}
-.el-dialog.fields-dialog .el-dialog__header {
-  padding: 24px 76px 16px 28px;
-  border-bottom: 1px solid #d8e0ee;
-}
-.el-dialog.fields-dialog .el-dialog__title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #1f2a44;
-}
-.el-dialog.fields-dialog .el-dialog__body {
-  padding: 18px 28px 8px;
-}
-.el-dialog.fields-dialog .el-dialog__footer {
-  padding: 33px 28px 12px;
-}
-.el-dialog.fields-dialog .el-table {
-  height: 425px !important;
-  max-height: none !important;
-}
-.el-dialog.fields-dialog .el-table .el-table__header th.el-table__cell {
-  background: #f5f7fc;
-  color: #8a98b0;
-  font-size: 12px;
-  font-weight: 400;
-  padding: 12px 8px;
-}
-.el-dialog.fields-dialog .el-table td.el-table__cell {
-  border-color: #edf0f6;
-  padding: 9px 8px;
-}
-.el-dialog.fields-dialog .el-table .cell {
-  padding: 0 6px;
-  transform: translateX(0);
-}
-.el-dialog.fields-dialog .el-table .el-table__header-wrapper th:nth-child(4) .cell,
-.el-dialog.fields-dialog .el-table .el-table__header-wrapper th:nth-child(6) .cell {
-  text-indent: -1px;
-}
-.el-dialog.fields-dialog .el-table .el-table__body-wrapper td:nth-child(4) .cell,
-.el-dialog.fields-dialog .el-table .el-table__body-wrapper td:nth-child(6) .cell {
-  text-indent: -1px;
-}
-.el-dialog.fields-dialog .el-table th:nth-child(5) .cell,
-.el-dialog.fields-dialog .el-table td:nth-child(5) .cell {
-  transform: translateX(3px);
-}
-.el-dialog.fields-dialog .fields-dialog__search .el-input__inner {
-  position: relative;
-  left: -9px;
-  width: calc(100% + 9px);
-  padding-left: 12px !important;
-}
-.el-dialog.fields-dialog .fields-dialog__close > span {
-  display: block;
-  width: 118px;
-  text-align: center;
-}
-.el-dialog.fields-dialog .fields-dialog__close {
-  padding-left: 11px;
-  padding-right: 11px;
-}
-
+   且历史弹窗 append-to-body，故该段使用全局作用域；类名为本页专用。
+   0.1.7 #39：字段清单由弹窗上收为工作区页签，其弹窗几何样式随之移除。 */
 .el-dialog.history-dialog {
   /* 覆盖组件内 width prop（内联 CSS 变量），需 !important；
      节点 14：538 宽、右上泊位（0.0381 最优态）。 */

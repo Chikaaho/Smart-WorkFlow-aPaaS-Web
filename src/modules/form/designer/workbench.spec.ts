@@ -82,6 +82,10 @@ describe('modules/form/designer/workbench', () => {
       expect(parseWorkbenchTab('processes')).toBe('processes')
     })
 
+    it('query 值 fields → 字段清单工作区（0.1.7 #39）', () => {
+      expect(parseWorkbenchTab('fields')).toBe('fields')
+    })
+
     it('design / 缺失 / 非法值 → 回退 design（深链恢复不落非法工作区）', () => {
       expect(parseWorkbenchTab('design')).toBe('design')
       expect(parseWorkbenchTab(undefined)).toBe('design')

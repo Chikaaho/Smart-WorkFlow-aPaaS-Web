@@ -93,6 +93,8 @@ export interface TableSubField {
   label?: string
   required?: boolean
   length?: number
+  /** 字段描述（0.1.7 #38）：字段清单里可直接维护的说明；纯元数据，不参与校验与提交载荷。 */
+  description?: string
   dictType?: string
   renderAs?: 'select' | 'radio'
   targetFormId?: string
@@ -124,6 +126,11 @@ interface BaseField {
   labelPosition?: FieldLabelPosition
   required?: boolean
   length?: number
+  /**
+   * 字段描述（0.1.7 #38）：字段清单里可直接维护的字段说明（可写「本字段的含义/口径」）。
+   * 纯元数据——不参与校验、不进入提交载荷、不影响动态列 DDL。
+   */
+  description?: string
   /** 占位提示（P53）：填报态空值时展示，画布/预览/渲染三态同源。 */
   placeholder?: string
   /** 24 列网格中的横向占用列数，合法值为 1—24。 */

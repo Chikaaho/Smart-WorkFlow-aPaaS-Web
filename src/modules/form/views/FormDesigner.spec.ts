@@ -74,6 +74,8 @@ const designerStubs = {
   },
   DesignerCanvas: { template: '<div class="stub-canvas" />' },
   FieldConfigPanel: { template: '<div class="stub-config" />' },
+  // 0.1.7 #39：字段清单成为工作区页签（独立组件），宿主测试用桩隔离其表格内部
+  FieldListPanel: { template: '<div class="stub-field-list" />' },
   SubFieldDesigner: { template: '<div class="stub-subfield" />' },
   PreviewModal: { template: '<div class="stub-preview" />' },
   HistoryVersionsDialog: { template: '<div class="stub-history" />' },
@@ -142,6 +144,34 @@ describe('FormDesigner 工作台（P52）', () => {
     expect(wrapper.find('.stub-canvas').exists()).toBe(false)
     expect(wrapper.find('.stub-processes').exists()).toBe(false)
     expect(wrapper.findAll('button').some((b) => b.text() === '发布')).toBe(false)
+  })
+
+  // 0.1.7 #39（Owner）：字段清单入口从「设置」下拉上收为居中页签，顺序=字段清单 / 表单设计 / 流程设计
+  it('工作区页签：三页签整组居中，字段清单在最左；「设置」下拉已去除', async () => {
+    const wrapper = await mountDesigner()
+
+    const tabs = wrapper.findAll('.designer__tab')
+    expect(tabs.map((tab) => tab.text())).toEqual(['字段清单', '表单设计', '流程设计'])
+    // 三页签同处居中页签组（几何由浏览器自验，见台账 #39）
+    expect(
+      wrapper.findAll('.designer__tab').every((tab) => tab.element.closest('.designer__tabs')),
+    ).toBe(true)
+    // 「设置」入口不再存在
+    expect(wrapper.findAll('button').some((b) => b.text() === '设置')).toBe(false)
+    // 默认在表单设计页签
+    expect(tabs[1]!.classes()).toContain('is-active')
+    expect(wrapper.find('.stub-canvas').exists()).toBe(true)
+  })
+
+  it('点「字段清单」页签 → 切到字段清单工作区（画布卸载、清单渲染）', async () => {
+    const wrapper = await mountDesigner()
+
+    await wrapper.findAll('.designer__tab')[0]!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('.designer__tab')[0]!.classes()).toContain('is-active')
+    expect(wrapper.find('.stub-field-list').exists()).toBe(true)
+    expect(wrapper.find('.stub-canvas').exists()).toBe(false)
   })
 
   // 0.1.7 #25 回归：内容区左上角标题/描述/汇总噪音去除后，「流程编号设置」入口上收工具条右上角
