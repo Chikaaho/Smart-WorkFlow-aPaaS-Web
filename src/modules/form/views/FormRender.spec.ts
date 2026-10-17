@@ -29,6 +29,16 @@ vi.mock('@/adapters/instance-relation', () => ({
   })),
 }))
 
+// 外挂流程面板：唯一控制面在 workflow 模块；表单侧经接缝消费，测试桩只验证挂载与入参
+vi.mock('@/adapters/instance-flow', () => ({
+  InstanceFlowPanel: {
+    name: 'InstanceFlowPanelStub',
+    props: ['approvalHistory', 'processDefinitionKey', 'currentNodeKey'],
+    template:
+      '<div class="instance-flow-panel-stub" :data-count="approvalHistory.length" :data-def-key="processDefinitionKey" />',
+  },
+}))
+
 vi.mock('@/adapters/process-draft', () => ({
   getDraft: vi.fn(),
   createDraft: vi.fn(),
@@ -64,6 +74,7 @@ import {
   pollCommandStatus,
 } from '@/adapters/process-draft'
 import { ElMessage } from 'element-plus'
+import { ApiError } from '@/foundation/request'
 import type { BpmDraft } from '@/contracts/bpm'
 import FormRender from './FormRender.vue'
 
@@ -194,7 +205,7 @@ describe('FormRender', () => {
     expect(wrapper.find('.form-render-page__top-actions').exists()).toBe(false)
   })
 
-  it('0.1.7 #30：参与人查看详情展示流程信息条，无审批动作卡', async () => {
+  it('0.1.7 #30：参与人查看详情把流程信息作为外挂面板挂在表单画布下方，无审批动作卡', async () => {
     mockQuery = { recordId: 'rec_001', mode: 'view' }
     mockGetInstanceRelation.mockResolvedValue({
       relation: 'PARTICIPANT',
@@ -209,7 +220,18 @@ describe('FormRender', () => {
         initiatorName: '张三',
         createTime: '2026-10-17 10:00:00',
         currentNodes: ['部门审批'],
+        currentNodeKeys: ['dept_approve'],
       },
+      approvalHistory: [
+        {
+          taskId: 'hist-1',
+          taskName: '发起申请',
+          assignee: '2',
+          createTime: '2026-10-17T09:00:00',
+          endTime: '2026-10-17T09:30:00',
+          approvalResult: 'APPROVED',
+        },
+      ],
     })
     vi.mocked(getFormDefinition).mockResolvedValueOnce({
       title: '查看表单',
@@ -221,10 +243,46 @@ describe('FormRender', () => {
     await flushPromises()
     await flushPromises()
 
-    expect(wrapper.find('.form-render-page__flowcard').exists()).toBe(true)
-    expect(wrapper.text()).toContain('请假审批流程')
-    expect(wrapper.text()).toContain('部门审批')
+    // 无效流程信息条已移除：流程信息只以外挂组件形式紧贴画布下方
+    expect(wrapper.find('.form-render-page__flowcard').exists()).toBe(false)
+    const panel = wrapper.find('.form-render-page__flowpanel .instance-flow-panel-stub')
+    expect(panel.exists()).toBe(true)
+    expect(panel.attributes('data-count')).toBe('1')
+    expect(panel.attributes('data-def-key')).toBe('leave_approval')
     expect(wrapper.find('.form-render-page__actioncard').exists()).toBe(false)
+  })
+
+  it('0.1.7 #30：无流程（NONE）不渲染外挂流程面板', async () => {
+    mockQuery = { recordId: 'rec_001', mode: 'view' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '查看表单',
+      fields: [{ name: 'x', type: 'TEXT', required: false }],
+    })
+    vi.mocked(getFormData).mockResolvedValueOnce({ id: 'rec_001', version: 1, x: 'hello' })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.find('.form-render-page__flowpanel').exists()).toBe(false)
+  })
+
+  it('0.1.7 #30：权限顺序——记录读取被拒（无权限）时不查询流程关系', async () => {
+    mockQuery = { recordId: 'rec_001', mode: 'view' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '查看表单',
+      fields: [{ name: 'x', type: 'TEXT', required: false }],
+    })
+    vi.mocked(getFormData).mockRejectedValueOnce(new ApiError(403, '无权访问'))
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    await flushPromises()
+
+    // 第一关（表单数据权限）未过：不得查询参与人/审批人关系，也不渲染流程面板
+    expect(mockGetInstanceRelation).not.toHaveBeenCalled()
+    expect(wrapper.find('.form-render-page__flowpanel').exists()).toBe(false)
+    expect(wrapper.text()).toContain('无权限查看该数据')
   })
 
   it('0.1.7 #30：审批人查看详情展示内联审批动作卡', async () => {

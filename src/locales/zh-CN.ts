@@ -707,11 +707,7 @@ export default {
     tierStandard: '常规（2 小时）',
   },
   form: {
-    relationFlowTitle: '流程信息',
-    relationProcess: '流程',
-    relationStatus: '状态',
-    relationInitiator: '发起人',
-    relationCurrentNodes: '当前节点',
+    noPermissionView: '无权限查看该数据',
     newForm: '新建表单',
     searchFormPlaceholder: '表单名称 / 标识',
     keyDuplicate: '表单标识已存在',

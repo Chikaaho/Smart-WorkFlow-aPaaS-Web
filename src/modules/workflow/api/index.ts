@@ -14,6 +14,7 @@ import type {
   DraftUpdateReq,
   CommandAcceptResp,
   WorkflowCommandStatus,
+  ApprovalHistoryItem,
 } from '@/contracts/bpm'
 import type { BpmNodeCapability, ApprovalActionRequest } from '@/contracts/bpm-node'
 import { parseBpmNodeCapabilities } from '@/modules/workflow/utils/node-capabilities'
@@ -97,7 +98,8 @@ export async function acceptTaskAction(
 
 /**
  * 0.1.7 #30：统一详情关系——当前用户与 formKey+businessKey 实例的关系。
- * NONE 时不回传实例信息（服务端 fail-closed）。
+ * NONE 时不回传实例信息（服务端 fail-closed）；非 NONE 时携带外挂流程信息
+ * （approvalHistory/currentNodeKeys）供表单详情渲染共享流程面板。
  */
 export interface InstanceRelationInfo {
   id: number | string
@@ -110,12 +112,15 @@ export interface InstanceRelationInfo {
   initiatorName: string | null
   createTime: string | null
   currentNodes: string[]
+  currentNodeKeys?: string[]
 }
 
 export interface InstanceRelation {
   relation: 'APPROVER' | 'PARTICIPANT' | 'NONE'
   pendingTaskId?: string | null
   instance?: InstanceRelationInfo | null
+  /** 与我的详情同装配口径的流转记录；NONE 时缺省 */
+  approvalHistory?: ApprovalHistoryItem[]
 }
 
 export async function getInstanceRelation(

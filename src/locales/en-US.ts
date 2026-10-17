@@ -725,11 +725,7 @@ export default {
     tierStandard: 'Standard (2 h)',
   },
   form: {
-    relationFlowTitle: 'Process info',
-    relationProcess: 'Process',
-    relationStatus: 'Status',
-    relationInitiator: 'Initiator',
-    relationCurrentNodes: 'Current node(s)',
+    noPermissionView: 'You do not have permission to view this record',
     newForm: 'New form',
     searchFormPlaceholder: 'Form name / key',
     keyDuplicate: 'This form key is already in use',
