@@ -28,6 +28,101 @@ export const NODE_WIDTH = DESIGNER_NODE_WIDTH
 export const NODE_HEIGHT = DESIGNER_NODE_HEIGHT
 export const EDGE_CURVE_HEIGHT = 40
 
+/** 默认流程图走向：自上而下（Owner 0.1.7 口径，取代旧的左右默认）。 */
+export const DEFAULT_LAYOUT_DIRECTION = 'TB'
+
+/** 归一化选项：节点坐标来源（只读视图默认走向 vs 设计器图内坐标）。 */
+export interface NormalizeGraphOptions {
+  /**
+   * authored（默认）：按图内/回读坐标，缺坐标回落默认走向；
+   * topDown：一律按默认走向「自上而下」重排（只读流程图视图，宽图不再横排缩成一条线）。
+   */
+  layout?: 'authored' | 'topDown'
+}
+
+/** 自上而下分层布局参数。 */
+export interface TopDownLayoutOptions {
+  /** 相邻层中心的纵向距离。 */
+  layerGap?: number
+  /** 同层节点中心的最小横向间距。 */
+  siblingGap?: number
+  originX?: number
+  originY?: number
+}
+
+/**
+ * 自上而下（TB）分层布局——流程图默认走向的唯一实现。
+ *
+ * 分层：父层全部就绪的节点取 max(父层深)+1（汇合节点落在所有父节点之下）；环内节点
+ * 统一落到最大层之下并保持输入顺序。同层按输入顺序等距横向排列。确定性：同输入同输出。
+ *
+ * 走线规则（Owner 0.1.7 澄清）：布局只决定节点坐标，**不做跨线避让**——不同连线之间
+ * 允许重叠/交叉（否则复杂流程无法表达）；单条连线自身不得重叠由折线归一口径保证。
+ */
+export function layoutGraphTopDown(
+  nodes: ReadonlyArray<{ id: string; type?: string | null }>,
+  edges: ReadonlyArray<{
+    source?: string | null
+    target?: string | null
+    sourceId?: string | null
+    targetId?: string | null
+  }>,
+  options: TopDownLayoutOptions = {},
+): Map<string, { x: number; y: number }> {
+  const layerGap = options.layerGap ?? 132
+  const siblingGap = options.siblingGap ?? 200
+  const originX = options.originX ?? 400
+  const originY = options.originY ?? 120
+
+  const ids = nodes.map((node) => node.id)
+  const idSet = new Set(ids)
+  const parents = new Map<string, string[]>()
+  for (const edge of edges) {
+    const source = edge.source ?? edge.sourceId ?? null
+    const target = edge.target ?? edge.targetId ?? null
+    if (!source || !target || source === target) continue
+    if (!idSet.has(source) || !idSet.has(target)) continue
+    parents.set(target, [...(parents.get(target) ?? []), source])
+  }
+
+  const depth = new Map<string, number>()
+  const processed = new Set<string>()
+  let guard = ids.length * ids.length + ids.length
+  while (processed.size < ids.length && guard-- > 0) {
+    for (const id of ids) {
+      if (processed.has(id)) continue
+      const ps = (parents.get(id) ?? []).filter((parent) => idSet.has(parent))
+      if (!ps.every((parent) => processed.has(parent))) continue
+      const value =
+        ps.length === 0 ? 0 : Math.max(...ps.map((parent) => (depth.get(parent) ?? 0) + 1))
+      depth.set(id, value)
+      processed.add(id)
+    }
+  }
+  // 环内剩余（无根环）：接在已算出最大层之下，保持输入顺序
+  const maxDepth = Math.max(0, ...Array.from(depth.values()))
+  for (const id of ids) {
+    if (!processed.has(id)) depth.set(id, maxDepth + 1)
+  }
+
+  const layers = new Map<number, string[]>()
+  for (const id of ids) {
+    const level = depth.get(id) ?? 0
+    layers.set(level, [...(layers.get(level) ?? []), id])
+  }
+
+  const positioned = new Map<string, { x: number; y: number }>()
+  for (const [level, layer] of layers) {
+    layer.forEach((id, index) => {
+      positioned.set(id, {
+        x: Math.round(originX + (index - (layer.length - 1) / 2) * siblingGap),
+        y: Math.round(originY + level * layerGap),
+      })
+    })
+  }
+  return positioned
+}
+
 /* ------------------------------------------------------------------ */
 /* 类型                                                                 */
 /* ------------------------------------------------------------------ */
@@ -75,15 +170,6 @@ function numberOrUndefined(value: unknown): number | undefined {
   return undefined
 }
 
-/** 稳定字符串哈希（用于确定性兼容布局，禁止随机漂移）。 */
-function stableHash(input: string): number {
-  let hash = 5381
-  for (let i = 0; i < input.length; i++) {
-    hash = ((hash << 5) + hash + input.charCodeAt(i)) | 0
-  }
-  return Math.abs(hash)
-}
-
 /** 读取单元素坐标：显式 x/y → style.x/y → undefined。 */
 function elementCoordinate(element: ProcessGraphElement): {
   x?: number
@@ -125,6 +211,7 @@ export function normalizeGraph(
     height: DESIGNER_NODE_HEIGHT,
   },
   gatewayRadius: number = Math.min(nodeSize.width, nodeSize.height) / 2,
+  options: NormalizeGraphOptions = {},
 ): RenderSpec {
   const elements = graph.elements ?? []
   const nodes = elements.filter((e) => e.kind === 'node')
@@ -136,18 +223,22 @@ export function normalizeGraph(
   >()
   let compatibilityLayout = false
 
-  for (const node of nodes) {
-    const coordinate = elementCoordinate(node)
-    if (coordinate.source === 'none') {
-      // 确定性兼容布局：按 ID 哈希落 4 列网格，同输入同输出
-      const hash = stableHash(node.id)
-      resolved.set(node.id, {
-        x: 140 + (hash % 4) * 220,
-        y: 80 + (Math.floor(hash / 4) % 6) * 110,
-        source: 'inferred',
-      })
-      compatibilityLayout = true
-    } else {
+  // 0.1.7：默认走向「自上而下」——只读视图（layout=topDown）一律按该走向重排；
+  // 设计器按图内坐标（authored），仅在整图缺坐标（历史图）时按默认走向还原。
+  const hadMissingCoordinates =
+    nodes.length > 0 && nodes.some((node) => elementCoordinate(node).source === 'none')
+  const missingCoordinates = options.layout === 'topDown' || hadMissingCoordinates
+  if (missingCoordinates) {
+    const layout = layoutGraphTopDown(nodes, edges)
+    for (const node of nodes) {
+      const point = layout.get(node.id) ?? { x: 0, y: 0 }
+      resolved.set(node.id, { x: point.x, y: point.y, source: 'inferred' })
+    }
+    // 强制走向不算「兼容布局」——只有真缺坐标才提示来源
+    compatibilityLayout = hadMissingCoordinates
+  } else {
+    for (const node of nodes) {
+      const coordinate = elementCoordinate(node)
       resolved.set(node.id, {
         x: coordinate.x ?? 0,
         y: coordinate.y ?? 0,
@@ -1103,6 +1194,8 @@ export interface DesignerModel {
   ): string | null
   undo(): void
   canUndo(): boolean
+  /** 0.1.7：按默认走向「自上而下」重排全部节点并回归默认路由（一次撤销单元）。 */
+  layoutTopDown(options?: TopDownLayoutOptions): void
   serialize(): ProcessGraphDocument
 }
 
@@ -1418,6 +1511,38 @@ export function createDesignerModel(
       emit()
     },
     canUndo: () => history.length > 0,
+    layoutTopDown(options) {
+      const layout = layoutGraphTopDown(current.nodes, current.edges, {
+        siblingGap: designerNodeSize.width + 48,
+        layerGap: designerNodeSize.height + 76,
+        ...options,
+      })
+      const nodes: PositionedNode[] = current.nodes.map((node) => {
+        const point = layout.get(node.id)
+        return point
+          ? { ...node, x: point.x, y: point.y, coordinateSource: 'explicit' as const }
+          : node
+      })
+      const moved = nodes.some((node, index) => {
+        const before = current.nodes[index]
+        return node.x !== before.x || node.y !== before.y
+      })
+      if (!moved) return
+      const byId = new Map(nodes.map((node) => [node.id, node] as const))
+      const edges: PositionedEdge[] = current.edges.map((edge) => {
+        const source = byId.get(edge.sourceId)
+        const target = byId.get(edge.targetId)
+        if (!source || !target) return edge
+        // 自动布局后回归默认路由：历史拐点会钉住旧几何（复杂流程里表现为单线自重叠）
+        return {
+          ...edge,
+          ...rebuildEdge(edge, source, target, designerNodeSize, gatewayRadius, []),
+        }
+      })
+      pushHistory()
+      current = { ...current, nodes, edges, dirty: true }
+      emit()
+    },
     serialize() {
       const nodeElements: ProcessGraphElement[] = current.nodes.map((node) => ({
         id: node.id,

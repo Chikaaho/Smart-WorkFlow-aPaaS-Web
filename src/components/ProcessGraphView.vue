@@ -53,7 +53,13 @@ const startViewBox = ref<{ x: number; y: number; w: number; h: number } | null>(
 
 const spec = computed(() =>
   props.graph
-    ? normalizeGraph(props.graph, { width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT }, 22)
+    ? normalizeGraph(
+        props.graph,
+        { width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT },
+        22,
+        // 0.1.7：只读流程图统一按默认走向「自上而下」呈现（宽流程不再横排缩成一条线）
+        { layout: 'topDown' },
+      )
     : null,
 )
 
@@ -223,7 +229,7 @@ defineExpose({ fitViewport, zoom, locateCurrent })
           orient="auto"
           markerUnits="userSpaceOnUse"
         >
-          <path d="M0,0 L8,4 L0,8 Z" :fill="tone === 'completed' ? '#16a77b' : '#a4adbe'" />
+          <path d="M0,0 L8,4 L0,8 Z" :fill="tone === 'completed' ? '#16a77b' : '#c3ccdb'" />
         </marker>
       </defs>
       <g>
@@ -246,7 +252,7 @@ defineExpose({ fitViewport, zoom, locateCurrent })
         <template v-if="isGateway(node)">
           <polygon points="0,-22 22,0 0,22 -22,0" class="pg-node-diamond" />
           <path d="M-12 0H12M0 -12V12" class="pg-node-diamond-plus" />
-          <text x="30" y="19" text-anchor="start" class="pg-node-gateway-label">
+          <text x="0" y="36" text-anchor="middle" class="pg-node-gateway-label">
             {{ node.label }}
           </text>
         </template>
@@ -257,9 +263,12 @@ defineExpose({ fitViewport, zoom, locateCurrent })
             :y="-NODE_H / 2 - 0.4"
             :width="NODE_W + 0.8"
             :height="NODE_H + 0.8"
-            :rx="node.type === 'START' ? 24.4 : 5.4"
+            :rx="node.type === 'START' || node.type === 'END' ? 24.4 : 8"
             class="pg-node-rect"
-            :class="NODE_RUNTIME_STATE_CLASS[nodeState(node)]"
+            :class="[
+              node.type === 'START' ? 'pg-node-start' : node.type === 'END' ? 'pg-node-end' : '',
+              NODE_RUNTIME_STATE_CLASS[nodeState(node)],
+            ]"
           />
           <rect
             v-if="nodeState(node) === 'current'"
@@ -365,10 +374,10 @@ defineExpose({ fitViewport, zoom, locateCurrent })
 .pg-view {
   position: relative;
   width: 100%;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 6px;
-  /* P53 设计（节点10/19）：画布浅蓝灰 #E8EDF6 */
-  background: #e8edf6;
+  border: 1px solid #e3e8f2;
+  border-radius: 10px;
+  /* 0.1.7：浅底画布（网格由消费方提供） */
+  background: #fbfcfe;
   overflow: hidden;
 }
 .pg-svg {
@@ -381,20 +390,30 @@ defineExpose({ fitViewport, zoom, locateCurrent })
 .pg-svg:active {
   cursor: grabbing;
 }
-/* 设计（节点19）：节点描边 #7E8799 1.2、圆角 5.4；完成 #16A77B；当前 #6F2DFF 2 + 光晕环。 */
+/* 0.1.7：卡片描边宜浅；开始/结束绿红胶囊；运行态优先（下方 state 规则覆盖）。 */
 .pg-node .pg-node-rect {
   fill: #ffffff;
-  stroke: #7e8799;
-  stroke-width: 1.2;
+  stroke: #d7dfec;
+  stroke-width: 1.4;
 }
+/* 开始/结束保持绿/红标识，不被运行态灰色覆盖（提高一级特异性）。 */
+.pg-node .pg-node-start.pg-node-rect {
+  fill: #eefaf3;
+  stroke: #16a77b;
+}
+.pg-node .pg-node-end.pg-node-rect {
+  fill: #fdf0f1;
+  stroke: #ef5d71;
+}
+/* 网关：橙色菱形 + 白色十字（参考同类产品） */
 .pg-node .pg-node-diamond {
-  fill: #ffffff;
-  stroke: #8393b5;
+  fill: #f7a92c;
+  stroke: #e79a1f;
   stroke-width: 1.4;
 }
 .pg-node-diamond-plus {
-  stroke: #8393b5;
-  stroke-width: 1.5;
+  stroke: #fff;
+  stroke-width: 1.8;
   fill: none;
 }
 .pg-node-halo {
@@ -438,7 +457,7 @@ defineExpose({ fitViewport, zoom, locateCurrent })
   fill: #19233b;
 }
 .pg-node-gateway-label {
-  font-size: 11px;
+  font-size: 12px;
   fill: #7e8799;
 }
 /* 节点类型图标：描边随状态色（设计 #8393B5 1.6） */
@@ -468,8 +487,8 @@ defineExpose({ fitViewport, zoom, locateCurrent })
   color: #16a77b;
 }
 .pg-edge {
-  stroke: #a4adbe;
-  stroke-width: 1.6;
+  stroke: #c3ccdb;
+  stroke-width: 1.4;
 }
 .pg-edge-completed {
   stroke: #16a77b;

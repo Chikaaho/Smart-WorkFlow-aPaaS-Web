@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   normalizeGraph,
+  layoutGraphTopDown,
   createDesignerModel,
   buildEdgePath,
   canonicalEdgeWaypoints,
@@ -55,6 +56,125 @@ function expectOrthogonalWithoutOverlap(points: OrthogonalPoint[]) {
     }
   }
 }
+
+describe('0.1.7 流程图默认走向：自上而下（TB）', () => {
+  it('分层自上而下：深度越大 y 越大，同层共 y；汇合节点落在所有父节点之下', () => {
+    const nodes = [
+      { id: 'start', type: 'START' },
+      { id: 'a', type: 'APPROVAL' },
+      { id: 'b', type: 'APPROVAL' },
+      { id: 'join', type: 'APPROVAL' },
+    ]
+    const edges = [
+      { source: 'start', target: 'a' },
+      { source: 'start', target: 'b' },
+      { source: 'a', target: 'join' },
+      { source: 'b', target: 'join' },
+    ]
+    const layout = layoutGraphTopDown(nodes, edges)
+
+    expect(layout.get('start')!.y).toBeLessThan(layout.get('a')!.y)
+    expect(layout.get('a')!.y).toBe(layout.get('b')!.y)
+    // 汇合节点低于两条分支（max(父层深)+1）
+    expect(layout.get('join')!.y).toBeGreaterThan(layout.get('a')!.y)
+    // 同层横向分开
+    expect(layout.get('a')!.x).not.toBe(layout.get('b')!.x)
+  })
+
+  it('确定性：同输入同输出（与节点数组顺序无关的分层语义）', () => {
+    const nodes = [
+      { id: 'start', type: 'START' },
+      { id: 'a', type: 'APPROVAL' },
+      { id: 'end', type: 'END' },
+    ]
+    const edges = [
+      { source: 'start', target: 'a' },
+      { source: 'a', target: 'end' },
+    ]
+    expect(layoutGraphTopDown(nodes, edges)).toEqual(layoutGraphTopDown(nodes, edges))
+  })
+
+  it('图缺坐标时按默认走向还原（纵向分层），并标记兼容来源', () => {
+    const legacy: ProcessGraphDocument = {
+      ...baseGraph(),
+      elements: baseGraph().elements.map((e) => ({
+        ...e,
+        x: undefined,
+        y: undefined,
+        style: e.kind === 'node' ? {} : e.style,
+      })),
+    }
+    const spec = normalizeGraph(legacy)
+    const start = spec.nodes.find((n) => n.id === 'node_start')!
+    const end = spec.nodes.find((n) => n.id === 'node_end')!
+    expect(spec.compatibilityLayout).toBe(true)
+    expect(start.y).toBeLessThan(end.y)
+    expect(start.x).toBe(end.x)
+  })
+
+  it('只读视图（layout=topDown）：忽略图内左右坐标，按默认走向自上而下重排', () => {
+    const spec = normalizeGraph(baseGraph(), undefined, undefined, { layout: 'topDown' })
+    const start = spec.nodes.find((n) => n.id === 'node_start')!
+    const end = spec.nodes.find((n) => n.id === 'node_end')!
+    expect(start.x).toBe(end.x)
+    expect(start.y).toBeLessThan(end.y)
+    // 有坐标的图强制走向不算「兼容布局」，不显示兼容标记
+    expect(spec.compatibilityLayout).toBe(false)
+  })
+
+  it('走线规则：不同连线之间允许重叠/交叉（不做跨线避让，复杂流程可表达）', () => {
+    // 两条并列分支共用同一水平走廊：路径几何相同但都必须保留，不因重叠被丢弃或改写
+    const graph: ProcessGraphDocument = {
+      processKey: 'bpm_overlap',
+      name: '分支重叠',
+      formKey: 'demo_form',
+      version: 1,
+      elements: [
+        { id: 'node_start', kind: 'node', type: 'START', x: 300, y: 100, config: {}, style: {} },
+        { id: 'node_a', kind: 'node', type: 'APPROVAL', x: 200, y: 240, config: {}, style: {} },
+        { id: 'node_b', kind: 'node', type: 'APPROVAL', x: 400, y: 240, config: {}, style: {} },
+        { id: 'node_join', kind: 'node', type: 'APPROVAL', x: 300, y: 380, config: {}, style: {} },
+        { id: 'edge_1', kind: 'edge', source: 'node_start', target: 'node_a' },
+        { id: 'edge_2', kind: 'edge', source: 'node_start', target: 'node_b' },
+        {
+          id: 'edge_3',
+          kind: 'edge',
+          source: 'node_a',
+          target: 'node_join',
+          waypoints: [
+            { x: 200, y: 380 },
+            { x: 400, y: 380 },
+          ],
+        },
+        {
+          id: 'edge_4',
+          kind: 'edge',
+          source: 'node_b',
+          target: 'node_join',
+          waypoints: [
+            { x: 400, y: 380 },
+            { x: 200, y: 380 },
+          ],
+        },
+      ],
+      canvas: {},
+    }
+    const spec = normalizeGraph(graph)
+    expect(spec.edges).toHaveLength(4)
+    expect(spec.edges.find((e) => e.id === 'edge_3')!.path).toContain('L')
+    expect(spec.edges.find((e) => e.id === 'edge_4')!.path).toContain('L')
+  })
+
+  it('单条连线仍不得自重叠（归一口径保持）', () => {
+    const points = normalizeOrthogonalPoints([
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 80 },
+    ])
+    expectOrthogonalWithoutOverlap(points)
+  })
+})
 
 function baseGraph(): ProcessGraphDocument {
   return {

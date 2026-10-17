@@ -47,6 +47,7 @@ import type {
 import type { ProcessDef } from '@/contracts/bpm'
 import type {
   BpmNodeCapability,
+  BpmNodeCategory,
   BpmNodeConfigField,
   ParticipantStrategy,
 } from '@/contracts/bpm-node'
@@ -162,6 +163,59 @@ function isGatewayShape(type: string): boolean {
 function snapshot() {
   version.value++
 }
+
+/* ─────────── 0.1.7 重构：节点面板分组 / 整理布局（上下） / 画布框 ─────────── */
+
+/** 节点面板分组（能力契约 category → 面板分组标题）。 */
+const PALETTE_GROUP_KEYS: ReadonlyArray<readonly [BpmNodeCategory, string]> = [
+  ['EVENT', 'workflow.nodeCategoryEvent'],
+  ['TASK', 'workflow.nodeCategoryTask'],
+  ['GATEWAY', 'workflow.nodeCategoryGateway'],
+  ['OTHER', 'workflow.nodeCategoryOther'],
+]
+const paletteGroups = computed(() =>
+  PALETTE_GROUP_KEYS.map(([category, labelKey]) => ({
+    category,
+    label: t(labelKey),
+    items: capabilities.value.filter((cap) => cap.category === category),
+  })).filter((group) => group.items.length > 0),
+)
+
+/** 撤销可用性（version 每次画布变更自增，用于驱动按钮态）。 */
+const undoAvailable = computed(() => {
+  void version.value
+  return model?.canUndo() ?? false
+})
+
+/** 撤销上一次画布编辑（与快捷键同源：模型内部历史）。 */
+function undoLast() {
+  if (!model?.canUndo()) return
+  model.undo()
+  snapshot()
+}
+
+/** 整理布局：默认走向「自上而下」重排全部节点（一次撤销单元；不同连线允许交叉）。 */
+function arrangeTopDown() {
+  if (!model) return
+  model.layoutTopDown()
+  snapshot()
+  fitViewport()
+}
+
+/** 画布框（随内容平移缩放）：流程内容外扩留白，参考同类产品的泳道式外框。 */
+const canvasFrame = computed(() => {
+  void version.value
+  const nodes = model?.state().nodes ?? []
+  if (nodes.length === 0) return null
+  const xs = nodes.map((node) => node.x)
+  const ys = nodes.map((node) => node.y)
+  const minX = Math.min(...xs) - 120
+  const maxX = Math.max(...xs) + 120
+  const minY = Math.min(...ys) - 96
+  const maxY = Math.max(...ys) + 96
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+})
+const frameLabel = computed(() => graph.value?.name || t('router.processDesigner'))
 
 /* ─────────── 画布视口 ─────────── */
 const CANVAS_W = 1200
@@ -2537,77 +2591,13 @@ function nodeLabelLines(label: string) {
       class="designer-alert"
     />
 
-    <!-- P53 设计（节点09）：节点能力工具条（顶部横排，替代原左侧纵栏） -->
-    <div class="designer-workbar">
-      <div
-        v-for="cap in capabilities"
-        :key="cap.type"
-        class="workbar-item"
-        :class="{ 'workbar-item--disabled': !cap.supports.design }"
-        :draggable="cap.supports.design"
-        @dragstart="onPaletteDragStart($event, cap)"
-        @click="onWorkbarClick(cap)"
-      >
-        <svg class="workbar-icon" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-          <template v-if="cap.type === 'START'">
-            <path d="M6.667 3.333L16.667 10L6.667 16.667V3.333Z" />
-          </template>
-          <template v-else-if="cap.type === 'DRAFT'">
-            <path
-              d="M11.667 2.5H3.333V17.5H16.667V7.5H11.667V2.5ZM9.167 13.333L15.833 6.667L17.5 8.333L10.833 15L8.333 15.833L9.167 13.333Z"
-            />
-          </template>
-          <template v-else-if="cap.type === 'APPROVAL'">
-            <path
-              d="M17.5 11.667C18.881 11.667 20 10.547 20 9.167C20 7.786 18.881 6.667 17.5 6.667C16.119 6.667 15 7.786 15 9.167C15 10.547 16.119 11.667 17.5 11.667Z"
-            />
-            <path
-              d="M10.833 18.333C10.833 17.228 11.272 16.168 12.054 15.387C12.835 14.606 13.895 14.167 15 14.167C16.105 14.167 17.165 14.606 17.946 15.387C18.728 16.168 19.167 17.228 19.167 18.333"
-            />
-          </template>
-          <template v-else-if="cap.type === 'CONSENSUS'">
-            <path
-              d="M12.5 9.167C14.341 9.167 15.833 7.674 15.833 5.833C15.833 3.992 14.341 2.5 12.5 2.5C10.659 2.5 9.167 3.992 9.167 5.833C9.167 7.674 10.659 9.167 12.5 9.167Z"
-            />
-            <path
-              d="M3.333 17.5C3.333 15.732 4.036 14.036 5.286 12.786C6.536 11.536 8.232 10.833 10 10.833C11.768 10.833 13.464 11.536 14.714 12.786C15.964 14.036 16.667 15.732 16.667 17.5"
-            />
-          </template>
-          <template v-else-if="cap.type === 'CONDITION'">
-            <path d="M12 1.667L20.333 10L12 18.333L3.667 10L12 1.667Z" />
-          </template>
-          <!-- P63 并行网关与条件分支同为菱形语义（分叉/汇合） -->
-          <template v-else-if="cap.type === 'PARALLEL_GATEWAY'">
-            <path d="M10 1.667L18.333 10L10 18.333L1.667 10L10 1.667Z" />
-            <path d="M10 6.667V13.333M6.667 10H13.333" />
-          </template>
-          <template v-else-if="cap.type === 'NOTIFICATION'">
-            <path d="M11.667 1.667H4.167V18.333H15.833V5.833L11.667 1.667V1.667Z" />
-          </template>
-          <template v-else-if="cap.type === 'IOT_COMMAND'">
-            <path
-              d="M13.333 5H6.667C5.746 5 5 5.746 5 6.667V13.333C5 14.254 5.746 15 6.667 15H13.333C14.254 15 15 14.254 15 13.333V6.667C15 5.746 14.254 5 13.333 5Z"
-            />
-            <path
-              d="M7.5 1.667V5M12.5 1.667V5M7.5 15V18.333M12.5 15V18.333M1.667 7.5H5M1.667 12.5H5M15 7.5H18.333M15 12.5H18.333"
-            />
-          </template>
-          <template v-else-if="cap.type === 'AGENT'">
-            <path
-              d="M15 4.167H5C3.619 4.167 2.5 5.286 2.5 6.667V14.167C2.5 15.547 3.619 16.667 5 16.667H15C16.381 16.667 17.5 15.547 17.5 14.167V6.667C17.5 5.286 16.381 4.167 15 4.167Z"
-            />
-            <path d="M10 1.667V4.167M6.667 8.333H6.75M13.333 8.333H13.417M6.667 12.5H13.333" />
-          </template>
-          <template v-else>
-            <path
-              d="M15 3.333H5C4.079 3.333 3.333 4.08 3.333 5V15.833C3.333 16.754 4.079 17.5 5 17.5H15C15.92 17.5 16.667 16.754 16.667 15.833V5C16.667 4.08 15.92 3.333 15 3.333Z"
-            />
-            <path d="M6.667 10L9.167 12.5L13.333 7.5M7.5 1.667H12.5V5H7.5V1.667Z" />
-          </template>
-        </svg>
-        <span class="workbar-name">{{ cap.displayName }}</span>
-      </div>
-      <span class="workbar-spacer" />
+    <!-- 0.1.7 重构：第二行工具栏（撤销 / 整理布局 / 变量 / 触发器 / 高级配置 / 校验） -->
+    <div class="designer-toolbar2">
+      <el-button size="small" :disabled="!undoAvailable" @click="undoLast">{{
+        t('common.undo')
+      }}</el-button>
+      <el-button size="small" @click="arrangeTopDown">{{ t('workflow.arrangeTopDown') }}</el-button>
+      <span class="spacer" />
       <el-button size="small" class="workbar-advance" @click="openVariables">变量</el-button>
       <el-button size="small" class="workbar-advance" @click="openTriggers">触发器</el-button>
       <el-button size="small" class="workbar-advance" @click="advancedConfigVisible = true">{{
@@ -2616,396 +2606,761 @@ function nodeLabelLines(label: string) {
       <el-button size="small" class="workbar-verify" :loading="validating" @click="validate">{{
         t('workflow.validateFlow')
       }}</el-button>
-      <svg class="workbar-gear" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-        <path
-          d="M10 13.833C11.841 13.833 13.333 12.341 13.333 10.5C13.333 8.659 11.841 7.167 10 7.167C8.159 7.167 6.667 8.659 6.667 10.5C6.667 12.341 8.159 13.833 10 13.833Z"
-        />
-        <path
-          d="M10 2.167V4.667M10 16.333V18.833M1.667 10.5H4.167M15.833 10.5H18.333M4.167 4.667L5.833 6.333M14.167 14.667L15.833 16.333M4.167 16.333L5.833 14.667M14.167 6.333L15.833 4.667"
-        />
-      </svg>
     </div>
 
-    <div class="designer-body">
-      <!-- 画布（P53 节点09：24px 网格底 + 缩放控件 + 底部操作提示） -->
-      <div class="designer-canvas-wrap">
-        <svg
-          ref="svgRef"
-          class="pg-svg"
-          :class="{ 'pg-svg-dragging': activeDragCursor !== null }"
-          :style="activeDragCursor ? { '--pg-drag-cursor': activeDragCursor } : undefined"
-          :width="'100%'"
-          :height="'100%'"
-          :viewBox="`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`"
-          @wheel="onWheel"
-          @pointerdown="onBgPointerDown"
-          @pointermove="onPointerMove"
-          @pointerup="onPointerUp"
-          @pointercancel="onPointerUp"
-          @dragover.prevent
-          @drop="onCanvasDrop"
-        >
-          <defs>
-            <pattern id="designer-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-              <path d="M24 0H0V24" fill="none" stroke="#e8edf6" stroke-width="1" />
-            </pattern>
-            <marker
-              id="designer-edge-arrow"
-              markerUnits="userSpaceOnUse"
-              markerWidth="8.5"
-              markerHeight="7"
-              refX="8.2"
-              refY="3.5"
-              orient="auto"
+    <div class="designer-main">
+      <!-- 0.1.7 重构：节点面板移到左侧竖栏（分组 + 图标块，拖拽/点击添加） -->
+      <aside class="designer-palette">
+        <section v-for="group in paletteGroups" :key="group.category" class="palette-group">
+          <h4 class="palette-group__title">{{ group.label }}</h4>
+          <div class="palette-group__grid">
+            <button
+              v-for="cap in group.items"
+              :key="cap.type"
+              type="button"
+              class="palette-item"
+              :class="{ 'palette-item--disabled': !cap.supports.design }"
+              :draggable="cap.supports.design"
+              @dragstart="onPaletteDragStart($event, cap)"
+              @click="onWorkbarClick(cap)"
             >
-              <path d="M0,0 L8.5,3.5 L0,7 z" class="designer-edge-arrow" />
-            </marker>
-            <marker
-              id="designer-edge-arrow-selected"
-              markerUnits="userSpaceOnUse"
-              markerWidth="8.5"
-              markerHeight="7"
-              refX="8.2"
-              refY="3.5"
-              orient="auto"
-            >
-              <path d="M0,0 L8.5,3.5 L0,7 z" class="designer-edge-arrow-selected" />
-            </marker>
-          </defs>
-          <rect class="pg-bg" x="-100000" y="-100000" width="200000" height="200000" />
-          <template v-for="edge in canvasEdges" :key="edge.id">
-            <path
-              :d="edgePathOf(edge)"
-              fill="none"
-              class="designer-edge"
-              :class="{ 'designer-edge-selected': selectionId === edge.id }"
-              stroke-width="10"
-              stroke="transparent"
-              :style="{ cursor: edgeHitCursor(edge) }"
-              :data-edge-id="edge.id"
-              @pointerdown.stop="onEdgePointerDown($event, edge)"
-              @pointermove="onEdgeHoverMove($event, edge)"
-              @pointerleave="onEdgeHoverLeave(edge)"
-            />
-            <path
-              :d="edgePathOf(edge)"
-              fill="none"
-              class="designer-edge-visual"
-              :class="{ 'designer-edge-selected': selectionId === edge.id }"
-              stroke-width="1.6"
-              pointer-events="none"
-            />
-          </template>
-          <path
-            v-if="pendingConnectTarget"
-            :d="
-              buildEdgePath(
-                { x: pendingConnectPos?.x ?? 0, y: pendingConnectPos?.y ?? 0 },
-                { x: pendingConnectTarget.x, y: pendingConnectTarget.y },
-                [],
-              )
-            "
-            fill="none"
-            class="designer-edge-pending"
-            stroke-dasharray="6 4"
-          />
-          <g
-            v-for="node in canvasNodes"
-            :key="node.id"
-            :transform="
-              isGatewayShape(node.type)
-                ? `translate(${node.x - P53_GATEWAY_RADIUS}, ${node.y - P53_GATEWAY_RADIUS})`
-                : `translate(${node.x - P53_NODE_WIDTH / 2}, ${node.y - P53_NODE_HEIGHT / 2})`
-            "
-            class="designer-node"
-            :class="{
-              'designer-node-selected': selectionId === node.id,
-              'designer-node-error': validationErrors.some((e) => e.nodeKey === node.id),
-              'designer-node-start': node.type === 'START',
-              'designer-node-end': node.type === 'END',
-              'designer-node-draft': node.config?.nodeClass === 'draft',
-            }"
-            :data-node-id="node.id"
-            @pointerdown="startNodeDrag($event, node)"
-            @pointerup="onNodePointerUp($event, node)"
-          >
-            <rect
-              v-if="!isGatewayShape(node.type)"
-              :width="P53_NODE_WIDTH"
-              :height="P53_NODE_HEIGHT"
-              rx="8"
-              class="designer-node-rect"
-            />
-            <!-- 设计09：网关为菱形（+号），名称置于菱形右侧；P63 纳入 CONDITION/PARALLEL_GATEWAY -->
-            <template v-else>
-              <polygon
-                points="22,0 44,22 22,44 0,22"
-                class="designer-node-rect designer-node-gateway"
-              />
-              <path d="M22 10 V34 M10 22 H34" class="designer-node-gateway-plus" />
-            </template>
-            <!-- V011-BUG-023：四向锚点（上下左右缘中点）均可拖拽/点选拉线（ProcessOn 口径） -->
-            <circle
-              v-if="selectionId === node.id && !isGatewayShape(node.type)"
-              cx="0"
-              :cy="P53_NODE_HEIGHT / 2"
-              r="3"
-              class="designer-node-port"
-              @pointerdown.stop="startConnect($event, node, 'left')"
-            />
-            <circle
-              v-if="selectionId === node.id && !isGatewayShape(node.type)"
-              :cx="P53_NODE_WIDTH"
-              :cy="P53_NODE_HEIGHT / 2"
-              r="3"
-              class="designer-node-port"
-              @pointerdown.stop="startConnect($event, node, 'right')"
-            />
-            <circle
-              v-if="selectionId === node.id && !isGatewayShape(node.type)"
-              :cx="P53_NODE_WIDTH / 2"
-              cy="0"
-              r="3"
-              class="designer-node-port"
-              @pointerdown.stop="startConnect($event, node, 'top')"
-            />
-            <circle
-              v-if="selectionId === node.id && !isGatewayShape(node.type)"
-              :cx="P53_NODE_WIDTH / 2"
-              :cy="P53_NODE_HEIGHT"
-              r="3"
-              class="designer-node-port"
-              @pointerdown.stop="startConnect($event, node, 'bottom')"
-            />
-            <!-- 设计09：节点图标为锁定 SVG 矢量字形（22×22，起点 (12,14)） -->
-            <g
-              v-if="!isGatewayShape(node.type)"
-              class="designer-node-icon"
-              transform="translate(12 14)"
-            >
-              <template v-if="node.type === 'START'">
-                <path d="M7.333 3.667L18.333 11L7.333 18.333V3.667Z" />
-              </template>
-              <template v-else-if="node.type === 'END'">
-                <path
-                  d="M16.5 3.667H5.5C4.488 3.667 3.667 4.488 3.667 5.5V17.417C3.667 18.429 4.488 19.25 5.5 19.25H16.5C17.513 19.25 18.333 18.429 18.333 17.417V5.5C18.333 4.488 17.513 3.667 16.5 3.667Z"
-                />
-                <path d="M7.333 11L10.083 13.75L14.667 8.25M8.25 1.833H13.75V5.5H8.25V1.833Z" />
-              </template>
-              <template v-else-if="node.config?.nodeClass === 'draft'">
-                <path
-                  d="M12.833 2.75H3.667V19.25H18.333V8.25H12.833V2.75ZM10.083 14.667L17.417 7.333L19.25 9.167L11.917 16.5L9.167 17.417L10.083 14.667Z"
-                />
-              </template>
-              <template v-else>
-                <path
-                  d="M15.583 2.75H3.667C3.16 2.75 2.75 3.16 2.75 3.667V18.333C2.75 18.84 3.16 19.25 3.667 19.25H15.583C16.09 19.25 16.5 18.84 16.5 18.333V3.667C16.5 3.16 16.09 2.75 15.583 2.75Z"
-                />
-                <path d="M5.5 6.417H12.833M5.5 10.083H11M5.5 13.75H9.167" />
-                <path
-                  d="M16.5 15.583C18.019 15.583 19.25 14.352 19.25 12.833C19.25 11.315 18.019 10.083 16.5 10.083C14.981 10.083 13.75 11.315 13.75 12.833C13.75 14.352 14.981 15.583 16.5 15.583Z"
-                />
-                <path
-                  d="M11.917 20.167C11.917 18.951 12.4 17.785 13.259 16.926C14.119 16.066 15.285 15.583 16.5 15.583C17.716 15.583 18.881 16.066 19.741 16.926C20.601 17.785 21.083 18.951 21.083 20.167"
-                />
-              </template>
-            </g>
-            <text
-              v-if="!isGatewayShape(node.type)"
-              :x="42"
-              :y="P53_NODE_HEIGHT / 2 + (nodeLabelLines(node.label).length > 1 ? -5 : 2)"
-              text-anchor="start"
-              class="designer-node-label"
-            >
-              <tspan
-                v-for="(line, lineIndex) in nodeLabelLines(node.label)"
-                :key="lineIndex"
-                :x="42"
-                :dy="lineIndex === 0 ? 0 : 17"
+              <svg
+                class="workbar-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                aria-hidden="true"
               >
-                {{ line }}
-              </tspan>
-            </text>
-            <text
-              v-else
-              x="54"
-              y="41.5"
-              text-anchor="start"
-              class="designer-node-label designer-node-label--gateway"
-            >
-              {{ node.label }}
-            </text>
-          </g>
-          <!-- V011-BUG-025 / BF20261013-030：把连线编辑手柄放在节点之后，确保端点不被节点盒遮挡。 -->
-          <template v-for="edge in canvasEdges" :key="'handles-' + edge.id">
-            <template v-if="selectionId === edge.id">
-              <!-- BF20261013-030：内段中点手柄（垂直段左右拖 / 水平段上下拖，方向光标随轴） -->
+                <template v-if="cap.type === 'START'">
+                  <path d="M6.667 3.333L16.667 10L6.667 16.667V3.333Z" />
+                </template>
+                <template v-else-if="cap.type === 'DRAFT'">
+                  <path
+                    d="M11.667 2.5H3.333V17.5H16.667V7.5H11.667V2.5ZM9.167 13.333L15.833 6.667L17.5 8.333L10.833 15L8.333 15.833L9.167 13.333Z"
+                  />
+                </template>
+                <template v-else-if="cap.type === 'APPROVAL'">
+                  <path
+                    d="M17.5 11.667C18.881 11.667 20 10.547 20 9.167C20 7.786 18.881 6.667 17.5 6.667C16.119 6.667 15 7.786 15 9.167C15 10.547 16.119 11.667 17.5 11.667Z"
+                  />
+                  <path
+                    d="M10.833 18.333C10.833 17.228 11.272 16.168 12.054 15.387C12.835 14.606 13.895 14.167 15 14.167C16.105 14.167 17.165 14.606 17.946 15.387C18.728 16.168 19.167 17.228 19.167 18.333"
+                  />
+                </template>
+                <template v-else-if="cap.type === 'CONSENSUS'">
+                  <path
+                    d="M12.5 9.167C14.341 9.167 15.833 7.674 15.833 5.833C15.833 3.992 14.341 2.5 12.5 2.5C10.659 2.5 9.167 3.992 9.167 5.833C9.167 7.674 10.659 9.167 12.5 9.167Z"
+                  />
+                  <path
+                    d="M3.333 17.5C3.333 15.732 4.036 14.036 5.286 12.786C6.536 11.536 8.232 10.833 10 10.833C11.768 10.833 13.464 11.536 14.714 12.786C15.964 14.036 16.667 15.732 16.667 17.5"
+                  />
+                </template>
+                <template v-else-if="cap.type === 'CONDITION'">
+                  <path d="M12 1.667L20.333 10L12 18.333L3.667 10L12 1.667Z" />
+                </template>
+                <!-- P63 并行网关与条件分支同为菱形语义（分叉/汇合） -->
+                <template v-else-if="cap.type === 'PARALLEL_GATEWAY'">
+                  <path d="M10 1.667L18.333 10L10 18.333L1.667 10L10 1.667Z" />
+                  <path d="M10 6.667V13.333M6.667 10H13.333" />
+                </template>
+                <template v-else-if="cap.type === 'NOTIFICATION'">
+                  <path d="M11.667 1.667H4.167V18.333H15.833V5.833L11.667 1.667V1.667Z" />
+                </template>
+                <template v-else-if="cap.type === 'IOT_COMMAND'">
+                  <path
+                    d="M13.333 5H6.667C5.746 5 5 5.746 5 6.667V13.333C5 14.254 5.746 15 6.667 15H13.333C14.254 15 15 14.254 15 13.333V6.667C15 5.746 14.254 5 13.333 5Z"
+                  />
+                  <path
+                    d="M7.5 1.667V5M12.5 1.667V5M7.5 15V18.333M12.5 15V18.333M1.667 7.5H5M1.667 12.5H5M15 7.5H18.333M15 12.5H18.333"
+                  />
+                </template>
+                <template v-else-if="cap.type === 'AGENT'">
+                  <path
+                    d="M15 4.167H5C3.619 4.167 2.5 5.286 2.5 6.667V14.167C2.5 15.547 3.619 16.667 5 16.667H15C16.381 16.667 17.5 15.547 17.5 14.167V6.667C17.5 5.286 16.381 4.167 15 4.167Z"
+                  />
+                  <path
+                    d="M10 1.667V4.167M6.667 8.333H6.75M13.333 8.333H13.417M6.667 12.5H13.333"
+                  />
+                </template>
+                <template v-else>
+                  <path
+                    d="M15 3.333H5C4.079 3.333 3.333 4.08 3.333 5V15.833C3.333 16.754 4.079 17.5 5 17.5H15C15.92 17.5 16.667 16.754 16.667 15.833V5C16.667 4.08 15.92 3.333 15 3.333Z"
+                  />
+                  <path d="M6.667 10L9.167 12.5L13.333 7.5M7.5 1.667H12.5V5H7.5V1.667Z" />
+                </template>
+              </svg>
+              <span class="palette-item__name">{{ cap.displayName }}</span>
+            </button>
+          </div>
+        </section>
+      </aside>
+
+      <div class="designer-body">
+        <!-- 画布（P53 节点09：24px 网格底 + 缩放控件 + 底部操作提示） -->
+        <div class="designer-canvas-wrap">
+          <svg
+            ref="svgRef"
+            class="pg-svg"
+            :class="{ 'pg-svg-dragging': activeDragCursor !== null }"
+            :style="activeDragCursor ? { '--pg-drag-cursor': activeDragCursor } : undefined"
+            :width="'100%'"
+            :height="'100%'"
+            :viewBox="`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`"
+            @wheel="onWheel"
+            @pointerdown="onBgPointerDown"
+            @pointermove="onPointerMove"
+            @pointerup="onPointerUp"
+            @pointercancel="onPointerUp"
+            @dragover.prevent
+            @drop="onCanvasDrop"
+          >
+            <defs>
+              <pattern id="designer-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+                <path d="M24 0H0V24" fill="none" stroke="#eef2f8" stroke-width="1" />
+              </pattern>
+              <marker
+                id="designer-edge-arrow"
+                markerUnits="userSpaceOnUse"
+                markerWidth="8.5"
+                markerHeight="7"
+                refX="8.2"
+                refY="3.5"
+                orient="auto"
+              >
+                <path d="M0,0 L8.5,3.5 L0,7 z" class="designer-edge-arrow" />
+              </marker>
+              <marker
+                id="designer-edge-arrow-selected"
+                markerUnits="userSpaceOnUse"
+                markerWidth="8.5"
+                markerHeight="7"
+                refX="8.2"
+                refY="3.5"
+                orient="auto"
+              >
+                <path d="M0,0 L8.5,3.5 L0,7 z" class="designer-edge-arrow-selected" />
+              </marker>
+            </defs>
+            <rect class="pg-bg" x="-100000" y="-100000" width="200000" height="200000" />
+            <!-- 0.1.7：流程画布框（随内容平移缩放） -->
+            <g v-if="canvasFrame" class="designer-frame-group" pointer-events="none">
               <rect
-                v-for="handle in edgeSegmentHandlesOf(edge)"
-                :key="'seg-' + edge.id + '-' + handle.index"
-                :x="handle.x - 4.5"
-                :y="handle.y - 4.5"
-                width="9"
-                height="9"
-                rx="1.5"
-                class="designer-edge-segment-handle"
-                :style="{ cursor: handle.cursor }"
-                @pointerdown.stop="beginSegmentDragFromHandle($event, edge, handle)"
+                :x="canvasFrame.x"
+                :y="canvasFrame.y"
+                :width="canvasFrame.w"
+                :height="canvasFrame.h"
+                rx="2"
+                class="designer-frame"
               />
-              <circle
-                :cx="pathPoints(edge.path)[0]?.x ?? 0"
-                :cy="pathPoints(edge.path)[0]?.y ?? 0"
-                r="5"
-                class="designer-edge-endpoint"
-                @pointerdown.stop="beginEndpointDrag($event, edge, 'source')"
+              <rect
+                :x="canvasFrame.x"
+                :y="canvasFrame.y - 26"
+                width="92"
+                height="26"
+                rx="3"
+                class="designer-frame-tab"
               />
-              <circle
-                :cx="pathPoints(edge.path)[pathPoints(edge.path).length - 1]?.x ?? 0"
-                :cy="pathPoints(edge.path)[pathPoints(edge.path).length - 1]?.y ?? 0"
-                r="5"
-                class="designer-edge-endpoint"
-                @pointerdown.stop="beginEndpointDrag($event, edge, 'target')"
+              <text
+                :x="canvasFrame.x + 46"
+                :y="canvasFrame.y - 9"
+                text-anchor="middle"
+                class="designer-frame-tab-text"
+              >
+                {{ frameLabel }}
+              </text>
+            </g>
+            <template v-for="edge in canvasEdges" :key="edge.id">
+              <path
+                :d="edgePathOf(edge)"
+                fill="none"
+                class="designer-edge"
+                :class="{ 'designer-edge-selected': selectionId === edge.id }"
+                stroke-width="10"
+                stroke="transparent"
+                :style="{ cursor: edgeHitCursor(edge) }"
+                :data-edge-id="edge.id"
+                @pointerdown.stop="onEdgePointerDown($event, edge)"
+                @pointermove="onEdgeHoverMove($event, edge)"
+                @pointerleave="onEdgeHoverLeave(edge)"
+              />
+              <path
+                :d="edgePathOf(edge)"
+                fill="none"
+                class="designer-edge-visual"
+                :class="{ 'designer-edge-selected': selectionId === edge.id }"
+                stroke-width="1.6"
+                pointer-events="none"
               />
             </template>
-          </template>
-        </svg>
-        <div class="canvas-zoom">
-          <button type="button" class="zoom-btn" @click="zoomView(1 / 1.1)">−</button>
-          <span class="zoom-value">{{ zoomPercent }}%</span>
-          <button type="button" class="zoom-btn" @click="zoomView(1.1)">＋</button>
-          <button type="button" class="zoom-fit" @click="fitViewport">
-            {{ t('workflow.fitView') }}
-          </button>
+            <path
+              v-if="pendingConnectTarget"
+              :d="
+                buildEdgePath(
+                  { x: pendingConnectPos?.x ?? 0, y: pendingConnectPos?.y ?? 0 },
+                  { x: pendingConnectTarget.x, y: pendingConnectTarget.y },
+                  [],
+                )
+              "
+              fill="none"
+              class="designer-edge-pending"
+              stroke-dasharray="6 4"
+            />
+            <g
+              v-for="node in canvasNodes"
+              :key="node.id"
+              :transform="
+                isGatewayShape(node.type)
+                  ? `translate(${node.x - P53_GATEWAY_RADIUS}, ${node.y - P53_GATEWAY_RADIUS})`
+                  : `translate(${node.x - P53_NODE_WIDTH / 2}, ${node.y - P53_NODE_HEIGHT / 2})`
+              "
+              class="designer-node"
+              :class="{
+                'designer-node-selected': selectionId === node.id,
+                'designer-node-error': validationErrors.some((e) => e.nodeKey === node.id),
+                'designer-node-start': node.type === 'START',
+                'designer-node-end': node.type === 'END',
+                'designer-node-draft': node.config?.nodeClass === 'draft',
+              }"
+              :data-node-id="node.id"
+              @pointerdown="startNodeDrag($event, node)"
+              @pointerup="onNodePointerUp($event, node)"
+            >
+              <rect
+                v-if="!isGatewayShape(node.type)"
+                :width="P53_NODE_WIDTH"
+                :height="P53_NODE_HEIGHT"
+                rx="8"
+                class="designer-node-rect"
+              />
+              <!-- 设计09：网关为菱形（+号），名称置于菱形右侧；P63 纳入 CONDITION/PARALLEL_GATEWAY -->
+              <template v-else>
+                <polygon
+                  points="22,0 44,22 22,44 0,22"
+                  class="designer-node-rect designer-node-gateway"
+                />
+                <path d="M22 10 V34 M10 22 H34" class="designer-node-gateway-plus" />
+              </template>
+              <!-- V011-BUG-023：四向锚点（上下左右缘中点）均可拖拽/点选拉线（ProcessOn 口径） -->
+              <circle
+                v-if="selectionId === node.id && !isGatewayShape(node.type)"
+                cx="0"
+                :cy="P53_NODE_HEIGHT / 2"
+                r="3"
+                class="designer-node-port"
+                @pointerdown.stop="startConnect($event, node, 'left')"
+              />
+              <circle
+                v-if="selectionId === node.id && !isGatewayShape(node.type)"
+                :cx="P53_NODE_WIDTH"
+                :cy="P53_NODE_HEIGHT / 2"
+                r="3"
+                class="designer-node-port"
+                @pointerdown.stop="startConnect($event, node, 'right')"
+              />
+              <circle
+                v-if="selectionId === node.id && !isGatewayShape(node.type)"
+                :cx="P53_NODE_WIDTH / 2"
+                cy="0"
+                r="3"
+                class="designer-node-port"
+                @pointerdown.stop="startConnect($event, node, 'top')"
+              />
+              <circle
+                v-if="selectionId === node.id && !isGatewayShape(node.type)"
+                :cx="P53_NODE_WIDTH / 2"
+                :cy="P53_NODE_HEIGHT"
+                r="3"
+                class="designer-node-port"
+                @pointerdown.stop="startConnect($event, node, 'bottom')"
+              />
+              <!-- 设计09：节点图标为锁定 SVG 矢量字形（22×22，起点 (12,14)） -->
+              <g
+                v-if="!isGatewayShape(node.type)"
+                class="designer-node-icon"
+                transform="translate(12 14)"
+              >
+                <template v-if="node.type === 'START'">
+                  <path d="M7.333 3.667L18.333 11L7.333 18.333V3.667Z" />
+                </template>
+                <template v-else-if="node.type === 'END'">
+                  <path
+                    d="M16.5 3.667H5.5C4.488 3.667 3.667 4.488 3.667 5.5V17.417C3.667 18.429 4.488 19.25 5.5 19.25H16.5C17.513 19.25 18.333 18.429 18.333 17.417V5.5C18.333 4.488 17.513 3.667 16.5 3.667Z"
+                  />
+                  <path d="M7.333 11L10.083 13.75L14.667 8.25M8.25 1.833H13.75V5.5H8.25V1.833Z" />
+                </template>
+                <template v-else-if="node.config?.nodeClass === 'draft'">
+                  <path
+                    d="M12.833 2.75H3.667V19.25H18.333V8.25H12.833V2.75ZM10.083 14.667L17.417 7.333L19.25 9.167L11.917 16.5L9.167 17.417L10.083 14.667Z"
+                  />
+                </template>
+                <template v-else>
+                  <path
+                    d="M15.583 2.75H3.667C3.16 2.75 2.75 3.16 2.75 3.667V18.333C2.75 18.84 3.16 19.25 3.667 19.25H15.583C16.09 19.25 16.5 18.84 16.5 18.333V3.667C16.5 3.16 16.09 2.75 15.583 2.75Z"
+                  />
+                  <path d="M5.5 6.417H12.833M5.5 10.083H11M5.5 13.75H9.167" />
+                  <path
+                    d="M16.5 15.583C18.019 15.583 19.25 14.352 19.25 12.833C19.25 11.315 18.019 10.083 16.5 10.083C14.981 10.083 13.75 11.315 13.75 12.833C13.75 14.352 14.981 15.583 16.5 15.583Z"
+                  />
+                  <path
+                    d="M11.917 20.167C11.917 18.951 12.4 17.785 13.259 16.926C14.119 16.066 15.285 15.583 16.5 15.583C17.716 15.583 18.881 16.066 19.741 16.926C20.601 17.785 21.083 18.951 21.083 20.167"
+                  />
+                </template>
+              </g>
+              <text
+                v-if="!isGatewayShape(node.type)"
+                :x="42"
+                :y="P53_NODE_HEIGHT / 2 + (nodeLabelLines(node.label).length > 1 ? -5 : 2)"
+                text-anchor="start"
+                class="designer-node-label"
+              >
+                <tspan
+                  v-for="(line, lineIndex) in nodeLabelLines(node.label)"
+                  :key="lineIndex"
+                  :x="42"
+                  :dy="lineIndex === 0 ? 0 : 17"
+                >
+                  {{ line }}
+                </tspan>
+              </text>
+              <text
+                v-else
+                x="54"
+                y="41.5"
+                text-anchor="start"
+                class="designer-node-label designer-node-label--gateway"
+              >
+                {{ node.label }}
+              </text>
+            </g>
+            <!-- V011-BUG-025 / BF20261013-030：把连线编辑手柄放在节点之后，确保端点不被节点盒遮挡。 -->
+            <template v-for="edge in canvasEdges" :key="'handles-' + edge.id">
+              <template v-if="selectionId === edge.id">
+                <!-- BF20261013-030：内段中点手柄（垂直段左右拖 / 水平段上下拖，方向光标随轴） -->
+                <rect
+                  v-for="handle in edgeSegmentHandlesOf(edge)"
+                  :key="'seg-' + edge.id + '-' + handle.index"
+                  :x="handle.x - 4.5"
+                  :y="handle.y - 4.5"
+                  width="9"
+                  height="9"
+                  rx="1.5"
+                  class="designer-edge-segment-handle"
+                  :style="{ cursor: handle.cursor }"
+                  @pointerdown.stop="beginSegmentDragFromHandle($event, edge, handle)"
+                />
+                <circle
+                  :cx="pathPoints(edge.path)[0]?.x ?? 0"
+                  :cy="pathPoints(edge.path)[0]?.y ?? 0"
+                  r="5"
+                  class="designer-edge-endpoint"
+                  @pointerdown.stop="beginEndpointDrag($event, edge, 'source')"
+                />
+                <circle
+                  :cx="pathPoints(edge.path)[pathPoints(edge.path).length - 1]?.x ?? 0"
+                  :cy="pathPoints(edge.path)[pathPoints(edge.path).length - 1]?.y ?? 0"
+                  r="5"
+                  class="designer-edge-endpoint"
+                  @pointerdown.stop="beginEndpointDrag($event, edge, 'target')"
+                />
+              </template>
+            </template>
+          </svg>
+          <div class="canvas-zoom">
+            <button type="button" class="zoom-btn" @click="zoomView(1 / 1.1)">−</button>
+            <span class="zoom-value">{{ zoomPercent }}%</span>
+            <button type="button" class="zoom-btn" @click="zoomView(1.1)">＋</button>
+            <button type="button" class="zoom-fit" @click="fitViewport">
+              {{ t('workflow.fitView') }}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <!-- 属性面板：字段由服务端能力 configFields + 参与人策略驱动 -->
-      <div class="designer-props">
-        <template v-if="selectedNode">
-          <div class="props-heading">
-            <span class="props-title">{{ t('workflow.nodePropsTitle') }}</span>
-          </div>
-
-          <!-- BF20261013-013：页签（字段属性仅非结束节点） -->
-          <div v-if="fieldConfigCapable" class="props-tabs">
-            <button
-              type="button"
-              class="props-tab"
-              :class="{ 'is-active': nodePropsTab === 'basic' }"
-              @click="nodePropsTab = 'basic'"
-            >
-              {{ t('workflow.basicPropsSection') }}
-            </button>
-            <button
-              type="button"
-              class="props-tab"
-              :class="{ 'is-active': nodePropsTab === 'fields' }"
-              @click="nodePropsTab = 'fields'"
-            >
-              {{ t('workflow.fieldPropsTab') }}
-            </button>
-          </div>
-
-          <template v-if="nodePropsTab === 'basic' || !fieldConfigCapable">
-            <div v-if="!fieldConfigCapable" class="props-section">
-              {{ t('workflow.basicPropsSection') }}
+        <!-- 属性面板：字段由服务端能力 configFields + 参与人策略驱动 -->
+        <div class="designer-props">
+          <template v-if="selectedNode">
+            <div class="props-heading">
+              <span class="props-title">{{ t('workflow.nodePropsTitle') }}</span>
             </div>
-            <el-form label-position="top" size="small">
-              <el-form-item :label="t('workflow.nodeName')">
-                <el-input v-model="propForm.name as string" @change="applyProps" />
-              </el-form-item>
-              <!-- 节点编号 / 审批方式（定义 config 元数据；只读展示） -->
-              <el-form-item v-if="nodeMeta.nodeKey" :label="t('workflow.nodeKeyLabel')">
-                <el-input :model-value="nodeMeta.nodeKey" disabled />
-              </el-form-item>
-              <el-form-item v-if="nodeMeta.approveMode" :label="t('workflow.approveModeLabel')">
-                <el-input :model-value="nodeMeta.approveMode" disabled />
-              </el-form-item>
-              <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
-              <template v-if="participantField">
-                <el-form-item label="审批人策略">
-                  <el-select v-model="participantForm.strategy" @change="applyParticipant">
-                    <el-option
-                      v-for="option in participantStrategyOptions"
-                      :key="option.value"
-                      :label="option.label"
-                      :value="option.value"
-                    />
-                  </el-select>
+
+            <!-- BF20261013-013：页签（字段属性仅非结束节点） -->
+            <div v-if="fieldConfigCapable" class="props-tabs">
+              <button
+                type="button"
+                class="props-tab"
+                :class="{ 'is-active': nodePropsTab === 'basic' }"
+                @click="nodePropsTab = 'basic'"
+              >
+                {{ t('workflow.basicPropsSection') }}
+              </button>
+              <button
+                type="button"
+                class="props-tab"
+                :class="{ 'is-active': nodePropsTab === 'fields' }"
+                @click="nodePropsTab = 'fields'"
+              >
+                {{ t('workflow.fieldPropsTab') }}
+              </button>
+            </div>
+
+            <template v-if="nodePropsTab === 'basic' || !fieldConfigCapable">
+              <div v-if="!fieldConfigCapable" class="props-section">
+                {{ t('workflow.basicPropsSection') }}
+              </div>
+              <el-form label-position="top" size="small">
+                <el-form-item :label="t('workflow.nodeName')">
+                  <el-input v-model="propForm.name as string" @change="applyProps" />
                 </el-form-item>
-                <!-- FIXED_USER：人员多选（复用审批人候选弹窗人员页签；id 数组保持精度） -->
-                <el-form-item v-if="participantForm.strategy === 'FIXED_USER'" label="指定人员">
-                  <div class="participant-picker-row">
-                    <el-button @click="openParticipantUserPicker">
+                <!-- 节点编号 / 审批方式（定义 config 元数据；只读展示） -->
+                <el-form-item v-if="nodeMeta.nodeKey" :label="t('workflow.nodeKeyLabel')">
+                  <el-input :model-value="nodeMeta.nodeKey" disabled />
+                </el-form-item>
+                <el-form-item v-if="nodeMeta.approveMode" :label="t('workflow.approveModeLabel')">
+                  <el-input :model-value="nodeMeta.approveMode" disabled />
+                </el-form-item>
+                <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
+                <template v-if="participantField">
+                  <el-form-item label="审批人策略">
+                    <el-select v-model="participantForm.strategy" @change="applyParticipant">
+                      <el-option
+                        v-for="option in participantStrategyOptions"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <!-- FIXED_USER：人员多选（复用审批人候选弹窗人员页签；id 数组保持精度） -->
+                  <el-form-item v-if="participantForm.strategy === 'FIXED_USER'" label="指定人员">
+                    <div class="participant-picker-row">
+                      <el-button @click="openParticipantUserPicker">
+                        {{
+                          participantForm.userIds.length > 0
+                            ? `已选 ${participantForm.userIds.length} 人（点击修改）`
+                            : '选择审批人'
+                        }}
+                      </el-button>
+                      <small v-if="nodeMeta.approverName" class="participant-hint">
+                        {{ nodeMeta.approverName }}
+                      </small>
+                    </div>
+                  </el-form-item>
+                  <!-- DEPT_LEADER：部门多选（复用弹窗部门树勾选，运行期服务端解析唯一负责人） -->
+                  <el-form-item
+                    v-else-if="participantForm.strategy === 'DEPT_LEADER'"
+                    label="部门多选"
+                  >
+                    <el-button @click="openParticipantDeptPicker">
                       {{
-                        participantForm.userIds.length > 0
-                          ? `已选 ${participantForm.userIds.length} 人（点击修改）`
-                          : '选择审批人'
+                        participantForm.deptIds.length > 0
+                          ? `已选 ${participantForm.deptIds.length} 个部门（点击修改）`
+                          : '选择部门'
                       }}
                     </el-button>
-                    <small v-if="nodeMeta.approverName" class="participant-hint">
-                      {{ nodeMeta.approverName }}
-                    </small>
+                  </el-form-item>
+                  <!-- FORM_FIELD：来源表单（objectType + scope + 字段绑定） -->
+                  <template v-else-if="participantForm.strategy === 'FORM_FIELD'">
+                    <el-form-item label="对象类型">
+                      <el-radio-group
+                        v-model="participantForm.formField.objectType"
+                        @change="applyParticipant"
+                      >
+                        <el-radio value="USER">人员（所选人员审批）</el-radio>
+                        <el-radio value="DEPT">部门（解析唯一负责人）</el-radio>
+                      </el-radio-group>
+                    </el-form-item>
+                    <el-form-item label="取值范围">
+                      <el-radio-group
+                        v-model="participantForm.formField.scope"
+                        @change="applyParticipant"
+                      >
+                        <el-radio value="MAIN">主表字段</el-radio>
+                        <el-radio value="TABLE">表格字段</el-radio>
+                      </el-radio-group>
+                    </el-form-item>
+                    <el-form-item label="主字段">
+                      <el-select
+                        v-model="participantForm.formField.field"
+                        filterable
+                        placeholder="选择主表字段"
+                        @change="applyParticipant"
+                      >
+                        <el-option
+                          v-for="option in mainFieldOptionsFor(
+                            participantForm.formField.objectType,
+                          )"
+                          :key="option.name"
+                          :label="`${option.label || option.name}（${option.name}）`"
+                          :value="option.name"
+                        />
+                      </el-select>
+                    </el-form-item>
+                    <template v-if="participantForm.formField.scope === 'TABLE'">
+                      <el-form-item label="表格字段">
+                        <el-select
+                          v-model="participantForm.formField.tableField"
+                          filterable
+                          placeholder="选择表格字段"
+                          @change="
+                            () => {
+                              participantForm.formField.column = ''
+                              applyParticipant()
+                            }
+                          "
+                        >
+                          <el-option
+                            v-for="option in tableFieldOptions"
+                            :key="option.name"
+                            :label="`${option.label || option.name}（${option.name}）`"
+                            :value="option.name"
+                          />
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item label="表格列">
+                        <el-select
+                          v-model="participantForm.formField.column"
+                          filterable
+                          placeholder="选择表格列"
+                          @change="applyParticipant"
+                        >
+                          <el-option
+                            v-for="option in tableColumnOptionsFor(
+                              participantForm.formField.tableField,
+                              participantForm.formField.objectType,
+                            )"
+                            :key="option.name"
+                            :label="`${option.label || option.name}（${option.name}）`"
+                            :value="option.name"
+                          />
+                        </el-select>
+                      </el-form-item>
+                    </template>
+                  </template>
+                  <!-- NODE_FORM_AGGREGATE：来源节点 + 人员字段 + 轮次口径（P64 A07 聚合会签） -->
+                  <template v-else-if="participantForm.strategy === 'NODE_FORM_AGGREGATE'">
+                    <el-form-item label="来源节点">
+                      <el-select
+                        v-model="participantForm.aggregate.nodeKey"
+                        filterable
+                        placeholder="选择来源节点（读取该节点本轮全部有效最终提交）"
+                        @change="applyParticipant"
+                      >
+                        <el-option
+                          v-for="node in graphNodes"
+                          :key="node.id"
+                          :label="graphNodeLabel(node)"
+                          :value="node.id"
+                        />
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="人员字段">
+                      <el-select
+                        v-model="participantForm.aggregate.formField"
+                        filterable
+                        allow-create
+                        placeholder="选择或填写人员字段名（并集去重生成下一轮参与人）"
+                        @change="applyParticipant"
+                      >
+                        <el-option
+                          v-for="option in mainFieldOptionsFor('USER')"
+                          :key="option.name"
+                          :label="`${option.label || option.name}（${option.name}）`"
+                          :value="option.name"
+                        />
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="轮次口径">
+                      <el-radio-group
+                        v-model="participantForm.aggregate.round"
+                        @change="applyParticipant"
+                      >
+                        <el-radio value="">当前轮（缺省）</el-radio>
+                        <el-radio value="PREVIOUS">上一轮</el-radio>
+                      </el-radio-group>
+                    </el-form-item>
+                  </template>
+                  <!-- BF20261013-022②④：表达式走脚本弹窗；ROLE/POST 保留逗号取值 -->
+                  <el-form-item
+                    v-else-if="participantForm.strategy === 'EXPRESSION'"
+                    label="表达式（脚本）"
+                  >
+                    <div class="participant-picker-row">
+                      <el-button @click="openExpressionScriptDialog">
+                        {{ participantForm.genericValue ? '编辑脚本' : '编写脚本' }}
+                      </el-button>
+                      <small v-if="participantForm.genericValue" class="participant-hint">
+                        {{ participantForm.genericValue.slice(0, 60) }}
+                      </small>
+                    </div>
+                  </el-form-item>
+                  <el-form-item v-else label="取值">
+                    <el-input
+                      v-model="participantForm.genericValue"
+                      placeholder="多个取值用英文逗号分隔"
+                      @change="applyParticipant"
+                      @blur="applyParticipant"
+                    />
+                  </el-form-item>
+                  <el-alert
+                    v-if="participantLegacyNote"
+                    :title="participantLegacyNote"
+                    type="info"
+                    :closable="false"
+                    class="participant-legacy-note"
+                  />
+                </template>
+                <!-- ═══ P64 阶段Ⅰ：节点业务表单绑定（APPROVAL/CONSENSUS/DYNAMIC_PARALLEL）；
+                   BF20261013-020：节点绑定的是审批意见表单（独立类型，流程管理单独维护） ═══ -->
+                <el-form-item v-if="nodeFormCapable" label="审批意见表单">
+                  <div class="nodeform-row">
+                    <el-input :model-value="selectedNodeFormKey || '未绑定'" disabled />
+                    <el-button size="small" @click="nodeFormSelectVisible = true">
+                      {{ selectedNodeFormKey ? '更换' : '选择表单' }}
+                    </el-button>
+                    <el-button v-if="selectedNodeFormKey" size="small" @click="clearNodeForm"
+                      >清除</el-button
+                    >
                   </div>
                 </el-form-item>
-                <!-- DEPT_LEADER：部门多选（复用弹窗部门树勾选，运行期服务端解析唯一负责人） -->
-                <el-form-item
-                  v-else-if="participantForm.strategy === 'DEPT_LEADER'"
-                  label="部门多选"
-                >
-                  <el-button @click="openParticipantDeptPicker">
-                    {{
-                      participantForm.deptIds.length > 0
-                        ? `已选 ${participantForm.deptIds.length} 个部门（点击修改）`
-                        : '选择部门'
-                    }}
-                  </el-button>
-                </el-form-item>
-                <!-- FORM_FIELD：来源表单（objectType + scope + 字段绑定） -->
-                <template v-else-if="participantForm.strategy === 'FORM_FIELD'">
-                  <el-form-item label="对象类型">
-                    <el-radio-group
-                      v-model="participantForm.formField.objectType"
-                      @change="applyParticipant"
-                    >
-                      <el-radio value="USER">人员（所选人员审批）</el-radio>
-                      <el-radio value="DEPT">部门（解析唯一负责人）</el-radio>
-                    </el-radio-group>
+                <!-- ═══ BF20261013-022①：节点触发器（开始前 / 结束），脚本经统一弹窗编写 ═══ -->
+                <template v-if="nodeTriggerCapable">
+                  <div class="props-section props-section--advanced">节点触发器</div>
+                  <el-form-item label="节点开始前">
+                    <div class="participant-picker-row">
+                      <el-button @click="openNodeTriggerScriptDialog('NODE_ENTERING')">
+                        {{
+                          nodeTriggerOf('NODE_ENTERING')?.script?.trim() ? '编辑脚本' : '编写脚本'
+                        }}
+                      </el-button>
+                      <small class="participant-hint">{{
+                        nodeTriggerSummary('NODE_ENTERING')
+                      }}</small>
+                    </div>
                   </el-form-item>
-                  <el-form-item label="取值范围">
-                    <el-radio-group
-                      v-model="participantForm.formField.scope"
-                      @change="applyParticipant"
-                    >
-                      <el-radio value="MAIN">主表字段</el-radio>
-                      <el-radio value="TABLE">表格字段</el-radio>
-                    </el-radio-group>
+                  <el-form-item label="节点结束">
+                    <div class="participant-picker-row">
+                      <el-button @click="openNodeTriggerScriptDialog('NODE_ROUND_COMPLETED')">
+                        {{
+                          nodeTriggerOf('NODE_ROUND_COMPLETED')?.script?.trim()
+                            ? '编辑脚本'
+                            : '编写脚本'
+                        }}
+                      </el-button>
+                      <small class="participant-hint">{{
+                        nodeTriggerSummary('NODE_ROUND_COMPLETED')
+                      }}</small>
+                    </div>
                   </el-form-item>
-                  <el-form-item label="主字段">
+                </template>
+                <!-- ═══ BF20261013-019/027：发起子流程（开关 + 向导弹窗；等待块由设计器自动生成） ═══ -->
+                <template v-if="selectedNode.type === 'APPROVAL'">
+                  <el-form-item label="发起子流程">
+                    <div class="participant-picker-row">
+                      <el-switch v-model="subflowForm.enabled" @change="onSubflowSwitch" />
+                      <el-button v-if="subflowForm.enabled" size="small" @click="openSubflowWizard">
+                        {{ subflowForm.targetProcessDefKey ? '修改配置' : '配置子流程' }}
+                      </el-button>
+                      <small v-if="subflowSummary" class="participant-hint">{{
+                        subflowSummary
+                      }}</small>
+                    </div>
+                  </el-form-item>
+                </template>
+                <!-- ═══ P63 动态并行专属面板（semanticVersion 开关 = 新语义按对象分支） ═══ -->
+                <template v-if="dynamicParallelActive">
+                  <el-form-item label="分支来源类型">
                     <el-select
-                      v-model="participantForm.formField.field"
+                      v-model="dynamicParallelForm.sourceType"
+                      @change="applyDynamicParallel"
+                    >
+                      <el-option label="表单字段" value="FORM_FIELD" />
+                      <el-option label="流程变量" value="VARIABLE" />
+                      <el-option label="固定值" value="FIXED" />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item v-if="dynamicParallelForm.sourceType === 'FIXED'" label="固定值">
+                    <!-- 新语义下直接选择人员/部门对象（稳定 ID）；旧语义保留手填取值形状 -->
+                    <div v-if="dynamicParallelForm.objectSemantic" class="participant-picker-row">
+                      <el-button
+                        v-if="dynamicParallelForm.objectType === 'USER'"
+                        @click="openDynamicUserPicker"
+                      >
+                        {{
+                          dynamicFixedSelectedIdList.length > 0
+                            ? `已选 ${dynamicFixedSelectedIdList.length} 人（点击修改）`
+                            : '选择人员'
+                        }}
+                      </el-button>
+                      <el-button v-else @click="openDynamicDeptPicker">
+                        {{
+                          dynamicFixedSelectedIdList.length > 0
+                            ? `已选 ${dynamicFixedSelectedIdList.length} 个部门（点击修改）`
+                            : '选择部门'
+                        }}
+                      </el-button>
+                    </div>
+                    <el-input
+                      v-else
+                      v-model="dynamicParallelForm.sourceValue"
+                      placeholder="多个取值用英文逗号分隔"
+                      @change="applyDynamicParallel"
+                      @blur="applyDynamicParallel"
+                    />
+                  </el-form-item>
+                  <el-form-item
+                    v-else-if="dynamicParallelForm.sourceType === 'VARIABLE'"
+                    label="变量名"
+                  >
+                    <el-input
+                      v-model="dynamicParallelForm.sourceValue"
+                      placeholder="请输入变量名"
+                      @change="applyDynamicParallel"
+                      @blur="applyDynamicParallel"
+                    />
+                  </el-form-item>
+                  <el-form-item v-else-if="dynamicParallelForm.scope === 'MAIN'" label="主字段">
+                    <el-select
+                      v-model="dynamicParallelForm.sourceValue"
                       filterable
                       placeholder="选择主表字段"
-                      @change="applyParticipant"
+                      @change="applyDynamicParallel"
                     >
                       <el-option
-                        v-for="option in mainFieldOptionsFor(participantForm.formField.objectType)"
+                        v-for="option in mainFieldOptionsFor(dynamicParallelForm.objectType)"
                         :key="option.name"
                         :label="`${option.label || option.name}（${option.name}）`"
                         :value="option.name"
                       />
                     </el-select>
                   </el-form-item>
-                  <template v-if="participantForm.formField.scope === 'TABLE'">
+                  <!-- 对象类型仅新语义（按对象分支）下有意义，随 semanticVersion 开关显示 -->
+                  <el-form-item v-if="dynamicParallelForm.objectSemantic" label="对象类型">
+                    <el-radio-group
+                      v-model="dynamicParallelForm.objectType"
+                      @change="onDynamicObjectTypeChange"
+                    >
+                      <el-radio value="USER">人员（逐人分支）</el-radio>
+                      <el-radio value="DEPT">部门（逐部门分支）</el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                  <el-form-item label="取值范围">
+                    <el-radio-group
+                      v-model="dynamicParallelForm.scope"
+                      @change="applyDynamicParallel"
+                    >
+                      <el-radio value="MAIN">主表字段</el-radio>
+                      <el-radio value="TABLE">表格字段</el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                  <template v-if="dynamicParallelForm.scope === 'TABLE'">
                     <el-form-item label="表格字段">
                       <el-select
-                        v-model="participantForm.formField.tableField"
+                        v-model="dynamicParallelForm.tableField"
                         filterable
                         placeholder="选择表格字段"
                         @change="
                           () => {
-                            participantForm.formField.column = ''
-                            applyParticipant()
+                            dynamicParallelForm.column = ''
+                            applyDynamicParallel()
                           }
                         "
                       >
@@ -3019,15 +3374,20 @@ function nodeLabelLines(label: string) {
                     </el-form-item>
                     <el-form-item label="表格列">
                       <el-select
-                        v-model="participantForm.formField.column"
+                        v-model="dynamicParallelForm.column"
                         filterable
                         placeholder="选择表格列"
-                        @change="applyParticipant"
+                        @change="
+                          () => {
+                            dynamicParallelForm.sourceValue = dynamicParallelForm.column
+                            applyDynamicParallel()
+                          }
+                        "
                       >
                         <el-option
                           v-for="option in tableColumnOptionsFor(
-                            participantForm.formField.tableField,
-                            participantForm.formField.objectType,
+                            dynamicParallelForm.tableField,
+                            dynamicParallelForm.objectType,
                           )"
                           :key="option.name"
                           :label="`${option.label || option.name}（${option.name}）`"
@@ -3036,433 +3396,177 @@ function nodeLabelLines(label: string) {
                       </el-select>
                     </el-form-item>
                   </template>
-                </template>
-                <!-- NODE_FORM_AGGREGATE：来源节点 + 人员字段 + 轮次口径（P64 A07 聚合会签） -->
-                <template v-else-if="participantForm.strategy === 'NODE_FORM_AGGREGATE'">
-                  <el-form-item label="来源节点">
-                    <el-select
-                      v-model="participantForm.aggregate.nodeKey"
-                      filterable
-                      placeholder="选择来源节点（读取该节点本轮全部有效最终提交）"
-                      @change="applyParticipant"
-                    >
-                      <el-option
-                        v-for="node in graphNodes"
-                        :key="node.id"
-                        :label="graphNodeLabel(node)"
-                        :value="node.id"
-                      />
+                  <el-form-item label="完成模式">
+                    <el-select v-model="dynamicParallelForm.mode" @change="applyDynamicParallel">
+                      <el-option label="全部通过（ALL）" value="ALL" />
+                      <el-option label="任一通过（ANY）" value="ANY" />
+                      <el-option label="按比例通过（RATIO）" value="RATIO" />
+                      <el-option label="一票否决（VETO）" value="VETO" />
                     </el-select>
                   </el-form-item>
-                  <el-form-item label="人员字段">
-                    <el-select
-                      v-model="participantForm.aggregate.formField"
-                      filterable
-                      allow-create
-                      placeholder="选择或填写人员字段名（并集去重生成下一轮参与人）"
-                      @change="applyParticipant"
-                    >
-                      <el-option
-                        v-for="option in mainFieldOptionsFor('USER')"
-                        :key="option.name"
-                        :label="`${option.label || option.name}（${option.name}）`"
-                        :value="option.name"
-                      />
-                    </el-select>
-                  </el-form-item>
-                  <el-form-item label="轮次口径">
-                    <el-radio-group
-                      v-model="participantForm.aggregate.round"
-                      @change="applyParticipant"
-                    >
-                      <el-radio value="">当前轮（缺省）</el-radio>
-                      <el-radio value="PREVIOUS">上一轮</el-radio>
-                    </el-radio-group>
-                  </el-form-item>
-                </template>
-                <!-- BF20261013-022②④：表达式走脚本弹窗；ROLE/POST 保留逗号取值 -->
-                <el-form-item
-                  v-else-if="participantForm.strategy === 'EXPRESSION'"
-                  label="表达式（脚本）"
-                >
-                  <div class="participant-picker-row">
-                    <el-button @click="openExpressionScriptDialog">
-                      {{ participantForm.genericValue ? '编辑脚本' : '编写脚本' }}
-                    </el-button>
-                    <small v-if="participantForm.genericValue" class="participant-hint">
-                      {{ participantForm.genericValue.slice(0, 60) }}
-                    </small>
-                  </div>
-                </el-form-item>
-                <el-form-item v-else label="取值">
-                  <el-input
-                    v-model="participantForm.genericValue"
-                    placeholder="多个取值用英文逗号分隔"
-                    @change="applyParticipant"
-                    @blur="applyParticipant"
-                  />
-                </el-form-item>
-                <el-alert
-                  v-if="participantLegacyNote"
-                  :title="participantLegacyNote"
-                  type="info"
-                  :closable="false"
-                  class="participant-legacy-note"
-                />
-              </template>
-              <!-- ═══ P64 阶段Ⅰ：节点业务表单绑定（APPROVAL/CONSENSUS/DYNAMIC_PARALLEL）；
-                   BF20261013-020：节点绑定的是审批意见表单（独立类型，流程管理单独维护） ═══ -->
-              <el-form-item v-if="nodeFormCapable" label="审批意见表单">
-                <div class="nodeform-row">
-                  <el-input :model-value="selectedNodeFormKey || '未绑定'" disabled />
-                  <el-button size="small" @click="nodeFormSelectVisible = true">
-                    {{ selectedNodeFormKey ? '更换' : '选择表单' }}
-                  </el-button>
-                  <el-button v-if="selectedNodeFormKey" size="small" @click="clearNodeForm"
-                    >清除</el-button
-                  >
-                </div>
-              </el-form-item>
-              <!-- ═══ BF20261013-022①：节点触发器（开始前 / 结束），脚本经统一弹窗编写 ═══ -->
-              <template v-if="nodeTriggerCapable">
-                <div class="props-section props-section--advanced">节点触发器</div>
-                <el-form-item label="节点开始前">
-                  <div class="participant-picker-row">
-                    <el-button @click="openNodeTriggerScriptDialog('NODE_ENTERING')">
-                      {{ nodeTriggerOf('NODE_ENTERING')?.script?.trim() ? '编辑脚本' : '编写脚本' }}
-                    </el-button>
-                    <small class="participant-hint">{{
-                      nodeTriggerSummary('NODE_ENTERING')
-                    }}</small>
-                  </div>
-                </el-form-item>
-                <el-form-item label="节点结束">
-                  <div class="participant-picker-row">
-                    <el-button @click="openNodeTriggerScriptDialog('NODE_ROUND_COMPLETED')">
-                      {{
-                        nodeTriggerOf('NODE_ROUND_COMPLETED')?.script?.trim()
-                          ? '编辑脚本'
-                          : '编写脚本'
-                      }}
-                    </el-button>
-                    <small class="participant-hint">{{
-                      nodeTriggerSummary('NODE_ROUND_COMPLETED')
-                    }}</small>
-                  </div>
-                </el-form-item>
-              </template>
-              <!-- ═══ BF20261013-019/027：发起子流程（开关 + 向导弹窗；等待块由设计器自动生成） ═══ -->
-              <template v-if="selectedNode.type === 'APPROVAL'">
-                <el-form-item label="发起子流程">
-                  <div class="participant-picker-row">
-                    <el-switch v-model="subflowForm.enabled" @change="onSubflowSwitch" />
-                    <el-button v-if="subflowForm.enabled" size="small" @click="openSubflowWizard">
-                      {{ subflowForm.targetProcessDefKey ? '修改配置' : '配置子流程' }}
-                    </el-button>
-                    <small v-if="subflowSummary" class="participant-hint">{{
-                      subflowSummary
-                    }}</small>
-                  </div>
-                </el-form-item>
-              </template>
-              <!-- ═══ P63 动态并行专属面板（semanticVersion 开关 = 新语义按对象分支） ═══ -->
-              <template v-if="dynamicParallelActive">
-                <el-form-item label="分支来源类型">
-                  <el-select
-                    v-model="dynamicParallelForm.sourceType"
-                    @change="applyDynamicParallel"
-                  >
-                    <el-option label="表单字段" value="FORM_FIELD" />
-                    <el-option label="流程变量" value="VARIABLE" />
-                    <el-option label="固定值" value="FIXED" />
-                  </el-select>
-                </el-form-item>
-                <el-form-item v-if="dynamicParallelForm.sourceType === 'FIXED'" label="固定值">
-                  <!-- 新语义下直接选择人员/部门对象（稳定 ID）；旧语义保留手填取值形状 -->
-                  <div v-if="dynamicParallelForm.objectSemantic" class="participant-picker-row">
-                    <el-button
-                      v-if="dynamicParallelForm.objectType === 'USER'"
-                      @click="openDynamicUserPicker"
-                    >
-                      {{
-                        dynamicFixedSelectedIdList.length > 0
-                          ? `已选 ${dynamicFixedSelectedIdList.length} 人（点击修改）`
-                          : '选择人员'
-                      }}
-                    </el-button>
-                    <el-button v-else @click="openDynamicDeptPicker">
-                      {{
-                        dynamicFixedSelectedIdList.length > 0
-                          ? `已选 ${dynamicFixedSelectedIdList.length} 个部门（点击修改）`
-                          : '选择部门'
-                      }}
-                    </el-button>
-                  </div>
-                  <el-input
-                    v-else
-                    v-model="dynamicParallelForm.sourceValue"
-                    placeholder="多个取值用英文逗号分隔"
-                    @change="applyDynamicParallel"
-                    @blur="applyDynamicParallel"
-                  />
-                </el-form-item>
-                <el-form-item
-                  v-else-if="dynamicParallelForm.sourceType === 'VARIABLE'"
-                  label="变量名"
-                >
-                  <el-input
-                    v-model="dynamicParallelForm.sourceValue"
-                    placeholder="请输入变量名"
-                    @change="applyDynamicParallel"
-                    @blur="applyDynamicParallel"
-                  />
-                </el-form-item>
-                <el-form-item v-else-if="dynamicParallelForm.scope === 'MAIN'" label="主字段">
-                  <el-select
-                    v-model="dynamicParallelForm.sourceValue"
-                    filterable
-                    placeholder="选择主表字段"
-                    @change="applyDynamicParallel"
-                  >
-                    <el-option
-                      v-for="option in mainFieldOptionsFor(dynamicParallelForm.objectType)"
-                      :key="option.name"
-                      :label="`${option.label || option.name}（${option.name}）`"
-                      :value="option.name"
+                  <el-form-item v-if="dynamicParallelForm.mode === 'RATIO'" label="通过比例（%）">
+                    <el-input-number
+                      v-model="dynamicParallelForm.ratio"
+                      :min="1"
+                      :max="100"
+                      @change="applyDynamicParallel"
                     />
-                  </el-select>
-                </el-form-item>
-                <!-- 对象类型仅新语义（按对象分支）下有意义，随 semanticVersion 开关显示 -->
-                <el-form-item v-if="dynamicParallelForm.objectSemantic" label="对象类型">
-                  <el-radio-group
-                    v-model="dynamicParallelForm.objectType"
-                    @change="onDynamicObjectTypeChange"
-                  >
-                    <el-radio value="USER">人员（逐人分支）</el-radio>
-                    <el-radio value="DEPT">部门（逐部门分支）</el-radio>
-                  </el-radio-group>
-                </el-form-item>
-                <el-form-item label="取值范围">
-                  <el-radio-group
-                    v-model="dynamicParallelForm.scope"
-                    @change="applyDynamicParallel"
-                  >
-                    <el-radio value="MAIN">主表字段</el-radio>
-                    <el-radio value="TABLE">表格字段</el-radio>
-                  </el-radio-group>
-                </el-form-item>
-                <template v-if="dynamicParallelForm.scope === 'TABLE'">
-                  <el-form-item label="表格字段">
-                    <el-select
-                      v-model="dynamicParallelForm.tableField"
-                      filterable
-                      placeholder="选择表格字段"
-                      @change="
-                        () => {
-                          dynamicParallelForm.column = ''
-                          applyDynamicParallel()
-                        }
-                      "
-                    >
-                      <el-option
-                        v-for="option in tableFieldOptions"
-                        :key="option.name"
-                        :label="`${option.label || option.name}（${option.name}）`"
-                        :value="option.name"
-                      />
-                    </el-select>
                   </el-form-item>
-                  <el-form-item label="表格列">
-                    <el-select
-                      v-model="dynamicParallelForm.column"
-                      filterable
-                      placeholder="选择表格列"
-                      @change="
-                        () => {
-                          dynamicParallelForm.sourceValue = dynamicParallelForm.column
-                          applyDynamicParallel()
-                        }
-                      "
-                    >
-                      <el-option
-                        v-for="option in tableColumnOptionsFor(
-                          dynamicParallelForm.tableField,
-                          dynamicParallelForm.objectType,
-                        )"
-                        :key="option.name"
-                        :label="`${option.label || option.name}（${option.name}）`"
-                        :value="option.name"
-                      />
-                    </el-select>
+                  <el-form-item label="最大分支数">
+                    <el-input-number
+                      v-model="dynamicParallelForm.maxBranches"
+                      :min="1"
+                      @change="applyDynamicParallel"
+                    />
                   </el-form-item>
-                </template>
-                <el-form-item label="完成模式">
-                  <el-select v-model="dynamicParallelForm.mode" @change="applyDynamicParallel">
-                    <el-option label="全部通过（ALL）" value="ALL" />
-                    <el-option label="任一通过（ANY）" value="ANY" />
-                    <el-option label="按比例通过（RATIO）" value="RATIO" />
-                    <el-option label="一票否决（VETO）" value="VETO" />
-                  </el-select>
-                </el-form-item>
-                <el-form-item v-if="dynamicParallelForm.mode === 'RATIO'" label="通过比例（%）">
-                  <el-input-number
-                    v-model="dynamicParallelForm.ratio"
-                    :min="1"
-                    :max="100"
-                    @change="applyDynamicParallel"
-                  />
-                </el-form-item>
-                <el-form-item label="最大分支数">
-                  <el-input-number
-                    v-model="dynamicParallelForm.maxBranches"
-                    :min="1"
-                    @change="applyDynamicParallel"
-                  />
-                </el-form-item>
-                <el-form-item label="空来源处置">
-                  <el-select
-                    v-model="dynamicParallelForm.emptyStrategy"
-                    @change="applyDynamicParallel"
-                  >
-                    <el-option label="阻断" value="BLOCK" />
-                    <el-option label="放行" value="PROCEED" />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="无效值处置">
-                  <el-select
-                    v-model="dynamicParallelForm.invalidStrategy"
-                    @change="applyDynamicParallel"
-                  >
-                    <el-option label="阻断" value="BLOCK" />
-                    <el-option label="跳过" value="SKIP" />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="分支语义">
-                  <div class="participant-picker-row">
-                    <el-checkbox
-                      v-model="dynamicParallelForm.objectSemantic"
+                  <el-form-item label="空来源处置">
+                    <el-select
+                      v-model="dynamicParallelForm.emptyStrategy"
                       @change="applyDynamicParallel"
                     >
-                      新语义（按对象分支）
-                    </el-checkbox>
-                  </div>
-                </el-form-item>
-              </template>
-              <template v-for="field in genericConfigFields" :key="field.key">
-                <!-- BF20261013-022③④：object 型 JSON 配置与「审批人（兼容）」不再渲染
+                      <el-option label="阻断" value="BLOCK" />
+                      <el-option label="放行" value="PROCEED" />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="无效值处置">
+                    <el-select
+                      v-model="dynamicParallelForm.invalidStrategy"
+                      @change="applyDynamicParallel"
+                    >
+                      <el-option label="阻断" value="BLOCK" />
+                      <el-option label="跳过" value="SKIP" />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="分支语义">
+                    <div class="participant-picker-row">
+                      <el-checkbox
+                        v-model="dynamicParallelForm.objectSemantic"
+                        @change="applyDynamicParallel"
+                      >
+                        新语义（按对象分支）
+                      </el-checkbox>
+                    </div>
+                  </el-form-item>
+                </template>
+                <template v-for="field in genericConfigFields" :key="field.key">
+                  <!-- BF20261013-022③④：object 型 JSON 配置与「审批人（兼容）」不再渲染
                      （审批人统一由「审批人策略」结构化面板承载） -->
-                <!-- BF20261013-027：可退回节点=本流程节点多选（不手填） -->
-                <el-form-item v-if="field.key === 'returnTargets'" :label="field.label">
-                  <el-select
-                    :model-value="returnTargetsValue"
-                    multiple
-                    filterable
-                    clearable
-                    placeholder="选择节点"
-                    style="width: 100%"
-                    @update:model-value="onReturnTargetsChange"
-                  >
-                    <el-option
-                      v-for="item in returnTargetCandidates"
-                      :key="item.id"
-                      :label="item.label"
-                      :value="item.id"
+                  <!-- BF20261013-027：可退回节点=本流程节点多选（不手填） -->
+                  <el-form-item v-if="field.key === 'returnTargets'" :label="field.label">
+                    <el-select
+                      :model-value="returnTargetsValue"
+                      multiple
+                      filterable
+                      clearable
+                      placeholder="选择节点"
+                      style="width: 100%"
+                      @update:model-value="onReturnTargetsChange"
+                    >
+                      <el-option
+                        v-for="item in returnTargetCandidates"
+                        :key="item.id"
+                        :label="item.label"
+                        :value="item.id"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item v-else-if="field.type === 'string'" :label="field.label">
+                    <el-input
+                      v-model="propForm[field.key] as string"
+                      @change="applyProps"
+                      @blur="applyProps"
                     />
-                  </el-select>
-                </el-form-item>
-                <el-form-item v-else-if="field.type === 'string'" :label="field.label">
-                  <el-input
-                    v-model="propForm[field.key] as string"
-                    @change="applyProps"
-                    @blur="applyProps"
+                  </el-form-item>
+                  <el-form-item v-else :label="field.label">
+                    <el-input
+                      v-model="propForm[field.key] as string"
+                      @change="applyProps"
+                      @blur="applyProps"
+                    />
+                  </el-form-item>
+                </template>
+                <el-form-item
+                  v-if="validationErrors.some((e) => e.nodeKey === selectionId)"
+                  :label="t('workflow.validationIssues')"
+                >
+                  <el-alert
+                    v-for="err in validationErrors.filter((e) => e.nodeKey === selectionId)"
+                    :key="String(err.nodeKey) + err.errorCode"
+                    type="error"
+                    :closable="false"
+                    :title="err.message"
                   />
                 </el-form-item>
-                <el-form-item v-else :label="field.label">
-                  <el-input
-                    v-model="propForm[field.key] as string"
-                    @change="applyProps"
-                    @blur="applyProps"
-                  />
-                </el-form-item>
-              </template>
-              <el-form-item
-                v-if="validationErrors.some((e) => e.nodeKey === selectionId)"
-                :label="t('workflow.validationIssues')"
-              >
-                <el-alert
-                  v-for="err in validationErrors.filter((e) => e.nodeKey === selectionId)"
-                  :key="String(err.nodeKey) + err.errorCode"
-                  type="error"
-                  :closable="false"
-                  :title="err.message"
-                />
-              </el-form-item>
-            </el-form>
+              </el-form>
 
-            <!-- 高级属性 · 监听器配置（定义 config.listeners 元数据；只读展示） -->
-            <template v-if="nodeMeta.listeners.length">
-              <div class="props-section props-section--advanced">
-                {{ t('workflow.listenerSectionTitle') }}
-              </div>
-              <div
-                v-for="(listener, index) in nodeMeta.listeners"
-                :key="listener.phase + String(index)"
-                class="listener-row"
-              >
-                <span class="listener-row__phase" :class="'listener-row__phase--' + listener.phase">
-                  {{
-                    listener.phase === 'before'
-                      ? t('workflow.listenerBefore')
-                      : t('workflow.listenerAfter')
-                  }}
-                </span>
-                <span class="listener-row__desc">{{ listener.label }}</span>
-                <span v-if="listener.bean" class="listener-row__bean">{{ listener.bean }}</span>
-                <span class="listener-row__note">{{ listener.note }}</span>
-              </div>
-              <div class="listener-add">{{ t('workflow.listenerAdd') }}</div>
+              <!-- 高级属性 · 监听器配置（定义 config.listeners 元数据；只读展示） -->
+              <template v-if="nodeMeta.listeners.length">
+                <div class="props-section props-section--advanced">
+                  {{ t('workflow.listenerSectionTitle') }}
+                </div>
+                <div
+                  v-for="(listener, index) in nodeMeta.listeners"
+                  :key="listener.phase + String(index)"
+                  class="listener-row"
+                >
+                  <span
+                    class="listener-row__phase"
+                    :class="'listener-row__phase--' + listener.phase"
+                  >
+                    {{
+                      listener.phase === 'before'
+                        ? t('workflow.listenerBefore')
+                        : t('workflow.listenerAfter')
+                    }}
+                  </span>
+                  <span class="listener-row__desc">{{ listener.label }}</span>
+                  <span v-if="listener.bean" class="listener-row__bean">{{ listener.bean }}</span>
+                  <span class="listener-row__note">{{ listener.note }}</span>
+                </div>
+                <div class="listener-add">{{ t('workflow.listenerAdd') }}</div>
+              </template>
+            </template>
+
+            <!-- BF20261013-013：字段属性——该节点对每个表单字段的必填/编辑/隐藏三态 -->
+            <template v-else>
+              <table v-if="mainFormFields.length" class="field-states__table">
+                <thead>
+                  <tr>
+                    <th>{{ t('workflow.fieldStatesFieldName') }}</th>
+                    <th>{{ t('workflow.fieldStatesRequired') }}</th>
+                    <th>{{ t('workflow.fieldStatesEditable') }}</th>
+                    <th>{{ t('workflow.fieldStatesHidden') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="f in mainFormFields" :key="f.name">
+                    <td class="field-states__name">{{ f.label || f.name }}</td>
+                    <td>
+                      <el-checkbox
+                        :model-value="fieldStateOf(f).required"
+                        @update:model-value="(v: unknown) => onFieldStateChange(f, 'required', v)"
+                      />
+                    </td>
+                    <td>
+                      <el-checkbox
+                        :model-value="fieldStateOf(f).editable"
+                        @update:model-value="(v: unknown) => onFieldStateChange(f, 'editable', v)"
+                      />
+                    </td>
+                    <td>
+                      <el-checkbox
+                        :model-value="fieldStateOf(f).hidden"
+                        @update:model-value="(v: unknown) => onFieldStateChange(f, 'hidden', v)"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p v-else class="field-states__empty">{{ t('workflow.fieldStatesEmptyHint') }}</p>
             </template>
           </template>
-
-          <!-- BF20261013-013：字段属性——该节点对每个表单字段的必填/编辑/隐藏三态 -->
-          <template v-else>
-            <table v-if="mainFormFields.length" class="field-states__table">
-              <thead>
-                <tr>
-                  <th>{{ t('workflow.fieldStatesFieldName') }}</th>
-                  <th>{{ t('workflow.fieldStatesRequired') }}</th>
-                  <th>{{ t('workflow.fieldStatesEditable') }}</th>
-                  <th>{{ t('workflow.fieldStatesHidden') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="f in mainFormFields" :key="f.name">
-                  <td class="field-states__name">{{ f.label || f.name }}</td>
-                  <td>
-                    <el-checkbox
-                      :model-value="fieldStateOf(f).required"
-                      @update:model-value="(v: unknown) => onFieldStateChange(f, 'required', v)"
-                    />
-                  </td>
-                  <td>
-                    <el-checkbox
-                      :model-value="fieldStateOf(f).editable"
-                      @update:model-value="(v: unknown) => onFieldStateChange(f, 'editable', v)"
-                    />
-                  </td>
-                  <td>
-                    <el-checkbox
-                      :model-value="fieldStateOf(f).hidden"
-                      @update:model-value="(v: unknown) => onFieldStateChange(f, 'hidden', v)"
-                    />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p v-else class="field-states__empty">{{ t('workflow.fieldStatesEmptyHint') }}</p>
-          </template>
-        </template>
-        <el-empty v-else :description="t('workflow.selectNodeToConfigure')" />
+          <el-empty v-else :description="t('workflow.selectNodeToConfigure')" />
+        </div>
       </div>
     </div>
 
@@ -4349,91 +4453,120 @@ function nodeLabelLines(label: string) {
   flex: 1;
   min-height: 0;
 }
-/* ── P53 设计（节点09）：节点能力工具条（顶部横排） ── */
-.designer-workbar {
+/* ── 0.1.7 重构：第二行工具栏（撤销 / 整理布局 / 文档级配置 / 校验） ── */
+.designer-toolbar2 {
   display: flex;
   align-items: center;
-  height: 65px;
-  flex: 0 0 65px;
   gap: 8px;
   box-sizing: border-box;
-  padding: 12px 60px 12px 18px;
+  padding: 8px 18px;
   background: #fff;
   border-bottom: 1px solid #e1e5ef;
 }
-.workbar-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 96px;
-  height: 40px;
-  box-sizing: border-box;
-  justify-content: flex-start;
-  padding: 0 9px;
+.designer-toolbar2 :deep(.el-button--small) {
+  height: 30px;
+  padding: 0 12px;
   border: 1px solid #cbd6e8;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #fff;
   color: #344164;
   font-size: 12px;
+}
+.designer-toolbar2 :deep(.workbar-advance) {
+  min-width: 76px;
+}
+.designer-toolbar2 :deep(.el-button.workbar-verify) {
+  margin-left: 4px;
+}
+
+/* ── 0.1.7 重构：左栏节点面板（分组 + 双列图标块） ── */
+.designer-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.designer-palette {
+  box-sizing: border-box;
+  flex: 0 0 196px;
+  width: 196px;
+  padding: 12px 10px 20px;
+  overflow-y: auto;
+  background: #fff;
+  border-right: 1px solid #e1e5ef;
+}
+.palette-group + .palette-group {
+  margin-top: 14px;
+}
+.palette-group__title {
+  margin: 0 0 8px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7e89a1;
+}
+.palette-group__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.palette-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: 62px;
+  padding: 8px 4px;
+  border: 1px solid #e0e6f2;
+  border-radius: 8px;
+  background: #fbfcff;
+  color: #344164;
+  font-size: 12px;
+  line-height: 16px;
   cursor: grab;
 }
-.workbar-item:active {
+.palette-item:hover {
+  border-color: #b9a4ff;
+  background: #f7f4ff;
+}
+.palette-item:active {
   cursor: grabbing;
 }
-.workbar-item--disabled {
+.palette-item--disabled {
   cursor: default;
+  opacity: 0.55;
 }
-.workbar-icon {
+.palette-item__name {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.palette-item .workbar-icon {
   flex: 0 0 20px;
   display: block;
 }
-.workbar-icon path {
+.palette-item .workbar-icon path {
   fill: none;
   stroke: #6f2dff;
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.workbar-name {
+
+/* ── 0.1.7：流程画布框（随内容平移缩放） ── */
+.designer-frame {
+  fill: #ffffff;
+  stroke: #dbe3f0;
+  stroke-width: 1.4;
+}
+.designer-frame-tab {
+  fill: #eef2fb;
+  stroke: #dbe3f0;
+  stroke-width: 1.2;
+}
+.designer-frame-tab-text {
+  font-size: 12px;
   font-weight: 500;
-  line-height: 16px;
-  white-space: nowrap;
-}
-.workbar-spacer {
-  flex: 1;
-}
-.workbar-gear {
-  margin-left: 12px;
-}
-.workbar-gear path {
-  fill: none;
-  stroke: #7e89a1;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.designer-workbar :deep(.el-button--small) {
-  height: 36px;
-  line-height: 17px;
-}
-.workbar-advance,
-.designer-workbar :deep(.el-button + .el-button) {
-  margin-left: 0;
-}
-
-.designer-workbar :deep(.workbar-advance) {
-  width: 112px;
-  justify-content: flex-start;
-  text-align: left;
-  padding-left: 11px;
-}
-
-.designer-workbar :deep(.el-button.workbar-verify) {
-  width: 104px;
-  margin-left: 4px;
-  justify-content: flex-start;
-  text-align: left;
-  padding-left: 11px;
+  fill: #4a5878;
 }
 
 /* ── 画布（24px 网格 + 缩放控件 + 底部提示条） ── */
@@ -4450,8 +4583,8 @@ function nodeLabelLines(label: string) {
 }
 .canvas-zoom {
   position: absolute;
-  right: 28px;
-  bottom: 74px;
+  right: 24px;
+  top: 16px;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -4516,18 +4649,26 @@ function nodeLabelLines(label: string) {
   y: 0.6px;
   width: 158.8px;
   height: 48.8px;
-  rx: 5.4px;
+  rx: 8px;
   fill: #fff;
-  stroke: #7e8799;
-  stroke-width: 1.2;
+  stroke: #d7dfec;
+  stroke-width: 1.4;
 }
 .designer-node-start .designer-node-rect {
   rx: 24.4px;
-  fill: #effaf5;
+  fill: #eefaf3;
+  stroke: #16a77b;
 }
 .designer-node-end .designer-node-rect {
   rx: 24.4px;
-  fill: #fff;
+  fill: #fdf0f1;
+  stroke: #ef5d71;
+}
+.designer-node-start .designer-node-icon {
+  color: #16a77b;
+}
+.designer-node-end .designer-node-icon {
+  color: #ef5d71;
 }
 /* 设计09：起草节点（发起人填写）浅橙底、灰描边 */
 .designer-node-draft .designer-node-rect {
@@ -4569,14 +4710,14 @@ function nodeLabelLines(label: string) {
   color: var(--sw-color-primary);
 }
 .designer-node-gateway {
-  fill: #fff;
-  stroke: #8393b5;
+  fill: #f7a92c;
+  stroke: #e79a1f;
   stroke-width: 1.4;
 }
 .designer-node-gateway-plus {
   fill: none;
-  stroke: #a2aec7;
-  stroke-width: 1.6;
+  stroke: #fff;
+  stroke-width: 1.8;
   stroke-linecap: round;
 }
 .designer-node-type {
@@ -4627,8 +4768,8 @@ function nodeLabelLines(label: string) {
   stroke: transparent;
 }
 .designer-edge-visual {
-  stroke: #a4adbe;
-  stroke-width: 1.6;
+  stroke: #c3ccdb;
+  stroke-width: 1.4;
   marker-end: url(#designer-edge-arrow);
   pointer-events: none;
 }
@@ -4638,7 +4779,7 @@ function nodeLabelLines(label: string) {
   marker-end: url(#designer-edge-arrow-selected);
 }
 .designer-edge-arrow {
-  fill: #a4adbe;
+  fill: #c3ccdb;
   stroke: none;
 }
 .designer-edge-arrow-selected {

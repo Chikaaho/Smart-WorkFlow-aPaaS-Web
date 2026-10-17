@@ -642,8 +642,8 @@ const opinionDetailAttachmentEntries = computed(() => {
   pointer-events: none;
   content: '';
   background-image:
-    linear-gradient(#e8edf6 1px, transparent 1px),
-    linear-gradient(90deg, #e8edf6 1px, transparent 1px);
+    linear-gradient(#eef2f8 1px, transparent 1px),
+    linear-gradient(90deg, #eef2f8 1px, transparent 1px);
   background-size: 24px 24px;
 }
 .p53-graph-canvas :deep(.pg-svg),
