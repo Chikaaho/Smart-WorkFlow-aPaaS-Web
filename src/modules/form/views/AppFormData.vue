@@ -633,60 +633,57 @@ onMounted(async () => {
       <LoadErrorState v-else-if="loadError" :error="loadError" @retry="loadData" />
 
       <template v-else>
-        <el-table
-          v-loading="loading"
-          :data="result?.list ?? []"
-          stripe
-          style="width: 100%"
-          :show-overflow-tooltip="true"
-        >
-          <el-table-column
-            v-for="col in displayColumns"
-            :key="col.prop"
-            :prop="col.prop"
-            :label="col.label"
-            :min-width="col.type === 'DICT' || col.type === 'BOOL' ? 100 : 140"
-            show-overflow-tooltip
+        <div class="afd__table-shell">
+          <!-- 0.1.7 #28：表头设置=卡片右上角固定的 ≡ 小入口（独立于操作栏；Owner 截图红框位） -->
+          <button
+            v-if="columns.length > 0"
+            type="button"
+            class="afd__cols-trigger"
+            data-testid="form-column-settings"
+            :title="t('form.appCenter.columnSettings')"
+            @click.stop="openColumnSettings"
           >
-            <template #default="{ row }">
-              <DictTag
-                v-if="col.type === 'DICT' && col.dictType"
-                :type="col.dictType"
-                :value="String(row[col.prop] ?? '')"
-              />
-              <el-tag
-                v-else-if="col.type === 'BOOL'"
-                :type="row[col.prop] === 1 || row[col.prop] === true ? 'success' : 'info'"
-                size="small"
-              >
-                {{ formatCellValue(row, col) }}
-              </el-tag>
-              <span v-else>{{ formatCellValue(row, col) }}</span>
-            </template>
-          </el-table-column>
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+              <rect x="1" y="3" width="14" height="1.6" rx="0.8" fill="currentColor" />
+              <rect x="1" y="7.2" width="14" height="1.6" rx="0.8" fill="currentColor" />
+              <rect x="1" y="11.4" width="14" height="1.6" rx="0.8" fill="currentColor" />
+            </svg>
+          </button>
+          <el-table
+            v-loading="loading"
+            :data="result?.list ?? []"
+            stripe
+            style="width: 100%"
+            :show-overflow-tooltip="true"
+          >
+            <el-table-column
+              v-for="col in displayColumns"
+              :key="col.prop"
+              :prop="col.prop"
+              :label="col.label"
+              :min-width="col.type === 'DICT' || col.type === 'BOOL' ? 100 : 140"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">
+                <DictTag
+                  v-if="col.type === 'DICT' && col.dictType"
+                  :type="col.dictType"
+                  :value="String(row[col.prop] ?? '')"
+                />
+                <el-tag
+                  v-else-if="col.type === 'BOOL'"
+                  :type="row[col.prop] === 1 || row[col.prop] === true ? 'success' : 'info'"
+                  size="small"
+                >
+                  {{ formatCellValue(row, col) }}
+                </el-tag>
+                <span v-else>{{ formatCellValue(row, col) }}</span>
+              </template>
+            </el-table-column>
 
-          <ListActionsColumn :actions="rowActions" :width="140" />
-
-          <!-- 0.1.7 #28（Owner 二次裁决）：表头设置=最右侧独立小固定列，与操作栏视觉分离 -->
-          <el-table-column width="40" fixed="right" column-key="column-settings" align="center">
-            <template #header>
-              <button
-                v-if="columns.length > 0"
-                type="button"
-                class="afd__cols-trigger"
-                data-testid="form-column-settings"
-                :title="t('form.appCenter.columnSettings')"
-                @click.stop="openColumnSettings"
-              >
-                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                  <rect x="1" y="3" width="14" height="1.6" rx="0.8" fill="currentColor" />
-                  <rect x="1" y="7.2" width="14" height="1.6" rx="0.8" fill="currentColor" />
-                  <rect x="1" y="11.4" width="14" height="1.6" rx="0.8" fill="currentColor" />
-                </svg>
-              </button>
-            </template>
-          </el-table-column>
-        </el-table>
+            <ListActionsColumn :actions="rowActions" :width="140" />
+          </el-table>
+        </div>
       </template>
     </StandardListTemplate>
 
@@ -789,11 +786,22 @@ onMounted(async () => {
   border-color: var(--el-color-primary-light-7, #c6e2ff);
   background: var(--el-color-primary-light-9, #ecf5ff);
 }
+.afd__table-shell {
+  position: relative;
+}
 .afd__cols-trigger {
+  position: absolute;
+  top: 11px;
+  right: 8px;
+  z-index: 10;
   display: inline-flex;
-  padding: 2px;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 5px;
   background: transparent;
   color: var(--sw-text-secondary, #909399);
   cursor: pointer;
