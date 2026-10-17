@@ -954,6 +954,8 @@ export default {
       appNavTitle: 'Directories and forms',
       pickForm: 'Pick a directory or form on the left',
       columnSettings: 'Column settings',
+      sectionColumns: 'Visible columns',
+      sectionFilters: 'Filter fields',
       columnShow: 'Show',
       columnDragHint: 'Drag to reorder',
       columnVisible: 'Show',

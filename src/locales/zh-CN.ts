@@ -926,6 +926,8 @@ export default {
       appNavTitle: '目录与表单',
       pickForm: '请从左侧选择目录或表单',
       columnSettings: '表头设置',
+      sectionColumns: '显示列',
+      sectionFilters: '查询字段',
       columnShow: '显示',
       columnDragHint: '按住拖动调整顺序',
       columnVisible: '展示',

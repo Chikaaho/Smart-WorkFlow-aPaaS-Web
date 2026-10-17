@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Menu } from '@element-plus/icons-vue'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { StandardListTemplate, LoadErrorState, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
@@ -105,6 +105,75 @@ const filterValues = ref<Record<string, string>>({})
 const dateRange = ref<[string, string] | null>(null)
 const dateFieldName = ref('')
 
+/* ── 查询字段设置（0.1.7 #28）：勾选哪些字段出现在筛选栏；本机偏好，不落服务端 ── */
+
+const FILTER_PREF_PREFIX = 'sw:app-form-filters:'
+
+/** 可查询字段池：与 deriveFilterFields 同一类型口径，但不做 3 个截断（用户自选）。 */
+const FILTERABLE_TYPES = new Set(['TEXT', 'NUMBER', 'DATE', 'BOOL', 'DICT'])
+
+const filterPool = computed(() => {
+  if (!schema.value) return []
+  return schema.value.fields
+    .filter((f) => FILTERABLE_TYPES.has(f.type))
+    .map((f) => ({ field: f.name, label: f.label ?? f.name, type: f.type as string, op: 'EQ' }))
+})
+
+const filterCandidates = computed(() => {
+  const persisted = persistedListConfig.value?.filters
+  if (persisted?.length) {
+    return persisted.map((f) => {
+      const def = schema.value?.fields.find((sf) => sf.name === f.name)
+      return {
+        field: f.name,
+        label: schema.value?.fields.find((sf) => sf.name === f.name)?.label ?? f.name,
+        type: (def?.type ?? 'TEXT') as string,
+        op: (f.op as 'EQ' | 'LIKE' | 'GE' | 'LE') ?? ('EQ' as const),
+      }
+    })
+  }
+  return filterPool.value
+})
+
+const filterPref = ref<string[] | null>(null)
+
+function readFilterPref(key: string): string[] | null {
+  const raw = globalThis.localStorage?.getItem(`${FILTER_PREF_PREFIX}${key}`)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : null
+  } catch {
+    return null
+  }
+}
+
+/** 筛选栏实际渲染的字段：未设置偏好时维持原口径，设置后=候选 ∩ 偏好。 */
+const queryableFields = computed(() => {
+  if (filterPref.value === null) return filterFields.value
+  const keep = new Set(filterPref.value)
+  return filterFields.value.filter((f) => keep.has(f.field))
+})
+
+const draftQueryFields = ref<string[]>([])
+
+function toggleQueryField(field: string, checked: boolean) {
+  const set = new Set(draftQueryFields.value)
+  if (checked) set.add(field)
+  else set.delete(field)
+  draftQueryFields.value = [...set]
+  filterPref.value = [...set]
+  globalThis.localStorage?.setItem(
+    `${FILTER_PREF_PREFIX}${formKey.value}`,
+    JSON.stringify([...set]),
+  )
+  // 不再可查询的字段：丢弃已填值，避免看不见的过滤条件
+  for (const k of Object.keys(filterValues.value)) {
+    if (!set.has(k)) delete filterValues.value[k]
+  }
+  if (dateFieldName.value && !set.has(dateFieldName.value)) dateRange.value = null
+}
+
 const isEmpty = computed(
   () =>
     !loading.value && !errorMsg.value && !loadError.value && (result.value?.list.length ?? 0) === 0,
@@ -176,6 +245,7 @@ function openColumnSettings() {
     label: c.label,
     visible: !columnPref.value.hidden.includes(c.prop),
   }))
+  draftQueryFields.value = filterPref.value ?? filterFields.value.map((f) => f.field)
   columnDrawerVisible.value = true
 }
 
@@ -250,7 +320,7 @@ async function loadDefinition() {
     } catch {
       persistedListConfig.value = null
     }
-    for (const f of filterFields.value) {
+    for (const f of filterCandidates.value) {
       if (f.type === 'DATE') dateFieldName.value = f.field
     }
   } catch {
@@ -269,8 +339,8 @@ async function loadData() {
     const filters: QueryFilter[] = []
     for (const [field, value] of Object.entries(filterValues.value)) {
       if (!value) continue
-      const f = filterFields.value.find((ff) => ff.field === field)
-      filters.push({ field, op: f?.op ?? 'EQ', value })
+      const f = filterCandidates.value.find((ff) => ff.field === field)
+      filters.push({ field, op: (f?.op as 'EQ' | 'LIKE' | 'GE' | 'LE') ?? 'EQ', value })
     }
     if (dateRange.value && dateRange.value[0]) {
       filters.push({ field: dateFieldName.value, op: 'GE', value: dateRange.value[0] })
@@ -459,6 +529,7 @@ async function reload() {
   schemaLoaded.value = false
   idLabelMaps.value = null
   columnPref.value = readColumnPref(formKey.value)
+  filterPref.value = readFilterPref(formKey.value)
   columnDrawerVisible.value = false
   await loadDefinition()
   if (canQuery.value) {
@@ -472,6 +543,7 @@ watch(formKey, () => {
 
 onMounted(async () => {
   columnPref.value = readColumnPref(formKey.value)
+  filterPref.value = readFilterPref(formKey.value)
   await loadDefinition()
   if (canQuery.value) {
     await loadData()
@@ -503,7 +575,7 @@ onMounted(async () => {
     >
       <!-- 筛选栏（有查询权限时可用） -->
       <template v-if="canQuery" #filter>
-        <template v-for="ff in filterFields" :key="ff.field">
+        <template v-for="ff in queryableFields" :key="ff.field">
           <el-input
             v-if="ff.type === 'TEXT' || ff.type === 'NUMBER'"
             v-model="filterValues[ff.field]"
@@ -595,6 +667,7 @@ onMounted(async () => {
 
           <ListActionsColumn :actions="rowActions" :width="150">
             <template #header>
+              <!-- 0.1.7 #28：≡ 合并进操作列表头右侧（Owner 回归裁决：不单列） -->
               <span class="afd__cols-head">
                 {{ t('common.actions') }}
                 <button
@@ -605,7 +678,11 @@ onMounted(async () => {
                   :title="t('form.appCenter.columnSettings')"
                   @click.stop="openColumnSettings"
                 >
-                  <el-icon><Menu /></el-icon>
+                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                    <rect x="1" y="3" width="14" height="1.6" rx="0.8" fill="currentColor" />
+                    <rect x="1" y="7.2" width="14" height="1.6" rx="0.8" fill="currentColor" />
+                    <rect x="1" y="11.4" width="14" height="1.6" rx="0.8" fill="currentColor" />
+                  </svg>
                 </button>
               </span>
             </template>
@@ -622,6 +699,7 @@ onMounted(async () => {
       size="320px"
       append-to-body
     >
+      <p class="afd-cols__section">{{ t('form.appCenter.sectionColumns') }}</p>
       <ul class="afd-cols" data-testid="column-settings-list">
         <li
           v-for="(col, index) in draftColumns"
@@ -637,19 +715,42 @@ onMounted(async () => {
           <span class="afd-cols__ops">
             <el-checkbox
               :model-value="col.visible"
+              size="small"
+              :title="t('form.appCenter.columnShow')"
+              :aria-label="t('form.appCenter.columnShow')"
               @update:model-value="toggleDraftColumn(index, Boolean($event))"
-              >{{ t('form.appCenter.columnShow') }}</el-checkbox
-            >
+            />
             <span
               class="afd-cols__handle"
               :title="t('form.appCenter.columnDragHint')"
               @mousedown="armColumnDrag(index)"
             >
-              <el-icon><Menu /></el-icon>
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <rect x="1" y="3" width="14" height="1.6" rx="0.8" fill="currentColor" />
+                <rect x="1" y="7.2" width="14" height="1.6" rx="0.8" fill="currentColor" />
+                <rect x="1" y="11.4" width="14" height="1.6" rx="0.8" fill="currentColor" />
+              </svg>
             </span>
           </span>
         </li>
       </ul>
+
+      <!-- 0.1.7 #28：勾选哪些字段出现在筛选栏（本机偏好，即时生效） -->
+      <template v-if="filterCandidates.length > 0">
+        <p class="afd-cols__section">{{ t('form.appCenter.sectionFilters') }}</p>
+        <ul class="afd-cols" data-testid="filter-settings-list">
+          <li v-for="ff in filterCandidates" :key="ff.field" class="afd-cols__row">
+            <span class="afd-cols__label">{{ ff.label }}</span>
+            <el-checkbox
+              :model-value="draftQueryFields.includes(ff.field)"
+              size="small"
+              :title="t('common.query')"
+              :aria-label="t('common.query')"
+              @update:model-value="toggleQueryField(ff.field, Boolean($event))"
+            />
+          </li>
+        </ul>
+      </template>
     </el-drawer>
   </div>
 </template>
@@ -692,7 +793,9 @@ onMounted(async () => {
 .afd__cols-head {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  white-space: nowrap;
 }
 .afd__cols-trigger {
   display: inline-flex;
@@ -706,6 +809,15 @@ onMounted(async () => {
 .afd__cols-trigger:hover {
   color: var(--el-color-primary);
   background: var(--el-color-primary-light-9, #ecf5ff);
+}
+.afd-cols__section {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sw-text-regular, #606266);
+}
+.afd-cols__section + .afd-cols {
+  margin-bottom: 16px;
 }
 .afd-cols {
   list-style: none;
