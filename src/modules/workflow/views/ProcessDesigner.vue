@@ -2990,7 +2990,8 @@ function nodeLabelLines(label: string) {
               <div v-if="!fieldConfigCapable" class="props-section">
                 {{ t('workflow.basicPropsSection') }}
               </div>
-              <el-form label-position="top" size="small">
+              <!-- 0.1.7 #36（Owner）：面板内不再混用 small 尺寸——输入框/选择器/按钮统一 32px 高 -->
+              <el-form label-position="top">
                 <el-form-item :label="t('workflow.nodeName')">
                   <el-input v-model="propForm.name as string" @change="applyProps" />
                 </el-form-item>
@@ -3197,12 +3198,10 @@ function nodeLabelLines(label: string) {
                 <el-form-item v-if="nodeFormCapable" label="审批意见表单">
                   <div class="nodeform-row">
                     <el-input :model-value="selectedNodeFormKey || '未绑定'" disabled />
-                    <el-button size="small" @click="nodeFormSelectVisible = true">
+                    <el-button @click="nodeFormSelectVisible = true">
                       {{ selectedNodeFormKey ? '更换' : '选择表单' }}
                     </el-button>
-                    <el-button v-if="selectedNodeFormKey" size="small" @click="clearNodeForm"
-                      >清除</el-button
-                    >
+                    <el-button v-if="selectedNodeFormKey" @click="clearNodeForm">清除</el-button>
                   </div>
                 </el-form-item>
                 <!-- ═══ BF20261013-022①：节点触发器（开始前 / 结束），脚本经统一弹窗编写 ═══ -->
@@ -3240,7 +3239,7 @@ function nodeLabelLines(label: string) {
                   <el-form-item label="发起子流程">
                     <div class="participant-picker-row">
                       <el-switch v-model="subflowForm.enabled" @change="onSubflowSwitch" />
-                      <el-button v-if="subflowForm.enabled" size="small" @click="openSubflowWizard">
+                      <el-button v-if="subflowForm.enabled" @click="openSubflowWizard">
                         {{ subflowForm.targetProcessDefKey ? '修改配置' : '配置子流程' }}
                       </el-button>
                       <small v-if="subflowSummary" class="participant-hint">{{
@@ -4769,6 +4768,10 @@ function nodeLabelLines(label: string) {
   border-left: 1px solid #d7deed;
   padding: 19px 24px 22px;
   overflow: auto;
+  /* 0.1.7 #36（Owner）：属性面板内所有选择/填写框统一 32px 高（含曾用 small 的控件），
+     与 .el-input__inner 30px + 上下各 1px 的行盒口径一致 */
+  --el-component-size: 32px;
+  --el-component-size-small: 32px;
 }
 
 /* 节点13设计：监听器行（before/after 徽标 + bean 名）与添加框 */
@@ -4937,64 +4940,8 @@ function nodeLabelLines(label: string) {
   box-shadow: 0 0 0 1px #cbd6e8 inset;
 }
 .designer-props :deep(.el-input__inner) {
-  height: 34px;
-  color: #19233b;
-}
-.approver-card {
-  position: relative;
-  width: 100%;
-  padding: 12px 12px 10px;
-  margin-bottom: 15px;
-  border: 1px solid #e7ebf4;
-  border-radius: 8px;
-  background: #fff;
-}
-.approver-card__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.approver-card__chip {
-  box-sizing: border-box;
-  width: 100px;
-  padding: 3.5px 8px;
-  font-size: 12px;
-  line-height: 15px;
-  text-align: left;
-  color: var(--sw-color-primary);
-  background: var(--sw-color-primary-soft, #ece9ff);
-  border-radius: 6px;
-}
-.approver-card__pick {
-  position: absolute;
-  top: 20px;
-  right: 36px;
   height: 30px;
-  line-height: 17px;
-}
-.approver-card__hint {
-  display: block;
-  margin-top: 7px;
-  font-size: 12px;
-  line-height: 15px;
-  color: #99a5bb;
-}
-.approver-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.approver-field .el-input {
-  flex: 1;
-  min-width: 0;
-}
-.approver-field :deep(.el-button) {
-  height: 34px;
-  border-radius: 6px;
-  border-color: #cbd6e8;
-  color: #6f2dff;
-  background: #fff;
+  color: #19233b;
 }
 
 /* ── P63 参与人结构化面板 / 动态并行专属面板 ── */
@@ -5571,6 +5518,15 @@ function nodeLabelLines(label: string) {
   display: flex;
   gap: 8px;
   width: 100%;
+}
+/* 0.1.7 #36（Owner）：值框占满整行、动作按钮靠右定宽（不再出现「窄框 + 悬浮按钮」） */
+.nodeform-row :deep(.el-input) {
+  flex: 1;
+  min-width: 0;
+}
+.nodeform-row :deep(.el-button) {
+  flex: none;
+  margin: 0;
 }
 .p64-toolbar {
   display: flex;

@@ -223,25 +223,20 @@ function onFieldKeySuffix(raw: string) {
           <template #prepend>field_</template>
         </el-input>
       </div>
-      <div v-if="field.field.type === 'TEXT'" class="config__type-pair">
-        <div class="config__row">
-          <label class="config__label">{{ t('fieldList.colType') }}</label>
-          <el-input :model-value="storageLabel" disabled />
-        </div>
-        <div class="config__row">
-          <label class="config__label">{{ t('form.maxLength') }}</label>
-          <el-input-number
-            :model-value="field.field.length"
-            :min="1"
-            :controls="true"
-            :placeholder="t('form.unlimited')"
-            @update:model-value="(v: number | undefined) => emit('update', { length: v })"
-          />
-        </div>
-      </div>
-      <div v-else class="config__row">
+      <div class="config__row">
         <label class="config__label">{{ t('fieldList.colType') }}</label>
         <el-input :model-value="storageLabel" disabled />
+      </div>
+      <!-- 0.1.7 #36（Owner）：数据类型/最大长度各自整行满宽（原两列半宽格里数字框过窄） -->
+      <div v-if="field.field.type === 'TEXT'" class="config__row">
+        <label class="config__label">{{ t('form.maxLength') }}</label>
+        <el-input-number
+          :model-value="field.field.length"
+          :min="1"
+          :controls="true"
+          :placeholder="t('form.unlimited')"
+          @update:model-value="(v: number | undefined) => emit('update', { length: v })"
+        />
       </div>
 
       <!-- 类型专属配置（注册表动态挂载；已发布只读时不出可编辑面板） -->
@@ -269,6 +264,7 @@ function onFieldKeySuffix(raw: string) {
       <h3 class="config__section">{{ t('form.sectionOtherInfo') }}</h3>
       <div class="config__extension">
         <p class="config__extension-title">{{ t('form.extensionAreaTitle') }}</p>
+        <p class="config__extension-hint">{{ t('form.extensionAreaEmptyHint') }}</p>
       </div>
 
       <!-- v0.0.2 P2：显隐联动规则（LABEL 非输入字段也可控显隐）；置于其他信息之后 -->
@@ -289,8 +285,10 @@ function onFieldKeySuffix(raw: string) {
   border-left: 1px solid var(--sw-border-light);
   padding: 18px 16px 16px;
   overflow-y: auto;
-  /* 设计 07：面板输入框 36px 高（文本在框内与设计同位）；文本行盒 17px */
-  --el-input-height: 36px;
+  /* 0.1.7 #36（Owner）：面板内选择/填写框统一尺寸口径——高度 32px（含曾用 small 的控件）、
+     宽度占满面板主体（.config__row 满宽）；文本行盒 17px */
+  --el-component-size: 32px;
+  --el-component-size-small: 32px;
 }
 
 /* V011-BUG-013：恢复输入框常规内边距——文本不再贴边/被裁切（此前 padding 被清零） */
@@ -351,20 +349,6 @@ function onFieldKeySuffix(raw: string) {
 .config__row--inline {
   margin-top: -6px;
   margin-bottom: 13px;
-}
-
-.config__type-pair {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px 24px;
-}
-
-.config__type-pair .config__row {
-  min-width: 0;
-}
-
-.config__type-pair :deep(.el-input-number) {
-  width: 100%;
 }
 
 .config__row--inline {
@@ -461,7 +445,8 @@ function onFieldKeySuffix(raw: string) {
 
 /* 其他信息：扩展属性预留区 */
 .config__extension {
-  padding: 25px 16px 12px;
+  /* 0.1.7 #36（Owner）：扩展属性区域收敛为紧凑占位（原为大块空白框，内容仅一行标题） */
+  padding: 12px 14px;
   border: 1px solid #e3e8f4;
   border-radius: 8px;
   background: #f7f9fe;

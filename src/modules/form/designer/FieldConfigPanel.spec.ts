@@ -148,3 +148,41 @@ describe('FieldConfigPanel 字段标题位置', () => {
     expect(wrapper.text()).not.toContain('标题位置')
   })
 })
+
+// 0.1.7 #36（Owner）：面板内选择/填写框尺寸口径——控件各自整行满宽、扩展属性区紧凑占位
+// （高度 32px 由浏览器实测；此处锁结构口径，避免回到半宽小框）
+describe('FieldConfigPanel 控件尺寸口径（0.1.7 #36）', () => {
+  function mountText() {
+    return mount(FieldConfigPanel, {
+      props: {
+        field: {
+          id: 'f1',
+          field: { name: 'field_name', type: 'TEXT', label: '姓名', colSpan: 24 },
+        },
+        otherNames: [],
+      },
+      global: { stubs: { RulesEditor: { template: '<div />' } } },
+    })
+  }
+
+  it('数据类型与最大长度各自整行（不再两列半宽格）', () => {
+    const wrapper = mountText()
+
+    expect(wrapper.find('.config__type-pair').exists()).toBe(false)
+    const rows = wrapper.findAll('.config__row')
+    const typeInput = rows.find((row) => row.text().startsWith('数据类型'))
+    const lengthRow = rows.find((row) => row.text().startsWith('最大长度'))
+    expect(typeInput).toBeTruthy()
+    expect(lengthRow).toBeTruthy()
+    expect(typeInput!.element).not.toBe(lengthRow!.element)
+  })
+
+  it('扩展属性区为紧凑占位并带空态说明', () => {
+    const wrapper = mountText()
+
+    const box = wrapper.find('.config__extension')
+    expect(box.exists()).toBe(true)
+    expect(box.find('.config__extension-title').exists()).toBe(true)
+    expect(box.text()).toContain('当前版本暂无可配置的扩展属性')
+  })
+})

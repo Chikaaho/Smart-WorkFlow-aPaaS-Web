@@ -1005,6 +1005,7 @@ export default {
     labelPositionTopLeft: 'Top',
     defaultValueExprPlaceholder: 'Empty / expression supported',
     extensionAreaTitle: 'Extension attribute area',
+    extensionAreaEmptyHint: 'No configurable extension attributes in this version',
     columnWidth: 'Column width',
     columnWidthHint:
       'After adjustment, fields are packed automatically from left to right and top to bottom.',

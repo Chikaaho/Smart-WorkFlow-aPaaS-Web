@@ -977,6 +977,7 @@ export default {
     labelPositionTopLeft: '上边',
     defaultValueExprPlaceholder: '留空 / 支持表达式',
     extensionAreaTitle: '扩展属性配置区域',
+    extensionAreaEmptyHint: '当前版本暂无可配置的扩展属性',
     columnWidth: '列宽',
     columnWidthHint: '调整后会按从左到右、从上到下自动紧凑排布。',
     publishedReadonly: '已发布表单，配置只读',
