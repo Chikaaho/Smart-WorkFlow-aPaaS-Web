@@ -58,10 +58,6 @@ function onCommand(row: unknown, command: string | number | object) {
     fixed="right"
     column-key="actions"
   >
-    <!-- 0.1.7 #28：可选表头插槽（如「表头设置」≡ 入口合并进操作列表头）；默认仍渲染 label -->
-    <template v-if="$slots.header" #header>
-      <slot name="header" />
-    </template>
     <template #default="{ row }">
       <template v-if="visibleActions(row).length > 0">
         <div class="list-actions">

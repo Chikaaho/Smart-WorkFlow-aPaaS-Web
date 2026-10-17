@@ -665,28 +665,27 @@ onMounted(async () => {
             </template>
           </el-table-column>
 
-          <ListActionsColumn :actions="rowActions" :width="150">
+          <ListActionsColumn :actions="rowActions" :width="140" />
+
+          <!-- 0.1.7 #28（Owner 二次裁决）：表头设置=最右侧独立小固定列，与操作栏视觉分离 -->
+          <el-table-column width="40" fixed="right" column-key="column-settings" align="center">
             <template #header>
-              <!-- 0.1.7 #28：≡ 合并进操作列表头右侧（Owner 回归裁决：不单列） -->
-              <span class="afd__cols-head">
-                {{ t('common.actions') }}
-                <button
-                  v-if="columns.length > 0"
-                  type="button"
-                  class="afd__cols-trigger"
-                  data-testid="form-column-settings"
-                  :title="t('form.appCenter.columnSettings')"
-                  @click.stop="openColumnSettings"
-                >
-                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                    <rect x="1" y="3" width="14" height="1.6" rx="0.8" fill="currentColor" />
-                    <rect x="1" y="7.2" width="14" height="1.6" rx="0.8" fill="currentColor" />
-                    <rect x="1" y="11.4" width="14" height="1.6" rx="0.8" fill="currentColor" />
-                  </svg>
-                </button>
-              </span>
+              <button
+                v-if="columns.length > 0"
+                type="button"
+                class="afd__cols-trigger"
+                data-testid="form-column-settings"
+                :title="t('form.appCenter.columnSettings')"
+                @click.stop="openColumnSettings"
+              >
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                  <rect x="1" y="3" width="14" height="1.6" rx="0.8" fill="currentColor" />
+                  <rect x="1" y="7.2" width="14" height="1.6" rx="0.8" fill="currentColor" />
+                  <rect x="1" y="11.4" width="14" height="1.6" rx="0.8" fill="currentColor" />
+                </svg>
+              </button>
             </template>
-          </ListActionsColumn>
+          </el-table-column>
         </el-table>
       </template>
     </StandardListTemplate>
@@ -789,13 +788,6 @@ onMounted(async () => {
   color: var(--el-color-primary);
   border-color: var(--el-color-primary-light-7, #c6e2ff);
   background: var(--el-color-primary-light-9, #ecf5ff);
-}
-.afd__cols-head {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  white-space: nowrap;
 }
 .afd__cols-trigger {
   display: inline-flex;
