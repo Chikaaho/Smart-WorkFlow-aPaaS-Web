@@ -392,6 +392,7 @@ export default {
     operationFailed: '操作失败',
     publishSuccess: '发布成功',
     emptyData: '暂无数据',
+    noContent: '暂无内容',
     loading: '加载中...',
     createTime: '创建时间',
     theme: '主题',

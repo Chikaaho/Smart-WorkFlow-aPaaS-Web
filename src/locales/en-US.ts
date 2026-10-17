@@ -407,6 +407,7 @@ export default {
     operationFailed: 'The operation did not complete. Please try again.',
     publishSuccess: 'Published',
     emptyData: 'No data',
+    noContent: 'No content',
     loading: 'Loading...',
     createTime: 'Created at',
     theme: 'Theme',

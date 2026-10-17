@@ -159,6 +159,44 @@ describe('AppWorkspace（应用管理上下文）', () => {
     expect(vm.isEmpty).toBe(true)
   })
 
+  it('0.1.7 #35：点目录行可收起/展开其表单（⋯ 菜单不触发切换）', async () => {
+    const wrapper = mount(AppWorkspace, { global: { stubs: minimalStubs } })
+    await nextTick()
+    await nextTick()
+    // 目录内 1 个 + 根级 1 个
+    expect(wrapper.findAll('[data-testid="app-tree-form"]')).toHaveLength(2)
+
+    const dir = wrapper.find('[data-testid="app-tree-dir"]')
+    expect(dir.attributes('aria-expanded')).toBe('true')
+    await dir.trigger('click')
+    await nextTick()
+    expect(wrapper.findAll('[data-testid="app-tree-form"]')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="app-tree-dir"]').attributes('aria-expanded')).toBe('false')
+
+    // ⋯ 菜单自身不改变展开态（避免点菜单把目录收起来）
+    await wrapper.find('[data-testid="dir-more-dir-1"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-testid="app-tree-dir"]').attributes('aria-expanded')).toBe('false')
+
+    await wrapper.find('[data-testid="app-tree-dir"]').trigger('click')
+    await nextTick()
+    expect(wrapper.findAll('[data-testid="app-tree-form"]')).toHaveLength(2)
+    expect(wrapper.find('[data-testid="app-tree-dir"]').attributes('aria-expanded')).toBe('true')
+  })
+
+  it('0.1.7 #35：未选择目录/表单时右侧为大图标 + 「暂无内容」占位', async () => {
+    const wrapper = mount(AppWorkspace, { global: { stubs: minimalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const placeholder = wrapper.find('[data-testid="app-ws-placeholder"]')
+    expect(placeholder.exists()).toBe(true)
+    expect(placeholder.text()).toContain('暂无内容')
+    // 引导语保留为次级文案，且占位自带大图标图形
+    expect(placeholder.text()).toContain('请从左侧选择目录或表单')
+    expect(placeholder.find('.el-empty__image').exists()).toBe(true)
+  })
+
   it('加载失败：错误信息可见且不渲染空态假象', async () => {
     vi.mocked(getFormAppContent).mockRejectedValue(new Error('nope'))
     const wrapper = mount(AppWorkspace, { global: { stubs: minimalStubs } })

@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Folder, MoreFilled, Plus } from '@element-plus/icons-vue'
+import { ArrowLeft, CaretRight, Folder, MoreFilled, Plus } from '@element-plus/icons-vue'
 import AppFormData from '@/modules/form/views/AppFormData.vue'
 import AppIcon from '@/modules/form/components/AppIcon.vue'
 import {
@@ -40,6 +40,19 @@ const dirs = computed(() => content.value?.dirs ?? [])
 const directForms = computed(() => content.value?.directForms ?? [])
 /** 应用身份（0.1.7 #34）：左上角图标 + 名称来自应用内容接口，不额外请求。 */
 const app = computed(() => content.value?.app ?? null)
+
+/** 目录展开态（0.1.7 #35）：默认展开，点目录行切换；仅视图态，不落库。 */
+const collapsedDirIds = ref<string[]>([])
+
+function isDirExpanded(dirId: string): boolean {
+  return !collapsedDirIds.value.includes(dirId)
+}
+
+function toggleDir(dirId: string) {
+  collapsedDirIds.value = collapsedDirIds.value.includes(dirId)
+    ? collapsedDirIds.value.filter((id) => id !== dirId)
+    : [...collapsedDirIds.value, dirId]
+}
 const isEmpty = computed(
   () =>
     !loading.value && !errorMsg.value && dirs.value.length === 0 && directForms.value.length === 0,
@@ -301,7 +314,24 @@ onMounted(() => {
 
         <nav v-if="!isEmpty" class="app-ws__tree" :aria-label="t('form.appCenter.appNavTitle')">
           <template v-for="dir in dirs" :key="dir.id">
-            <div class="app-ws__dir" data-testid="app-tree-dir">
+            <!-- 0.1.7 #35（Owner）：目录可展开/收起（默认展开），点整行切换；⋯ 菜单不触发切换 -->
+            <div
+              class="app-ws__dir"
+              data-testid="app-tree-dir"
+              role="button"
+              tabindex="0"
+              :aria-expanded="isDirExpanded(dir.id)"
+              @click="toggleDir(dir.id)"
+              @keydown.enter.prevent="toggleDir(dir.id)"
+              @keydown.space.prevent="toggleDir(dir.id)"
+            >
+              <el-icon
+                class="app-ws__dir-caret"
+                :class="{ 'is-collapsed': !isDirExpanded(dir.id) }"
+                aria-hidden="true"
+              >
+                <CaretRight />
+              </el-icon>
               <el-icon class="app-ws__dir-icon"><Folder /></el-icon>
               <span class="app-ws__dir-name">{{ dir.name }}</span>
               <el-dropdown
@@ -327,38 +357,40 @@ onMounted(() => {
                 </template>
               </el-dropdown>
             </div>
-            <button
-              v-for="item in dir.forms ?? []"
-              :key="item.formId"
-              type="button"
-              class="app-ws__form"
-              :class="{ 'is-active': item.formKey === selectedFormKey }"
-              data-testid="app-tree-form"
-              :data-form-key="item.formKey"
-              @click="selectForm(item)"
-            >
-              <span class="app-ws__form-name">{{ item.name }}</span>
-              <el-dropdown
-                class="app-ws__more"
-                trigger="click"
-                @command="(cmd: string) => onFormCommand(cmd, item)"
+            <template v-if="isDirExpanded(dir.id)">
+              <button
+                v-for="item in dir.forms ?? []"
+                :key="item.formId"
+                type="button"
+                class="app-ws__form"
+                :class="{ 'is-active': item.formKey === selectedFormKey }"
+                data-testid="app-tree-form"
+                :data-form-key="item.formKey"
+                @click="selectForm(item)"
               >
-                <span class="app-ws__more-trigger" @click.stop>
-                  <el-icon><MoreFilled /></el-icon>
-                </span>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="design">
-                      {{ t('form.appCenter.enterFormDesign') }}
-                    </el-dropdown-item>
-                    <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
-                    <el-dropdown-item command="delete" divided>
-                      {{ t('common.delete') }}
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </button>
+                <span class="app-ws__form-name">{{ item.name }}</span>
+                <el-dropdown
+                  class="app-ws__more"
+                  trigger="click"
+                  @command="(cmd: string) => onFormCommand(cmd, item)"
+                >
+                  <span class="app-ws__more-trigger" @click.stop>
+                    <el-icon><MoreFilled /></el-icon>
+                  </span>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="design">
+                        {{ t('form.appCenter.enterFormDesign') }}
+                      </el-dropdown-item>
+                      <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
+                      <el-dropdown-item command="delete" divided>
+                        {{ t('common.delete') }}
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </button>
+            </template>
           </template>
 
           <button
@@ -414,11 +446,15 @@ onMounted(() => {
         </div>
       </aside>
 
-      <!-- 右侧内容：空应用只展示「暂无数据」；选中表单展示其数据列表（回归01c） -->
+      <!-- 右侧内容：空应用 / 未选择目录或表单均用大图标占位；选中表单展示其数据列表（回归01c） -->
       <section class="app-ws__panel">
-        <p v-if="isEmpty" class="app-ws__empty" data-testid="app-ws-empty">
-          {{ t('form.appCenter.emptyAppContent') }}
-        </p>
+        <el-empty
+          v-if="isEmpty"
+          class="app-ws__placeholder"
+          data-testid="app-ws-empty"
+          :image-size="120"
+          :description="t('form.appCenter.emptyAppContent')"
+        />
         <AppFormData
           v-else-if="selectedFormKey"
           :key="selectedFormKey"
@@ -426,7 +462,18 @@ onMounted(() => {
           :app-id="appId"
           embedded
         />
-        <p v-else class="app-ws__empty">{{ t('form.appCenter.pickForm') }}</p>
+        <!-- 0.1.7 #35（Owner）：进来未选择任何目录/表单时，大图标 + 提示语占位 -->
+        <el-empty
+          v-else
+          class="app-ws__placeholder"
+          data-testid="app-ws-placeholder"
+          :image-size="120"
+        >
+          <template #description>
+            <p class="app-ws__placeholder-title">{{ t('common.noContent') }}</p>
+            <p class="app-ws__placeholder-hint">{{ t('form.appCenter.pickForm') }}</p>
+          </template>
+        </el-empty>
       </section>
     </div>
 
@@ -560,6 +607,19 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   color: #303133;
+  cursor: pointer;
+}
+.app-ws__dir:hover .app-ws__dir-name {
+  color: #409eff;
+}
+/* 0.1.7 #35（Owner）：目录展开/收起指示（展开朝下、收起朝右） */
+.app-ws__dir-caret {
+  color: #909399;
+  transform: rotate(90deg);
+  transition: transform 0.15s ease;
+}
+.app-ws__dir-caret.is-collapsed {
+  transform: rotate(0deg);
 }
 .app-ws__dir:first-child {
   margin-top: 0;
@@ -659,12 +719,22 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
 }
-.app-ws__empty {
+/* 0.1.7 #35（Owner）：右侧空态/未选择态统一为大图标占位（el-empty 自带宽高与图形） */
+.app-ws__placeholder {
   flex: 1;
-  display: flex;
-  align-items: center;
   justify-content: center;
   margin: 0;
+}
+.app-ws__placeholder-title {
+  margin: 0;
+  color: #606266;
+  font-size: 14px;
+  line-height: 22px;
+}
+.app-ws__placeholder-hint {
+  margin: 4px 0 0;
   color: #909399;
+  font-size: 12px;
+  line-height: 18px;
 }
 </style>
