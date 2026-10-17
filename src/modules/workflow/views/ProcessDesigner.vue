@@ -202,20 +202,10 @@ function arrangeTopDown() {
   fitViewport()
 }
 
-/** 画布框（随内容平移缩放）：流程内容外扩留白，参考同类产品的泳道式外框。 */
-const canvasFrame = computed(() => {
-  void version.value
-  const nodes = model?.state().nodes ?? []
-  if (nodes.length === 0) return null
-  const xs = nodes.map((node) => node.x)
-  const ys = nodes.map((node) => node.y)
-  const minX = Math.min(...xs) - 120
-  const maxX = Math.max(...xs) + 120
-  const minY = Math.min(...ys) - 96
-  const maxY = Math.max(...ys) + 96
-  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
-})
-const frameLabel = computed(() => graph.value?.name || t('router.processDesigner'))
+/** 事件型节点（开始/结束）：小图标呈现，不使用卡片盒。 */
+function isEventShape(type: string): boolean {
+  return type === 'START' || type === 'END'
+}
 
 /* ─────────── 画布视口 ─────────── */
 const CANVAS_W = 1200
@@ -2742,33 +2732,6 @@ function nodeLabelLines(label: string) {
               </marker>
             </defs>
             <rect class="pg-bg" x="-100000" y="-100000" width="200000" height="200000" />
-            <!-- 0.1.7：流程画布框（随内容平移缩放） -->
-            <g v-if="canvasFrame" class="designer-frame-group" pointer-events="none">
-              <rect
-                :x="canvasFrame.x"
-                :y="canvasFrame.y"
-                :width="canvasFrame.w"
-                :height="canvasFrame.h"
-                rx="2"
-                class="designer-frame"
-              />
-              <rect
-                :x="canvasFrame.x"
-                :y="canvasFrame.y - 26"
-                width="92"
-                height="26"
-                rx="3"
-                class="designer-frame-tab"
-              />
-              <text
-                :x="canvasFrame.x + 46"
-                :y="canvasFrame.y - 9"
-                text-anchor="middle"
-                class="designer-frame-tab-text"
-              >
-                {{ frameLabel }}
-              </text>
-            </g>
             <template v-for="edge in canvasEdges" :key="edge.id">
               <path
                 :d="edgePathOf(edge)"
@@ -2826,24 +2789,32 @@ function nodeLabelLines(label: string) {
               @pointerup="onNodePointerUp($event, node)"
             >
               <rect
-                v-if="!isGatewayShape(node.type)"
+                v-if="!isGatewayShape(node.type) && !isEventShape(node.type)"
                 :width="P53_NODE_WIDTH"
                 :height="P53_NODE_HEIGHT"
                 rx="8"
                 class="designer-node-rect"
               />
-              <!-- 设计09：网关为菱形（+号），名称置于菱形右侧；P63 纳入 CONDITION/PARALLEL_GATEWAY -->
+              <!-- 0.1.7：开始/结束为小圆形图标节点，名称置于图标下方 -->
+              <circle
+                v-else-if="isEventShape(node.type)"
+                :cx="P53_NODE_WIDTH / 2"
+                :cy="P53_NODE_HEIGHT / 2"
+                r="18"
+                class="designer-node-rect designer-node-event"
+              />
+              <!-- 网关为小菱形（+号），名称置于菱形下方 -->
               <template v-else>
                 <polygon
-                  points="22,0 44,22 22,44 0,22"
+                  points="18,0 36,18 18,36 0,18"
                   class="designer-node-rect designer-node-gateway"
                 />
-                <path d="M22 10 V34 M10 22 H34" class="designer-node-gateway-plus" />
+                <path d="M18 9 V27 M9 18 H27" class="designer-node-gateway-plus" />
               </template>
               <!-- V011-BUG-023：四向锚点（上下左右缘中点）均可拖拽/点选拉线（ProcessOn 口径） -->
               <circle
                 v-if="selectionId === node.id && !isGatewayShape(node.type)"
-                cx="0"
+                :cx="isEventShape(node.type) ? P53_NODE_WIDTH / 2 - 18 : 0"
                 :cy="P53_NODE_HEIGHT / 2"
                 r="3"
                 class="designer-node-port"
@@ -2851,7 +2822,7 @@ function nodeLabelLines(label: string) {
               />
               <circle
                 v-if="selectionId === node.id && !isGatewayShape(node.type)"
-                :cx="P53_NODE_WIDTH"
+                :cx="isEventShape(node.type) ? P53_NODE_WIDTH / 2 + 18 : P53_NODE_WIDTH"
                 :cy="P53_NODE_HEIGHT / 2"
                 r="3"
                 class="designer-node-port"
@@ -2860,7 +2831,7 @@ function nodeLabelLines(label: string) {
               <circle
                 v-if="selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="P53_NODE_WIDTH / 2"
-                cy="0"
+                :cy="isEventShape(node.type) ? P53_NODE_HEIGHT / 2 - 18 : 0"
                 r="3"
                 class="designer-node-port"
                 @pointerdown.stop="startConnect($event, node, 'top')"
@@ -2868,7 +2839,7 @@ function nodeLabelLines(label: string) {
               <circle
                 v-if="selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="P53_NODE_WIDTH / 2"
-                :cy="P53_NODE_HEIGHT"
+                :cy="isEventShape(node.type) ? P53_NODE_HEIGHT / 2 + 18 : P53_NODE_HEIGHT"
                 r="3"
                 class="designer-node-port"
                 @pointerdown.stop="startConnect($event, node, 'bottom')"
@@ -2877,7 +2848,11 @@ function nodeLabelLines(label: string) {
               <g
                 v-if="!isGatewayShape(node.type)"
                 class="designer-node-icon"
-                transform="translate(12 14)"
+                :transform="
+                  isEventShape(node.type)
+                    ? `translate(${P53_NODE_WIDTH / 2 - 11} ${P53_NODE_HEIGHT / 2 - 11})`
+                    : 'translate(12 14)'
+                "
               >
                 <template v-if="node.type === 'START'">
                   <path d="M7.333 3.667L18.333 11L7.333 18.333V3.667Z" />
@@ -2907,7 +2882,16 @@ function nodeLabelLines(label: string) {
                 </template>
               </g>
               <text
-                v-if="!isGatewayShape(node.type)"
+                v-if="isEventShape(node.type)"
+                :x="P53_NODE_WIDTH / 2"
+                :y="P53_NODE_HEIGHT / 2 + 40"
+                text-anchor="middle"
+                class="designer-node-label"
+              >
+                {{ node.label }}
+              </text>
+              <text
+                v-else-if="!isGatewayShape(node.type)"
                 :x="42"
                 :y="P53_NODE_HEIGHT / 2 + (nodeLabelLines(node.label).length > 1 ? -5 : 2)"
                 text-anchor="start"
@@ -2924,9 +2908,9 @@ function nodeLabelLines(label: string) {
               </text>
               <text
                 v-else
-                x="54"
-                y="41.5"
-                text-anchor="start"
+                x="18"
+                y="52"
+                text-anchor="middle"
                 class="designer-node-label designer-node-label--gateway"
               >
                 {{ node.label }}
@@ -4552,21 +4536,9 @@ function nodeLabelLines(label: string) {
   stroke-linejoin: round;
 }
 
-/* ── 0.1.7：流程画布框（随内容平移缩放） ── */
-.designer-frame {
-  fill: #ffffff;
-  stroke: #dbe3f0;
-  stroke-width: 1.4;
-}
-.designer-frame-tab {
-  fill: #eef2fb;
-  stroke: #dbe3f0;
-  stroke-width: 1.2;
-}
-.designer-frame-tab-text {
-  font-size: 12px;
-  font-weight: 500;
-  fill: #4a5878;
+/* 0.1.7：开始/结束小圆形图标节点（无卡片盒） */
+.designer-node-event {
+  stroke-width: 1.6;
 }
 
 /* ── 画布（24px 网格 + 缩放控件 + 底部提示条） ── */
@@ -4655,12 +4627,10 @@ function nodeLabelLines(label: string) {
   stroke-width: 1.4;
 }
 .designer-node-start .designer-node-rect {
-  rx: 24.4px;
   fill: #eefaf3;
   stroke: #16a77b;
 }
 .designer-node-end .designer-node-rect {
-  rx: 24.4px;
   fill: #fdf0f1;
   stroke: #ef5d71;
 }

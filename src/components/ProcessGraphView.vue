@@ -160,6 +160,11 @@ function isGateway(node: PositionedNode): boolean {
   return node.type === 'GATEWAY'
 }
 
+/** 0.1.7：开始/结束以小圆形图标呈现（无卡片盒）。 */
+function isEventNode(node: PositionedNode): boolean {
+  return node.type === 'START' || node.type === 'END'
+}
+
 const shownNodes = computed(() => spec.value?.nodes ?? [])
 /** config.visible=false 的边只保留逻辑后继语义，不渲染连线（设计10/19：会签出线不画）。 */
 const shownEdges = computed(() =>
@@ -257,21 +262,33 @@ defineExpose({ fitViewport, zoom, locateCurrent })
           </text>
         </template>
         <template v-else>
-          <!-- 设计（节点19）：节点盒 158.8×48.8，矩形以中心定位（与设计坐标逐像素一致） -->
-          <rect
-            :x="-NODE_W / 2 - 0.4"
-            :y="-NODE_H / 2 - 0.4"
-            :width="NODE_W + 0.8"
-            :height="NODE_H + 0.8"
-            :rx="node.type === 'START' || node.type === 'END' ? 24.4 : 8"
+          <!-- 0.1.7：开始/结束为小圆形图标节点；其余为节点卡（均以中心定位） -->
+          <circle
+            v-if="isEventNode(node)"
+            r="18"
             class="pg-node-rect"
             :class="[
-              node.type === 'START' ? 'pg-node-start' : node.type === 'END' ? 'pg-node-end' : '',
+              node.type === 'START' ? 'pg-node-start' : 'pg-node-end',
               NODE_RUNTIME_STATE_CLASS[nodeState(node)],
             ]"
           />
           <rect
-            v-if="nodeState(node) === 'current'"
+            v-else
+            :x="-NODE_W / 2 - 0.4"
+            :y="-NODE_H / 2 - 0.4"
+            :width="NODE_W + 0.8"
+            :height="NODE_H + 0.8"
+            rx="8"
+            class="pg-node-rect"
+            :class="NODE_RUNTIME_STATE_CLASS[nodeState(node)]"
+          />
+          <circle
+            v-if="nodeState(node) === 'current' && isEventNode(node)"
+            r="22.4"
+            class="pg-node-halo"
+          />
+          <rect
+            v-else-if="nodeState(node) === 'current'"
             :x="-NODE_W / 2 - 3.9"
             :y="-NODE_H / 2 - 3.9"
             :width="NODE_W + 7.8"
@@ -281,7 +298,7 @@ defineExpose({ fitViewport, zoom, locateCurrent })
           />
           <rect
             v-if="nodeState(node) === 'current'"
-            :x="-NODE_W / 2 - 2.8"
+            :x="(isEventNode(node) ? -18 : -NODE_W / 2) - 2"
             :y="-2.4"
             width="4.8"
             height="4.8"
@@ -290,14 +307,17 @@ defineExpose({ fitViewport, zoom, locateCurrent })
           />
           <rect
             v-if="nodeState(node) === 'current'"
-            :x="NODE_W / 2 - 2"
+            :x="(isEventNode(node) ? 18 : NODE_W / 2) - 2.8"
             :y="-2.4"
             width="4.8"
             height="4.8"
             rx="2.4"
             class="pg-node-port"
           />
-          <g class="pg-node-icon" transform="translate(-64.4, -8.7)">
+          <g
+            class="pg-node-icon"
+            :transform="isEventNode(node) ? 'translate(-9.5, -9.5)' : 'translate(-64.4, -8.7)'"
+          >
             <template v-if="node.type === 'START'">
               <path d="M6 4 L15 10 L6 16 Z" class="pg-node-icon-fill" />
             </template>
@@ -322,7 +342,11 @@ defineExpose({ fitViewport, zoom, locateCurrent })
               />
             </template>
           </g>
+          <text v-if="isEventNode(node)" x="0" y="34" text-anchor="middle" class="pg-node-label">
+            {{ node.label }}
+          </text>
           <text
+            v-else
             x="-39.4"
             :y="node.label.length > 8 ? -4 : 4.5"
             text-anchor="start"
