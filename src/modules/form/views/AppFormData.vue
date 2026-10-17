@@ -612,12 +612,6 @@ onMounted(async () => {
           </ListActionsColumn>
         </el-table>
       </template>
-
-      <template #empty-action>
-        <el-button type="primary" @click="handleCreate">{{
-          t('form.appCenter.createRecord')
-        }}</el-button>
-      </template>
     </StandardListTemplate>
 
     <!-- 0.1.7 #23：表头设置 = 右侧抽屉；字段按当前顺序排列，右侧「显示」勾选 + ≡ 手柄拖拽排序，改动即时生效 -->
