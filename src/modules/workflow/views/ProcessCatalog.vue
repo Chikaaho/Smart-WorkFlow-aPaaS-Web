@@ -375,8 +375,11 @@ onMounted(() => {
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
   box-shadow: var(--sw-shadow-card);
+  /* 0.1.7 #41（Owner）：分类面板顶边要与右侧搜索卡片平行。
+     原粘性偏移 76px 是按后台外壳高度估的，在门户区（内容区自顶开始）会把面板整体压到
+     搜索卡片下方 48px；改为与页面内距同量级的 12px——静止时两者同高，滚动时面板贴内容区顶部。 */
   position: sticky;
-  top: 76px;
+  top: 12px;
 }
 .catalog-tree__item {
   display: flex;
@@ -506,7 +509,17 @@ onMounted(() => {
 }
 /* V012-BUG-009 复开：列表化（不用卡片）——分类分组带 + 多列条目，参考蓝凌流程发起 */
 .catalog-list {
+  /* 0.1.7 #41（Owner）：流程集合区加画布底纹——与流程设计器画布同源（24px 网格、#eef2f8 线），
+     外框用画布的虚线圆角框，使列表区读起来就是「一块画布」。 */
   min-height: 120px;
+  padding: 16px 16px 6px;
+  border: 1px dashed #c6cce0;
+  border-radius: 12px;
+  background-color: #fff;
+  background-image:
+    linear-gradient(to right, #eef2f8 1px, transparent 1px),
+    linear-gradient(to bottom, #eef2f8 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 .catalog-group {
   margin-bottom: 14px;
