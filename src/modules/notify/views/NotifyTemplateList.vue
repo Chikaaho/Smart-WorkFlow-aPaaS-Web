@@ -14,7 +14,7 @@ const { t } = useI18n()
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   pageNotifyTemplates,
@@ -263,24 +263,26 @@ defineExpose({ list, errorMsg, retryLoad: loadTemplates })
     </template>
 
     <template #filter>
-      <el-input
-        v-model="filter.keyword"
-        :placeholder="t('notify.searchTemplatePlaceholder')"
-        clearable
-        style="width: 220px"
-        @keyup.enter="handleQuery"
-        @clear="handleQuery"
-      />
-      <el-select
-        v-model="filter.enabled"
-        :placeholder="t('common.allStatuses')"
-        clearable
-        style="width: 130px"
-        @change="handleQuery"
-      >
-        <el-option :label="t('common.enable')" :value="true" />
-        <el-option :label="t('common.disable')" :value="false" />
-      </el-select>
+      <ListFilterItem :label="t('notify.templateName')">
+        <el-input
+          v-model="filter.keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+          @clear="handleQuery"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.status')">
+        <el-select
+          v-model="filter.enabled"
+          :placeholder="t('common.all')"
+          clearable
+          @change="handleQuery"
+        >
+          <el-option :label="t('common.enable')" :value="true" />
+          <el-option :label="t('common.disable')" :value="false" />
+        </el-select>
+      </ListFilterItem>
     </template>
 
     <template #filter-actions>

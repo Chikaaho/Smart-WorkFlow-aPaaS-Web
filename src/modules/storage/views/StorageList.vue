@@ -16,7 +16,7 @@ const { t } = useI18n()
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { listFiles, uploadFile, deleteFile, downloadFile } from '@/modules/storage/api'
 import { formatFileSize } from '@/modules/storage/utils/format'
@@ -259,13 +259,14 @@ onMounted(loadList)
 
     <!-- 筛选区：文件名搜索 -->
     <template #filter>
-      <el-input
-        v-model="filter.originalName"
-        :placeholder="t('storage.fileName')"
-        clearable
-        style="width: 240px"
-        @keyup.enter="handleQuery"
-      />
+      <ListFilterItem :label="t('storage.fileName')">
+        <el-input
+          v-model="filter.originalName"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+        />
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>

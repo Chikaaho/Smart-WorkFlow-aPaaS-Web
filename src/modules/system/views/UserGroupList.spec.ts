@@ -104,8 +104,13 @@ describe('UserGroupList', () => {
     await nextTick()
     await nextTick()
 
-    const input = wrapper.find('input[placeholder="组名称"]')
-    await input.setValue('技术')
+    // #42：字段块按「字段名 + 控件」渲染，定位「组名称」块内的输入框
+    const groupNameItem = wrapper
+      .findAll('.list-filter-item')
+      .find((item) => item.find('.list-filter-item__label').text() === '组名称')
+    const input = groupNameItem?.find('input')
+    expect(input?.exists()).toBe(true)
+    await input?.setValue('技术')
     await wrapper.find('button').findAll('button')[0]?.trigger('click')
     // 点击「查询」
     const queryBtn = wrapper.findAll('button').find((b) => b.text().includes('查询'))

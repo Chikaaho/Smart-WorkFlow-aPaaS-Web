@@ -5,6 +5,7 @@ import FormSection from './FormSection.vue'
 import FormActions from './FormActions.vue'
 import ListToolbar from './ListToolbar.vue'
 import ListFilterBar from './ListFilterBar.vue'
+import ListFilterItem from './ListFilterItem.vue'
 import ListTable from './ListTable.vue'
 import ListPagination from './ListPagination.vue'
 import ListEmpty from './ListEmpty.vue'
@@ -124,6 +125,32 @@ describe('ListFilterBar', () => {
       slots: { actions: '<button class="btn-query">查询</button>' },
     })
     expect(wrapper.find('.btn-query').text()).toBe('查询')
+    // #42：按钮组与字段同处 12 格栅格内（钉在行尾 3 格）
+    expect(wrapper.find('.list-filter-bar__fields .list-filter-bar__actions').exists()).toBe(true)
+  })
+
+  it('defaults to the 12-column grid layout (#42)', () => {
+    const wrapper = mount(ListFilterBar, { slots: { default: '<input />' } })
+    expect(wrapper.classes()).toContain('list-filter-bar--grid')
+  })
+
+  it('supports inline layout for non-search bars (#42)', () => {
+    const wrapper = mount(ListFilterBar, {
+      props: { layout: 'inline' },
+      slots: { default: '<textarea class="batch-comment" />' },
+    })
+    expect(wrapper.classes()).toContain('list-filter-bar--inline')
+  })
+})
+
+describe('ListFilterItem (#42)', () => {
+  it('renders field label plus control slot', () => {
+    const wrapper = mount(ListFilterItem, {
+      props: { label: '角色名称' },
+      slots: { default: '<input class="ctrl" />' },
+    })
+    expect(wrapper.find('.list-filter-item__label').text()).toBe('角色名称')
+    expect(wrapper.find('.list-filter-item__control .ctrl').exists()).toBe(true)
   })
 })
 

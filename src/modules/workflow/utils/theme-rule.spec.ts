@@ -17,6 +17,7 @@ import {
   themeRulePreview,
   tokenLabelKey,
 } from './theme-rule'
+import type { ThemeElement } from './theme-rule'
 
 /** 测试用翻译替身：直接回显 key，验证「变量 → 文案键」的映射与参数 */
 const translate = (key: string, params?: Record<string, unknown>) =>

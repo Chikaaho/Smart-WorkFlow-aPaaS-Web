@@ -12,7 +12,7 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ApiError } from '@/foundation/request'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { pageJobLogs } from '@/modules/job/api'
 import type { JobLog, ExecStatus, TriggerType } from '@/contracts/job'
@@ -152,16 +152,13 @@ onMounted(loadList)
     @update:page-size="handlePageSizeChange"
   >
     <template #filter>
-      <el-select
-        v-model="filter.execStatus"
-        :placeholder="t('common.executionStatus')"
-        clearable
-        style="width: 140px"
-      >
-        <el-option :label="t('common.statusRunning')" value="RUNNING" />
-        <el-option :label="t('common.resultSuccess')" value="SUCCESS" />
-        <el-option :label="t('common.resultFailed')" value="FAILED" />
-      </el-select>
+      <ListFilterItem :label="t('common.executionStatus')">
+        <el-select v-model="filter.execStatus" :placeholder="t('common.all')" clearable>
+          <el-option :label="t('common.statusRunning')" value="RUNNING" />
+          <el-option :label="t('common.resultSuccess')" value="SUCCESS" />
+          <el-option :label="t('common.resultFailed')" value="FAILED" />
+        </el-select>
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>

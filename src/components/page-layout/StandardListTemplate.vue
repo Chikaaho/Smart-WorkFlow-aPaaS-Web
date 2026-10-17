@@ -19,12 +19,14 @@ const props = withDefaults(
     large?: boolean
     /** 工具栏内联「共 N 条记录」：默认关闭，总条数统一由右下角分页区展示（V012-BUG-003） */
     showToolbarTotal?: boolean
+    /** 筛选区排布：grid（默认，12 格栅格）| inline（批量操作条等非搜索场景） */
+    filterLayout?: 'grid' | 'inline'
     total: number
     pageNum: number
     pageSize: number
     empty?: boolean
   }>(),
-  { showToolbarTotal: false },
+  { showToolbarTotal: false, filterLayout: 'grid' },
 )
 
 const emit = defineEmits<{
@@ -47,7 +49,10 @@ const emit = defineEmits<{
     />
 
     <!-- 筛选区（BF20261013-040：所有动作槽都为空时不渲染——否则会留一条空白白条） -->
-    <ListFilterBar v-if="$slots.filter || $slots['filter-actions'] || $slots['toolbar-actions']">
+    <ListFilterBar
+      v-if="$slots.filter || $slots['filter-actions'] || $slots['toolbar-actions']"
+      :layout="props.filterLayout"
+    >
       <slot name="filter" />
       <template v-if="$slots['filter-actions'] || $slots['toolbar-actions']" #actions>
         <slot name="toolbar-actions" />

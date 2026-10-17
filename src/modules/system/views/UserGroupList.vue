@@ -36,6 +36,7 @@ import type {
 import type { SysUser } from '@/modules/system/types/user'
 import type { PageQuery } from '@/contracts/common'
 import {
+  ListFilterItem,
   StandardListTemplate,
   StandardFormTemplate,
   FormSection,
@@ -359,29 +360,28 @@ onMounted(loadList)
 
     <!-- 筛选区 -->
     <template #filter>
-      <el-input
-        v-model="filter.groupCode"
-        :placeholder="t('common.businessKey')"
-        clearable
-        style="width: 140px"
-        @keyup.enter="handleQuery"
-      />
-      <el-input
-        v-model="filter.groupName"
-        :placeholder="t('system.groupName')"
-        clearable
-        style="width: 160px"
-        @keyup.enter="handleQuery"
-      />
-      <el-select
-        v-model="filter.status"
-        :placeholder="t('common.status')"
-        clearable
-        style="width: 120px"
-      >
-        <el-option :label="t('common.enable')" :value="0" />
-        <el-option :label="t('common.disable')" :value="1" />
-      </el-select>
+      <ListFilterItem :label="t('common.businessKey')">
+        <el-input
+          v-model="filter.groupCode"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('system.groupName')">
+        <el-input
+          v-model="filter.groupName"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.status')">
+        <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
+          <el-option :label="t('common.enable')" :value="0" />
+          <el-option :label="t('common.disable')" :value="1" />
+        </el-select>
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>

@@ -11,7 +11,7 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   queryNotifyRecords,
@@ -167,33 +167,36 @@ onMounted(loadList)
     @update:page-size="handlePageSizeChange"
   >
     <template #filter>
-      <el-select
-        v-model="filter.deliveryStatus"
-        :placeholder="t('common.status')"
-        clearable
-        style="width: 140px"
-        @change="handleSearch"
-      >
-        <el-option :label="t('common.resultSuccess')" value="SUCCESS" />
-        <el-option :label="t('common.resultFailed')" value="FAILED" />
-        <el-option :label="t('notify.statusResending')" value="RESENDING" />
-        <el-option :label="t('notify.statusTimeout')" value="TIMEOUT" />
-      </el-select>
-      <el-date-picker
-        v-model="filter.timeRange"
-        type="datetimerange"
-        :range-separator="t('common.to')"
-        :start-placeholder="t('common.startTime')"
-        :end-placeholder="t('common.endTime')"
-        style="width: 340px"
-      />
-      <el-input
-        v-model="filter.keyword"
-        :placeholder="t('notify.recordSearchPlaceholder')"
-        clearable
-        style="width: 200px"
-        @keyup.enter="handleSearch"
-      />
+      <ListFilterItem :label="t('common.status')">
+        <el-select
+          v-model="filter.deliveryStatus"
+          :placeholder="t('common.all')"
+          clearable
+          @change="handleSearch"
+        >
+          <el-option :label="t('common.resultSuccess')" value="SUCCESS" />
+          <el-option :label="t('common.resultFailed')" value="FAILED" />
+          <el-option :label="t('notify.statusResending')" value="RESENDING" />
+          <el-option :label="t('notify.statusTimeout')" value="TIMEOUT" />
+        </el-select>
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.time')">
+        <el-date-picker
+          v-model="filter.timeRange"
+          type="datetimerange"
+          :range-separator="t('common.to')"
+          :start-placeholder="t('common.startTime')"
+          :end-placeholder="t('common.endTime')"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.keyword')">
+        <el-input
+          v-model="filter.keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleSearch"
+        />
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleSearch">{{ t('common.query') }}</el-button>

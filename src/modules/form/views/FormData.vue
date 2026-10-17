@@ -6,7 +6,12 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate, LoadErrorState, ListActionsColumn } from '@/components/page-layout'
+import {
+  ListFilterItem,
+  StandardListTemplate,
+  LoadErrorState,
+  ListActionsColumn,
+} from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import DictSelect from '@/foundation/dict/DictSelect.vue'
 import DictTag from '@/foundation/dict/DictTag.vue'
@@ -501,23 +506,21 @@ onMounted(async () => {
   >
     <!-- 筛选栏 -->
     <template #filter>
-      <template v-for="ff in filterFields" :key="ff.field">
+      <ListFilterItem v-for="ff in filterFields" :key="ff.field" :label="ff.label">
         <!-- TEXT / NUMBER → input -->
         <el-input
           v-if="ff.type === 'TEXT' || ff.type === 'NUMBER'"
           v-model="filterValues[ff.field]"
-          :placeholder="ff.label"
+          :placeholder="t('common.pleaseInput')"
           clearable
-          style="width: 180px"
           @keyup.enter="handleQuery"
         />
         <!-- BOOL → select 是/否 -->
         <el-select
           v-else-if="ff.type === 'BOOL'"
           v-model="filterValues[ff.field]"
-          :placeholder="ff.label"
+          :placeholder="t('common.all')"
           clearable
-          style="width: 120px"
         >
           <el-option :label="t('common.yes')" value="1" />
           <el-option :label="t('common.no')" value="0" />
@@ -527,7 +530,7 @@ onMounted(async () => {
           v-else-if="ff.type === 'DICT'"
           v-model="filterValues[ff.field]"
           :type="ff.dictType ?? ''"
-          :placeholder="ff.label"
+          :placeholder="t('common.all')"
           size="default"
         />
         <!-- DATE → 日期范围 -->
@@ -539,9 +542,8 @@ onMounted(async () => {
           :start-placeholder="t('common.startDate')"
           :end-placeholder="t('common.endDate')"
           value-format="YYYY-MM-DD"
-          style="width: 240px"
         />
-      </template>
+      </ListFilterItem>
     </template>
 
     <!-- 筛选操作按钮 -->

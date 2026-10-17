@@ -45,6 +45,7 @@ import {
   userStatusLabel,
 } from '@/modules/system/constants'
 import {
+  ListFilterItem,
   StandardListTemplate,
   StandardFormTemplate,
   FormSection,
@@ -355,26 +356,24 @@ onMounted(loadList)
 
     <!-- 筛选区 -->
     <template #filter>
-      <el-input
-        v-model="filter.username"
-        :placeholder="t('common.username')"
-        clearable
-        style="width: 180px"
-        @keyup.enter="handleQuery"
-      />
-      <el-select
-        v-model="filter.status"
-        :placeholder="t('common.status')"
-        clearable
-        style="width: 120px"
-      >
-        <el-option
-          v-for="opt in userStatusOptions"
-          :key="opt.value"
-          :label="opt.label"
-          :value="opt.value"
+      <ListFilterItem :label="t('common.username')">
+        <el-input
+          v-model="filter.username"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
         />
-      </el-select>
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.status')">
+        <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
+          <el-option
+            v-for="opt in userStatusOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>

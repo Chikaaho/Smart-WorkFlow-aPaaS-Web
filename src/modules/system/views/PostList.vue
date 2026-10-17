@@ -18,6 +18,7 @@ import { pagePosts, getPost, createPost, updatePost, deletePost } from '@/module
 import type { SysPost, PostFilter } from '@/modules/system/types/post'
 import type { PageQuery } from '@/contracts/common'
 import {
+  ListFilterItem,
   StandardListTemplate,
   StandardFormTemplate,
   FormSection,
@@ -260,29 +261,28 @@ onMounted(loadList)
 
     <!-- 筛选区 -->
     <template #filter>
-      <el-input
-        v-model="filter.code"
-        :placeholder="t('system.postCode')"
-        clearable
-        style="width: 180px"
-        @keyup.enter="handleQuery"
-      />
-      <el-input
-        v-model="filter.name"
-        :placeholder="t('system.postName')"
-        clearable
-        style="width: 180px"
-        @keyup.enter="handleQuery"
-      />
-      <el-select
-        v-model="filter.status"
-        :placeholder="t('common.status')"
-        clearable
-        style="width: 120px"
-      >
-        <el-option :label="t('common.statusNormal')" :value="1" />
-        <el-option :label="t('common.disable')" :value="0" />
-      </el-select>
+      <ListFilterItem :label="t('system.postCode')">
+        <el-input
+          v-model="filter.code"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('system.postName')">
+        <el-input
+          v-model="filter.name"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.status')">
+        <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
+          <el-option :label="t('common.statusNormal')" :value="1" />
+          <el-option :label="t('common.disable')" :value="0" />
+        </el-select>
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>

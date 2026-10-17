@@ -10,7 +10,7 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import { ListFilterItem, ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   queryAdminCatalogItems,
@@ -226,13 +226,14 @@ onMounted(() => {
       }}</el-button>
     </template>
     <template #filter>
-      <el-input
-        v-model="keyword"
-        :placeholder="t('workflow.itemSearchPlaceholder')"
-        clearable
-        style="width: 220px"
-        @keyup.enter="handleSearch"
-      />
+      <ListFilterItem :label="t('workflow.itemName')">
+        <el-input
+          v-model="keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleSearch"
+        />
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleSearch">{{ t('common.query') }}</el-button>

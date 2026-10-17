@@ -11,7 +11,7 @@ const { t } = useI18n()
  * 抄送身份不含审批操作权（无同意/驳回入口）。
  */
 import { ref, computed, onMounted, reactive } from 'vue'
-import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import { ListFilterItem, ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   queryMyCopies,
@@ -146,28 +146,31 @@ onMounted(loadList)
     @update:page-size="handlePageSizeChange"
   >
     <template #filter>
-      <el-date-picker
-        v-model="filter.timeRange"
-        type="datetimerange"
-        :range-separator="t('common.to')"
-        :start-placeholder="t('common.startTime')"
-        :end-placeholder="t('common.endTime')"
-        style="width: 340px"
-      />
-      <el-input
-        v-model="filter.processInstanceId"
-        :placeholder="t('workflow.instanceIdExactPlaceholder')"
-        clearable
-        style="width: 260px"
-        @keyup.enter="handleSearch"
-      />
-      <el-input
-        v-model="filter.keyword"
-        :placeholder="t('workflow.ccKeywordPlaceholder')"
-        clearable
-        style="width: 220px"
-        @keyup.enter="handleSearch"
-      />
+      <ListFilterItem :label="t('workflow.ccTime')">
+        <el-date-picker
+          v-model="filter.timeRange"
+          type="datetimerange"
+          :range-separator="t('common.to')"
+          :start-placeholder="t('common.startTime')"
+          :end-placeholder="t('common.endTime')"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.instanceId')">
+        <el-input
+          v-model="filter.processInstanceId"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleSearch"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.keyword')">
+        <el-input
+          v-model="filter.keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleSearch"
+        />
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleSearch">{{ t('common.query') }}</el-button>

@@ -24,6 +24,7 @@ import {
 import type { SysDictData, DictDataFilter } from '@/modules/system/types/dict'
 import type { PageQuery } from '@/contracts/common'
 import {
+  ListFilterItem,
   StandardListTemplate,
   StandardFormTemplate,
   FormSection,
@@ -368,43 +369,43 @@ onMounted(() => {
     <!-- 筛选区 -->
     <template #filter>
       <!-- V012-BUG-017：字典数据管理独立菜单入口——页内切换字典类型 -->
-      <el-select
-        :model-value="dictCode"
-        filterable
-        :placeholder="t('system.dictTypeSelect')"
-        style="width: 220px"
-        @change="onTypeChange"
-      >
-        <el-option
-          v-for="item in typeOptions"
-          :key="item.code"
-          :label="`${item.name}（${item.code}）`"
-          :value="item.code"
+      <ListFilterItem :label="t('system.dictType')">
+        <el-select
+          :model-value="dictCode"
+          filterable
+          :placeholder="t('common.pleaseSelect')"
+          @change="onTypeChange"
+        >
+          <el-option
+            v-for="item in typeOptions"
+            :key="item.code"
+            :label="`${item.name}（${item.code}）`"
+            :value="item.code"
+          />
+        </el-select>
+      </ListFilterItem>
+      <ListFilterItem :label="t('system.dictLabel')">
+        <el-input
+          v-model="filter.label"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
         />
-      </el-select>
-      <el-input
-        v-model="filter.label"
-        :placeholder="t('system.dictLabel')"
-        clearable
-        style="width: 180px"
-        @keyup.enter="handleQuery"
-      />
-      <el-input
-        v-model="filter.dictValue"
-        :placeholder="t('system.dictValue')"
-        clearable
-        style="width: 180px"
-        @keyup.enter="handleQuery"
-      />
-      <el-select
-        v-model="filter.status"
-        :placeholder="t('common.status')"
-        clearable
-        style="width: 120px"
-      >
-        <el-option :label="t('common.statusNormal')" :value="0" />
-        <el-option :label="t('common.disable')" :value="1" />
-      </el-select>
+      </ListFilterItem>
+      <ListFilterItem :label="t('system.dictValue')">
+        <el-input
+          v-model="filter.dictValue"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.status')">
+        <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
+          <el-option :label="t('common.statusNormal')" :value="0" />
+          <el-option :label="t('common.disable')" :value="1" />
+        </el-select>
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>

@@ -11,7 +11,7 @@ const { t } = useI18n()
 import { ref, computed, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, ListFilterItem, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { myInstances, myInstanceDetail, withdrawInstance } from '@/modules/workflow/api'
 import { urgeMyInstance } from '@/modules/workflow/api/oa'
@@ -332,32 +332,27 @@ onMounted(loadList)
   >
     <!-- 筛选区（关键字、状态、发起时间均进入列表查询参数） -->
     <template #filter>
-      <div class="my-instances-field">
-        <span class="my-instances-field__label">{{ t('workflow.filterKeywordLabel') }}</span>
+      <ListFilterItem :label="t('workflow.filterKeywordLabel')">
         <el-input
           v-model="filter.keyword"
-          :placeholder="t('workflow.searchProcessPlaceholder')"
+          :placeholder="t('common.pleaseInput')"
           clearable
-          style="width: 250px"
           @keyup.enter="handleSearch"
         />
-      </div>
-      <div class="my-instances-field">
-        <span class="my-instances-field__label">{{ t('common.status') }}</span>
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.status')">
         <el-select
           v-model="filter.status"
           :placeholder="t('common.all')"
           clearable
-          style="width: 130px"
           @change="handleSearch"
         >
           <el-option :label="t('common.statusInProgress')" value="RUNNING" />
           <el-option :label="t('common.statusApproved')" value="APPROVED" />
           <el-option :label="t('common.statusRejected')" value="REJECTED" />
         </el-select>
-      </div>
-      <div class="my-instances-field">
-        <span class="my-instances-field__label">{{ t('common.startTimeShort') }}</span>
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.startTimeShort')">
         <el-date-picker
           v-model="dateRange"
           type="daterange"
@@ -365,9 +360,8 @@ onMounted(loadList)
           :start-placeholder="t('common.startTimeShort')"
           :end-placeholder="t('common.endTime')"
           range-separator="—"
-          style="width: 220px"
         />
-      </div>
+      </ListFilterItem>
     </template>
 
     <template #filter-actions>
@@ -643,71 +637,9 @@ onMounted(loadList)
   color: var(--sw-text-primary);
   transform: translateY(-7px);
 }
-.my-instances-field {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-.standard-list :deep(.list-filter-bar__fields) {
-  /* 不再写死 784px：宽屏下三列按比例吃掉整行剩余宽度（窄屏回落到各自 min，不挤压） */
-  /* flex-basis 取原固定宽度：空间不足时先收缩字段块，按钮不会被挤到第二行 */
-  flex: 1 1 784px;
-  /* 与按钮组的间距由字段侧给：按钮组用 margin-left:auto 才能在被换到第二行时靠右 */
-  margin-right: 18px;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(220px, 1.6fr) minmax(140px, 1fr) minmax(220px, 1.4fr);
-  column-gap: 64px;
-  row-gap: 0;
-  align-items: start;
-  transform: translateY(3px);
-}
-.standard-list :deep(.list-filter-bar__actions) {
-  margin-left: auto;
-  padding-top: 24px;
-  gap: 12px;
-  transform: translateY(5px);
-  /* 不参与换行收缩，保证与字段块同行 */
-  flex: 0 0 auto;
-}
-.standard-list :deep(.list-filter-bar__actions .el-button) {
-  width: 86px;
-  height: 42px;
-  margin-left: 0;
-}
-.my-instances-field > :deep(.el-input),
-.my-instances-field > :deep(.el-select),
-.my-instances-field > :deep(.el-date-editor) {
-  margin-left: 16px;
-  width: 220px !important;
-  height: 42px;
-}
-.my-instances-field > :deep(.el-input),
-.my-instances-field > :deep(.el-select) {
-  height: 42px;
-}
-.my-instances-field:nth-child(1) > :deep(.el-input) {
-  width: 250px !important;
-}
-.my-instances-field:nth-child(2) > :deep(.el-select) {
-  width: 130px !important;
-}
-.my-instances-field__label {
-  line-height: 17px;
-}
-.my-instances-field__label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--sw-text-regular);
-}
-
 .standard-list :deep(.list-toolbar__title--large) {
   font-size: 26px;
   line-height: 28px;
-}
-.standard-list :deep(.list-filter-bar) {
-  min-height: 165px;
-  box-sizing: border-box;
 }
 .standard-list :deep(.standard-list__panel-head) {
   padding: 0 24px;

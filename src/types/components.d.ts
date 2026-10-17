@@ -82,6 +82,7 @@ declare module 'vue' {
     ListActionsColumn: typeof import('./../components/page-layout/ListActionsColumn.vue')['default']
     ListEmpty: typeof import('./../components/page-layout/ListEmpty.vue')['default']
     ListFilterBar: typeof import('./../components/page-layout/ListFilterBar.vue')['default']
+    ListFilterItem: typeof import('./../components/page-layout/ListFilterItem.vue')['default']
     ListPagination: typeof import('./../components/page-layout/ListPagination.vue')['default']
     ListTable: typeof import('./../components/page-layout/ListTable.vue')['default']
     ListToolbar: typeof import('./../components/page-layout/ListToolbar.vue')['default']

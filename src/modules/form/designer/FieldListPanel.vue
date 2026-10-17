@@ -56,7 +56,9 @@ function mainRows(): FieldRow[] {
 }
 
 function subRows(item: DesignerItem): FieldRow[] {
-  return (item.field.subFields ?? []).map((subField, index) => ({
+  const field = item.field
+  const subFields = field.type === 'TABLE' ? (field.subFields ?? []) : []
+  return subFields.map((subField, index) => ({
     key: `${item.id}-${index}`,
     index: index + 1,
     field: subField,
@@ -195,7 +197,7 @@ function patchDescription(row: FieldRow, description: string) {
             maxlength="60"
             :data-testid="'field-label-' + row.key"
             :placeholder="row.field.name"
-            @update:model-value="(value: string) => patchLabel(row, value)"
+            @update:model-value="(value: string) => patchLabel(row as FieldRow, value)"
           />
         </template>
       </el-table-column>
@@ -219,7 +221,7 @@ function patchDescription(row: FieldRow, description: string) {
             :controls="false"
             :data-testid="'field-length-' + row.key"
             :placeholder="t('form.unlimited')"
-            @update:model-value="(value: number | undefined) => patchLength(row, value)"
+            @update:model-value="(value: number | undefined) => patchLength(row as FieldRow, value)"
           />
           <span v-else class="field-list__dash">—</span>
         </template>
@@ -236,7 +238,7 @@ function patchDescription(row: FieldRow, description: string) {
             maxlength="200"
             :data-testid="'field-description-' + row.key"
             :placeholder="t('fieldList.descriptionPlaceholder')"
-            @update:model-value="(value: string) => patchDescription(row, value)"
+            @update:model-value="(value: string) => patchDescription(row as FieldRow, value)"
           />
         </template>
       </el-table-column>

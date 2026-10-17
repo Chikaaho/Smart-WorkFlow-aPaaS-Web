@@ -10,7 +10,7 @@ const { t } = useI18n()
  */
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import { ListFilterItem, ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { myProcessed } from '@/modules/workflow/api'
 import type { MyProcessedItem } from '@/contracts/bpm'
@@ -154,16 +154,17 @@ onMounted(loadList)
   >
     <!-- 筛选区 -->
     <template #filter>
-      <el-select
-        v-model="filter.source"
-        :placeholder="t('common.source')"
-        clearable
-        style="width: 180px"
-        @change="handleSearch"
-      >
-        <el-option :label="t('workflow.sourceAction')" value="ACTION" />
-        <el-option :label="t('workflow.sourceHistoryCompat')" value="HISTORY_COMPAT" />
-      </el-select>
+      <ListFilterItem :label="t('common.source')">
+        <el-select
+          v-model="filter.source"
+          :placeholder="t('common.all')"
+          clearable
+          @change="handleSearch"
+        >
+          <el-option :label="t('workflow.sourceAction')" value="ACTION" />
+          <el-option :label="t('workflow.sourceHistoryCompat')" value="HISTORY_COMPAT" />
+        </el-select>
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleSearch">{{ t('common.query') }}</el-button>

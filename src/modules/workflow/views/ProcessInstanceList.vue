@@ -11,7 +11,7 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import { ListFilterItem, ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   queryInstances,
@@ -376,20 +376,21 @@ function rowActions(row: unknown): ListAction[] {
 
     <!-- 筛选区：状态过滤 -->
     <template #filter>
-      <el-select
-        v-model="filterStatus"
-        :placeholder="t('common.allStatuses')"
-        clearable
-        style="width: 180px"
-        @change="handleFilterChange"
-      >
-        <el-option :label="t('common.statusRunning')" value="RUNNING" />
-        <el-option :label="t('common.statusCompleted')" value="APPROVED" />
-        <el-option :label="t('common.statusRejected')" value="REJECTED" />
-        <el-option :label="t('common.statusWithdrawn')" value="WITHDRAWN" />
-        <el-option :label="t('workflow.statusDiscarded')" value="DISCARDED" />
-        <el-option :label="t('common.resultFailed')" value="FAILED" />
-      </el-select>
+      <ListFilterItem :label="t('common.status')">
+        <el-select
+          v-model="filterStatus"
+          :placeholder="t('common.all')"
+          clearable
+          @change="handleFilterChange"
+        >
+          <el-option :label="t('common.statusRunning')" value="RUNNING" />
+          <el-option :label="t('common.statusCompleted')" value="APPROVED" />
+          <el-option :label="t('common.statusRejected')" value="REJECTED" />
+          <el-option :label="t('common.statusWithdrawn')" value="WITHDRAWN" />
+          <el-option :label="t('workflow.statusDiscarded')" value="DISCARDED" />
+          <el-option :label="t('common.resultFailed')" value="FAILED" />
+        </el-select>
+      </ListFilterItem>
     </template>
 
     <!-- 错误提示 -->

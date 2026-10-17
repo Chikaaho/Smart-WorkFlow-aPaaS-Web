@@ -23,7 +23,7 @@ const { t } = useI18n()
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { deleteModel, pageModels, testModelConnection } from '@/modules/agent/api'
 import type { AgentModelConfig, AgentModelTestConnectionResp } from '@/contracts/agent'
@@ -259,13 +259,14 @@ onMounted(() => {
     </template>
 
     <template #filter>
-      <el-input
-        v-model="filter.name"
-        :placeholder="t('agent.nameKeywordPlaceholder')"
-        clearable
-        style="width: 200px"
-        @keyup.enter="handleQuery"
-      />
+      <ListFilterItem :label="t('common.name')">
+        <el-input
+          v-model="filter.name"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+        />
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>

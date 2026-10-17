@@ -10,7 +10,7 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import { ListFilterItem, ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   pageTemplates,
@@ -157,24 +157,30 @@ onMounted(loadList)
     @update:page-size="handlePageSizeChange"
   >
     <template #filter>
-      <el-input
-        v-model="keyword"
-        :placeholder="t('workflow.templateKeywordPlaceholder')"
-        clearable
-        style="width: 200px"
-        @keyup.enter="search"
-      />
-      <el-input
-        v-model="category"
-        :placeholder="t('common.category')"
-        clearable
-        style="width: 140px"
-        @keyup.enter="search"
-      />
-      <el-select v-model="status" :placeholder="t('common.status')" clearable style="width: 120px">
-        <el-option :label="t('common.enable')" value="ENABLED" />
-        <el-option :label="t('common.disable')" value="DISABLED" />
-      </el-select>
+      <ListFilterItem :label="t('common.name')">
+        <el-input
+          v-model="keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="search"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.category')">
+        <el-input
+          v-model="category"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="search"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.status')">
+        <el-select v-model="status" :placeholder="t('common.all')" clearable>
+          <el-option :label="t('common.enable')" value="ENABLED" />
+          <el-option :label="t('common.disable')" value="DISABLED" />
+        </el-select>
+      </ListFilterItem>
+    </template>
+    <template #filter-actions>
       <el-button type="primary" @click="search">{{ t('common.query') }}</el-button>
       <el-button @click="resetFilters">{{ t('common.reset') }}</el-button>
     </template>

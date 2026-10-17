@@ -9,7 +9,7 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import { ListFilterItem, ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   pageMonitorInstances,
@@ -216,52 +216,50 @@ onMounted(loadList)
     @update:page-size="handlePageSizeChange"
   >
     <template #filter>
-      <el-input
-        v-model="processDefKey"
-        :placeholder="t('common.processDefKey')"
-        clearable
-        style="width: 150px"
-      />
-      <el-input
-        v-model="processInstanceId"
-        :placeholder="t('common.instanceId')"
-        clearable
-        style="width: 150px"
-      />
-      <el-input-number
-        v-model="initiatorId"
-        :placeholder="t('workflow.initiatorId')"
-        :min="1"
-        controls-position="right"
-        style="width: 130px"
-      />
-      <el-select v-model="status" :placeholder="t('common.status')" clearable style="width: 130px">
-        <el-option :label="t('common.statusRunning')" value="RUNNING" />
-        <el-option :label="t('common.statusApproved')" value="APPROVED" />
-        <el-option :label="t('common.statusRejected')" value="REJECTED" />
-        <el-option :label="t('common.statusTerminated')" value="TERMINATED" />
-      </el-select>
-      <el-input
-        v-model="nodeKey"
-        :placeholder="t('common.currentNode')"
-        clearable
-        style="width: 120px"
-      />
-      <el-input-number
-        v-model="assignee"
-        :placeholder="t('workflow.assigneeId')"
-        :min="1"
-        controls-position="right"
-        style="width: 130px"
-      />
-      <el-date-picker
-        v-model="timeRange"
-        type="datetimerange"
-        :start-placeholder="t('common.startTime')"
-        :end-placeholder="t('common.endTime')"
-        value-format="YYYY-MM-DDTHH:mm:ss"
-        style="width: 340px"
-      />
+      <ListFilterItem :label="t('common.processDef')">
+        <el-input v-model="processDefKey" :placeholder="t('common.pleaseInput')" clearable />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.instanceId')">
+        <el-input v-model="processInstanceId" :placeholder="t('common.pleaseInput')" clearable />
+      </ListFilterItem>
+      <ListFilterItem :label="t('workflow.initiatorId')">
+        <el-input-number
+          v-model="initiatorId"
+          :placeholder="t('common.pleaseInput')"
+          :min="1"
+          controls-position="right"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.status')">
+        <el-select v-model="status" :placeholder="t('common.all')" clearable>
+          <el-option :label="t('common.statusRunning')" value="RUNNING" />
+          <el-option :label="t('common.statusApproved')" value="APPROVED" />
+          <el-option :label="t('common.statusRejected')" value="REJECTED" />
+          <el-option :label="t('common.statusTerminated')" value="TERMINATED" />
+        </el-select>
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.currentNode')">
+        <el-input v-model="nodeKey" :placeholder="t('common.pleaseInput')" clearable />
+      </ListFilterItem>
+      <ListFilterItem :label="t('workflow.assigneeId')">
+        <el-input-number
+          v-model="assignee"
+          :placeholder="t('common.pleaseInput')"
+          :min="1"
+          controls-position="right"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.startTimeShort')">
+        <el-date-picker
+          v-model="timeRange"
+          type="datetimerange"
+          :start-placeholder="t('common.startTime')"
+          :end-placeholder="t('common.endTime')"
+          value-format="YYYY-MM-DDTHH:mm:ss"
+        />
+      </ListFilterItem>
+    </template>
+    <template #filter-actions>
       <el-button type="primary" @click="search">{{ t('common.query') }}</el-button>
       <el-button @click="resetFilters">{{ t('common.reset') }}</el-button>
     </template>

@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from '@/locales'
 import { ApiError } from '@/foundation/request'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { listMenuItems, updateMenuItem, type MenuManageItem } from '@/modules/system/api/menu'
 import { MENU_ICON_KEYS, menuIcon } from '@/layouts/menu-icons'
@@ -117,13 +117,14 @@ onMounted(loadList)
     hide-pagination
   >
     <template #filter>
-      <el-input
-        v-model="keyword"
-        :placeholder="t('system.menuSearchPlaceholder')"
-        clearable
-        style="width: 240px"
-        @keyup.enter="loadList"
-      />
+      <ListFilterItem :label="t('system.menuTitle')">
+        <el-input
+          v-model="keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="loadList"
+        />
+      </ListFilterItem>
     </template>
 
     <el-alert

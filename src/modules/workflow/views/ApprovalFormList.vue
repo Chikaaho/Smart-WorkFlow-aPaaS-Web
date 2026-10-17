@@ -21,9 +21,11 @@ import {
 } from '@/adapters/form-catalog'
 import type { FormDefListItem } from '@/adapters/form-catalog'
 import type { PageQuery } from '@/contracts/common'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import { useI18n } from '@/locales'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
+const { t } = useI18n()
 const router = useRouter()
 
 /** 审批意见表单的固定类型（服务端元数据）。 */
@@ -185,13 +187,14 @@ onMounted(loadList)
       </template>
 
       <template #filter>
-        <el-input
-          v-model="keyword"
-          placeholder="搜索表单名称"
-          clearable
-          style="width: 240px"
-          @keyup.enter="handleQuery"
-        />
+        <ListFilterItem :label="t('common.formName')">
+          <el-input
+            v-model="keyword"
+            :placeholder="t('common.pleaseInput')"
+            clearable
+            @keyup.enter="handleQuery"
+          />
+        </ListFilterItem>
       </template>
       <template #filter-actions>
         <el-button type="primary" @click="handleQuery">查询</el-button>

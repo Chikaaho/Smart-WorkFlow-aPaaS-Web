@@ -13,7 +13,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import { pageProcessDefs } from '@/adapters/process-catalog'
 import type { ProcessDef } from '@/contracts/bpm'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   pageJobInfos,
@@ -400,31 +400,26 @@ onMounted(loadList)
 
     <!-- 筛选区 -->
     <template #filter>
-      <el-input
-        v-model="filter.jobName"
-        :placeholder="t('common.taskName')"
-        clearable
-        style="width: 200px"
-        @keyup.enter="handleQuery"
-      />
-      <el-select
-        v-model="filter.status"
-        :placeholder="t('common.status')"
-        clearable
-        style="width: 120px"
-      >
-        <el-option :label="t('common.statusRunning')" value="NORMAL" />
-        <el-option :label="t('common.statusPaused')" value="PAUSED" />
-      </el-select>
-      <el-select
-        v-model="filter.jobType"
-        :placeholder="t('common.type')"
-        clearable
-        style="width: 120px"
-      >
-        <el-option label="Bean" value="BEAN" />
-        <el-option :label="t('common.process')" value="FLOW" />
-      </el-select>
+      <ListFilterItem :label="t('common.taskName')">
+        <el-input
+          v-model="filter.jobName"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+        />
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.status')">
+        <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
+          <el-option :label="t('common.statusRunning')" value="NORMAL" />
+          <el-option :label="t('common.statusPaused')" value="PAUSED" />
+        </el-select>
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.type')">
+        <el-select v-model="filter.jobType" :placeholder="t('common.all')" clearable>
+          <el-option label="Bean" value="BEAN" />
+          <el-option :label="t('common.process')" value="FLOW" />
+        </el-select>
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>

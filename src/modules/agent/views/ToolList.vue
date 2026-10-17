@@ -13,7 +13,7 @@ const { t } = useI18n()
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   pageInternalTools,
@@ -317,17 +317,21 @@ onMounted(() => {
     </template>
 
     <template #filter>
-      <el-tabs v-model="activeTab" class="tool-tabs" @tab-change="handleTabChange">
-        <el-tab-pane :label="t('common.internalTool')" name="internal" />
-        <el-tab-pane :label="t('agent.externalHttpTool')" name="external" />
-      </el-tabs>
-      <el-input
-        v-model="filter.name"
-        :placeholder="t('agent.nameKeywordPlaceholder')"
-        clearable
-        style="width: 200px"
-        @keyup.enter="handleQuery"
-      />
+      <!-- 页签是整行内容（非搜索字段），按 12 格整行占位 -->
+      <div class="list-filter-bar__span-full">
+        <el-tabs v-model="activeTab" class="tool-tabs" @tab-change="handleTabChange">
+          <el-tab-pane :label="t('common.internalTool')" name="internal" />
+          <el-tab-pane :label="t('agent.externalHttpTool')" name="external" />
+        </el-tabs>
+      </div>
+      <ListFilterItem :label="t('common.name')">
+        <el-input
+          v-model="filter.name"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+        />
+      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>

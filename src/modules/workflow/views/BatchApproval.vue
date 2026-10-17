@@ -104,6 +104,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
+    filter-layout="inline"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
