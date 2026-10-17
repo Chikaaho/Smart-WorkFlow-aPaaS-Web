@@ -102,10 +102,7 @@ onMounted(() => {
 
 <template>
   <div class="conversation-list-page">
-    <!-- 页面标题 -->
-    <div class="page-header">
-      <h2 class="page-title">{{ t('agent.conversationHistory') }}</h2>
-    </div>
+    <!-- 0.1.7 #25：左上角页面标题为噪音，已去除——列表即页首 -->
 
     <!-- 加载中骨架屏 -->
     <el-skeleton v-if="loading" :rows="5" animated />
@@ -153,16 +150,5 @@ onMounted(() => {
 <style scoped>
 .conversation-list-page {
   padding: var(--sw-space-24);
-}
-
-.page-header {
-  margin-bottom: var(--sw-space-20);
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--sw-text-primary);
-  margin: 0;
 }
 </style>

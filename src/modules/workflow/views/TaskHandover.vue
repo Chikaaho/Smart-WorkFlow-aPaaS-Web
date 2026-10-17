@@ -102,7 +102,7 @@ function resultLabel(resultValue: HandoverItem['result']) {
 
 <template>
   <div class="handover-page">
-    <h2 class="page-title">{{ t('workflow.handoverTitle') }}</h2>
+    <!-- 0.1.7 #25：左上角页面标题为噪音，已去除（表单即页首） -->
     <el-card shadow="never" class="form-card">
       <el-form label-width="130px">
         <el-form-item :label="t('workflow.sourceUserId')">
@@ -189,12 +189,6 @@ function resultLabel(resultValue: HandoverItem['result']) {
 .handover-page {
   padding: 16px 24px;
   max-width: 1100px;
-}
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--sw-text-primary, #303133);
-  margin: 0 0 16px;
 }
 .form-card {
   margin-bottom: 16px;

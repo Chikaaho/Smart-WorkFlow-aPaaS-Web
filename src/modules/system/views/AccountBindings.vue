@@ -70,7 +70,7 @@ onMounted(() => {
 
 <template>
   <div class="account-bindings">
-    <h2>{{ t('auth.accountBindings') }}</h2>
+    <!-- 0.1.7 #25：左上角页面标题为噪音，已去除（绑定列表即页首） -->
     <div v-loading="loading" class="provider-list">
       <div v-for="p in SSO_PROVIDERS" :key="p.key" class="provider-row">
         <div class="provider-name">{{ p.label }}</div>

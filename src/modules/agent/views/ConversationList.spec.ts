@@ -74,8 +74,8 @@ describe('ConversationList — 会话历史列表页（M07-F04-02 标准6）', (
     expect(listConversations).toHaveBeenCalledTimes(1)
     // 数据已进入组件状态
     expect((wrapper.vm as any).conversations).toHaveLength(2)
-    // 页面标题存在
-    expect(wrapper.text()).toContain('会话历史')
+    // 0.1.7 #25：左上角页面标题为噪音，已去除（列表即页首）
+    expect(wrapper.find('.page-title').exists()).toBe(false)
   })
 
   it('加载失败显示错误信息', async () => {

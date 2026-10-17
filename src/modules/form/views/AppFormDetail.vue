@@ -145,8 +145,8 @@ onMounted(() => {
 </script>
 
 <template>
+  <!-- 0.1.7 #25：工具条「共 N 条」汇总计数为噪音，已去除（total 仍供分页使用） -->
   <StandardListTemplate
-    :show-toolbar-total="true"
     :total="processes.length"
     :page-num="1"
     :page-size="processes.length || 10"

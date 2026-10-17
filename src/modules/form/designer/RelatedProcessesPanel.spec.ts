@@ -62,7 +62,7 @@ describe('RelatedProcessesPanel', () => {
     mockPageProcessDefs.mockResolvedValue(pageResult)
   })
 
-  it('mount 时以 formKey 请求后端过滤的流程列表', async () => {
+  it('mount 时以 formKey 请求后端过滤的流程列表；页首无标题/描述/汇总噪音', async () => {
     const wrapper = mount(RelatedProcessesPanel, {
       props: { formId: 'uuid-1', formKey: 'leave-request' },
       global: globalOpts(),
@@ -71,7 +71,34 @@ describe('RelatedProcessesPanel', () => {
 
     expect(mockPageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 }, 'leave-request')
     expect(wrapper.text()).toContain('请假审批流程')
-    expect(wrapper.text()).toContain('共 1 个流程 · 启用 1 个')
+    // 0.1.7 #25 回归：左上角标题/描述/「共 N 个流程 · 启用 N 个」汇总计数为噪音，全部去除，
+    // 筛选栏即本页最顶部（表单可单独存在，该工作区只保留可操作内容）
+    expect(wrapper.find('.related-processes__title').exists()).toBe(false)
+    expect(wrapper.find('.related-processes__subtitle').exists()).toBe(false)
+    expect(wrapper.find('.related-processes__total').exists()).toBe(false)
+    const root = wrapper.find('.related-processes')
+    expect(root.element.firstElementChild?.className).toContain('related-processes__filter')
+  })
+
+  it('查询与新建流程同处筛选栏右侧动作组（新建流程紧随查询）', async () => {
+    const wrapper = mount(RelatedProcessesPanel, {
+      props: { formId: 'uuid-1', formKey: 'leave-request' },
+      global: globalOpts(),
+    })
+    await flushPromises()
+
+    const actions = wrapper.find('.related-processes__filter-actions')
+    expect(actions.exists()).toBe(true)
+    const labels = actions.findAll('button').map((button) => button.text().trim())
+    expect(labels).toEqual([i18n.global.t('common.query'), i18n.global.t('form.createProcess')])
+    // 流程编号设置入口已上收设计器工具条右上角，面板内不再有该按钮
+    expect(
+      wrapper
+        .findAll('button')
+        .some((button) =>
+          button.text().includes(i18n.global.t('form.relatedProcessNumberSetting')),
+        ),
+    ).toBe(false)
   })
 
   it('无 formKey（未保存草稿）不发起请求，显示保存引导', async () => {
@@ -137,6 +164,7 @@ describe('RelatedProcessesPanel', () => {
   })
 
   // BF20261013-043：流程编号设置入口（单流程直接进入规则编辑器，变量按钮同框带入）
+  // 0.1.7 #25 回归：入口按钮上收设计器工具条，面板经 defineExpose 暴露同一入口给宿主
   it('流程编号设置：单流程时直接打开规则编辑器并回显当前规则', async () => {
     mockGetProcessDefThemeRule.mockResolvedValueOnce('JRZX_{SEQ:3}')
     const wrapper = mount(RelatedProcessesPanel, {
@@ -144,17 +172,27 @@ describe('RelatedProcessesPanel', () => {
       global: globalOpts(),
     })
     await flushPromises()
-
-    const numberLabel = i18n.global.t('form.relatedProcessNumberSetting')
-    const numberBtn = wrapper.findAll('button').find((b) => b.text().includes(numberLabel))
-    expect(numberBtn).toBeTruthy()
-    await numberBtn!.trigger('click')
-    await flushPromises()
+    ;(wrapper.vm as unknown as { openNumberSettings: () => void }).openNumberSettings()
+    // 编号弹窗经异步接缝加载，等待规则请求真正发出（而不是依赖固定 tick 数）
+    await vi.waitFor(() => expect(mockGetProcessDefThemeRule).toHaveBeenCalledWith(2))
     await flushPromises()
 
-    expect(mockGetProcessDefThemeRule).toHaveBeenCalledWith(2)
     const chips = wrapper.findAll('.theme-editor__chip')
     expect(chips.map((chip) => chip.attributes('data-token'))).toEqual(['{SEQ:3}'])
     expect(wrapper.find('.theme-editor').findAll('.theme-editor__add').length).toBe(5)
+  })
+
+  it('流程编号设置：无关联流程时入口为空操作（不打开任何弹窗）', async () => {
+    mockPageProcessDefs.mockResolvedValueOnce({ list: [], total: 0, pageNum: 1, pageSize: 10 })
+    const wrapper = mount(RelatedProcessesPanel, {
+      props: { formId: 'uuid-1', formKey: 'leave-request' },
+      global: globalOpts(),
+    })
+    await flushPromises()
+    ;(wrapper.vm as unknown as { openNumberSettings: () => void }).openNumberSettings()
+    await flushPromises()
+
+    // el-dialog 桩无条件渲染插槽，故以「规则请求未发出」为准（真实可见性由 el-dialog 自己管）
+    expect(mockGetProcessDefThemeRule).not.toHaveBeenCalled()
   })
 })

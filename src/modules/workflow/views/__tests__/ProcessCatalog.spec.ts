@@ -109,4 +109,23 @@ describe('ProcessCatalog 前台流程中心（BF20261013-051：分类维护移�
 
     expect(wrapper.find('.catalog-page__search').exists()).toBe(true)
   })
+
+  // 0.1.7 #25 回归：左上角标题/描述与「可发起 N 个流程」「全部流程 · N 个可发起」汇总计数为噪音
+  it('#25：页首无标题/描述/汇总计数噪音，分类树与搜索工具栏即页首', async () => {
+    vi.mocked(oa.queryCatalogItems).mockResolvedValue({
+      list: [],
+      total: 3,
+      pageNum: 1,
+      pageSize: 60,
+    })
+    const wrapper = mountCatalog()
+    await flushPromises()
+
+    expect(wrapper.find('.catalog-page__title').exists()).toBe(false)
+    expect(wrapper.find('.catalog-page__subtitle').exists()).toBe(false)
+    expect(wrapper.find('.catalog-page__count').exists()).toBe(false)
+    expect(wrapper.find('.catalog-page__result-title').exists()).toBe(false)
+    const root = wrapper.find('.catalog-page')
+    expect(root.element.firstElementChild?.className).toContain('catalog-layout')
+  })
 })

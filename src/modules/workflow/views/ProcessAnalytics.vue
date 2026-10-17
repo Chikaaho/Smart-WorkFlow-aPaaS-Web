@@ -88,7 +88,7 @@ onMounted(loadSummary)
 
 <template>
   <div class="analytics-page">
-    <h2 class="page-title">{{ t('workflow.processAnalytics') }}</h2>
+    <!-- 0.1.7 #25：左上角页面标题为噪音，已去除（筛选栏即页首） -->
     <div class="filter-bar">
       <el-input
         v-model="processDefKey"
@@ -207,12 +207,6 @@ onMounted(loadSummary)
 <style scoped>
 .analytics-page {
   padding: 16px 24px;
-}
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--sw-text-primary, #303133);
-  margin: 0 0 16px;
 }
 .filter-bar {
   display: flex;

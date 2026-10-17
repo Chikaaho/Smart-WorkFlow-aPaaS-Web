@@ -29,7 +29,11 @@ import type { ProcessDef } from '@/contracts/bpm'
 const ThemeRuleDialog = defineAsyncComponent(themeRuleDialogLoader)
 
 const props = defineProps<{ formId: string; formKey: string }>()
-const emit = defineEmits<{ (e: 'enter-process', def: ProcessDef): void }>()
+const emit = defineEmits<{
+  (e: 'enter-process', def: ProcessDef): void
+  /** 关联流程数量（供设计器工具条「流程编号设置」入口联动禁用态） */
+  (e: 'update:process-count', count: number): void
+}>()
 
 const records = ref<ProcessDef[]>([])
 const total = ref(0)
@@ -42,9 +46,6 @@ const statusFilter = ref('ALL')
 let requestSeq = 0
 
 const hasFormKey = computed(() => props.formKey.trim().length > 0)
-const publishedCount = computed(
-  () => records.value.filter((record) => record.status === 'PUBLISHED').length,
-)
 
 async function load() {
   if (!hasFormKey.value) return
@@ -59,6 +60,7 @@ async function load() {
     if (seq !== requestSeq) return
     records.value = result.list
     total.value = result.total
+    emit('update:process-count', result.list.length)
   } catch {
     if (seq !== requestSeq) return
     ElMessage.error(t('form.relatedProcessLoadFailed'))
@@ -73,6 +75,7 @@ watch(
     pageNum.value = 1
     records.value = []
     total.value = 0
+    emit('update:process-count', 0)
     load()
   },
   { immediate: true },
@@ -176,6 +179,9 @@ function openNumberSettings() {
   }
   rulePickerVisible.value = true
 }
+
+/** 0.1.7 #25 回归：入口已上收设计器工具条右上角，由宿主经模板 ref 调用 */
+defineExpose({ openNumberSettings })
 </script>
 
 <template>
@@ -185,22 +191,9 @@ function openNumberSettings() {
     </div>
 
     <template v-else>
-      <header class="related-processes__head">
-        <h1 class="related-processes__title">{{ t('form.relatedProcessTitle') }}</h1>
-        <p class="related-processes__subtitle">{{ t('form.relatedProcessDescription') }}</p>
-        <!-- BF20261013-043：流程编号设置（发布前必填的编号规则入口，设计器/列表两处共用同一弹窗） -->
-        <el-button
-          class="related-processes__number"
-          :disabled="records.length === 0"
-          @click="openNumberSettings"
-        >
-          {{ t('form.relatedProcessNumberSetting') }}
-        </el-button>
-        <el-button class="related-processes__create" type="primary" @click="openCreate">
-          {{ t('form.createProcess') }}
-        </el-button>
-      </header>
-
+      <!-- 0.1.7 #25 回归：左上角标题/描述/「共 N 个流程 · 启用 N 个」汇总计数为噪音，全部去除，
+           筛选栏即本页最顶部；「新建流程」入筛选栏查询右侧（查询与新建一并靠右），
+           「流程编号设置」上收设计器工具条右上角（见 FormDesigner.designer__actions） -->
       <div class="related-processes__filter" role="search">
         <el-input
           v-model="searchText"
@@ -215,17 +208,14 @@ function openNumberSettings() {
           <el-option :label="t('form.relatedProcessStatusDisabled')" value="DISABLED" />
           <el-option :label="t('form.relatedProcessStatusDraft')" value="DRAFT" />
         </el-select>
-        <el-button class="related-processes__query" type="primary" @click="load">
-          {{ t('common.query') }}
-        </el-button>
-        <span class="related-processes__total">
-          {{
-            t('form.relatedProcessSummary', {
-              total,
-              published: publishedCount,
-            })
-          }}
-        </span>
+        <div class="related-processes__filter-actions">
+          <el-button class="related-processes__query" type="primary" @click="load">
+            {{ t('common.query') }}
+          </el-button>
+          <el-button class="related-processes__create" type="primary" @click="openCreate">
+            {{ t('form.createProcess') }}
+          </el-button>
+        </div>
       </div>
 
       <section class="related-processes__table-card" aria-label="关联流程列表">
@@ -384,35 +374,51 @@ function openNumberSettings() {
   flex: 1;
   min-height: 0;
   box-sizing: border-box;
-  padding: 36px 48px 32px;
+  padding: 20px 48px 32px;
   overflow: auto;
 }
 
-.related-processes__head {
-  position: relative;
-  min-height: 63px;
+/* 0.1.7 #25 回归：标题/描述/汇总计数噪音已去除（见模板注释），筛选栏即页首；
+   「新建流程」紧随查询，两个按钮整体靠右 */
+.related-processes__filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 82px;
+  padding: 0 23px;
+  box-sizing: border-box;
+  border: 1px solid var(--sw-border-light, #e7ebf1);
+  border-radius: 8px;
+  background: var(--sw-surface, #fff);
 }
 
-.related-processes__title {
-  margin: 0;
-  color: var(--sw-text-primary, #1f2937);
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 38px;
+.related-processes__search {
+  width: 350px;
 }
 
-.related-processes__subtitle {
-  margin: 5px 0 0;
-  color: var(--sw-text-secondary, #687386);
-  font-size: 14px;
-  line-height: 19px;
+.related-processes__status {
+  width: 130px;
 }
 
+.related-processes__status :deep(.el-input__inner) {
+  line-height: 17px;
+}
+
+.related-processes__status :deep(.el-select__selected-item),
+.related-processes__status :deep(.el-select__placeholder) {
+  line-height: 17px;
+}
+
+.related-processes__filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  flex: none;
+}
+
+.related-processes__query,
 .related-processes__create {
-  position: absolute;
-  top: 8px;
-  right: 2px;
-  width: 140px;
   height: 36px;
   margin: 0;
   padding: 0 12px;
@@ -422,17 +428,9 @@ function openNumberSettings() {
   justify-content: center;
 }
 
-/* BF20261013-043：流程编号设置入口（在「新建流程」左侧，多个流程时先选择） */
-.related-processes__number {
-  position: absolute;
-  top: 8px;
-  right: 154px;
-  height: 36px;
-  margin: 0;
-  padding: 0 16px;
-  line-height: 17px;
+.related-processes__query {
+  width: 88px;
 }
-
 .related-processes__rule-list {
   margin: 0;
   padding: 0;
@@ -475,36 +473,22 @@ function openNumberSettings() {
 }
 
 .related-processes__filter {
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   height: 82px;
-  margin-top: 30px;
-  padding: 0;
+  padding: 0 23px;
   box-sizing: border-box;
   border: 1px solid var(--sw-border-light, #e7ebf1);
   border-radius: 8px;
   background: var(--sw-surface, #fff);
 }
 
-.related-processes__filter-label {
-  position: absolute;
-  top: -7px;
-  left: 24px;
-  color: var(--sw-text-secondary, #687386);
-  font-size: 12px;
-  line-height: 17px;
-}
-
 .related-processes__search {
-  position: absolute;
-  top: 22px;
-  left: 23px;
   width: 350px;
 }
 
 .related-processes__status {
-  position: absolute;
-  top: 24px;
-  left: 393px;
   width: 130px;
 }
 
@@ -517,12 +501,18 @@ function openNumberSettings() {
   line-height: 17px;
 }
 
-.related-processes__query {
-  position: absolute;
-  top: 24px;
-  left: 539px;
-  width: 88px;
+.related-processes__filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  margin-left: auto;
+}
+
+.related-processes__query,
+.related-processes__create {
   height: 36px;
+  margin: 0;
   padding: 0 12px;
   line-height: 17px;
   /* BF20261013-046：按钮文字居中（原 fixture 左对齐，文字明显偏左） */
@@ -530,13 +520,8 @@ function openNumberSettings() {
   justify-content: center;
 }
 
-.related-processes__total {
-  position: absolute;
-  top: 32px;
-  left: 1079px;
-  color: var(--sw-text-secondary, #687386);
-  font-size: 14px;
-  line-height: 17px;
+.related-processes__query {
+  width: 88px;
 }
 
 /* BF20261013-038 全局巡检：去掉 24px 23px 0 内距——表格即卡片首行，表头上方不再留空白行、
@@ -611,13 +596,6 @@ function openNumberSettings() {
   font-size: 12px;
   border-radius: 4px;
   line-height: 16px;
-}
-
-.related-processes__footnote {
-  margin: 24px 12px 0;
-  color: var(--sw-text-secondary, #687386);
-  font-size: 12px;
-  line-height: 17px;
 }
 
 .related-processes__empty {

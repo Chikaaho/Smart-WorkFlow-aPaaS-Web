@@ -103,6 +103,15 @@ const isPublished = computed(() => status.value === 'PUBLISHED')
 /* ── 工作区（表单设计 / 关联流程），路由 query 可恢复 ── */
 const activeTab = ref<WorkbenchTab>(parseWorkbenchTab(route.query.tab))
 
+/* 0.1.7 #25 回归：关联流程面板的「流程编号设置」入口上收本页工具条右上角
+   （内容区不再有标题/描述/汇总噪音）；数量由面板上报以联动禁用态。 */
+const processPanelRef = ref<{ openNumberSettings: () => void } | null>(null)
+const relatedProcessCount = ref(0)
+
+function openProcessNumberSettings() {
+  processPanelRef.value?.openNumberSettings()
+}
+
 watch(activeTab, (tab) => {
   const current = parseWorkbenchTab(route.query.tab)
   if (current !== tab) {
@@ -747,6 +756,15 @@ async function loadBreadcrumbCategory() {
       </nav>
 
       <div class="designer__actions">
+        <!-- 0.1.7 #25 回归：关联流程工作区的「流程编号设置」置于工具条右上角（仅流程设计页签可见） -->
+        <el-button
+          v-if="activeTab === 'processes'"
+          class="designer__number-setting"
+          :disabled="relatedProcessCount === 0"
+          @click="openProcessNumberSettings"
+        >
+          {{ t('form.relatedProcessNumberSetting') }}
+        </el-button>
         <el-button :disabled="!formId" @click="historyVisible = true">{{
           t('form.draftHistoryEntry')
         }}</el-button>
@@ -828,9 +846,11 @@ async function loadBreadcrumbCategory() {
       <!-- ═══ 工作区：关联流程 ═══ -->
       <RelatedProcessesPanel
         v-else
+        ref="processPanelRef"
         :form-id="formId ?? ''"
         :form-key="formKey"
         @enter-process="enterProcess"
+        @update:process-count="relatedProcessCount = $event"
       />
     </template>
 

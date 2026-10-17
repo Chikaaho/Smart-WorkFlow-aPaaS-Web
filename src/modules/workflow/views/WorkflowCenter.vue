@@ -153,7 +153,7 @@ onMounted(() => void loadTab('todo'))
 
 <template>
   <div class="workflow-center">
-    <h2 class="page-title">{{ t('common.workspace') }}</h2>
+    <!-- 0.1.7 #25：左上角页面标题为噪音，已去除（页签即页首） -->
     <el-tabs v-model="activeTab" @tab-change="handleTabChange">
       <el-tab-pane v-for="(title, key) in TAB_TITLES" :key="key" :label="title" :name="key">
         <template v-if="(key as TabKey) !== 'messages'">
@@ -207,11 +207,5 @@ onMounted(() => void loadTab('todo'))
 <style scoped>
 .workflow-center {
   padding: 16px 24px;
-}
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--sw-text-primary, #303133);
-  margin: 0 0 8px;
 }
 </style>

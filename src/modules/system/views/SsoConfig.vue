@@ -208,7 +208,7 @@ onMounted(() => {
 <template>
   <div class="sso-config">
     <div class="page-head">
-      <h2>{{ t('view.ssoConfig.title') }}</h2>
+      <!-- 0.1.7 #25：左上角页面标题为噪音，已去除（动作按钮仍在右上角） -->
       <div class="head-actions">
         <el-button v-perm="'system:sso:audit:query'" @click="openAudit">
           {{ t('view.ssoConfig.audit') }}
@@ -461,7 +461,7 @@ onMounted(() => {
 .page-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
 }
 h2 {
   font-size: 16px;

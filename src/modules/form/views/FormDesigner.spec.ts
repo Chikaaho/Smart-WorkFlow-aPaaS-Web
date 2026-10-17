@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { h, onMounted } from 'vue'
+import type { SetupContext } from 'vue'
 import { ApiError } from '@/foundation/request'
 import { mount, flushPromises } from '@vue/test-utils'
 
@@ -60,6 +62,9 @@ vi.mock('vue-router', () => ({
 
 import FormDesigner from './FormDesigner.vue'
 
+/** 关联流程面板桩暴露的「流程编号设置」入口（0.1.7 #25 回归：入口在工具条，由宿主转交） */
+const mockOpenNumberSettings = vi.fn()
+
 const designerStubs = {
   // V011-BUG-006/014 起画布标题输入已移除：以「组件库添加字段」作为制造脏态的真实入口
   FieldPalette: {
@@ -72,7 +77,15 @@ const designerStubs = {
   SubFieldDesigner: { template: '<div class="stub-subfield" />' },
   PreviewModal: { template: '<div class="stub-preview" />' },
   HistoryVersionsDialog: { template: '<div class="stub-history" />' },
-  RelatedProcessesPanel: { template: '<div class="stub-processes" />' },
+  // 0.1.7 #25 回归：面板经 defineExpose 暴露编号设置入口、并上报流程数量
+  RelatedProcessesPanel: {
+    emits: ['enter-process', 'update:process-count'],
+    setup(_props: unknown, { expose, emit }: SetupContext) {
+      expose({ openNumberSettings: mockOpenNumberSettings })
+      onMounted(() => emit('update:process-count', 1))
+      return () => h('div', { class: 'stub-processes' })
+    },
+  },
 }
 
 const identityDto = {
@@ -131,9 +144,28 @@ describe('FormDesigner 工作台（P52）', () => {
     expect(wrapper.findAll('button').some((b) => b.text() === '发布')).toBe(false)
   })
 
+  // 0.1.7 #25 回归：内容区左上角标题/描述/汇总噪音去除后，「流程编号设置」入口上收工具条右上角
+  it('流程设计页签：流程编号设置入口在工具条动作组内，点击转交关联流程面板', async () => {
+    const wrapper = await mountDesigner()
+    const label = '流程编号设置'
+    // 表单设计页签不显示该入口
+    expect(wrapper.findAll('button').some((b) => b.text().includes(label))).toBe(false)
+
+    const processTab = wrapper.findAll('.designer__tab').find((b) => b.text() === '流程设计')!
+    await processTab.trigger('click')
+    await flushPromises()
+
+    const numberBtn = wrapper.findAll('button').find((b) => b.text().includes(label))
+    expect(numberBtn).toBeTruthy()
+    // 入口位于右上角动作组（草稿历史/预览/保存/发布新版本同组）
+    expect(numberBtn!.element.closest('.designer__actions')).not.toBeNull()
+
+    await numberBtn!.trigger('click')
+    expect(mockOpenNumberSettings).toHaveBeenCalledTimes(1)
+  })
+
   it('保存成功 → 调用保存动作并显示「保存成功」', async () => {
     const wrapper = await mountDesigner()
-
     const saveBtn = wrapper.findAll('button').find((b) => b.text() === '保存')!
     await saveBtn.trigger('click')
     await flushPromises()

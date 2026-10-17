@@ -93,16 +93,6 @@ function resetFilter(): void {
   void loadCatalog()
 }
 
-/** 结果区标题：全部流程 / 当前分类名 · N 个可发起（P53 设计节点21/22-26）。 */
-const resultTitle = computed(() => {
-  const name =
-    activeCategory.value === ''
-      ? t('catalog.allProcesses')
-      : (categories.value.find((c) => c.id === activeCategory.value)?.name ??
-        t('workflow.uncategorized'))
-  return t('catalog.resultTitle', { name, count: total.value })
-})
-
 /** 图标交替色：按 formKey 稳定交替，避免数据刷新后跳变。 */
 function catalogIconTone(item: CatalogItem): 'primary' | 'info' | 'success' | 'purple' {
   const categoryId = Number(item.categoryId)
@@ -206,10 +196,7 @@ onMounted(() => {
 
 <template>
   <div class="catalog-page">
-    <header class="catalog-page__header">
-      <h2 class="catalog-page__title">{{ t('workflow.processCenter') }}</h2>
-      <p class="catalog-page__subtitle">{{ t('workflow.catalogSubtitle') }}</p>
-    </header>
+    <!-- 0.1.7 #25：左上角标题/描述为噪音，已去除——分类树与流程列表即页首 -->
 
     <!-- V012-BUG-009：左分类树 + 右列表 -->
     <div class="catalog-layout">
@@ -262,7 +249,6 @@ onMounted(() => {
             <el-button class="catalog-page__reset" @click="resetFilter">{{
               t('common.reset')
             }}</el-button>
-            <span class="catalog-page__count">{{ t('catalog.countHint', { count: total }) }}</span>
           </div>
         </div>
 
@@ -319,8 +305,6 @@ onMounted(() => {
             </button>
           </div>
         </section>
-
-        <h3 class="catalog-page__result-title">{{ resultTitle }}</h3>
 
         <!-- V012-BUG-009 复开：流程用列表不用卡片——分类分组带 + 多列「图标+名称」条目（参考蓝凌） -->
         <div v-loading="loading" class="catalog-list">
@@ -435,19 +419,6 @@ onMounted(() => {
   border-color: var(--sw-color-primary);
   color: var(--sw-color-primary);
 }
-.catalog-page__title {
-  margin: 0;
-  font-size: 24px;
-  line-height: 35px;
-  font-weight: 600;
-  color: var(--sw-text-primary);
-}
-.catalog-page__subtitle {
-  margin: 6px 0 20px;
-  font-size: 13px;
-  line-height: 19px;
-  color: var(--sw-text-secondary);
-}
 .catalog-page__toolbar {
   margin-bottom: 16px;
   padding: 19px 21px 25px;
@@ -481,12 +452,6 @@ onMounted(() => {
   height: 34px;
   margin-left: 1px;
   color: #17213a;
-}
-.catalog-page__count {
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--sw-text-secondary);
-  white-space: nowrap;
 }
 .catalog-page__alert {
   margin-bottom: 12px;
@@ -538,13 +503,6 @@ onMounted(() => {
   color: var(--sw-color-primary);
   font-size: 12px;
   font-weight: 600;
-}
-.catalog-page__result-title {
-  margin: 16px 0;
-  font-size: 15px;
-  line-height: 40px;
-  font-weight: 600;
-  color: var(--sw-text-primary);
 }
 /* V012-BUG-009 复开：列表化（不用卡片）——分类分组带 + 多列条目，参考蓝凌流程发起 */
 .catalog-list {

@@ -209,7 +209,7 @@ onMounted(() => {
 <template>
   <div class="app-manage">
     <div class="app-manage__bar">
-      <h2 class="app-manage__title">{{ t('form.appCenter.manageTitle') }}</h2>
+      <!-- 0.1.7 #25：左上角标题为噪音，已去除——搜索框即页首，靠左 -->
       <el-input
         v-model="keyword"
         class="app-manage__search"
@@ -344,15 +344,8 @@ onMounted(() => {
   gap: 16px;
   margin-bottom: 16px;
 }
-.app-manage__title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-}
 .app-manage__search {
   flex: 0 1 260px;
-  margin-left: auto;
 }
 .app-manage__error {
   color: #f56c6c;
