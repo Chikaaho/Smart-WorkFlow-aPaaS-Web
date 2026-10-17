@@ -121,11 +121,29 @@ describe('AppWorkspace（应用管理上下文）', () => {
     expect(vm.dirs[0]?.forms?.map((f) => f.name)).toContain('差旅报销')
   })
 
-  it('0.1.7 #25：侧栏头只留返回箭头（应用名等左上角噪音移除）', async () => {
+  it('0.1.7 #34：侧栏头 = 返回箭头 + 应用图标 + 应用名称（名称限 5 字省略号）', async () => {
     const wrapper = mount(AppWorkspace, { global: { stubs: minimalStubs } })
     await nextTick()
+
     expect(wrapper.find('[data-testid="app-back"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="app-detail-name"]').exists()).toBe(false)
+    const name = wrapper.find('[data-testid="app-ws-name"]')
+    expect(name.exists()).toBe(true)
+    expect(name.text()).toBe('报销应用')
+    // 截断只发生在视觉层（CSS 5em + 省略号）：完整名称仍需可读
+    expect(name.attributes('title')).toBe('报销应用')
+    // 图标组件在测试里以桩渲染：只断言「返回箭头 + 图标 + 名称」三项同排
+    expect(wrapper.find('.app-ws__side-head').element.children).toHaveLength(3)
+  })
+
+  it('0.1.7 #34：左下角「新建」入口在侧栏底部且占满整栏', async () => {
+    const wrapper = mount(AppWorkspace, { global: { stubs: minimalStubs } })
+    await nextTick()
+
+    const foot = wrapper.find('.app-ws__side-foot')
+    expect(foot.exists()).toBe(true)
+    expect(foot.find('[data-testid="app-ws-create"]').exists()).toBe(true)
+    // 占满整栏靠 .app-ws__side-foot :deep(.el-dropdown) 撑满包裹层 + 按钮 width:100%
+    expect(foot.find('.el-dropdown').exists()).toBe(true)
   })
 
   it('内容为空：进入空态', async () => {

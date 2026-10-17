@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Folder, MoreFilled, Plus } from '@element-plus/icons-vue'
 import AppFormData from '@/modules/form/views/AppFormData.vue'
+import AppIcon from '@/modules/form/components/AppIcon.vue'
 import {
   createFormAppDir,
   deleteFormAppDir,
@@ -37,6 +38,8 @@ const errorMsg = ref('')
 
 const dirs = computed(() => content.value?.dirs ?? [])
 const directForms = computed(() => content.value?.directForms ?? [])
+/** 应用身份（0.1.7 #34）：左上角图标 + 名称来自应用内容接口，不额外请求。 */
+const app = computed(() => content.value?.app ?? null)
 const isEmpty = computed(
   () =>
     !loading.value && !errorMsg.value && dirs.value.length === 0 && directForms.value.length === 0,
@@ -277,7 +280,8 @@ onMounted(() => {
       <!-- 应用专属侧边栏：返回箭头 + 应用身份 + 目录/表单树 + 左下角新建 -->
       <aside class="app-ws__side">
         <div class="app-ws__side-head">
-          <!-- 0.1.7 #25：左上角只留返回箭头（应用名/图标/状态是噪音） -->
+          <!-- 0.1.7 #25 只留返回箭头；#34（Owner）：左上角补回应用身份——图标 + 应用名称
+               （名称只展示 5 个字，超长省略号，完整名称走悬浮标题） -->
           <button
             type="button"
             class="app-ws__back"
@@ -287,6 +291,12 @@ onMounted(() => {
           >
             <el-icon><ArrowLeft /></el-icon>
           </button>
+          <template v-if="app">
+            <AppIcon class="app-ws__app-icon" :icon="app.icon" :color="app.color" :size="13" />
+            <span class="app-ws__app-name" data-testid="app-ws-name" :title="app.name">
+              {{ app.name }}
+            </span>
+          </template>
         </div>
 
         <nav v-if="!isEmpty" class="app-ws__tree" :aria-label="t('form.appCenter.appNavTitle')">
@@ -518,6 +528,21 @@ onMounted(() => {
   border-color: #c6e2ff;
   background: #ecf5ff;
 }
+/* 0.1.7 #34（Owner）：应用名称只展示 5 个字，超长省略号（完整名称走 title 悬浮）。
+   6em = 5 个全角字 + 1 个省略号位：刚好 5 字时不截断，超长时稳定呈现「5 字 + …」 */
+.app-ws__app-icon {
+  flex: 0 0 auto;
+}
+.app-ws__app-name {
+  max-width: 6em;
+  overflow: hidden;
+  color: #303133;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .app-ws__tree {
   flex: 1;
   min-height: 0;
@@ -618,6 +643,12 @@ onMounted(() => {
 .app-ws__side-foot {
   padding: 10px 12px 14px;
   border-top: 1px solid #f0f2f5;
+}
+/* 0.1.7 #34（Owner）：左下角「新建」占满整栏——el-dropdown 包裹层默认行内收缩，
+   不撑满时按钮的 width:100% 无从生效 */
+.app-ws__side-foot :deep(.el-dropdown) {
+  display: block;
+  width: 100%;
 }
 .app-ws__create {
   width: 100%;
