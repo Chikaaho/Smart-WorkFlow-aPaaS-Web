@@ -629,9 +629,6 @@ export default {
     emptyRows: 'No fields in this table yet — add them from the palette in Form design',
     colDescription: 'Description',
     descriptionPlaceholder: 'Enter a description',
-    editHint:
-      'Editable: field name / length / description. Field key and component type are locked (published fields allow length, name and description only). This list offers no delete or disable.',
-    note: 'Published field structures are version-constrained: changes are saved with the draft and compatibility is validated on publish.',
   },
   txnAction: {
     title: 'Transaction actions',

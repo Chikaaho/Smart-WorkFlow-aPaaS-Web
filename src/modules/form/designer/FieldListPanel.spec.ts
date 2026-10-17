@@ -141,6 +141,24 @@ describe('FieldListPanel（#38/#39 字段清单）', () => {
     expect(labelInputValue(wrapper, 'di_1')).toBeNull()
   })
 
+  // 0.1.7 #40（Owner）：「噪音信息太多」——说明文案整段移除；单表时不渲染表范围与表名
+  it('无说明文案：清单不再出现「可直接维护…」「已发布字段结构受版本约束…」等说明噪音', async () => {
+    const wrapper = await mountPanel()
+    const text = wrapper.text()
+    expect(text).not.toContain('可直接维护')
+    expect(text).not.toContain('版本约束')
+  })
+
+  it('单表（无子表）不渲染表范围与表名；多表（含子表）才渲染', async () => {
+    const single = await mountPanel({ items: [items[0]!, items[1]!], formKey: 'leave-request' })
+    expect(single.findAll('[role="tab"]')).toHaveLength(0)
+    expect(single.find('[data-testid="field-table-name"]').exists()).toBe(false)
+
+    const multi = await mountPanel()
+    expect(multi.findAll('[role="tab"]')).toHaveLength(2)
+    expect(multi.find('[data-testid="field-table-name"]').exists()).toBe(true)
+  })
+
   it('空表提示：没有字段时给出添加引导而不是空表', async () => {
     const wrapper = await mountPanel({ items: [] })
     expect(wrapper.find('[data-testid="field-list-empty"]').exists()).toBe(true)

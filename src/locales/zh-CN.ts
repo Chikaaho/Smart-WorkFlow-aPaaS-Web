@@ -614,9 +614,6 @@ export default {
     emptyRows: '该表下暂无字段：切到「表单设计」从左侧组件库添加',
     colDescription: '描述',
     descriptionPlaceholder: '请输入描述',
-    editHint:
-      '可直接维护：字段名 / 字段长度 / 描述；字段编码与控件类型不可改（发布过的字段只能改长度、名称和描述）；本清单不提供删除与停用。',
-    note: '已发布字段结构受版本约束：字段变更随草稿保存，发布时进行兼容性校验。',
   },
   txnAction: {
     title: '事务动作',

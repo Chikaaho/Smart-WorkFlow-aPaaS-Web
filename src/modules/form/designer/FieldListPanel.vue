@@ -92,6 +92,12 @@ const activeScope = computed<TableScope>(
   () => scopes.value.find((scope) => scope.key === activeScopeKey.value) ?? scopes.value[0]!,
 )
 
+/**
+ * 只有主表（没有子表）时不渲染表范围与表名：单表无从切换，
+ * 表名又与面包屑表单名重复——0.1.7 #40 Owner「噪音信息太多」据此收敛。
+ */
+const hasMultipleTables = computed(() => scopes.value.length > 1)
+
 const rows = computed<FieldRow[]>(() => {
   const keyword = search.value.trim().toLowerCase()
   const list = activeScope.value.rows
@@ -128,8 +134,13 @@ function patchDescription(row: FieldRow, description: string) {
 
 <template>
   <div class="field-list">
-    <!-- 表范围：主表 + 各子表（明细表） -->
-    <div class="field-list__scopes" role="tablist" :aria-label="t('fieldList.mainTable')">
+    <!-- 表范围：仅多表（主表 + 子表）时出现——单表无从切换，不占一行 -->
+    <div
+      v-if="hasMultipleTables"
+      class="field-list__scopes"
+      role="tablist"
+      :aria-label="t('fieldList.mainTable')"
+    >
       <button
         v-for="scope in scopes"
         :key="scope.key"
@@ -146,9 +157,12 @@ function patchDescription(row: FieldRow, description: string) {
     </div>
 
     <div class="field-list__meta">
-      <span class="field-list__table-name" data-testid="field-table-name">{{
-        t('fieldList.tableName', { name: activeScope.tableName })
-      }}</span>
+      <span
+        v-if="hasMultipleTables"
+        class="field-list__table-name"
+        data-testid="field-table-name"
+        >{{ t('fieldList.tableName', { name: activeScope.tableName }) }}</span
+      >
       <el-input
         v-model="search"
         class="field-list__search"
@@ -227,9 +241,6 @@ function patchDescription(row: FieldRow, description: string) {
         </template>
       </el-table-column>
     </el-table>
-
-    <p class="field-list__hint">{{ t('fieldList.editHint') }}</p>
-    <p class="field-list__hint">{{ t('fieldList.note') }}</p>
   </div>
 </template>
 
@@ -297,12 +308,6 @@ function patchDescription(row: FieldRow, description: string) {
 .field-list__table :deep(.el-input__wrapper),
 .field-list__table :deep(.el-input-number) {
   width: 100%;
-}
-.field-list__hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: #8c99b0;
 }
 .field-list__empty {
   margin: 0;
