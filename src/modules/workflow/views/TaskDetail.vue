@@ -1370,12 +1370,17 @@ onMounted(loadDetail)
   border-color: var(--el-color-primary-light-7, #c6e2ff);
   background: var(--el-color-primary-light-9, #ecf5ff);
 }
+/* 0.1.7 #30 回归：内容按自然高度自上而下排列——表单卡不撑高，
+   流程信息面板紧贴表单（12px），不出现中间大块空白。 */
 .task-main {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
+}
+.task-detail :deep(.instance-flow-panel),
+.task-detail :deep(.detail-card--actions) {
+  margin-top: 12px;
 }
 .detail-card {
   margin-bottom: 0;
