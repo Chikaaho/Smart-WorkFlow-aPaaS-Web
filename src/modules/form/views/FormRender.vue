@@ -825,10 +825,14 @@ onMounted(() => {
   padding: 16px 24px 24px;
 }
 
+/* 0.1.7 #29：画布宽度与表单设计器画布对齐（设计器画布=视口-658px 侧板，1280 下 622px），
+   随视口同等比例放大，两边留白居中；窄屏回落铺满。 */
 .form-render-page__sheet {
   flex: 1;
   box-sizing: border-box;
   width: 100%;
+  max-width: min(100%, max(622px, calc(100vw - 658px)));
+  margin: 0 auto;
   min-height: 320px;
   padding: 28px 24px;
   background: #fff;
