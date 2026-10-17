@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /* global window */
+import { useTaskApproval } from '../composables/use-task-approval'
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
@@ -404,6 +405,29 @@ async function navigateAfterAction() {
   }
 }
 
+/**
+ * 0.1.7 #30：通过/驳回唯一控制面（use-task-approval）。
+ * 本页注入完整处理的特权：意见表单/节点表单预检 + actionPayload 负载 + 完成后导航。
+ */
+const taskApproval = useTaskApproval({
+  taskId: () => taskId,
+  preCheck: (action) => {
+    if (!ensureOpinionData()) return false
+    if (
+      action === 'APPROVE' &&
+      nodeFormBound.value &&
+      !nodeFormSubmitted.value &&
+      !validateNodeFormRequired()
+    ) {
+      ElMessage.error(nodeFormErrors.value[0] ?? '节点业务表单校验未通过')
+      return false
+    }
+    return true
+  },
+  buildPayload: (action) => actionPayload(action),
+  onCompleted: () => navigateAfterAction(),
+})
+
 const returnTargets = computed(() =>
   (detail.value?.approvalHistory ?? []).filter(
     (item): item is ApprovalHistoryItem & { nodeKey: string } =>
@@ -579,60 +603,22 @@ async function handleApprove() {
     return
   }
   acting.value = 'approve'
-
-  let confirmed = false
   try {
-    await ElMessageBox.confirm(t('workflow.confirmApprove'), t('workflow.approveConfirmTitle'), {
-      get confirmButtonText() {
-        return t('common.approve')
-      },
-      get cancelButtonText() {
-        return t('common.cancel')
-      },
-      type: 'info',
-    })
-    confirmed = true
-  } catch {
-    return
+    await taskApproval.submit('APPROVE')
   } finally {
-    if (!confirmed) acting.value = null
+    acting.value = null
   }
-  await runAction(
-    'complete',
-    actionPayload('APPROVE'),
-    t('common.statusApproved'),
-    t('workflow.approveActionFailed'),
-  )
 }
 
 async function handleReject() {
   if (acting.value) return
   if (!ensureOpinionData()) return
   acting.value = 'reject'
-
-  let confirmed = false
   try {
-    await ElMessageBox.confirm(t('workflow.confirmReject'), t('workflow.rejectConfirmTitle'), {
-      get confirmButtonText() {
-        return t('common.reject')
-      },
-      get cancelButtonText() {
-        return t('common.cancel')
-      },
-      type: 'warning',
-    })
-    confirmed = true
-  } catch {
-    return
+    await taskApproval.submit('REJECT')
   } finally {
-    if (!confirmed) acting.value = null
+    acting.value = null
   }
-  await runAction(
-    'reject',
-    actionPayload('REJECT'),
-    t('common.statusRejected'),
-    t('workflow.rejectActionFailed'),
-  )
 }
 
 async function handleReturn() {

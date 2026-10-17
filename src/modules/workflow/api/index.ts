@@ -95,6 +95,40 @@ export async function acceptTaskAction(
   })
 }
 
+/**
+ * 0.1.7 #30：统一详情关系——当前用户与 formKey+businessKey 实例的关系。
+ * NONE 时不回传实例信息（服务端 fail-closed）。
+ */
+export interface InstanceRelationInfo {
+  id: number | string
+  processInstanceId: string
+  processDefKey: string | null
+  processName: string | null
+  theme: string | null
+  status: string
+  initiatorId: number | null
+  initiatorName: string | null
+  createTime: string | null
+  currentNodes: string[]
+}
+
+export interface InstanceRelation {
+  relation: 'APPROVER' | 'PARTICIPANT' | 'NONE'
+  pendingTaskId?: string | null
+  instance?: InstanceRelationInfo | null
+}
+
+export async function getInstanceRelation(
+  formKey: string,
+  businessKey: string,
+): Promise<InstanceRelation> {
+  return request<InstanceRelation>({
+    method: 'GET',
+    url: '/workflow/my/instances/relations',
+    params: { formKey, businessKey },
+  })
+}
+
 /** GET /workflow/commands/{commandId} → WorkflowCommandStatus */
 export async function queryCommandStatus(commandId: string): Promise<WorkflowCommandStatus> {
   return request<WorkflowCommandStatus>({

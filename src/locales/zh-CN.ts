@@ -707,6 +707,11 @@ export default {
     tierStandard: '常规（2 小时）',
   },
   form: {
+    relationFlowTitle: '流程信息',
+    relationProcess: '流程',
+    relationStatus: '状态',
+    relationInitiator: '发起人',
+    relationCurrentNodes: '当前节点',
     newForm: '新建表单',
     searchFormPlaceholder: '表单名称 / 标识',
     keyDuplicate: '表单标识已存在',
@@ -926,6 +931,7 @@ export default {
       appNavTitle: '目录与表单',
       pickForm: '请从左侧选择目录或表单',
       columnSettings: '表头设置',
+
       sectionColumns: '显示列',
       sectionFilters: '查询字段',
       columnShow: '显示',
@@ -2072,6 +2078,7 @@ export default {
     commentRequired: '请填写必填审批意见',
     handled: '已办理',
     confirmApprove: '确认审批通过此任务？',
+    actionProcessing: '命令处理中，可稍后刷新查看结果',
     confirmReject: '确认驳回此任务？',
     confirmReturn: '确认将流程退回所选人工节点？',
     noReturnTargets: '当前没有可退回的已通过人工节点',

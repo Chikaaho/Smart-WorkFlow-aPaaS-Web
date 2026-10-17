@@ -725,6 +725,11 @@ export default {
     tierStandard: 'Standard (2 h)',
   },
   form: {
+    relationFlowTitle: 'Process info',
+    relationProcess: 'Process',
+    relationStatus: 'Status',
+    relationInitiator: 'Initiator',
+    relationCurrentNodes: 'Current node(s)',
     newForm: 'New form',
     searchFormPlaceholder: 'Form name / key',
     keyDuplicate: 'This form key is already in use',
@@ -954,6 +959,7 @@ export default {
       appNavTitle: 'Directories and forms',
       pickForm: 'Pick a directory or form on the left',
       columnSettings: 'Column settings',
+
       sectionColumns: 'Visible columns',
       sectionFilters: 'Filter fields',
       columnShow: 'Show',
@@ -2138,6 +2144,7 @@ export default {
     commentRequired: 'A comment is required.',
     handled: 'Handled',
     confirmApprove: 'Approve this task?',
+    actionProcessing: 'Command is processing; refresh later to see the result',
     confirmReject: 'Reject this task?',
     confirmReturn: 'Return the flow to the selected node?',
     noReturnTargets: 'There is no completed manual node to return to.',

@@ -37,6 +37,11 @@ import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-
 import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
 import { createFieldScripts } from '@/modules/form/utils/field-scripts'
 import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
+import {
+  createTaskApproval,
+  getInstanceRelation,
+  type InstanceRelation,
+} from '@/adapters/instance-relation'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
 
 /* ── 路由参数 ── */
@@ -45,6 +50,62 @@ const route = useRoute()
 const router = useRouter()
 const formKey = String(route.params.formKey)
 const recordId = route.query.recordId ? String(route.query.recordId) : ''
+
+/* ── 0.1.7 #30：统一详情关系——无权限提示/参与人只读+流程信息/审批人内联动作 ── */
+
+const relation = ref<InstanceRelation | null>(null)
+const actionComment = ref('')
+const approval = ref<{
+  submitting: { value: '' | 'approve' | 'reject' }
+  submit: (action: 'APPROVE' | 'REJECT') => Promise<void>
+} | null>(null)
+
+const flowInfo = computed(() => relation.value?.instance ?? null)
+const isApprover = computed(
+  () => relation.value?.relation === 'APPROVER' && !!relation.value?.pendingTaskId,
+)
+const actionSubmitting = computed(() => approval.value?.submitting.value ?? '')
+
+function relationStatusLabel(status: string): string {
+  const keyByStatus: Record<string, string> = {
+    RUNNING: 'common.statusInProgress',
+    APPROVED: 'common.statusApproved',
+    REJECTED: 'common.statusRejected',
+    WITHDRAWN: 'common.statusWithdrawn',
+    DISCARDED: 'workflow.statusDiscarded',
+  }
+  const key = keyByStatus[status]
+  return key ? t(key) : status
+}
+
+async function loadRelation() {
+  if (!recordId || !formKey) return
+  try {
+    relation.value = await getInstanceRelation(formKey, recordId)
+  } catch {
+    // 关系查询失败按无关系处理：详情仍按数据权限展示
+    relation.value = { relation: 'NONE' }
+  }
+}
+
+/** 控制面唯一来源=workflow 模块 use-task-approval；本页只提供任务号/负载/完成刷新。 */
+async function ensureApprovalControl() {
+  if (approval.value) return approval.value
+  approval.value = await createTaskApproval({
+    taskId: () => relation.value?.pendingTaskId,
+    buildPayload: (action) => {
+      const comment = actionComment.value.trim()
+      return comment ? { action, comment, opinionData: { comment } } : { action }
+    },
+    onCompleted: () => loadRelation(),
+  })
+  return approval.value
+}
+
+async function submitRelationAction(action: 'APPROVE' | 'REJECT') {
+  const control = await ensureApprovalControl()
+  await control.submit(action)
+}
 const mode = route.query.mode === 'edit' ? 'edit' : 'view'
 /** 草稿填报模式：route.query.mode === 'draft'（可选 draftId 打开已有草稿） */
 const isDraftMode = ref(route.query.mode === 'draft')
@@ -200,6 +261,10 @@ async function loadSchema() {
       }
     } else if (recordId) {
       await loadRecord(schema.value)
+      // 0.1.7 #30：详情（查看态）加载当前用户与实例的关系（参与人/审批人/流程信息）
+      if (isViewMode.value) {
+        await loadRelation()
+      }
     } else {
       for (const field of schema.value.fields) initField(field)
     }
@@ -697,6 +762,38 @@ onMounted(() => {
 
         <!-- 0.1.7 #13/#18：画布——设计器里有什么就展示什么（24 栅格直出），无其它信息 -->
         <div class="form-render-page__canvas">
+          <!-- 0.1.7 #30：流程相关信息（参与人/审批人可见） -->
+          <div v-if="flowInfo" class="form-render-page__flowcard">
+            <span class="form-render-page__flowcard-title">{{ t('form.relationFlowTitle') }}</span>
+            <span class="form-render-page__flowcard-item">
+              <label>{{ t('form.relationProcess') }}</label>
+              {{ flowInfo.processName || flowInfo.processDefKey || '—' }}
+            </span>
+            <span class="form-render-page__flowcard-item">
+              <label>{{ t('form.relationStatus') }}</label>
+              <el-tag
+                size="small"
+                :type="
+                  flowInfo.status === 'RUNNING'
+                    ? 'primary'
+                    : flowInfo.status === 'APPROVED'
+                      ? 'success'
+                      : flowInfo.status === 'REJECTED'
+                        ? 'danger'
+                        : 'info'
+                "
+                >{{ relationStatusLabel(flowInfo.status) }}</el-tag
+              >
+            </span>
+            <span class="form-render-page__flowcard-item">
+              <label>{{ t('form.relationInitiator') }}</label>
+              {{ flowInfo.initiatorName || '—' }}
+            </span>
+            <span v-if="flowInfo.currentNodes.length > 0" class="form-render-page__flowcard-item">
+              <label>{{ t('form.relationCurrentNodes') }}</label>
+              {{ flowInfo.currentNodes.join('、') }}
+            </span>
+          </div>
           <div class="form-render-page__sheet">
             <div class="form-render-page__group">
               <div
@@ -725,6 +822,32 @@ onMounted(() => {
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- 0.1.7 #30：审批人内联审批动作（意见默认备注 + 通过/驳回） -->
+        <div v-if="isApprover" class="form-render-page__actioncard">
+          <el-input
+            v-model="actionComment"
+            type="textarea"
+            :rows="2"
+            maxlength="500"
+            :placeholder="t('common.remark')"
+          />
+          <div class="form-render-page__actioncard-actions">
+            <el-button
+              :loading="actionSubmitting === 'reject'"
+              @click="submitRelationAction('REJECT')"
+            >
+              {{ t('common.reject') }}
+            </el-button>
+            <el-button
+              type="primary"
+              :loading="actionSubmitting === 'approve'"
+              @click="submitRelationAction('APPROVE')"
+            >
+              {{ t('common.approve') }}
+            </el-button>
           </div>
         </div>
       </template>
@@ -842,6 +965,47 @@ onMounted(() => {
 
 .form-render-page__alert {
   margin: 12px 24px 0;
+}
+
+/* 0.1.7 #30：流程信息条 / 审批动作卡——与画布同宽居中 */
+.form-render-page__flowcard,
+.form-render-page__actioncard {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: min(100%, max(622px, calc(100vw - 658px)));
+  margin: 0 auto 12px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid var(--sw-border-light, #ebeef5);
+  border-radius: var(--sw-radius-card, 8px);
+}
+.form-render-page__flowcard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+}
+.form-render-page__flowcard-title {
+  font-size: var(--sw-font-caption, 12px);
+  font-weight: 600;
+  color: var(--sw-text-secondary, #909399);
+}
+.form-render-page__flowcard-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--sw-text-primary, #303133);
+}
+.form-render-page__flowcard-item label {
+  font-size: 12px;
+  color: var(--sw-text-secondary, #909399);
+}
+.form-render-page__actioncard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .form-render-page__group {

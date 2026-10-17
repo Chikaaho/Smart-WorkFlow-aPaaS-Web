@@ -20,6 +20,15 @@ vi.mock('@/modules/form/utils/resolve-reference-display', () => ({
   resolveReferenceDisplay: vi.fn().mockResolvedValue('ref-display'),
 }))
 
+const mockGetInstanceRelation = vi.fn()
+vi.mock('@/adapters/instance-relation', () => ({
+  getInstanceRelation: (...args: unknown[]) => mockGetInstanceRelation(...args),
+  createTaskApproval: vi.fn(async () => ({
+    submitting: { value: '' },
+    submit: vi.fn(async () => undefined),
+  })),
+}))
+
 vi.mock('@/adapters/process-draft', () => ({
   getDraft: vi.fn(),
   createDraft: vi.fn(),
@@ -77,6 +86,8 @@ const baseStubs = {
 
 describe('FormRender', () => {
   beforeEach(() => {
+    mockGetInstanceRelation.mockReset()
+    mockGetInstanceRelation.mockResolvedValue({ relation: 'NONE' })
     vi.mocked(getFormDefinition).mockReset()
     vi.mocked(getFormData).mockReset()
     vi.mocked(submitForm).mockReset()
@@ -181,6 +192,73 @@ describe('FormRender', () => {
     expect(field.attributes('data-readonly')).toBe('true')
     // 查看模式不显示提交/保存按钮（0.1.7 #13：动作收进顶部导航栏）
     expect(wrapper.find('.form-render-page__top-actions').exists()).toBe(false)
+  })
+
+  it('0.1.7 #30：参与人查看详情展示流程信息条，无审批动作卡', async () => {
+    mockQuery = { recordId: 'rec_001', mode: 'view' }
+    mockGetInstanceRelation.mockResolvedValue({
+      relation: 'PARTICIPANT',
+      instance: {
+        id: 9,
+        processInstanceId: 'pi-1',
+        processDefKey: 'leave_approval',
+        processName: '请假审批流程',
+        theme: '测试单',
+        status: 'RUNNING',
+        initiatorId: 2,
+        initiatorName: '张三',
+        createTime: '2026-10-17 10:00:00',
+        currentNodes: ['部门审批'],
+      },
+    })
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '查看表单',
+      fields: [{ name: 'x', type: 'TEXT', required: false }],
+    })
+    vi.mocked(getFormData).mockResolvedValueOnce({ id: 'rec_001', version: 1, x: 'hello' })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.find('.form-render-page__flowcard').exists()).toBe(true)
+    expect(wrapper.text()).toContain('请假审批流程')
+    expect(wrapper.text()).toContain('部门审批')
+    expect(wrapper.find('.form-render-page__actioncard').exists()).toBe(false)
+  })
+
+  it('0.1.7 #30：审批人查看详情展示内联审批动作卡', async () => {
+    mockQuery = { recordId: 'rec_001', mode: 'view' }
+    mockGetInstanceRelation.mockResolvedValue({
+      relation: 'APPROVER',
+      pendingTaskId: 'task-9',
+      instance: {
+        id: 9,
+        processInstanceId: 'pi-1',
+        processDefKey: 'leave_approval',
+        processName: '请假审批流程',
+        theme: '测试单',
+        status: 'RUNNING',
+        initiatorId: 2,
+        initiatorName: '张三',
+        createTime: '2026-10-17 10:00:00',
+        currentNodes: ['部门审批'],
+      },
+    })
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '查看表单',
+      fields: [{ name: 'x', type: 'TEXT', required: false }],
+    })
+    vi.mocked(getFormData).mockResolvedValueOnce({ id: 'rec_001', version: 1, x: 'hello' })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    await flushPromises()
+
+    const card = wrapper.find('.form-render-page__actioncard')
+    expect(card.exists()).toBe(true)
+    expect(card.text()).toContain('通过')
+    expect(card.text()).toContain('驳回')
   })
 
   it('loads record and resolves REFERENCE display name in edit mode', async () => {
