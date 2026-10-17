@@ -175,9 +175,10 @@ describe('FormDesigner 工作台（P52）', () => {
   })
 
   // 0.1.7 #25 回归：内容区左上角标题/描述/汇总噪音去除后，「流程编号设置」入口上收工具条右上角
+  // 0.1.7 #43：按钮文案瘦身为「编号设置」（≤4 字口径）
   it('流程设计页签：流程编号设置入口在工具条动作组内，点击转交关联流程面板', async () => {
     const wrapper = await mountDesigner()
-    const label = '流程编号设置'
+    const label = '编号设置'
     // 表单设计页签不显示该入口
     expect(wrapper.findAll('button').some((b) => b.text().includes(label))).toBe(false)
 

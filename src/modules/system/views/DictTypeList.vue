@@ -273,7 +273,7 @@ onMounted(loadList)
   >
     <!-- 工具栏：新建按钮 -->
     <template #toolbar-actions>
-      <el-button type="primary" @click="openCreate">{{ t('system.newDictType') }}</el-button>
+      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
     </template>
 
     <!-- 筛选区 -->
@@ -338,7 +338,7 @@ onMounted(loadList)
 
     <!-- 空态操作 -->
     <template #empty-action>
-      <el-button type="primary" @click="openCreate">{{ t('system.newDictType') }}</el-button>
+      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
     </template>
   </StandardListTemplate>
 

@@ -354,7 +354,7 @@ onMounted(loadList)
     <!-- 工具栏：新建按钮（管理权限） -->
     <template #toolbar-actions>
       <el-button v-if="canManage" type="primary" @click="openCreate">{{
-        t('system.newUserGroup')
+        t('common.create')
       }}</el-button>
     </template>
 
@@ -419,7 +419,7 @@ onMounted(loadList)
     <!-- 空态操作 -->
     <template #empty-action>
       <el-button v-if="canManage" type="primary" @click="openCreate">{{
-        t('system.newUserGroup')
+        t('common.create')
       }}</el-button>
     </template>
   </StandardListTemplate>

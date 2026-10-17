@@ -171,7 +171,7 @@ function rowActions(r: unknown): ListAction[] {
   <div style="padding: 16px">
     <div style="display: flex; justify-content: space-between; margin-bottom: 12px">
       <h3 style="margin: 0">{{ t('iot.topicConfig') }}</h3>
-      <el-button type="primary" @click="openCreate">{{ t('iot.newTopic') }}</el-button>
+      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
     </div>
     <el-alert
       v-if="loadError"

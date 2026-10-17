@@ -312,7 +312,7 @@ onMounted(() => {
   >
     <template #toolbar-actions>
       <el-button v-if="canManage" type="primary" @click="openCreate">
-        {{ activeTab === 'internal' ? t('agent.newInternalTool') : t('agent.newExternalTool') }}
+        {{ t('common.create') }}
       </el-button>
     </template>
 
@@ -439,7 +439,7 @@ onMounted(() => {
 
     <template #empty-action>
       <el-button v-if="canManage" type="primary" @click="openCreate">
-        {{ activeTab === 'internal' ? t('agent.newInternalTool') : t('agent.newExternalTool') }}
+        {{ t('common.create') }}
       </el-button>
     </template>
   </StandardListTemplate>

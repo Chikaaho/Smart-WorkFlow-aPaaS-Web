@@ -340,7 +340,7 @@ onMounted(() => {
 
     <template #empty-action>
       <el-button v-if="canManage" type="primary" @click="openCreate">{{
-        t('agent.newModelConfig')
+        t('common.create')
       }}</el-button>
     </template>
   </StandardListTemplate>

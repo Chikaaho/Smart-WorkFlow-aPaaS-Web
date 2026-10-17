@@ -129,9 +129,10 @@ describe('UserGroupList', () => {
     await nextTick()
     await nextTick()
 
+    // #43：新建按钮文案瘦身为「新建」
     await wrapper
       .findAll('button')
-      .find((b) => b.text().includes('新建用户组'))
+      .find((b) => b.text().trim() === '新建')
       ?.trigger('click')
     await nextTick()
 
@@ -224,7 +225,7 @@ describe('UserGroupList', () => {
     await nextTick()
     await nextTick()
 
-    expect(wrapper.text()).not.toContain('新建用户组')
+    expect(wrapper.text()).not.toContain('新建')
     expect(wrapper.findAll('button').find((b) => b.text().includes('删除'))).toBeUndefined()
     expect(wrapper.findAll('button').find((b) => b.text().includes('停用'))).toBeUndefined()
     __perms.manage = true

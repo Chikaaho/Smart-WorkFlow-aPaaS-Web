@@ -202,9 +202,7 @@ onMounted(() => void loadList())
     @update:page-size="handlePageSizeChange"
   >
     <template #toolbar-actions>
-      <el-button type="primary" @click="openCreate">{{
-        t('workflow.newWorkspaceCardType')
-      }}</el-button>
+      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
     </template>
 
     <el-alert v-if="errorMsg" :title="errorMsg" type="error" :closable="false" show-icon />

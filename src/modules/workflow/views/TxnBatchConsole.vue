@@ -259,7 +259,7 @@ function statusTagType(
           :disabled="!canSubmit"
           @click="submitBatch"
         >
-          受理批量调用
+          受理
         </el-button>
         <span v-if="!canSubmit" class="batch-section__hint">无调用权限（form:action:invoke）</span>
       </div>

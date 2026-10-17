@@ -183,7 +183,7 @@ onMounted(loadList)
       @update:page-size="handlePageSizeChange"
     >
       <template #toolbar-actions>
-        <el-button type="primary" @click="goCreate">新建审批意见表单</el-button>
+        <el-button type="primary" @click="goCreate">{{ t('common.create') }}</el-button>
       </template>
 
       <template #filter>
@@ -237,7 +237,7 @@ onMounted(loadList)
       </el-table>
 
       <template #empty-action>
-        <el-button type="primary" @click="goCreate">新建审批意见表单</el-button>
+        <el-button type="primary" @click="goCreate">{{ t('common.create') }}</el-button>
       </template>
     </StandardListTemplate>
   </div>
