@@ -1,12 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import {
-  THEME_RULE_TOKENS,
   SEQ_DIGIT_OPTIONS,
+  THEME_ELEMENT_DEFAULT_RAW,
   chipText,
+  datePatternOf,
   escapeThemeText,
+  expressionOf,
   parseRuleSegments,
-  seqDigitsFromRule,
+  parseThemeElements,
+  seqDigitsOf,
   seqToken,
+  serializeThemeElements,
+  themeElementError,
+  themeElementKind,
   themeRuleDisplay,
   themeRulePreview,
   tokenLabelKey,
@@ -17,18 +23,6 @@ const translate = (key: string, params?: Record<string, unknown>) =>
   params ? `${key}:${JSON.stringify(params)}` : key
 
 describe('BF20261013-041/042 流程编号规则构建器', () => {
-  it('变量按钮：发起日期/发起时间/时间戳/发起人四个固定变量（服务端白名单内的写法）', () => {
-    expect(THEME_RULE_TOKENS.map((t) => t.token)).toEqual([
-      '{YYYYMMDD}',
-      '{YYYYMMDDHHMMSS}',
-      '{TIMESTAMP}',
-      '{INITIATOR}',
-    ])
-    // 发起时间/发起人复用既有文案键（同一文案一个键）
-    expect(THEME_RULE_TOKENS[1].labelKey).toBe('common.startTimeShort')
-    expect(THEME_RULE_TOKENS[3].labelKey).toBe('common.initiator')
-  })
-
   it('自增序号：位数 0 为不补零，其余拼成 {SEQ:n}；可选项含 2-6 位', () => {
     expect(seqToken(0)).toBe('{SEQ}')
     expect(seqToken(3)).toBe('{SEQ:3}')
@@ -78,11 +72,9 @@ describe('BF20261013-041/042 流程编号规则构建器', () => {
   })
 
   it('自增位数回显：{SEQ:n} → n，{SEQ} → 0，无自增序号 → null', () => {
-    expect(seqDigitsFromRule('P{SEQ:5}')).toBe(5)
-    expect(seqDigitsFromRule('P{SEQ}')).toBe(0)
-    expect(seqDigitsFromRule('P{YYYYMMDD}')).toBeNull()
-    // 转义后的字面 {SEQ} 不算自增序号
-    expect(seqDigitsFromRule('P{{SEQ}}')).toBeNull()
+    expect(seqDigitsOf('{SEQ:5}')).toBe(5)
+    expect(seqDigitsOf('{SEQ}')).toBe(0)
+    expect(seqDigitsOf('{YYYYMMDD}')).toBeNull()
   })
 
   it('列表展示文字：变量显示成 [文案]，不暴露占位记法', () => {
@@ -103,5 +95,67 @@ describe('BF20261013-041/042 流程编号规则构建器', () => {
     // 手写 {FOO} / 转义后的字面花括号都原样显示
     expect(themeRulePreview('{FOO}', now)).toBe('{FOO}')
     expect(themeRulePreview('单号{{临时}}', now)).toBe('单号{临时}')
+  })
+
+  // 0.1.7 #37：要素编排器模型（规则文本 ↔ 要素序列；新增日期/时间格式与自定义表达式要素）
+  it('要素类型判定：日期/时间/流水号/发起人/自定义/历史记法/字面文字', () => {
+    expect(themeElementKind('{DATE:yyyy-MM-dd}')).toBe('date')
+    expect(themeElementKind('{TIME:HH:mm}')).toBe('time')
+    expect(themeElementKind('{SEQ:3}')).toBe('seq')
+    expect(themeElementKind('{INITIATOR}')).toBe('initiator')
+    expect(themeElementKind('{EXPR:seq > 0}')).toBe('custom')
+    expect(themeElementKind('{YYYYMMDD}')).toBe('legacy')
+    expect(themeElementKind('OA-')).toBe('text')
+  })
+
+  it('要素序列往返：拆分（相邻文字合并）+ 序列化（字面量转义、变量原样）', () => {
+    const rule = 'OA-{DATE:yyyyMMdd}-{SEQ:3}'
+    const elements = parseThemeElements(rule)
+    // 两个占位符之间的字面量「-」是独立常量要素（编排序即所见顺序）
+    expect(elements.map((element) => element.kind)).toEqual(['text', 'date', 'text', 'seq'])
+    expect(elements[1]!.raw).toBe('{DATE:yyyyMMdd}')
+    expect(serializeThemeElements(elements)).toBe(rule)
+
+    // 手写花括号（库内已转义）回显成字面文字，再序列化仍回到转义形态
+    const escaped = parseThemeElements('单号{{临时}}')
+    expect(escaped).toHaveLength(1)
+    expect(escaped[0]!.raw).toBe('单号{临时}')
+    expect(serializeThemeElements(escaped)).toBe('单号{{临时}}')
+  })
+
+  it('要素配置读取：日期/时间格式、自定义表达式、默认记法', () => {
+    expect(datePatternOf('{DATE:yyMMdd}')).toBe('yyMMdd')
+    expect(datePatternOf('{TIME:HHmmss}')).toBe('HHmmss')
+    expect(datePatternOf('{YYYYMMDD}')).toBe('yyyyMMdd')
+    expect(datePatternOf('{INITIATOR}')).toBeNull()
+    expect(expressionOf('{EXPR:initiatorName seq}')).toBe('initiatorName seq')
+    expect(expressionOf('{SEQ:3}')).toBeNull()
+    expect(THEME_ELEMENT_DEFAULT_RAW.date).toBe('{DATE:yyyyMMdd}')
+    expect(THEME_ELEMENT_DEFAULT_RAW.custom.startsWith('{EXPR:')).toBe(true)
+  })
+
+  it('示例预览（#37 新要素）：日期/时间按白名单格式输出，自定义表达式单变量显示演示值', () => {
+    const now = new Date(2026, 9, 14, 9, 5, 7)
+    expect(themeRulePreview('{DATE:yyyyMMdd}-{TIME:HHmmss}', now)).toBe('20261014-090507')
+    expect(themeRulePreview('{DATE:yyyy-MM-dd}', now)).toBe('2026-10-14')
+    expect(themeRulePreview('{DATE:yyyy-M-d}', now)).toBe('2026-10-14')
+    expect(themeRulePreview('{TIME:HH:mm}', now)).toBe('09:05')
+    // 单变量表达式显示演示值；复合表达式原样展示（真实值由服务端物化）
+    expect(themeRulePreview('{EXPR:yyyy}{EXPR:MM}', now)).toBe('202610')
+    expect(themeRulePreview('{EXPR:seq > 0}', now)).toBe('seq > 0')
+  })
+
+  it('要素级校验：空常量 / 空表达式 / 括号不成对报错，其余要素与合法表达式通过', () => {
+    const make = (kind: ThemeElement['kind'], raw: string): ThemeElement => ({ id: 'x', kind, raw })
+    expect(themeElementError(make('text', ''))).toBe('emptyText')
+    expect(themeElementError(make('text', 'OA-'))).toBeNull()
+    expect(themeElementError(make('custom', '{EXPR:   }'))).toBe('emptyExpression')
+    expect(themeElementError(make('custom', '{EXPR:(seq > 0}'))).toBe('unbalancedParens')
+    expect(themeElementError(make('custom', '{EXPR:seq > 0)}'))).toBe('unbalancedParens')
+    expect(themeElementError(make('custom', '{EXPR:(seq > 0)}'))).toBeNull()
+    expect(themeElementError(make('custom', '{EXPR:initiatorName}'))).toBeNull()
+    // 非自定义要素不做表达式校验
+    expect(themeElementError(make('seq', '{SEQ:3}'))).toBeNull()
+    expect(themeElementError(make('legacy', '{TIMESTAMP}'))).toBeNull()
   })
 })

@@ -195,25 +195,28 @@ describe('ProcessDefList.vue', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await nextTick()
 
-    // 回显：固定文字 + 两个灰底标识（标识带 data-token，展示文字取文案）
-    const chips = wrapper.findAll('.theme-editor__chip')
-    expect(chips.map((chip) => chip.attributes('data-token'))).toEqual([
+    // 回显：要素条按规则拆成「常量 + 要素」，每格带 data-kind/data-raw（0.1.7 #37）
+    const chips = wrapper.findAll('[data-testid="theme-element-chip"]')
+    expect(chips.map((chip) => chip.attributes('data-raw'))).toEqual([
+      'JRZX_',
       '{YYYYMMDDHHMMSS}',
+      '_',
       '{SEQ:3}',
     ])
-    expect(wrapper.find('.theme-editor').text()).toContain('JRZX_')
+    expect(chips.map((chip) => chip.attributes('data-kind'))).toEqual([
+      'text',
+      'legacy',
+      'text',
+      'seq',
+    ])
 
-    // 点框内「自增序号」按钮：按当前位数（3）带入 {SEQ:3} 标识
-    const seqButton = wrapper
-      .findAll('.theme-editor__add')
-      .find((button) => button.text().includes('自增序号'))
-    expect(seqButton).toBeTruthy()
-    await seqButton?.trigger('click')
+    // 点「流水号」要素按钮：按默认位数带入 {SEQ:3} 要素
+    await wrapper.find('[data-testid="theme-element-add-seq"]').trigger('click')
     await nextTick()
-    expect(wrapper.findAll('.theme-editor__chip').length).toBe(3)
+    expect(wrapper.findAll('[data-testid="theme-element-chip"]')).toHaveLength(5)
 
-    // 示例：规则文本 → 演示值（发起时间补足 14 位、序号补零到 3 位）
-    const preview = wrapper.find('.theme-dialog__preview').text()
+    // 模拟编号：规则文本 → 演示值（发起时间补足 14 位、序号补零到 3 位）
+    const preview = wrapper.find('[data-testid="theme-preview"]').text()
     expect(preview).toMatch(/\d{14}_001/)
   })
 

@@ -4,12 +4,14 @@ import { createPinia } from 'pinia'
 import { nextTick } from 'vue'
 
 /**
- * ThemeRuleDialog 单测（BF20261013-042 流程编号设置弹窗）。
+ * ThemeRuleDialog 单测（0.1.7 #37 要素编排器重构）。
  *
  * 覆盖 Owner 口径：
- *   - 变量按钮与输入框同框（灰底文字样式），点击在光标处带入；
- *   - 框内只显示 [发起时间] 类标识（data-token），不暴露占位记法；
- *   - 用户手写的 {xxx} 一律当普通字符串（保存转义 {{ }}、预览原样、不被当变量）。
+ *   - 打开按规则回显成要素条（类型 + 演示值），模拟编号实时更新；
+ *   - 要素按钮追加要素、删除/清空、选中后按类型配置（常量文字 / 日期格式 / 时间格式 /
+ *     流水号长度 / 自定义表达式 + 变量点选）；
+ *   - 保存把要素序列序列化回规则文本（字面量转义、变量记法原样）；
+ *   - 空规则保存被拦下（必填提示，不请求接口）。
  */
 
 vi.mock('@/modules/workflow/api', () => ({
@@ -28,10 +30,23 @@ const stubs = {
   },
   'el-button': {
     emits: ['click'],
-    template: '<button class="el-button" @click="$emit(\'click\')"><slot/></button>',
+    template:
+      '<button class="el-button" :disabled="disabled" @click="$emit(\'click\')"><slot/></button>',
+    props: ['disabled', 'size'],
   },
-  'el-select': { template: '<div class="el-select"><slot/></div>', props: ['modelValue'] },
+  // 选择器桩：把选项渲染出来并把 update:modelValue 交给父组件
+  'el-select': {
+    template: '<div class="el-select"><slot/></div>',
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+  },
   'el-option': { template: '<div class="el-option"/>', props: ['label', 'value'] },
+  'el-input': {
+    template:
+      '<input class="el-input-stub" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+    props: ['modelValue', 'maxlength', 'placeholder'],
+    emits: ['update:modelValue'],
+  },
 }
 
 const def: ProcessDef = {
@@ -45,12 +60,10 @@ const def: ProcessDef = {
   updateTime: '2026-10-14 10:00:00',
 }
 
-function mountDialog(attachToBody = false) {
+function mountDialog() {
   return mount(ThemeRuleDialog, {
     props: { visible: false, def },
     global: { stubs, plugins: [createPinia()] },
-    // 光标/选区相关用例需要真实挂载（jsdom 对游离树不落选区）
-    ...(attachToBody ? { attachTo: document.body } : {}),
   })
 }
 
@@ -60,128 +73,145 @@ async function openDialog(wrapper: ReturnType<typeof mountDialog>) {
   await nextTick()
 }
 
-describe('ThemeRuleDialog', () => {
+/** 要素条上的 (类型, 原文, 演示值)。 */
+function chipFacts(wrapper: ReturnType<typeof mountDialog>) {
+  return wrapper.findAll('[data-testid="theme-element-chip"]').map((chip) => ({
+    kind: chip.attributes('data-kind'),
+    raw: chip.attributes('data-raw'),
+    value: chip.find('.theme-dialog__chip-value').text(),
+  }))
+}
+
+function previewText(wrapper: ReturnType<typeof mountDialog>) {
+  return wrapper.find('[data-testid="theme-preview"]').text()
+}
+
+describe('ThemeRuleDialog（#37 要素编排器）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('打开时回显规则：框内标识带 data-token、位数回显、示例实时更新', async () => {
-    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('JRZX_{YYYYMMDDHHMMSS}_{SEQ:3}')
+  it('打开回显：规则拆成要素条，模拟编号实时展示', async () => {
+    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('JRZX_{SEQ:3}')
     const wrapper = mountDialog()
     await openDialog(wrapper)
 
-    expect(getProcessDefThemeRule).toHaveBeenCalledWith(9)
-    const chips = wrapper.findAll('.theme-editor__chip')
-    expect(chips.map((chip) => chip.attributes('data-token'))).toEqual([
-      '{YYYYMMDDHHMMSS}',
-      '{SEQ:3}',
+    const chips = chipFacts(wrapper)
+    expect(chips.map((chip) => chip.kind)).toEqual(['text', 'seq'])
+    expect(chips[0]!.raw).toBe('JRZX_')
+    expect(chips[1]!.raw).toBe('{SEQ:3}')
+    expect(previewText(wrapper)).toContain('JRZX_001')
+  })
+
+  it('要素按钮：日期/时间/流水号/常量/发起人/自定义可追加，选中后按类型配置', async () => {
+    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('')
+    const wrapper = mountDialog()
+    await openDialog(wrapper)
+
+    expect(wrapper.find('[data-testid="theme-element-config"]').exists()).toBe(false)
+    for (const kind of ['date', 'time', 'seq', 'text', 'initiator', 'custom']) {
+      await wrapper.find(`[data-testid="theme-element-add-${kind}"]`).trigger('click')
+    }
+    const chips = chipFacts(wrapper)
+    expect(chips.map((chip) => chip.kind)).toEqual([
+      'date',
+      'time',
+      'seq',
+      'text',
+      'initiator',
+      'custom',
     ])
-    expect(wrapper.find('.theme-editor__content').text()).toContain('JRZX_')
-    expect(wrapper.vm).toHaveProperty('themeSeqDigits', 3)
-    expect(wrapper.find('.theme-dialog__preview').text()).toMatch(/\d{14}_001/)
+    // 新要素默认记法：与后端白名单格式一致
+    expect(chips[0]!.raw).toBe('{DATE:yyyyMMdd}')
+    expect(chips[1]!.raw).toBe('{TIME:HHmmss}')
+    expect(chips[3]!.raw).toBe('')
+
+    // 选中常量（第 4 个）→ 编辑文字：模拟编号与要素条同步
+    await wrapper.findAll('[data-testid="theme-element-chip"]')[3]!.trigger('click')
+    await wrapper.find('[data-testid="theme-element-text"]').setValue('OA-')
+    expect(chipFacts(wrapper)[3]!.raw).toBe('OA-')
+    expect(previewText(wrapper)).toContain('OA-')
+
+    // 选中自定义（第 6 个）→ 表达式可编辑、点变量追加
+    await wrapper.findAll('[data-testid="theme-element-chip"]')[5]!.trigger('click')
+    expect(wrapper.find('[data-testid="theme-element-expression"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="theme-var-seq"]').trigger('click')
+    expect(chipFacts(wrapper)[5]!.raw).toBe('{EXPR:initiatorName seq}')
+    // 已在表达式里的变量再点一次不重复叠加
+    await wrapper.find('[data-testid="theme-var-seq"]').trigger('click')
+    expect(chipFacts(wrapper)[5]!.raw).toBe('{EXPR:initiatorName seq}')
   })
 
-  it('点中灰底标识不会把光标放进标识内部（避免打字把标识文字改坏、且改坏后不落规则）', async () => {
-    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('A{SEQ:3}B')
-    const wrapper = mountDialog(true)
-    await openDialog(wrapper)
-
-    const content = wrapper.find('.theme-editor__content').element as HTMLElement
-    const chip = content.querySelector('.theme-editor__chip') as HTMLElement
-    expect(chip).toBeTruthy()
-
-    // 左半边点击：光标落在标识之前；mousedown 被 preventDefault（不交给浏览器放光标）
-    const allowed = chip.dispatchEvent(
-      new window.MouseEvent('mousedown', {
-        bubbles: true,
-        cancelable: true,
-        clientX: 1,
-      }),
-    )
-    expect(allowed).toBe(false)
-    const selection = window.getSelection()
-    expect(selection?.rangeCount).toBe(1)
-    const range = selection!.getRangeAt(0)
-    expect(range.startContainer).toBe(content)
-    // 子节点序：文本 'A'(0) → 标识(1) → 文本 'B'；offset=1 即光标贴在标识之前
-    expect(range.startOffset).toBe(1)
-
-    // 兜底：光标若仍落在标识内部（键盘/输入法路径），beforeinput 被拦下
-    const inside = window.document.createRange()
-    inside.selectNodeContents(chip)
-    inside.collapse(true)
-    selection?.removeAllRanges()
-    selection?.addRange(inside)
-    const inputAllowed = content.dispatchEvent(
-      new window.InputEvent('beforeinput', { bubbles: true, cancelable: true }),
-    )
-    expect(inputAllowed).toBe(false)
-  })
-
-  it('变量按钮在输入框内（与标识同为灰底文字），点击在光标处带入', async () => {
-    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('')
+  it('删除/前移后移/清空：要素条与规则同步', async () => {
+    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('A{SEQ:3}')
     const wrapper = mountDialog()
     await openDialog(wrapper)
 
-    const adds = wrapper.findAll('.theme-editor__add')
-    // 4 个固定变量 + 自增序号 = 5 个按钮，全部位于输入框（.theme-editor）内
-    expect(adds.length).toBe(5)
-    expect(wrapper.find('.theme-editor').findAll('.theme-editor__add').length).toBe(5)
+    // 选中常量后前移/后移
+    await wrapper.findAll('[data-testid="theme-element-chip"]')[0]!.trigger('click')
+    await wrapper.find('[data-testid="theme-element-move-right"]').trigger('click')
+    expect(chipFacts(wrapper).map((chip) => chip.kind)).toEqual(['seq', 'text'])
+    expect(previewText(wrapper)).toContain('001A')
 
-    const pick = (label: string) => adds.find((button) => button.text() === label)
-    expect(pick('发起人')).toBeTruthy()
+    // 删除当前选中要素（前移后选中的是常量，删掉后只剩流水号）
+    await wrapper.find('[data-testid="theme-element-remove"]').trigger('click')
+    expect(chipFacts(wrapper).map((chip) => chip.kind)).toEqual(['seq'])
 
-    await pick('发起人')?.trigger('click')
-    await nextTick()
-    expect(
-      wrapper.findAll('.theme-editor__chip').map((chip) => chip.attributes('data-token')),
-    ).toEqual(['{INITIATOR}'])
-
-    // 再点「自增序号」按当前位数（默认 3 位）带入
-    await pick('自增序号')?.trigger('click')
-    await nextTick()
-    expect(
-      wrapper.findAll('.theme-editor__chip').map((chip) => chip.attributes('data-token')),
-    ).toEqual(['{INITIATOR}', '{SEQ:3}'])
-    // 规则文本：两个变量按带入顺序相邻拼接；示例里发起人取当前登录用户（测试无会话 → 空）、
-    // 序号补零到 3 位
-    expect(wrapper.vm).toHaveProperty('themeRuleInput', '{INITIATOR}{SEQ:3}')
-    expect(wrapper.find('.theme-dialog__preview').text()).toContain('001')
+    // 清空
+    await wrapper.find('[data-testid="theme-clear"]').trigger('click')
+    expect(chipFacts(wrapper)).toHaveLength(0)
+    expect(previewText(wrapper)).toContain('—')
   })
 
-  it('手写 {xxx} 按普通字符串：保存时转义、示例原样、不被当变量', async () => {
-    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('')
-    vi.mocked(updateProcessDefThemeRule).mockResolvedValueOnce(undefined)
+  it('保存：要素序列序列化为规则文本（字面量转义、历史记法原样保留）', async () => {
+    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('单号{{临时}}{TIMESTAMP}')
     const wrapper = mountDialog()
     await openDialog(wrapper)
 
-    // 模拟用户手打「单号{临时}」（直接改编辑区 DOM 再派发 input）
-    const content = wrapper.find('.theme-editor__content').element as HTMLElement
-    content.textContent = '单号{临时}'
-    await wrapper.find('.theme-editor__content').trigger('input')
-
-    expect(wrapper.vm).toHaveProperty('themeRuleInput', '单号{{临时}}')
-    expect(wrapper.findAll('.theme-editor__chip').length).toBe(0)
-    expect(wrapper.find('.theme-dialog__preview').text()).toContain('单号{临时}')
-
-    await wrapper
-      .findAll('.el-button')
-      .find((button) => button.text() === '保存')
-      ?.trigger('click')
+    const kinds = chipFacts(wrapper).map((chip) => chip.kind)
+    expect(kinds).toEqual(['text', 'legacy'])
+    await wrapper.find('[data-testid="theme-element-add-date"]').trigger('click')
+    await wrapper.find('[data-testid="theme-save"]').trigger('click')
     await flushPromises()
-    expect(updateProcessDefThemeRule).toHaveBeenCalledWith(9, '单号{{临时}}')
+
+    expect(updateProcessDefThemeRule).toHaveBeenCalledWith(
+      9,
+      '单号{{临时}}{TIMESTAMP}{DATE:yyyyMMdd}',
+    )
+  })
+
+  it('要素级错误：要素条标错 + 顶部汇总「存在 N 个错误」，保存按钮置灰；修正后恢复', async () => {
+    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('OA-')
+    const wrapper = mountDialog()
+    await openDialog(wrapper)
+
+    // 常量被清空 → 1 个错误
+    await wrapper.find('[data-testid="theme-element-text"]').setValue('')
+    expect(wrapper.find('[data-testid="theme-error-banner"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="theme-element-error"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="theme-save"]').attributes('disabled')).toBeDefined()
+
+    // 填入内容 → 错误消失、保存恢复可用
+    await wrapper.find('[data-testid="theme-element-text"]').setValue('OA-')
+    expect(wrapper.find('[data-testid="theme-error-banner"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="theme-save"]').attributes('disabled')).toBeUndefined()
+
+    // 自定义要素括号不成对 → 再次报错
+    await wrapper.find('[data-testid="theme-element-add-custom"]').trigger('click')
+    await wrapper.find('[data-testid="theme-element-expression"]').setValue('(seq > 0')
+    expect(wrapper.find('[data-testid="theme-error-banner"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="theme-element-expression"]').setValue('(seq > 0)')
+    expect(wrapper.find('[data-testid="theme-error-banner"]').exists()).toBe(false)
   })
 
   it('空规则保存被拦下（必填提示，不请求接口）', async () => {
-    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce(null)
+    vi.mocked(getProcessDefThemeRule).mockResolvedValueOnce('')
     const wrapper = mountDialog()
     await openDialog(wrapper)
 
-    await wrapper
-      .findAll('.el-button')
-      .find((button) => button.text() === '保存')
-      ?.trigger('click')
+    await wrapper.find('[data-testid="theme-save"]').trigger('click')
     await flushPromises()
+
     expect(updateProcessDefThemeRule).not.toHaveBeenCalled()
   })
 })

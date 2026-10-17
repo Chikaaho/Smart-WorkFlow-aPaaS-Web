@@ -177,9 +177,12 @@ describe('RelatedProcessesPanel', () => {
     await vi.waitFor(() => expect(mockGetProcessDefThemeRule).toHaveBeenCalledWith(2))
     await flushPromises()
 
-    const chips = wrapper.findAll('.theme-editor__chip')
-    expect(chips.map((chip) => chip.attributes('data-token'))).toEqual(['{SEQ:3}'])
-    expect(wrapper.find('.theme-editor').findAll('.theme-editor__add').length).toBe(5)
+    // 0.1.7 #37 要素编排器：要素条按当前规则回显（常量独立成格），选中首要素后配置区与六类要素按钮可见
+    const chips = wrapper.findAll('[data-testid="theme-element-chip"]')
+    expect(chips.map((chip) => chip.attributes('data-raw'))).toEqual(['JRZX_', '{SEQ:3}'])
+    expect(chips[0]!.attributes('data-kind')).toBe('text')
+    expect(wrapper.find('[data-testid="theme-element-config"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-testid^="theme-element-add-"]').length).toBe(6)
   })
 
   it('流程编号设置：无关联流程时入口为空操作（不打开任何弹窗）', async () => {
