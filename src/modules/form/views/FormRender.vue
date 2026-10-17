@@ -688,7 +688,8 @@ onMounted(() => {
                 data-testid="form-render-submit"
                 @click="handleSubmit"
               >
-                {{ t('form.launch') }}
+                <!-- 0.1.7 #19：提交，不再暗示必有流程 -->
+                {{ t('common.submit') }}
               </el-button>
             </template>
           </div>

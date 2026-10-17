@@ -226,7 +226,7 @@ describe('FormRender', () => {
 
     await flushPromises()
 
-    expect(wrapper.find('.form-render-page__top-actions').text()).toContain('发起流程')
+    expect(wrapper.find('.form-render-page__top-actions').text()).toContain('提交')
   })
 
   it('shows required validation inline and keeps the next grid row below the error', async () => {
@@ -245,7 +245,7 @@ describe('FormRender', () => {
     await flushPromises()
     const submitButton = wrapper
       .findAll('.form-render-page__top-actions button')
-      .find((button) => button.text().includes('发起流程'))
+      .find((button) => button.text().includes('提交'))
     expect(submitButton).toBeDefined()
     await submitButton!.trigger('click')
     await flushPromises()

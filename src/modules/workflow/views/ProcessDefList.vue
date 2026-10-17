@@ -17,12 +17,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { themeRuleDisplay } from '@/modules/workflow/utils/theme-rule'
 import { ListActionsColumn, ListEmpty, ListPagination } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
-import {
-  pageProcessDefs,
-  getProcessDefDefinition,
-  publishProcessDef,
-  deleteProcessDef,
-} from '@/modules/workflow/api'
+import { pageProcessDefs, getProcessDefDefinition, publishProcessDef } from '@/modules/workflow/api'
 import type { ProcessDef } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
@@ -196,7 +191,6 @@ const viewerGraph = ref<ProcessGraphDocument | null>(null)
 const publishingId = ref<number | null>(null)
 
 // ─── 删除流程定义 ───
-const deletingId = ref<number | null>(null)
 
 // ─── 创建流程定义 ───
 const createDialogVisible = ref(false)
@@ -284,13 +278,6 @@ function rowActions(row: unknown): ListAction[] {
       onClick: () => void handlePublish(item),
     },
     {
-      key: 'delete',
-      label: t('common.delete'),
-      type: 'danger',
-      visible: item.status === 'DRAFT',
-      onClick: () => void handleDelete(item),
-    },
-    {
       key: 'themeRule',
       label: t('workflow.themeRuleAction'),
       onClick: () => openThemeRule(item),
@@ -376,29 +363,6 @@ async function handlePublish(row: ProcessDef) {
     }
   } finally {
     publishingId.value = null
-  }
-}
-
-/** 删除流程定义（带确认对话框，仅 DRAFT 状态可删除） */
-async function handleDelete(row: ProcessDef) {
-  if (row.status !== 'DRAFT') {
-    ElMessage.warning(t('workflow.onlyDraftDeletable'))
-    return
-  }
-
-  deletingId.value = row.id
-  try {
-    await deleteProcessDef(row.id)
-    ElMessage.success(t('common.deleteSuccess'))
-    await loadList()
-  } catch (err) {
-    if (err instanceof ApiError) {
-      ElMessage.error(err.msg)
-    } else {
-      ElMessage.error(t('common.deleteFailed'))
-    }
-  } finally {
-    deletingId.value = null
   }
 }
 

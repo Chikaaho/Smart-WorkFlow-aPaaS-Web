@@ -15,12 +15,11 @@ const { t } = useI18n()
  *     本轮后端无挂起/激活能力，不提供对应按钮（不伪装支持）。
  */
 import { defineAsyncComponent, ref, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import {
   createProcessDef,
   pageProcessDefs,
-  deleteProcessDef,
   themeRuleDisplay,
   themeRuleDialogLoader,
 } from '@/adapters/process-catalog'
@@ -135,30 +134,7 @@ function openVersion(row: ProcessDef) {
   versionVisible.value = true
 }
 
-/** 更多：删除关联流程（既有真实能力；发布中的流程是否可删由后端校验兜底）。 */
-async function removeProcess(row: ProcessDef) {
-  try {
-    await ElMessageBox.confirm(
-      t('form.relatedProcessDeleteConfirm', { name: row.name }),
-      // 复用既有「删除确认」标题键（原 common.warningTitle 不存在，实景里标题显示为键名）
-      t('common.deleteConfirmTitle'),
-      {
-        type: 'warning',
-        confirmButtonText: t('common.delete'),
-        cancelButtonText: t('common.cancel'),
-      },
-    )
-  } catch {
-    return
-  }
-  try {
-    await deleteProcessDef(row.id)
-    ElMessage.success(t('form.relatedProcessDeleted'))
-    await load()
-  } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.deleteFailed'))
-  }
-}
+// 0.1.7 #21：流程定义禁删——关联流程面板不提供删除。
 
 function statusLabel(status: ProcessDef['status']) {
   if (status === 'PUBLISHED') return t('form.relatedProcessStatusEnabled')
@@ -304,13 +280,6 @@ function openNumberSettings() {
                   @click="openVersion(procRow(row))"
                 >
                   {{ t('common.version') }}
-                </el-button>
-                <el-button
-                  class="related-processes__action"
-                  size="small"
-                  @click="removeProcess(procRow(row))"
-                >
-                  {{ t('common.delete') }}
                 </el-button>
               </div>
             </template>

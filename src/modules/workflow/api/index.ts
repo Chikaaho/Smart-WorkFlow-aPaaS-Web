@@ -201,13 +201,7 @@ export async function pageProcessDefs(
   return adaptPage(raw)
 }
 
-/** DELETE /workflow/defs/{id} → void */
-export async function deleteProcessDef(id: number): Promise<void> {
-  return request<void>({
-    method: 'DELETE',
-    url: `/workflow/defs/${id}`,
-  })
-}
+// 0.1.7 #21：流程定义禁删，不提供删除 API（表单可软删走 form-def.deleteFormDef）。
 
 /** POST /workflow/defs/{id}/publish → ProcessDef */
 export async function publishProcessDef(id: number | string): Promise<ProcessDef> {

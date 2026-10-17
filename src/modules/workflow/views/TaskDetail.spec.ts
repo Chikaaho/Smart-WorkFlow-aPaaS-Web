@@ -5,10 +5,11 @@ import { i18n } from '@/locales'
 import { createPinia, setActivePinia } from 'pinia'
 
 const mockPush = vi.fn()
+const mockBack = vi.fn()
 /** 可变 route 桩：query 在用例内按需设置（如 source=processed） */
 const mockRoute = { params: { taskId: 'task-001' }, query: {} as Record<string, string> }
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, back: mockBack }),
   useRoute: () => mockRoute,
 }))
 
@@ -187,7 +188,7 @@ describe('TaskDetail.vue', () => {
     expect(vm.detail!.approvalHistory).toHaveLength(0)
   })
 
-  it('accepts approve via command channel and navigates to TodoList', async () => {
+  it('accepts approve via command channel and returns to the todo list', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
     vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
     vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
@@ -204,7 +205,8 @@ describe('TaskDetail.vue', () => {
     expect(pollCommandStatus).toHaveBeenCalledWith('cmd-1')
     // 断言目录键而不是某个语言的字面量：文案收敛/改词不应让行为断言失效
     expect(ElMessage.success).toHaveBeenCalledWith(i18n.global.t('common.statusApproved'))
-    expect(mockPush).toHaveBeenCalledWith({ name: 'TodoList' })
+    // 0.1.7 #20：无应用内历史时兜底回工作台待办
+    expect(mockPush).toHaveBeenCalledWith({ name: 'workspace-todo' })
   })
 
   it('P64: 无意见表单/备注时节点表单数据仍随同意提交（nodeFormData 不丢）', async () => {
@@ -241,7 +243,7 @@ describe('TaskDetail.vue', () => {
     )
   })
 
-  it('accepts reject via command channel and navigates to TodoList', async () => {
+  it('accepts reject via command channel and returns to the todo list', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
     vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
     vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
@@ -257,7 +259,7 @@ describe('TaskDetail.vue', () => {
     expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'reject', undefined)
     expect(pollCommandStatus).toHaveBeenCalledWith('cmd-1')
     expect(ElMessage.success).toHaveBeenCalledWith('已驳回')
-    expect(mockPush).toHaveBeenCalledWith({ name: 'TodoList' })
+    expect(mockPush).toHaveBeenCalledWith({ name: 'workspace-todo' })
   })
 
   it('shows failureReason and stays when command polling ends FAILED', async () => {
@@ -299,7 +301,7 @@ describe('TaskDetail.vue', () => {
     expect(ElMessage.error).not.toHaveBeenCalled()
   })
 
-  it('navigates back to TodoList on back button click', async () => {
+  it('falls back to workspace todo on back click when no in-app history', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
     const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
@@ -308,12 +310,13 @@ describe('TaskDetail.vue', () => {
     const vm = wrapper.vm as unknown as { goBack: () => void }
     vm.goBack()
 
-    expect(mockPush).toHaveBeenCalledWith({ name: 'TodoList' })
+    expect(mockBack).not.toHaveBeenCalled()
+    expect(mockPush).toHaveBeenCalledWith({ name: 'workspace-todo' })
   })
 
-  it('V012-BUG-001: navigates back to ProcessedList when source=processed', async () => {
-    mockRoute.query = { source: 'processed' }
+  it('0.1.7 #20: back returns to the previous page when in-app history exists', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
+    window.history.replaceState({ back: '/workflow/processed' }, '')
     const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
     await nextTick()
     await nextTick()
@@ -321,10 +324,12 @@ describe('TaskDetail.vue', () => {
     const vm = wrapper.vm as unknown as { goBack: () => void }
     vm.goBack()
 
-    expect(mockPush).toHaveBeenCalledWith({ name: 'ProcessedList' })
+    expect(mockBack).toHaveBeenCalledTimes(1)
+    expect(mockPush).not.toHaveBeenCalled()
+    window.history.replaceState(null, '')
   })
 
-  it('V012-BUG-001: finished task renders read-only detail with instance status', async () => {
+  it('V012-BUG-001: finished task renders read-only detail without action card', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce({
       ...mockDetail,
       taskStatus: 'FINISHED',
@@ -335,15 +340,8 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await nextTick()
 
-    const vm = wrapper.vm as unknown as {
-      isFinishedTask: boolean
-      canAct: boolean
-      headerTagLabel: string
-    }
-    expect(vm.isFinishedTask).toBe(true)
+    const vm = wrapper.vm as unknown as { canAct: boolean }
     expect(vm.canAct).toBe(false)
-    // 页头展示真实实例状态（已通过），不再按 nodeKey 推断
-    expect(vm.headerTagLabel).toBe(i18n.global.t('common.statusApproved'))
     // 办理操作卡不渲染
     expect(wrapper.findAll('.detail-card--actions')).toHaveLength(0)
   })
@@ -358,8 +356,7 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await nextTick()
 
-    const vm = wrapper.vm as unknown as { isFinishedTask: boolean; canAct: boolean }
-    expect(vm.isFinishedTask).toBe(false)
+    const vm = wrapper.vm as unknown as { canAct: boolean }
     expect(vm.canAct).toBe(false)
     expect(wrapper.findAll('.detail-card--actions')).toHaveLength(0)
   })

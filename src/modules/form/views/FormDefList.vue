@@ -12,13 +12,14 @@ const { t } = useI18n()
  */
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import {
   pageFormDefs,
   updateFormVisibility,
   createFormDef,
   saveFormConfig,
+  deleteFormDef,
 } from '@/modules/form/api/form-def'
 import { disableFormDef, enableFormDef } from '@/modules/form/api/i2-choices'
 import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/utils/form-def-status'
@@ -290,6 +291,30 @@ async function toggleLifecycleRow(r: unknown, action: 'disable' | 'enable') {
   }
 }
 
+// 0.1.7 #21：表单删除（软删）——任何状态可删，物理表/快照/数据保留
+async function deleteRow(row: FormDefListItem) {
+  try {
+    await ElMessageBox.confirm(
+      t('form.appCenter.deleteFormConfirm', { name: row.name }),
+      t('common.deleteConfirmTitle'),
+      {
+        type: 'warning',
+        confirmButtonText: t('common.delete'),
+        cancelButtonText: t('common.cancel'),
+      },
+    )
+  } catch {
+    return
+  }
+  try {
+    await deleteFormDef(row.id)
+    ElMessage.success(t('common.deleteSuccess'))
+    await loadList()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : t('common.deleteFailed'))
+  }
+}
+
 function openVisibility(row: FormDefListItem) {
   visibilityForm.value = row
   try {
@@ -331,6 +356,12 @@ function rowActions(r: unknown): ListAction[] {
       type: 'success',
       visible: row.status === 'DISABLED',
       onClick: () => toggleLifecycleRow(row, 'enable'),
+    },
+    {
+      key: 'delete',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => deleteRow(row),
     },
   ]
 }

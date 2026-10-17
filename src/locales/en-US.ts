@@ -1145,7 +1145,6 @@ export default {
     publishedFrozenNote:
       'This form is published: table name and fields are frozen and cannot be edited.',
     backToProcessCenter: 'Back to process center',
-    launch: 'Start process',
     submitDraft: 'Submit draft',
     titleWithKey: 'Form — {formKey}',
     initiateTitle: 'Start {title}',

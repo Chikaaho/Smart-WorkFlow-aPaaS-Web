@@ -38,8 +38,4 @@ export async function createProcessDef(req: CreateProcessDefRequest): Promise<vo
   await create(req)
 }
 
-/** 删除流程定义。 */
-export async function deleteProcessDef(id: number): Promise<void> {
-  const { deleteProcessDef: remove } = await import('@/modules/workflow/api')
-  await remove(id)
-}
+// 0.1.7 #21：流程定义禁删，接缝层不提供删除。

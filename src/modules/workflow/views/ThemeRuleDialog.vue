@@ -237,6 +237,7 @@ watch(
   (visible) => {
     if (visible) void loadThemeRule()
   },
+  { immediate: true },
 )
 
 function close() {

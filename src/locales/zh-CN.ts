@@ -1108,7 +1108,6 @@ export default {
     initiationScope: '发起范围',
     publishedFrozenNote: '此表单已发布，表名和字段已冻结，不可编辑。',
     backToProcessCenter: '返回流程中心',
-    launch: '发起流程',
     submitDraft: '提交草稿',
     titleWithKey: '表单 — {formKey}',
     initiateTitle: '发起{title}',
