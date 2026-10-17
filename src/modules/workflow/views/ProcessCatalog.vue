@@ -509,17 +509,8 @@ onMounted(() => {
 }
 /* V012-BUG-009 复开：列表化（不用卡片）——分类分组带 + 多列条目，参考蓝凌流程发起 */
 .catalog-list {
-  /* 0.1.7 #41（Owner）：流程集合区加画布底纹——与流程设计器画布同源（24px 网格、#eef2f8 线），
-     外框用画布的虚线圆角框，使列表区读起来就是「一块画布」。 */
   min-height: 120px;
-  padding: 16px 16px 6px;
-  border: 1px dashed #c6cce0;
-  border-radius: 12px;
-  background-color: #fff;
-  background-image:
-    linear-gradient(to right, #eef2f8 1px, transparent 1px),
-    linear-gradient(to bottom, #eef2f8 1px, transparent 1px);
-  background-size: 24px 24px;
+  background: #fff;
 }
 .catalog-group {
   margin-bottom: 14px;
