@@ -66,6 +66,7 @@ vi.mock('element-plus', async (importOriginal) => {
 })
 
 import { getFormDefinition, getFormData, submitForm } from '@/modules/form/api/form'
+import { countProcessInstancesByBusinessKey } from '@/adapters/process-runtime'
 import {
   getDraft,
   createDraft,
@@ -427,8 +428,57 @@ function findButtonByText(wrapper: ReturnType<typeof mount>, text: string) {
   return wrapper.findAll('button').find((b) => b.text().includes(text)) ?? null
 }
 
+/**
+ * 提交成功确认：弹层文案固定为「提交成功」，且实例探测走用户态 adapter（表单键 + 记录 ID）。
+ */
+describe('FormRender 提交成功确认', () => {
+  beforeEach(() => {
+    vi.mocked(getFormDefinition).mockReset()
+    vi.mocked(submitForm).mockReset()
+    vi.mocked(countProcessInstancesByBusinessKey).mockReset()
+    mockQuery = {}
+  })
+
+  it('新建提交成功后只提示「提交成功」，并按表单键+记录 ID 探测实例', async () => {
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '灾备演练',
+      fields: [{ name: 'drill_name', label: '演练名称', type: 'TEXT', required: false }],
+    })
+    vi.mocked(submitForm).mockResolvedValueOnce('rec-900')
+    vi.mocked(countProcessInstancesByBusinessKey).mockResolvedValueOnce(1)
+
+    // el-dialog 内容默认 teleport 到 body：桩成内联渲染，断言提交确认面文案
+    const submitStubs = {
+      ...baseStubs,
+      'el-dialog': {
+        props: ['modelValue'],
+        template: '<div v-if="modelValue" class="submit-dialog-stub"><slot /></div>',
+      },
+      'el-result': {
+        props: ['title', 'subTitle'],
+        template: '<div class="result-stub" :data-sub-title="subTitle">{{ title }}</div>',
+      },
+    }
+    const wrapper = mount(FormRender, { global: { stubs: submitStubs } })
+    await flushPromises()
+
+    const submitBtn = findButtonByText(wrapper, '提交')
+    expect(submitBtn).not.toBeNull()
+    await submitBtn!.trigger('click')
+    await flushPromises()
+
+    expect(countProcessInstancesByBusinessKey).toHaveBeenCalledWith('test-form-key', 'rec-900')
+    const dialogText = wrapper.find('.submit-dialog-stub').text()
+    expect(dialogText).toBe('提交成功')
+    expect(wrapper.find('.result-stub').attributes('data-sub-title')).toBeUndefined()
+    wrapper.unmount()
+  })
+})
+
 describe('FormRender draft mode', () => {
   beforeEach(() => {
+    // 本套件断言「草稿路径不得触发表单数据提交」，历史必须在用例开始前清空
+    vi.mocked(submitForm).mockReset()
     vi.mocked(getFormDefinition).mockReset()
     vi.mocked(getDraft).mockReset()
     vi.mocked(createDraft).mockReset()

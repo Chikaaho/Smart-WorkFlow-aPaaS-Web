@@ -379,6 +379,24 @@ export async function getInstanceDetail(processInstanceId: string): Promise<Inst
   })
 }
 
+/**
+ * GET /workflow/my/instances/count?formKey=&businessKey= → 本人该记录下的实例数
+ *
+ * 提交后实例探测的用户态口径（发起人=当前用户，服务端强制）；不依赖
+ * 流程监控权限，普通发起人可用。缺参或非本人实例返回 0。
+ */
+export async function countMyInstancesByBusinessKey(
+  formKey: string,
+  businessKey: string,
+): Promise<number> {
+  const data = await request<{ count?: number }>({
+    method: 'GET',
+    url: '/workflow/my/instances/count',
+    params: { formKey, businessKey },
+  })
+  return typeof data?.count === 'number' ? data.count : 0
+}
+
 // ═══════════════════════════════════════
 // OA 个人中心：我发起的 / 我的草稿 / 我的已办
 // ═══════════════════════════════════════

@@ -172,7 +172,6 @@ const isViewMode = computed(() => !!recordId && mode === 'view')
 
 // ── 0.1.7 #16：提交成功 → 居中确认弹窗（用户点击确认后再离开） ──
 const submitDialogVisible = ref(false)
-const submitDialogText = ref('')
 /** 提交成功确认后的去向：已发起流程 → 我发起的；仅存数据 → 返回来源页 */
 const submitDialogGotoInstances = ref(false)
 
@@ -500,13 +499,10 @@ async function handleSubmit() {
     }
     const id = await submitForm(formKey, submitData, schema.value?.fields)
 
-    // 按业务键（记录 ID）查询流程实例，只有实例真实创建才提示"流程已发起"。
+    // 探测实例是否真实创建（决定确认后的去向）；提示文案统一为「提交成功」。
     // 实例由表单提交事件在事务提交后异步创建，短暂轮询等待其可见（最多约 5s）。
-    const started = await waitForInstanceByBusinessKey(id)
+    const started = await waitForInstanceByBusinessKey(formKey, id)
     // 0.1.7 #16：提交结果以居中确认弹窗呈现，由用户点击确认后再离开本页
-    submitDialogText.value = started
-      ? t('form.submittedProcessStarted')
-      : t('form.submittedDataOnly')
     submitDialogGotoInstances.value = started
     submitDialogVisible.value = true
   } catch (err) {
@@ -520,13 +516,13 @@ async function handleSubmit() {
   }
 }
 
-/** 按记录 ID 轮询查询流程实例是否真实创建（AFTER_COMMIT 异步创建存在短暂延迟） */
-async function waitForInstanceByBusinessKey(recordId: string): Promise<boolean> {
+/** 按表单键+记录 ID 轮询查询本人实例是否真实创建（AFTER_COMMIT 异步创建存在短暂延迟） */
+async function waitForInstanceByBusinessKey(formKey: string, recordId: string): Promise<boolean> {
   const { countProcessInstancesByBusinessKey } = await import('@/adapters/process-runtime')
   const maxAttempts = 10
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      if ((await countProcessInstancesByBusinessKey(recordId)) > 0) return true
+      if ((await countProcessInstancesByBusinessKey(formKey, recordId)) > 0) return true
     } catch {
       // 查询失败不判定为未发起，继续重试直至超限
     }
@@ -848,7 +844,7 @@ onMounted(() => {
       :close-on-click-modal="false"
       class="form-render-page__submit-dialog"
     >
-      <el-result icon="success" title="提交成功" :sub-title="submitDialogText" />
+      <el-result icon="success" title="提交成功" />
       <template #footer>
         <el-button
           round

@@ -220,6 +220,25 @@ describe('modules/workflow/api', () => {
     })
   })
 
+  it('countMyInstancesByBusinessKey sends GET /workflow/my/instances/count with formKey+businessKey', async () => {
+    mockRequest.mockResolvedValueOnce({ count: 1, formKey: '灾备演练', businessKey: 'rec-900' })
+
+    const count = await workflowApi.countMyInstancesByBusinessKey('灾备演练', 'rec-900')
+
+    expect(count).toBe(1)
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/workflow/my/instances/count',
+      params: { formKey: '灾备演练', businessKey: 'rec-900' },
+    })
+  })
+
+  it('countMyInstancesByBusinessKey treats missing count as 0', async () => {
+    mockRequest.mockResolvedValueOnce({})
+
+    await expect(workflowApi.countMyInstancesByBusinessKey('灾备演练', 'rec-none')).resolves.toBe(0)
+  })
+
   it('myDrafts sends GET /workflow/drafts with pagination', async () => {
     mockRequest.mockResolvedValueOnce({ records: [], total: 0, pageNum: 1, pageSize: 10 })
     await workflowApi.myDrafts({ pageNum: 2, pageSize: 5 })
