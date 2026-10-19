@@ -17,11 +17,17 @@ export async function getProcessDefDefinitionByKey(
 }
 
 /**
- * 按业务键（表单记录 ID）计数流程实例：0 = 尚未创建。
+ * 按表单键 + 业务键（表单记录 ID）计数「本人发起」的流程实例：0 = 尚未创建。
  * 表单提交后实例为 AFTER_COMMIT 异步创建，调用方按需重试到超限即可。
+ *
+ * 走用户态端点（发起人=当前用户），**不经**流程监控权限：
+ * `/workflow/instances` 需要 workflow:monitor:view，普通发起人取到 403 会把
+ * 「已发起」误判为「仅保存数据」。
  */
-export async function countProcessInstancesByBusinessKey(businessKey: string): Promise<number> {
-  const { queryInstances } = await import('@/modules/workflow/api')
-  const page = await queryInstances({ pageNum: 1, pageSize: 1 }, { businessKey })
-  return page.list.length
+export async function countProcessInstancesByBusinessKey(
+  formKey: string,
+  businessKey: string,
+): Promise<number> {
+  const { countMyInstancesByBusinessKey } = await import('@/modules/workflow/api')
+  return countMyInstancesByBusinessKey(formKey, businessKey)
 }

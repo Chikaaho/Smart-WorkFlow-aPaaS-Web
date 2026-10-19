@@ -4869,6 +4869,25 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
+  // GET /api/workflow/my/instances/count — 提交后实例探测（本人 + 表单键 + 业务键）
+  // 先于 /api/workflow/my/instances/:id 注册，避免 "count" 被当作 :id 解析
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/instances/count',
+    handler: (_params, query) => {
+      const currentUserId = MOCK_CURRENT_SESSION.user.id
+      const formKey = String(query.formKey ?? '')
+      const businessKey = String(query.businessKey ?? '')
+      const count = MOCK_INSTANCES.filter(
+        (i) =>
+          i.businessKey === businessKey &&
+          (formKey ? i.formKey === formKey : true) &&
+          String(i.initiatorId) === currentUserId,
+      ).length
+      return { code: 0, message: 'ok', data: { count, formKey, businessKey } }
+    },
+  },
+
   // GET /api/workflow/my/instances/:id — 我发起的流程详情（进度 + 流转记录）
   {
     method: 'GET',

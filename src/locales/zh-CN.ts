@@ -720,8 +720,6 @@ export default {
     completeRequired: '请完善必填项后再提交',
     saveFailed: '保存失败，请稍后重试',
     processStarted: '流程已发起',
-    submittedProcessStarted: '提交成功，流程已发起',
-    submittedDataOnly: '提交成功（该表单未关联已发布流程，仅保存数据）',
     submitEndpointUnavailable: '提交失败：后端提交端点待上线',
     draftLoadFailedTitle: '草稿加载失败',
     draftCreated: '草稿已创建',

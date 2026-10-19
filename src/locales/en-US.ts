@@ -754,9 +754,6 @@ export default {
     completeRequired: 'Complete the required fields before submitting.',
     saveFailed: 'Failed to save. Try again later.',
     processStarted: 'Process started',
-    submittedProcessStarted: 'Submitted successfully. Process started.',
-    submittedDataOnly:
-      'Submitted successfully (this form is not linked to a published process; only the data was saved).',
     submitEndpointUnavailable:
       'Submission failed: the backend submit endpoint is not available yet.',
     draftLoadFailedTitle: 'Failed to load the draft',
