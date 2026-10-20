@@ -13,6 +13,13 @@ import { parseScript, runScript } from '@/modules/form/utils/script-interpreter'
 import { transpileScriptSugar } from '@/modules/form/utils/script-sugar'
 import type { ScriptFunctionDoc } from './script-catalog'
 
+interface SimResult {
+  ok: boolean
+  value?: unknown
+  log: string[]
+  error?: string
+}
+
 const props = defineProps<{
   title: string
   functions: ScriptFunctionDoc[]
@@ -20,6 +27,11 @@ const props = defineProps<{
   code: string
   /** 输入框占位（可选）。 */
   placeholder?: string
+  /**
+   * 服务端模拟运行（流程表达式）。提供时优先使用：与运行期同一脚本引擎（GraalJS + # 函数语法糖），
+   * 避免本地解释器与运行期语义漂移；表单脚本仍走本地解释器（表单表达式是异步插件入口，语义不同）。
+   */
+  simulate?: (code: string) => Promise<SimResult>
 }>()
 
 const emit = defineEmits<{
@@ -52,13 +64,6 @@ function insertFunction(fn: ScriptFunctionDoc) {
 }
 
 /* ── BF20261013-028：模拟运行（本地解释器执行；宿主函数返回示例值并记录调用） ── */
-
-interface SimResult {
-  ok: boolean
-  value?: unknown
-  log: string[]
-  error?: string
-}
 
 const simResult = ref<SimResult | null>(null)
 
@@ -105,8 +110,21 @@ function buildSimulationHost(log: string[]): Record<string, (...args: unknown[])
   return host
 }
 
-function simulate() {
+const simulating = ref(false)
+
+async function runSimulation() {
   simResult.value = null
+  if (props.simulate) {
+    simulating.value = true
+    try {
+      simResult.value = await props.simulate(working.value ?? '')
+    } catch (e) {
+      simResult.value = { ok: false, log: [], error: e instanceof Error ? e.message : String(e) }
+    } finally {
+      simulating.value = false
+    }
+    return
+  }
   try {
     const program = parseScript(transpileScriptSugar(working.value ?? ''))
     const log: string[] = []
@@ -162,7 +180,7 @@ function onSave() {
           :functions="props.functions"
           :placeholder="placeholder ?? '在此编写脚本；用 #函数名 调用内置函数（名字无需引号）'"
         />
-        <!-- BF20261013-028：模拟运行结果（本地解释器；获取类为示例值） -->
+        <!-- BF20261013-028：模拟运行结果（流程脚本=服务端同一引擎；表单脚本=本地解释器示例值） -->
         <div v-if="simResult" class="script-dialog__sim" data-testid="script-sim-result">
           <p class="script-dialog__sim-title">模拟运行结果</p>
           <p v-if="simResult.error" class="script-dialog__sim-error">{{ simResult.error }}</p>
@@ -173,13 +191,16 @@ function onSave() {
             <ul v-if="simResult.log.length" class="script-dialog__sim-log">
               <li v-for="(item, index) in simResult.log" :key="index">{{ item }}</li>
             </ul>
-            <p v-else class="script-dialog__sim-note">未调用内置函数</p>
+            <p v-else-if="!props.simulate" class="script-dialog__sim-note">未调用内置函数</p>
+            <p v-else class="script-dialog__sim-note">
+              由服务端脚本引擎执行（组织目录为真实数据，变量为示例值）
+            </p>
           </template>
         </div>
       </div>
     </div>
     <template #footer>
-      <el-button @click="simulate">模拟运行</el-button>
+      <el-button :loading="simulating" @click="runSimulation">模拟运行</el-button>
       <el-button @click="onCancel">取消</el-button>
       <el-button type="primary" @click="onSave">应用</el-button>
     </template>
