@@ -38,14 +38,20 @@ function onReferenceSelect(payload: IdValueProperty) {
 </script>
 
 <template>
-  <div class="dynamic-field__reference">
+  <!-- 只读回看：静态展示已选业务名称，不再渲染输入框与禁用按钮 -->
+  <div v-if="readonly" class="dynamic-field__reference-readonly">
+    <span v-if="referenceDisplayText">{{ referenceDisplayText }}</span>
+    <span v-else class="dynamic-field__reference-empty">{{ t('common.notSelected') }}</span>
+  </div>
+
+  <div v-else class="dynamic-field__reference">
     <el-input
       :model-value="referenceDisplayText"
       :placeholder="t('component.selectReferencePlaceholder')"
       readonly
     >
       <template #append>
-        <el-button :disabled="readonly || !targetFormId" @click="referenceSelectorVisible = true">
+        <el-button :disabled="!targetFormId" @click="referenceSelectorVisible = true">
           {{ t('common.select') }}
         </el-button>
       </template>
@@ -63,5 +69,16 @@ function onReferenceSelect(payload: IdValueProperty) {
 <style scoped>
 .dynamic-field__reference {
   width: 100%;
+}
+.dynamic-field__reference-readonly {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  color: var(--sw-text-primary);
+  line-height: 22px;
+  word-break: break-all;
+}
+.dynamic-field__reference-empty {
+  color: var(--sw-text-secondary);
 }
 </style>

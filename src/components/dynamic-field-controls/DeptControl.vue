@@ -60,11 +60,28 @@ const displayLabel = computed(() => {
   return labelOf(currentValue.value)
 })
 
+/** 只读且无权读取组织目录时，不暴露内部 ID，退化为业务数量描述。 */
+const resolvedLabels = computed(() => {
+  const ids = isMultiple.value ? selectedIds.value : currentValue.value ? [currentValue.value] : []
+  return ids
+    .map((id) => options.value.find((o) => o.id === id)?.label.replace(/^[\u3000\s]+/, ''))
+    .filter((label): label is string => Boolean(label))
+})
+
+const readonlyText = computed(() => {
+  if (resolvedLabels.value.length > 0) return resolvedLabels.value.join('、')
+  if (!hasValue.value) return ''
+  return isMultiple.value
+    ? t('component.selectedDeptCount', { count: selectedIds.value.length })
+    : t('component.selectedDept')
+})
+
 onMounted(async () => {
   try {
     options.value = await loadDeptChoices()
   } catch {
-    ElMessage.error(t('common.loadFailed'))
+    // 只读回看不弹错误提示：无组织目录权限时按业务数量兜底。
+    if (!props.readonly) ElMessage.error(t('common.loadFailed'))
     // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     options.value = []
   }
@@ -116,13 +133,19 @@ function clearValue(): void {
 </script>
 
 <template>
+  <!-- 只读回看：按业务名称静态展示，不再渲染成禁用输入框 -->
+  <div v-if="readonly" class="dept-readonly">
+    <span v-if="readonlyText">{{ readonlyText }}</span>
+    <span v-else class="dept-readonly__empty">{{ t('common.notSelected') }}</span>
+  </div>
+
   <el-input
+    v-else
     class="dept-picker__trigger"
     :size="subField ? 'small' : undefined"
     :model-value="displayLabel"
     :placeholder="t('common.selectDept')"
     readonly
-    :disabled="readonly"
     @click="openDialog"
   >
     <template #suffix>
@@ -164,6 +187,17 @@ function clearValue(): void {
 </template>
 
 <style scoped>
+.dept-readonly {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  color: var(--sw-text-primary);
+  line-height: 22px;
+  word-break: break-all;
+}
+.dept-readonly__empty {
+  color: var(--sw-text-secondary);
+}
 .dept-picker__trigger {
   cursor: pointer;
 }

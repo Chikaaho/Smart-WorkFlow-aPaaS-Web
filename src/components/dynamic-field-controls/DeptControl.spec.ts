@@ -67,14 +67,33 @@ describe('DeptControl 弹窗选择', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['12'])
   })
 
-  it('readonly 时点击不打开弹窗；清除按钮上抛 null', async () => {
+  it('readonly 时静态展示部门名，不渲染触发输入框、不打开弹窗', async () => {
     const wrapper = mount(DeptControl, {
       ...mountOptions,
       props: { ...mountOptions.props, modelValue: 10, readonly: true },
     })
     await nextTick()
-    await wrapper.find('.dept-picker__trigger input').trigger('click')
+    await nextTick()
+    expect(wrapper.find('.dept-readonly').text()).toContain('总公司')
+    expect(wrapper.find('.dept-picker__trigger').exists()).toBe(false)
     expect(wrapper.find('.dept-picker__table').exists()).toBe(false)
+  })
+
+  it('readonly 无组织目录权限时按业务数量兜底，不暴露内部 ID', async () => {
+    vi.mocked(loadDeptChoices).mockRejectedValueOnce(new Error('forbidden'))
+    const wrapper = mount(DeptControl, {
+      ...mountOptions,
+      props: {
+        ...mountOptions.props,
+        field: { ...field, multiple: true } as unknown as DynamicFieldSchema,
+        modelValue: ['10', '11'],
+        readonly: true,
+      },
+    })
+    await nextTick()
+    await nextTick()
+    expect(wrapper.find('.dept-readonly').text()).toContain('已选择 2 个部门')
+    expect(wrapper.find('.dept-readonly').text()).not.toContain('10')
   })
 })
 

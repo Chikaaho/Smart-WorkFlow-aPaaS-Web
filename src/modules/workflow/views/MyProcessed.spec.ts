@@ -25,6 +25,7 @@ const stubs = {
     emits: ['click'],
   },
   'el-select': { template: '<div/>', props: ['modelValue'] },
+  TaskDetailDialog: { template: '<div />' },
 }
 
 const mockItem: MyProcessedItem = {
@@ -83,5 +84,22 @@ describe('MyProcessed.vue', () => {
     await nextTick()
 
     expect(myProcessed).toHaveBeenLastCalledWith({ pageNum: 1, pageSize: 10 }, { source: 'ACTION' })
+  })
+
+  it('opens the shared task detail dialog from the detail action', async () => {
+    vi.mocked(myProcessed).mockResolvedValueOnce(mockPage)
+    const wrapper = mount(MyProcessed, { global: { stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      openDetail: (r: MyProcessedItem) => void
+      detailVisible: boolean
+      detailTaskId: string
+    }
+    vm.openDetail(mockItem)
+
+    expect(vm.detailVisible).toBe(true)
+    expect(vm.detailTaskId).toBe('my-processed-001')
   })
 })

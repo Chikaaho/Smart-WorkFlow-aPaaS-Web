@@ -42,7 +42,20 @@ import BusinessFormReadonly from '@/components/business-detail/BusinessFormReado
 const router = useRouter()
 const route = useRoute()
 
-const taskId = route.params.taskId as string
+/**
+ * 同一套任务详情既作为独立办理页，也嵌入统一详情弹窗：
+ * 列表传入 taskId；路由直达时回退读取路由参数。
+ */
+const props = withDefaults(
+  defineProps<{
+    taskId?: string
+    embedded?: boolean
+  }>(),
+  { taskId: '', embedded: false },
+)
+const emit = defineEmits<{ completed: [] }>()
+
+const taskId = props.taskId || (route.params.taskId as string)
 
 // ─── 页面状态 ───
 const detail = ref<TaskDetail | null>(null)
@@ -213,10 +226,10 @@ async function handleNodeFormDraft() {
   nodeFormSavingDraft.value = true
   try {
     await saveTaskNodeFormDraft(taskId, nodeFormModel.value)
-    ElMessage.success('节点表单草稿已保存')
+    ElMessage.success(t('workflow.taskFormSaved'))
     await loadNodeForm()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : '节点表单草稿保存失败')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.taskFormSaveFailed'))
   } finally {
     nodeFormSavingDraft.value = false
   }
@@ -335,6 +348,11 @@ const backLabel = computed(() => t('common.backShort'))
  * 0.1.7 #20：审批结束（通过/驳回及转办委托等完成动作）后返回上一页。
  */
 async function navigateAfterAction() {
+  // 弹窗内办理完成后关闭弹窗并由列表刷新，不触发整页导航。
+  if (props.embedded) {
+    emit('completed')
+    return
+  }
   try {
     if (hasInAppHistory()) {
       router.back()
@@ -360,7 +378,7 @@ const taskApproval = useTaskApproval({
       !nodeFormSubmitted.value &&
       !validateNodeFormRequired()
     ) {
-      ElMessage.error(nodeFormErrors.value[0] ?? '节点业务表单校验未通过')
+      ElMessage.error(nodeFormErrors.value[0] ?? t('workflow.taskFormValidationFailed'))
       return false
     }
     return true
@@ -540,7 +558,7 @@ async function handleApprove() {
   if (!ensureOpinionData()) return
   // P64 阶段Ⅰ：节点表单必填客户端预检（服务端 2433 为权威口径）
   if (nodeFormBound.value && !nodeFormSubmitted.value && !validateNodeFormRequired()) {
-    ElMessage.error(nodeFormErrors.value[0] ?? '节点业务表单校验未通过')
+    ElMessage.error(nodeFormErrors.value[0] ?? t('workflow.taskFormValidationFailed'))
     return
   }
   acting.value = 'approve'
@@ -743,6 +761,12 @@ const canAct = computed(
   () => detail.value?.taskStatus !== 'FINISHED' && detail.value?.canHandle === true,
 )
 
+/** 嵌入统一详情弹窗时，仅在有流程信息时呈现「审批进度」区块。 */
+const hasFlow = computed(
+  () =>
+    (detail.value?.approvalHistory?.length ?? 0) > 0 || Boolean(detail.value?.processDefinitionKey),
+)
+
 /** 催办仅对流程发起人呈现（真实契约：POST /workflow/my/instances/{id}/urge）。 */
 const isInitiator = computed(() => {
   const d = detail.value
@@ -786,9 +810,9 @@ onMounted(loadDetail)
 </script>
 
 <template>
-  <div v-loading="loading" class="task-detail">
+  <div v-loading="loading" class="task-detail" :class="{ 'task-detail--embedded': embedded }">
     <!-- 0.1.7 #18：页头只留左上角返回箭头，标题/状态/发起人等噪音全部去掉 -->
-    <div class="detail-header">
+    <div v-if="!embedded" class="detail-header">
       <button
         type="button"
         class="detail-header__arrow"
@@ -826,6 +850,9 @@ onMounted(loadDetail)
       </el-alert>
 
       <!-- 本次提交的表单数据：与抄送详情共用同一套业务表单只读展示 -->
+      <h4 v-if="embedded" class="task-detail__section">
+        {{ t('workflow.formDataReadonlySnapshot') }}
+      </h4>
       <BusinessFormReadonly
         v-if="detail.formKey && detail.businessKey"
         :form-key="detail.formKey"
@@ -837,20 +864,17 @@ onMounted(loadDetail)
       <el-card v-if="nodeForm && nodeFormBound" class="detail-card detail-card--node-form">
         <template #header>
           <span>
-            节点业务表单
-            <el-tag v-if="nodeFormSubmitted" size="small" type="success" class="nodeform-tag"
-              >已最终提交</el-tag
-            >
-            <el-tag v-else size="small" type="info" class="nodeform-tag">草稿</el-tag>
+            {{ t('workflow.taskFormSection') }}
+            <el-tag v-if="nodeFormSubmitted" size="small" type="success" class="nodeform-tag">
+              {{ t('workflow.taskFormSubmitted') }}
+            </el-tag>
+            <el-tag v-else size="small" type="info" class="nodeform-tag">
+              {{ t('workflow.taskFormDraft') }}
+            </el-tag>
           </span>
         </template>
         <div class="nodeform-body">
-          <small class="nodeform-meta">
-            {{ nodeForm.formName
-            }}<template v-if="nodeForm.formVersion"> · v{{ nodeForm.formVersion }}</template>
-            <template v-if="nodeForm.roundNo"> · 第 {{ nodeForm.roundNo }} 轮</template>
-            <template v-if="nodeFormSubmitted"> · 数据已生效，可读变量与历史回看</template>
-          </small>
+          <small class="nodeform-meta">{{ nodeForm.formName }}</small>
           <div class="nodeform-fields">
             <div v-for="field in nodeFormRenderFields" :key="field.name" class="nodeform-field">
               <div class="nodeform-field__label">
@@ -881,7 +905,7 @@ onMounted(loadDetail)
             >
               保存草稿
             </el-button>
-            <span class="nodeform-meta">最终提交与「同意」动作一并在服务端事务生效</span>
+            <span class="nodeform-meta">{{ t('workflow.taskFormSubmitNote') }}</span>
           </div>
         </div>
       </el-card>
@@ -955,6 +979,9 @@ onMounted(loadDetail)
     </div>
 
     <!-- 流程信息作为表单详情的外挂组件：与表单详情/任务详情共用同一控制面 -->
+    <h4 v-if="embedded && hasFlow" class="task-detail__section">
+      {{ t('workflow.approvalProgress') }}
+    </h4>
     <InstanceFlowPanel
       v-if="detail"
       :approval-history="detail.approvalHistory"
@@ -964,6 +991,9 @@ onMounted(loadDetail)
 
     <!-- 0.1.7 #18：审批意见在下方，全部操作按钮右下角；发起人常驻催办入口 -->
     <el-card v-if="detail && (canAct || isInitiator)" class="detail-card detail-card--actions">
+      <template v-if="canAct" #header>
+        <span class="detail-actions__title">{{ t('workflow.approvalSection') }}</span>
+      </template>
       <div class="detail-actions">
         <div v-if="opinionFields.length > 0" class="opinion-form">
           <div class="opinion-form__title">审批意见</div>
@@ -1262,6 +1292,22 @@ onMounted(loadDetail)
   padding: 4px 0 10px;
   background: var(--sw-surface-page, #f5f7fa);
 }
+/* 嵌入统一详情弹窗：取消整页定位，由弹窗正文滚动；操作栏仍吸底靠右。 */
+.task-detail--embedded {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
+}
+/* 与统一只读详情弹窗的区块标题同一视觉口径。 */
+.task-detail__section {
+  margin: 16px 0 8px;
+  color: var(--sw-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
 .detail-header__arrow {
   display: inline-flex;
   align-items: center;
@@ -1368,6 +1414,20 @@ onMounted(loadDetail)
   bottom: 0;
   z-index: 5;
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06);
+}
+.detail-actions__title {
+  color: var(--sw-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+/* 审批操作栏收敛为紧凑尺寸，按钮统一靠右。 */
+.detail-card--actions :deep(.el-button) {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.detail-card--actions :deep(.el-select__wrapper) {
+  min-height: 30px;
 }
 .detail-actions {
   display: flex;

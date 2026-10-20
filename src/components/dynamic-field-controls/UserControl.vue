@@ -38,11 +38,32 @@ const singleModelValue = computed(() =>
 /** 多选绑定值：归一化为 ID 串数组（JSON 数组串 / 数组 / 单值宽容兼容）。 */
 const selectedIds = computed(() => (isMultiple.value ? normalizeIdList(props.modelValue) : []))
 
+/** 只读回看：选中 ID 解析为业务名称；解析不到时不暴露内部 ID。 */
+const readonlyIds = computed(() => {
+  if (isMultiple.value) return selectedIds.value
+  return singleModelValue.value ? [singleModelValue.value] : []
+})
+
+const resolvedLabels = computed(() =>
+  readonlyIds.value
+    .map((id) => options.value.find((o) => o.id === id)?.label)
+    .filter((label): label is string => Boolean(label)),
+)
+
+const readonlyText = computed(() => {
+  if (resolvedLabels.value.length > 0) return resolvedLabels.value.join('、')
+  if (readonlyIds.value.length === 0) return ''
+  return isMultiple.value
+    ? t('component.selectedUserCount', { count: readonlyIds.value.length })
+    : t('component.selectedUser')
+})
+
 onMounted(async () => {
   try {
     options.value = await loadUserChoices()
   } catch {
-    ElMessage.error(t('common.loadFailed'))
+    // 只读回看不弹错误提示：无人员目录权限时按业务数量兜底。
+    if (!props.readonly) ElMessage.error(t('common.loadFailed'))
     // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     options.value = []
   }
@@ -72,16 +93,38 @@ function onChange(value: unknown) {
 </script>
 
 <template>
+  <!-- 只读回看：按业务名称静态展示，不再渲染成禁用下拉框 -->
+  <div v-if="readonly" class="user-readonly">
+    <span v-if="readonlyText">{{ readonlyText }}</span>
+    <span v-else class="user-readonly__empty">{{ t('common.notSelected') }}</span>
+  </div>
+
   <el-select
+    v-else
     :size="subField ? 'small' : undefined"
     :multiple="isMultiple"
     :model-value="isMultiple ? selectedIds : singleModelValue"
     filterable
     clearable
-    :disabled="readonly"
     :placeholder="isMultiple ? t('component.selectUsers') : t('component.selectUser')"
     @change="onChange"
   >
     <el-option v-for="o in options" :key="o.id" :label="o.label" :value="o.id" />
   </el-select>
 </template>
+
+<style scoped>
+.user-readonly {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: center;
+  min-height: 40px;
+  color: var(--sw-text-primary);
+  line-height: 22px;
+  word-break: break-all;
+}
+.user-readonly__empty {
+  color: var(--sw-text-secondary);
+}
+</style>

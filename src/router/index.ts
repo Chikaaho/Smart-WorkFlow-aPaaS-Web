@@ -158,7 +158,8 @@ export const routes: RouteRecordRaw[] = [
           get title() {
             return i18n.global.t('router.formData')
           },
-          authority: ['form:data:template', 'form:data:import', 'form:data:export'],
+          // 查看数据列表只需 query；模板/导入/导出是页内动作按钮，不能反过来阻断整页。
+          authority: ['form:data:query'],
         },
       },
       {

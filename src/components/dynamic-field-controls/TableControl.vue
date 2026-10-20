@@ -115,7 +115,7 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
 .dynamic-field__table-inner th,
 .dynamic-field__table-inner td {
   padding: var(--sw-space-4) var(--sw-space-8);
-  text-align: left;
+  text-align: center;
   border: 1px solid var(--sw-border-light);
 }
 

@@ -13,7 +13,8 @@ import BusinessFormReadonly from './BusinessFormReadonly.vue'
 const stubs = {
   DynamicField: {
     props: ['field', 'modelValue', 'readonly', 'referenceLabel'],
-    template: '<div class="dynamic-field">{{ field.label || field.name }}</div>',
+    template:
+      '<div class="dynamic-field" :data-value="JSON.stringify(modelValue)">{{ field.label || field.name }}</div>',
   },
   'el-card': { template: '<div class="el-card"><slot/></div>' },
   'el-alert': { props: ['title'], template: '<div class="el-alert">{{ title }}</div>' },
@@ -50,6 +51,31 @@ describe('BusinessFormReadonly（业务表单只读展示唯一实现）', () =>
     expect(wrapper.text()).not.toContain('field_drill_depts')
     expect(wrapper.text()).not.toContain('field_drill_name')
     expect(wrapper.text()).not.toContain('["91002","91005"]')
+  })
+
+  it('多值字段为 JSON 数组串时按数组回显，只读选择控件能标出选中项', async () => {
+    mockGetFormDefinition.mockResolvedValue({
+      title: '灾备演练',
+      fields: [
+        {
+          name: 'field_drill_types',
+          type: 'MULTISELECT',
+          label: '演练类型',
+          options: [{ key: '机房断电', value: '机房断电' }],
+        },
+      ],
+    })
+    const wrapper = mount(BusinessFormReadonly, {
+      props: {
+        formKey: 'form_drill',
+        record: { field_drill_types: '["机房断电"]' },
+      },
+      global: { plugins: [i18n], stubs },
+    })
+    await flushPromises()
+
+    const field = wrapper.find('.dynamic-field')
+    expect(JSON.parse(field.attributes('data-value') ?? 'null')).toEqual(['机房断电'])
   })
 
   it('表单定义不可用时显示业务提示，不回退渲染原始记录键值', async () => {

@@ -8,15 +8,13 @@ const { t } = useI18n()
  * 分页展示当前用户已办理完成的任务，支持点击行跳转详情。
  */
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { queryProcessedTasks } from '@/modules/workflow/api'
 import type { ProcessedTask } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
-
-const router = useRouter()
+import TaskDetailDialog from '../components/TaskDetailDialog.vue'
 
 // ─── 列表状态 ───
 const list = ref<ProcessedTask[]>([])
@@ -25,6 +23,10 @@ const pageNum = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
 const errorMsg = ref('')
+
+// ─── 详情弹窗（与待办/抄送/表单数据共用同一详情布局） ───
+const detailVisible = ref(false)
+const detailTaskId = ref('')
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
 
@@ -59,12 +61,8 @@ function handlePageSizeChange(s: number) {
 }
 
 function handleRowClick(row: ProcessedTask) {
-  // 已办入口：携带 source=processed，详情页按已办只读渲染并回跳本列表（V012-BUG-001）
-  router.push({
-    name: 'TaskDetail',
-    params: { taskId: row.taskId },
-    query: { source: 'processed' },
-  })
+  detailTaskId.value = row.taskId
+  detailVisible.value = true
 }
 
 // 操作列（V012-BUG-002）：单按钮「详情」，行为与行点击跳转一致
@@ -133,4 +131,6 @@ onMounted(loadList)
       <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
   </StandardListTemplate>
+
+  <TaskDetailDialog v-model="detailVisible" :task-id="detailTaskId" />
 </template>

@@ -5,7 +5,7 @@
  * 抄送详情、表单数据详情、实例详情共用同一套弹窗布局：
  * 不展示流程名称/实例状态等元信息，只呈现业务表单字段与流程信息。
  */
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useSlots, watch } from 'vue'
 import { useI18n } from '@/locales'
 import BusinessFormReadonly from './BusinessFormReadonly.vue'
 import { getFormData } from '@/adapters/form-runtime'
@@ -40,6 +40,10 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
+const slots = useSlots()
+
+/** 任务办理详情由调用方经 #task 插槽传入（共享组件不横向依赖业务模块）。 */
+const hasTaskSlot = computed(() => Boolean(slots.task))
 
 const internalLoading = ref(false)
 const errorMsg = ref('')
@@ -113,28 +117,42 @@ watch(
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div v-loading="internalLoading" class="business-detail-dialog__body">
-      <el-alert v-if="errorMsg" :title="errorMsg" type="warning" :closable="false" show-icon />
+      <slot v-if="hasTaskSlot" name="task" />
 
-      <h4 class="business-detail-dialog__section">{{ t('workflow.formDataReadonlySnapshot') }}</h4>
-      <BusinessFormReadonly v-if="formKey" :form-key="formKey" :record="effectiveRecord" />
-      <el-alert v-else :title="t('workflow.noFormData')" type="info" :closable="false" show-icon />
+      <template v-else>
+        <el-alert v-if="errorMsg" :title="errorMsg" type="warning" :closable="false" show-icon />
 
-      <template v-if="hasFlow">
-        <h4 class="business-detail-dialog__section">{{ t('workflow.approvalProgress') }}</h4>
-        <InstanceFlowPanel
-          :approval-history="history"
-          :process-definition-key="processKey"
-          :current-node-key="currentNodeKey"
+        <h4 class="business-detail-dialog__section">
+          {{ t('workflow.formDataReadonlySnapshot') }}
+        </h4>
+        <BusinessFormReadonly v-if="formKey" :form-key="formKey" :record="effectiveRecord" />
+        <el-alert
+          v-else
+          :title="t('workflow.noFormData')"
+          type="info"
+          :closable="false"
+          show-icon
         />
+
+        <template v-if="hasFlow">
+          <h4 class="business-detail-dialog__section">{{ t('workflow.approvalProgress') }}</h4>
+          <InstanceFlowPanel
+            :approval-history="history"
+            :process-definition-key="processKey"
+            :current-node-key="currentNodeKey"
+          />
+        </template>
       </template>
     </div>
-    <template #footer>
-      <el-button @click="emit('update:modelValue', false)">{{ t('common.close') }}</el-button>
-    </template>
   </el-dialog>
 </template>
 
 <style scoped>
+/* 详情正文单独滚动；el-dialog 经 Teleport 渲染，需用 :global 穿透作用域。 */
+:global(.business-detail-dialog .el-dialog__body) {
+  max-height: 72vh;
+  overflow-y: auto;
+}
 .business-detail-dialog__body {
   min-height: 120px;
 }

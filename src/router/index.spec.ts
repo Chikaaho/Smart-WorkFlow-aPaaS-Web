@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useMenuStore } from '@/stores/menu'
 import { MenuType } from '@/contracts/menu'
 import type { MenuNode } from '@/contracts/menu'
-import { resolveDefaultRedirect } from './index'
+import { resolveDefaultRedirect, router } from './index'
 
 const mockSystemMenu: MenuNode[] = [
   {
@@ -231,5 +231,12 @@ describe('router/index resolveDefaultRedirect（v0.0.2 P54/P55：三类身份统
 
   it('menu store not yet populated (initial empty state): lands on /workspace', () => {
     expect(resolveDefaultRedirect()).toBe('/workspace')
+  })
+})
+
+describe('router/index 表单数据列表准入', () => {
+  it('form-data 路由以 form:data:query 为准，模板/导入/导出不阻断整页', () => {
+    const route = router.getRoutes().find((item) => item.name === 'form-data')
+    expect(route?.meta.authority).toEqual(['form:data:query'])
   })
 })

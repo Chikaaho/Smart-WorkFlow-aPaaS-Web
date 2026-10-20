@@ -2,12 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
-const mockPush = vi.fn()
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: mockPush }),
-  useRoute: () => ({ params: {} }),
-}))
-
 vi.mock('@/modules/workflow/api', () => ({
   queryProcessedTasks: vi.fn(),
 }))
@@ -42,6 +36,7 @@ const stubs = {
     template: '<button @click="$emit(\'click\')"><slot/></button>',
     emits: ['click'],
   },
+  TaskDetailDialog: { template: '<div />' },
 }
 
 const mockRecords: ProcessedTask[] = [
@@ -162,19 +157,20 @@ describe('ProcessedList.vue', () => {
     expect(vm.list[0].endTime).toBeNull()
   })
 
-  it('navigates to TaskDetail on row click', async () => {
+  it('opens the shared task detail dialog on row click', async () => {
     vi.mocked(queryProcessedTasks).mockResolvedValueOnce(mockPageResult)
     const wrapper = mount(ProcessedList, { global: { stubs } })
     await nextTick()
     await nextTick()
 
-    const vm = wrapper.vm as unknown as { handleRowClick: (r: ProcessedTask) => void }
+    const vm = wrapper.vm as unknown as {
+      handleRowClick: (r: ProcessedTask) => void
+      detailVisible: boolean
+      detailTaskId: string
+    }
     vm.handleRowClick(mockRecords[0])
 
-    expect(mockPush).toHaveBeenCalledWith({
-      name: 'TaskDetail',
-      params: { taskId: 't1' },
-      query: { source: 'processed' },
-    })
+    expect(vm.detailVisible).toBe(true)
+    expect(vm.detailTaskId).toBe('t1')
   })
 })

@@ -9,15 +9,13 @@ const { t } = useI18n()
  * （ACTION=动作通道 / HISTORY_COMPAT=历史兼容）。分页 + 来源筛选。
  */
 import { ref, computed, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ListFilterItem, ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { myProcessed } from '@/modules/workflow/api'
 import type { MyProcessedItem } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
-
-const router = useRouter()
+import TaskDetailDialog from '../components/TaskDetailDialog.vue'
 
 // ─── 列表状态 ───
 const list = ref<MyProcessedItem[]>([])
@@ -26,6 +24,10 @@ const pageNum = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
 const errorMsg = ref('')
+
+// ─── 详情弹窗（与待办/抄送/表单数据共用同一详情布局） ───
+const detailVisible = ref(false)
+const detailTaskId = ref('')
 
 const filter = reactive<{ source: string }>({ source: '' })
 
@@ -119,13 +121,10 @@ function handlePageSizeChange(s: number) {
   void loadList()
 }
 
-/** 详情跳转：携带 source=processed，详情页按已办只读渲染并回跳本列表（对齐 ProcessedList） */
+/** 详情：弹窗按已办只读渲染，不离开列表。 */
 function openDetail(row: MyProcessedItem) {
-  void router.push({
-    name: 'TaskDetail',
-    params: { taskId: row.taskId },
-    query: { source: 'processed' },
-  })
+  detailTaskId.value = row.taskId
+  detailVisible.value = true
 }
 
 // 操作列（V012-BUG-002）：单按钮「详情」
@@ -234,4 +233,6 @@ onMounted(loadList)
       <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
   </StandardListTemplate>
+
+  <TaskDetailDialog v-model="detailVisible" :task-id="detailTaskId" />
 </template>

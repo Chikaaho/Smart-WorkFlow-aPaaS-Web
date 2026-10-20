@@ -69,6 +69,19 @@ describe('UserControl 多选（P63）', () => {
     expect(optionValues).toContain('999')
   })
 
+  it('readonly 时静态展示人员姓名，不渲染禁用下拉框', async () => {
+    const wrapper = mount(UserControl, {
+      props: { field: userField(true), modelValue: '["5","6"]', readonly: true },
+      global: { plugins: [i18n] },
+    })
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.find('.user-readonly').text()).toContain('张三')
+    expect(wrapper.find('.user-readonly').text()).toContain('李四')
+    expect(wrapper.findComponent({ name: 'ElSelect' }).exists()).toBe(false)
+  })
+
   it('历史单个 ID 值宽容归一为单元素选择', async () => {
     const wrapper = mountControl(userField(true), '5')
     await nextTick()

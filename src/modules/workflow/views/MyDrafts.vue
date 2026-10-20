@@ -19,6 +19,7 @@ import { myDrafts, deleteDraft, submitDraft, pollCommandStatus } from '@/modules
 import type { BpmDraft, BpmDraftStatus } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
+import BusinessDetailDialog from '@/components/business-detail/BusinessDetailDialog.vue'
 
 const router = useRouter()
 
@@ -99,6 +100,25 @@ function openEdit(row: BpmDraft) {
   void router.push(`/form/form-render/${row.formKey}?${params.join('&')}`)
 }
 
+/** 查看：与其它列表共用只读详情弹窗；草稿内容取本地 payload，不触发整页跳转。 */
+const detailVisible = ref(false)
+const detailFormKey = ref('')
+const detailRecord = ref<Record<string, unknown> | null>(null)
+
+function openDetail(row: BpmDraft) {
+  detailFormKey.value = row.formKey
+  try {
+    const parsed = JSON.parse(row.payload || '{}')
+    detailRecord.value =
+      parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null
+  } catch {
+    detailRecord.value = null
+  }
+  detailVisible.value = true
+}
+
 // ─── 删除 ───
 async function handleDelete(row: BpmDraft) {
   try {
@@ -163,6 +183,11 @@ async function handleSubmit(row: BpmDraft) {
 function draftActions(row: unknown): ListAction[] {
   const item = row as BpmDraft
   return [
+    {
+      key: 'detail',
+      label: t('common.view'),
+      onClick: () => openDetail(item),
+    },
     {
       key: 'edit',
       label: t('common.edit'),
@@ -239,7 +264,14 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" :label="t('common.updateTime')" min-width="170" />
-      <ListActionsColumn :actions="draftActions" :width="150" />
+      <ListActionsColumn :actions="draftActions" :width="210" />
     </el-table>
   </StandardListTemplate>
+
+  <BusinessDetailDialog
+    v-model="detailVisible"
+    :title="t('common.detail')"
+    :form-key="detailFormKey"
+    :record="detailRecord"
+  />
 </template>

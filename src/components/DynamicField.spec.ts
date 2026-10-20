@@ -98,16 +98,15 @@ describe('DynamicField — readonly', () => {
     expect(wrapper.findComponent({ name: 'ElSelect' }).exists()).toBe(false)
   })
 
-  it('REFERENCE readonly → 选择按钮 disabled', () => {
+  it('REFERENCE readonly → 静态展示已选值，不渲染选择按钮', () => {
     const wrapper = mountField(
       { name: 'f7', type: 'REFERENCE', targetFormId: 'demo-form' },
-      '',
+      '7',
       true,
     )
-    const buttons = wrapper.findAll('button')
-    const selectBtn = buttons.find((b) => b.text() === '选择')
-    expect(selectBtn).toBeTruthy()
-    expect(selectBtn!.attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.dynamic-field__reference-readonly').exists()).toBe(true)
+    expect(wrapper.find('.dynamic-field__reference-readonly').text()).toBe('7')
+    expect(wrapper.findAll('button')).toHaveLength(0)
   })
 
   it('TABLE readonly → 隐藏添加行和删除按钮', () => {

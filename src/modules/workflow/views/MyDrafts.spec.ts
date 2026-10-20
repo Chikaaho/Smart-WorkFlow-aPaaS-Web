@@ -67,6 +67,7 @@ const stubs = {
   'el-select': { template: '<div/>', props: ['modelValue'] },
   'el-input': { template: '<div/>', props: ['modelValue'] },
   'el-tag': { template: '<span/>', props: ['type', 'size'] },
+  BusinessDetailDialog: { template: '<div />' },
 }
 
 const mockDraft: BpmDraft = {
@@ -144,6 +145,22 @@ describe('MyDrafts.vue', () => {
     ;(wrapper.vm as unknown as { openEdit: (r: BpmDraft) => void }).openEdit(mockDraft)
 
     expect(pushSpy).toHaveBeenCalledWith('/form/form-render/leave-request?mode=draft&draftId=1')
+  })
+
+  it('opens the shared read-only detail dialog with the draft payload', async () => {
+    vi.mocked(myDrafts).mockResolvedValueOnce(mockPage)
+    const wrapper = mount(MyDrafts, { global: { stubs } })
+    await nextTick()
+    ;(wrapper.vm as unknown as { openDetail: (r: BpmDraft) => void }).openDetail(mockDraft)
+
+    const vm = wrapper.vm as unknown as {
+      detailVisible: boolean
+      detailFormKey: string
+      detailRecord: Record<string, unknown> | null
+    }
+    expect(vm.detailVisible).toBe(true)
+    expect(vm.detailFormKey).toBe('leave-request')
+    expect(vm.detailRecord).toEqual({ applicant: '张三' })
   })
 
   it('deletes a draft after confirm and reloads', async () => {

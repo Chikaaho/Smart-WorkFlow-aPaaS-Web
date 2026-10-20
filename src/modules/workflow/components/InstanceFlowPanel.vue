@@ -328,10 +328,7 @@ const opinionDetailAttachmentEntries = computed(() => {
 </script>
 
 <template>
-  <el-card
-    class="instance-flow-panel"
-    :class="{ 'instance-flow-panel--people-active': activeTab === 'people' }"
-  >
+  <el-card class="instance-flow-panel">
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <!-- 流转记录：四列设计版式，行数据来自真实审批历史 -->
       <el-tab-pane name="records">
@@ -345,20 +342,12 @@ const opinionDetailAttachmentEntries = computed(() => {
           :closable="false"
           show-icon
         />
-        <div v-else class="p53-records-table">
-          <div class="p53-records-table__head">
-            <span>{{ t('taskDetailUi.recordTime') }}</span>
-            <span>{{ t('taskDetailUi.recordNode') }}</span>
-            <span>{{ t('taskDetailUi.operatorLabel') }}</span>
-            <span>{{ t('taskDetailUi.recordEvent') }}</span>
-          </div>
-          <div v-for="row in flowRecordRows" :key="row.key" class="p53-records-table__row">
-            <span>{{ row.time }}</span>
-            <span>{{ row.node }}</span>
-            <span>{{ row.operator }}</span>
-            <span>{{ row.event }}</span>
-          </div>
-        </div>
+        <el-table v-else class="detail-flow-table" :data="flowRecordRows" stripe>
+          <el-table-column prop="time" :label="t('taskDetailUi.recordTime')" width="180" />
+          <el-table-column prop="node" :label="t('taskDetailUi.recordNode')" min-width="180" />
+          <el-table-column prop="operator" :label="t('taskDetailUi.operatorLabel')" width="180" />
+          <el-table-column prop="event" :label="t('taskDetailUi.recordEvent')" min-width="280" />
+        </el-table>
       </el-tab-pane>
 
       <!-- 流程图：定义图 + 真实轨迹高亮，切 tab 懒加载；图内容由 ProcessGraphView 内核输出 -->
@@ -419,7 +408,7 @@ const opinionDetailAttachmentEntries = computed(() => {
         <template #label
           ><span class="detail-tab-label">{{ t('taskDetailUi.tabPeople') }}</span></template
         >
-        <el-table :data="peopleRows" stripe>
+        <el-table class="detail-flow-table" :data="peopleRows" stripe>
           <el-table-column prop="taskName" :label="t('workflow.approvalNode')" min-width="260" />
           <el-table-column :label="t('workflow.approver')" width="120">
             <template #default="{ row }">
@@ -514,11 +503,6 @@ const opinionDetailAttachmentEntries = computed(() => {
           </div>
         </template>
       </div>
-      <template #footer>
-        <el-button type="primary" class="p53-dialog-close" @click="opinionDetailVisible = false">
-          {{ t('common.close') }}
-        </el-button>
-      </template>
     </el-dialog>
   </el-card>
 </template>
@@ -560,34 +544,29 @@ const opinionDetailAttachmentEntries = computed(() => {
   display: inline-block;
   line-height: 19px;
 }
-/* 审批详情列表页签（设计行高 24 表头 / 44 行；表格 270..1386） */
-.instance-flow-panel--people-active
-  :deep(.el-tabs__content > .el-tab-pane[aria-hidden='false'] > .el-table) {
+/* 流转记录与审批详情列表共用同一套表格几何与字体，避免两页签视觉不一致。 */
+.instance-flow-panel :deep(.detail-flow-table) {
   box-sizing: border-box;
   width: calc(100% - 46px) !important;
   margin: 12px 22px 0 24px;
+  color: var(--sw-text-primary);
+  font-size: 14px;
 }
-.instance-flow-panel--people-active :deep(.el-table__header-wrapper tr),
-.instance-flow-panel--people-active :deep(.el-table__header-wrapper th) {
-  height: 32px !important;
-}
-.instance-flow-panel--people-active :deep(.el-table__body-wrapper tr),
-.instance-flow-panel--people-active :deep(.el-table__body-wrapper td) {
+.instance-flow-panel :deep(.detail-flow-table .el-table__header-wrapper th) {
   height: 44px;
+  padding: 0;
+  background: var(--sw-fill-base);
+  color: var(--sw-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
 }
-.instance-flow-panel--people-active :deep(.el-table .cell) {
+.instance-flow-panel :deep(.detail-flow-table .el-table__body-wrapper td) {
+  height: 52px;
+  padding: 0;
+}
+.instance-flow-panel :deep(.detail-flow-table .cell) {
+  padding: 0 16px;
   line-height: 20px;
-  padding-left: 1px;
-  padding-right: 0;
-}
-.instance-flow-panel--people-active :deep(.el-table__header-wrapper .cell) {
-  transform: translateY(-2.5px);
-}
-.instance-flow-panel--people-active :deep(.el-table__body-wrapper td:not(:last-child) .cell) {
-  transform: translateY(-6px);
-}
-.instance-flow-panel--people-active :deep(.el-table__body-wrapper td:last-child .cell) {
-  transform: translateY(-1px);
 }
 .instance-flow-panel :deep(.el-dialog .people-group__pending) {
   color: #a0a9bb;
@@ -604,48 +583,6 @@ const opinionDetailAttachmentEntries = computed(() => {
 }
 .people-status--info {
   color: var(--sw-text-secondary);
-}
-/* ─── 流转记录四列表（行数据来自真实审批历史） ─── */
-.p53-records-table {
-  box-sizing: border-box;
-  width: calc(100% - 46px);
-  margin: 12px 22px 0 24px;
-  border: 1px solid var(--sw-border-lighter);
-  color: var(--sw-text-primary);
-  font-size: 13px;
-}
-.p53-records-table__head,
-.p53-records-table__row {
-  display: grid;
-  /* 窄容器（表单详情 622px）与宽容器（任务详情）都保证四列可见：
-     事件/结果列保留可读宽度，不被挤成省略号。 */
-  grid-template-columns: 110px minmax(90px, 1fr) 100px minmax(120px, 1.8fr);
-  align-items: center;
-}
-.p53-records-table__head {
-  min-height: 32px;
-  background: var(--sw-fill-base);
-  color: var(--sw-text-secondary);
-  font-size: 12px;
-}
-.p53-records-table__row {
-  box-sizing: border-box;
-  min-height: 44px;
-  border-top: 1px solid var(--sw-border-lighter);
-}
-.p53-records-table__head span,
-.p53-records-table__row span {
-  min-width: 0;
-  padding: 0 12px 0 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.p53-records-table__head span {
-  transform: translateY(-4px);
-}
-.p53-records-table__row span {
-  transform: translateY(-8px);
 }
 /* ─── 流程图 tab：设计壳层（网格底 / 圆角画布 / 右侧当前节点状态卡） ─── */
 .p53-graph-shell {
@@ -927,29 +864,5 @@ const opinionDetailAttachmentEntries = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.instance-flow-panel :deep(.p53-opinion-dialog .el-dialog__footer) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-sizing: border-box;
-  height: 68px;
-  padding: 0 28px;
-  border-top: 1px solid var(--sw-border-light);
-}
-.instance-flow-panel :deep(.p53-opinion-dialog .el-dialog__footer > .p53-opinion-dialog__note),
-.instance-flow-panel :deep(.p53-opinion-dialog .el-dialog__footer > .p53-dialog-close) {
-  position: relative;
-  top: -16px;
-}
-.p53-opinion-dialog__note {
-  font-size: 12px;
-  color: var(--sw-text-secondary);
-}
-/* 弹窗关闭按钮（设计 108×42） */
-.instance-flow-panel :deep(.el-dialog__footer .p53-dialog-close) {
-  min-width: 108px;
-  height: 42px;
-  margin: 0;
 }
 </style>

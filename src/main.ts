@@ -3,6 +3,8 @@ import { createApp, watch } from 'vue'
 import 'element-plus/dist/index.css'
 // 品牌色单源主题，覆盖 Element Plus 默认 token，须在 Element Plus 样式之后导入。
 import './styles/tokens.css'
+// 表格表头与行数据统一居中，须在 Element Plus 样式之后导入。
+import './styles/tables.css'
 
 import App from './App.vue'
 import { pinia } from './stores'

@@ -9,21 +9,14 @@ const { t } = useI18n()
  * 支持行点击导航到任务详情页。真分页模式。
  */
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
-import {
-  queryTodoTasks,
-  acceptTaskAction,
-  pollCommandStatus,
-  claimTask,
-} from '@/modules/workflow/api'
+import { queryTodoTasks, claimTask } from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
 import type { TodoTask } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
-
-const router = useRouter()
+import TaskDetailDialog from '../components/TaskDetailDialog.vue'
 
 // ─── 列表状态 ───
 
@@ -31,9 +24,20 @@ const list = ref<TodoTask[]>([])
 const total = ref(0)
 const loading = ref(false)
 const errorMsg = ref('')
-const approvingId = ref<string | null>(null) // 当前正在审批的任务 ID（loading 态）
-const rejectingId = ref<string | null>(null) // 当前正在驳回的任务 ID（loading 态）
-const claimingId = ref<string | null>(null) // 当前正在领取的候选任务 ID（P64 阶段Ⅱ）
+const claimingId = ref<string | null>(null) // 正在领取的候选任务 ID（P64 阶段Ⅱ）
+
+// ─── 详情弹窗（与已办/抄送/表单数据共用同一只读详情布局；待办额外带审批区） ───
+const detailVisible = ref(false)
+const detailTaskId = ref('')
+
+function openDetail(row: TodoTask) {
+  detailTaskId.value = row.taskId
+  detailVisible.value = true
+}
+
+async function onDetailCompleted() {
+  await loadList()
+}
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
 
@@ -74,8 +78,7 @@ function handlePageSizeChange(s: number) {
 // ─── 行操作 ───
 
 /**
- * 操作列（V012-BUG-002）：通过 / 驳回两个直显按钮，
- * 保留行级 loading 与审批进行中的互斥 disabled。
+ * 操作列（V012-BUG-002）：候选组先领取；审批动作统一在详情弹窗底部「审批」区完成。
  */
 function rowActions(row: unknown): ListAction[] {
   const item = row as TodoTask
@@ -93,121 +96,17 @@ function rowActions(row: unknown): ListAction[] {
       },
     ]
   }
-  const busy = approvingId.value !== null || rejectingId.value !== null
   return [
     {
-      key: 'approve',
-      label: t('common.approve'),
-      type: 'primary',
-      loading: approvingId.value === item.taskId,
-      disabled: busy,
-      onClick: () => void handleApprove(item),
-    },
-    {
-      key: 'reject',
-      label: t('common.reject'),
-      type: 'danger',
-      loading: rejectingId.value === item.taskId,
-      disabled: busy,
-      onClick: () => void handleReject(item),
+      key: 'detail',
+      label: t('common.detail'),
+      onClick: () => openDetail(item),
     },
   ]
 }
 
-/**
- * 异步命令通道公共链路：受理（ACCEPTED ≠ 成功）→ 轮询命令状态到终态。
- * COMPLETED → 成功提示并从列表移除；FAILED → 展示失败原因并刷新；
- * 超时未终态 → 如实提示「处理中」，不伪装成功。
- */
-async function runTaskAction(
-  row: TodoTask,
-  action: 'complete' | 'reject',
-  successMsg: string,
-  failMsg: string,
-): Promise<void> {
-  try {
-    const accept = await acceptTaskAction(row.taskId, action)
-    const finalStatus = await pollCommandStatus(accept.commandId)
-    if (finalStatus?.status === 'COMPLETED') {
-      ElMessage.success(successMsg)
-      list.value = list.value.filter((t) => t.taskId !== row.taskId)
-      total.value = list.value.length
-    } else if (finalStatus?.status === 'FAILED') {
-      ElMessage.error(finalStatus.failureReason ?? failMsg)
-      await loadList()
-    } else {
-      ElMessage.warning(t('common.processingCheckLater'))
-      await loadList()
-    }
-  } catch (err) {
-    if (err instanceof ApiError) {
-      ElMessage.error(err.msg)
-    } else {
-      ElMessage.error(failMsg)
-    }
-    approvingId.value = null
-    rejectingId.value = null
-  }
-}
-
-async function handleApprove(row: TodoTask) {
-  // 防重复点击：在显示确认框前锁定，阻止快速点击创建多个对话框
-  if (approvingId.value || rejectingId.value) return
-  approvingId.value = row.taskId
-
-  let confirmed = false
-  try {
-    await ElMessageBox.confirm(t('workflow.confirmApprove'), t('workflow.approveConfirmTitle'), {
-      get confirmButtonText() {
-        return t('common.approve')
-      },
-      get cancelButtonText() {
-        return t('common.cancel')
-      },
-      type: 'info',
-    })
-    confirmed = true
-  } catch {
-    return // 用户取消
-  } finally {
-    if (!confirmed) approvingId.value = null
-  }
-  await runTaskAction(
-    row,
-    'complete',
-    t('common.statusApproved'),
-    t('workflow.approveActionFailed'),
-  )
-  approvingId.value = null
-}
-
-async function handleReject(row: TodoTask) {
-  if (rejectingId.value || approvingId.value) return
-  rejectingId.value = row.taskId
-
-  let confirmed = false
-  try {
-    await ElMessageBox.confirm(t('workflow.confirmReject'), t('workflow.rejectConfirmTitle'), {
-      get confirmButtonText() {
-        return t('common.reject')
-      },
-      get cancelButtonText() {
-        return t('common.cancel')
-      },
-      type: 'warning',
-    })
-    confirmed = true
-  } catch {
-    return // 用户取消
-  } finally {
-    if (!confirmed) rejectingId.value = null
-  }
-  await runTaskAction(row, 'reject', t('common.statusRejected'), t('workflow.rejectActionFailed'))
-  rejectingId.value = null
-}
-
 async function handleClaim(row: TodoTask) {
-  if (claimingId.value || approvingId.value || rejectingId.value) return
+  if (claimingId.value) return
   claimingId.value = row.taskId
 
   let confirmed = false
@@ -243,7 +142,7 @@ async function handleClaim(row: TodoTask) {
 }
 
 function handleRowClick(row: TodoTask) {
-  router.push({ name: 'TaskDetail', params: { taskId: row.taskId } })
+  openDetail(row)
 }
 
 onMounted(loadList)
@@ -305,7 +204,13 @@ onMounted(loadList)
         <template #default="{ row }">{{ row.initiatorName || '—' }}</template>
       </el-table-column>
       <el-table-column prop="createTime" :label="t('workflow.receiveTime')" min-width="170" />
-      <ListActionsColumn :actions="rowActions" :width="160" />
+      <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
   </StandardListTemplate>
+
+  <TaskDetailDialog
+    v-model="detailVisible"
+    :task-id="detailTaskId"
+    @completed="onDetailCompleted"
+  />
 </template>
