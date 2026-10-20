@@ -774,6 +774,16 @@ const isInitiator = computed(() => {
   return d != null && uid != null && String(d.initiatorId ?? '') === String(uid)
 })
 
+/** 已结束/失败/终止的流程只读：发起人也不能再催办。 */
+const flowActive = computed(() => {
+  const d = detail.value
+  if (!d) return false
+  if (d.instanceStatus != null) return d.instanceStatus === 'RUNNING'
+  return d.taskStatus === 'RUNNING'
+})
+
+const canUrge = computed(() => isInitiator.value && flowActive.value)
+
 async function onUrge(): Promise<void> {
   const d = detail.value
   if (!d?.processInstanceId) return
@@ -940,7 +950,7 @@ onMounted(loadDetail)
     />
 
     <!-- 0.1.7 #18：审批意见在下方，全部操作按钮右下角；发起人常驻催办入口 -->
-    <el-card v-if="detail && (canAct || isInitiator)" class="detail-card detail-card--actions">
+    <el-card v-if="detail && (canAct || canUrge)" class="detail-card detail-card--actions">
       <template v-if="canAct" #header>
         <span class="detail-actions__title">{{ t('workflow.approvalSection') }}</span>
       </template>
@@ -1069,7 +1079,7 @@ onMounted(loadDetail)
             >
           </div>
           <div class="detail-actions__btns">
-            <el-button v-if="isInitiator" :disabled="acting !== null" @click="onUrge">
+            <el-button v-if="canUrge" :disabled="acting !== null" @click="onUrge">
               {{ t('taskDetailUi.urgeAction') }}
             </el-button>
             <template v-if="canAct">

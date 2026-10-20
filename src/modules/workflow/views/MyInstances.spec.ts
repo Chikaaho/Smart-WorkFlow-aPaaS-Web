@@ -7,6 +7,15 @@ vi.mock('@/modules/workflow/api', () => ({
   myInstanceDetail: vi.fn(),
 }))
 
+// 流程面板经异步组件接缝懒加载；本文件只验证列表/详情弹窗行为，
+// 用静态桩隔离动态 import，避免测试环境拆除时仍在加载造成 teardown 竞态。
+vi.mock('@/adapters/instance-flow', () => ({
+  InstanceFlowPanel: {
+    name: 'InstanceFlowPanel',
+    template: '<div class="instance-flow-panel-stub" />',
+  },
+}))
+
 const mockPush = vi.fn()
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockPush }),

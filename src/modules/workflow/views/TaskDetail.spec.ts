@@ -385,6 +385,72 @@ describe('TaskDetail.vue', () => {
     expect(wrapper.findAll('.detail-card--actions')).toHaveLength(0)
   })
 
+  it('finished task never shows urge even when current user is the initiator', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '1',
+        username: 'initiator',
+        displayName: '发起人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set<string>(),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      taskStatus: 'FINISHED',
+      instanceStatus: 'APPROVED',
+      canHandle: false,
+    })
+    const wrapper = mount(TaskDetailView, {
+      global: { plugins: [i18n, pinia], stubs },
+    })
+    await nextTick()
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as { canAct: boolean; canUrge: boolean }
+    expect(vm.canAct).toBe(false)
+    expect(vm.canUrge).toBe(false)
+    expect(wrapper.findAll('.detail-card--actions')).toHaveLength(0)
+    expect(wrapper.text()).not.toContain(i18n.global.t('taskDetailUi.urgeAction'))
+  })
+
+  it('running task still shows urge to the initiator', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '1',
+        username: 'initiator',
+        displayName: '发起人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set<string>(),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      taskStatus: 'RUNNING',
+      instanceStatus: 'RUNNING',
+      canHandle: false,
+    })
+    const wrapper = mount(TaskDetailView, {
+      global: { plugins: [i18n, pinia], stubs },
+    })
+    await nextTick()
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as { canUrge: boolean }
+    expect(vm.canUrge).toBe(true)
+    expect(wrapper.text()).toContain(i18n.global.t('taskDetailUi.urgeAction'))
+  })
+
   it('V012-BUG-001: running task without handle permission hides approval actions', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce({
       ...mockDetail,
