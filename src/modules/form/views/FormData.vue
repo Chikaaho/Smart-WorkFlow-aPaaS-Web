@@ -38,6 +38,8 @@ const { hasPerm } = usePermission()
 const canTemplate = computed(() => hasPerm('form:data:template'))
 const canImport = computed(() => hasPerm('form:data:import'))
 const canExport = computed(() => hasPerm('form:data:export'))
+const canEdit = computed(() => hasPerm('form:data:edit'))
+const canDelete = computed(() => hasPerm('form:data:delete'))
 
 const route = useRoute()
 const router = useRouter()
@@ -297,27 +299,32 @@ async function handleDelete(row: Record<string, unknown>) {
   }
 }
 
-/** 统一操作列（V012-BUG-002）：查看/编辑直显，删除收进「更多」 */
+/** 统一操作列（V012-BUG-002）：查看恒显示；编辑/删除按动作权限显隐。 */
 function rowActions(r: unknown): ListAction[] {
   const row = r as Record<string, unknown>
-  return [
+  const actions: ListAction[] = [
     {
       key: 'view',
       label: t('common.view'),
       onClick: () => handleView(row),
     },
-    {
+  ]
+  if (canEdit.value) {
+    actions.push({
       key: 'edit',
       label: t('common.edit'),
       onClick: () => handleEdit(row),
-    },
-    {
+    })
+  }
+  if (canDelete.value) {
+    actions.push({
       key: 'delete',
       label: t('common.delete'),
       type: 'danger',
       onClick: () => handleDelete(row),
-    },
-  ]
+    })
+  }
+  return actions
 }
 
 // ── 值显示辅助 ──
