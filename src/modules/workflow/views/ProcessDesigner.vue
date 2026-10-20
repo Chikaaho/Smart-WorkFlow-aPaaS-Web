@@ -35,6 +35,7 @@ import {
   validateProcessDefGraph,
   publishedFormDefinition,
   pageProcessDefs,
+  previewProcessScript,
 } from '@/modules/workflow/api'
 import { pageFormDefs } from '@/adapters/form-catalog'
 import ScriptDialog from '@/components/ScriptDialog.vue'
@@ -1913,6 +1914,26 @@ function openProcessScriptDialog(title: string, code: string, target: ScriptDial
   scriptDialogVisible.value = true
 }
 
+/**
+ * 流程脚本模拟运行：交给服务端脚本引擎（与运行期同一 GraalJS + # 语法糖），
+ * 变量按图定义声明传给服务端，由其按类型生成示例值并加载真实组织目录。
+ */
+async function simulateProcessScript(code: string) {
+  const variables = (graph.value?.variables ?? []).map((item) => ({
+    name: item.varId,
+    type: item.type,
+  }))
+  const result = await previewProcessScript(code, variables)
+  if (result.kind === 'OK') {
+    return { ok: true, value: result.value, log: [] }
+  }
+  return {
+    ok: false,
+    log: [] as string[],
+    error: result.errorMessage || `脚本执行失败（${result.kind}）`,
+  }
+}
+
 function onScriptDialogSave(code: string) {
   const target = scriptDialogTarget
   if (!target) return
@@ -2993,7 +3014,12 @@ function nodeLabelLines(label: string) {
               <!-- 0.1.7 #36（Owner）：面板内不再混用 small 尺寸——输入框/选择器/按钮统一 32px 高 -->
               <el-form label-position="top">
                 <el-form-item :label="t('workflow.nodeName')">
-                  <el-input v-model="propForm.name as string" @change="applyProps" />
+                  <el-input
+                    v-model="propForm.name as string"
+                    @change="applyProps"
+                    @blur="applyProps"
+                    @keyup.enter="applyProps"
+                  />
                 </el-form-item>
                 <!-- 节点编号 / 审批方式（定义 config 元数据；只读展示） -->
                 <el-form-item v-if="nodeMeta.nodeKey" :label="t('workflow.nodeKeyLabel')">
@@ -3660,6 +3686,7 @@ function nodeLabelLines(label: string) {
       :title="scriptDialogTitle"
       :code="scriptDialogCode"
       :functions="PROCESS_SCRIPT_FUNCTIONS"
+      :simulate="simulateProcessScript"
       @save="onScriptDialogSave"
     />
 

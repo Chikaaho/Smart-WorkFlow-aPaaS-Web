@@ -259,6 +259,31 @@ export async function saveProcessDefGraph(id: number | string, graph: unknown): 
   })
 }
 
+/** 流程脚本模拟运行结果（与运行期同一脚本引擎）。 */
+export interface ProcessScriptPreviewResult {
+  kind: string
+  value?: unknown
+  typeName?: string | null
+  errorMessage?: string | null
+  durationMs?: number
+  samples?: Record<string, unknown>
+}
+
+/**
+ * POST /workflow/scripts/preview → 模拟运行流程表达式脚本。
+ * 流程表达式是计算值适配器（以 return 返回结果）；模拟与运行期使用同一引擎，避免两套解释器。
+ */
+export async function previewProcessScript(
+  script: string,
+  variables: Array<{ name: string; type?: string }>,
+): Promise<ProcessScriptPreviewResult> {
+  return request<ProcessScriptPreviewResult>({
+    method: 'POST',
+    url: '/workflow/scripts/preview',
+    data: { script, variables },
+  })
+}
+
 /** GET /workflow/defs/{id} → ProcessGraph（流程图定义，含节点配置） */
 export async function getProcessDefDefinition(id: number | string): Promise<ProcessGraphPayload> {
   return request<ProcessGraphPayload>({
