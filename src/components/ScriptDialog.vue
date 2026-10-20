@@ -191,7 +191,10 @@ function onSave() {
             <ul v-if="simResult.log.length" class="script-dialog__sim-log">
               <li v-for="(item, index) in simResult.log" :key="index">{{ item }}</li>
             </ul>
-            <p v-else class="script-dialog__sim-note">未调用内置函数</p>
+            <p v-else-if="!props.simulate" class="script-dialog__sim-note">未调用内置函数</p>
+            <p v-else class="script-dialog__sim-note">
+              由服务端脚本引擎执行（组织目录为真实数据，变量为示例值）
+            </p>
           </template>
         </div>
       </div>
