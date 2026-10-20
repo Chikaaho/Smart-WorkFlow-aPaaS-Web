@@ -109,7 +109,7 @@ describe('MyInstances.vue', () => {
     expect(wrapper.vm).toHaveProperty('errorMsg', '无权查看')
   })
 
-  it('0.1.7 #17：有表单绑定的实例直达数据表单页（不弹元数据框）', async () => {
+  it('详情改为统一弹窗打开：保留表单与流程详情，不再跳转整页', async () => {
     vi.mocked(myInstances).mockResolvedValueOnce(mockPage)
     vi.mocked(myInstanceDetail).mockResolvedValueOnce(mockDetail)
     const wrapper = mount(MyInstances, { global: { stubs } })
@@ -121,14 +121,14 @@ describe('MyInstances.vue', () => {
     await nextTick()
 
     expect(myInstanceDetail).toHaveBeenCalledWith(1)
-    expect(mockPush).toHaveBeenCalledWith({
-      path: '/form/form-render/leave-request',
-      query: { recordId: 'rec-leave-001', mode: 'view' },
-    })
-    expect((wrapper.vm as unknown as { detail: MyInstanceDetail | null }).detail).toBeNull()
+    expect(mockPush).not.toHaveBeenCalled()
+    expect((wrapper.vm as unknown as { detail: MyInstanceDetail | null }).detail).toEqual(
+      mockDetail,
+    )
+    expect((wrapper.vm as unknown as { detailVisible: boolean }).detailVisible).toBe(true)
   })
 
-  it('无表单绑定的实例回落元数据弹窗', async () => {
+  it('无表单绑定的实例同样使用统一弹窗', async () => {
     vi.mocked(myInstances).mockResolvedValueOnce(mockPage)
     const unbound = { ...mockDetail, formKey: '', businessKey: '' }
     vi.mocked(myInstanceDetail).mockResolvedValueOnce(unbound)

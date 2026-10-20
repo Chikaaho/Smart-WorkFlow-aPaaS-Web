@@ -11,6 +11,7 @@ const { t } = useI18n()
  * 抄送身份不含审批操作权（无同意/驳回入口）。
  */
 import { ref, computed, onMounted, reactive } from 'vue'
+import { ElMessage } from 'element-plus'
 import { ListFilterItem, ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
@@ -22,8 +23,7 @@ import {
 import type { ApprovalHistoryItem } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
-import BusinessFormReadonly from '../components/BusinessFormReadonly.vue'
-import InstanceFlowPanel from '../components/InstanceFlowPanel.vue'
+import BusinessDetailDialog from '@/components/business-detail/BusinessDetailDialog.vue'
 import { useWorkflowDisplayNames } from '../composables/use-workflow-display-names'
 
 const list = ref<MyCopyItem[]>([])
@@ -107,12 +107,9 @@ function handlePageSizeChange(s: number) {
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref<MyCopyDetail | null>(null)
-const detailError = ref('')
 
 async function openDetail(row: MyCopyItem) {
-  detailVisible.value = true
   detailLoading.value = true
-  detailError.value = ''
   detail.value = null
   try {
     detail.value = await queryMyCopyDetail(row.id)
@@ -120,8 +117,9 @@ async function openDetail(row: MyCopyItem) {
       void ensureProcess(detailProcessKey.value)
       void ensureForm(detailFormKey.value)
     }
+    detailVisible.value = true
   } catch (err) {
-    detailError.value = err instanceof ApiError ? err.msg : t('workflow.ccDetailLoadFailed')
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.ccDetailLoadFailed'))
   } finally {
     detailLoading.value = false
   }
@@ -161,23 +159,7 @@ const detailProcessKey = computed(() =>
 const detailFormKey = computed(() =>
   String(detailCopy.value.formKey ?? detailInstance.value?.formKey ?? ''),
 )
-const detailBusinessKey = computed(() =>
-  String(detailCopy.value.businessKey ?? detailInstance.value?.businessKey ?? ''),
-)
 const detailNodeKey = computed(() => String(detailCopy.value.nodeKey ?? ''))
-const detailStatus = computed(() =>
-  String(detailInstance.value?.status ?? detailCopy.value.instanceStatus ?? ''),
-)
-const detailDeliveryStatus = computed(() => String(detailCopy.value.deliveryStatus ?? ''))
-const detailCopyTime = computed(() => formatTime(detailCopy.value.createTime))
-
-const detailProcessName = computed(() => processName(detailProcessKey.value))
-const detailFormName = computed(() => formName(detailFormKey.value))
-const detailNodeName = computed(() => nodeName(detailProcessKey.value, detailNodeKey.value))
-const detailStatusLabel = computed(() => enumLabel('WORKFLOW_INSTANCE', detailStatus.value) || '-')
-const detailDeliveryLabel = computed(
-  () => enumLabel('NOTIFY_DELIVERY', detailDeliveryStatus.value) || '-',
-)
 
 /** 抄送详情与任务详情共用流程信息面板：历史行转换为统一审批历史形状。 */
 const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
@@ -301,75 +283,13 @@ onMounted(loadList)
     </el-table>
   </StandardListTemplate>
 
-  <el-dialog v-model="detailVisible" :title="t('workflow.ccDetailTitle')" width="980px">
-    <div v-loading="detailLoading">
-      <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" show-icon />
-      <template v-if="detail">
-        <el-descriptions :column="2" border>
-          <el-descriptions-item :label="t('common.processName')">
-            {{ detailProcessName }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('workflow.instanceStatus')">
-            {{ detailStatusLabel }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('common.formName')">
-            {{ detailFormName }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('workflow.ccNode')">
-            {{ detailNodeName }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('common.businessNo')">
-            {{ detailBusinessKey || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('workflow.ccTime')">
-            {{ detailCopyTime }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('workflow.deliveryStatus')">
-            {{ detailDeliveryLabel }}
-          </el-descriptions-item>
-        </el-descriptions>
-
-        <h4 class="detail-section-title">{{ t('workflow.formDataReadonlySnapshot') }}</h4>
-        <BusinessFormReadonly
-          v-if="detailFormKey"
-          :form-key="detailFormKey"
-          :record="detailFormData"
-        />
-        <el-alert
-          v-else
-          :title="t('workflow.noFormData')"
-          type="info"
-          :closable="false"
-          show-icon
-        />
-
-        <h4 class="detail-section-title">{{ t('workflow.approvalProgress') }}</h4>
-        <InstanceFlowPanel
-          v-if="approvalHistory.length > 0"
-          :approval-history="approvalHistory"
-          :process-definition-key="detailProcessKey"
-          :current-node-key="detailNodeKey"
-        />
-        <el-alert
-          v-else
-          :title="t('workflow.noFlowRecords')"
-          type="info"
-          :closable="false"
-          show-icon
-        />
-      </template>
-    </div>
-    <template #footer>
-      <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
-    </template>
-  </el-dialog>
+  <BusinessDetailDialog
+    v-model="detailVisible"
+    :title="t('workflow.ccDetailTitle')"
+    :form-key="detailFormKey"
+    :record="detailFormData"
+    :approval-history="approvalHistory"
+    :process-definition-key="detailProcessKey"
+    :current-node-key="detailNodeKey"
+  />
 </template>
-
-<style scoped>
-.detail-section-title {
-  margin: 16px 0 8px;
-  color: var(--sw-color-primary);
-  font-size: 13px;
-  font-weight: 600;
-}
-</style>

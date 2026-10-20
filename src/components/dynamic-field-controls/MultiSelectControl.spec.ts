@@ -28,9 +28,9 @@ function multiField(options: unknown): DynamicFieldSchema {
   } as unknown as DynamicFieldSchema
 }
 
-function mountControl(field: DynamicFieldSchema, modelValue: unknown = []) {
+function mountControl(field: DynamicFieldSchema, modelValue: unknown = [], readonly = false) {
   return mount(MultiSelectControl, {
-    props: { field, modelValue },
+    props: { field, modelValue, readonly },
     global: { plugins: [i18n] },
   })
 }
@@ -125,5 +125,21 @@ describe('MultiSelectControl 候选选项键值对', () => {
     const wrapper = mountControl(field)
     await nextTick()
     expect(wrapper.findComponent({ name: 'ElSelect' }).props('placeholder')).toBe('请配置数据')
+  })
+
+  it('只读回看：以静态选中项展示，不渲染输入框', async () => {
+    const wrapper = mountControl(
+      multiField([
+        { key: 'canyin', value: '餐饮' },
+        { key: 'jiaotong', value: '交通' },
+      ]),
+      ['canyin', 'jiaotong'],
+      true,
+    )
+    await nextTick()
+    expect(wrapper.findComponent({ name: 'ElSelect' }).exists()).toBe(false)
+    expect(
+      wrapper.findAll('.readonly-option').map((item) => item.text().replace('✓', '').trim()),
+    ).toEqual(['餐饮', '交通'])
   })
 })

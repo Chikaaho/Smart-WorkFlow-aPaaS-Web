@@ -49,6 +49,8 @@ const value = computed<string[]>(() =>
   Array.isArray(props.modelValue) ? (props.modelValue as string[]) : [],
 )
 
+const selectedKeys = computed(() => new Set(value.value))
+
 function onChange(next: unknown) {
   emit('update:modelValue', Array.isArray(next) ? next : [])
 }
@@ -57,21 +59,73 @@ function onChange(next: unknown) {
 <template>
   <!-- BF20261013-010：未配置数据源 → 禁用占位提示 -->
   <el-select
-    v-if="!configured"
+    v-if="!configured && !readonly"
     :size="subField ? 'small' : undefined"
     disabled
     :placeholder="t('form.configureDataPrompt')"
   />
+
+  <!-- 只读回看：按设计器同一套选择项呈现（选中打勾），不渲染输入框 -->
+  <div v-else-if="readonly" class="readonly-options">
+    <span
+      v-for="opt in options"
+      :key="opt.key"
+      class="readonly-option"
+      :class="{ 'is-selected': selectedKeys.has(opt.key) }"
+    >
+      <span class="readonly-option__mark">{{ selectedKeys.has(opt.key) ? '✓' : '' }}</span>
+      {{ opt.label }}
+    </span>
+    <span v-if="options.length === 0" class="readonly-options__empty">未选择</span>
+  </div>
 
   <el-select
     v-else
     :size="subField ? 'small' : undefined"
     multiple
     :model-value="value"
-    :disabled="readonly"
     clearable
     @update:model-value="onChange"
   >
     <el-option v-for="opt in options" :key="opt.key" :label="opt.label" :value="opt.key" />
   </el-select>
 </template>
+
+<style scoped>
+.readonly-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 6px 0;
+}
+.readonly-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sw-text-secondary);
+  line-height: 22px;
+}
+.readonly-option__mark {
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--sw-border-base);
+  border-radius: 3px;
+  color: #fff;
+  font-size: 11px;
+  line-height: 14px;
+  text-align: center;
+}
+.readonly-option.is-selected {
+  color: #5b4bdb;
+  font-weight: 500;
+}
+.readonly-option.is-selected .readonly-option__mark {
+  border-color: #5b4bdb;
+  background: #5b4bdb;
+}
+.readonly-options__empty {
+  color: var(--sw-text-secondary);
+  line-height: 22px;
+}
+</style>

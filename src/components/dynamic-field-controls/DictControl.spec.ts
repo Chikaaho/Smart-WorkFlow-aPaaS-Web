@@ -28,9 +28,9 @@ function dictField(overrides: Record<string, unknown> = {}): DynamicFieldSchema 
   } as unknown as DynamicFieldSchema
 }
 
-function mountControl(field: DynamicFieldSchema, modelValue: unknown = '') {
+function mountControl(field: DynamicFieldSchema, modelValue: unknown = '', readonly = false) {
   return mount(DictControl, {
-    props: { field, modelValue },
+    props: { field, modelValue, readonly },
     global: { plugins: [i18n] },
   })
 }
@@ -130,5 +130,25 @@ describe('DictControl 数据来源（BF20261013-009）', () => {
     const wrapper = mountControl(dictField({ source: 'dict', dictType: '' }))
     await nextTick()
     expect(wrapper.findComponent({ name: 'ElSelect' }).props('placeholder')).toBe('请配置数据')
+  })
+
+  it('只读回看（下拉）：按选择项展示选中状态，不渲染输入框', async () => {
+    const wrapper = mountControl(
+      dictField({
+        source: 'custom',
+        options: [
+          { key: 'canyin', value: '餐饮' },
+          { key: 'jiaotong', value: '交通' },
+        ],
+      }),
+      'canyin',
+      true,
+    )
+    await nextTick()
+    expect(wrapper.findComponent({ name: 'ElSelect' }).exists()).toBe(false)
+    const options = wrapper.findAll('.readonly-option')
+    expect(options.map((item) => item.text().replace('✓', '').trim())).toEqual(['餐饮', '交通'])
+    expect(options[0].classes()).toContain('is-selected')
+    expect(options[1].classes()).not.toContain('is-selected')
   })
 })

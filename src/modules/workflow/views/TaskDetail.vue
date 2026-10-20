@@ -37,7 +37,7 @@ import { getTaskNodeForm, saveTaskNodeFormDraft } from '@/modules/workflow/api/p
 import DynamicField from '@/components/DynamicField.vue'
 import { createFieldScripts } from '@/adapters/form-runtime'
 import InstanceFlowPanel from '../components/InstanceFlowPanel.vue'
-import BusinessFormReadonly from '../components/BusinessFormReadonly.vue'
+import BusinessFormReadonly from '@/components/business-detail/BusinessFormReadonly.vue'
 
 const router = useRouter()
 const route = useRoute()

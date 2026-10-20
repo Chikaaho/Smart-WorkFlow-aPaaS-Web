@@ -19,6 +19,7 @@ import type { ProcessInstance, MyInstanceDetail } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 import { hasPerm } from '@/foundation/permission'
+import BusinessDetailDialog from '@/components/business-detail/BusinessDetailDialog.vue'
 
 const router = useRouter()
 
@@ -181,87 +182,17 @@ function formatTime(value: string | null): string {
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref<MyInstanceDetail | null>(null)
-const detailError = ref('')
-// P64 阶段Ⅰ：触发与动作链回查（失败不阻断详情主链）
-const p64Execs = ref<import('@/contracts/p64').TriggerExecView[]>([])
-const p64Refs = ref<import('@/contracts/p64').ActionRefView[]>([])
 
 async function openDetail(row: ProcessInstance) {
-  // 0.1.7 #17：进详情看的是表单本体——有表单绑定时直接打开统一数据表单页（只读），
-  // 元数据弹窗仅留给无表单绑定的实例兜底
   detailLoading.value = true
-  detailError.value = ''
   try {
-    const d = await myInstanceDetail(row.id)
-    if (d.formKey && d.businessKey) {
-      detailLoading.value = false
-      await router.push({
-        path: `/form/form-render/${d.formKey}`,
-        query: { recordId: d.businessKey, mode: 'view' },
-      })
-      return
-    }
-    detail.value = d
+    detail.value = await myInstanceDetail(row.id)
     detailVisible.value = true
   } catch (err) {
-    detailError.value = err instanceof ApiError ? err.msg : t('workflow.instanceDetailLoadFailed')
-    detailVisible.value = true
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.instanceDetailLoadFailed'))
   } finally {
     detailLoading.value = false
   }
-  p64Execs.value = []
-  p64Refs.value = []
-}
-
-// ─── 流转记录映射 ───
-const APPROVAL_RESULT_MAP: Record<string, { label: string; type: 'success' | 'danger' | 'info' }> =
-  {
-    APPROVED: {
-      get label() {
-        return t('common.approve')
-      },
-      type: 'success',
-    },
-    REJECTED: {
-      get label() {
-        return t('common.reject')
-      },
-      type: 'danger',
-    },
-    RETURNED: {
-      get label() {
-        return t('common.statusReturned')
-      },
-      type: 'info',
-    },
-  }
-
-// 动作标签（对齐 MyProcessed 的 ACTION_TAG 口径）
-const ACTION_LABEL_MAP: Record<string, string> = {
-  get APPROVE() {
-    return t('common.approve')
-  },
-  get REJECT() {
-    return t('common.reject')
-  },
-  get RETURN() {
-    return t('common.returnBack')
-  },
-}
-
-function actionLabel(action: string | null): string {
-  if (!action) return '-'
-  return ACTION_LABEL_MAP[action] ?? action
-}
-
-function resultLabel(result: string | null): string {
-  if (!result) return t('common.statusInProgress')
-  return APPROVAL_RESULT_MAP[result]?.label ?? result
-}
-
-function resultTagType(result: string | null): 'success' | 'danger' | 'info' {
-  if (!result) return 'info'
-  return APPROVAL_RESULT_MAP[result]?.type ?? 'info'
 }
 
 // ─── 催办（v0.0.2：发起人对运行中实例催办当前待办人；10 分钟冷却） ───
@@ -434,164 +365,15 @@ onMounted(loadList)
 
     <!-- 详情弹窗 -->
   </StandardListTemplate>
-  <el-dialog v-model="detailVisible" :title="t('workflow.instanceDetail')" width="760px">
-    <div v-loading="detailLoading">
-      <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" show-icon />
-      <template v-if="detail">
-        <el-descriptions :column="2" border>
-          <el-descriptions-item :label="t('common.processName')">
-            {{ detail.processName ?? '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('common.status')">
-            <el-tag :type="statusTagType(detail.status)" size="small">
-              {{ statusLabel(detail.status) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('common.businessNo')">{{
-            detail.businessKey
-          }}</el-descriptions-item>
-          <el-descriptions-item :label="t('common.startTimeShort')">
-            {{ detail.instance.createTime }}
-          </el-descriptions-item>
-        </el-descriptions>
-
-        <!-- 当前进度 -->
-        <h4 class="detail-section-title">{{ t('workflow.currentProgress') }}</h4>
-        <el-alert
-          v-if="detail.progress.length === 0"
-          :title="t('workflow.flowEndedNoActiveNode')"
-          type="info"
-          :closable="false"
-          show-icon
-        />
-        <el-table v-else :data="detail.progress" stripe size="small">
-          <el-table-column prop="taskName" :label="t('common.node')" min-width="160" />
-          <el-table-column prop="assignee" :label="t('workflow.assignee')" min-width="140" />
-        </el-table>
-
-        <!-- 流转记录 -->
-        <h4 class="detail-section-title">{{ t('common.flowHistory') }}</h4>
-        <el-alert
-          v-if="detail.history.length === 0"
-          :title="t('workflow.noFlowRecords')"
-          type="info"
-          :closable="false"
-          show-icon
-        />
-        <el-table v-else :data="detail.history" stripe size="small">
-          <el-table-column prop="taskName" :label="t('common.node')" min-width="120" />
-          <el-table-column :label="t('workflow.assignee')" min-width="110">
-            <template #default="{ row }">
-              {{ row.assigneeName ?? row.assignee ?? '-' }}
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('common.action')" width="90">
-            <template #default="{ row }">
-              {{ actionLabel(row.action) }}
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('common.result')" width="90">
-            <template #default="{ row }">
-              <el-tag :type="resultTagType(row.approvalResult)" size="small">
-                {{ resultLabel(row.approvalResult) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('common.comment')" min-width="150">
-            <template #default="{ row }">
-              {{ row.opinionData?.comment ?? '-' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="createTime" :label="t('workflow.arrivedAt')" min-width="160" />
-          <el-table-column :label="t('workflow.handledAt')" min-width="160">
-            <template #default="{ row }">
-              {{ row.endTime ?? '-' }}
-            </template>
-          </el-table-column>
-        </el-table>
-      </template>
-
-      <!-- P64 阶段Ⅰ：触发与动作（判断→意图→关联实例 回查链；有数据才渲染） -->
-      <template v-if="p64Execs.length > 0 || p64Refs.length > 0">
-        <h4 class="detail-section-title">触发与动作</h4>
-        <template v-if="p64Execs.length > 0">
-          <p class="p64-subtitle">触发执行</p>
-          <div class="p64-table-scroll">
-            <el-table :data="p64Execs" stripe size="small">
-              <el-table-column prop="triggerId" label="触发器" min-width="110" />
-              <el-table-column prop="eventType" label="事件" min-width="150" />
-              <el-table-column label="结果" min-width="130">
-                <template #default="{ row }">
-                  <el-tag
-                    :type="
-                      row.status === 'MATCHED'
-                        ? 'success'
-                        : row.status === 'FAILED'
-                          ? 'danger'
-                          : 'warning'
-                    "
-                    size="small"
-                  >
-                    {{ row.status }}
-                  </el-tag>
-                  <span class="p64-cell-note"
-                    >{{ row.resultType }}={{ row.resultValue ?? '-' }}</span
-                  >
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="errorText"
-                label="诊断"
-                min-width="180"
-                show-overflow-tooltip
-              />
-            </el-table>
-          </div>
-        </template>
-        <template v-if="p64Refs.length > 0">
-          <p class="p64-subtitle">动作意图与关联实例</p>
-          <div class="p64-table-scroll">
-            <el-table :data="p64Refs" stripe size="small">
-              <el-table-column prop="actionId" label="动作" min-width="100" />
-              <el-table-column prop="itemKey" label="派发项" min-width="90" />
-              <el-table-column label="状态" width="130">
-                <template #default="{ row }">
-                  <el-tag
-                    :type="
-                      row.status === 'STARTED'
-                        ? 'success'
-                        : row.status === 'FAILED'
-                          ? 'danger'
-                          : 'info'
-                    "
-                    size="small"
-                  >
-                    {{ row.status }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="targetDefKey" label="目标流程" min-width="110" />
-              <el-table-column
-                prop="targetRecordId"
-                label="目标记录"
-                min-width="130"
-                show-overflow-tooltip
-              />
-              <el-table-column
-                prop="targetInstanceId"
-                label="关联实例"
-                min-width="130"
-                show-overflow-tooltip
-              />
-            </el-table>
-          </div>
-        </template>
-      </template>
-    </div>
-    <template #footer>
-      <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
-    </template>
-  </el-dialog>
+  <BusinessDetailDialog
+    v-model="detailVisible"
+    :title="t('workflow.instanceDetail')"
+    :form-key="detail?.formKey ?? ''"
+    :record-id="detail?.businessKey ?? ''"
+    :approval-history="detail?.history ?? []"
+    :process-definition-key="detail?.instance.processDefKey ?? ''"
+    :current-node-key="detail?.progress?.[0]?.nodeKey ?? ''"
+  />
 </template>
 
 <style scoped>

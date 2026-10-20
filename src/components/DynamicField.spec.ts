@@ -92,11 +92,10 @@ describe('DynamicField — readonly', () => {
     expect(sw.attributes('disabled')).toBeDefined()
   })
 
-  it('DICT readonly → 下拉禁用', () => {
+  it('DICT readonly → 静态展示选中项，不再渲染输入框', () => {
     const wrapper = mountField({ name: 'f6', type: 'DICT', dictType: 'sex' }, '', true)
-    const select = wrapper.findComponent({ name: 'ElSelect' })
-    expect(select.exists()).toBe(true)
-    expect(select.props('disabled')).toBe(true)
+    expect(wrapper.find('.readonly-options').exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'ElSelect' }).exists()).toBe(false)
   })
 
   it('REFERENCE readonly → 选择按钮 disabled', () => {

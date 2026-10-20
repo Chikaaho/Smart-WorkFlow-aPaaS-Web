@@ -17,6 +17,7 @@ import { usePermission } from '@/foundation/permission'
 import { deriveColumns, deriveFilterFields } from '@/modules/form/utils/derive-list-config'
 import { getListConfig } from '@/modules/form/api/i2-choices'
 import { ApiError } from '@/foundation/request'
+import BusinessDetailDialog from '@/components/business-detail/BusinessDetailDialog.vue'
 import type { FormSchema } from '@/contracts/form-schema'
 import type { PageResult } from '@/contracts/common'
 import { useI18n } from '@/locales'
@@ -440,12 +441,12 @@ function handleReset() {
   void loadData()
 }
 
+const detailVisible = ref(false)
+const detailRecordId = ref('')
+
 function handleView(row: Record<string, unknown>) {
-  router.push({
-    name: 'form-render',
-    params: { formKey: formKey.value },
-    query: { recordId: String(row.id ?? ''), mode: 'view', from: 'app-form' },
-  })
+  detailRecordId.value = String(row.id ?? '')
+  detailVisible.value = true
 }
 
 function handleEdit(row: Record<string, unknown>) {
@@ -748,6 +749,13 @@ onMounted(async () => {
         </ul>
       </template>
     </el-drawer>
+
+    <BusinessDetailDialog
+      v-model="detailVisible"
+      :form-key="formKey"
+      :record-id="detailRecordId"
+      :title="t('common.detail')"
+    />
   </div>
 </template>
 
