@@ -1411,6 +1411,15 @@ const selectedNode = computed(() =>
 /** 能力 configFields → 表单草稿（object 类型拆 participant.strategy/value） */
 const propForm = ref<Record<string, unknown>>({})
 
+/**
+ * 节点名称逐字写入：ElInput 的 input 事件早于 v-model 回写，
+ * 若直接读 propForm 会晚一拍；这里以事件值为准立即同步画布标签。
+ */
+function onNodeNameInput(value: string) {
+  propForm.value = { ...propForm.value, name: value }
+  applyProps()
+}
+
 function applyProps() {
   if (!selectedNode.value || !model) return
   const patch: Record<string, unknown> = { ...propForm.value }
@@ -1426,6 +1435,8 @@ function applyProps() {
     }
   }
   model.updateNodeConfig(selectedNode.value.id, patch)
+  // 模型非响应式：属性变更后推进快照 serial，画布标签/配置立即重绘。
+  snapshot()
 }
 
 function removeSelected() {
@@ -3057,8 +3068,8 @@ function nodeLabelLines(label: string) {
               <el-form label-position="top">
                 <el-form-item :label="t('workflow.nodeName')">
                   <el-input
-                    v-model="propForm.name as string"
-                    @input="applyProps"
+                    :model-value="propForm.name as string"
+                    @input="onNodeNameInput"
                     @change="applyProps"
                     @blur="applyProps"
                     @keyup.enter="applyProps"

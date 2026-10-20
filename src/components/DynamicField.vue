@@ -61,7 +61,7 @@ function onControlUpdate(value: unknown) {
   <div class="dynamic-field" :class="labelPositionClass">
     <!-- 标签 + 必填红星（页型A 规范） -->
     <label v-if="showLabel" class="dynamic-field__label">
-      <span v-if="field.required" class="dynamic-field__required">*</span>
+      <span v-if="field.required && !readonly" class="dynamic-field__required">*</span>
       {{ field.label ?? field.name }}
     </label>
 

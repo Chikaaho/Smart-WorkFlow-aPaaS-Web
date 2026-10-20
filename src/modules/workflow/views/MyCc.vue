@@ -193,12 +193,13 @@ const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
           ? 'REJECTED'
           : null
     const taskName = String(row.taskName || nodeName(detailProcessKey.value, nodeKey) || '审批记录')
+    const rawAssignee = String(row.assigneeName ?? row.assignee ?? '').trim()
     return {
       taskId: String(row.taskId ?? `cc-history-${index}`),
       taskName,
       nodeKey: nodeKey || null,
       assignee: String(row.assignee ?? ''),
-      assigneeName: String(row.assigneeName ?? '') || '审批人',
+      assigneeName: /[\u4e00-\u9fa5]/.test(rawAssignee) ? rawAssignee : '审批人',
       assigneeDept: row.assigneeDept ? String(row.assigneeDept) : null,
       createTime: String(row.createTime ?? ''),
       endTime: row.endTime ? String(row.endTime) : row.createTime ? String(row.createTime) : null,

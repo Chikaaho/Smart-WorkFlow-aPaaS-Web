@@ -415,6 +415,11 @@ describe('DynamicField — 标签与必填', () => {
     expect(wrapper.find('.dynamic-field__required').exists()).toBe(true)
   })
 
+  it('readonly 回看不显示必填星（避免业务详情出现无意义星标）', () => {
+    const wrapper = mountField({ name: 'x', type: 'TEXT', required: true }, '', true)
+    expect(wrapper.find('.dynamic-field__required').exists()).toBe(false)
+  })
+
   it('always renders label (falls back to field.name)', () => {
     const wrapper = mountField({ name: 'x', type: 'TEXT' })
     // Label always renders now — falls back to field.name when no label
