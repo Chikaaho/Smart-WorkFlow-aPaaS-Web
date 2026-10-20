@@ -949,14 +949,6 @@ onMounted(loadDetail)
         <div v-if="canAct && nodeFormBound" class="approval-form">
           <div class="nodeform-fields">
             <div v-for="field in nodeFormRenderFields" :key="field.name" class="nodeform-field">
-              <div class="nodeform-field__label">
-                <span
-                  v-if="nodeFieldRequired(field) && nodeFormEditable"
-                  class="nodeform-field__required"
-                  >*</span
-                >
-                {{ field.label || field.name }}
-              </div>
               <DynamicField
                 :field="field"
                 :model-value="nodeFormModel[field.name]"
@@ -1669,15 +1661,6 @@ onMounted(loadDetail)
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   column-gap: 28px;
   row-gap: 14px;
-}
-.nodeform-field__label {
-  font-size: 14px;
-  margin-bottom: 6px;
-  color: var(--el-text-color-primary, #303133);
-}
-.nodeform-field__required {
-  color: var(--el-color-danger, #f56c6c);
-  margin-right: 2px;
 }
 .nodeform-errors {
   color: var(--el-color-danger, #f56c6c);
