@@ -860,56 +860,6 @@ onMounted(loadDetail)
         :loading="formRecordLoading"
       />
 
-      <!-- P64 阶段Ⅰ：节点业务表单（绑定节点可填报；草稿可存，最终提交随审批动作同事务生效；已提交只读回看） -->
-      <el-card v-if="nodeForm && nodeFormBound" class="detail-card detail-card--node-form">
-        <template #header>
-          <span>
-            {{ t('workflow.taskFormSection') }}
-            <el-tag v-if="nodeFormSubmitted" size="small" type="success" class="nodeform-tag">
-              {{ t('workflow.taskFormSubmitted') }}
-            </el-tag>
-            <el-tag v-else size="small" type="info" class="nodeform-tag">
-              {{ t('workflow.taskFormDraft') }}
-            </el-tag>
-          </span>
-        </template>
-        <div class="nodeform-body">
-          <small class="nodeform-meta">{{ nodeForm.formName }}</small>
-          <div class="nodeform-fields">
-            <div v-for="field in nodeFormRenderFields" :key="field.name" class="nodeform-field">
-              <div class="nodeform-field__label">
-                <span
-                  v-if="nodeFieldRequired(field) && nodeFormEditable"
-                  class="nodeform-field__required"
-                  >*</span
-                >
-                {{ field.label || field.name }}
-              </div>
-              <DynamicField
-                :field="field"
-                :model-value="nodeFormModel[field.name]"
-                :readonly="nodeFieldReadonly(field)"
-                @update:model-value="nodeFormModel[field.name] = $event"
-              />
-            </div>
-          </div>
-          <div v-if="nodeFormErrors.length > 0" class="nodeform-errors" role="alert">
-            <p v-for="item in nodeFormErrors" :key="item">{{ item }}</p>
-          </div>
-          <div v-if="nodeFormEditable" class="nodeform-actions">
-            <el-button
-              size="small"
-              :loading="nodeFormSavingDraft"
-              :disabled="acting !== null"
-              @click="handleNodeFormDraft"
-            >
-              保存草稿
-            </el-button>
-            <span class="nodeform-meta">{{ t('workflow.taskFormSubmitNote') }}</span>
-          </div>
-        </div>
-      </el-card>
-
       <!-- P63 IoT 预约（实例维度）：有数据才渲染；取消入口按 v-perm 显隐，服务端仍是最终权威 -->
       <el-card v-if="reservations.length > 0" class="detail-card detail-card--iot-reservations">
         <template #header>
@@ -995,8 +945,42 @@ onMounted(loadDetail)
         <span class="detail-actions__title">{{ t('workflow.approvalSection') }}</span>
       </template>
       <div class="detail-actions">
-        <div v-if="opinionFields.length > 0" class="opinion-form">
-          <div class="opinion-form__title">审批意见</div>
+        <!-- P64 节点审批表单：并入审批区，只呈现字段组件，不显示表单名称 -->
+        <div v-if="canAct && nodeFormBound" class="approval-form">
+          <div class="nodeform-fields">
+            <div v-for="field in nodeFormRenderFields" :key="field.name" class="nodeform-field">
+              <div class="nodeform-field__label">
+                <span
+                  v-if="nodeFieldRequired(field) && nodeFormEditable"
+                  class="nodeform-field__required"
+                  >*</span
+                >
+                {{ field.label || field.name }}
+              </div>
+              <DynamicField
+                :field="field"
+                :model-value="nodeFormModel[field.name]"
+                :readonly="nodeFieldReadonly(field)"
+                @update:model-value="nodeFormModel[field.name] = $event"
+              />
+            </div>
+          </div>
+          <div v-if="nodeFormErrors.length > 0" class="nodeform-errors" role="alert">
+            <p v-for="item in nodeFormErrors" :key="item">{{ item }}</p>
+          </div>
+          <div v-if="nodeFormEditable" class="nodeform-actions">
+            <el-button
+              size="small"
+              :loading="nodeFormSavingDraft"
+              :disabled="acting !== null"
+              @click="handleNodeFormDraft"
+            >
+              保存草稿
+            </el-button>
+            <span class="nodeform-meta">{{ t('workflow.taskFormSubmitNote') }}</span>
+          </div>
+        </div>
+        <div v-if="canAct && visibleOpinionFields.length > 0" class="opinion-form">
           <div v-for="field in visibleOpinionFields" :key="field.key" class="opinion-field">
             <template v-if="field.type === 'NOTE'">
               <span class="opinion-note">{{ field.label }}</span>
@@ -1062,7 +1046,7 @@ onMounted(loadDetail)
           </div>
         </div>
         <textarea
-          v-if="opinionFields.length === 0 && canAct"
+          v-if="canAct && !nodeFormBound && visibleOpinionFields.length === 0"
           v-model="opinionComment"
           class="opinion-input"
           rows="3"
@@ -1420,11 +1404,15 @@ onMounted(loadDetail)
   font-size: 13px;
   font-weight: 600;
 }
-/* 审批操作栏收敛为紧凑尺寸，按钮统一靠右。 */
+/* 审批操作栏收敛为紧凑尺寸；按钮宽度跟随文字，整体靠右。 */
 .detail-card--actions :deep(.el-button) {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
   height: 30px;
   padding: 0 12px;
   font-size: 13px;
+  justify-content: center;
 }
 .detail-card--actions :deep(.el-select__wrapper) {
   min-height: 30px;
@@ -1433,6 +1421,12 @@ onMounted(loadDetail)
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.approval-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
 }
 .detail-actions__bar {
   display: flex;
@@ -1446,13 +1440,16 @@ onMounted(loadDetail)
 .detail-actions__btns {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 .return-config {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  margin-right: auto;
   font-size: 13px;
   color: var(--sw-text-regular);
 }
@@ -1465,19 +1462,16 @@ onMounted(loadDetail)
   resize: vertical;
 }
 .opinion-form {
-  padding: 12px;
-  border: 1px solid var(--sw-border-base);
-  border-radius: var(--sw-radius-base);
-}
-.opinion-form__title {
-  margin-bottom: 12px;
-  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
 }
 .opinion-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 .opinion-field input,
 .opinion-field textarea,
@@ -1665,15 +1659,7 @@ onMounted(loadDetail)
   }
 }
 
-/* ─────────── P64 阶段Ⅰ：节点业务表单 ─────────── */
-.nodeform-tag {
-  margin-left: 8px;
-}
-.nodeform-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+/* ─────────── P64 阶段Ⅰ：节点审批表单（并入审批区） ─────────── */
 .nodeform-meta {
   color: var(--el-text-color-secondary, #909399);
   font-size: 12px;

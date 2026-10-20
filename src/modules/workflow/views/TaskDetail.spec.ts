@@ -243,6 +243,45 @@ describe('TaskDetail.vue', () => {
     )
   })
 
+  it('P64: 审批表单并入审批区，只呈现字段组件、不显示表单名称与备注', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({ ...mockDetail, canHandle: true })
+    vi.mocked(getTaskNodeForm).mockResolvedValueOnce({
+      bound: true,
+      formKey: 'approval_opinion_form',
+      formName: '演练审批意见',
+      formVersion: '2',
+      definition: {
+        fields: [{ name: 'verdict', type: 'TEXT', label: '审批结论', required: true }],
+      },
+      status: 'EMPTY',
+      data: {},
+      roundNo: 1,
+    } as never)
+
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await flushPromises()
+
+    const approvalArea = wrapper.find('.detail-card--actions')
+    expect(approvalArea.find('.approval-form').exists()).toBe(true)
+    expect(approvalArea.text()).toContain('审批结论')
+    expect(approvalArea.text()).not.toContain('演练审批意见')
+    expect(approvalArea.find('.opinion-input').exists()).toBe(false)
+  })
+
+  it('P64: 无审批表单时审批区保留备注输入', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({ ...mockDetail, canHandle: true })
+    vi.mocked(getTaskNodeForm).mockResolvedValueOnce({ bound: false } as never)
+
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await flushPromises()
+
+    const approvalArea = wrapper.find('.detail-card--actions')
+    expect(approvalArea.find('.approval-form').exists()).toBe(false)
+    expect(approvalArea.find('.opinion-input').exists()).toBe(true)
+  })
+
   it('accepts reject via command channel and returns to the todo list', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
     vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)

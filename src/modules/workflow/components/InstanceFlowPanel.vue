@@ -514,7 +514,7 @@ const opinionDetailAttachmentEntries = computed(() => {
   margin-bottom: 0;
 }
 .instance-flow-panel :deep(.el-card__body) {
-  padding: 0 0 24px;
+  padding: 0;
 }
 .instance-flow-panel :deep(.el-tabs__header) {
   height: 48px;
@@ -544,11 +544,11 @@ const opinionDetailAttachmentEntries = computed(() => {
   display: inline-block;
   line-height: 19px;
 }
-/* 流转记录与审批详情列表共用同一套表格几何与字体，避免两页签视觉不一致。 */
+/* 流转记录与审批详情列表共用同一套表格几何与字体；表格铺满卡片，四周不留白。 */
 .instance-flow-panel :deep(.detail-flow-table) {
   box-sizing: border-box;
-  width: calc(100% - 46px) !important;
-  margin: 12px 22px 0 24px;
+  width: 100% !important;
+  margin: 0;
   color: var(--sw-text-primary);
   font-size: 14px;
 }
@@ -584,9 +584,14 @@ const opinionDetailAttachmentEntries = computed(() => {
 .people-status--info {
   color: var(--sw-text-secondary);
 }
+/* 表格页签无内边距；仅空态提示保留与卡片边缘的间距。 */
+.instance-flow-panel :deep(.el-tab-pane > .el-alert) {
+  margin: 12px 16px;
+}
 /* ─── 流程图 tab：设计壳层（网格底 / 圆角画布 / 右侧当前节点状态卡） ─── */
 .p53-graph-shell {
   min-height: 320px;
+  padding: 12px 16px 16px;
 }
 .p53-graph-shell > .el-alert {
   margin-bottom: 12px;
