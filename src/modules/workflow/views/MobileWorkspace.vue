@@ -402,27 +402,19 @@ void (async () => {
           <section class="m-section">
             <h3 class="m-section-title">{{ t('common.basicInfo') }}</h3>
             <div class="m-kv">
-              <span>{{ t('common.instanceId') }}</span
-              ><b>{{ refInstance.processInstanceId }}</b>
-            </div>
-            <div class="m-kv">
               <span>{{ t('common.status') }}</span
               ><b>{{ enumLabel('WORKFLOW_INSTANCE', refInstance.status) }}</b>
             </div>
             <div class="m-kv">
               <span>{{ t('common.initiator') }}</span
-              ><b>{{ refInstance.initiatorId }}</b>
-            </div>
-            <div class="m-kv">
-              <span>{{ t('common.form') }}</span
-              ><b>{{ refInstance.formKey }}</b>
+              ><b>{{ refInstance.initiatorName || '—' }}</b>
             </div>
           </section>
           <section class="m-section">
             <h3 class="m-section-title">{{ t('common.flowHistory') }}</h3>
             <div v-for="(trace, i) in refInstance.flowTrace || []" :key="i" class="m-kv">
-              <span>{{ trace.activityName || trace.activityId || i }}</span>
-              <b>{{ trace.assigneeName || trace.assignee || '' }} {{ trace.endTime || '' }}</b>
+              <span>{{ trace.activityName || '流程节点' }}</span>
+              <b>{{ trace.assigneeName || '' }} {{ trace.endTime || '' }}</b>
             </div>
           </section>
         </template>
@@ -442,15 +434,15 @@ void (async () => {
             <h3 class="m-section-title">{{ t('workflow.taskInfo') }}</h3>
             <div class="m-kv">
               <span>{{ t('common.processName') }}</span
-              ><b>{{ detail.processName || detail.processDefinitionKey }}</b>
+              ><b>{{ detail.processName || '—' }}</b>
             </div>
             <div class="m-kv">
               <span>{{ t('common.initiator') }}</span
-              ><b>{{ detail.initiatorName || detail.initiatorId || '—' }}</b>
+              ><b>{{ detail.initiatorName || '—' }}</b>
             </div>
             <div class="m-kv">
               <span>{{ t('workflow.currentAssignee') }}</span
-              ><b>{{ detail.assigneeName || detail.assignee || '—' }}</b>
+              ><b>{{ detail.assigneeName || '—' }}</b>
             </div>
             <div class="m-kv">
               <span>{{ t('common.businessNo') }}</span

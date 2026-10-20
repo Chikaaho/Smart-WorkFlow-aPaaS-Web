@@ -1413,10 +1413,17 @@ export function createDesignerModel(
     },
     select,
     updateNodeConfig(id, patch) {
+      const nextName = typeof patch.name === 'string' ? patch.name : undefined
       current = {
         ...current,
         nodes: current.nodes.map((node) =>
-          node.id === id ? { ...node, config: { ...node.config, ...patch } } : node,
+          node.id === id
+            ? {
+                ...node,
+                label: nextName ?? node.label,
+                config: { ...node.config, ...patch },
+              }
+            : node,
         ),
         dirty: true,
       }

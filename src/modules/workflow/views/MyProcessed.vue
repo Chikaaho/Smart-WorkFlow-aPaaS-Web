@@ -194,7 +194,6 @@ onMounted(loadList)
           {{ row.processName ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="130" />
       <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="120" />
       <el-table-column :label="t('common.action')" width="90">
         <template #default="{ row }">

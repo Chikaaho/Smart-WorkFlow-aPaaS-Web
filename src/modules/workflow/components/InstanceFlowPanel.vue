@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from '@/locales'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { ApiError } from '@/foundation/request'
+import { getFormDefinition } from '@/adapters/form-runtime'
 import type { ApprovalHistoryItem } from '@/contracts/bpm'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import { deriveProcessTrace } from '../utils/process-trace'
@@ -246,6 +247,34 @@ const peopleRows = computed(() =>
 // ─── 意见详情弹窗：展示该行真实可得字段 ───
 const opinionDetailVisible = ref(false)
 const opinionDetailRow = ref<ApprovalHistoryItem | null>(null)
+/** 意见表单字段名 → 业务标签；未解析到时只显示业务兜底，不暴露内部字段名。 */
+const opinionFieldLabels = ref<Record<string, string>>({})
+let opinionSchemaToken = 0
+
+async function loadOpinionFieldLabels(row: ApprovalHistoryItem | null) {
+  const token = ++opinionSchemaToken
+  opinionFieldLabels.value = {}
+  const formKey = row?.opinionFormId
+  if (!formKey) return
+  try {
+    const schema = await getFormDefinition(String(formKey))
+    if (token !== opinionSchemaToken) return
+    const labels: Record<string, string> = {}
+    for (const field of schema.fields) {
+      if (field.label?.trim()) labels[field.name] = field.label.trim()
+    }
+    opinionFieldLabels.value = labels
+  } catch {
+    if (token === opinionSchemaToken) opinionFieldLabels.value = {}
+  }
+}
+
+function businessFieldLabel(key: string): string {
+  if (opinionFieldLabels.value[key]) return opinionFieldLabels.value[key]
+  return /[\u4e00-\u9fa5]/.test(key) ? key : '补充信息'
+}
+
+watch(opinionDetailRow, (row) => void loadOpinionFieldLabels(row))
 
 function openOpinionDetail(row: ApprovalHistoryItem) {
   opinionDetailRow.value = row
@@ -272,16 +301,16 @@ const opinionDetailEntries = computed(() => {
         value != null &&
         value !== '',
     )
-    .map(([key, value]) => ({ key, value: String(value) }))
+    .map(([key, value]) => ({ key: businessFieldLabel(key), value: String(value) }))
 })
 
 /** 设计（意见详情）的已确认检查项区块：仅当字段值为非空数组时按检查项芯片渲染。 */
 const opinionDetailCheckEntries = computed(() => {
   const row = opinionDetailRow.value
   if (!row?.opinionData) return []
-  return Object.entries(row.opinionData).filter(
-    ([key, value]) => key !== 'comment' && Array.isArray(value) && value.length > 0,
-  )
+  return Object.entries(row.opinionData)
+    .filter(([key, value]) => key !== 'comment' && Array.isArray(value) && value.length > 0)
+    .map(([key, value]) => [businessFieldLabel(key), value] as const)
 })
 
 /** 设计（意见详情）的附件区块：仅当键名命中附件约定且值非空时渲染。 */
@@ -291,7 +320,7 @@ const opinionDetailAttachmentEntries = computed(() => {
   return Object.entries(row.opinionData)
     .filter(([key]) => key !== 'comment' && OPINION_ATTACHMENT_KEY.test(key))
     .map(([key, value]) => ({
-      key,
+      key: businessFieldLabel(key),
       value: Array.isArray(value) ? value.map((item) => String(item)).join('、') : String(value),
     }))
     .filter((entry) => entry.value !== '')
@@ -461,9 +490,7 @@ const opinionDetailAttachmentEntries = computed(() => {
         </div>
       </template>
       <div v-if="opinionDetailRow" class="p53-opinion-panel">
-        <h3 v-if="opinionDetailRow.opinionFormId">
-          {{ opinionDetailRow.opinionFormId }}
-        </h3>
+        <h3 v-if="opinionDetailRow.opinionFormId">审批意见</h3>
         <div v-if="opinionDetailEntries.length > 0" class="p53-opinion-grid">
           <div v-for="entry in opinionDetailEntries" :key="entry.key">
             <label>{{ entry.key }}</label>

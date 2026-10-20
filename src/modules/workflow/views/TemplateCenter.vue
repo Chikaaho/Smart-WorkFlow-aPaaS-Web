@@ -20,8 +20,10 @@ import {
 import type { BpmTemplate } from '@/modules/workflow/api/i4'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
+import { useWorkflowDisplayNames } from '../composables/use-workflow-display-names'
 
 const router = useRouter()
+const { ensureForm, formName } = useWorkflowDisplayNames()
 
 const list = ref<BpmTemplate[]>([])
 const total = ref(0)
@@ -47,6 +49,7 @@ async function loadList() {
     })
     list.value = result.list
     total.value = result.total
+    for (const row of result.list) void ensureForm(row.formKey)
   } catch (err) {
     errorMsg.value = err instanceof ApiError ? err.msg : t('workflow.templateListLoadFailed')
   } finally {
@@ -192,8 +195,8 @@ onMounted(loadList)
       <el-table-column :label="t('common.category')" min-width="100">
         <template #default="{ row }">{{ row?.category || '—' }}</template>
       </el-table-column>
-      <el-table-column :label="t('workflow.boundForm')" min-width="140">
-        <template #default="{ row }">{{ row?.formKey }}</template>
+      <el-table-column :label="t('workflow.boundForm')" min-width="160">
+        <template #default="{ row }">{{ formName(row?.formKey) }}</template>
       </el-table-column>
       <el-table-column :label="t('common.version')" width="70">
         <template #default="{ row }">V{{ row?.templateVersion }}</template>

@@ -447,14 +447,8 @@ onMounted(loadList)
               {{ statusLabel(detail.status) }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item :label="t('common.processKey')">
-            {{ detail.instance.processDefKey }}
-          </el-descriptions-item>
           <el-descriptions-item :label="t('common.businessNo')">{{
             detail.businessKey
-          }}</el-descriptions-item>
-          <el-descriptions-item :label="t('common.formKey')">{{
-            detail.formKey
           }}</el-descriptions-item>
           <el-descriptions-item :label="t('common.startTimeShort')">
             {{ detail.instance.createTime }}
@@ -471,14 +465,8 @@ onMounted(loadList)
           show-icon
         />
         <el-table v-else :data="detail.progress" stripe size="small">
-          <el-table-column prop="taskName" :label="t('common.node')" min-width="140" />
-          <el-table-column prop="nodeKey" :label="t('workflow.nodeKey')" min-width="140" />
-          <el-table-column prop="assignee" :label="t('workflow.assignee')" min-width="120" />
-          <el-table-column :label="t('common.taskNo')" min-width="140">
-            <template #default="{ row }">
-              {{ row.taskId }}
-            </template>
-          </el-table-column>
+          <el-table-column prop="taskName" :label="t('common.node')" min-width="160" />
+          <el-table-column prop="assignee" :label="t('workflow.assignee')" min-width="140" />
         </el-table>
 
         <!-- 流转记录 -->

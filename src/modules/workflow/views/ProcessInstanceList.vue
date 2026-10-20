@@ -462,14 +462,8 @@ function rowActions(row: unknown): ListAction[] {
               <el-descriptions-item :label="t('common.processName')">{{
                 detail.processName ?? '-'
               }}</el-descriptions-item>
-              <el-descriptions-item :label="t('common.instanceId')">{{
-                detail.processInstanceId
-              }}</el-descriptions-item>
               <el-descriptions-item :label="t('common.businessNo')">{{
                 detail.businessKey
-              }}</el-descriptions-item>
-              <el-descriptions-item :label="t('common.formKey')">{{
-                detail.formKey
               }}</el-descriptions-item>
               <el-descriptions-item :label="t('common.initiator')">{{
                 detail.initiatorName ?? detail.initiatorId

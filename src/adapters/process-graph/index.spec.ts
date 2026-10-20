@@ -1082,4 +1082,13 @@ describe('createDesignerModel', () => {
     expect(node?.config.name).toBe('审批')
     expect(node?.config.disapprovePolicy).toBe('CONTINUE')
   })
+
+  it('updateNodeConfig 改名时画布标题同步更新', () => {
+    const model = createDesignerModel(baseGraph())
+    const approvalId = model.addNode('APPROVAL', '审批', 400, 300)
+    model.updateNodeConfig(approvalId, { name: '部门负责人审批' })
+    const node = model.state().nodes.find((n) => n.id === approvalId)
+    expect(node?.label).toBe('部门负责人审批')
+    expect(node?.config.name).toBe('部门负责人审批')
+  })
 })

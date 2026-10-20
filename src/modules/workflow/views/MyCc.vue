@@ -7,7 +7,7 @@ const { t } = useI18n()
  * MyCc — 抄送我的（v0.0.2 OA 个人办理，页型 B）。
  *
  * 仅本人收到的抄送（服务端强制 recipient=当前用户），关键字 + 时间窗过滤，
- * 稳定分页；行操作「详情」弹窗展示抄送/实例信息、只读表单快照与审批进度/意见。
+ * 稳定分页；详情与任务详情共用业务表单只读展示和流程信息面板，只呈现业务名称与业务状态。
  * 抄送身份不含审批操作权（无同意/驳回入口）。
  */
 import { ref, computed, onMounted, reactive } from 'vue'
@@ -19,8 +19,12 @@ import {
   type MyCopyItem,
   type MyCopyDetail,
 } from '@/modules/workflow/api/oa'
+import type { ApprovalHistoryItem } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
+import BusinessFormReadonly from '../components/BusinessFormReadonly.vue'
+import InstanceFlowPanel from '../components/InstanceFlowPanel.vue'
+import { useWorkflowDisplayNames } from '../composables/use-workflow-display-names'
 
 const list = ref<MyCopyItem[]>([])
 const total = ref(0)
@@ -28,6 +32,7 @@ const pageNum = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
 const errorMsg = ref('')
+const { ensureProcess, ensureForm, processName, formName, nodeName } = useWorkflowDisplayNames()
 
 const filter = reactive<{
   processInstanceId: string
@@ -40,6 +45,18 @@ const filter = reactive<{
 })
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
+
+function formatTime(value: unknown): string {
+  if (!value) return '-'
+  return String(value).replace('T', ' ').slice(0, 16)
+}
+
+function primeDisplayNames(rows: MyCopyItem[]) {
+  for (const row of rows) {
+    void ensureProcess(row.processDefKey)
+    void ensureForm(row.formKey)
+  }
+}
 
 async function loadList() {
   loading.value = true
@@ -54,6 +71,7 @@ async function loadList() {
     })
     list.value = result.list
     total.value = result.total
+    primeDisplayNames(result.list)
   } catch (err) {
     errorMsg.value = err instanceof ApiError ? err.msg : t('workflow.ccListLoadFailed')
   } finally {
@@ -98,6 +116,10 @@ async function openDetail(row: MyCopyItem) {
   detail.value = null
   try {
     detail.value = await queryMyCopyDetail(row.id)
+    if (detailProcessKey.value) {
+      void ensureProcess(detailProcessKey.value)
+      void ensureForm(detailFormKey.value)
+    }
   } catch (err) {
     detailError.value = err instanceof ApiError ? err.msg : t('workflow.ccDetailLoadFailed')
   } finally {
@@ -128,9 +150,68 @@ const detailCopy = computed<Record<string, unknown>>(() => {
   return raw as Record<string, unknown>
 })
 
-const detailFormData = computed<Record<string, unknown>>(() => {
+const detailFormData = computed<Record<string, unknown> | null>(() => {
   const raw = detail.value?.formData
-  return raw ? (raw as Record<string, unknown>) : {}
+  return raw ? (raw as Record<string, unknown>) : null
+})
+
+const detailProcessKey = computed(() =>
+  String(detailCopy.value.processDefKey ?? detailInstance.value?.processDefKey ?? ''),
+)
+const detailFormKey = computed(() =>
+  String(detailCopy.value.formKey ?? detailInstance.value?.formKey ?? ''),
+)
+const detailBusinessKey = computed(() =>
+  String(detailCopy.value.businessKey ?? detailInstance.value?.businessKey ?? ''),
+)
+const detailNodeKey = computed(() => String(detailCopy.value.nodeKey ?? ''))
+const detailStatus = computed(() =>
+  String(detailInstance.value?.status ?? detailCopy.value.instanceStatus ?? ''),
+)
+const detailDeliveryStatus = computed(() => String(detailCopy.value.deliveryStatus ?? ''))
+const detailCopyTime = computed(() => formatTime(detailCopy.value.createTime))
+
+const detailProcessName = computed(() => processName(detailProcessKey.value))
+const detailFormName = computed(() => formName(detailFormKey.value))
+const detailNodeName = computed(() => nodeName(detailProcessKey.value, detailNodeKey.value))
+const detailStatusLabel = computed(() => enumLabel('WORKFLOW_INSTANCE', detailStatus.value) || '-')
+const detailDeliveryLabel = computed(
+  () => enumLabel('NOTIFY_DELIVERY', detailDeliveryStatus.value) || '-',
+)
+
+/** 抄送详情与任务详情共用流程信息面板：历史行转换为统一审批历史形状。 */
+const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
+  const rows = detail.value?.history ?? []
+  return rows.map((row, index) => {
+    const nodeKey = typeof row.nodeKey === 'string' ? row.nodeKey : ''
+    const action = String(row.action ?? '')
+    const settlement = String(row.settlementStatus ?? '')
+    const result =
+      settlement === 'APPROVED' || action === 'APPROVE'
+        ? 'APPROVED'
+        : settlement === 'REJECTED' || action === 'REJECT' || action === 'DISAPPROVE'
+          ? 'REJECTED'
+          : null
+    const taskName = String(row.taskName || nodeName(detailProcessKey.value, nodeKey) || '审批记录')
+    return {
+      taskId: String(row.taskId ?? `cc-history-${index}`),
+      taskName,
+      nodeKey: nodeKey || null,
+      assignee: String(row.assignee ?? ''),
+      assigneeName: String(row.assigneeName ?? '') || '审批人',
+      assigneeDept: row.assigneeDept ? String(row.assigneeDept) : null,
+      createTime: String(row.createTime ?? ''),
+      endTime: row.endTime ? String(row.endTime) : row.createTime ? String(row.createTime) : null,
+      action: action === 'APPROVE' || action === 'REJECT' || action === 'RETURN' ? action : null,
+      opinionData:
+        row.opinionData && typeof row.opinionData === 'object'
+          ? (row.opinionData as Record<string, unknown>)
+          : typeof row.comment === 'string' && row.comment
+            ? { comment: row.comment }
+            : null,
+      approvalResult: result,
+    }
+  })
 })
 
 onMounted(loadList)
@@ -155,7 +236,7 @@ onMounted(loadList)
           :end-placeholder="t('common.endTime')"
         />
       </ListFilterItem>
-      <ListFilterItem :label="t('common.instanceId')">
+      <ListFilterItem label="流程实例编号">
         <el-input
           v-model="filter.processInstanceId"
           :placeholder="t('common.pleaseInput')"
@@ -190,85 +271,91 @@ onMounted(loadList)
     />
 
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
-      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="140" />
-      <el-table-column prop="processDefKey" :label="t('common.processKey')" min-width="150" />
-      <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="130" />
-      <el-table-column prop="nodeKey" :label="t('workflow.ccNode')" min-width="120" />
-      <el-table-column :label="t('workflow.instanceStatus')" width="100">
+      <el-table-column :label="t('common.formName')" min-width="160">
+        <template #default="{ row }">{{ formName(row.formKey) }}</template>
+      </el-table-column>
+      <el-table-column :label="t('common.processName')" min-width="160">
+        <template #default="{ row }">{{ processName(row.processDefKey) }}</template>
+      </el-table-column>
+      <el-table-column :label="t('common.businessNo')" min-width="160">
+        <template #default="{ row }">{{ row.businessKey || '-' }}</template>
+      </el-table-column>
+      <el-table-column :label="t('workflow.ccNode')" min-width="130">
+        <template #default="{ row }">{{ nodeName(row.processDefKey, row.nodeKey) }}</template>
+      </el-table-column>
+      <el-table-column :label="t('workflow.instanceStatus')" width="110">
         <template #default="{ row }">
-          {{ enumLabel('WORKFLOW_INSTANCE', row.instanceStatus ?? '-') }}
+          {{ enumLabel('WORKFLOW_INSTANCE', row.instanceStatus ?? '') || '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="deliveryStatus" :label="t('workflow.deliveryStatus')" width="100" />
-      <el-table-column prop="createTime" :label="t('workflow.ccTime')" min-width="170" />
+      <el-table-column :label="t('workflow.deliveryStatus')" width="110">
+        <template #default="{ row }">
+          {{ enumLabel('NOTIFY_DELIVERY', row.deliveryStatus ?? '') || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('workflow.ccTime')" min-width="170">
+        <template #default="{ row }">{{ formatTime(row.createTime) }}</template>
+      </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
   </StandardListTemplate>
 
-  <el-dialog v-model="detailVisible" :title="t('workflow.ccDetailTitle')" width="760px">
+  <el-dialog v-model="detailVisible" :title="t('workflow.ccDetailTitle')" width="980px">
     <div v-loading="detailLoading">
       <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" show-icon />
       <template v-if="detail">
         <el-descriptions :column="2" border>
-          <el-descriptions-item :label="t('common.processKey')">
-            {{ detailInstance?.processDefKey ?? '-' }}
+          <el-descriptions-item :label="t('common.processName')">
+            {{ detailProcessName }}
           </el-descriptions-item>
           <el-descriptions-item :label="t('workflow.instanceStatus')">
-            {{ detailInstance?.status ?? '-' }}
+            {{ detailStatusLabel }}
           </el-descriptions-item>
-          <el-descriptions-item :label="t('common.businessNo')">
-            {{ detailInstance?.businessKey ?? '-' }}
+          <el-descriptions-item :label="t('common.formName')">
+            {{ detailFormName }}
           </el-descriptions-item>
           <el-descriptions-item :label="t('workflow.ccNode')">
-            {{ detailCopy.nodeKey ?? '-' }}
+            {{ detailNodeName }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('common.businessNo')">
+            {{ detailBusinessKey || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('workflow.ccTime')">
+            {{ detailCopyTime }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('workflow.deliveryStatus')">
+            {{ detailDeliveryLabel }}
           </el-descriptions-item>
         </el-descriptions>
 
         <h4 class="detail-section-title">{{ t('workflow.formDataReadonlySnapshot') }}</h4>
+        <BusinessFormReadonly
+          v-if="detailFormKey"
+          :form-key="detailFormKey"
+          :record="detailFormData"
+        />
         <el-alert
-          v-if="Object.keys(detailFormData).length === 0"
+          v-else
           :title="t('workflow.noFormData')"
           type="info"
           :closable="false"
           show-icon
         />
-        <el-descriptions v-else :column="1" border size="small">
-          <el-descriptions-item
-            v-for="(value, key) in detailFormData"
-            :key="key"
-            :label="String(key)"
-          >
-            {{ typeof value === 'object' ? JSON.stringify(value) : String(value) }}
-          </el-descriptions-item>
-        </el-descriptions>
 
         <h4 class="detail-section-title">{{ t('workflow.approvalProgress') }}</h4>
-        <el-alert
-          v-if="detail.progress.length === 0"
-          :title="t('workflow.flowEndedNoActiveNode')"
-          type="info"
-          :closable="false"
-          show-icon
+        <InstanceFlowPanel
+          v-if="approvalHistory.length > 0"
+          :approval-history="approvalHistory"
+          :process-definition-key="detailProcessKey"
+          :current-node-key="detailNodeKey"
         />
-        <el-table v-else :data="detail.progress" stripe size="small">
-          <el-table-column prop="name" :label="t('common.node')" min-width="140" />
-          <el-table-column prop="assignee" :label="t('workflow.assignee')" min-width="120" />
-        </el-table>
-
-        <h4 class="detail-section-title">{{ t('common.flowHistory') }}</h4>
         <el-alert
-          v-if="detail.history.length === 0"
+          v-else
           :title="t('workflow.noFlowRecords')"
           type="info"
           :closable="false"
           show-icon
         />
-        <el-table v-else :data="detail.history" stripe size="small">
-          <el-table-column prop="taskName" :label="t('common.node')" min-width="120" />
-          <el-table-column prop="action" :label="t('common.action')" width="90" />
-          <el-table-column prop="settlementStatus" :label="t('common.result')" width="90" />
-          <el-table-column prop="createTime" :label="t('workflow.arrivedAt')" min-width="160" />
-        </el-table>
       </template>
     </div>
     <template #footer>

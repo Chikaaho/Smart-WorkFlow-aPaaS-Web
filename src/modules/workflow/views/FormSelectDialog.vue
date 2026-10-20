@@ -153,11 +153,9 @@ watch(
     @update:model-value="emit('update:visible', $event)"
   >
     <div class="form-select">
-      <!-- 提示条：只展示已发布的审批意见表单（业务表单在表单管理维护，不进入候选） -->
+      <!-- 提示条：只展示已发布的审批意见表单 -->
       <el-alert type="info" :closable="false" show-icon style="margin-bottom: var(--sw-space-16)">
-        <template #title>
-          仅展示已发布的审批意见表单作为可选绑定目标（草稿不可用；业务表单请到「表单管理」维护）
-        </template>
+        <template #title>仅展示已发布的审批意见表单</template>
       </el-alert>
 
       <!-- 搜索栏 -->
@@ -188,10 +186,9 @@ watch(
         <el-table-column
           prop="name"
           :label="t('common.formName')"
-          min-width="160"
+          min-width="220"
           show-overflow-tooltip
         />
-        <el-table-column prop="formKey" label="formKey" min-width="140" show-overflow-tooltip />
         <el-table-column :label="t('common.status')" width="90">
           <template #default="{ row }">
             <el-tag :type="getFormDefStatusType(row.status)" size="small">

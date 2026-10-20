@@ -24,6 +24,9 @@ import {
 } from '@/modules/workflow/api/oa'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
+import { useWorkflowDisplayNames } from '../composables/use-workflow-display-names'
+
+const { ensureForm, formName } = useWorkflowDisplayNames()
 
 // ─── 分类管理 ───
 const categories = ref<CatalogCategory[]>([])
@@ -122,6 +125,7 @@ async function loadList() {
     })
     list.value = result.list
     total.value = result.total
+    for (const item of result.list) void ensureForm(item.formKey)
   } catch (err) {
     errorMsg.value = err instanceof ApiError ? err.msg : t('workflow.catalogItemsLoadFailed')
   } finally {
@@ -254,7 +258,9 @@ onMounted(() => {
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
       <el-table-column prop="name" :label="t('workflow.itemName')" min-width="150" />
       <el-table-column prop="itemKey" :label="t('workflow.itemKey')" min-width="170" />
-      <el-table-column prop="formKey" :label="t('common.boundForm')" min-width="140" />
+      <el-table-column :label="t('common.boundForm')" min-width="160">
+        <template #default="{ row }">{{ formName(row?.formKey) }}</template>
+      </el-table-column>
       <el-table-column :label="t('common.category')" min-width="120">
         <template #default="{ row }">
           {{ categoryNameOf(row.categoryId) }}

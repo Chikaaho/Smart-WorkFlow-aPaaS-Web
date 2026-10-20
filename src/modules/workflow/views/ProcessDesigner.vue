@@ -378,6 +378,28 @@ const selectedNodeFormKey = computed(() => {
   return nodeForm?.formKey ?? ''
 })
 
+/** formKey → 业务表单名称：界面只展示名称，不向业务人员暴露内部标识。 */
+const nodeFormNames = ref<Record<string, string>>({})
+
+async function resolveNodeFormName(formKey?: string) {
+  if (!formKey || nodeFormNames.value[formKey]) return
+  try {
+    const schema = await publishedFormDefinition(formKey)
+    nodeFormNames.value = {
+      ...nodeFormNames.value,
+      [formKey]: schema.title?.trim() || '已绑定表单',
+    }
+  } catch {
+    nodeFormNames.value = { ...nodeFormNames.value, [formKey]: '已绑定表单' }
+  }
+}
+
+const selectedNodeFormName = computed(() =>
+  selectedNodeFormKey.value
+    ? (nodeFormNames.value[selectedNodeFormKey.value] ?? '已绑定表单')
+    : '未绑定',
+)
+
 function applyNodeForm(formKey: string) {
   if (!selectedNode.value) return
   model?.updateNodeConfig(selectedNode.value.id, {
@@ -387,8 +409,13 @@ function applyNodeForm(formKey: string) {
   onModelChanged()
 }
 
-function onNodeFormSelected(formKey: string) {
+function onNodeFormSelected(formKey: string, formName: string) {
   nodeFormSelectVisible.value = false
+  if (formName.trim()) {
+    nodeFormNames.value = { ...nodeFormNames.value, [formKey]: formName.trim() }
+  } else {
+    void resolveNodeFormName(formKey)
+  }
   applyNodeForm(formKey)
 }
 
@@ -518,7 +545,7 @@ function formFieldOptions(formKey?: string) {
 }
 
 function formFieldLabel(field: { name: string; label?: string }) {
-  return field.label ? `${field.label}(${field.name})` : field.name
+  return field.label || '未命名字段'
 }
 
 const graphNodes = computed(() => {
@@ -535,7 +562,7 @@ const graphNodes = computed(() => {
 
 /** 触发器源节点选项文案：业务名(nodeId)，未命名仅 nodeId。 */
 function graphNodeLabel(node: { id: string; name: string }) {
-  return node.name && node.name !== node.id ? `${node.name}(${node.id})` : node.id
+  return node.name && node.name !== node.id ? node.name : '未命名节点'
 }
 
 /** 触发器表源节点列：节点业务名（未命名回退 nodeId）。 */
@@ -808,14 +835,23 @@ interface NodeListenerMeta {
 const nodeMeta = computed<{
   nodeKey: string
   approveMode: string
+  approveModeLabel: string
   approverName: string
   listeners: NodeListenerMeta[]
 }>(() => {
   const config = (selectedNode.value?.config ?? {}) as Record<string, unknown>
   const listeners = Array.isArray(config.listeners) ? (config.listeners as NodeListenerMeta[]) : []
+  const mode = typeof config.approveMode === 'string' ? config.approveMode : ''
+  const modeLabels: Record<string, string> = {
+    ALL: '全部同意',
+    ANY: '任一同意',
+    RATIO: '比例通过',
+    VETO: '一票否决',
+  }
   return {
     nodeKey: typeof config.nodeKey === 'string' ? config.nodeKey : '',
-    approveMode: typeof config.approveMode === 'string' ? config.approveMode : '',
+    approveMode: mode,
+    approveModeLabel: modeLabels[mode] ?? (mode ? '会签' : ''),
     approverName: typeof config.approverName === 'string' ? config.approverName : '',
     listeners,
   }
@@ -1690,9 +1726,9 @@ const participantStrategyOptions = computed(() => {
 const participantLegacyNote = computed(() => {
   switch (participantShape.value) {
     case 'legacy':
-      return '检测到旧版审批人配置，已做兼容展示；保存后将升级为策略取值形状。'
+      return '当前审批人来自旧版配置，保存后按新配置生效。'
     case 'unparsed':
-      return '当前审批人配置无法识别；重新选择策略并保存后将覆盖旧值。'
+      return '当前审批人配置无法识别，请重新选择审批人策略。'
     default:
       return ''
   }
@@ -1963,12 +1999,11 @@ function nodeTriggerOf(event: string): TriggerConfig | null {
   return found ?? null
 }
 
-/** ①节点触发器：状态文案（已配置显示脚本摘要）。 */
+/** ①节点触发器：状态文案（已配置仅显示业务状态，不展示脚本片段）。 */
 function nodeTriggerSummary(event: string): string {
   const trigger = nodeTriggerOf(event)
   if (!trigger || !trigger.script?.trim()) return '未配置'
-  const firstLine = trigger.script.trim().split('\n')[0] ?? ''
-  return `已配置 · ${firstLine.slice(0, 40)}`
+  return '已配置'
 }
 
 /** ①节点触发器：打开脚本弹窗（无则应用时创建；变量授权=全部已定义变量）。 */
@@ -2495,6 +2530,13 @@ async function load() {
     lastSavedJson = currentGraphJson()
     dirty.value = false
     savedAtText.value = ''
+    // 已绑定审批意见表单的节点：预先解析业务名称，属性面板不展示 formKey
+    for (const element of graph.value.elements ?? []) {
+      const nodeForm = (element.config as Record<string, unknown> | undefined)?.nodeForm as
+        | { formKey?: string }
+        | undefined
+      void resolveNodeFormName(nodeForm?.formKey)
+    }
     selectNode(null)
     snapshot()
     fitViewport()
@@ -3016,17 +3058,15 @@ function nodeLabelLines(label: string) {
                 <el-form-item :label="t('workflow.nodeName')">
                   <el-input
                     v-model="propForm.name as string"
+                    @input="applyProps"
                     @change="applyProps"
                     @blur="applyProps"
                     @keyup.enter="applyProps"
                   />
                 </el-form-item>
                 <!-- 节点编号 / 审批方式（定义 config 元数据；只读展示） -->
-                <el-form-item v-if="nodeMeta.nodeKey" :label="t('workflow.nodeKeyLabel')">
-                  <el-input :model-value="nodeMeta.nodeKey" disabled />
-                </el-form-item>
                 <el-form-item v-if="nodeMeta.approveMode" :label="t('workflow.approveModeLabel')">
-                  <el-input :model-value="nodeMeta.approveMode" disabled />
+                  <el-input :model-value="nodeMeta.approveModeLabel" disabled />
                 </el-form-item>
                 <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
                 <template v-if="participantField">
@@ -3100,7 +3140,7 @@ function nodeLabelLines(label: string) {
                             participantForm.formField.objectType,
                           )"
                           :key="option.name"
-                          :label="`${option.label || option.name}（${option.name}）`"
+                          :label="option.label || '未命名字段'"
                           :value="option.name"
                         />
                       </el-select>
@@ -3121,7 +3161,7 @@ function nodeLabelLines(label: string) {
                           <el-option
                             v-for="option in tableFieldOptions"
                             :key="option.name"
-                            :label="`${option.label || option.name}（${option.name}）`"
+                            :label="option.label || '未命名字段'"
                             :value="option.name"
                           />
                         </el-select>
@@ -3139,7 +3179,7 @@ function nodeLabelLines(label: string) {
                               participantForm.formField.objectType,
                             )"
                             :key="option.name"
-                            :label="`${option.label || option.name}（${option.name}）`"
+                            :label="option.label || '未命名字段'"
                             :value="option.name"
                           />
                         </el-select>
@@ -3174,7 +3214,7 @@ function nodeLabelLines(label: string) {
                         <el-option
                           v-for="option in mainFieldOptionsFor('USER')"
                           :key="option.name"
-                          :label="`${option.label || option.name}（${option.name}）`"
+                          :label="option.label || '未命名字段'"
                           :value="option.name"
                         />
                       </el-select>
@@ -3199,7 +3239,7 @@ function nodeLabelLines(label: string) {
                         {{ participantForm.genericValue ? '编辑脚本' : '编写脚本' }}
                       </el-button>
                       <small v-if="participantForm.genericValue" class="participant-hint">
-                        {{ participantForm.genericValue.slice(0, 60) }}
+                        已配置
                       </small>
                     </div>
                   </el-form-item>
@@ -3223,7 +3263,7 @@ function nodeLabelLines(label: string) {
                    BF20261013-020：节点绑定的是审批意见表单（独立类型，流程管理单独维护） ═══ -->
                 <el-form-item v-if="nodeFormCapable" label="审批意见表单">
                   <div class="nodeform-row">
-                    <el-input :model-value="selectedNodeFormKey || '未绑定'" disabled />
+                    <el-input :model-value="selectedNodeFormName" disabled />
                     <el-button @click="nodeFormSelectVisible = true">
                       {{ selectedNodeFormKey ? '更换' : '选择表单' }}
                     </el-button>
@@ -3336,7 +3376,7 @@ function nodeLabelLines(label: string) {
                       <el-option
                         v-for="option in mainFieldOptionsFor(dynamicParallelForm.objectType)"
                         :key="option.name"
-                        :label="`${option.label || option.name}（${option.name}）`"
+                        :label="option.label || '未命名字段'"
                         :value="option.name"
                       />
                     </el-select>
@@ -3376,7 +3416,7 @@ function nodeLabelLines(label: string) {
                         <el-option
                           v-for="option in tableFieldOptions"
                           :key="option.name"
-                          :label="`${option.label || option.name}（${option.name}）`"
+                          :label="option.label || '未命名字段'"
                           :value="option.name"
                         />
                       </el-select>
@@ -3399,7 +3439,7 @@ function nodeLabelLines(label: string) {
                             dynamicParallelForm.objectType,
                           )"
                           :key="option.name"
-                          :label="`${option.label || option.name}（${option.name}）`"
+                          :label="option.label || '未命名字段'"
                           :value="option.name"
                         />
                       </el-select>
@@ -3722,9 +3762,7 @@ function nodeLabelLines(label: string) {
             >
               {{ subflowForm.script?.trim() ? '编辑脚本' : '编写脚本' }}
             </el-button>
-            <small v-if="subflowForm.script?.trim()" class="participant-hint">
-              {{ subflowForm.script.trim().split('\n')[0].slice(0, 50) }}
-            </small>
+            <small v-if="subflowForm.script?.trim()" class="participant-hint"> 已配置 </small>
           </div>
         </el-form-item>
         <el-form-item v-else label="触发字段（字段值为真即发起）">
@@ -3738,7 +3776,7 @@ function nodeLabelLines(label: string) {
             <el-option
               v-for="field in mainFormFields"
               :key="field.name"
-              :label="`${field.label || field.name}（${field.name}）`"
+              :label="field.label || '未命名字段'"
               :value="field.name"
             />
           </el-select>
@@ -3758,7 +3796,7 @@ function nodeLabelLines(label: string) {
             <el-option
               v-for="item in publishedTargetOptions.defs"
               :key="item.key"
-              :label="`${item.name}（${item.key}）`"
+              :label="item.name || '未命名流程'"
               :value="item.key"
             />
           </el-select>
@@ -3781,7 +3819,7 @@ function nodeLabelLines(label: string) {
               <el-option
                 v-for="field in subflowTargetFields"
                 :key="field.name"
-                :label="`${field.label || field.name}（${field.name}）`"
+                :label="field.label || '未命名字段'"
                 :value="field.name"
               />
             </el-select>
@@ -3805,19 +3843,19 @@ function nodeLabelLines(label: string) {
                 <el-option
                   v-for="field in mainFormFields"
                   :key="`main:${field.name}`"
-                  :label="`${field.label || field.name}（${field.name}）`"
+                  :label="field.label || '未命名字段'"
                   :value="`main:${field.name}`"
                 />
               </el-option-group>
               <el-option-group
                 v-for="table in tableFieldOptions"
                 :key="table.name"
-                :label="table.label || table.name"
+                :label="table.label || '未命名表格'"
               >
                 <el-option
                   v-for="column in table.subFields ?? []"
                   :key="`table:${table.name}:${column.name}`"
-                  :label="`${column.label || column.name}（${table.name}.${column.name}）`"
+                  :label="column.label || '未命名字段'"
                   :value="`table:${table.name}:${column.name}`"
                 />
               </el-option-group>
@@ -3874,13 +3912,9 @@ function nodeLabelLines(label: string) {
     >
       <div class="p64-toolbar">
         <el-button size="small" type="primary" @click="resetVariableDraft">新增变量</el-button>
-        <HintTip
-          content="变量固定 var_ 开头。按 JS 类型使用（数字/文本/是-否/数组），无需选择数据类型；默认由脚本赋值（#设置流程变量），也可与主表单或审批意见表单字段同名自动取值（审批意见取最新一轮）；取不到值按空处理，不阻止触发。"
-        />
       </div>
       <el-table :data="graph?.variables ?? []" size="small" class="p64-table">
-        <el-table-column prop="varId" label="变量标识" width="200" />
-        <el-table-column prop="name" label="名称" min-width="160" />
+        <el-table-column prop="name" label="变量名称" min-width="200" />
         <el-table-column label="操作" width="140">
           <template #default="{ $index }">
             <el-button size="small" link type="primary" @click="editVariable($index)"
@@ -3926,12 +3960,11 @@ function nodeLabelLines(label: string) {
       <div class="p64-toolbar">
         <el-button size="small" type="primary" @click="resetTriggerDraft">新增触发器</el-button>
         <HintTip
-          content="全局触发器只有两类：流程发起、流程结束（节点开始前/结束的触发器在节点属性里配置）。判断脚本经「编写脚本」弹窗撰写，读取勾选的变量并返回一个结果值；每个结果值对应一个动作。"
+          content="流程发起和流程结束时自动执行；节点的开始前/结束触发器在节点属性中配置。"
         />
       </div>
       <el-table :data="graph?.triggers ?? []" size="small" class="p64-table">
-        <el-table-column prop="triggerId" label="规则标识" width="130" />
-        <el-table-column prop="name" label="名称" width="130" />
+        <el-table-column prop="name" label="名称" width="150" />
         <el-table-column label="触发时机" width="190">
           <template #default="{ row }">{{ labelOf(TRIGGER_EVENT_LABELS, row.event) }}</template>
         </el-table-column>
@@ -3989,7 +4022,7 @@ function nodeLabelLines(label: string) {
               <el-option
                 v-for="item in graph?.variables ?? []"
                 :key="item.varId"
-                :label="`${item.name}(${item.varId})`"
+                :label="item.name || '未命名变量'"
                 :value="item.varId"
               />
             </el-select>
@@ -4006,9 +4039,7 @@ function nodeLabelLines(label: string) {
             >
               {{ triggerDraft.script?.trim() ? '编辑脚本' : '编写脚本' }}
             </el-button>
-            <small v-if="triggerDraft.script?.trim()" class="p64-hint">
-              {{ triggerDraft.script.trim().split('\n')[0].slice(0, 60) }}
-            </small>
+            <small v-if="triggerDraft.script?.trim()" class="p64-hint"> 已配置 </small>
           </div>
         </el-form-item>
         <div class="p64-toolbar">
@@ -4066,7 +4097,7 @@ function nodeLabelLines(label: string) {
                   <el-option
                     v-for="item in graph?.variables ?? []"
                     :key="item.varId"
-                    :label="`${item.name}(${item.varId})`"
+                    :label="item.name || '未命名变量'"
                     :value="item.varId"
                   />
                 </el-select>
@@ -4090,7 +4121,7 @@ function nodeLabelLines(label: string) {
                   <el-option
                     v-for="item in publishedTargetOptions.defs"
                     :key="item.key"
-                    :label="`${item.name}(${item.key})`"
+                    :label="item.name || '未命名表单'"
                     :value="item.key"
                   />
                 </el-select>
@@ -4106,7 +4137,7 @@ function nodeLabelLines(label: string) {
                   <el-option
                     v-for="item in publishedTargetOptions.forms"
                     :key="item.key"
-                    :label="`${item.name}(${item.key})`"
+                    :label="item.name || '未命名表单'"
                     :value="item.key"
                   />
                 </el-select>
@@ -4150,7 +4181,7 @@ function nodeLabelLines(label: string) {
                   <el-option
                     v-for="item in graph?.variables ?? []"
                     :key="item.varId"
-                    :label="`${item.name}(${item.varId})`"
+                    :label="item.name || '未命名变量'"
                     :value="item.varId"
                   />
                 </el-select>

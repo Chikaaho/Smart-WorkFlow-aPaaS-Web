@@ -178,7 +178,7 @@ function onSave() {
         <JsCodeEditor
           v-model="working"
           :functions="props.functions"
-          :placeholder="placeholder ?? '在此编写脚本；用 #函数名 调用内置函数（名字无需引号）'"
+          :placeholder="placeholder ?? '在此编写计算脚本，结果用 return 返回'"
         />
         <!-- BF20261013-028：模拟运行结果（流程脚本=服务端同一引擎；表单脚本=本地解释器示例值） -->
         <div v-if="simResult" class="script-dialog__sim" data-testid="script-sim-result">
@@ -192,9 +192,6 @@ function onSave() {
               <li v-for="(item, index) in simResult.log" :key="index">{{ item }}</li>
             </ul>
             <p v-else-if="!props.simulate" class="script-dialog__sim-note">未调用内置函数</p>
-            <p v-else class="script-dialog__sim-note">
-              由服务端脚本引擎执行（组织目录为真实数据，变量为示例值）
-            </p>
           </template>
         </div>
       </div>

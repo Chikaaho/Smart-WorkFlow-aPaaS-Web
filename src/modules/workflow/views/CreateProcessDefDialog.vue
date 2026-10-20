@@ -138,7 +138,7 @@ async function handleSubmit() {
             <label class="form-field__label">{{ t('common.boundForm') }}</label>
             <div class="form-field__selector">
               <el-input
-                :model-value="form.formName ? `${form.formName} (${form.formKey})` : ''"
+                :model-value="form.formName"
                 :placeholder="t('common.boundFormPlaceholder')"
                 readonly
                 @click="formSelectVisible = true"

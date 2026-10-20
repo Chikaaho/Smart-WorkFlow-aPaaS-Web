@@ -123,7 +123,6 @@ onMounted(loadList)
           {{ row.processName ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="140" />
       <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="120" />
       <el-table-column prop="createTime" :label="t('common.createTime')" min-width="170" />
       <el-table-column :label="t('workflow.completedAt')" min-width="170">

@@ -36,8 +36,8 @@ import type { TaskNodeFormView } from '@/contracts/p64'
 import { getTaskNodeForm, saveTaskNodeFormDraft } from '@/modules/workflow/api/p64'
 import DynamicField from '@/components/DynamicField.vue'
 import { createFieldScripts } from '@/adapters/form-runtime'
-import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 import InstanceFlowPanel from '../components/InstanceFlowPanel.vue'
+import BusinessFormReadonly from '../components/BusinessFormReadonly.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -57,30 +57,6 @@ const returnTargetNodeId = ref('')
 /** 本次提交的表单记录数据（businessKey = 表单记录 ID，经 form 模块只读接口回查） */
 const formRecord = ref<Record<string, unknown> | null>(null)
 const formRecordLoading = ref(false)
-/** 表单定义（用于把内部字段名映射为业务字段标签） */
-const formSchema = ref<FormSchema | null>(null)
-
-/** REFERENCE 字段显示名缓存（id→可读关联对象信息，授权单查解析，取不到回退 id）。 */
-const refDisplayMap = ref<Record<string, string>>({})
-/** P63 G01：USER/DEPT 字段可读显示缓存（字段名→姓名/部门名，多选顿号连接，取不到回退原值）。 */
-const userDeptDisplays = ref<Record<string, string>>({})
-
-/**
- * 0.1.7 #18：数据表单按设计器栅格直出——字段清单来自表单定义（LABEL 文字也展示），
- * 值取本次提交记录；REFERENCE/USER/DEPT 用既有显示名缓存。设计器里有什么就展示什么。
- */
-const formGridItems = computed(() => {
-  if (!formSchema.value) return []
-  return formSchema.value.fields.map((field) => {
-    const recordKey = field.type === 'REFERENCE' ? 'ref_' + field.name + '_id' : field.name
-    return {
-      field,
-      colSpan: normalizeFormFieldColSpan(field.colSpan, field.type),
-      value: formRecord.value?.[recordKey],
-      referenceLabel: field.type === 'REFERENCE' ? (refDisplayMap.value[field.name] ?? '') : '',
-    }
-  })
-})
 
 async function loadDetail() {
   loading.value = true
@@ -104,46 +80,13 @@ async function loadDetail() {
 }
 
 /** 按 formKey + businessKey 回查本次提交的表单数据；失败不阻断审批主链 */
-async function resolveRefDisplays() {
-  refDisplayMap.value = {}
-  if (!formSchema.value || !formRecord.value) return
-  const { resolveReferenceDisplay } = await import('@/adapters/form-runtime')
-  for (const field of formSchema.value.fields) {
-    if (field.type !== 'REFERENCE') continue
-    const refId = formRecord.value['ref_' + field.name + '_id']
-    if (refId == null || refId === '') continue
-    try {
-      refDisplayMap.value[field.name] = await resolveReferenceDisplay(
-        String(field.targetFormId ?? ''),
-        String(refId),
-      )
-    } catch {
-      refDisplayMap.value[field.name] = String(refId)
-    }
-  }
-}
-
 async function loadFormRecord() {
   const d = detail.value
   if (!d?.formKey || !d.businessKey) return
   formRecordLoading.value = true
   try {
-    const { getFormData, getFormDefinition } = await import('@/adapters/form-runtime')
+    const { getFormData } = await import('@/adapters/form-runtime')
     formRecord.value = await getFormData(d.formKey, d.businessKey)
-    try {
-      formSchema.value = await getFormDefinition(d.formKey)
-    } catch {
-      formSchema.value = null
-    }
-    // P63 G01：USER/DEPT 字段保存回读显示为可读姓名/部门名（解析失败回退原值不阻断）
-    if (formSchema.value && formRecord.value) {
-      const { buildUserDeptDisplays } = await import('@/adapters/form-runtime')
-      userDeptDisplays.value = await buildUserDeptDisplays(
-        formSchema.value,
-        formRecord.value,
-      ).catch(() => ({}))
-    }
-    await resolveRefDisplays()
   } catch {
     formRecord.value = null
   } finally {
@@ -882,38 +825,13 @@ onMounted(loadDetail)
         <p>可直接重试本次操作（将重新提交审批命令，原过期记录保留可查）。</p>
       </el-alert>
 
-      <!-- 本次提交的表单数据：按设计器栅格渲染（LABEL 文字也展示） -->
-      <el-card v-if="detail.formKey && detail.businessKey" class="detail-card detail-card--form">
-        <div v-loading="formRecordLoading" class="form-canvas">
-          <el-alert
-            v-if="!formRecordLoading && !formRecord"
-            :title="t('workflow.formRecordUnavailable')"
-            type="warning"
-            :closable="false"
-            show-icon
-          />
-          <div v-else-if="formGridItems.length > 0" class="form-canvas__grid">
-            <div
-              v-for="item in formGridItems"
-              :key="item.field.name"
-              class="form-canvas__field"
-              :style="{ gridColumn: `span ${item.colSpan}` }"
-            >
-              <DynamicField
-                :field="item.field"
-                :model-value="item.value"
-                readonly
-                :reference-label="item.referenceLabel"
-              />
-            </div>
-          </div>
-          <el-descriptions v-else-if="formRecord" :column="1" border>
-            <el-descriptions-item :label="t('common.description')">{{
-              t('workflow.noDisplayableFields')
-            }}</el-descriptions-item>
-          </el-descriptions>
-        </div>
-      </el-card>
+      <!-- 本次提交的表单数据：与抄送详情共用同一套业务表单只读展示 -->
+      <BusinessFormReadonly
+        v-if="detail.formKey && detail.businessKey"
+        :form-key="detail.formKey"
+        :record="formRecord"
+        :loading="formRecordLoading"
+      />
 
       <!-- P64 阶段Ⅰ：节点业务表单（绑定节点可填报；草稿可存，最终提交随审批动作同事务生效；已提交只读回看） -->
       <el-card v-if="nodeForm && nodeFormBound" class="detail-card detail-card--node-form">
@@ -1048,16 +966,7 @@ onMounted(loadDetail)
     <el-card v-if="detail && (canAct || isInitiator)" class="detail-card detail-card--actions">
       <div class="detail-actions">
         <div v-if="opinionFields.length > 0" class="opinion-form">
-          <div class="opinion-form__title">
-            审批意见{{
-              detail.opinionForm?.formId
-                ? t('workflow.opinionFormSuffix', {
-                    formId: detail.opinionForm.formId,
-                    version: detail.opinionForm.version,
-                  })
-                : ''
-            }}
-          </div>
+          <div class="opinion-form__title">审批意见</div>
           <div v-for="field in visibleOpinionFields" :key="field.key" class="opinion-field">
             <template v-if="field.type === 'NOTE'">
               <span class="opinion-note">{{ field.label }}</span>
