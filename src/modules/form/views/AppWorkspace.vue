@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import AppFormData from '@/modules/form/views/AppFormData.vue'
+import AppContentPanel from '@/modules/form/components/AppContentPanel.vue'
 import AppTreeNav from '@/modules/form/components/AppTreeNav.vue'
 import {
   createFormAppDir,
@@ -38,19 +38,30 @@ const errorMsg = ref('')
 
 const dirs = computed(() => content.value?.dirs ?? [])
 const directForms = computed(() => content.value?.directForms ?? [])
+const allForms = computed<FormAppFormItem[]>(() => {
+  const forms: FormAppFormItem[] = []
+  for (const dir of dirs.value) forms.push(...(dir.forms ?? []))
+  forms.push(...directForms.value)
+  return forms
+})
 /** 应用身份（0.1.7 #34）：左上角图标 + 名称来自应用内容接口，不额外请求。 */
 const app = computed(() => content.value?.app ?? null)
 
-const isEmpty = computed(
-  () =>
-    !loading.value && !errorMsg.value && dirs.value.length === 0 && directForms.value.length === 0,
-)
+const isEmpty = computed(() => !loading.value && !errorMsg.value && allForms.value.length === 0)
 
-/** 当前选中表单（路由 query.formKey 持久化，刷新后保持）。 */
+/** 当前选中表单：query.formKey 命中则用之，否则回落首个表单（与用户端应用内页一致）。 */
 const selectedFormKey = computed(() => {
   const fromQuery = typeof route.query.formKey === 'string' ? route.query.formKey : ''
-  if (fromQuery) return fromQuery
-  return ''
+  if (fromQuery && allForms.value.some((form) => form.formKey === fromQuery)) return fromQuery
+  return allForms.value[0]?.formKey ?? ''
+})
+
+/** 目录/应用被后台调整后回到首个可选表单，避免停留在已移除的表单上。 */
+watch(allForms, (forms) => {
+  const fromQuery = typeof route.query.formKey === 'string' ? route.query.formKey : ''
+  if (fromQuery && !forms.some((form) => form.formKey === fromQuery)) {
+    void router.replace({ query: { ...route.query, formKey: forms[0]?.formKey ?? undefined } })
+  }
 })
 
 /** 树点击表单 → 右侧展示数据列表（回归01c：点行看数据）。 */
@@ -314,34 +325,13 @@ onMounted(() => {
       </AppTreeNav>
 
       <!-- 右侧内容：空应用 / 未选择目录或表单均用大图标占位；选中表单展示其数据列表（回归01c） -->
-      <section class="app-ws__panel">
-        <el-empty
-          v-if="isEmpty"
-          class="app-ws__placeholder"
-          data-testid="app-ws-empty"
-          :image-size="120"
-          :description="t('form.appCenter.emptyAppContent')"
-        />
-        <AppFormData
-          v-else-if="selectedFormKey"
-          :key="selectedFormKey"
-          :form-key="selectedFormKey"
-          :app-id="appId"
-          embedded
-        />
-        <!-- 0.1.7 #35（Owner）：进来未选择任何目录/表单时，大图标 + 提示语占位 -->
-        <el-empty
-          v-else
-          class="app-ws__placeholder"
-          data-testid="app-ws-placeholder"
-          :image-size="120"
-        >
-          <template #description>
-            <p class="app-ws__placeholder-title">{{ t('common.noContent') }}</p>
-            <p class="app-ws__placeholder-hint">{{ t('form.appCenter.pickForm') }}</p>
-          </template>
-        </el-empty>
-      </section>
+      <AppContentPanel
+        :form-key="selectedFormKey"
+        :app-id="appId"
+        :is-empty="isEmpty"
+        empty-test-id="app-ws-empty"
+        placeholder-test-id="app-ws-placeholder"
+      />
     </div>
 
     <!-- 目录新建/改名对话框（0.1.7 #4：修改只改名称） -->
@@ -406,29 +396,5 @@ onMounted(() => {
   align-items: stretch;
   flex: 1;
   min-height: 0;
-}
-.app-ws__panel {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-/* 0.1.7 #35（Owner）：右侧空态/未选择态统一为大图标占位（el-empty 自带宽高与图形） */
-.app-ws__placeholder {
-  flex: 1;
-  justify-content: center;
-  margin: 0;
-}
-.app-ws__placeholder-title {
-  margin: 0;
-  color: #606266;
-  font-size: 14px;
-  line-height: 22px;
-}
-.app-ws__placeholder-hint {
-  margin: 4px 0 0;
-  color: #909399;
-  font-size: 12px;
-  line-height: 18px;
 }
 </style>

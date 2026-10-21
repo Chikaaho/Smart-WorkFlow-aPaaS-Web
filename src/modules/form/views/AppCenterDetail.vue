@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import AppFormData from '@/modules/form/views/AppFormData.vue'
+import AppContentPanel from '@/modules/form/components/AppContentPanel.vue'
 import AppTreeNav from '@/modules/form/components/AppTreeNav.vue'
 import { getAppCenterContent } from '@/modules/form/api/app-center'
 import type { FormAppContent, FormAppFormItem } from '@/contracts/app-center'
@@ -96,19 +96,13 @@ onMounted(() => {
         @back="backToCenter"
       />
 
-      <section class="app-detail__panel">
-        <p v-if="isEmpty" class="app-detail__empty" data-testid="app-detail-empty">
-          {{ t('form.appCenter.emptyAppContent') }}
-        </p>
-        <AppFormData
-          v-else-if="selectedFormKey"
-          :key="selectedFormKey"
-          :form-key="selectedFormKey"
-          :app-id="appId"
-          embedded
-        />
-        <p v-else class="app-detail__empty">{{ t('form.appCenter.pickForm') }}</p>
-      </section>
+      <AppContentPanel
+        :form-key="selectedFormKey"
+        :app-id="appId"
+        :is-empty="isEmpty"
+        empty-test-id="app-detail-empty"
+        placeholder-test-id="app-detail-placeholder"
+      />
     </div>
   </div>
 </template>
@@ -129,16 +123,5 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
   gap: 0;
-}
-/* 左侧目录/表单树由 AppTreeNav 统一维护 */
-.app-detail__panel {
-  flex: 1;
-  min-width: 0;
-}
-.app-detail__empty {
-  color: #909399;
-  text-align: center;
-  padding: 48px 0;
-  flex: 1;
 }
 </style>

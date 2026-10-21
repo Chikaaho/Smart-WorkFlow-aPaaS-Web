@@ -2,10 +2,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { MoreFilled, Search } from '@element-plus/icons-vue'
 import { LoadErrorState } from '@/components/page-layout'
 import AppScopePicker, { type AppScopeValue } from '@/components/AppScopePicker.vue'
-import AppIcon from '@/modules/form/components/AppIcon.vue'
+import AppGrid from '@/modules/form/components/AppGrid.vue'
+import AppGridToolbar from '@/modules/form/components/AppGridToolbar.vue'
 import { APP_COLOR_PRESETS, APP_ICON_KEYS } from '@/modules/form/utils/app-icons'
 import {
   createFormApp,
@@ -47,10 +47,6 @@ async function loadList() {
   } finally {
     loading.value = false
   }
-}
-
-function handleSearch() {
-  void loadList()
 }
 
 // ==================== 新建 / 修改对话框 ====================
@@ -208,67 +204,27 @@ onMounted(() => {
 
 <template>
   <div class="app-manage">
-    <div class="app-manage__bar">
-      <!-- 0.1.7 #25：左上角标题为噪音，已去除——搜索框即页首，靠左 -->
-      <el-input
-        v-model="keyword"
-        class="app-manage__search"
-        :placeholder="t('form.appCenter.searchPlaceholder')"
-        :prefix-icon="Search"
-        clearable
-        @keyup.enter="handleSearch"
-      />
-    </div>
+    <AppGridToolbar
+      v-model="keyword"
+      :placeholder="t('form.appCenter.searchPlaceholder')"
+      test-id="app-manage-search"
+      @search="loadList"
+    />
 
     <LoadErrorState v-if="loadError" :error="loadError" @retry="loadList" />
     <div v-else-if="errorMsg" class="app-manage__error">{{ errorMsg }}</div>
 
-    <div v-else v-loading="loading" class="app-manage__grid">
-      <button
-        v-for="app in apps"
-        :key="app.id"
-        type="button"
-        class="app-card"
-        data-testid="app-card"
-        @click="enterWorkspace(app)"
-      >
-        <el-dropdown
-          class="app-card__more"
-          trigger="click"
-          @command="(cmd: string) => onCardCommand(cmd, app)"
-        >
-          <span class="app-card__more-trigger" data-testid="app-card-more" @click.stop>
-            <el-icon><MoreFilled /></el-icon>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item v-perm="'form:app:manage'" command="edit">
-                {{ t('common.edit') }}
-              </el-dropdown-item>
-              <el-dropdown-item v-perm="'form:app:manage'" command="delete" divided>
-                {{ t('common.delete') }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <AppIcon :icon="app.icon" :color="app.color" :size="28" />
-        <span class="app-card__name" data-testid="app-name">{{ app.name }}</span>
-        <el-tag v-if="app.status === 'DISABLED'" class="app-card__tag" size="small" type="info">
-          {{ t('form.appCenter.statusDisabled') }}
-        </el-tag>
-      </button>
-
-      <button
-        v-perm="'form:app:manage'"
-        type="button"
-        class="app-card app-card--create"
-        data-testid="app-create"
-        @click="openCreate"
-      >
-        <span class="app-card__plus">+</span>
-        <span class="app-card__name">{{ t('form.appCenter.newApp') }}</span>
-      </button>
-    </div>
+    <AppGrid
+      v-else
+      :apps="apps"
+      :loading="loading"
+      show-actions
+      show-form-count
+      show-create
+      @select="enterWorkspace"
+      @command="onCardCommand"
+      @create="openCreate"
+    />
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="560px">
       <el-form label-width="90px">
@@ -338,83 +294,8 @@ onMounted(() => {
   min-height: 100%;
   padding: 20px 24px;
 }
-.app-manage__bar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.app-manage__search {
-  flex: 0 1 260px;
-}
 .app-manage__error {
   color: #f56c6c;
-}
-.app-manage__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
-}
-.app-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 120px;
-  padding: 20px 16px;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
-  transition: box-shadow 0.2s;
-}
-.app-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-}
-.app-card--create {
-  border-style: dashed;
-  color: #909399;
-  background: #fafafa;
-}
-.app-card__plus {
-  font-size: 28px;
-  line-height: 1;
-  color: #a8abb2;
-}
-.app-card__name {
-  max-width: 100%;
-  font-size: 14px;
-  font-weight: 500;
-  color: #303133;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.app-card__tag {
-  position: absolute;
-  left: 8px;
-  top: 8px;
-}
-.app-card__more {
-  position: absolute;
-  right: 6px;
-  top: 6px;
-}
-.app-card__more-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  color: #909399;
-  cursor: pointer;
-}
-.app-card__more-trigger:hover {
-  background: #f5f7fa;
-  color: #303133;
 }
 .icon-picker {
   display: flex;
