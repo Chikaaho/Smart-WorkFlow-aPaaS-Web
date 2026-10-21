@@ -1500,6 +1500,44 @@ function applyProps() {
   snapshot()
 }
 
+/* ─────────── 会签结算：人数 / 比例（0.1.10） ─────────── */
+const CONSENSUS_MODE_OPTIONS = [
+  { label: '人数', value: 'COUNT' },
+  { label: '比例', value: 'RATIO' },
+  { label: '全部通过（ALL）', value: 'ALL' },
+  { label: '一票否决（VETO）', value: 'VETO' },
+  { label: '任一通过（ANY）', value: 'ANY' },
+] as const
+
+function isPositiveInteger(value: unknown) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1
+}
+
+function onConsensusModeChange(value: string) {
+  const next: Record<string, unknown> = { ...propForm.value, mode: value }
+  // 切换口径时把另一口径的越界值收敛到合法缺省，避免把 67 人当 67% 或反之。
+  if (value === 'COUNT' && !isPositiveInteger(next.ratio)) next.ratio = 1
+  if (value === 'RATIO' && !isPositiveInteger(next.ratio)) next.ratio = 100
+  if (value === 'RATIO' && typeof next.ratio === 'number' && next.ratio > 100) next.ratio = 100
+  propForm.value = next
+  applyProps()
+}
+
+function onConsensusRatioChange(value: number | null | undefined) {
+  propForm.value = { ...propForm.value, ratio: value ?? 1 }
+  applyProps()
+}
+
+const consensusRatioLabel = computed(() =>
+  propForm.value.mode === 'COUNT' ? '通过人数' : '通过比例（%）',
+)
+
+const consensusRatioHint = computed(() =>
+  propForm.value.mode === 'COUNT'
+    ? '至少 1 人；达到或超过实际审批人数时，需全部通过。'
+    : '1%–100%，按实际审批人数向上取整计算通过人数。',
+)
+
 function removeSelected() {
   if (!model || !selectionId.value) return
   model.removeSelection()
@@ -2486,6 +2524,11 @@ watch(selectedNode, (node, prev) => {
       field?.type === 'object' && value !== null && typeof value === 'object'
         ? JSON.stringify(value)
         : value
+  }
+  // 会签：旧图缺 mode 时按后端 ALL 缺省回显；人数模式缺人数时给合法缺省
+  if (node.type === 'CONSENSUS') {
+    if (draft.mode == null) draft.mode = 'ALL'
+    if (draft.mode === 'COUNT' && !isPositiveInteger(draft.ratio)) draft.ratio = 1
   }
   propForm.value = draft
   if (participantKey) {
@@ -3531,6 +3574,36 @@ function nodeLabelLines(label: string) {
                       />
                     </el-select>
                   </el-form-item>
+                  <el-form-item
+                    v-else-if="field.key === 'mode' && selectedNode?.type === 'CONSENSUS'"
+                    :label="field.label"
+                  >
+                    <el-select
+                      :model-value="String(propForm.mode ?? 'ALL')"
+                      @change="onConsensusModeChange"
+                    >
+                      <el-option
+                        v-for="option in CONSENSUS_MODE_OPTIONS"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <template v-else-if="field.key === 'ratio' && selectedNode?.type === 'CONSENSUS'">
+                    <el-form-item
+                      v-if="propForm.mode === 'COUNT' || propForm.mode === 'RATIO'"
+                      :label="consensusRatioLabel"
+                    >
+                      <el-input-number
+                        :model-value="Number(propForm.ratio ?? 1)"
+                        :min="1"
+                        :max="propForm.mode === 'RATIO' ? 100 : undefined"
+                        @change="onConsensusRatioChange"
+                      />
+                      <div class="props-field-hint">{{ consensusRatioHint }}</div>
+                    </el-form-item>
+                  </template>
                   <el-form-item v-else-if="field.type === 'string'" :label="field.label">
                     <el-input
                       v-model="propForm[field.key] as string"
@@ -4923,6 +4996,12 @@ function nodeLabelLines(label: string) {
 }
 .props-node-type {
   margin: 0 0 6px;
+  color: #8a98b0;
+  font-size: 12px;
+  line-height: 17px;
+}
+.props-field-hint {
+  margin-top: 4px;
   color: #8a98b0;
   font-size: 12px;
   line-height: 17px;
