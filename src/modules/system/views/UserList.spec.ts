@@ -56,6 +56,7 @@ import { pageRoles } from '@/modules/system/api/role'
 import { pagePosts } from '@/modules/system/api/post'
 import { listDeptTree } from '@/modules/system/api/dept'
 import type { SysUser, UserFormRequest } from '@/modules/system/types/user'
+import type { SysRole } from '@/modules/system/types/role'
 import UserList from './UserList.vue'
 
 function stubPageResult() {
@@ -276,5 +277,38 @@ describe('UserList', () => {
     vm.confirmRoleDialog()
 
     expect(vm.roleIds).toEqual(['11', '12'])
+  })
+
+  it('新建用户时内置超管不可勾选，全选只纳入可分配角色', async () => {
+    vi.mocked(pageRoles).mockResolvedValue({
+      list: [
+        { id: '1', name: '超级管理员', code: 'superadmin', builtIn: true, status: 1 },
+        { id: '2', name: '管理员', code: 'admin', status: 1 },
+      ],
+      total: 2,
+      pageNum: 1,
+      pageSize: 200,
+    })
+
+    const wrapper = mount(UserList, { global: { stubs: minimalStubs } })
+    await nextTick()
+    const vm = wrapper.vm as unknown as {
+      openCreate: () => void
+      openRoleDialog: () => void
+      selectAllRoles: () => void
+      isRoleLocked: (role: SysRole) => boolean
+      roleDraft: string[]
+    }
+    vm.openCreate()
+    await flushPromises()
+
+    expect(vm.isRoleLocked({ id: '1', name: '超级管理员', code: 'superadmin', status: 1 })).toBe(
+      true,
+    )
+    expect(vm.isRoleLocked({ id: '2', name: '管理员', code: 'admin', status: 1 })).toBe(false)
+
+    vm.openRoleDialog()
+    vm.selectAllRoles()
+    expect(vm.roleDraft).toEqual(['2'])
   })
 })
