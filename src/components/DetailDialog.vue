@@ -19,6 +19,8 @@ withDefaults(
     destroyOnClose?: boolean
     /** 是否渲染默认「关闭」按钮；无 footer 的只读弹窗可关掉 */
     showFooter?: boolean
+    /** 嵌在滚动/裁剪容器内时挂到 body，避免被父级 overflow 裁切 */
+    appendToBody?: boolean
   }>(),
   {
     title: '',
@@ -27,6 +29,7 @@ withDefaults(
     error: '',
     destroyOnClose: true,
     showFooter: true,
+    appendToBody: false,
   },
 )
 
@@ -44,6 +47,7 @@ const emit = defineEmits<{
     top="6vh"
     class="sw-detail-dialog"
     :destroy-on-close="destroyOnClose"
+    :append-to-body="appendToBody"
     @update:model-value="emit('update:modelValue', $event)"
     @closed="emit('closed')"
   >

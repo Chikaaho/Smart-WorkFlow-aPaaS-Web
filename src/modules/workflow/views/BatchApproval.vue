@@ -10,6 +10,7 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { StandardListTemplate } from '@/components/page-layout'
+import DetailDialog from '@/components/DetailDialog.vue'
 import { queryTodoTasks } from '@/modules/workflow/api'
 import { batchTaskAction, type BatchItemResult } from '@/modules/workflow/api/i4'
 import type { PageQuery } from '@/contracts/common'
@@ -146,7 +147,12 @@ onMounted(loadList)
       <template #empty>{{ t('workflow.noBatchTodos') }}</template>
     </el-table>
 
-    <el-dialog v-model="resultVisible" :title="t('workflow.batchResults')" width="720px">
+    <DetailDialog
+      v-model="resultVisible"
+      :title="t('workflow.batchResults')"
+      width="720px"
+      :show-footer="false"
+    >
       <el-descriptions :column="4" border class="batch-summary">
         <el-descriptions-item :label="t('common.total')">
           <span data-testid="batch-approval-total">{{ summary.total }}</span>
@@ -174,7 +180,7 @@ onMounted(loadList)
           <template #default="{ row }">{{ row?.message || '—' }}</template>
         </el-table-column>
       </el-table>
-    </el-dialog>
+    </DetailDialog>
   </StandardListTemplate>
 </template>
 

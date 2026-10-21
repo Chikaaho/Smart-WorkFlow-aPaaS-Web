@@ -35,6 +35,7 @@ import { getListConfig } from '@/modules/form/api/i2-choices'
 import { ApiError } from '@/foundation/request'
 import { getErrorMessage } from '@/foundation/request/error-code-map'
 import BusinessDetailDialog from '@/components/business-detail/BusinessDetailDialog.vue'
+import DetailDialog from '@/components/DetailDialog.vue'
 import type { FormSchema } from '@/contracts/form-schema'
 import type { PageResult } from '@/contracts/common'
 import { useI18n } from '@/locales'
@@ -924,7 +925,7 @@ async function handleExport() {
     />
 
     <!-- 导入结果：总量/成功/失败/处理中 + 逐行安全明细 -->
-    <el-dialog v-model="importResultVisible" :title="t('form.importResultTitle')" width="620px">
+    <DetailDialog v-model="importResultVisible" :title="t('form.importResultTitle')" width="620px">
       <el-descriptions :column="4" border>
         <el-descriptions-item :label="t('form.importTotalRows')">
           <span data-testid="import-result-total">{{ importResult?.totalRows ?? 0 }}</span>
@@ -951,7 +952,7 @@ async function handleExport() {
           t('common.confirm')
         }}</el-button>
       </template>
-    </el-dialog>
+    </DetailDialog>
   </div>
 </template>
 

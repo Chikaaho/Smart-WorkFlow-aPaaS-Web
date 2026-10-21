@@ -25,6 +25,7 @@ import {
 } from '@/adapters/process-catalog'
 import type { ProcessDef } from '@/contracts/bpm'
 import { ListPagination } from '@/components/page-layout'
+import DetailDialog from '@/components/DetailDialog.vue'
 
 /** 主题规则设置弹窗经接缝异步加载（跨模块组件不静态直引）。 */
 const ThemeRuleDialog = defineAsyncComponent(themeRuleDialogLoader)
@@ -299,7 +300,7 @@ defineExpose({ openNumberSettings })
       </section>
 
       <!-- V011-BUG-019：版本信息弹窗（当前行真实版本数据） -->
-      <el-dialog
+      <DetailDialog
         v-model="versionVisible"
         :title="t('form.relatedProcessVersionTitle')"
         width="420px"
@@ -319,10 +320,7 @@ defineExpose({ openNumberSettings })
             {{ versionRow.createTime }}
           </el-descriptions-item>
         </el-descriptions>
-        <template #footer>
-          <el-button @click="versionVisible = false">{{ t('common.close') }}</el-button>
-        </template>
-      </el-dialog>
+      </DetailDialog>
 
       <ListPagination
         :total="total"
