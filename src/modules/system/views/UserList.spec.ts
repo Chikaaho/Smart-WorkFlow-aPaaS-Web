@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 vi.mock('@/modules/system/api/user', () => ({
@@ -8,6 +8,26 @@ vi.mock('@/modules/system/api/user', () => ({
   createUser: vi.fn(),
   updateUser: vi.fn(),
   deleteUser: vi.fn(),
+  getUserRoles: vi.fn(),
+  updateUserRoles: vi.fn(),
+  getUserPosts: vi.fn(),
+  updateUserPosts: vi.fn(),
+}))
+
+vi.mock('@/modules/system/api/role', () => ({
+  pageRoles: vi.fn(),
+}))
+
+vi.mock('@/modules/system/api/post', () => ({
+  pagePosts: vi.fn(),
+}))
+
+vi.mock('@/modules/system/api/dept', () => ({
+  listDeptTree: vi.fn(),
+}))
+
+vi.mock('@/stores/user', () => ({
+  useUserStore: () => ({ user: { tenantId: '0' }, superAdmin: true }),
 }))
 
 vi.mock('vue-router', () => ({
@@ -24,7 +44,17 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
-import { pageUsers, getUser, createUser, deleteUser } from '@/modules/system/api/user'
+import {
+  pageUsers,
+  getUser,
+  createUser,
+  deleteUser,
+  getUserRoles,
+  getUserPosts,
+} from '@/modules/system/api/user'
+import { pageRoles } from '@/modules/system/api/role'
+import { pagePosts } from '@/modules/system/api/post'
+import { listDeptTree } from '@/modules/system/api/dept'
 import type { SysUser, UserFormRequest } from '@/modules/system/types/user'
 import UserList from './UserList.vue'
 
@@ -36,6 +66,11 @@ describe('UserList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(pageUsers).mockResolvedValue(stubPageResult())
+    vi.mocked(pageRoles).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 200 })
+    vi.mocked(pagePosts).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 200 })
+    vi.mocked(listDeptTree).mockResolvedValue([])
+    vi.mocked(getUserRoles).mockResolvedValue([])
+    vi.mocked(getUserPosts).mockResolvedValue([])
   })
 
   const minimalStubs = {
@@ -53,6 +88,8 @@ describe('UserList', () => {
     'el-select': { template: '<select/>', props: ['modelValue'] },
     'el-option': { template: '<option/>' },
     'el-tag': { template: '<span><slot/></span>' },
+    'el-checkbox-group': { template: '<div><slot/></div>', props: ['modelValue'] },
+    'el-checkbox': { template: '<label><slot/></label>', props: ['value'] },
     'el-alert': { template: '<div><slot/></div>', props: ['title', 'type'] },
   }
 
@@ -184,5 +221,60 @@ describe('UserList', () => {
     expect(vi.mocked(createUser)).toHaveBeenCalledWith(
       expect.objectContaining({ username: 'testuser', status: 0 }),
     )
+  })
+
+  // ─── 配置角色：按目标用户租户取角色 ───
+
+  it('编辑用户时按该用户所属租户加载角色', async () => {
+    vi.mocked(getUser).mockResolvedValue({
+      id: '2',
+      username: 'demo_a_hq_1',
+      tenantId: '9001',
+      status: 0,
+    } as SysUser)
+    vi.mocked(getUserRoles).mockResolvedValue(['11'])
+    vi.mocked(pageRoles).mockResolvedValue({
+      list: [{ id: '11', name: '租户管理员', code: 'demo_admin', tenantId: '9001' }],
+      total: 1,
+      pageNum: 1,
+      pageSize: 200,
+    })
+
+    const wrapper = mount(UserList, { global: { stubs: minimalStubs } })
+    await nextTick()
+    const vm = wrapper.vm as unknown as { openEdit: (row: SysUser) => Promise<void> }
+    await vm.openEdit({ id: '2', username: 'demo_a_hq_1' } as SysUser)
+
+    expect(pageRoles).toHaveBeenCalledWith({ pageNum: 1, pageSize: 200 }, { tenantId: '9001' })
+  })
+
+  it('新建用户时按当前登录租户加载角色', async () => {
+    const wrapper = mount(UserList, { global: { stubs: minimalStubs } })
+    await nextTick()
+    const vm = wrapper.vm as unknown as { openCreate: () => void }
+    vm.openCreate()
+    await flushPromises()
+
+    expect(pageRoles).toHaveBeenCalledWith({ pageNum: 1, pageSize: 200 }, { tenantId: '0' })
+  })
+
+  it('配置角色弹窗确认后把勾选结果写回表单', async () => {
+    const wrapper = mount(UserList, { global: { stubs: minimalStubs } })
+    await nextTick()
+    const vm = wrapper.vm as unknown as {
+      openCreate: () => void
+      openRoleDialog: () => void
+      confirmRoleDialog: () => void
+      roleIds: string[]
+      roleDraft: string[]
+    }
+    vm.openCreate()
+    await flushPromises()
+
+    vm.openRoleDialog()
+    vm.roleDraft = ['11', '12']
+    vm.confirmRoleDialog()
+
+    expect(vm.roleIds).toEqual(['11', '12'])
   })
 })

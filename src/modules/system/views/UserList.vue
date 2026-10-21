@@ -27,7 +27,7 @@ import {
 import { pageRoles } from '@/modules/system/api/role'
 import { listDeptTree } from '@/modules/system/api/dept'
 import { pagePosts } from '@/modules/system/api/post'
-import type { SysRole } from '@/modules/system/types/role'
+import type { SysRole, RoleFilter } from '@/modules/system/types/role'
 import type { SysDept } from '@/modules/system/types/dept'
 import type { SysPost } from '@/modules/system/types/post'
 import type {
@@ -53,6 +53,7 @@ import {
   ListActionsColumn,
 } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
+import { useUserStore } from '@/stores/user'
 
 // ─── 列表状态 ───
 
@@ -119,8 +120,21 @@ function handlePageSizeChange(s: number) {
 }
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
+const userStore = useUserStore()
 const roleOptions = ref<SysRole[]>([])
+const roleOptionsLoading = ref(false)
 const roleIds = ref<string[]>([])
+/** 本次配置角色所属租户：编辑取用户详情，新建取当前登录租户 */
+const targetTenantId = ref<string | null>(null)
+const roleOptionsTenantId = ref<string | null>(null)
+const roleDialogVisible = ref(false)
+const roleDraft = ref<string[]>([])
+
+const selectedRoles = computed(() =>
+  roleIds.value
+    .map((id) => roleOptions.value.find((role) => role.id === id))
+    .filter((role): role is SysRole => Boolean(role)),
+)
 const postOptions = ref<SysPost[]>([])
 /** 岗位任职勾选（postId 集合）+ 各岗位任职部门（缺省 = 用户主部门，I1） */
 const postIds = ref<string[]>([])
@@ -145,14 +159,22 @@ function toPostPayload(): PostAssociation[] {
   }))
 }
 
-async function loadRoleOptions() {
+async function loadRoleOptions(tenantId: string | null) {
+  if (roleOptionsTenantId.value !== tenantId) {
+    roleOptions.value = []
+    roleOptionsTenantId.value = tenantId
+  }
+  roleOptionsLoading.value = true
   try {
-    const result = await pageRoles({ pageNum: 1, pageSize: 200 }, {})
+    const filter: RoleFilter = tenantId ? { tenantId } : {}
+    const result = await pageRoles({ pageNum: 1, pageSize: 200 }, filter)
     roleOptions.value = result.list
   } catch {
-    ElMessage.error(t('common.loadFailed'))
+    ElMessage.error(t('system.roleLoadFailed'))
     // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     roleOptions.value = []
+  } finally {
+    roleOptionsLoading.value = false
   }
   try {
     const result = await pagePosts({ pageNum: 1, pageSize: 200 }, {})
@@ -174,6 +196,9 @@ async function loadRoleOptions() {
 const dialogVisible = ref(false)
 const dialogTitle = computed(() => (editingId.value ? t('system.editUser') : t('system.newUser')))
 const editingId = ref<string | null>(null)
+const roleDialogHint = computed(() =>
+  editingId.value ? t('system.roleDialogHintEdit') : t('system.roleDialogHintCreate'),
+)
 const submitting = ref(false)
 const formError = ref('')
 
@@ -200,13 +225,17 @@ function resetForm() {
   editingId.value = null
   formError.value = ''
   roleIds.value = []
+  roleDraft.value = []
+  roleDialogVisible.value = false
+  targetTenantId.value = null
   postIds.value = []
   Object.keys(postDeptMap).forEach((key) => delete postDeptMap[key])
 }
 
 function openCreate() {
   resetForm()
-  void loadRoleOptions()
+  targetTenantId.value = userStore.user?.tenantId ?? null
+  void loadRoleOptions(targetTenantId.value)
   dialogVisible.value = true
 }
 
@@ -222,6 +251,8 @@ async function openEdit(row: SysUser) {
     form.sex = detail.sex ?? 0
     form.status = detail.status
     form.deptId = detail.deptId ?? ''
+    targetTenantId.value =
+      detail.tenantId != null ? String(detail.tenantId) : (userStore.user?.tenantId ?? null)
     roleIds.value = await getUserRoles(row.id!)
     const associations = await getUserPosts(row.id!)
     postIds.value = associations.map((item) => item.postId)
@@ -234,11 +265,24 @@ async function openEdit(row: SysUser) {
     return
   }
   dialogVisible.value = true
-  await loadRoleOptions()
+  await loadRoleOptions(targetTenantId.value)
 }
 
 function closeDialog() {
   dialogVisible.value = false
+}
+
+function openRoleDialog() {
+  roleDraft.value = [...roleIds.value]
+  roleDialogVisible.value = true
+  if (!roleOptionsLoading.value && roleOptions.value.length === 0) {
+    void loadRoleOptions(targetTenantId.value)
+  }
+}
+
+function confirmRoleDialog() {
+  roleIds.value = [...roleDraft.value]
+  roleDialogVisible.value = false
 }
 
 async function handleSubmit() {
@@ -536,11 +580,25 @@ onMounted(loadList)
           </div>
           <div class="form-field">
             <label class="form-field__label">{{ t('common.role') }}</label>
-            <el-checkbox-group v-model="roleIds">
-              <el-checkbox v-for="role in roleOptions" :key="role.id" :value="role.id">
-                {{ role.name }}
-              </el-checkbox>
-            </el-checkbox-group>
+            <div class="role-summary">
+              <div class="role-summary__tags">
+                <template v-if="selectedRoles.length">
+                  <el-tag v-for="role in selectedRoles" :key="role.id" size="small" effect="plain">
+                    {{ role.name }}
+                  </el-tag>
+                </template>
+                <span v-else class="role-summary__empty">
+                  {{
+                    roleIds.length
+                      ? t('system.roleSelectedCount', { count: roleIds.length })
+                      : t('system.noRoleSelected')
+                  }}
+                </span>
+              </div>
+              <el-button size="small" @click="openRoleDialog">{{
+                t('system.configureRoles')
+              }}</el-button>
+            </div>
           </div>
           <div v-if="!editingId" class="form-field">
             <label class="form-field__label">{{ t('common.password') }}</label>
@@ -563,6 +621,38 @@ onMounted(loadList)
       </template>
     </StandardFormTemplate>
   </el-dialog>
+
+  <!-- 配置角色：只展示目标用户所属租户下的角色 -->
+  <el-dialog
+    v-model="roleDialogVisible"
+    :title="t('system.configureRoles')"
+    width="440px"
+    append-to-body
+    :close-on-click-modal="false"
+  >
+    <p class="role-dialog__hint">{{ roleDialogHint }}</p>
+    <div v-if="roleOptionsLoading" class="role-dialog__state">{{ t('common.loading') }}</div>
+    <div v-else-if="roleOptions.length === 0" class="role-dialog__state">
+      {{ t('system.noRolesInTenant') }}
+    </div>
+    <el-checkbox-group v-else v-model="roleDraft" class="role-dialog__list">
+      <el-checkbox
+        v-for="role in roleOptions"
+        :key="role.id"
+        :value="role.id"
+        class="role-dialog__item"
+      >
+        <span class="role-dialog__name">{{ role.name }}</span>
+        <el-tag v-if="role.status === 0" size="small" type="info">{{
+          t('common.statusDisabled')
+        }}</el-tag>
+      </el-checkbox>
+    </el-checkbox-group>
+    <template #footer>
+      <el-button @click="roleDialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="confirmRoleDialog">{{ t('common.confirm') }}</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -581,5 +671,59 @@ onMounted(loadList)
 .form-field--required .form-field__label::before {
   content: '* ';
   color: var(--sw-danger);
+}
+
+.role-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sw-space-12);
+  min-height: 32px;
+}
+
+.role-summary__tags {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.role-summary__empty {
+  font-size: var(--sw-font-body);
+  line-height: 24px;
+  color: var(--sw-text-tertiary);
+}
+
+.role-dialog__hint {
+  margin: 0 0 var(--sw-space-16);
+  font-size: var(--sw-font-body);
+  color: var(--sw-text-secondary);
+}
+
+.role-dialog__state {
+  padding: 28px 0;
+  text-align: center;
+  font-size: var(--sw-font-body);
+  color: var(--sw-text-tertiary);
+}
+
+.role-dialog__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.role-dialog__item {
+  height: 36px;
+  margin-right: 0;
+}
+
+.role-dialog__item :deep(.el-checkbox__label) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sw-space-8);
 }
 </style>
