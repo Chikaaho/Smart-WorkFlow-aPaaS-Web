@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Folder } from '@element-plus/icons-vue'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import AppFormData from '@/modules/form/views/AppFormData.vue'
+import AppTreeNav from '@/modules/form/components/AppTreeNav.vue'
 import { getAppCenterContent } from '@/modules/form/api/app-center'
 import type { FormAppContent, FormAppFormItem } from '@/contracts/app-center'
 import { useI18n } from '@/locales'
@@ -79,75 +80,44 @@ onMounted(() => {
 
 <template>
   <div class="app-detail">
-    <div class="app-detail__head">
-      <!-- 0.1.7 #22/#25：左上角圆角返回箭头，应用名等左上角噪音全部去除 -->
-      <button
-        type="button"
-        class="app-detail__back"
-        data-testid="app-detail-back"
-        :title="t('common.backShort')"
-        @click="backToCenter"
-      >
-        <el-icon><ArrowLeft /></el-icon>
-      </button>
-    </div>
-
     <div v-if="errorMsg" class="app-detail__error">{{ errorMsg }}</div>
 
     <div v-else v-loading="loading" class="app-detail__body">
-      <p v-if="isEmpty" class="app-detail__empty" data-testid="app-detail-empty">
-        {{ t('form.appCenter.emptyAppContent') }}
-      </p>
-
-      <template v-else>
-        <nav class="app-tree" :aria-label="t('form.appCenter.appNavTitle')">
-          <template v-for="dir in dirs" :key="dir.id">
-            <p class="app-tree__dir" data-testid="app-tree-dir">
-              <el-icon class="app-tree__dir-icon"><Folder /></el-icon>
-              {{ dir.name }}
-            </p>
+      <AppTreeNav
+        :dirs="dirs"
+        :direct-forms="directForms"
+        :selected-form-key="selectedFormKey"
+        @select="selectForm"
+      >
+        <template #header>
+          <div class="app-detail__head">
+            <!-- 0.1.7 #22/#25：左上角圆角返回箭头，应用名等左上角噪音全部去除 -->
             <button
-              v-for="item in dir.forms ?? []"
-              :key="item.formId"
               type="button"
-              class="app-tree__form"
-              :class="{ 'is-active': item.formKey === selectedFormKey }"
-              data-testid="app-tree-form"
-              :data-form-key="item.formKey"
-              @click="selectForm(item)"
+              class="app-detail__back"
+              data-testid="app-detail-back"
+              :title="t('common.backShort')"
+              @click="backToCenter"
             >
-              {{ item.name }}
+              <el-icon><ArrowLeft /></el-icon>
             </button>
-            <p v-if="(dir.forms?.length ?? 0) === 0" class="app-tree__empty">
-              {{ t('form.appCenter.emptyDir') }}
-            </p>
-          </template>
+          </div>
+        </template>
+      </AppTreeNav>
 
-          <button
-            v-for="item in directForms"
-            :key="item.formId"
-            type="button"
-            class="app-tree__form app-tree__form--root"
-            :class="{ 'is-active': item.formKey === selectedFormKey }"
-            data-testid="app-tree-form"
-            :data-form-key="item.formKey"
-            @click="selectForm(item)"
-          >
-            {{ item.name }}
-          </button>
-        </nav>
-
-        <section class="app-detail__panel">
-          <AppFormData
-            v-if="selectedFormKey"
-            :key="selectedFormKey"
-            :form-key="selectedFormKey"
-            :app-id="appId"
-            embedded
-          />
-          <p v-else class="app-detail__empty">{{ t('form.appCenter.pickForm') }}</p>
-        </section>
-      </template>
+      <section class="app-detail__panel">
+        <p v-if="isEmpty" class="app-detail__empty" data-testid="app-detail-empty">
+          {{ t('form.appCenter.emptyAppContent') }}
+        </p>
+        <AppFormData
+          v-else-if="selectedFormKey"
+          :key="selectedFormKey"
+          :form-key="selectedFormKey"
+          :app-id="appId"
+          embedded
+        />
+        <p v-else class="app-detail__empty">{{ t('form.appCenter.pickForm') }}</p>
+      </section>
     </div>
   </div>
 </template>
@@ -191,64 +161,7 @@ onMounted(() => {
   min-height: 0;
   gap: 0;
 }
-/* 左侧：目录/表单导航（原型：目录 → 目录内表单缩进，直接归属表单平级；
-   Owner 2026-10-16 裁决：本栏全白底纹） */
-.app-tree {
-  flex: 0 0 220px;
-  width: 220px;
-  padding: 8px 12px 24px;
-  background: #ffffff;
-  border-right: 1px solid #ebeef5;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  overflow-y: auto;
-}
-.app-tree__dir {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 12px 0 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #303133;
-}
-.app-tree__dir:first-child {
-  margin-top: 0;
-}
-.app-tree__dir-icon {
-  color: #909399;
-}
-.app-tree__form {
-  display: block;
-  width: 100%;
-  padding: 7px 10px 7px 22px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  text-align: left;
-  font-size: 13px;
-  color: #606266;
-  cursor: pointer;
-}
-.app-tree__form--root {
-  padding-left: 10px;
-  margin-top: 2px;
-}
-.app-tree__form:hover {
-  background: #f5f7fa;
-  color: #303133;
-}
-.app-tree__form.is-active {
-  background: #ecf5ff;
-  color: #409eff;
-  font-weight: 500;
-}
-.app-tree__empty {
-  margin: 0 0 0 22px;
-  font-size: 12px;
-  color: #c0c4cc;
-}
+/* 左侧目录/表单树由 AppTreeNav 统一维护 */
 .app-detail__panel {
   flex: 1;
   min-width: 0;

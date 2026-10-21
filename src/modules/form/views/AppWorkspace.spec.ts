@@ -26,6 +26,10 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {}, params: { appId: 'app-1' } }),
 }))
 
+vi.mock('@/foundation/permission', () => ({
+  hasPerm: () => true,
+}))
+
 vi.mock('element-plus', async (importOriginal) => {
   const actual = await importOriginal()
   return {
@@ -139,10 +143,10 @@ describe('AppWorkspace（应用管理上下文）', () => {
     const wrapper = mount(AppWorkspace, { global: { stubs: minimalStubs } })
     await nextTick()
 
-    const foot = wrapper.find('.app-ws__side-foot')
+    const foot = wrapper.find('.app-tree-nav__foot')
     expect(foot.exists()).toBe(true)
     expect(foot.find('[data-testid="app-ws-create"]').exists()).toBe(true)
-    // 占满整栏靠 .app-ws__side-foot :deep(.el-dropdown) 撑满包裹层 + 按钮 width:100%
+    // 占满整栏由 AppTreeNav 底部插槽样式统一维护
     expect(foot.find('.el-dropdown').exists()).toBe(true)
   })
 

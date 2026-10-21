@@ -17,6 +17,10 @@ vi.mock('vue-router', () => ({
   useRoute: () => route,
 }))
 
+vi.mock('@/foundation/permission', () => ({
+  hasPerm: () => false,
+}))
+
 vi.mock('element-plus', async (importOriginal) => {
   const actual = await importOriginal()
   return {
@@ -85,7 +89,7 @@ describe('AppCenterDetail（应用内页：目录/表单导航 + 数据列表）
     const wrapper = mount(AppCenterDetail, { global: { stubs: minimalStubs } })
     await flushPromises()
 
-    const active = wrapper.find('.app-tree__form.is-active')
+    const active = wrapper.find('.app-tree-nav__form.is-active')
     expect(active.text()).toBe('直接归属表单')
     expect(wrapper.find('[data-testid="panel"]').attributes('data-form-key')).toBe('direct_form')
   })

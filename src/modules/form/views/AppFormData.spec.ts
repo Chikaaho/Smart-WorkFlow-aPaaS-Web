@@ -36,7 +36,7 @@ vi.mock('element-plus', async (importOriginal) => {
 })
 
 import { getFormDefinition, queryFormData } from '@/modules/form/api/form'
-import AppFormData from './AppFormData.vue'
+import FormDataList from '@/modules/form/components/FormDataList.vue'
 
 const minimalStubs = {
   StandardListTemplate: {
@@ -59,7 +59,7 @@ const minimalStubs = {
   'el-tag': { template: '<span><slot/></span>' },
 }
 
-describe('AppFormData（用户端数据列表）', () => {
+describe('FormDataList（管理端/用户端共用数据列表）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     granted.clear()
@@ -69,6 +69,12 @@ describe('AppFormData（用户端数据列表）', () => {
     } as never)
   })
 
+  const mountList = () =>
+    mount(FormDataList, {
+      props: { formKey: 'leave_request' },
+      global: { stubs: minimalStubs },
+    })
+
   it('有 form:data:query 权限：按 formKey 查询真实数据列表', async () => {
     granted.add('form:data:query')
     vi.mocked(queryFormData).mockResolvedValue({
@@ -77,26 +83,31 @@ describe('AppFormData（用户端数据列表）', () => {
       pageNum: 1,
       pageSize: 10,
     })
-    mount(AppFormData, { global: { stubs: minimalStubs } })
+    mountList()
     await flushPromises()
     expect(queryFormData).toHaveBeenCalledTimes(1)
     expect(vi.mocked(queryFormData).mock.calls[0][0]).toBe('leave_request')
   })
 
-  it('无 form:data:query 权限：不请求数据、显示数据访问受限并保留填写入口', async () => {
-    mount(AppFormData, { global: { stubs: minimalStubs } })
+  it('无 form:data:query 权限：不请求数据，有提交权限时保留填写入口', async () => {
+    granted.add('form:data:submit')
+    const wrapper = mountList()
     await flushPromises()
     expect(queryFormData).not.toHaveBeenCalled()
-    const wrapper2 = mount(AppFormData, { global: { stubs: minimalStubs } })
+    expect(wrapper.find('[data-testid="data-forbidden"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="form-data-create"]').exists()).toBe(true)
+  })
+
+  it('无 form:data:submit 权限：不展示新增入口', async () => {
+    const wrapper = mountList()
     await flushPromises()
-    expect(wrapper2.find('[data-testid="data-forbidden"]').exists()).toBe(true)
-    expect(wrapper2.find('[data-testid="form-data-create"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="form-data-create"]').exists()).toBe(false)
   })
 
   it('查询结果为零：显示空列表（isEmpty 为真），不用演示数据代替', async () => {
     granted.add('form:data:query')
     vi.mocked(queryFormData).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 10 })
-    const wrapper = mount(AppFormData, { global: { stubs: minimalStubs } })
+    const wrapper = mountList()
     await flushPromises()
     const vm = wrapper.vm as unknown as { isEmpty: boolean }
     expect(vm.isEmpty).toBe(true)
@@ -105,7 +116,7 @@ describe('AppFormData（用户端数据列表）', () => {
   it('查询失败：错误态与空态互斥（失败不伪装为空数据）', async () => {
     granted.add('form:data:query')
     vi.mocked(queryFormData).mockRejectedValue(new Error('backend down'))
-    const wrapper = mount(AppFormData, { global: { stubs: minimalStubs } })
+    const wrapper = mountList()
     await flushPromises()
     const vm = wrapper.vm as unknown as { isEmpty: boolean }
     expect(vm.isEmpty).toBe(false)
@@ -122,7 +133,7 @@ describe('AppFormData（用户端数据列表）', () => {
     } as never)
     vi.mocked(queryFormData).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 10 })
     const setItem = vi.spyOn(Storage.prototype, 'setItem')
-    const wrapper = mount(AppFormData, { global: { stubs: minimalStubs } })
+    const wrapper = mountList()
     await flushPromises()
 
     const vm = wrapper.vm as unknown as {
@@ -149,7 +160,7 @@ describe('AppFormData（用户端数据列表）', () => {
   it('表头设置：至少保留一列（全部取消不生效）', async () => {
     granted.add('form:data:query')
     vi.mocked(queryFormData).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 10 })
-    const wrapper = mount(AppFormData, { global: { stubs: minimalStubs } })
+    const wrapper = mountList()
     await flushPromises()
 
     const vm = wrapper.vm as unknown as {
