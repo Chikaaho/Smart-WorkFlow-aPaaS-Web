@@ -42,6 +42,7 @@ import RelatedProcessesPanel from '../designer/RelatedProcessesPanel.vue'
 import { saveDraftDefinition, publishDefinition as publishDef } from '../designer/draft-actions'
 import { publishNewFormVersion } from '../api/form-def'
 import { findCategoryNameByFormKey } from '@/adapters/oa-catalog'
+import { pageProcessDefs } from '@/adapters/process-catalog'
 import {
   resolveSaveState,
   saveStateKey,
@@ -402,6 +403,23 @@ async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
   return saved ? 'proceed' : 'abort'
 }
 
+/** 单流程表单：切到流程设计页签时直接进入画布，不再停留只有一行的列表。 */
+async function enterProcessCanvasIfSingle(): Promise<boolean> {
+  if (!formKey.value) return false
+  try {
+    const result = await pageProcessDefs({ pageNum: 1, pageSize: 10 }, formKey.value)
+    const process = result.list[0]
+    if (Number(result.total) !== 1 || !process) return false
+    await router.push(
+      `/workflow/defs/${process.id}/design?from=form-workbench&formId=${formId.value ?? ''}&formKey=${formKey.value}`,
+    )
+    return true
+  } catch {
+    // 查询失败回退关联流程列表，由列表自身提示错误
+    return false
+  }
+}
+
 /** 切工作区：脏状态先过保护，取消则回弹原工作区。 */
 async function onTabChange(tab: WorkbenchTab) {
   if (tab === activeTab.value) return
@@ -409,6 +427,7 @@ async function onTabChange(tab: WorkbenchTab) {
   // 在回弹后按旧 URL 又把工作区翻回去（取消分支竞态）
   const verdict = await guardUnsavedChanges()
   if (verdict === 'abort') return
+  if (tab === 'processes' && (await enterProcessCanvasIfSingle())) return
   activeTab.value = tab
   if (parseWorkbenchTab(route.query.tab) !== tab) {
     router.replace({ query: { ...route.query, tab: tab === 'design' ? undefined : tab } })

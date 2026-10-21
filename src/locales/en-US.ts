@@ -2547,6 +2547,13 @@ export default {
     nodeCategoryGateway: 'Gateways',
     nodeCategoryOther: 'Other',
     arrangeTopDown: 'Auto arrange',
+    versionHistory: 'Version history',
+    versionHistoryLoading: 'Loading',
+    versionHistoryEmpty: 'No versions',
+    versionHistoryLoadFailed: 'Failed to load version history',
+    versionPreviewTag: 'Version v{version}',
+    backToEditing: 'Back to editing',
+    versionGraphLoadFailed: 'Failed to load version snapshot',
     advancedConfigTitle: 'Advanced Process Configuration',
     advancedConfigSubtitle:
       'Process scope / unified listeners, notifications, pre- and post-processing',
