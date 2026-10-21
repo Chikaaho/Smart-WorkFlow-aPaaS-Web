@@ -2,7 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import { StandardListTemplate } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import AppIcon from '@/modules/form/components/AppIcon.vue'
 import { getFormAppContent } from '@/modules/form/api/app-center'
 import { getFormDefById } from '@/modules/form/api/form-def'
@@ -101,6 +102,17 @@ function enterProcessDesigner(r: unknown) {
   void router.push(
     `/workflow/defs/${def.id}/design?from=app-form&appId=${appId.value}&formId=${formId.value}`,
   )
+}
+
+function processActions(r: unknown): ListAction[] {
+  return [
+    {
+      key: 'designer',
+      label: t('form.appCenter.enterProcessDesigner'),
+      testId: 'enter-process-designer',
+      onClick: () => enterProcessDesigner(r),
+    },
+  ]
 }
 
 function backToWorkspace() {
@@ -223,18 +235,7 @@ onMounted(() => {
           width="100"
         />
         <el-table-column prop="updateTime" :label="t('common.updateTime')" min-width="160" />
-        <el-table-column :label="t('common.actions')" width="140" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              data-testid="enter-process-designer"
-              @click="enterProcessDesigner(row)"
-            >
-              {{ t('form.appCenter.enterProcessDesigner') }}
-            </el-button>
-          </template>
-        </el-table-column>
+        <ListActionsColumn :actions="processActions" :width="140" />
       </el-table>
     </div>
 

@@ -13,6 +13,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ApiError } from '@/foundation/request'
 import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import DetailDialog from '@/components/DetailDialog.vue'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { pageJobLogs } from '@/modules/job/api'
 import type { JobLog, ExecStatus, TriggerType } from '@/contracts/job'
@@ -232,11 +233,10 @@ onMounted(loadList)
   </StandardListTemplate>
 
   <!-- 详情弹窗 -->
-  <el-dialog
+  <DetailDialog
     v-model="detailVisible"
     :title="t('job.executionDetail')"
     width="640px"
-    destroy-on-close
     @closed="closeDetail"
   >
     <template v-if="detailLog">
@@ -282,8 +282,5 @@ onMounted(loadList)
         </el-descriptions-item>
       </el-descriptions>
     </template>
-    <template #footer>
-      <el-button @click="closeDetail">{{ t('common.close') }}</el-button>
-    </template>
-  </el-dialog>
+  </DetailDialog>
 </template>

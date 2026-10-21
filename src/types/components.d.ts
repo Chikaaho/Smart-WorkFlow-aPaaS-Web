@@ -21,6 +21,7 @@ declare module 'vue' {
     DatasourceControl: typeof import('./../components/dynamic-field-controls/DatasourceControl.vue')['default']
     DateControl: typeof import('./../components/dynamic-field-controls/DateControl.vue')['default']
     DeptControl: typeof import('./../components/dynamic-field-controls/DeptControl.vue')['default']
+    DetailDialog: typeof import('./../components/DetailDialog.vue')['default']
     DictControl: typeof import('./../components/dynamic-field-controls/DictControl.vue')['default']
     DynamicField: typeof import('./../components/DynamicField.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
