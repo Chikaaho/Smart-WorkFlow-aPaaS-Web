@@ -14,7 +14,7 @@ const { t } = useI18n()
  *   - 恢复此草稿 = 以快照 definition 保存为**新的草稿**（saveDraftDefinition 既有契约），
  *     不覆盖已发布版本；恢复后由宿主重新加载工作台。
  */
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listFormSnapshots, getFormSnapshotDefinition, type FormSnapshotDTO } from '../api/form-def'
 import { saveDraftDefinition } from './draft-actions'
@@ -34,9 +34,6 @@ const emit = defineEmits<{ restored: [] }>()
 const snapshots = ref<FormSnapshotDTO[]>([])
 const loading = ref(false)
 const selectedVersion = ref<number | null>(null)
-const selectedSnapshot = computed(
-  () => snapshots.value.find((r) => r.formVersion === selectedVersion.value) ?? null,
-)
 
 /* ── 只读对比预览（历史版本标识经 PreviewModal badge 呈现） ── */
 const previewVisible = ref(false)
@@ -73,7 +70,9 @@ watch(
 
 /** 快照时间展示：截到分钟（后端携带秒，设计/产品口径为分钟粒度）。 */
 function formatTime(value: string): string {
-  return typeof value === 'string' && value.length >= 16 ? value.slice(0, 16) : value
+  if (typeof value !== 'string') return ''
+  const normalized = value.replace('T', ' ')
+  return normalized.length >= 16 ? normalized.slice(0, 16) : normalized
 }
 
 /** 徽标：已发布快照显示版本，首条草稿=当前草稿，其余=历史草稿。 */
@@ -174,23 +173,17 @@ async function restoreSelected() {
       </button>
     </div>
 
-    <div v-if="selectedSnapshot" class="history-dialog__summary">
-      <p class="history-dialog__summary-time">
-        {{ t('form.selectedSnapshotPrefix', { time: selectedSnapshot.createTime }) }}
-      </p>
-    </div>
-
     <template #footer>
       <div class="history-dialog__footer">
-        <el-button :disabled="selectedVersion == null" @click="openCompare"
-          >{{ t('form.compareCurrent') }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</el-button
-        >
+        <el-button :disabled="selectedVersion == null" @click="openCompare">{{
+          t('form.compareCurrent')
+        }}</el-button>
         <el-button
           type="primary"
           :disabled="selectedVersion == null"
           class="history-dialog__restore"
           @click="restoreSelected"
-          >&nbsp;&nbsp;{{ t('form.restoreDraft') }}&nbsp;&nbsp;</el-button
+          >{{ t('form.restoreDraft') }}</el-button
         >
       </div>
     </template>
@@ -207,11 +200,10 @@ async function restoreSelected() {
 
 <style scoped>
 .history-dialog__hint {
-  /* 设计（节点14）：header 区节奏 168（弹窗顶→卡1顶） */
-  margin: 6px 0 20px;
+  margin: 0 0 18px;
   font-size: 13px;
+  line-height: 20px;
   color: var(--sw-text-secondary, #909399);
-  transform: translateY(-25px);
 }
 
 .history-dialog__loading,
@@ -227,27 +219,32 @@ async function restoreSelected() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 0 22px;
-  font-size: 15px;
+  gap: 12px;
+  margin: 0 0 14px;
+  min-height: 24px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--sw-text-primary);
-  transform: translateY(-4px);
 }
 
 /* 版本卡片列表 */
 .history-dialog__list {
   display: flex;
   flex-direction: column;
-  /* 设计（节点14）：卡节距 124（卡高 107 + 间隙 17） */
-  gap: 16px;
+  gap: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .history-card {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  /* 锁定稿卡框 108px 高；内容行仍落在 y277/401/525/649。 */
-  padding: 12px 14px 20px;
+  justify-content: center;
+  gap: 6px;
+  min-height: 72px;
+  box-sizing: border-box;
+  padding: 14px 16px;
   text-align: left;
   background: #fff;
   border: 1px solid #e0e6f2;
@@ -269,29 +266,35 @@ async function restoreSelected() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  width: 100%;
 }
 
 .history-card__time {
   font-size: 14px;
-  line-height: 19px;
+  line-height: 20px;
+  font-weight: 600;
   color: var(--sw-text-primary);
 }
 
 .history-card__badge {
-  width: 106px;
+  flex: none;
+  min-width: 72px;
   height: 24px;
   box-sizing: border-box;
-  padding: 2px 10px;
+  padding: 0 10px;
   font-size: 12px;
+  line-height: 24px;
+  text-align: center;
   border-radius: 6px;
-  line-height: 20px;
   white-space: nowrap;
 }
 
 .history-dialog__current .history-card__badge {
-  width: 82px;
-  padding: 4px 9px;
-  line-height: 16px;
+  min-width: 64px;
+  height: 24px;
+  padding: 0 10px;
+  line-height: 24px;
 }
 
 .history-card__badge--current {
@@ -311,44 +314,25 @@ async function restoreSelected() {
 
 .history-card__meta {
   font-size: 12px;
+  line-height: 18px;
   color: #8a96ad;
-  transform: translateY(2px);
 }
 
 .history-card__note {
   font-size: 13px;
+  line-height: 20px;
   color: var(--sw-text-regular);
-  transform: translateY(1px);
-}
-
-/* 选中摘要 */
-.history-dialog__summary {
-  /* 设计（节点14）：summary 卡位于卡区下方 24px，高 73 */
-  margin-top: 25px;
-  min-height: 73px;
-  box-sizing: border-box;
-  padding: 14px;
-  border: 1px solid #e0e6f2;
-  border-radius: 10px;
-  background: #fff;
-}
-
-.history-dialog__summary-time {
-  margin: 0 0 11px;
-  font-size: 13px;
-  color: var(--sw-text-primary);
-}
-
-.history-dialog__summary-note {
-  margin: 0;
-  font-size: 12px;
-  color: var(--sw-text-secondary);
 }
 
 .history-dialog__footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.history-dialog__footer :deep(.el-button) {
+  min-width: 96px;
+  margin: 0;
 }
 
 .history-dialog__restore {

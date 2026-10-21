@@ -144,6 +144,10 @@ type DesignerGraph = ProcessGraphDocument & {
   triggers?: TriggerConfig[]
 }
 const graph = ref<DesignerGraph | null>(null)
+/** 表单工作台上下文：提供三类页签，画布与表单页签共享同一顶部切换。 */
+const workbenchFormId = computed(
+  () => returnFormId.value || returnAppForm.value?.formId || graph.value?.formDefId || '',
+)
 const capabilities = ref<BpmNodeCapability[]>([])
 let model: DesignerModel | null = null
 const version = ref(0) // 触发视图刷新的快照 serial
@@ -2777,19 +2781,17 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
-function backToList() {
-  if (returnAppForm.value) {
-    void router.push({
-      name: 'form-app-manage-form',
-      params: { appId: returnAppForm.value.appId, formId: returnAppForm.value.formId },
-    })
-    return
-  }
-  if (returnFormId.value) {
-    void router.push({ path: `/form/designer/${returnFormId.value}`, query: { tab: 'processes' } })
-    return
-  }
-  void router.push('/workflow/defs')
+function goBack() {
+  router.back()
+}
+
+/** 顶部三类页签：字段清单 / 表单设计 / 流程设计（当前页）。 */
+function goWorkbenchTab(tab: 'fields' | 'design' | 'processes') {
+  if (tab === 'processes' || !workbenchFormId.value) return
+  void router.push({
+    path: `/form/designer/${workbenchFormId.value}`,
+    query: tab === 'fields' ? { tab: 'fields' } : {},
+  })
 }
 
 function nodeLabelLines(label: string) {
@@ -2800,11 +2802,9 @@ function nodeLabelLines(label: string) {
 <template>
   <div class="designer-page">
     <div class="designer-toolbar">
-      <el-button class="toolbar-settings" @click="backToList">
+      <el-button class="toolbar-settings" @click="goBack">
         <el-icon><ArrowLeft /></el-icon>
-        <span>
-          {{ returnFormId ? t('workflow.backToProcessList') : t('form.workbenchSettings') }}
-        </span>
+        <span>{{ t('common.back') }}</span>
       </el-button>
       <span class="designer-crumb">
         / {{ graph?.formName || graph?.name || t('router.processDesigner') }} /
@@ -2813,6 +2813,22 @@ function nodeLabelLines(label: string) {
           isVersionPreview ? ` v${previewVersion}` : graph?.version ? ` v${graph.version}` : ''
         }}
       </span>
+      <nav v-if="workbenchFormId" class="designer-workbench-tabs" aria-label="工作区切换">
+        <button type="button" class="designer-workbench-tab" @click="goWorkbenchTab('fields')">
+          {{ t('fieldList.button') }}
+        </button>
+        <button type="button" class="designer-workbench-tab" @click="goWorkbenchTab('design')">
+          {{ t('form.tabDesign') }}
+        </button>
+        <button
+          type="button"
+          class="designer-workbench-tab is-active"
+          aria-current="page"
+          @click="goWorkbenchTab('processes')"
+        >
+          {{ t('form.tabProcesses') }}
+        </button>
+      </nav>
       <span class="spacer" />
       <span v-if="isVersionPreview" class="designer-saved designer-saved--readonly">
         {{ t('workflow.versionPreviewTag', { version: previewVersion }) }}
@@ -4624,13 +4640,42 @@ function nodeLabelLines(label: string) {
 .designer-saved--readonly {
   color: #6f2dff;
 }
-/* R5/G6b：窄视口面包屑单行省略，不逐字竖排挤压工具栏 */
+/* R5/G6b：窄视口面包屑单行省略，不逐字竖排挤压工具栏；为居中页签预留中部空间 */
 .designer-crumb {
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 24%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.designer-workbench-tabs {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  height: 56px;
+  gap: 24px;
+}
+.designer-workbench-tab {
+  height: 56px;
+  padding: 0 44px;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  line-height: 20px;
+  color: #8a96ad;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.designer-workbench-tab:hover {
+  color: var(--sw-color-primary);
+}
+.designer-workbench-tab.is-active {
+  color: var(--sw-color-primary);
+  border-bottom-color: var(--sw-color-primary);
 }
 .toolbar-actions {
   display: flex;
