@@ -1504,9 +1504,9 @@ function applyProps() {
 const CONSENSUS_MODE_OPTIONS = [
   { label: '人数', value: 'COUNT' },
   { label: '比例', value: 'RATIO' },
-  { label: '全部通过（ALL）', value: 'ALL' },
-  { label: '一票否决（VETO）', value: 'VETO' },
-  { label: '任一通过（ANY）', value: 'ANY' },
+  { label: '全部通过', value: 'ALL' },
+  { label: '一票否决', value: 'VETO' },
+  { label: '任一通过', value: 'ANY' },
 ] as const
 
 function isPositiveInteger(value: unknown) {
@@ -1529,13 +1529,7 @@ function onConsensusRatioChange(value: number | null | undefined) {
 }
 
 const consensusRatioLabel = computed(() =>
-  propForm.value.mode === 'COUNT' ? '通过人数' : '通过比例（%）',
-)
-
-const consensusRatioHint = computed(() =>
-  propForm.value.mode === 'COUNT'
-    ? '至少 1 人；达到或超过实际审批人数时，需全部通过。'
-    : '1%–100%，按实际审批人数向上取整计算通过人数。',
+  propForm.value.mode === 'COUNT' ? '通过人数' : '通过比例',
 )
 
 function removeSelected() {
@@ -3502,13 +3496,13 @@ function nodeLabelLines(label: string) {
                   </template>
                   <el-form-item label="完成模式">
                     <el-select v-model="dynamicParallelForm.mode" @change="applyDynamicParallel">
-                      <el-option label="全部通过（ALL）" value="ALL" />
-                      <el-option label="任一通过（ANY）" value="ANY" />
-                      <el-option label="按比例通过（RATIO）" value="RATIO" />
-                      <el-option label="一票否决（VETO）" value="VETO" />
+                      <el-option label="全部通过" value="ALL" />
+                      <el-option label="任一通过" value="ANY" />
+                      <el-option label="按比例通过" value="RATIO" />
+                      <el-option label="一票否决" value="VETO" />
                     </el-select>
                   </el-form-item>
-                  <el-form-item v-if="dynamicParallelForm.mode === 'RATIO'" label="通过比例（%）">
+                  <el-form-item v-if="dynamicParallelForm.mode === 'RATIO'" label="通过比例">
                     <el-input-number
                       v-model="dynamicParallelForm.ratio"
                       :min="1"
@@ -3601,7 +3595,6 @@ function nodeLabelLines(label: string) {
                         :max="propForm.mode === 'RATIO' ? 100 : undefined"
                         @update:model-value="onConsensusRatioChange"
                       />
-                      <div class="props-field-hint">{{ consensusRatioHint }}</div>
                     </el-form-item>
                   </template>
                   <el-form-item v-else-if="field.type === 'string'" :label="field.label">
@@ -4996,12 +4989,6 @@ function nodeLabelLines(label: string) {
 }
 .props-node-type {
   margin: 0 0 6px;
-  color: #8a98b0;
-  font-size: 12px;
-  line-height: 17px;
-}
-.props-field-hint {
-  margin-top: 4px;
   color: #8a98b0;
   font-size: 12px;
   line-height: 17px;
