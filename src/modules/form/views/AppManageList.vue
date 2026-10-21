@@ -209,7 +209,7 @@ onMounted(() => {
   <div class="app-manage">
     <AppGridToolbar
       v-model="keyword"
-      :placeholder="t('form.appCenter.searchPlaceholder')"
+      :placeholder="t('form.appCenter.appSearchPlaceholder')"
       test-id="app-manage-search"
       @search="loadList"
     >
