@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
 import AppFormData from '@/modules/form/views/AppFormData.vue'
 import AppTreeNav from '@/modules/form/components/AppTreeNav.vue'
 import { getAppCenterContent } from '@/modules/form/api/app-center'
@@ -87,23 +86,15 @@ onMounted(() => {
         :dirs="dirs"
         :direct-forms="directForms"
         :selected-form-key="selectedFormKey"
+        :app-name="content?.app?.name"
+        :app-icon="content?.app?.icon"
+        :app-color="content?.app?.color"
+        :back-title="t('form.appCenter.backToList')"
+        back-test-id="app-detail-back"
+        name-test-id="app-detail-name"
         @select="selectForm"
-      >
-        <template #header>
-          <div class="app-detail__head">
-            <!-- 0.1.7 #22/#25：左上角圆角返回箭头，应用名等左上角噪音全部去除 -->
-            <button
-              type="button"
-              class="app-detail__back"
-              data-testid="app-detail-back"
-              :title="t('common.backShort')"
-              @click="backToCenter"
-            >
-              <el-icon><ArrowLeft /></el-icon>
-            </button>
-          </div>
-        </template>
-      </AppTreeNav>
+        @back="backToCenter"
+      />
 
       <section class="app-detail__panel">
         <p v-if="isEmpty" class="app-detail__empty" data-testid="app-detail-empty">
@@ -127,28 +118,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-}
-.app-detail__head {
-  display: flex;
-  align-items: center;
-  padding: 10px 16px 0;
-}
-.app-detail__back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--sw-border-base, #dcdfe6);
-  border-radius: 50%;
-  background: #fff;
-  color: var(--sw-text-regular, #606266);
-  cursor: pointer;
-}
-.app-detail__back:hover {
-  color: var(--el-color-primary);
-  border-color: var(--el-color-primary-light-7, #c6e2ff);
-  background: var(--el-color-primary-light-9, #ecf5ff);
 }
 .app-detail__error {
   color: #f56c6c;

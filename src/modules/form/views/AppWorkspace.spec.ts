@@ -136,7 +136,7 @@ describe('AppWorkspace（应用管理上下文）', () => {
     // 截断只发生在视觉层（CSS 5em + 省略号）：完整名称仍需可读
     expect(name.attributes('title')).toBe('报销应用')
     // 图标组件在测试里以桩渲染：只断言「返回箭头 + 图标 + 名称」三项同排
-    expect(wrapper.find('.app-ws__side-head').element.children).toHaveLength(3)
+    expect(wrapper.find('.app-tree-nav__head').element.children).toHaveLength(3)
   })
 
   it('0.1.7 #34：左下角「新建」入口在侧栏底部且占满整栏', async () => {

@@ -2,9 +2,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Plus } from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 import AppFormData from '@/modules/form/views/AppFormData.vue'
-import AppIcon from '@/modules/form/components/AppIcon.vue'
 import AppTreeNav from '@/modules/form/components/AppTreeNav.vue'
 import {
   createFormAppDir,
@@ -284,32 +283,17 @@ onMounted(() => {
         :dirs="dirs"
         :direct-forms="directForms"
         :selected-form-key="selectedFormKey"
+        :app-name="app?.name"
+        :app-icon="app?.icon"
+        :app-color="app?.color"
+        :back-title="t('form.appCenter.backToList')"
+        back-test-id="app-back"
+        name-test-id="app-ws-name"
         @select="selectForm"
+        @back="backToList"
         @dir-command="onDirCommand"
         @form-command="onFormCommand"
       >
-        <template #header>
-          <div class="app-ws__side-head">
-            <!-- 0.1.7 #25 只留返回箭头；#34（Owner）：左上角补回应用身份——图标 + 应用名称
-                 （名称只展示 5 个字，超长省略号，完整名称走悬浮标题） -->
-            <button
-              type="button"
-              class="app-ws__back"
-              data-testid="app-back"
-              :title="t('form.appCenter.backToList')"
-              @click="backToList"
-            >
-              <el-icon><ArrowLeft /></el-icon>
-            </button>
-            <template v-if="app">
-              <AppIcon class="app-ws__app-icon" :icon="app.icon" :color="app.color" :size="13" />
-              <span class="app-ws__app-name" data-testid="app-ws-name" :title="app.name">
-                {{ app.name }}
-              </span>
-            </template>
-          </div>
-        </template>
-
         <template #footer>
           <el-dropdown v-perm="'form:app:manage'" trigger="click" @command="onCreateCommand">
             <el-button class="app-ws__create" data-testid="app-ws-create" :icon="Plus">
@@ -422,46 +406,6 @@ onMounted(() => {
   align-items: stretch;
   flex: 1;
   min-height: 0;
-}
-.app-ws__side-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 12px 10px;
-  border-bottom: 1px solid #f0f2f5;
-}
-.app-ws__back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  background: #fff;
-  color: #606266;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.app-ws__back:hover {
-  color: #409eff;
-  border-color: #c6e2ff;
-  background: #ecf5ff;
-}
-/* 0.1.7 #34（Owner）：应用名称只展示 5 个字，超长省略号（完整名称走 title 悬浮）。
-   6em = 5 个全角字 + 1 个省略号位：刚好 5 字时不截断，超长时稳定呈现「5 字 + …」 */
-.app-ws__app-icon {
-  flex: 0 0 auto;
-}
-.app-ws__app-name {
-  max-width: 6em;
-  overflow: hidden;
-  color: #303133;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 .app-ws__panel {
   flex: 1;

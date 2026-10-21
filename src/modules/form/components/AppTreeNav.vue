@@ -6,19 +6,39 @@
  * 目录/表单管理菜单按 form:app:manage 权限显隐。
  */
 import { computed, ref } from 'vue'
-import { CaretRight, Folder, MoreFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, CaretRight, Folder, MoreFilled } from '@element-plus/icons-vue'
 import type { FormAppDir, FormAppFormItem } from '@/contracts/app-center'
 import { hasPerm } from '@/foundation/permission'
 import { useI18n } from '@/locales'
+import AppIcon from './AppIcon.vue'
 
-defineProps<{
-  dirs: FormAppDir[]
-  directForms: FormAppFormItem[]
-  selectedFormKey: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    dirs: FormAppDir[]
+    directForms: FormAppFormItem[]
+    selectedFormKey: string
+    /** 应用身份：名称/图标/主题色，页头统一渲染（管理端与用户端一致）。 */
+    appName?: string
+    appIcon?: string | null
+    appColor?: string | null
+    /** 返回按钮文案；不传则不渲染返回按钮。 */
+    backTitle?: string
+    backTestId?: string
+    nameTestId?: string
+  }>(),
+  {
+    appName: '',
+    appIcon: null,
+    appColor: null,
+    backTitle: '',
+    backTestId: 'app-tree-back',
+    nameTestId: 'app-tree-name',
+  },
+)
 
 const emit = defineEmits<{
   select: [item: FormAppFormItem]
+  back: []
   'dir-command': [command: string, dir: FormAppDir]
   'form-command': [command: string, item: FormAppFormItem]
 }>()
@@ -41,7 +61,29 @@ function toggleDir(dirId: string) {
 
 <template>
   <aside class="app-tree-nav">
-    <slot name="header" />
+    <div v-if="backTitle || appName" class="app-tree-nav__head">
+      <button
+        v-if="backTitle"
+        type="button"
+        class="app-tree-nav__back"
+        :data-testid="backTestId"
+        :title="backTitle"
+        @click="emit('back')"
+      >
+        <el-icon><ArrowLeft /></el-icon>
+      </button>
+      <template v-if="appName">
+        <AppIcon
+          class="app-tree-nav__app-icon"
+          :icon="props.appIcon"
+          :color="props.appColor"
+          :size="13"
+        />
+        <span class="app-tree-nav__app-name" :data-testid="nameTestId" :title="appName">
+          {{ appName }}
+        </span>
+      </template>
+    </div>
 
     <nav class="app-tree-nav__tree" :aria-label="t('form.appCenter.appNavTitle')">
       <template v-for="dir in dirs" :key="dir.id">
@@ -179,6 +221,51 @@ function toggleDir(dirId: string) {
   min-height: 0;
   background: #fff;
   border-right: 1px solid #ebeef5;
+}
+
+.app-tree-nav__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.app-tree-nav__back {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  background: #fff;
+  color: #606266;
+  cursor: pointer;
+}
+
+.app-tree-nav__back:hover {
+  color: #409eff;
+  border-color: #c6e2ff;
+  background: #ecf5ff;
+}
+
+/* 应用名称只展示 5 个字，超长省略号（完整名称走 title 悬浮）。
+   6em = 5 个全角字 + 1 个省略号位：刚好 5 字时不截断，超长时稳定呈现「5 字 + …」 */
+.app-tree-nav__app-icon {
+  flex: 0 0 auto;
+}
+
+.app-tree-nav__app-name {
+  max-width: 6em;
+  overflow: hidden;
+  color: #303133;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .app-tree-nav__tree {
