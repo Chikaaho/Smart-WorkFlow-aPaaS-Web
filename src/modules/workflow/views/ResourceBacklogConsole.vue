@@ -11,7 +11,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { StandardFormTemplate } from '@/components/page-layout'
+import { StandardFormTemplate, ListPagination } from '@/components/page-layout'
 import {
   getBacklogSummary,
   getBacklogCommands,
@@ -120,6 +120,11 @@ async function refreshRejects(): Promise<void> {
   } finally {
     loadingRejects.value = false
   }
+}
+
+function changeRejectPage(next: number): void {
+  rejectPage.value = next
+  void refreshRejects()
 }
 
 const REJECT_SCOPE_TEXT: Record<string, string> = {
@@ -265,13 +270,14 @@ onMounted(() => {
           </template>
         </el-table-column>
       </el-table>
-      <el-pagination
-        layout="prev, pager, next, total"
+      <ListPagination
         :total="total"
+        :page-num="page"
         :page-size="size"
-        :current-page="page"
-        data-test="command-pagination"
-        @current-change="changePage"
+        layout="prev, pager, next, total"
+        :show-when-single-page="false"
+        test-id="command-pagination"
+        @update:page-num="changePage"
       />
     </section>
 
@@ -300,13 +306,14 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="明细" min-width="220" prop="detail" />
       </el-table>
-      <el-pagination
-        layout="prev, pager, next, total"
+      <ListPagination
         :total="rejectTotal"
+        :page-num="rejectPage"
         :page-size="10"
-        :current-page="rejectPage"
-        data-test="reject-pagination"
-        @current-change="refreshRejects"
+        layout="prev, pager, next, total"
+        :show-when-single-page="false"
+        test-id="reject-pagination"
+        @update:page-num="changeRejectPage"
       />
     </section>
   </StandardFormTemplate>

@@ -16,6 +16,7 @@ import { ElMessage } from 'element-plus'
 import { pageFormDefs } from '@/modules/form/api/form-def'
 import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/utils/form-def-status'
 import type { FormDefListItem } from '@/modules/form/api/form-def'
+import { ListPagination } from '@/components/page-layout'
 
 /* ── Props & emits ── */
 
@@ -207,22 +208,19 @@ watch(
       </el-table>
 
       <!-- 分页 -->
-      <div class="form-selector__pagination">
-        <span class="form-selector__pagination-total">{{
-          t('common.totalRecords', { total })
-        }}</span>
-        <el-pagination
-          :current-page="pageNum"
-          :page-size="pageSize"
-          :total="total"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-          background
-          small
-          @current-change="handlePageChange"
-          @size-change="handlePageSizeChange"
-        />
-      </div>
+      <ListPagination
+        :total="total"
+        :page-num="pageNum"
+        :page-size="pageSize"
+        layout="sizes, prev, pager, next"
+        :page-sizes="[10, 20, 50]"
+        small
+        total-text
+        align="space-between"
+        :inset="false"
+        @update:page-num="handlePageChange"
+        @update:page-size="handlePageSizeChange"
+      />
     </div>
 
     <template #footer>
@@ -245,17 +243,5 @@ watch(
   display: flex;
   align-items: center;
   gap: var(--sw-space-8);
-}
-
-.form-selector__pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: var(--sw-space-8);
-}
-
-.form-selector__pagination-total {
-  font-size: var(--sw-font-secondary);
-  color: var(--sw-text-secondary);
 }
 </style>

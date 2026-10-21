@@ -24,6 +24,7 @@ import {
   themeRuleDialogLoader,
 } from '@/adapters/process-catalog'
 import type { ProcessDef } from '@/contracts/bpm'
+import { ListPagination } from '@/components/page-layout'
 
 /** 主题规则设置弹窗经接缝异步加载（跨模块组件不静态直引）。 */
 const ThemeRuleDialog = defineAsyncComponent(themeRuleDialogLoader)
@@ -323,15 +324,14 @@ defineExpose({ openNumberSettings })
         </template>
       </el-dialog>
 
-      <div v-if="total > pageSize" class="related-processes__pager">
-        <el-pagination
-          layout="prev, pager, next"
-          :total="total"
-          :page-size="pageSize"
-          :current-page="pageNum"
-          @current-change="handlePageChange"
-        />
-      </div>
+      <ListPagination
+        :total="total"
+        :page-num="pageNum"
+        :page-size="pageSize"
+        layout="prev, pager, next"
+        :show-when-single-page="false"
+        @update:page-num="handlePageChange"
+      />
     </template>
 
     <el-dialog
@@ -681,11 +681,5 @@ defineExpose({ openNumberSettings })
 
 .related-processes__table :deep(.el-table__body-wrapper) {
   overflow: hidden;
-}
-
-.related-processes__pager {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: var(--sw-space-12);
 }
 </style>

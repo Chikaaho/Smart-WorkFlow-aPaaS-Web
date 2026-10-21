@@ -6,17 +6,36 @@ import { request } from '@/foundation/request'
 import type { PageResult } from '@/contracts/common'
 import type { PostDelegateRow } from '@/contracts/p64'
 
+// 后端分页原始形状：PageResult 字段是 records，前端契约统一为 list。
+interface BackendPageResult<T> {
+  records: T[]
+  total: number
+  pageNum: number
+  pageSize: number
+}
+
+function adaptPage<T>(raw: BackendPageResult<T>): PageResult<T> {
+  return {
+    list: raw.records,
+    // 后端 Long → JSON string：统一归一为 number
+    total: Number(raw.total) || 0,
+    pageNum: Number(raw.pageNum) || 1,
+    pageSize: Number(raw.pageSize) || 10,
+  }
+}
+
 /** POST /system/post-delegate/page → 分页查询委托关系 */
 export async function pagePostDelegates(
   pageNum: number,
   pageSize: number,
   filter?: Partial<Pick<PostDelegateRow, 'sourcePostId' | 'targetPostId' | 'scopeType' | 'status'>>,
 ): Promise<PageResult<PostDelegateRow>> {
-  return request<PageResult<PostDelegateRow>>({
+  const raw = await request<BackendPageResult<PostDelegateRow>>({
     method: 'POST',
     url: `/system/post-delegate/page?pageNum=${pageNum}&pageSize=${pageSize}`,
     data: filter ?? {},
   })
+  return adaptPage(raw)
 }
 
 /** POST /system/post-delegate → 创建（自委托/循环/跨租户/越权/同优先级重叠配置拒绝） */
