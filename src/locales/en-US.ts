@@ -2529,6 +2529,8 @@ export default {
     handoverPartial: 'Partially completed',
     nodeTypeStart: 'Start event',
     nodeTypeEnd: 'End event',
+    nodeTypeGeneric: '{name} node',
+    nodeTypeUnknown: 'Flow node',
     nodeTypeConsensus: 'Consensus task',
     nodeTypeCondition: 'Condition',
     nodeTypeNotification: 'Notification',

@@ -2449,6 +2449,8 @@ export default {
     handoverPartial: '交接部分完成',
     nodeTypeStart: '开始节点',
     nodeTypeEnd: '结束节点',
+    nodeTypeGeneric: '{name}节点',
+    nodeTypeUnknown: '流程节点',
     nodeTypeConsensus: '会签节点',
     nodeTypeCondition: '条件节点',
     nodeTypeNotification: '通知节点',

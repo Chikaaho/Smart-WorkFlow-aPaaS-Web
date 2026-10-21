@@ -151,6 +151,67 @@ const SNAP_Y = 20
 /** P53 设计稿专用节点几何；其它流程图继续使用适配器默认尺寸。 */
 const P53_NODE_WIDTH = 160
 const P53_NODE_HEIGHT = 50
+
+/**
+ * 节点图标字形（20×20 坐标系，与左侧选择器同源）：画布与选择器共用同一份路径，
+ * 避免拖入后统一退化成通用文档图标。网关在画布上以菱形呈现，不使用字形。
+ */
+const NODE_ICON_PATHS: Record<string, readonly string[]> = {
+  START: ['M6.667 3.333L16.667 10L6.667 16.667V3.333Z'],
+  DRAFT: [
+    'M11.667 2.5H3.333V17.5H16.667V7.5H11.667V2.5ZM9.167 13.333L15.833 6.667L17.5 8.333L10.833 15L8.333 15.833L9.167 13.333Z',
+  ],
+  APPROVAL: [
+    'M17.5 11.667C18.881 11.667 20 10.547 20 9.167C20 7.786 18.881 6.667 17.5 6.667C16.119 6.667 15 7.786 15 9.167C15 10.547 16.119 11.667 17.5 11.667Z',
+    'M10.833 18.333C10.833 17.228 11.272 16.168 12.054 15.387C12.835 14.606 13.895 14.167 15 14.167C16.105 14.167 17.165 14.606 17.946 15.387C18.728 16.168 19.167 17.228 19.167 18.333',
+  ],
+  CONSENSUS: [
+    'M12.5 9.167C14.341 9.167 15.833 7.674 15.833 5.833C15.833 3.992 14.341 2.5 12.5 2.5C10.659 2.5 9.167 3.992 9.167 5.833C9.167 7.674 10.659 9.167 12.5 9.167Z',
+    'M3.333 17.5C3.333 15.732 4.036 14.036 5.286 12.786C6.536 11.536 8.232 10.833 10 10.833C11.768 10.833 13.464 11.536 14.714 12.786C15.964 14.036 16.667 15.732 16.667 17.5',
+  ],
+  CONDITION: ['M12 1.667L20.333 10L12 18.333L3.667 10L12 1.667Z'],
+  PARALLEL_GATEWAY: [
+    'M10 1.667L18.333 10L10 18.333L1.667 10L10 1.667Z',
+    'M10 6.667V13.333M6.667 10H13.333',
+  ],
+  NOTIFICATION: ['M11.667 1.667H4.167V18.333H15.833V5.833L11.667 1.667V1.667Z'],
+  IOT_COMMAND: [
+    'M13.333 5H6.667C5.746 5 5 5.746 5 6.667V13.333C5 14.254 5.746 15 6.667 15H13.333C14.254 15 15 14.254 15 13.333V6.667C15 5.746 14.254 5 13.333 5Z',
+    'M7.5 1.667V5M12.5 1.667V5M7.5 15V18.333M12.5 15V18.333M1.667 7.5H5M1.667 12.5H5M15 7.5H18.333M15 12.5H18.333',
+  ],
+  AGENT: [
+    'M15 4.167H5C3.619 4.167 2.5 5.286 2.5 6.667V14.167C2.5 15.547 3.619 16.667 5 16.667H15C16.381 16.667 17.5 15.547 17.5 14.167V6.667C17.5 5.286 16.381 4.167 15 4.167Z',
+    'M10 1.667V4.167M6.667 8.333H6.75M13.333 8.333H13.417M6.667 12.5H13.333',
+  ],
+  DEFAULT: [
+    'M15 3.333H5C4.079 3.333 3.333 4.08 3.333 5V15.833C3.333 16.754 4.079 17.5 5 17.5H15C15.92 17.5 16.667 16.754 16.667 15.833V5C16.667 4.08 15.92 3.333 15 3.333Z',
+    'M6.667 10L9.167 12.5L13.333 7.5M7.5 1.667H12.5V5H7.5V1.667Z',
+  ],
+}
+
+function nodeIconPaths(type: string): readonly string[] {
+  return NODE_ICON_PATHS[type] ?? NODE_ICON_PATHS.DEFAULT!
+}
+
+/** 节点类型灰色说明（与选择器同一能力清单的 displayName，缺省回退通用文案）。 */
+const NODE_TYPE_LABEL_KEYS: Record<string, string> = {
+  START: 'workflow.nodeTypeStart',
+  END: 'workflow.nodeTypeEnd',
+  APPROVAL: 'workflow.approvalNode',
+  CONSENSUS: 'workflow.nodeTypeConsensus',
+  COPY: 'workflow.ccNode',
+  CONDITION: 'workflow.nodeTypeCondition',
+  NOTIFICATION: 'workflow.nodeTypeNotification',
+}
+
+function nodeTypeHint(type: string): string {
+  const labelKey = NODE_TYPE_LABEL_KEYS[type]
+  if (labelKey) return t(labelKey)
+  const capability = capabilities.value.find((item) => item.type === type)
+  return capability?.displayName
+    ? t('workflow.nodeTypeGeneric', { name: capability.displayName })
+    : t('workflow.nodeTypeUnknown')
+}
 const P53_GATEWAY_RADIUS = 18
 
 /**
@@ -2695,63 +2756,11 @@ function nodeLabelLines(label: string) {
                 viewBox="0 0 20 20"
                 aria-hidden="true"
               >
-                <template v-if="cap.type === 'START'">
-                  <path d="M6.667 3.333L16.667 10L6.667 16.667V3.333Z" />
-                </template>
-                <template v-else-if="cap.type === 'DRAFT'">
-                  <path
-                    d="M11.667 2.5H3.333V17.5H16.667V7.5H11.667V2.5ZM9.167 13.333L15.833 6.667L17.5 8.333L10.833 15L8.333 15.833L9.167 13.333Z"
-                  />
-                </template>
-                <template v-else-if="cap.type === 'APPROVAL'">
-                  <path
-                    d="M17.5 11.667C18.881 11.667 20 10.547 20 9.167C20 7.786 18.881 6.667 17.5 6.667C16.119 6.667 15 7.786 15 9.167C15 10.547 16.119 11.667 17.5 11.667Z"
-                  />
-                  <path
-                    d="M10.833 18.333C10.833 17.228 11.272 16.168 12.054 15.387C12.835 14.606 13.895 14.167 15 14.167C16.105 14.167 17.165 14.606 17.946 15.387C18.728 16.168 19.167 17.228 19.167 18.333"
-                  />
-                </template>
-                <template v-else-if="cap.type === 'CONSENSUS'">
-                  <path
-                    d="M12.5 9.167C14.341 9.167 15.833 7.674 15.833 5.833C15.833 3.992 14.341 2.5 12.5 2.5C10.659 2.5 9.167 3.992 9.167 5.833C9.167 7.674 10.659 9.167 12.5 9.167Z"
-                  />
-                  <path
-                    d="M3.333 17.5C3.333 15.732 4.036 14.036 5.286 12.786C6.536 11.536 8.232 10.833 10 10.833C11.768 10.833 13.464 11.536 14.714 12.786C15.964 14.036 16.667 15.732 16.667 17.5"
-                  />
-                </template>
-                <template v-else-if="cap.type === 'CONDITION'">
-                  <path d="M12 1.667L20.333 10L12 18.333L3.667 10L12 1.667Z" />
-                </template>
-                <!-- P63 并行网关与条件分支同为菱形语义（分叉/汇合） -->
-                <template v-else-if="cap.type === 'PARALLEL_GATEWAY'">
-                  <path d="M10 1.667L18.333 10L10 18.333L1.667 10L10 1.667Z" />
-                  <path d="M10 6.667V13.333M6.667 10H13.333" />
-                </template>
-                <template v-else-if="cap.type === 'NOTIFICATION'">
-                  <path d="M11.667 1.667H4.167V18.333H15.833V5.833L11.667 1.667V1.667Z" />
-                </template>
-                <template v-else-if="cap.type === 'IOT_COMMAND'">
-                  <path
-                    d="M13.333 5H6.667C5.746 5 5 5.746 5 6.667V13.333C5 14.254 5.746 15 6.667 15H13.333C14.254 15 15 14.254 15 13.333V6.667C15 5.746 14.254 5 13.333 5Z"
-                  />
-                  <path
-                    d="M7.5 1.667V5M12.5 1.667V5M7.5 15V18.333M12.5 15V18.333M1.667 7.5H5M1.667 12.5H5M15 7.5H18.333M15 12.5H18.333"
-                  />
-                </template>
-                <template v-else-if="cap.type === 'AGENT'">
-                  <path
-                    d="M15 4.167H5C3.619 4.167 2.5 5.286 2.5 6.667V14.167C2.5 15.547 3.619 16.667 5 16.667H15C16.381 16.667 17.5 15.547 17.5 14.167V6.667C17.5 5.286 16.381 4.167 15 4.167Z"
-                  />
-                  <path
-                    d="M10 1.667V4.167M6.667 8.333H6.75M13.333 8.333H13.417M6.667 12.5H13.333"
-                  />
-                </template>
-                <template v-else>
-                  <path
-                    d="M15 3.333H5C4.079 3.333 3.333 4.08 3.333 5V15.833C3.333 16.754 4.079 17.5 5 17.5H15C15.92 17.5 16.667 16.754 16.667 15.833V5C16.667 4.08 15.92 3.333 15 3.333Z"
-                  />
-                  <path d="M6.667 10L9.167 12.5L13.333 7.5M7.5 1.667H12.5V5H7.5V1.667Z" />
-                </template>
+                <path
+                  v-for="(pathData, pathIndex) in nodeIconPaths(cap.type)"
+                  :key="pathIndex"
+                  :d="pathData"
+                />
               </svg>
               <span class="palette-item__name">{{ cap.displayName }}</span>
             </button>
@@ -2937,23 +2946,14 @@ function nodeLabelLines(label: string) {
                   />
                   <path d="M7.333 11L10.083 13.75L14.667 8.25M8.25 1.833H13.75V5.5H8.25V1.833Z" />
                 </template>
-                <template v-else-if="node.config?.nodeClass === 'draft'">
+                <!-- 0.1.10：非事件节点与左侧选择器共用同一份 20×20 字形（平移到 22×22 图标域） -->
+                <g v-else transform="translate(1 1)">
                   <path
-                    d="M12.833 2.75H3.667V19.25H18.333V8.25H12.833V2.75ZM10.083 14.667L17.417 7.333L19.25 9.167L11.917 16.5L9.167 17.417L10.083 14.667Z"
+                    v-for="(pathData, pathIndex) in nodeIconPaths(node.type)"
+                    :key="pathIndex"
+                    :d="pathData"
                   />
-                </template>
-                <template v-else>
-                  <path
-                    d="M15.583 2.75H3.667C3.16 2.75 2.75 3.16 2.75 3.667V18.333C2.75 18.84 3.16 19.25 3.667 19.25H15.583C16.09 19.25 16.5 18.84 16.5 18.333V3.667C16.5 3.16 16.09 2.75 15.583 2.75Z"
-                  />
-                  <path d="M5.5 6.417H12.833M5.5 10.083H11M5.5 13.75H9.167" />
-                  <path
-                    d="M16.5 15.583C18.019 15.583 19.25 14.352 19.25 12.833C19.25 11.315 18.019 10.083 16.5 10.083C14.981 10.083 13.75 11.315 13.75 12.833C13.75 14.352 14.981 15.583 16.5 15.583Z"
-                  />
-                  <path
-                    d="M11.917 20.167C11.917 18.951 12.4 17.785 13.259 16.926C14.119 16.066 15.285 15.583 16.5 15.583C17.716 15.583 18.881 16.066 19.741 16.926C20.601 17.785 21.083 18.951 21.083 20.167"
-                  />
-                </template>
+                </g>
               </g>
               <text
                 v-if="isEventShape(node.type)"
@@ -3036,9 +3036,7 @@ function nodeLabelLines(label: string) {
         <!-- 属性面板：字段由服务端能力 configFields + 参与人策略驱动 -->
         <div class="designer-props">
           <template v-if="selectedNode">
-            <div class="props-heading">
-              <span class="props-title">{{ t('workflow.nodePropsTitle') }}</span>
-            </div>
+            <!-- 0.1.10：去掉「节点属性」大标题，面板直接以页签/表单开始 -->
 
             <!-- BF20261013-013：页签（字段属性仅非结束节点） -->
             <div v-if="fieldConfigCapable" class="props-tabs">
@@ -3066,6 +3064,9 @@ function nodeLabelLines(label: string) {
               </div>
               <!-- 0.1.7 #36（Owner）：面板内不再混用 small 尺寸——输入框/选择器/按钮统一 32px 高 -->
               <el-form label-position="top">
+                <div v-if="selectedNode" class="props-node-type">
+                  {{ nodeTypeHint(selectedNode.type) }}
+                </div>
                 <el-form-item :label="t('workflow.nodeName')">
                   <el-input
                     :model-value="propForm.name as string"
@@ -4909,17 +4910,6 @@ function nodeLabelLines(label: string) {
   line-height: 17px;
   color: #303a55;
 }
-.props-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 31px;
-}
-.props-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #19233b;
-}
 .props-section {
   font-size: 13px;
   line-height: 19px;
@@ -4930,6 +4920,12 @@ function nodeLabelLines(label: string) {
 }
 .props-section--advanced {
   margin-bottom: 15px;
+}
+.props-node-type {
+  margin: 0 0 6px;
+  color: #8a98b0;
+  font-size: 12px;
+  line-height: 17px;
 }
 
 /* BF20261013-014：节点属性页签——一行占满的分段式切换（替代独立药丸按钮） */
