@@ -786,7 +786,7 @@ export default {
     createProcess: '新建流程',
     relatedProcessNumberSetting: '编号设置',
     relatedProcessSearchPlaceholder: '搜索流程名称或编号',
-    relatedProcessNameColumn: '流程名称 / 编号',
+    relatedProcessNameColumn: '流程名称',
     relatedProcessEnabledColumn: '启用状态',
     relatedProcessCreatedAtColumn: '创建时间',
     relatedProcessCreatorColumn: '创建人',

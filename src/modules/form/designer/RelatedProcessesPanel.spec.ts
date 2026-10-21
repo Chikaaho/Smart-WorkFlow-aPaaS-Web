@@ -49,6 +49,7 @@ const pageResult = {
       status: 'PUBLISHED' as const,
       createTime: '2026-07-08 14:20:00',
       updateTime: '2026-07-09 09:10:00',
+      creatorName: '系统管理员',
     },
   ],
   total: 1,
@@ -78,6 +79,18 @@ describe('RelatedProcessesPanel', () => {
     expect(wrapper.find('.related-processes__total').exists()).toBe(false)
     const root = wrapper.find('.related-processes')
     expect(root.element.firstElementChild?.className).toContain('related-processes__filter')
+  })
+
+  it('列表展示创建人回填名、不展示流程编号', async () => {
+    const wrapper = mount(RelatedProcessesPanel, {
+      props: { formId: 'uuid-1', formKey: 'leave-request' },
+      global: globalOpts(),
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('系统管理员')
+    // 0.1.10：UI 不再展示 processKey/编号，名称列只保留流程名称
+    expect(wrapper.text()).not.toContain('leave_approval')
   })
 
   it('查询与新建流程同处筛选栏右侧动作组（新建流程紧随查询）', async () => {

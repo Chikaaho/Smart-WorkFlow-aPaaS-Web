@@ -734,7 +734,7 @@ export default {
     relatedProcessNumberSetting: 'Numbering',
     relatedProcessLoadFailed: 'Could not load linked flows. Please try again.',
     relatedProcessSearchPlaceholder: 'Search flow name or key',
-    relatedProcessNameColumn: 'Flow name / key',
+    relatedProcessNameColumn: 'Flow name',
     relatedProcessEnabledColumn: 'Status',
     relatedProcessCreatedAtColumn: 'Created at',
     relatedProcessCreatorColumn: 'Created by',

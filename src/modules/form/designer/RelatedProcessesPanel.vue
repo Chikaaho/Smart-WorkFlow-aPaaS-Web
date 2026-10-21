@@ -126,6 +126,13 @@ function displayVersion(row: ProcessDef) {
   return row.versionLabel ? `v${row.versionLabel}` : `v${row.defVersion}`
 }
 
+/** 列表时间只展示到秒，去掉 ISO 的 T 与小数秒（后端 LocalDateTime 原样下发）。 */
+function formatCreateTime(value?: string | null) {
+  if (!value) return '—'
+  const normalized = value.replace('T', ' ')
+  return normalized.length >= 19 ? normalized.slice(0, 19) : normalized
+}
+
 /* ── V011-BUG-019：操作列三个独立按钮（编辑 / 版本 / 更多） ── */
 
 /** 版本信息弹窗（真实行数据，不做假能力）。 */
@@ -219,20 +226,27 @@ defineExpose({ openNumberSettings })
       </div>
 
       <section class="related-processes__table-card" aria-label="关联流程列表">
-        <!-- V011-BUG-018：列宽改为 min-width 弹性伸展，表格随容器宽度填满 -->
+        <!-- 列宽/对齐：名称列吸收剩余宽度，其余列固定宽并居中，保证表头与内容同一轴线 -->
         <el-table v-loading="loading" :data="records" class="related-processes__table">
-          <el-table-column :label="t('form.relatedProcessNameColumn')" min-width="300">
+          <el-table-column
+            :label="t('form.relatedProcessNameColumn')"
+            min-width="260"
+            header-align="left"
+          >
             <template #default="{ row }">
               <div class="related-processes__name-cell">
                 <strong>{{ procRow(row).name }}</strong>
-                <span>{{ procRow(row).processKey }}</span>
               </div>
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.version')" min-width="100">
+          <el-table-column :label="t('common.version')" width="90" align="center">
             <template #default="{ row }">{{ displayVersion(procRow(row)) }}</template>
           </el-table-column>
-          <el-table-column :label="t('form.relatedProcessEnabledColumn')" min-width="110">
+          <el-table-column
+            :label="t('form.relatedProcessEnabledColumn')"
+            width="110"
+            align="center"
+          >
             <template #default="{ row }">
               <el-tag
                 class="related-processes__status-tag"
@@ -244,14 +258,20 @@ defineExpose({ openNumberSettings })
             </template>
           </el-table-column>
           <el-table-column
-            prop="createTime"
             :label="t('form.relatedProcessCreatedAtColumn')"
-            min-width="180"
-          />
-          <el-table-column :label="t('form.relatedProcessCreatorColumn')" min-width="120">
-            <template #default="{ row }">{{ procRow(row).updatedBy || '—' }}</template>
+            width="180"
+            align="center"
+          >
+            <template #default="{ row }">{{ formatCreateTime(procRow(row).createTime) }}</template>
           </el-table-column>
-          <el-table-column :label="t('form.relatedProcessActionColumn')" min-width="200">
+          <el-table-column
+            :label="t('form.relatedProcessCreatorColumn')"
+            width="120"
+            align="center"
+          >
+            <template #default="{ row }">{{ procRow(row).creatorName || '—' }}</template>
+          </el-table-column>
+          <el-table-column :label="t('form.relatedProcessActionColumn')" width="160" align="center">
             <template #default="{ row }">
               <!-- V011-BUG-019：编辑=当前页进入网格设计器；版本/更多为独立按钮 -->
               <div class="related-processes__actions">
@@ -583,6 +603,7 @@ defineExpose({ openNumberSettings })
 
 .related-processes__actions {
   display: flex;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -631,10 +652,6 @@ defineExpose({ openNumberSettings })
 
 .related-processes__table :deep(td.el-table__cell) {
   border-bottom: none;
-}
-
-.related-processes__table :deep(td.el-table__cell:last-child .cell) {
-  padding-left: 3px;
 }
 
 .related-processes__table :deep(.el-table__body tr:nth-child(even) td) {
