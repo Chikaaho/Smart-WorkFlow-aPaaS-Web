@@ -559,6 +559,21 @@ describe('ListActionsColumn', () => {
     expect(wrapper.find('.stub-dropdown').exists()).toBe(false)
   })
 
+  it('testId 透传到操作按钮，便于页面回归定位', () => {
+    const wrapper = mount(ListActionsColumn, {
+      props: {
+        actions: () => [{ key: 'enable', label: '启用', testId: 'enable-3', onClick: vi.fn() }],
+      },
+      global: {
+        stubs: {
+          'el-table-column': { template: '<div><slot name="default" :row="row" /></div>' },
+          'el-button': { template: '<button class="stub-btn"><slot /></button>' },
+        },
+      },
+    })
+    expect(wrapper.find('[data-test="enable-3"]').text()).toBe('启用')
+  })
+
   it('visible=false 的动作不渲染、不占直显名额', () => {
     const actions = [
       ...mkActions(2),
