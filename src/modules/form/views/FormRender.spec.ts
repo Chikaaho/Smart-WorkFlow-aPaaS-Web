@@ -144,7 +144,7 @@ describe('FormRender', () => {
     })
 
     await flushPromises()
-    expect(wrapper.find('.form-render-page__title').exists()).toBe(false)
+    expect(wrapper.find('.form-render-page__title').text()).toBe('新增数据')
     expect(wrapper.text()).not.toContain('我的业务表单')
   })
 
