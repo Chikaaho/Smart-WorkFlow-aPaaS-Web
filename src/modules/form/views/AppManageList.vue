@@ -6,6 +6,8 @@ import { LoadErrorState } from '@/components/page-layout'
 import AppScopePicker, { type AppScopeValue } from '@/components/AppScopePicker.vue'
 import AppGrid from '@/modules/form/components/AppGrid.vue'
 import AppGridToolbar from '@/modules/form/components/AppGridToolbar.vue'
+import AppPerRowSetting from '@/modules/form/components/AppPerRowSetting.vue'
+import { useAppPerRow } from '@/modules/form/components/useAppPerRow'
 import { APP_COLOR_PRESETS, APP_ICON_KEYS } from '@/modules/form/utils/app-icons'
 import {
   createFormApp,
@@ -33,6 +35,7 @@ const keyword = ref('')
 const loading = ref(false)
 const errorMsg = ref('')
 const loadError = ref<ApiError | null>(null)
+const { perRow, options: perRowOptions } = useAppPerRow()
 
 async function loadList() {
   loading.value = true
@@ -209,7 +212,11 @@ onMounted(() => {
       :placeholder="t('form.appCenter.searchPlaceholder')"
       test-id="app-manage-search"
       @search="loadList"
-    />
+    >
+      <template #actions>
+        <AppPerRowSetting v-model="perRow" :options="perRowOptions" />
+      </template>
+    </AppGridToolbar>
 
     <LoadErrorState v-if="loadError" :error="loadError" @retry="loadList" />
     <div v-else-if="errorMsg" class="app-manage__error">{{ errorMsg }}</div>
@@ -218,6 +225,7 @@ onMounted(() => {
       v-else
       :apps="apps"
       :loading="loading"
+      :per-row="perRow"
       show-actions
       show-form-count
       show-create
