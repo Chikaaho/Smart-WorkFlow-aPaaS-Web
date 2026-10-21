@@ -28,6 +28,7 @@ import {
   type FavoriteItem,
 } from '@/modules/workflow/api/oa'
 import { ApiError } from '@/foundation/request'
+import { CategorySidebar } from '@/components/page-layout'
 
 const router = useRouter()
 
@@ -200,7 +201,12 @@ onMounted(() => {
 
     <!-- V012-BUG-009：左分类树 + 右列表 -->
     <div class="catalog-layout">
-      <aside class="catalog-tree" role="tree" :aria-label="t('workflow.processCenter')">
+      <CategorySidebar
+        class="catalog-tree"
+        sticky
+        role="tree"
+        :aria-label="t('workflow.processCenter')"
+      >
         <button
           type="button"
           class="catalog-tree__item"
@@ -230,7 +236,7 @@ onMounted(() => {
           <span>{{ t('workflow.uncategorized') }}</span>
           <span class="catalog-tree__count">{{ itemCountOf(0) }}</span>
         </button>
-      </aside>
+      </CategorySidebar>
 
       <div class="catalog-main">
         <div class="catalog-page__toolbar">
@@ -365,21 +371,6 @@ onMounted(() => {
   grid-template-columns: 240px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
-}
-.catalog-tree {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 14px 10px;
-  background: var(--sw-surface-card);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-  box-shadow: var(--sw-shadow-card);
-  /* 0.1.7 #41（Owner）：分类面板顶边要与右侧搜索卡片平行。
-     原粘性偏移 76px 是按后台外壳高度估的，在门户区（内容区自顶开始）会把面板整体压到
-     搜索卡片下方 48px；改为与页面内距同量级的 12px——静止时两者同高，滚动时面板贴内容区顶部。 */
-  position: sticky;
-  top: 12px;
 }
 .catalog-tree__item {
   display: flex;

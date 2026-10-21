@@ -10,6 +10,7 @@ import ListFilterBar from './ListFilterBar.vue'
 import ListFilterItem from './ListFilterItem.vue'
 import ListTable from './ListTable.vue'
 import ListPagination from './ListPagination.vue'
+import CategorySidebar from './CategorySidebar.vue'
 import ListEmpty from './ListEmpty.vue'
 import StandardFormTemplate from './StandardFormTemplate.vue'
 import StandardListTemplate from './StandardListTemplate.vue'
@@ -217,6 +218,38 @@ describe('ListPagination', () => {
     wrapper.findComponent(ElPagination).vm.$emit('update:current-page', 2)
     await nextTick()
     expect(wrapper.emitted('update:pageNum')).toEqual([[2]])
+  })
+})
+
+/* ═══════════════════════════════════════════════════
+ * CategorySidebar
+ * ═══════════════════════════════════════════════════ */
+
+describe('CategorySidebar', () => {
+  it('渲染标题与默认插槽', () => {
+    const wrapper = mount(CategorySidebar, {
+      props: { title: '分类' },
+      slots: { default: '<button class="nav-item">全部</button>' },
+    })
+    expect(wrapper.find('.category-sidebar__title').text()).toBe('分类')
+    expect(wrapper.find('.nav-item').text()).toBe('全部')
+  })
+
+  it('fill / sticky 以修饰类表达', () => {
+    const wrapper = mount(CategorySidebar, {
+      props: { fill: true, sticky: true },
+    })
+    expect(wrapper.classes()).toContain('category-sidebar--fill')
+    expect(wrapper.classes()).toContain('category-sidebar--sticky')
+  })
+
+  it('宿主属性透传到面板根节点', () => {
+    const wrapper = mount(CategorySidebar, {
+      attrs: { role: 'tree', 'aria-label': '流程中心', class: 'catalog-tree' },
+    })
+    expect(wrapper.attributes('role')).toBe('tree')
+    expect(wrapper.attributes('aria-label')).toBe('流程中心')
+    expect(wrapper.classes()).toContain('catalog-tree')
   })
 })
 

@@ -17,6 +17,7 @@ declare module 'vue' {
     BoolControl: typeof import('./../components/dynamic-field-controls/BoolControl.vue')['default']
     BusinessDetailDialog: typeof import('./../components/business-detail/BusinessDetailDialog.vue')['default']
     BusinessFormReadonly: typeof import('./../components/business-detail/BusinessFormReadonly.vue')['default']
+    CategorySidebar: typeof import('./../components/page-layout/CategorySidebar.vue')['default']
     DatasourceControl: typeof import('./../components/dynamic-field-controls/DatasourceControl.vue')['default']
     DateControl: typeof import('./../components/dynamic-field-controls/DateControl.vue')['default']
     DeptControl: typeof import('./../components/dynamic-field-controls/DeptControl.vue')['default']
