@@ -3599,7 +3599,7 @@ function nodeLabelLines(label: string) {
                         :model-value="Number(propForm.ratio ?? 1)"
                         :min="1"
                         :max="propForm.mode === 'RATIO' ? 100 : undefined"
-                        @change="onConsensusRatioChange"
+                        @update:model-value="onConsensusRatioChange"
                       />
                       <div class="props-field-hint">{{ consensusRatioHint }}</div>
                     </el-form-item>
