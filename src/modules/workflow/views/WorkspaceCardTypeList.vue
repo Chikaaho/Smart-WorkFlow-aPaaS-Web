@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn, useClientList } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   createWorkspaceCardType,
@@ -173,28 +173,23 @@ function rowActions(row: unknown): ListAction[] {
 }
 
 // ─── 客户端分页（V012-BUG-003）：管理列表一次拉全量，前端切片 ───
-const pageNum = ref(1)
-const pageSize = ref(10)
-
-const pagedList = computed(() =>
-  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
-)
-
-function handlePageNumChange(p: number) {
-  pageNum.value = p
-}
-
-function handlePageSizeChange(s: number) {
-  pageSize.value = s
-  pageNum.value = 1
-}
+const {
+  pageNum,
+  pageSize,
+  pagedRows: pagedList,
+  total,
+  handlePageNumChange,
+  handlePageSizeChange,
+} = useClientList(list, {
+  searchFields: (row) => [row.displayName, row.typeCode],
+})
 
 onMounted(() => void loadList())
 </script>
 
 <template>
   <StandardListTemplate
-    :total="list.length"
+    :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
     :empty="!loading && !errorMsg && list.length === 0"

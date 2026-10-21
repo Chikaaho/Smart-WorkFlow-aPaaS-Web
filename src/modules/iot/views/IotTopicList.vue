@@ -10,7 +10,12 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import {
+  ListActionsColumn,
+  ListFilterItem,
+  StandardListTemplate,
+  useClientList,
+} from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listTopics,
@@ -32,6 +37,20 @@ const list = ref<IotTopic[]>([])
 const connections = ref<IotConnection[]>([])
 const products = ref<IotProduct[]>([])
 
+const {
+  keyword,
+  pageNum,
+  pageSize,
+  pagedRows,
+  total,
+  handleQuery,
+  handleReset,
+  handlePageNumChange,
+  handlePageSizeChange,
+} = useClientList(list, {
+  searchFields: (row) => [row.topic, row.direction, row.payloadType],
+})
+
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const form = reactive({
@@ -45,9 +64,7 @@ const form = reactive({
   mappingJson: '',
 })
 
-const isEmpty = computed(
-  () => !loading.value && !loadError.value && !loadError.value && list.value.length === 0,
-)
+const isEmpty = computed(() => !loading.value && !loadError.value && list.value.length === 0)
 
 async function load() {
   loading.value = true
@@ -64,22 +81,7 @@ async function load() {
   }
 }
 
-// ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
-const pageNum = ref(1)
-const pageSize = ref(10)
-
-const pagedRows = computed(() =>
-  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
-)
-
-function handlePageNumChange(p: number) {
-  pageNum.value = p
-}
-
-function handlePageSizeChange(s: number) {
-  pageSize.value = s
-  pageNum.value = 1
-}
+// ─── 客户端分页 + 关键词筛选（V012-BUG-003）：一次拉全量，前端切片 ───
 
 function openCreate() {
   editingId.value = null
@@ -168,11 +170,34 @@ function rowActions(r: unknown): ListAction[] {
 </script>
 
 <template>
-  <div style="padding: 16px">
-    <div style="display: flex; justify-content: space-between; margin-bottom: 12px">
-      <h3 style="margin: 0">{{ t('iot.topicConfig') }}</h3>
+  <StandardListTemplate
+    :total="total"
+    :page-num="pageNum"
+    :page-size="pageSize"
+    :empty="isEmpty"
+    @update:page-num="handlePageNumChange"
+    @update:page-size="handlePageSizeChange"
+  >
+    <template #toolbar-actions>
       <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
-    </div>
+    </template>
+
+    <template #filter>
+      <ListFilterItem :label="t('common.keyword')">
+        <el-input
+          v-model="keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+          @clear="handleReset"
+        />
+      </ListFilterItem>
+    </template>
+    <template #filter-actions>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+    </template>
+
     <el-alert
       v-if="loadError"
       :title="loadError"
@@ -186,7 +211,7 @@ function rowActions(r: unknown): ListAction[] {
       </template>
     </el-alert>
 
-    <el-table v-loading="loading" :data="pagedRows" stripe>
+    <el-table v-else v-loading="loading" :data="pagedRows" stripe>
       <el-table-column
         prop="topic"
         :label="t('common.subject')"
@@ -205,71 +230,67 @@ function rowActions(r: unknown): ListAction[] {
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
-    <ListPagination
-      :total="list.length"
-      :page-num="pageNum"
-      :page-size="pageSize"
-      @update:page-num="handlePageNumChange"
-      @update:page-size="handlePageSizeChange"
-    />
-    <el-empty v-if="isEmpty" :description="t('iot.noTopics')" />
 
-    <el-dialog
-      v-model="dialogVisible"
-      :title="editingId ? t('iot.editTopic') : t('iot.newTopic')"
-      width="560px"
-    >
-      <el-form label-width="90px">
-        <el-form-item :label="t('iot.connect')" required>
-          <el-select v-model="form.connId" :placeholder="t('iot.selectMqttConnection')">
-            <el-option
-              v-for="c in connections.filter((x) => x.connType === 'MQTT')"
-              :key="c.id"
-              :label="c.name"
-              :value="c.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('iot.product')">
-          <el-select
-            v-model="form.productId"
-            clearable
-            :placeholder="t('iot.bindProductPlaceholder')"
-          >
-            <el-option v-for="p in products" :key="p.id" :label="p.name" :value="p.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('common.subject')" required>
-          <el-input v-model="form.topic" :placeholder="t('iot.topicPlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('iot.direction')">
-          <el-select v-model="form.direction">
-            <el-option :label="t('iot.directionUp')" value="UP" />
-            <el-option :label="t('iot.directionDown')" value="DOWN" />
-            <el-option :label="t('iot.directionBoth')" value="BOTH" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="QoS">
-          <el-select v-model="form.qos">
-            <el-option label="0" :value="0" /><el-option label="1" :value="1" /><el-option
-              label="2"
-              :value="2"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('iot.payloadType')">
-          <el-select v-model="form.payloadType">
-            <el-option :label="t('iot.payloadProperty')" value="PROPERTY" />
-            <el-option :label="t('common.event')" value="EVENT" />
-            <el-option :label="t('iot.payloadActionResult')" value="ACTION_RESULT" />
-            <el-option :label="t('iot.payloadRaw')" value="RAW" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
-      </template>
-    </el-dialog>
-  </div>
+    <template #empty-action>
+      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
+    </template>
+  </StandardListTemplate>
+
+  <el-dialog
+    v-model="dialogVisible"
+    :title="editingId ? t('iot.editTopic') : t('iot.newTopic')"
+    width="560px"
+  >
+    <el-form label-width="90px">
+      <el-form-item :label="t('iot.connect')" required>
+        <el-select v-model="form.connId" :placeholder="t('iot.selectMqttConnection')">
+          <el-option
+            v-for="c in connections.filter((x) => x.connType === 'MQTT')"
+            :key="c.id"
+            :label="c.name"
+            :value="c.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="t('iot.product')">
+        <el-select
+          v-model="form.productId"
+          clearable
+          :placeholder="t('iot.bindProductPlaceholder')"
+        >
+          <el-option v-for="p in products" :key="p.id" :label="p.name" :value="p.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="t('common.subject')" required>
+        <el-input v-model="form.topic" :placeholder="t('iot.topicPlaceholder')" />
+      </el-form-item>
+      <el-form-item :label="t('iot.direction')">
+        <el-select v-model="form.direction">
+          <el-option :label="t('iot.directionUp')" value="UP" />
+          <el-option :label="t('iot.directionDown')" value="DOWN" />
+          <el-option :label="t('iot.directionBoth')" value="BOTH" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="QoS">
+        <el-select v-model="form.qos">
+          <el-option label="0" :value="0" /><el-option label="1" :value="1" /><el-option
+            label="2"
+            :value="2"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="t('iot.payloadType')">
+        <el-select v-model="form.payloadType">
+          <el-option :label="t('iot.payloadProperty')" value="PROPERTY" />
+          <el-option :label="t('common.event')" value="EVENT" />
+          <el-option :label="t('iot.payloadActionResult')" value="ACTION_RESULT" />
+          <el-option :label="t('iot.payloadRaw')" value="RAW" />
+        </el-select>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
+    </template>
+  </el-dialog>
 </template>

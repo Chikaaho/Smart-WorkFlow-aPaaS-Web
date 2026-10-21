@@ -12,7 +12,12 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import {
+  ListActionsColumn,
+  ListFilterItem,
+  StandardListTemplate,
+  useClientList,
+} from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listRules,
@@ -31,6 +36,20 @@ const loading = ref(false)
 const loadError = ref('')
 const list = ref<IotEventRule[]>([])
 const devices = ref<IotDevice[]>([])
+
+const {
+  keyword,
+  pageNum,
+  pageSize,
+  pagedRows,
+  total,
+  handleQuery,
+  handleReset,
+  handlePageNumChange,
+  handlePageSizeChange,
+} = useClientList(list, {
+  searchFields: (row) => [row.code, row.name, row.ruleType, row.conditionJson],
+})
 
 const dialogVisible = ref(false)
 const form = reactive({
@@ -56,9 +75,7 @@ const triggerDetailJson = computed(() =>
   selectedTrigger.value ? JSON.stringify(selectedTrigger.value, null, 2) : '',
 )
 
-const isEmpty = computed(
-  () => !loading.value && !loadError.value && !loadError.value && list.value.length === 0,
-)
+const isEmpty = computed(() => !loading.value && !loadError.value && list.value.length === 0)
 
 async function load() {
   loading.value = true
@@ -74,22 +91,7 @@ async function load() {
   }
 }
 
-// ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
-const pageNum = ref(1)
-const pageSize = ref(10)
-
-const pagedRows = computed(() =>
-  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
-)
-
-function handlePageNumChange(p: number) {
-  pageNum.value = p
-}
-
-function handlePageSizeChange(s: number) {
-  pageSize.value = s
-  pageNum.value = 1
-}
+// ─── 客户端分页 + 关键词筛选（V012-BUG-003）：一次拉全量，前端切片 ───
 
 function deviceName(deviceId: number): string {
   const d = devices.value.find((x) => x.id === deviceId)
@@ -177,16 +179,34 @@ function rowActions(r: unknown): ListAction[] {
 </script>
 
 <template>
-  <div style="padding: 16px">
-    <div style="display: flex; justify-content: space-between; margin-bottom: 12px">
-      <h3 style="margin: 0">{{ t('iot.eventRules') }}</h3>
-      <div>
-        <span style="color: var(--el-text-color-secondary); font-size: 12px; margin-right: 8px">
-          {{ t('iot.ruleEligibleNote') }}
-        </span>
-        <el-button type="primary" @click="openCreate">{{ t('common.newRule') }}</el-button>
-      </div>
-    </div>
+  <StandardListTemplate
+    :total="total"
+    :page-num="pageNum"
+    :page-size="pageSize"
+    :empty="isEmpty"
+    @update:page-num="handlePageNumChange"
+    @update:page-size="handlePageSizeChange"
+  >
+    <template #toolbar-actions>
+      <el-button type="primary" @click="openCreate">{{ t('common.newRule') }}</el-button>
+    </template>
+
+    <template #filter>
+      <ListFilterItem :label="t('common.keyword')">
+        <el-input
+          v-model="keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+          @clear="handleReset"
+        />
+      </ListFilterItem>
+    </template>
+    <template #filter-actions>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+    </template>
+
     <el-alert
       v-if="loadError"
       :title="loadError"
@@ -200,7 +220,7 @@ function rowActions(r: unknown): ListAction[] {
       </template>
     </el-alert>
 
-    <el-table v-loading="loading" :data="pagedRows" stripe>
+    <el-table v-else v-loading="loading" :data="pagedRows" stripe>
       <el-table-column prop="code" :label="t('common.code')" min-width="110" />
       <el-table-column prop="name" :label="t('common.name')" min-width="130" />
       <el-table-column :label="t('common.device')" min-width="120">
@@ -233,130 +253,122 @@ function rowActions(r: unknown): ListAction[] {
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
-    <ListPagination
-      :total="list.length"
-      :page-num="pageNum"
-      :page-size="pageSize"
-      @update:page-num="handlePageNumChange"
-      @update:page-size="handlePageSizeChange"
-    />
-    <el-empty v-if="isEmpty" :description="t('iot.noRules')" />
 
-    <el-dialog v-model="dialogVisible" :title="t('common.newRule')" width="640px">
-      <el-form label-width="100px">
-        <el-form-item :label="t('common.code')" required
-          ><el-input v-model="form.code"
-        /></el-form-item>
-        <el-form-item :label="t('common.name')" required
-          ><el-input v-model="form.name"
-        /></el-form-item>
-        <el-form-item :label="t('common.device')" required>
-          <el-select v-model="form.deviceId" :placeholder="t('iot.eligibleDevicesPlaceholder')">
-            <el-option
-              v-for="d in devices"
-              :key="d.id"
-              :label="`${d.name} (${d.deviceKey})`"
-              :value="d.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('iot.ruleType')">
-          <el-select v-model="form.ruleType">
-            <el-option :label="t('iot.ruleTypeThreshold')" value="THRESHOLD" />
-            <el-option :label="t('iot.ruleTypePropertyChanged')" value="PROPERTY_CHANGED" />
-            <el-option :label="t('iot.ruleTypeEventOccur')" value="EVENT_OCCUR" />
-            <el-option :label="t('iot.ruleTypeOnline')" value="ONLINE" />
-            <el-option :label="t('iot.ruleTypeOffline')" value="OFFLINE" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('iot.conditionJson')" required>
-          <el-input v-model="form.conditionJson" type="textarea" :rows="3" />
-        </el-form-item>
-        <el-form-item :label="t('iot.debounceMs')"
-          ><el-input-number v-model="form.debounceMs" :min="0" :step="500"
-        /></el-form-item>
-        <el-form-item :label="t('iot.cooldownMs')"
-          ><el-input-number v-model="form.cooldownMs" :min="0" :step="1000"
-        /></el-form-item>
-        <el-form-item :label="t('iot.consecutiveCount')"
-          ><el-input-number v-model="form.continuousCount" :min="1" :max="100"
-        /></el-form-item>
-        <el-form-item :label="t('iot.processLinkage')">
-          <el-switch v-model="form.processEnabled" :active-value="1" :inactive-value="0" />
-        </el-form-item>
-        <el-form-item v-if="form.processEnabled === 1" :label="t('iot.processTemplate')" required>
-          <el-input
-            v-model="form.processTemplateKey"
-            :placeholder="t('iot.processTemplateKeyPlaceholder')"
+    <template #empty-action>
+      <el-button type="primary" @click="openCreate">{{ t('common.newRule') }}</el-button>
+    </template>
+  </StandardListTemplate>
+
+  <el-dialog v-model="dialogVisible" :title="t('common.newRule')" width="640px">
+    <el-form label-width="100px">
+      <el-form-item :label="t('common.code')" required
+        ><el-input v-model="form.code"
+      /></el-form-item>
+      <el-form-item :label="t('common.name')" required
+        ><el-input v-model="form.name"
+      /></el-form-item>
+      <el-form-item :label="t('common.device')" required>
+        <el-select v-model="form.deviceId" :placeholder="t('iot.eligibleDevicesPlaceholder')">
+          <el-option
+            v-for="d in devices"
+            :key="d.id"
+            :label="`${d.name} (${d.deviceKey})`"
+            :value="d.id"
           />
-        </el-form-item>
-        <el-form-item v-if="form.processEnabled === 1" :label="t('iot.formMapping')">
-          <el-input v-model="form.formMappingJson" type="textarea" :rows="4" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
-      </template>
-    </el-dialog>
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="t('iot.ruleType')">
+        <el-select v-model="form.ruleType">
+          <el-option :label="t('iot.ruleTypeThreshold')" value="THRESHOLD" />
+          <el-option :label="t('iot.ruleTypePropertyChanged')" value="PROPERTY_CHANGED" />
+          <el-option :label="t('iot.ruleTypeEventOccur')" value="EVENT_OCCUR" />
+          <el-option :label="t('iot.ruleTypeOnline')" value="ONLINE" />
+          <el-option :label="t('iot.ruleTypeOffline')" value="OFFLINE" />
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="t('iot.conditionJson')" required>
+        <el-input v-model="form.conditionJson" type="textarea" :rows="3" />
+      </el-form-item>
+      <el-form-item :label="t('iot.debounceMs')"
+        ><el-input-number v-model="form.debounceMs" :min="0" :step="500"
+      /></el-form-item>
+      <el-form-item :label="t('iot.cooldownMs')"
+        ><el-input-number v-model="form.cooldownMs" :min="0" :step="1000"
+      /></el-form-item>
+      <el-form-item :label="t('iot.consecutiveCount')"
+        ><el-input-number v-model="form.continuousCount" :min="1" :max="100"
+      /></el-form-item>
+      <el-form-item :label="t('iot.processLinkage')">
+        <el-switch v-model="form.processEnabled" :active-value="1" :inactive-value="0" />
+      </el-form-item>
+      <el-form-item v-if="form.processEnabled === 1" :label="t('iot.processTemplate')" required>
+        <el-input
+          v-model="form.processTemplateKey"
+          :placeholder="t('iot.processTemplateKeyPlaceholder')"
+        />
+      </el-form-item>
+      <el-form-item v-if="form.processEnabled === 1" :label="t('iot.formMapping')">
+        <el-input v-model="form.formMappingJson" type="textarea" :rows="4" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
+    </template>
+  </el-dialog>
 
-    <el-dialog v-model="triggerVisible" :title="t('iot.triggerRecordsTitle')" width="760px">
-      <el-table
-        v-loading="triggerLoading"
-        :data="triggers"
-        stripe
-        size="small"
-        @row-click="openTriggerDetail"
-      >
-        <el-table-column
-          prop="idempotentKey"
-          :label="t('iot.idempotencyKey')"
-          min-width="200"
-          show-overflow-tooltip
-        />
-        <el-table-column prop="status" :label="t('common.status')" width="90">
-          <template #default="{ row }">
-            <el-tag
-              :type="
-                row.status === 'SUCCESS'
-                  ? 'success'
-                  : row.status === 'FAILED'
-                    ? 'danger'
-                    : 'warning'
-              "
-              size="small"
-            >
-              {{ enumLabel('IOT_RELEASE_STATE', row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="processInstanceId"
-          :label="t('common.processInstance')"
-          min-width="140"
-        />
-        <el-table-column
-          prop="error"
-          :label="t('common.failureReason')"
-          min-width="160"
-          show-overflow-tooltip
-        />
-        <el-table-column prop="triggerTime" :label="t('iot.triggeredAt')" min-width="150" />
-      </el-table>
-    </el-dialog>
-    <el-dialog v-model="triggerDetailVisible" :title="t('iot.triggerRecordDetail')" width="680px">
-      <pre
-        style="
-          max-height: 55vh;
-          overflow: auto;
-          margin: 0;
-          padding: 12px;
-          background: var(--el-fill-color-light);
-          white-space: pre-wrap;
-          word-break: break-word;
-        "
-        >{{ triggerDetailJson }}</pre
-      >
-    </el-dialog>
-  </div>
+  <el-dialog v-model="triggerVisible" :title="t('iot.triggerRecordsTitle')" width="760px">
+    <el-table
+      v-loading="triggerLoading"
+      :data="triggers"
+      stripe
+      size="small"
+      @row-click="openTriggerDetail"
+    >
+      <el-table-column
+        prop="idempotentKey"
+        :label="t('iot.idempotencyKey')"
+        min-width="200"
+        show-overflow-tooltip
+      />
+      <el-table-column prop="status" :label="t('common.status')" width="90">
+        <template #default="{ row }">
+          <el-tag
+            :type="
+              row.status === 'SUCCESS' ? 'success' : row.status === 'FAILED' ? 'danger' : 'warning'
+            "
+            size="small"
+          >
+            {{ enumLabel('IOT_RELEASE_STATE', row.status) }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column
+        prop="processInstanceId"
+        :label="t('common.processInstance')"
+        min-width="140"
+      />
+      <el-table-column
+        prop="error"
+        :label="t('common.failureReason')"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column prop="triggerTime" :label="t('iot.triggeredAt')" min-width="150" />
+    </el-table>
+  </el-dialog>
+  <el-dialog v-model="triggerDetailVisible" :title="t('iot.triggerRecordDetail')" width="680px">
+    <pre
+      style="
+        max-height: 55vh;
+        overflow: auto;
+        margin: 0;
+        padding: 12px;
+        background: var(--el-fill-color-light);
+        white-space: pre-wrap;
+        word-break: break-word;
+      "
+      >{{ triggerDetailJson }}</pre
+    >
+  </el-dialog>
 </template>

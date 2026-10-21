@@ -14,7 +14,7 @@ import { useRouter } from 'vue-router'
 import { listConversations } from '@/modules/agent/api'
 import type { AgentConversation } from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
-import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate, useClientList } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
 const router = useRouter()
@@ -23,6 +23,13 @@ const router = useRouter()
 const loading = ref(false)
 const error = ref<string | null>(null)
 const conversations = ref<AgentConversation[]>([])
+
+const { pageNum, pageSize, pagedRows, total, handlePageNumChange, handlePageSizeChange } =
+  useClientList(conversations, {
+    searchFields: (row) => [row.title],
+  })
+
+const isEmpty = computed(() => !loading.value && !error.value && conversations.value.length === 0)
 
 // ─── 格式化函数 ───
 function formatTimestamp(ts: string): string {
@@ -61,21 +68,6 @@ async function loadConversations() {
 }
 
 // ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
-const pageNum = ref(1)
-const pageSize = ref(10)
-
-const pagedConversations = computed(() =>
-  conversations.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
-)
-
-function handlePageNumChange(p: number) {
-  pageNum.value = p
-}
-
-function handlePageSizeChange(s: number) {
-  pageSize.value = s
-  pageNum.value = 1
-}
 
 // ─── 导航操作 ───
 function viewConversation(sessionId: number) {
@@ -101,9 +93,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="conversation-list-page">
-    <!-- 0.1.7 #25：左上角页面标题为噪音，已去除——列表即页首 -->
-
+  <StandardListTemplate
+    :total="total"
+    :page-num="pageNum"
+    :page-size="pageSize"
+    :empty="isEmpty"
+    @update:page-num="handlePageNumChange"
+    @update:page-size="handlePageSizeChange"
+  >
     <!-- 加载中骨架屏 -->
     <el-skeleton v-if="loading" :rows="5" animated />
 
@@ -111,44 +108,26 @@ onMounted(() => {
     <el-alert v-else-if="error" :title="error" type="error" show-icon :closable="false" />
 
     <!-- 会话列表 -->
-    <template v-else-if="conversations.length > 0">
-      <el-table :data="pagedConversations" stripe>
-        <el-table-column prop="id" :label="t('agent.conversationId')" width="100" />
-        <el-table-column prop="title" :label="t('common.title')">
-          <template #default="{ row }">
-            {{ row.title || t('agent.untitledConversation') }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" :label="t('common.status')" width="100">
-          <template #default="{ row }">
-            <el-tag size="small" type="success">{{
-              enumLabel('AGENT_CONVERSATION', row.status)
-            }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createTime" :label="t('common.createTime')" width="180">
-          <template #default="{ row }">
-            {{ formatTimestamp(row.createTime) }}
-          </template>
-        </el-table-column>
-        <ListActionsColumn :actions="rowActions" :width="90" />
-      </el-table>
-      <ListPagination
-        :total="conversations.length"
-        :page-num="pageNum"
-        :page-size="pageSize"
-        @update:page-num="handlePageNumChange"
-        @update:page-size="handlePageSizeChange"
-      />
-    </template>
-
-    <!-- 空状态 -->
-    <el-empty v-else :description="t('agent.noConversations')" />
-  </div>
+    <el-table v-else :data="pagedRows" stripe>
+      <el-table-column prop="id" :label="t('agent.conversationId')" width="100" />
+      <el-table-column prop="title" :label="t('common.title')">
+        <template #default="{ row }">
+          {{ row.title || t('agent.untitledConversation') }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="status" :label="t('common.status')" width="100">
+        <template #default="{ row }">
+          <el-tag size="small" type="success">{{
+            enumLabel('AGENT_CONVERSATION', row.status)
+          }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="createTime" :label="t('common.createTime')" width="180">
+        <template #default="{ row }">
+          {{ formatTimestamp(row.createTime) }}
+        </template>
+      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="90" />
+    </el-table>
+  </StandardListTemplate>
 </template>
-
-<style scoped>
-.conversation-list-page {
-  padding: var(--sw-space-24);
-}
-</style>

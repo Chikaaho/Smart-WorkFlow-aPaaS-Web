@@ -11,7 +11,12 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import {
+  ListActionsColumn,
+  ListFilterItem,
+  StandardListTemplate,
+  useClientList,
+} from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listScripts,
@@ -31,6 +36,20 @@ const loading = ref(false)
 const loadError = ref('')
 const list = ref<IotScript[]>([])
 
+const {
+  keyword,
+  pageNum,
+  pageSize,
+  pagedRows,
+  total,
+  handleQuery,
+  handleReset,
+  handlePageNumChange,
+  handlePageSizeChange,
+} = useClientList(list, {
+  searchFields: (row) => [row.code, row.name, row.language, row.triggerType],
+})
+
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const form = reactive({
@@ -46,9 +65,7 @@ const execVisible = ref(false)
 const execs = ref<IotScriptExec[]>([])
 const execLoading = ref(false)
 
-const isEmpty = computed(
-  () => !loading.value && !loadError.value && !loadError.value && list.value.length === 0,
-)
+const isEmpty = computed(() => !loading.value && !loadError.value && list.value.length === 0)
 
 const JS_SAMPLE = `// handler(input) 为唯一入口；可用宿主函数：
 // fun_publish / fun_subscribe / fun_getProperty / fun_setProperty /
@@ -85,22 +102,7 @@ async function load() {
   }
 }
 
-// ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
-const pageNum = ref(1)
-const pageSize = ref(10)
-
-const pagedRows = computed(() =>
-  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
-)
-
-function handlePageNumChange(p: number) {
-  pageNum.value = p
-}
-
-function handlePageSizeChange(s: number) {
-  pageSize.value = s
-  pageNum.value = 1
-}
+// ─── 客户端分页 + 关键词筛选（V012-BUG-003）：一次拉全量，前端切片 ───
 
 function openCreate() {
   editingId.value = null
@@ -235,11 +237,34 @@ function rowActions(r: unknown): ListAction[] {
 </script>
 
 <template>
-  <div style="padding: 16px">
-    <div style="display: flex; justify-content: space-between; margin-bottom: 12px">
-      <h3 style="margin: 0">{{ t('iot.scriptListTitle') }}</h3>
+  <StandardListTemplate
+    :total="total"
+    :page-num="pageNum"
+    :page-size="pageSize"
+    :empty="isEmpty"
+    @update:page-num="handlePageNumChange"
+    @update:page-size="handlePageSizeChange"
+  >
+    <template #toolbar-actions>
       <el-button type="primary" @click="openCreate">{{ t('iot.newScript') }}</el-button>
-    </div>
+    </template>
+
+    <template #filter>
+      <ListFilterItem :label="t('common.keyword')">
+        <el-input
+          v-model="keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+          @clear="handleReset"
+        />
+      </ListFilterItem>
+    </template>
+    <template #filter-actions>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+    </template>
+
     <el-alert
       v-if="loadError"
       :title="loadError"
@@ -253,7 +278,7 @@ function rowActions(r: unknown): ListAction[] {
       </template>
     </el-alert>
 
-    <el-table v-loading="loading" :data="pagedRows" stripe>
+    <el-table v-else v-loading="loading" :data="pagedRows" stripe>
       <el-table-column prop="code" :label="t('common.code')" min-width="120" />
       <el-table-column prop="name" :label="t('common.name')" min-width="130" />
       <el-table-column prop="language" :label="t('common.language')" width="70" />
@@ -281,76 +306,72 @@ function rowActions(r: unknown): ListAction[] {
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="170" />
     </el-table>
-    <ListPagination
-      :total="list.length"
-      :page-num="pageNum"
-      :page-size="pageSize"
-      @update:page-num="handlePageNumChange"
-      @update:page-size="handlePageSizeChange"
-    />
-    <el-empty v-if="isEmpty" :description="t('iot.noScripts')" />
 
-    <el-dialog
-      v-model="dialogVisible"
-      :title="editingId ? t('iot.editScriptDraft') : t('iot.newScript')"
-      width="760px"
-    >
-      <el-form label-width="80px">
-        <el-form-item :label="t('common.code')" required
-          ><el-input v-model="form.code" :disabled="!!editingId"
-        /></el-form-item>
-        <el-form-item :label="t('common.name')" required
-          ><el-input v-model="form.name"
-        /></el-form-item>
-        <el-form-item :label="t('common.language')">
-          <el-radio-group v-model="form.language" :disabled="!!editingId">
-            <el-radio value="JS">JavaScript</el-radio>
-            <el-radio value="JAVA">Java</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item :label="t('iot.triggerType')">
-          <el-select v-model="form.triggerType">
-            <el-option :label="t('iot.triggerTypeMessage')" value="MESSAGE" />
-            <el-option :label="t('iot.triggerTypeRule')" value="RULE" />
-            <el-option :label="t('iot.triggerTypeManual')" value="MANUAL" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('iot.timeoutMs')"
-          ><el-input-number v-model="form.timeoutMs" :min="500" :max="30000" :step="500"
-        /></el-form-item>
-        <el-form-item :label="t('iot.sourceCode')">
-          <el-input v-model="form.sourceCode" type="textarea" :rows="18" spellcheck="false" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button @click="form.sourceCode = form.language === 'JS' ? JS_SAMPLE : JAVA_SAMPLE">{{
-          t('iot.insertSample')
-        }}</el-button>
-        <el-button type="primary" @click="save">{{ t('common.saveDraft') }}</el-button>
-      </template>
-    </el-dialog>
+    <template #empty-action>
+      <el-button type="primary" @click="openCreate">{{ t('iot.newScript') }}</el-button>
+    </template>
+  </StandardListTemplate>
 
-    <el-dialog v-model="execVisible" :title="t('iot.executionRecordsTitle')" width="720px">
-      <el-table v-loading="execLoading" :data="execs" stripe size="small">
-        <el-table-column prop="scriptVersion" :label="t('common.version')" width="60" />
-        <el-table-column prop="triggerSource" :label="t('common.source')" width="90" />
-        <el-table-column prop="status" :label="t('common.status')" width="90" />
-        <el-table-column prop="durationMs" :label="t('common.durationMs')" width="90" />
-        <el-table-column
-          prop="outputJson"
-          :label="t('iot.output')"
-          min-width="180"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="error"
-          :label="t('common.error')"
-          min-width="160"
-          show-overflow-tooltip
-        />
-        <el-table-column prop="createTime" :label="t('common.time')" min-width="150" />
-      </el-table>
-    </el-dialog>
-  </div>
+  <el-dialog
+    v-model="dialogVisible"
+    :title="editingId ? t('iot.editScriptDraft') : t('iot.newScript')"
+    width="760px"
+  >
+    <el-form label-width="80px">
+      <el-form-item :label="t('common.code')" required
+        ><el-input v-model="form.code" :disabled="!!editingId"
+      /></el-form-item>
+      <el-form-item :label="t('common.name')" required
+        ><el-input v-model="form.name"
+      /></el-form-item>
+      <el-form-item :label="t('common.language')">
+        <el-radio-group v-model="form.language" :disabled="!!editingId">
+          <el-radio value="JS">JavaScript</el-radio>
+          <el-radio value="JAVA">Java</el-radio>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item :label="t('iot.triggerType')">
+        <el-select v-model="form.triggerType">
+          <el-option :label="t('iot.triggerTypeMessage')" value="MESSAGE" />
+          <el-option :label="t('iot.triggerTypeRule')" value="RULE" />
+          <el-option :label="t('iot.triggerTypeManual')" value="MANUAL" />
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="t('iot.timeoutMs')"
+        ><el-input-number v-model="form.timeoutMs" :min="500" :max="30000" :step="500"
+      /></el-form-item>
+      <el-form-item :label="t('iot.sourceCode')">
+        <el-input v-model="form.sourceCode" type="textarea" :rows="18" spellcheck="false" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button @click="form.sourceCode = form.language === 'JS' ? JS_SAMPLE : JAVA_SAMPLE">{{
+        t('iot.insertSample')
+      }}</el-button>
+      <el-button type="primary" @click="save">{{ t('common.saveDraft') }}</el-button>
+    </template>
+  </el-dialog>
+
+  <el-dialog v-model="execVisible" :title="t('iot.executionRecordsTitle')" width="720px">
+    <el-table v-loading="execLoading" :data="execs" stripe size="small">
+      <el-table-column prop="scriptVersion" :label="t('common.version')" width="60" />
+      <el-table-column prop="triggerSource" :label="t('common.source')" width="90" />
+      <el-table-column prop="status" :label="t('common.status')" width="90" />
+      <el-table-column prop="durationMs" :label="t('common.durationMs')" width="90" />
+      <el-table-column
+        prop="outputJson"
+        :label="t('iot.output')"
+        min-width="180"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="error"
+        :label="t('common.error')"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column prop="createTime" :label="t('common.time')" min-width="150" />
+    </el-table>
+  </el-dialog>
 </template>

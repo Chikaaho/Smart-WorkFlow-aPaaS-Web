@@ -8,9 +8,9 @@ const { t } = useI18n()
  * 向导式：来源/目标用户 + 流程范围 + 代理规则显式勾选；逐项清单可复核；
  * 历史与抄送零改写；失败项可安全重试（已迁移任务自动跳过）。
  */
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ListPagination } from '@/components/page-layout'
+import { ListPagination, useClientList } from '@/components/page-layout'
 import {
   submitHandover,
   queryHandoverItems,
@@ -60,21 +60,16 @@ async function submit() {
 }
 
 // ─── 逐项清单客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
-const pageNum = ref(1)
-const pageSize = ref(10)
-
-const pagedItems = computed(() =>
-  items.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
-)
-
-function handlePageNumChange(p: number) {
-  pageNum.value = p
-}
-
-function handlePageSizeChange(s: number) {
-  pageSize.value = s
-  pageNum.value = 1
-}
+const {
+  pageNum,
+  pageSize,
+  pagedRows: pagedItems,
+  total,
+  handlePageNumChange,
+  handlePageSizeChange,
+} = useClientList(items, {
+  searchFields: (row) => [row.itemType, row.taskId],
+})
 
 function resultTag(resultValue: HandoverItem['result']) {
   return resultValue === 'MIGRATED' ? 'success' : resultValue === 'FAILED' ? 'danger' : 'info'
@@ -175,7 +170,7 @@ function resultLabel(resultValue: HandoverItem['result']) {
         <template #empty>{{ t('workflow.handoverEmpty') }}</template>
       </el-table>
       <ListPagination
-        :total="items.length"
+        :total="total"
         :page-num="pageNum"
         :page-size="pageSize"
         @update:page-num="handlePageNumChange"

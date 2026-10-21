@@ -14,7 +14,12 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError, request } from '@/foundation/request'
-import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import {
+  ListActionsColumn,
+  ListFilterItem,
+  StandardListTemplate,
+  useClientList,
+} from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { listEligibleDevices, type IotDevice } from '../api'
 
@@ -34,6 +39,20 @@ const loadError = ref('')
 const defs = ref<ProcessDefRow[]>([])
 const devices = ref<IotDevice[]>([])
 
+const {
+  keyword,
+  pageNum,
+  pageSize,
+  pagedRows,
+  total,
+  handleQuery,
+  handleReset,
+  handlePageNumChange,
+  handlePageSizeChange,
+} = useClientList(defs, {
+  searchFields: (row) => [row.processKey, row.name],
+})
+
 const dialogVisible = ref(false)
 const editingDef = ref<ProcessDefRow | null>(null)
 const form = reactive({
@@ -52,9 +71,7 @@ const form = reactive({
   reservationLateWindow: 60,
 })
 
-const isEmpty = computed(
-  () => !loading.value && !loadError.value && !loadError.value && defs.value.length === 0,
-)
+const isEmpty = computed(() => !loading.value && !loadError.value && defs.value.length === 0)
 
 interface ActionConfig {
   enabled: boolean
@@ -105,22 +122,7 @@ async function load() {
   }
 }
 
-// ─── 客户端分页（V012-BUG-003）：模板列表一次拉取（服务端 pageSize=50），前端切片 ───
-const pageNum = ref(1)
-const pageSize = ref(10)
-
-const pagedRows = computed(() =>
-  defs.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
-)
-
-function handlePageNumChange(p: number) {
-  pageNum.value = p
-}
-
-function handlePageSizeChange(s: number) {
-  pageSize.value = s
-  pageNum.value = 1
-}
+// ─── 客户端分页 + 关键词筛选（V012-BUG-003）：模板列表一次拉取，前端切片 ───
 
 function deviceName(deviceId?: number): string {
   if (!deviceId) return '—'
@@ -260,13 +262,34 @@ function rowActions(r: unknown): ListAction[] {
 </script>
 
 <template>
-  <div style="padding: 16px">
-    <div style="margin-bottom: 12px">
-      <h3 style="margin: 0">{{ t('iot.processDeviceActions') }}</h3>
-      <p style="color: var(--el-text-color-secondary); font-size: 12px; margin: 4px 0 0">
-        {{ t('iot.flowActionHelp') }}
-      </p>
-    </div>
+  <StandardListTemplate
+    :total="total"
+    :page-num="pageNum"
+    :page-size="pageSize"
+    :empty="isEmpty"
+    @update:page-num="handlePageNumChange"
+    @update:page-size="handlePageSizeChange"
+  >
+    <template #table-title>
+      <p class="flow-help">{{ t('iot.flowActionHelp') }}</p>
+    </template>
+
+    <template #filter>
+      <ListFilterItem :label="t('common.keyword')">
+        <el-input
+          v-model="keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+          @clear="handleReset"
+        />
+      </ListFilterItem>
+    </template>
+    <template #filter-actions>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+    </template>
+
     <el-alert
       v-if="loadError"
       :title="loadError"
@@ -280,7 +303,7 @@ function rowActions(r: unknown): ListAction[] {
       </template>
     </el-alert>
 
-    <el-table v-loading="loading" :data="pagedRows" stripe>
+    <el-table v-else v-loading="loading" :data="pagedRows" stripe>
       <el-table-column
         prop="processKey"
         :label="t('iot.processTemplate')"
@@ -330,105 +353,101 @@ function rowActions(r: unknown): ListAction[] {
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
-    <ListPagination
-      :total="defs.length"
-      :page-num="pageNum"
-      :page-size="pageSize"
-      @update:page-num="handlePageNumChange"
-      @update:page-size="handlePageSizeChange"
-    />
-    <el-empty v-if="isEmpty" :description="t('iot.noProcessTemplates')" />
+  </StandardListTemplate>
 
-    <el-dialog
-      v-model="dialogVisible"
-      :title="t('iot.deviceActionDialogTitle', { name: editingDef?.name ?? '' })"
-      width="560px"
-    >
-      <el-form label-width="110px">
-        <el-form-item :label="t('common.enable')">
-          <el-switch v-model="form.enabled" />
+  <el-dialog
+    v-model="dialogVisible"
+    :title="t('iot.deviceActionDialogTitle', { name: editingDef?.name ?? '' })"
+    width="560px"
+  >
+    <el-form label-width="110px">
+      <el-form-item :label="t('common.enable')">
+        <el-switch v-model="form.enabled" />
+      </el-form-item>
+      <el-form-item :label="t('iot.deviceSource')" required>
+        <el-radio-group v-model="form.deviceSource">
+          <el-radio value="FIXED">{{ t('iot.deviceSourceFixed') }}</el-radio>
+          <el-radio value="FORM_FIELD">{{ t('iot.deviceSourceFormField') }}</el-radio>
+          <el-radio value="VARIABLE">{{ t('common.processVariable') }}</el-radio>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item v-if="form.deviceSource === 'FIXED'" :label="t('iot.targetDevice')" required>
+        <el-select v-model="form.deviceId" :placeholder="t('iot.eligibleDevicesOnly')">
+          <el-option
+            v-for="d in devices"
+            :key="d.id"
+            :label="`${d.name} (${d.deviceKey})`"
+            :value="d.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item v-if="form.deviceSource === 'FORM_FIELD'" :label="t('iot.formField')" required>
+        <el-input v-model="form.deviceField" :placeholder="t('iot.deviceFieldPlaceholder')" />
+      </el-form-item>
+      <el-form-item
+        v-if="form.deviceSource === 'VARIABLE'"
+        :label="t('common.processVariable')"
+        required
+      >
+        <el-input v-model="form.variableName" :placeholder="t('iot.variableNamePlaceholder')" />
+      </el-form-item>
+      <el-form-item :label="t('iot.capabilityKey')" required>
+        <el-input v-model="form.commandKey" :placeholder="t('iot.capabilityKeyPlaceholder')" />
+      </el-form-item>
+      <el-form-item :label="t('iot.paramField')">
+        <el-input v-model="form.paramField" :placeholder="t('iot.paramFieldPlaceholder')" />
+      </el-form-item>
+      <!-- P63 下发方式：立即下发=既有缺省行为零变化；预约下发在到点时间窗内触发 -->
+      <el-form-item label="下发方式" required>
+        <el-radio-group v-model="form.deliveryMode">
+          <el-radio value="IMMEDIATE">立即下发</el-radio>
+          <el-radio value="RESERVATION">预约下发</el-radio>
+        </el-radio-group>
+      </el-form-item>
+      <template v-if="form.deliveryMode === 'RESERVATION'">
+        <el-form-item label="预约时间字段" required>
+          <el-input
+            v-model="form.reservationDueField"
+            placeholder="表单日期时间字段名（DATE 字段且 format=datetime）"
+          />
         </el-form-item>
-        <el-form-item :label="t('iot.deviceSource')" required>
-          <el-radio-group v-model="form.deviceSource">
-            <el-radio value="FIXED">{{ t('iot.deviceSourceFixed') }}</el-radio>
-            <el-radio value="FORM_FIELD">{{ t('iot.deviceSourceFormField') }}</el-radio>
-            <el-radio value="VARIABLE">{{ t('common.processVariable') }}</el-radio>
-          </el-radio-group>
+        <el-form-item label="时区">
+          <el-autocomplete
+            v-model="form.reservationTimezone"
+            :fetch-suggestions="queryTimezones"
+            placeholder="Asia/Shanghai"
+            style="width: 100%"
+          />
         </el-form-item>
-        <el-form-item v-if="form.deviceSource === 'FIXED'" :label="t('iot.targetDevice')" required>
-          <el-select v-model="form.deviceId" :placeholder="t('iot.eligibleDevicesOnly')">
-            <el-option
-              v-for="d in devices"
-              :key="d.id"
-              :label="`${d.name} (${d.deviceKey})`"
-              :value="d.id"
-            />
-          </el-select>
+        <el-form-item label="允许迟到(秒)">
+          <el-input-number
+            v-model="form.reservationLateWindow"
+            :min="1"
+            :max="3600"
+            :step="10"
+            step-strictly
+          />
         </el-form-item>
-        <el-form-item
-          v-if="form.deviceSource === 'FORM_FIELD'"
-          :label="t('iot.formField')"
-          required
-        >
-          <el-input v-model="form.deviceField" :placeholder="t('iot.deviceFieldPlaceholder')" />
-        </el-form-item>
-        <el-form-item
-          v-if="form.deviceSource === 'VARIABLE'"
-          :label="t('common.processVariable')"
-          required
-        >
-          <el-input v-model="form.variableName" :placeholder="t('iot.variableNamePlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('iot.capabilityKey')" required>
-          <el-input v-model="form.commandKey" :placeholder="t('iot.capabilityKeyPlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('iot.paramField')">
-          <el-input v-model="form.paramField" :placeholder="t('iot.paramFieldPlaceholder')" />
-        </el-form-item>
-        <!-- P63 下发方式：立即下发=既有缺省行为零变化；预约下发在到点时间窗内触发 -->
-        <el-form-item label="下发方式" required>
-          <el-radio-group v-model="form.deliveryMode">
-            <el-radio value="IMMEDIATE">立即下发</el-radio>
-            <el-radio value="RESERVATION">预约下发</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <template v-if="form.deliveryMode === 'RESERVATION'">
-          <el-form-item label="预约时间字段" required>
-            <el-input
-              v-model="form.reservationDueField"
-              placeholder="表单日期时间字段名（DATE 字段且 format=datetime）"
-            />
-          </el-form-item>
-          <el-form-item label="时区">
-            <el-autocomplete
-              v-model="form.reservationTimezone"
-              :fetch-suggestions="queryTimezones"
-              placeholder="Asia/Shanghai"
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="允许迟到(秒)">
-            <el-input-number
-              v-model="form.reservationLateWindow"
-              :min="1"
-              :max="3600"
-              :step="10"
-              step-strictly
-            />
-          </el-form-item>
-        </template>
-        <el-form-item :label="t('notify.failurePolicy')" required>
-          <el-select v-model="form.failurePolicy">
-            <el-option :label="t('iot.failurePolicyBlock')" value="BLOCK" />
-            <el-option :label="t('iot.failurePolicyContinue')" value="CONTINUE" />
-            <el-option :label="t('iot.failurePolicyManual')" value="MANUAL" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
       </template>
-    </el-dialog>
-  </div>
+      <el-form-item :label="t('notify.failurePolicy')" required>
+        <el-select v-model="form.failurePolicy">
+          <el-option :label="t('iot.failurePolicyBlock')" value="BLOCK" />
+          <el-option :label="t('iot.failurePolicyContinue')" value="CONTINUE" />
+          <el-option :label="t('iot.failurePolicyManual')" value="MANUAL" />
+        </el-select>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
+    </template>
+  </el-dialog>
 </template>
+
+<style scoped>
+.flow-help {
+  margin: 0;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+}
+</style>
