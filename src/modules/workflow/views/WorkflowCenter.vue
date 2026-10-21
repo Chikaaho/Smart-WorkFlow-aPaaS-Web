@@ -10,7 +10,7 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import { ListActionsColumn, ListPagination, useClientList } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { queryTodoTasks, queryProcessedTasks, myInstances, myDrafts } from '@/modules/workflow/api'
 import { queryMyCopies } from '@/modules/workflow/api/oa'
@@ -127,21 +127,11 @@ function rowActions(row: unknown, tab: TabKey): ListAction[] {
 }
 
 // ─── 客户端分页（V012-BUG-003）：各页签一次拉取全量（服务端 pageSize 20），前端切片 ───
-const pageNum = ref(1)
-const pageSize = ref(20)
-
-const pagedRows = computed(() =>
-  currentRows.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
-)
-
-function handlePageNumChange(p: number) {
-  pageNum.value = p
-}
-
-function handlePageSizeChange(s: number) {
-  pageSize.value = s
-  pageNum.value = 1
-}
+const { pageNum, pageSize, pagedRows, total, handlePageNumChange, handlePageSizeChange } =
+  useClientList(currentRows, {
+    pageSize: 20,
+    searchFields: (row) => [row.name, row.title, row.processDefinitionKey],
+  })
 
 function handleTabChange(tab: string | number) {
   pageNum.value = 1
@@ -185,7 +175,7 @@ onMounted(() => void loadTab('todo'))
             <template #empty>{{ t('common.emptyData') }}</template>
           </el-table>
           <ListPagination
-            :total="currentRows.length"
+            :total="total"
             :page-num="pageNum"
             :page-size="pageSize"
             @update:page-num="handlePageNumChange"

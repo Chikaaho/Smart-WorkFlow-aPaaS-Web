@@ -21,6 +21,8 @@ export interface ListAction {
   disabled?: boolean
   loading?: boolean
   type?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
+  /** 透传到按钮/下拉项的 data-test，便于页面级回归用例定位 */
+  testId?: string
 }
 
 const props = withDefaults(
@@ -30,7 +32,7 @@ const props = withDefaults(
     label?: string
     width?: number | string
   }>(),
-  { width: 140 },
+  { width: 140, label: undefined },
 )
 
 function visibleActions(row: unknown): ListAction[] {
@@ -69,6 +71,7 @@ function onCommand(row: unknown, command: string | number | object) {
             :type="action.type ?? 'primary'"
             :disabled="action.disabled"
             :loading="action.loading"
+            :data-test="action.testId"
             @click.stop="action.onClick()"
           >
             {{ action.label }}
@@ -88,6 +91,7 @@ function onCommand(row: unknown, command: string | number | object) {
                   :key="action.key"
                   :command="action.key"
                   :disabled="action.disabled"
+                  :data-test="action.testId"
                 >
                   {{ action.label }}
                 </el-dropdown-item>

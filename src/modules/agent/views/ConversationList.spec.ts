@@ -90,7 +90,7 @@ describe('ConversationList — 会话历史列表页（M07-F04-02 标准6）', (
     expect((wrapper.vm as any).error).toBe('服务异常')
   })
 
-  it('空列表显示空状态', async () => {
+  it('空列表时保留表格表头且无数据行（0.1.7 #7 空态约定）', async () => {
     vi.mocked(listConversations).mockResolvedValue([])
 
     const wrapper = mount(ConversationList, {
@@ -100,7 +100,9 @@ describe('ConversationList — 会话历史列表页（M07-F04-02 标准6）', (
     await nextTick()
 
     expect((wrapper.vm as any).conversations).toHaveLength(0)
-    expect(wrapper.find('.empty-stub').exists()).toBe(true)
+    const table = wrapper.find('.table-stub')
+    expect(table.exists()).toBe(true)
+    expect(table.attributes('data-count')).toBe('0')
   })
 
   it('点击"查看消息"跳转到会话详情路由', async () => {

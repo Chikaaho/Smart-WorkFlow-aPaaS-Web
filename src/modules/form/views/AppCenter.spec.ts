@@ -110,7 +110,7 @@ describe('AppCenter（用户端）', () => {
     group.vm.$emit('update:modelValue', 3)
     await nextTick()
 
-    expect(wrapper.find('.app-center__grid').attributes('style')).toContain('--per-row: 3')
+    expect(wrapper.find('.app-grid').attributes('style')).toContain('--per-row: 3')
     expect(setItem).toHaveBeenCalledWith('sw:app-center:per-row', '3')
     setItem.mockRestore()
   })

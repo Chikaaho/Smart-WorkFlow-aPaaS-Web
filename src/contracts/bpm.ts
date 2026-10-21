@@ -95,6 +95,8 @@ export interface ProcessDef {
   categoryName?: string | null
   instanceCount?: number | null
   updatedBy?: string | null
+  /** 创建人展示名（列表响应回填，非表列） */
+  creatorName?: string | null
   /** Optional display version supplied by list adapters that expose a revision label. */
   versionLabel?: string | null
   /** 主题生成规则（V012-BUG-010；列表行随实体下发，历史响应可能缺省） */

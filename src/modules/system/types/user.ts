@@ -1,7 +1,7 @@
 /**
  * 用户管理前端类型 —— 镜像后端实体 SysUser 字段。
  *
- * SysUser 不含 password 字段（后端不返回密文），不含 deleted/version/tenantId 噪音列。
+ * SysUser 不含 password 字段（后端不返回密文），不含 deleted/version 噪音列。
  * 创建/更新表单使用 UserFormRequest DTO（含 plainPassword 字段）。
  */
 
@@ -9,6 +9,8 @@
 export interface SysUser {
   id?: string
   username: string
+  /** 用户所属租户；角色配置按该租户筛选 */
+  tenantId?: string
   realName?: string
   email?: string
   phone?: string

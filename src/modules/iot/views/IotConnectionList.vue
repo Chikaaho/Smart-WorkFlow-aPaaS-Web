@@ -11,7 +11,13 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { LoadErrorState, ListActionsColumn, ListPagination } from '@/components/page-layout'
+import {
+  LoadErrorState,
+  ListActionsColumn,
+  ListFilterItem,
+  StandardListTemplate,
+  useClientList,
+} from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { enumLabel } from '@/foundation/i18n/enum-label'
 import {
@@ -31,6 +37,20 @@ const loading = ref(false)
 const loadError = ref<ApiError | null>(null)
 const list = ref<IotConnection[]>([])
 
+const {
+  keyword,
+  pageNum,
+  pageSize,
+  pagedRows,
+  total,
+  handleQuery,
+  handleReset,
+  handlePageNumChange,
+  handlePageSizeChange,
+} = useClientList(list, {
+  searchFields: (row) => [row.code, row.name, row.connType, row.host, row.lastCheckResult],
+})
+
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const form = reactive({
@@ -45,9 +65,7 @@ const form = reactive({
   keepalive: 60,
 })
 
-const isEmpty = computed(
-  () => !loading.value && !loadError.value && !loadError.value && list.value.length === 0,
-)
+const isEmpty = computed(() => !loading.value && !loadError.value && list.value.length === 0)
 
 async function load() {
   loading.value = true
@@ -63,22 +81,7 @@ async function load() {
   }
 }
 
-// ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
-const pageNum = ref(1)
-const pageSize = ref(10)
-
-const pagedRows = computed(() =>
-  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
-)
-
-function handlePageNumChange(p: number) {
-  pageNum.value = p
-}
-
-function handlePageSizeChange(s: number) {
-  pageSize.value = s
-  pageNum.value = 1
-}
+// ─── 客户端分页 + 关键词筛选（V012-BUG-003）：一次拉全量，前端切片 ───
 
 function openCreate() {
   editingId.value = null
@@ -223,14 +226,36 @@ function rowActions(r: unknown): ListAction[] {
 </script>
 
 <template>
-  <div style="padding: 16px">
-    <div style="display: flex; justify-content: space-between; margin-bottom: 12px">
-      <h3 style="margin: 0">{{ t('iot.connectionConfig') }}</h3>
+  <StandardListTemplate
+    :total="total"
+    :page-num="pageNum"
+    :page-size="pageSize"
+    :empty="isEmpty"
+    @update:page-num="handlePageNumChange"
+    @update:page-size="handlePageSizeChange"
+  >
+    <template #toolbar-actions>
       <el-button type="primary" @click="openCreate">{{ t('iot.newConnection') }}</el-button>
-    </div>
-    <LoadErrorState v-if="loadError" :error="loadError" @retry="load" />
+    </template>
 
-    <el-table v-loading="loading" :data="pagedRows" stripe>
+    <template #filter>
+      <ListFilterItem :label="t('common.keyword')">
+        <el-input
+          v-model="keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+          @clear="handleReset"
+        />
+      </ListFilterItem>
+    </template>
+    <template #filter-actions>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+    </template>
+
+    <LoadErrorState v-if="loadError" :error="loadError" @retry="load" />
+    <el-table v-else v-loading="loading" :data="pagedRows" stripe>
       <el-table-column prop="code" :label="t('common.identifier')" min-width="110" />
       <el-table-column prop="name" :label="t('common.name')" min-width="130" />
       <el-table-column prop="connType" :label="t('common.type')" width="90" />
@@ -282,67 +307,63 @@ function rowActions(r: unknown): ListAction[] {
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="170" />
     </el-table>
-    <ListPagination
-      :total="list.length"
-      :page-num="pageNum"
-      :page-size="pageSize"
-      @update:page-num="handlePageNumChange"
-      @update:page-size="handlePageSizeChange"
-    />
-    <el-empty v-if="isEmpty" :description="t('iot.noConnections')" />
 
-    <el-dialog
-      v-model="dialogVisible"
-      :title="editingId ? t('iot.editConnection') : t('iot.newConnection')"
-      width="520px"
-    >
-      <el-form label-width="90px">
-        <el-form-item :label="t('common.identifier')" required>
-          <el-input
-            v-model="form.code"
-            :disabled="!!editingId"
-            :placeholder="t('iot.uniqueIdentifier')"
-          />
+    <template #empty-action>
+      <el-button type="primary" @click="openCreate">{{ t('iot.newConnection') }}</el-button>
+    </template>
+  </StandardListTemplate>
+
+  <el-dialog
+    v-model="dialogVisible"
+    :title="editingId ? t('iot.editConnection') : t('iot.newConnection')"
+    width="520px"
+  >
+    <el-form label-width="90px">
+      <el-form-item :label="t('common.identifier')" required>
+        <el-input
+          v-model="form.code"
+          :disabled="!!editingId"
+          :placeholder="t('iot.uniqueIdentifier')"
+        />
+      </el-form-item>
+      <el-form-item :label="t('common.name')" required>
+        <el-input v-model="form.name" />
+      </el-form-item>
+      <el-form-item :label="t('common.type')">
+        <el-select v-model="form.connType" :disabled="!!editingId">
+          <el-option :label="t('iot.mqttSelfBuilt')" value="MQTT" />
+          <el-option :label="t('iot.tencentIot')" value="TENCENT" />
+        </el-select>
+      </el-form-item>
+      <template v-if="form.connType === 'MQTT'">
+        <el-form-item :label="t('iot.host')" required>
+          <el-input v-model="form.host" />
         </el-form-item>
-        <el-form-item :label="t('common.name')" required>
-          <el-input v-model="form.name" />
+        <el-form-item :label="t('iot.port')" required>
+          <el-input-number v-model="form.port" :min="1" :max="65535" />
         </el-form-item>
-        <el-form-item :label="t('common.type')">
-          <el-select v-model="form.connType" :disabled="!!editingId">
-            <el-option :label="t('iot.mqttSelfBuilt')" value="MQTT" />
-            <el-option :label="t('iot.tencentIot')" value="TENCENT" />
-          </el-select>
+        <el-form-item label="TLS">
+          <el-switch v-model="form.useTls" :active-value="1" :inactive-value="0" />
         </el-form-item>
-        <template v-if="form.connType === 'MQTT'">
-          <el-form-item :label="t('iot.host')" required>
-            <el-input v-model="form.host" />
-          </el-form-item>
-          <el-form-item :label="t('iot.port')" required>
-            <el-input-number v-model="form.port" :min="1" :max="65535" />
-          </el-form-item>
-          <el-form-item label="TLS">
-            <el-switch v-model="form.useTls" :active-value="1" :inactive-value="0" />
-          </el-form-item>
-        </template>
-        <el-form-item :label="t('common.username')">
-          <el-input v-model="form.username" />
-        </el-form-item>
-        <el-form-item :label="t('iot.password')">
-          <el-input
-            v-model="form.password"
-            type="password"
-            show-password
-            :placeholder="editingId ? t('iot.passwordKeepPlaceholder') : t('iot.password')"
-          />
-        </el-form-item>
-        <el-form-item label="keepalive">
-          <el-input-number v-model="form.keepalive" :min="10" :max="600" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
       </template>
-    </el-dialog>
-  </div>
+      <el-form-item :label="t('common.username')">
+        <el-input v-model="form.username" />
+      </el-form-item>
+      <el-form-item :label="t('iot.password')">
+        <el-input
+          v-model="form.password"
+          type="password"
+          show-password
+          :placeholder="editingId ? t('iot.passwordKeepPlaceholder') : t('iot.password')"
+        />
+      </el-form-item>
+      <el-form-item label="keepalive">
+        <el-input-number v-model="form.keepalive" :min="10" :max="600" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
+    </template>
+  </el-dialog>
 </template>

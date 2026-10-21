@@ -42,6 +42,7 @@ import RelatedProcessesPanel from '../designer/RelatedProcessesPanel.vue'
 import { saveDraftDefinition, publishDefinition as publishDef } from '../designer/draft-actions'
 import { publishNewFormVersion } from '../api/form-def'
 import { findCategoryNameByFormKey } from '@/adapters/oa-catalog'
+import { pageProcessDefs } from '@/adapters/process-catalog'
 import {
   resolveSaveState,
   saveStateKey,
@@ -402,6 +403,23 @@ async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
   return saved ? 'proceed' : 'abort'
 }
 
+/** 单流程表单：切到流程设计页签时直接进入画布，不再停留只有一行的列表。 */
+async function enterProcessCanvasIfSingle(): Promise<boolean> {
+  if (!formKey.value) return false
+  try {
+    const result = await pageProcessDefs({ pageNum: 1, pageSize: 10 }, formKey.value)
+    const process = result.list[0]
+    if (Number(result.total) !== 1 || !process) return false
+    await router.push(
+      `/workflow/defs/${process.id}/design?from=form-workbench&formId=${formId.value ?? ''}&formKey=${formKey.value}`,
+    )
+    return true
+  } catch {
+    // 查询失败回退关联流程列表，由列表自身提示错误
+    return false
+  }
+}
+
 /** 切工作区：脏状态先过保护，取消则回弹原工作区。 */
 async function onTabChange(tab: WorkbenchTab) {
   if (tab === activeTab.value) return
@@ -409,6 +427,7 @@ async function onTabChange(tab: WorkbenchTab) {
   // 在回弹后按旧 URL 又把工作区翻回去（取消分支竞态）
   const verdict = await guardUnsavedChanges()
   if (verdict === 'abort') return
+  if (tab === 'processes' && (await enterProcessCanvasIfSingle())) return
   activeTab.value = tab
   if (parseWorkbenchTab(route.query.tab) !== tab) {
     router.replace({ query: { ...route.query, tab: tab === 'design' ? undefined : tab } })
@@ -660,6 +679,11 @@ function backToList() {
   router.push({ name: 'form-def-list' })
 }
 
+/** 工作台顶部返回：字段清单/表单设计/流程设计统一返回上一页。 */
+function goBack() {
+  router.back()
+}
+
 /* ── V011-BUG-011：面包屑分类（可发起事项目录反查 formKey 所属分类） ── */
 const categoryName = ref<string | null>(null)
 const breadcrumbLoadedFor = ref('')
@@ -678,12 +702,10 @@ async function loadBreadcrumbCategory() {
          / 右保存状态与操作组；「设置」下拉已去除（其唯一入口「字段清单」上收为页签） -->
     <header v-if="!rejected" class="designer__workbench">
       <div class="designer__crumb">
-        <!-- V011-BUG-017：返回表单列表放为显式入口 -->
-        <el-button class="designer__back" @click="backToList">
+        <!-- V011-BUG-017：返回上一页 -->
+        <el-button class="designer__back" @click="goBack">
           <el-icon><Back /></el-icon>
-          <span>{{
-            fromAppContext ? t('form.appCenter.backToWorkspace') : t('form.backToList')
-          }}</span>
+          <span>{{ t('common.back') }}</span>
         </el-button>
         <!-- V011-BUG-010：保存状态从动作组移到左侧信息簇，动作组只留可点按钮 -->
         <span class="designer__save-state" :class="'designer__save-state--' + saveState">
@@ -1248,7 +1270,6 @@ async function loadBreadcrumbCategory() {
 }
 .el-dialog.history-dialog .el-dialog__title {
   display: inline-block;
-  transform: translateY(2px);
   font-size: 20px;
   font-weight: 600;
   color: #1f2a44;
@@ -1284,23 +1305,22 @@ async function loadBreadcrumbCategory() {
   padding: 21px 28px 13px;
 }
 .el-dialog.history-dialog .history-dialog__footer > .el-button:first-child {
-  width: 104px;
+  min-width: 104px;
   height: 36px;
-  line-height: 17px;
-  text-indent: 17px;
+  padding: 0 22px;
+  line-height: 36px;
+  text-indent: 0;
 }
 .el-dialog.history-dialog .history-dialog__restore {
-  width: 112px;
   min-width: 112px;
   height: 36px;
-  line-height: 17px;
-  text-indent: -9px;
+  padding: 0 22px;
+  line-height: 36px;
+  text-indent: 0;
 }
 .el-dialog.history-dialog .history-dialog__footer > .el-button > span {
-  position: relative;
-  top: 2px;
-}
-.el-dialog.history-dialog .history-dialog__restore > span {
-  left: 4.5px;
+  position: static;
+  top: auto;
+  left: auto;
 }
 </style>

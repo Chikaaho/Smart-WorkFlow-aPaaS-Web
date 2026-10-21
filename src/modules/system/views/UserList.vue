@@ -27,7 +27,7 @@ import {
 import { pageRoles } from '@/modules/system/api/role'
 import { listDeptTree } from '@/modules/system/api/dept'
 import { pagePosts } from '@/modules/system/api/post'
-import type { SysRole } from '@/modules/system/types/role'
+import type { SysRole, RoleFilter } from '@/modules/system/types/role'
 import type { SysDept } from '@/modules/system/types/dept'
 import type { SysPost } from '@/modules/system/types/post'
 import type {
@@ -53,6 +53,8 @@ import {
   ListActionsColumn,
 } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
+import { useUserStore } from '@/stores/user'
+import { InfoFilled, Plus, Search } from '@element-plus/icons-vue'
 
 // ─── 列表状态 ───
 
@@ -119,8 +121,35 @@ function handlePageSizeChange(s: number) {
 }
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
+const userStore = useUserStore()
 const roleOptions = ref<SysRole[]>([])
+const roleOptionsLoading = ref(false)
 const roleIds = ref<string[]>([])
+/** 本次配置角色所属租户：编辑取用户详情，新建取当前登录租户 */
+const targetTenantId = ref<string | null>(null)
+const roleOptionsTenantId = ref<string | null>(null)
+const roleDialogVisible = ref(false)
+const roleDraft = ref<string[]>([])
+const roleKeyword = ref('')
+
+const selectedRoles = computed(() =>
+  roleIds.value
+    .map((id) => roleOptions.value.find((role) => role.id === id))
+    .filter((role): role is SysRole => Boolean(role)),
+)
+
+const filteredRoleOptions = computed(() => {
+  const keyword = roleKeyword.value.trim().toLowerCase()
+  if (!keyword) return roleOptions.value
+  return roleOptions.value.filter(
+    (role) =>
+      role.name.toLowerCase().includes(keyword) || role.code.toLowerCase().includes(keyword),
+  )
+})
+
+const assignableRoles = computed(() =>
+  filteredRoleOptions.value.filter((role) => !isRoleLocked(role)),
+)
 const postOptions = ref<SysPost[]>([])
 /** 岗位任职勾选（postId 集合）+ 各岗位任职部门（缺省 = 用户主部门，I1） */
 const postIds = ref<string[]>([])
@@ -145,14 +174,22 @@ function toPostPayload(): PostAssociation[] {
   }))
 }
 
-async function loadRoleOptions() {
+async function loadRoleOptions(tenantId: string | null) {
+  if (roleOptionsTenantId.value !== tenantId) {
+    roleOptions.value = []
+    roleOptionsTenantId.value = tenantId
+  }
+  roleOptionsLoading.value = true
   try {
-    const result = await pageRoles({ pageNum: 1, pageSize: 200 }, {})
+    const filter: RoleFilter = tenantId ? { tenantId } : {}
+    const result = await pageRoles({ pageNum: 1, pageSize: 200 }, filter)
     roleOptions.value = result.list
   } catch {
-    ElMessage.error(t('common.loadFailed'))
+    ElMessage.error(t('system.roleLoadFailed'))
     // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     roleOptions.value = []
+  } finally {
+    roleOptionsLoading.value = false
   }
   try {
     const result = await pagePosts({ pageNum: 1, pageSize: 200 }, {})
@@ -174,6 +211,9 @@ async function loadRoleOptions() {
 const dialogVisible = ref(false)
 const dialogTitle = computed(() => (editingId.value ? t('system.editUser') : t('system.newUser')))
 const editingId = ref<string | null>(null)
+const roleDialogHint = computed(() =>
+  editingId.value ? t('system.roleDialogHintEdit') : t('system.roleDialogHintCreate'),
+)
 const submitting = ref(false)
 const formError = ref('')
 
@@ -200,13 +240,18 @@ function resetForm() {
   editingId.value = null
   formError.value = ''
   roleIds.value = []
+  roleDraft.value = []
+  roleKeyword.value = ''
+  roleDialogVisible.value = false
+  targetTenantId.value = null
   postIds.value = []
   Object.keys(postDeptMap).forEach((key) => delete postDeptMap[key])
 }
 
 function openCreate() {
   resetForm()
-  void loadRoleOptions()
+  targetTenantId.value = userStore.user?.tenantId ?? null
+  void loadRoleOptions(targetTenantId.value)
   dialogVisible.value = true
 }
 
@@ -222,6 +267,8 @@ async function openEdit(row: SysUser) {
     form.sex = detail.sex ?? 0
     form.status = detail.status
     form.deptId = detail.deptId ?? ''
+    targetTenantId.value =
+      detail.tenantId != null ? String(detail.tenantId) : (userStore.user?.tenantId ?? null)
     roleIds.value = await getUserRoles(row.id!)
     const associations = await getUserPosts(row.id!)
     postIds.value = associations.map((item) => item.postId)
@@ -234,11 +281,46 @@ async function openEdit(row: SysUser) {
     return
   }
   dialogVisible.value = true
-  await loadRoleOptions()
+  await loadRoleOptions(targetTenantId.value)
 }
 
 function closeDialog() {
   dialogVisible.value = false
+}
+
+function openRoleDialog() {
+  roleKeyword.value = ''
+  roleDraft.value = [...roleIds.value]
+  roleDialogVisible.value = true
+  if (!roleOptionsLoading.value && roleOptions.value.length === 0) {
+    void loadRoleOptions(targetTenantId.value)
+  }
+}
+
+/** 内置超管与停用角色仅对已绑定用户可操作，避免选到后端拒绝的角色 */
+function isRoleLocked(role: SysRole): boolean {
+  const assigned = role.id != null && roleIds.value.includes(role.id)
+  if (assigned) return false
+  return role.status === 0 || role.code === 'superadmin'
+}
+
+function selectAllRoles() {
+  roleDraft.value = Array.from(
+    new Set([...roleDraft.value, ...assignableRoles.value.map((role) => role.id!)]),
+  )
+}
+
+function clearRoleDraft() {
+  roleDraft.value = []
+}
+
+function removeRole(id: string) {
+  roleIds.value = roleIds.value.filter((roleId) => roleId !== id)
+}
+
+function confirmRoleDialog() {
+  roleIds.value = [...roleDraft.value]
+  roleDialogVisible.value = false
 }
 
 async function handleSubmit() {
@@ -536,11 +618,33 @@ onMounted(loadList)
           </div>
           <div class="form-field">
             <label class="form-field__label">{{ t('common.role') }}</label>
-            <el-checkbox-group v-model="roleIds">
-              <el-checkbox v-for="role in roleOptions" :key="role.id" :value="role.id">
+            <button
+              v-if="roleIds.length === 0"
+              type="button"
+              class="role-picker role-picker--empty"
+              @click="openRoleDialog"
+            >
+              <el-icon><Plus /></el-icon>
+              <span>{{ t('system.configureRoles') }}</span>
+            </button>
+            <div v-else class="role-picker">
+              <el-tag
+                v-for="role in selectedRoles"
+                :key="role.id"
+                size="small"
+                closable
+                @close="removeRole(role.id!)"
+              >
                 {{ role.name }}
-              </el-checkbox>
-            </el-checkbox-group>
+              </el-tag>
+              <span v-if="selectedRoles.length < roleIds.length" class="role-picker__more">
+                +{{ roleIds.length - selectedRoles.length }}
+              </span>
+              <button type="button" class="role-picker__add" @click="openRoleDialog">
+                <el-icon><Plus /></el-icon>
+                <span>{{ t('system.configureRoles') }}</span>
+              </button>
+            </div>
           </div>
           <div v-if="!editingId" class="form-field">
             <label class="form-field__label">{{ t('common.password') }}</label>
@@ -563,6 +667,98 @@ onMounted(loadList)
       </template>
     </StandardFormTemplate>
   </el-dialog>
+
+  <!-- 配置角色：只展示目标用户所属租户下的角色 -->
+  <el-dialog
+    v-model="roleDialogVisible"
+    :title="t('system.configureRoles')"
+    width="560px"
+    append-to-body
+    :close-on-click-modal="false"
+    class="role-assign-dialog"
+  >
+    <div class="role-assign">
+      <div class="role-assign__note">
+        <el-icon><InfoFilled /></el-icon>
+        <span>{{ roleDialogHint }}</span>
+      </div>
+
+      <div class="role-assign__toolbar">
+        <el-input
+          v-if="roleOptions.length > 5"
+          v-model="roleKeyword"
+          :placeholder="t('system.roleSearchPlaceholder')"
+          clearable
+          class="role-assign__search"
+        >
+          <template #prefix
+            ><el-icon><Search /></el-icon
+          ></template>
+        </el-input>
+        <span v-else class="role-assign__count">
+          {{ t('system.roleTotal', { count: roleOptions.length }) }}
+        </span>
+        <div class="role-assign__bulk">
+          <el-button
+            link
+            type="primary"
+            :disabled="assignableRoles.length === 0"
+            @click="selectAllRoles"
+          >
+            {{ t('system.roleSelectAll') }}
+          </el-button>
+          <el-button link :disabled="roleDraft.length === 0" @click="clearRoleDraft">
+            {{ t('system.roleClearAll') }}
+          </el-button>
+        </div>
+      </div>
+
+      <div v-loading="roleOptionsLoading" class="role-assign__list">
+        <el-empty
+          v-if="!roleOptionsLoading && filteredRoleOptions.length === 0"
+          :image-size="64"
+          :description="
+            roleOptions.length === 0 ? t('system.noRolesInTenant') : t('system.roleSearchEmpty')
+          "
+        />
+        <el-checkbox-group v-else v-model="roleDraft" class="role-list">
+          <el-checkbox
+            v-for="role in filteredRoleOptions"
+            :key="role.id"
+            :value="role.id"
+            :disabled="isRoleLocked(role)"
+            class="role-row"
+            :class="{ 'is-checked': roleDraft.includes(role.id!) }"
+          >
+            <span class="role-row__info">
+              <span class="role-row__title">
+                {{ role.name }}
+                <el-tag v-if="role.builtIn" size="small" effect="plain">{{
+                  t('system.roleBuiltIn')
+                }}</el-tag>
+                <el-tag v-if="role.status === 0" size="small" type="info">{{
+                  t('common.statusDisabled')
+                }}</el-tag>
+              </span>
+              <span class="role-row__code">{{ role.code }}</span>
+            </span>
+          </el-checkbox>
+        </el-checkbox-group>
+      </div>
+    </div>
+
+    <template #footer>
+      <div class="role-assign__footer">
+        <span class="role-assign__selected">{{
+          t('system.roleSelectedCount', { count: roleDraft.length })
+        }}</span>
+        <div class="role-assign__footer-actions">
+          <el-button @click="roleDialogVisible = false">{{ t('common.cancel') }}</el-button>
+          <el-button type="primary" @click="confirmRoleDialog">{{ t('common.confirm') }}</el-button>
+        </div>
+      </div>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -581,5 +777,238 @@ onMounted(loadList)
 .form-field--required .form-field__label::before {
   content: '* ';
   color: var(--sw-danger);
+}
+
+.role-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  padding: 5px 8px;
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--el-border-radius-base);
+  box-sizing: border-box;
+  background: var(--el-fill-color-blank);
+  transition: border-color 0.2s;
+}
+
+.role-picker:hover {
+  border-color: var(--el-color-primary);
+}
+
+.role-picker--empty {
+  justify-content: flex-start;
+  gap: 6px;
+  border-style: dashed;
+  color: var(--sw-text-tertiary);
+  font: inherit;
+  font-size: var(--sw-font-body);
+  cursor: pointer;
+}
+
+.role-picker--empty:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+}
+
+.role-picker--empty .el-icon {
+  font-size: 14px;
+}
+
+.role-picker__more {
+  font-size: 12px;
+  color: var(--sw-text-tertiary);
+}
+
+.role-picker__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--el-color-primary);
+  font: inherit;
+  font-size: var(--sw-font-body);
+  cursor: pointer;
+}
+
+.role-picker__add:hover {
+  color: var(--el-color-primary-light-3);
+}
+
+.role-assign {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.role-assign__note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #f6f8fc;
+  color: var(--sw-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.role-assign__note .el-icon {
+  flex: none;
+  color: var(--el-color-primary);
+  font-size: 15px;
+}
+
+.role-assign__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+}
+
+.role-assign__count {
+  font-size: 13px;
+  color: var(--sw-text-tertiary);
+}
+
+.role-assign__search {
+  max-width: 260px;
+}
+
+.role-assign__bulk {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.role-assign__bulk .el-button + .el-button {
+  margin-left: 0;
+}
+
+.role-assign__list {
+  min-height: 120px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.role-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.role-row {
+  display: flex;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid #e6eaf2;
+  border-radius: 8px;
+  box-sizing: border-box;
+  white-space: normal;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.role-row:hover {
+  border-color: var(--el-color-primary-light-7);
+  background: #faf9ff;
+}
+
+.role-row.is-checked {
+  border-color: var(--el-color-primary-light-5);
+  background: #f6f3ff;
+}
+
+.role-row.is-disabled {
+  background: #fafafa;
+}
+
+.role-row :deep(.el-checkbox__input) {
+  margin-top: 1px;
+}
+
+/* 全局 checkbox 为 28px（Owner 放大要求），角色行内用 20px 保持列表密度 */
+.role-row :deep(.el-checkbox__inner) {
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 5px;
+}
+
+.role-row :deep(.el-checkbox__inner::after) {
+  top: 2px;
+  left: 6px;
+  width: 4px !important;
+  height: 9px !important;
+}
+
+.role-row :deep(.el-checkbox__label) {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  margin-left: 8px;
+  padding-left: 0;
+  line-height: normal;
+}
+
+.role-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
+
+.role-row__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sw-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.role-row__code {
+  color: var(--sw-text-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.role-row__title .el-tag {
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.role-assign__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.role-assign__selected {
+  color: var(--sw-text-tertiary);
+  font-size: 13px;
+}
+
+.role-assign__footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.role-assign__footer-actions .el-button + .el-button {
+  margin-left: 0;
 }
 </style>

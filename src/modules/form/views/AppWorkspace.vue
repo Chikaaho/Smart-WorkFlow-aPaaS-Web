@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, CaretRight, Folder, MoreFilled, Plus } from '@element-plus/icons-vue'
-import AppFormData from '@/modules/form/views/AppFormData.vue'
-import AppIcon from '@/modules/form/components/AppIcon.vue'
+import { Plus } from '@element-plus/icons-vue'
+import AppContentPanel from '@/modules/form/components/AppContentPanel.vue'
+import AppTreeNav from '@/modules/form/components/AppTreeNav.vue'
 import {
   createFormAppDir,
   deleteFormAppDir,
@@ -38,31 +38,30 @@ const errorMsg = ref('')
 
 const dirs = computed(() => content.value?.dirs ?? [])
 const directForms = computed(() => content.value?.directForms ?? [])
+const allForms = computed<FormAppFormItem[]>(() => {
+  const forms: FormAppFormItem[] = []
+  for (const dir of dirs.value) forms.push(...(dir.forms ?? []))
+  forms.push(...directForms.value)
+  return forms
+})
 /** 应用身份（0.1.7 #34）：左上角图标 + 名称来自应用内容接口，不额外请求。 */
 const app = computed(() => content.value?.app ?? null)
 
-/** 目录展开态（0.1.7 #35）：默认展开，点目录行切换；仅视图态，不落库。 */
-const collapsedDirIds = ref<string[]>([])
+const isEmpty = computed(() => !loading.value && !errorMsg.value && allForms.value.length === 0)
 
-function isDirExpanded(dirId: string): boolean {
-  return !collapsedDirIds.value.includes(dirId)
-}
-
-function toggleDir(dirId: string) {
-  collapsedDirIds.value = collapsedDirIds.value.includes(dirId)
-    ? collapsedDirIds.value.filter((id) => id !== dirId)
-    : [...collapsedDirIds.value, dirId]
-}
-const isEmpty = computed(
-  () =>
-    !loading.value && !errorMsg.value && dirs.value.length === 0 && directForms.value.length === 0,
-)
-
-/** 当前选中表单（路由 query.formKey 持久化，刷新后保持）。 */
+/** 当前选中表单：query.formKey 命中则用之，否则回落首个表单（与用户端应用内页一致）。 */
 const selectedFormKey = computed(() => {
   const fromQuery = typeof route.query.formKey === 'string' ? route.query.formKey : ''
-  if (fromQuery) return fromQuery
-  return ''
+  if (fromQuery && allForms.value.some((form) => form.formKey === fromQuery)) return fromQuery
+  return allForms.value[0]?.formKey ?? ''
+})
+
+/** 目录/应用被后台调整后回到首个可选表单，避免停留在已移除的表单上。 */
+watch(allForms, (forms) => {
+  const fromQuery = typeof route.query.formKey === 'string' ? route.query.formKey : ''
+  if (fromQuery && !forms.some((form) => form.formKey === fromQuery)) {
+    void router.replace({ query: { ...route.query, formKey: forms[0]?.formKey ?? undefined } })
+  }
 })
 
 /** 树点击表单 → 右侧展示数据列表（回归01c：点行看数据）。 */
@@ -291,143 +290,22 @@ onMounted(() => {
 
     <div v-else v-loading="loading" class="app-ws__body">
       <!-- 应用专属侧边栏：返回箭头 + 应用身份 + 目录/表单树 + 左下角新建 -->
-      <aside class="app-ws__side">
-        <div class="app-ws__side-head">
-          <!-- 0.1.7 #25 只留返回箭头；#34（Owner）：左上角补回应用身份——图标 + 应用名称
-               （名称只展示 5 个字，超长省略号，完整名称走悬浮标题） -->
-          <button
-            type="button"
-            class="app-ws__back"
-            data-testid="app-back"
-            :title="t('form.appCenter.backToList')"
-            @click="backToList"
-          >
-            <el-icon><ArrowLeft /></el-icon>
-          </button>
-          <template v-if="app">
-            <AppIcon class="app-ws__app-icon" :icon="app.icon" :color="app.color" :size="13" />
-            <span class="app-ws__app-name" data-testid="app-ws-name" :title="app.name">
-              {{ app.name }}
-            </span>
-          </template>
-        </div>
-
-        <nav v-if="!isEmpty" class="app-ws__tree" :aria-label="t('form.appCenter.appNavTitle')">
-          <template v-for="dir in dirs" :key="dir.id">
-            <!-- 0.1.7 #35（Owner）：目录可展开/收起（默认展开），点整行切换；⋯ 菜单不触发切换 -->
-            <div
-              class="app-ws__dir"
-              data-testid="app-tree-dir"
-              role="button"
-              tabindex="0"
-              :aria-expanded="isDirExpanded(dir.id)"
-              @click="toggleDir(dir.id)"
-              @keydown.enter.prevent="toggleDir(dir.id)"
-              @keydown.space.prevent="toggleDir(dir.id)"
-            >
-              <el-icon
-                class="app-ws__dir-caret"
-                :class="{ 'is-collapsed': !isDirExpanded(dir.id) }"
-                aria-hidden="true"
-              >
-                <CaretRight />
-              </el-icon>
-              <el-icon class="app-ws__dir-icon"><Folder /></el-icon>
-              <span class="app-ws__dir-name">{{ dir.name }}</span>
-              <el-dropdown
-                class="app-ws__more"
-                trigger="click"
-                @command="(cmd: string) => onDirCommand(cmd, dir)"
-              >
-                <span class="app-ws__more-trigger" :data-testid="'dir-more-' + dir.id" @click.stop>
-                  <el-icon><MoreFilled /></el-icon>
-                </span>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item v-perm="'form:app:manage'" command="rename">
-                      {{ t('common.edit') }}
-                    </el-dropdown-item>
-                    <el-dropdown-item v-perm="'form:app:manage'" command="form">
-                      {{ t('form.appCenter.newFormInDir') }}
-                    </el-dropdown-item>
-                    <el-dropdown-item v-perm="'form:app:manage'" command="delete" divided>
-                      {{ t('common.delete') }}
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
-            <template v-if="isDirExpanded(dir.id)">
-              <button
-                v-for="item in dir.forms ?? []"
-                :key="item.formId"
-                type="button"
-                class="app-ws__form"
-                :class="{ 'is-active': item.formKey === selectedFormKey }"
-                data-testid="app-tree-form"
-                :data-form-key="item.formKey"
-                @click="selectForm(item)"
-              >
-                <span class="app-ws__form-name">{{ item.name }}</span>
-                <el-dropdown
-                  class="app-ws__more"
-                  trigger="click"
-                  @command="(cmd: string) => onFormCommand(cmd, item)"
-                >
-                  <span class="app-ws__more-trigger" @click.stop>
-                    <el-icon><MoreFilled /></el-icon>
-                  </span>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="design">
-                        {{ t('form.appCenter.enterFormDesign') }}
-                      </el-dropdown-item>
-                      <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
-                      <el-dropdown-item command="delete" divided>
-                        {{ t('common.delete') }}
-                      </el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-              </button>
-            </template>
-          </template>
-
-          <button
-            v-for="item in directForms"
-            :key="item.formId"
-            type="button"
-            class="app-ws__form app-ws__form--root"
-            :class="{ 'is-active': item.formKey === selectedFormKey }"
-            data-testid="app-tree-form"
-            :data-form-key="item.formKey"
-            @click="selectForm(item)"
-          >
-            <span class="app-ws__form-name">{{ item.name }}</span>
-            <el-dropdown
-              class="app-ws__more"
-              trigger="click"
-              @command="(cmd: string) => onFormCommand(cmd, item)"
-            >
-              <span class="app-ws__more-trigger" @click.stop>
-                <el-icon><MoreFilled /></el-icon>
-              </span>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="design">
-                    {{ t('form.appCenter.enterFormDesign') }}
-                  </el-dropdown-item>
-                  <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided>{{
-                    t('common.delete')
-                  }}</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </button>
-        </nav>
-
-        <div class="app-ws__side-foot">
+      <AppTreeNav
+        :dirs="dirs"
+        :direct-forms="directForms"
+        :selected-form-key="selectedFormKey"
+        :app-name="app?.name"
+        :app-icon="app?.icon"
+        :app-color="app?.color"
+        :back-title="t('form.appCenter.backToList')"
+        back-test-id="app-back"
+        name-test-id="app-ws-name"
+        @select="selectForm"
+        @back="backToList"
+        @dir-command="onDirCommand"
+        @form-command="onFormCommand"
+      >
+        <template #footer>
           <el-dropdown v-perm="'form:app:manage'" trigger="click" @command="onCreateCommand">
             <el-button class="app-ws__create" data-testid="app-ws-create" :icon="Plus">
               {{ t('form.appCenter.createAction') }}
@@ -443,38 +321,17 @@ onMounted(() => {
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-        </div>
-      </aside>
+        </template>
+      </AppTreeNav>
 
       <!-- 右侧内容：空应用 / 未选择目录或表单均用大图标占位；选中表单展示其数据列表（回归01c） -->
-      <section class="app-ws__panel">
-        <el-empty
-          v-if="isEmpty"
-          class="app-ws__placeholder"
-          data-testid="app-ws-empty"
-          :image-size="120"
-          :description="t('form.appCenter.emptyAppContent')"
-        />
-        <AppFormData
-          v-else-if="selectedFormKey"
-          :key="selectedFormKey"
-          :form-key="selectedFormKey"
-          :app-id="appId"
-          embedded
-        />
-        <!-- 0.1.7 #35（Owner）：进来未选择任何目录/表单时，大图标 + 提示语占位 -->
-        <el-empty
-          v-else
-          class="app-ws__placeholder"
-          data-testid="app-ws-placeholder"
-          :image-size="120"
-        >
-          <template #description>
-            <p class="app-ws__placeholder-title">{{ t('common.noContent') }}</p>
-            <p class="app-ws__placeholder-hint">{{ t('form.appCenter.pickForm') }}</p>
-          </template>
-        </el-empty>
-      </section>
+      <AppContentPanel
+        :form-key="selectedFormKey"
+        :app-id="appId"
+        :is-empty="isEmpty"
+        empty-test-id="app-ws-empty"
+        placeholder-test-id="app-ws-placeholder"
+      />
     </div>
 
     <!-- 目录新建/改名对话框（0.1.7 #4：修改只改名称） -->
@@ -539,202 +396,5 @@ onMounted(() => {
   align-items: stretch;
   flex: 1;
   min-height: 0;
-}
-/* 应用专属侧边栏（0.1.7 #4）：与用户端应用内页同构的白底树 + 底部新建 */
-.app-ws__side {
-  flex: 0 0 240px;
-  width: 240px;
-  background: #ffffff;
-  border-right: 1px solid #ebeef5;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.app-ws__side-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 12px 10px;
-  border-bottom: 1px solid #f0f2f5;
-}
-.app-ws__back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  background: #fff;
-  color: #606266;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.app-ws__back:hover {
-  color: #409eff;
-  border-color: #c6e2ff;
-  background: #ecf5ff;
-}
-/* 0.1.7 #34（Owner）：应用名称只展示 5 个字，超长省略号（完整名称走 title 悬浮）。
-   6em = 5 个全角字 + 1 个省略号位：刚好 5 字时不截断，超长时稳定呈现「5 字 + …」 */
-.app-ws__app-icon {
-  flex: 0 0 auto;
-}
-.app-ws__app-name {
-  max-width: 6em;
-  overflow: hidden;
-  color: #303133;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.app-ws__tree {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 8px 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.app-ws__dir {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 10px 0 2px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #303133;
-  cursor: pointer;
-}
-.app-ws__dir:hover .app-ws__dir-name {
-  color: #409eff;
-}
-/* 0.1.7 #35（Owner）：目录展开/收起指示（展开朝下、收起朝右） */
-.app-ws__dir-caret {
-  color: #909399;
-  transform: rotate(90deg);
-  transition: transform 0.15s ease;
-}
-.app-ws__dir-caret.is-collapsed {
-  transform: rotate(0deg);
-}
-.app-ws__dir:first-child {
-  margin-top: 0;
-}
-.app-ws__dir-icon {
-  color: #909399;
-}
-.app-ws__dir-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.app-ws__form {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 7px 26px 7px 24px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  text-align: left;
-  font-size: 13px;
-  color: #606266;
-  cursor: pointer;
-}
-.app-ws__form--root {
-  padding-left: 12px;
-  margin-top: 2px;
-}
-.app-ws__form:hover {
-  background: #f5f7fa;
-  color: #303133;
-}
-.app-ws__form.is-active {
-  background: #ecf5ff;
-  color: #409eff;
-  font-weight: 500;
-}
-.app-ws__form-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.app-ws__more {
-  position: absolute;
-  right: 2px;
-  top: 50%;
-  transform: translateY(-50%);
-  visibility: hidden;
-}
-.app-ws__dir .app-ws__more {
-  position: static;
-  transform: none;
-  margin-left: auto;
-  visibility: hidden;
-}
-.app-ws__dir:hover .app-ws__more,
-.app-ws__form:hover .app-ws__more,
-.app-ws__more-trigger:focus-visible {
-  visibility: visible;
-}
-.app-ws__more-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
-  color: #909399;
-  cursor: pointer;
-}
-.app-ws__more-trigger:hover {
-  background: #ebeef5;
-  color: #303133;
-}
-.app-ws__side-foot {
-  padding: 10px 12px 14px;
-  border-top: 1px solid #f0f2f5;
-}
-/* 0.1.7 #34（Owner）：左下角「新建」占满整栏——el-dropdown 包裹层默认行内收缩，
-   不撑满时按钮的 width:100% 无从生效 */
-.app-ws__side-foot :deep(.el-dropdown) {
-  display: block;
-  width: 100%;
-}
-.app-ws__create {
-  width: 100%;
-}
-.app-ws__panel {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-/* 0.1.7 #35（Owner）：右侧空态/未选择态统一为大图标占位（el-empty 自带宽高与图形） */
-.app-ws__placeholder {
-  flex: 1;
-  justify-content: center;
-  margin: 0;
-}
-.app-ws__placeholder-title {
-  margin: 0;
-  color: #606266;
-  font-size: 14px;
-  line-height: 22px;
-}
-.app-ws__placeholder-hint {
-  margin: 4px 0 0;
-  color: #909399;
-  font-size: 12px;
-  line-height: 18px;
 }
 </style>

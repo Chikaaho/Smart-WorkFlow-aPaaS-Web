@@ -3066,7 +3066,11 @@ export const mockRegistrations: MockRegistration[] = [
   {
     method: 'POST',
     pattern: '/api/system/post-delegate/page',
-    handler: () => ({ code: 0, message: 'ok', data: { list: [], total: 0 } }),
+    handler: () => ({
+      code: 0,
+      message: 'ok',
+      data: { records: [], total: 0, pageNum: 1, pageSize: 10 },
+    }),
   },
   {
     method: 'POST',

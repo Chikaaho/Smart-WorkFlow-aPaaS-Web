@@ -26,6 +26,10 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {}, params: { appId: 'app-1' } }),
 }))
 
+vi.mock('@/foundation/permission', () => ({
+  hasPerm: () => true,
+}))
+
 vi.mock('element-plus', async (importOriginal) => {
   const actual = await importOriginal()
   return {
@@ -48,6 +52,10 @@ const minimalStubs = {
   },
   ListActionsColumn: { template: '<div/>', props: ['actions', 'width'] },
   AppIcon: { template: '<i/>', props: ['icon', 'color', 'size'] },
+  AppFormData: {
+    props: ['formKey', 'appId', 'embedded'],
+    template: '<div data-testid="panel" :data-form-key="formKey" :data-app-id="appId" />',
+  },
   'el-button': { template: '<button @click="$emit(\'click\')"><slot/></button>' },
   'el-card': { template: '<div><slot/></div>' },
   'el-table': { template: '<div><slot/></div>' },
@@ -132,17 +140,17 @@ describe('AppWorkspace（应用管理上下文）', () => {
     // 截断只发生在视觉层（CSS 5em + 省略号）：完整名称仍需可读
     expect(name.attributes('title')).toBe('报销应用')
     // 图标组件在测试里以桩渲染：只断言「返回箭头 + 图标 + 名称」三项同排
-    expect(wrapper.find('.app-ws__side-head').element.children).toHaveLength(3)
+    expect(wrapper.find('.app-tree-nav__head').element.children).toHaveLength(3)
   })
 
   it('0.1.7 #34：左下角「新建」入口在侧栏底部且占满整栏', async () => {
     const wrapper = mount(AppWorkspace, { global: { stubs: minimalStubs } })
     await nextTick()
 
-    const foot = wrapper.find('.app-ws__side-foot')
+    const foot = wrapper.find('.app-tree-nav__foot')
     expect(foot.exists()).toBe(true)
     expect(foot.find('[data-testid="app-ws-create"]').exists()).toBe(true)
-    // 占满整栏靠 .app-ws__side-foot :deep(.el-dropdown) 撑满包裹层 + 按钮 width:100%
+    // 占满整栏由 AppTreeNav 底部插槽样式统一维护
     expect(foot.find('.el-dropdown').exists()).toBe(true)
   })
 
@@ -184,17 +192,15 @@ describe('AppWorkspace（应用管理上下文）', () => {
     expect(wrapper.find('[data-testid="app-tree-dir"]').attributes('aria-expanded')).toBe('true')
   })
 
-  it('0.1.7 #35：未选择目录/表单时右侧为大图标 + 「暂无内容」占位', async () => {
+  it('进入应用默认选中首个表单，右侧直接展示数据列表（与用户端一致）', async () => {
     const wrapper = mount(AppWorkspace, { global: { stubs: minimalStubs } })
     await nextTick()
     await nextTick()
 
-    const placeholder = wrapper.find('[data-testid="app-ws-placeholder"]')
-    expect(placeholder.exists()).toBe(true)
-    expect(placeholder.text()).toContain('暂无内容')
-    // 引导语保留为次级文案，且占位自带大图标图形
-    expect(placeholder.text()).toContain('请从左侧选择目录或表单')
-    expect(placeholder.find('.el-empty__image').exists()).toBe(true)
+    const panel = wrapper.find('[data-testid="panel"]')
+    expect(panel.exists()).toBe(true)
+    expect(panel.attributes('data-form-key')).toBe('travel_form')
+    expect(wrapper.find('[data-testid="app-ws-placeholder"]').exists()).toBe(false)
   })
 
   it('加载失败：错误信息可见且不渲染空态假象', async () => {

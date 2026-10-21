@@ -170,6 +170,15 @@ const draftRefreshVersion = ref(false) // 保存时是否重绑表单最新已�
 // 查看只读模式：有 recordId 且 mode=view；无 recordId 时永远是新建（可编辑）
 const isViewMode = computed(() => !!recordId && mode === 'view')
 
+/** 页面标题只表达动作，不展示表单名/流程名（0.1.7 #13）。 */
+const pageTitle = computed(() => {
+  if (isDraftMode.value) return t('form.fillDraftTitle')
+  if (isViewMode.value) return t('common.detail')
+  if (recordId) return t('form.editDataTitle')
+  if (route.query.process) return t('form.startProcessTitle')
+  return t('form.createDataTitle')
+})
+
 // ── 0.1.7 #16：提交成功 → 居中确认弹窗（用户点击确认后再离开） ──
 const submitDialogVisible = ref(false)
 /** 提交成功确认后的去向：已发起流程 → 我发起的；仅存数据 → 返回来源页 */
@@ -709,15 +718,18 @@ onMounted(() => {
       <template v-else-if="schema">
         <!-- 0.1.7 #13：整个 top 导航栏——左上圆角返回，右上圆角保存草稿/提交；无表单名/流程名噪音 -->
         <header class="form-render-page__top">
-          <button
-            class="form-render-page__back"
-            type="button"
-            data-testid="form-render-back"
-            :title="t('common.backShort')"
-            @click="goBack"
-          >
-            <el-icon><ArrowLeft /></el-icon>
-          </button>
+          <div class="form-render-page__heading">
+            <button
+              class="form-render-page__back"
+              type="button"
+              data-testid="form-render-back"
+              :title="t('common.backShort')"
+              @click="goBack"
+            >
+              <el-icon><ArrowLeft /></el-icon>
+            </button>
+            <span class="form-render-page__title">{{ pageTitle }}</span>
+          </div>
           <div v-if="!isViewMode" class="form-render-page__top-actions">
             <template v-if="isDraftMode">
               <el-input
@@ -768,69 +780,80 @@ onMounted(() => {
 
         <!-- 0.1.7 #13/#18：画布——设计器里有什么就展示什么（24 栅格直出），无其它信息 -->
         <div class="form-render-page__canvas">
-          <div class="form-render-page__sheet">
-            <div class="form-render-page__group">
-              <div
-                v-for="field in renderFields"
-                :key="field.name"
-                class="form-render-page__field"
-                :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
-                :data-col-span="getFormFieldColSpan(field)"
-                :data-grid-field-type="field.type"
-                :data-grid-field-name="field.name"
-              >
-                <DynamicField
-                  :field="field"
-                  :model-value="formData[field.name]"
-                  :readonly="fieldReadonly(field)"
-                  :reference-label="referenceLabels[field.name] ?? ''"
-                  @update:model-value="formData[field.name] = $event"
-                />
-                <p
-                  v-if="validationErrors[field.name]"
-                  class="form-render-page__field-error"
-                  role="alert"
-                  :data-validation-error-for="field.name"
+          <div class="form-render-page__main">
+            <h4 class="form-render-page__section">
+              {{ t('workflow.formDataReadonlySnapshot') }}
+            </h4>
+            <div class="form-render-page__sheet">
+              <div class="form-render-page__group">
+                <div
+                  v-for="field in renderFields"
+                  :key="field.name"
+                  class="form-render-page__field"
+                  :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
+                  :data-col-span="getFormFieldColSpan(field)"
+                  :data-grid-field-type="field.type"
+                  :data-grid-field-name="field.name"
                 >
-                  {{ validationErrors[field.name] }}
-                </p>
+                  <DynamicField
+                    :field="field"
+                    :model-value="formData[field.name]"
+                    :readonly="fieldReadonly(field)"
+                    :reference-label="referenceLabels[field.name] ?? ''"
+                    @update:model-value="formData[field.name] = $event"
+                  />
+                  <p
+                    v-if="validationErrors[field.name]"
+                    class="form-render-page__field-error"
+                    role="alert"
+                    :data-validation-error-for="field.name"
+                  >
+                    {{ validationErrors[field.name] }}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- 0.1.7 #30：有流程时，流程信息作为表单的外挂组件紧贴画布渲染（与任务详情同一控制面） -->
-          <div v-if="hasProcessInfo" class="form-render-page__flowpanel">
-            <InstanceFlowPanel
-              :approval-history="approvalHistory"
-              :process-definition-key="relation?.instance?.processDefKey ?? null"
-              :current-node-key="currentNodeKey"
-            />
-          </div>
+            <!-- 0.1.7 #30：有流程时，流程信息作为表单的外挂组件紧贴画布渲染（与任务详情同一控制面） -->
+            <template v-if="hasProcessInfo">
+              <h4 class="form-render-page__section">{{ t('workflow.approvalProgress') }}</h4>
+              <div class="form-render-page__flowpanel">
+                <InstanceFlowPanel
+                  :approval-history="approvalHistory"
+                  :process-definition-key="relation?.instance?.processDefKey ?? null"
+                  :current-node-key="currentNodeKey"
+                />
+              </div>
+            </template>
 
-          <!-- 0.1.7 #30：审批人内联审批动作（意见默认备注 + 通过/驳回） -->
-          <div v-if="isApprover" class="form-render-page__actioncard">
-            <el-input
-              v-model="actionComment"
-              type="textarea"
-              :rows="2"
-              maxlength="500"
-              :placeholder="t('common.remark')"
-            />
-            <div class="form-render-page__actioncard-actions">
-              <el-button
-                :loading="actionSubmitting === 'reject'"
-                @click="submitRelationAction('REJECT')"
-              >
-                {{ t('common.reject') }}
-              </el-button>
-              <el-button
-                type="primary"
-                :loading="actionSubmitting === 'approve'"
-                @click="submitRelationAction('APPROVE')"
-              >
-                {{ t('common.approve') }}
-              </el-button>
-            </div>
+            <!-- 0.1.7 #30：审批人内联审批动作（意见默认备注 + 通过/驳回） -->
+            <template v-if="isApprover">
+              <h4 class="form-render-page__section">{{ t('workflow.approvalSection') }}</h4>
+              <div class="form-render-page__actioncard">
+                <el-input
+                  v-model="actionComment"
+                  type="textarea"
+                  :rows="2"
+                  maxlength="500"
+                  :placeholder="t('common.remark')"
+                />
+                <div class="form-render-page__actioncard-actions">
+                  <el-button
+                    :loading="actionSubmitting === 'reject'"
+                    @click="submitRelationAction('REJECT')"
+                  >
+                    {{ t('common.reject') }}
+                  </el-button>
+                  <el-button
+                    type="primary"
+                    :loading="actionSubmitting === 'approve'"
+                    @click="submitRelationAction('APPROVE')"
+                  >
+                    {{ t('common.approve') }}
+                  </el-button>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
       </template>
@@ -892,6 +915,22 @@ onMounted(() => {
   border-bottom: 1px solid var(--sw-border-light, #ebeef5);
 }
 
+.form-render-page__heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.form-render-page__title {
+  overflow: hidden;
+  color: var(--sw-text-primary, #1f2a44);
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .form-render-page__back {
   display: inline-flex;
   align-items: center;
@@ -928,19 +967,37 @@ onMounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
   padding: 16px 24px 24px;
 }
 
-/* 0.1.7 #29：画布宽度与表单设计器画布对齐（设计器画布=视口-658px 侧板，1280 下 622px），
-   随视口同等比例放大，两边留白居中；窄屏回落铺满。
-   0.1.7 #30：画布范围截止到最后一个组件（内容高度），不撑满剩余视口。 */
+/* 与详情弹窗（BusinessDetailDialog）同一版式：分区标题 + 白色卡片 */
+.form-render-page__main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  /* 0.1.7 #29：画布宽度与表单设计器画布对齐（设计器画布=视口-658px 侧板，1280 下 622px），
+     随视口同等比例放大，两边留白居中；窄屏回落铺满。
+     0.1.7 #30：画布范围截止到最后一个组件（内容高度），不撑满剩余视口。 */
+  max-width: min(100%, max(622px, calc(100vw - 658px)));
+  margin: 0 auto;
+}
+
+.form-render-page__section {
+  margin: 8px 0 0;
+  color: var(--sw-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-render-page__section:first-child {
+  margin-top: 0;
+}
+
 .form-render-page__sheet {
   box-sizing: border-box;
   width: 100%;
-  max-width: min(100%, max(622px, calc(100vw - 658px)));
-  margin: 0 auto;
-  padding: 28px 24px;
+  padding: 24px;
   background: #fff;
   border: 1px solid var(--sw-border-light, #ebeef5);
   border-radius: var(--sw-radius-card, 8px);
@@ -955,11 +1012,9 @@ onMounted(() => {
 .form-render-page__actioncard {
   box-sizing: border-box;
   width: 100%;
-  max-width: min(100%, max(622px, calc(100vw - 658px)));
-  margin: 0 auto;
 }
 .form-render-page__actioncard {
-  padding: 12px 16px;
+  padding: 16px;
   background: #fff;
   border: 1px solid var(--sw-border-light, #ebeef5);
   border-radius: var(--sw-radius-card, 8px);
@@ -975,12 +1030,12 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(24, minmax(0, 1fr));
   grid-auto-flow: row;
-  row-gap: var(--sw-form-row-gap);
+  column-gap: 16px;
+  row-gap: 12px;
 }
 
 .form-render-page__field {
   min-width: 0;
-  padding-inline: var(--sw-space-8);
   box-sizing: border-box;
 }
 

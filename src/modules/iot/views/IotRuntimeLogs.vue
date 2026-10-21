@@ -13,6 +13,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import DetailDialog from '@/components/DetailDialog.vue'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listMessages,
@@ -404,7 +405,7 @@ onMounted(() => void load())
       </el-tab-pane>
     </el-tabs>
     <el-empty v-if="isEmpty" :description="t('common.noRecords')" />
-    <el-dialog v-model="detailVisible" :title="detailTitle" width="760px">
+    <DetailDialog v-model="detailVisible" :title="detailTitle" width="760px" :show-footer="false">
       <pre
         style="
           max-height: 55vh;
@@ -417,6 +418,6 @@ onMounted(() => void load())
         "
         >{{ detailJson }}</pre
       >
-    </el-dialog>
+    </DetailDialog>
   </div>
 </template>

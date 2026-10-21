@@ -6,7 +6,7 @@ import type { LoginChallengeDTO } from '@/foundation/auth'
 import { SSO_PROVIDERS, startSsoLoginAuthorize } from '@/foundation/auth/sso'
 import type { SsoProvider } from '@/foundation/auth/sso'
 import { useI18n } from '@/locales'
-import { Lock, Share, Document, House, MagicStick, User, View } from '@element-plus/icons-vue'
+import { Lock, Share, Document, House, MagicStick, User, View, Hide } from '@element-plus/icons-vue'
 import LocaleSwitch from '@/components/LocaleSwitch.vue'
 
 // SSO 徽标字：label 经 i18n 解析，徽标按 provider key 固定映射（WECOM=企业微信）
@@ -21,6 +21,7 @@ const { fetchChallenge, login } = useAuth()
 
 const username = ref('')
 const password = ref('')
+const passwordVisible = ref(false)
 const captcha = ref('')
 const challenge = ref<LoginChallengeDTO | null>(null)
 const submitting = ref(false)
@@ -167,12 +168,20 @@ function onSsoProviderSelect(key: SsoProvider): void {
             <el-icon class="login-page__input-icon"><Lock /></el-icon>
             <input
               v-model="password"
-              type="password"
+              class="login-page__input-secret"
+              :type="passwordVisible ? 'text' : 'password'"
               autocomplete="current-password"
               placeholder="请输入密码"
               required
             />
-            <el-icon class="login-page__input-action"><View /></el-icon>
+            <el-icon
+              class="login-page__input-action login-page__input-action--toggle"
+              role="button"
+              :aria-label="passwordVisible ? '隐藏密码' : '查看密码'"
+              @click="passwordVisible = !passwordVisible"
+            >
+              <component :is="passwordVisible ? Hide : View" />
+            </el-icon>
           </span>
         </label>
         <label>
@@ -490,8 +499,16 @@ function onSsoProviderSelect(key: SsoProvider): void {
   box-sizing: border-box;
   padding-left: 42px;
 }
-.login-page__input-wrap > input[type='password'] {
+.login-page__input-wrap > input[type='password'],
+.login-page__input-wrap > input.login-page__input-secret {
   padding-right: 42px;
+}
+.login-page__input-action--toggle {
+  cursor: pointer;
+  color: var(--sw-text-secondary);
+}
+.login-page__input-action--toggle:hover {
+  color: var(--sw-color-primary);
 }
 .login-page__form input:focus {
   outline: none;

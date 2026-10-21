@@ -25,7 +25,7 @@ import { disableFormDef, enableFormDef } from '@/modules/form/api/i2-choices'
 import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/utils/form-def-status'
 import type { FormDefListItem } from '@/modules/form/api/form-def'
 import type { PageQuery } from '@/contracts/common'
-import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn, CategorySidebar } from '@/components/page-layout'
 import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { listFormApps, getFormAppContent } from '@/modules/form/api/app-center'
@@ -388,8 +388,7 @@ onMounted(loadList)
 <template>
   <div class="form-def-page">
     <!-- 左侧分类树（分类 → 表单，多级）：点分类过滤右侧列表，点表单直接进设计器 -->
-    <aside class="form-def-page__tree">
-      <p class="form-def-page__tree-title">{{ t('form.categoryTreeTitle') }}</p>
+    <CategorySidebar :title="t('form.categoryTreeTitle')" fill>
       <el-tree
         :data="categoryTree"
         node-key="key"
@@ -408,7 +407,7 @@ onMounted(loadList)
           </span>
         </template>
       </el-tree>
-    </aside>
+    </CategorySidebar>
     <StandardListTemplate
       large
       :total="displayTotal"
@@ -542,27 +541,6 @@ onMounted(loadList)
   box-sizing: border-box;
   height: 100%;
   padding-bottom: 16px;
-}
-
-.form-def-page__tree {
-  /* BF20261013-050（Owner：整个这一列跟右侧一样）：
-     左列 = 整列面板——高度随内容区撑开（align-self: stretch）、底部同样圆角、右侧同为卡片面
-     （描边 + 卡片投影，与右侧列表卡同 token）；树比面板长时面板内滚动（Owner：可以滚动）。 */
-  align-self: stretch;
-  min-height: 0;
-  padding: 12px;
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-  background: #fff;
-  box-shadow: var(--sw-shadow-card);
-  overflow: auto;
-}
-
-.form-def-page__tree-title {
-  margin: 0 0 8px;
-  font-size: var(--sw-font-emphasis);
-  font-weight: var(--sw-font-weight-emphasis);
-  color: var(--sw-text-primary);
 }
 
 .form-def-page > * {

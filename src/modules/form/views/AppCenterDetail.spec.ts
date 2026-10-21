@@ -17,6 +17,10 @@ vi.mock('vue-router', () => ({
   useRoute: () => route,
 }))
 
+vi.mock('@/foundation/permission', () => ({
+  hasPerm: () => false,
+}))
+
 vi.mock('element-plus', async (importOriginal) => {
   const actual = await importOriginal()
   return {
@@ -80,12 +84,25 @@ describe('AppCenterDetail（应用内页：目录/表单导航 + 数据列表）
     expect(panel.attributes('data-app-id')).toBe('app-1')
   })
 
+  it('页头展示应用图标与名称，与管理端应用工作台一致', async () => {
+    const wrapper = mount(AppCenterDetail, { global: { stubs: minimalStubs } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="app-detail-back"]').exists()).toBe(true)
+    const name = wrapper.find('[data-testid="app-detail-name"]')
+    expect(name.exists()).toBe(true)
+    expect(name.text()).toBe('报销应用')
+    expect(name.attributes('title')).toBe('报销应用')
+    // 返回箭头 + 图标（测试桩）+ 名称三项同排
+    expect(wrapper.find('.app-tree-nav__head').element.children).toHaveLength(3)
+  })
+
   it('选中态跟随路由 query.formKey（刷新后仍停留在同一表单）', async () => {
     route.query = { formKey: 'direct_form' }
     const wrapper = mount(AppCenterDetail, { global: { stubs: minimalStubs } })
     await flushPromises()
 
-    const active = wrapper.find('.app-tree__form.is-active')
+    const active = wrapper.find('.app-tree-nav__form.is-active')
     expect(active.text()).toBe('直接归属表单')
     expect(wrapper.find('[data-testid="panel"]').attributes('data-form-key')).toBe('direct_form')
   })

@@ -40,6 +40,7 @@ import {
   FormSection,
   FormGrid,
   ListActionsColumn,
+  ListPagination,
 } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
@@ -223,9 +224,15 @@ function openMembers(row: SysRole) {
   void loadCandidates()
 }
 
-function handleMembersPageSizeChange() {
+function handleMembersPageChange(page: number) {
+  membersPageNum.value = page
+  void loadMembers()
+}
+
+function handleMembersPageSizeChange(size: number) {
+  membersPageSize.value = size
   membersPageNum.value = 1
-  loadMembers()
+  void loadMembers()
 }
 
 async function loadMembers() {
@@ -783,14 +790,13 @@ onMounted(loadList)
         </template>
       </el-table-column>
     </el-table>
-    <el-pagination
-      v-model:current-page="membersPageNum"
-      v-model:page-size="membersPageSize"
-      :page-sizes="[10, 20, 50, 100]"
-      layout="total, sizes, prev, pager, next"
+    <ListPagination
       :total="membersTotal"
-      @current-change="loadMembers"
-      @size-change="handleMembersPageSizeChange"
+      :page-num="membersPageNum"
+      :page-size="membersPageSize"
+      layout="total, sizes, prev, pager, next"
+      @update:page-num="handleMembersPageChange"
+      @update:page-size="handleMembersPageSizeChange"
     />
   </el-dialog>
 </template>

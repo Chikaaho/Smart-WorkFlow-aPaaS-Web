@@ -11,7 +11,12 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { ListActionsColumn, ListPagination } from '@/components/page-layout'
+import {
+  ListActionsColumn,
+  ListFilterItem,
+  StandardListTemplate,
+  useClientList,
+} from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listProducts,
@@ -28,6 +33,20 @@ const loading = ref(false)
 const loadError = ref('')
 const list = ref<IotProduct[]>([])
 
+const {
+  keyword,
+  pageNum,
+  pageSize,
+  pagedRows,
+  total,
+  handleQuery,
+  handleReset,
+  handlePageNumChange,
+  handlePageSizeChange,
+} = useClientList(list, {
+  searchFields: (row) => [row.code, row.name, row.connType, row.description],
+})
+
 const dialogVisible = ref(false)
 const form = reactive({ code: '', name: '', connType: 'MQTT', description: '' })
 
@@ -36,9 +55,7 @@ const currentProduct = ref<IotProduct | null>(null)
 const modelVersions = ref<IotThingModel[]>([])
 const modelText = ref('')
 
-const isEmpty = computed(
-  () => !loading.value && !loadError.value && !loadError.value && list.value.length === 0,
-)
+const isEmpty = computed(() => !loading.value && !loadError.value && list.value.length === 0)
 
 async function load() {
   loading.value = true
@@ -53,22 +70,7 @@ async function load() {
   }
 }
 
-// ─── 客户端分页（V012-BUG-003）：一次拉全量，前端切片 ───
-const pageNum = ref(1)
-const pageSize = ref(10)
-
-const pagedRows = computed(() =>
-  list.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
-)
-
-function handlePageNumChange(p: number) {
-  pageNum.value = p
-}
-
-function handlePageSizeChange(s: number) {
-  pageSize.value = s
-  pageNum.value = 1
-}
+// ─── 客户端分页 + 关键词筛选（V012-BUG-003）：一次拉全量，前端切片 ───
 
 function openCreate() {
   Object.assign(form, { code: '', name: '', connType: 'MQTT', description: '' })
@@ -134,11 +136,34 @@ function rowActions(r: unknown): ListAction[] {
 </script>
 
 <template>
-  <div style="padding: 16px">
-    <div style="display: flex; justify-content: space-between; margin-bottom: 12px">
-      <h3 style="margin: 0">{{ t('iot.productsAndModels') }}</h3>
+  <StandardListTemplate
+    :total="total"
+    :page-num="pageNum"
+    :page-size="pageSize"
+    :empty="isEmpty"
+    @update:page-num="handlePageNumChange"
+    @update:page-size="handlePageSizeChange"
+  >
+    <template #toolbar-actions>
       <el-button type="primary" @click="openCreate">{{ t('iot.newProduct') }}</el-button>
-    </div>
+    </template>
+
+    <template #filter>
+      <ListFilterItem :label="t('common.keyword')">
+        <el-input
+          v-model="keyword"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+          @clear="handleReset"
+        />
+      </ListFilterItem>
+    </template>
+    <template #filter-actions>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+    </template>
+
     <el-alert
       v-if="loadError"
       :title="loadError"
@@ -152,7 +177,7 @@ function rowActions(r: unknown): ListAction[] {
       </template>
     </el-alert>
 
-    <el-table v-loading="loading" :data="pagedRows" stripe>
+    <el-table v-else v-loading="loading" :data="pagedRows" stripe>
       <el-table-column prop="code" :label="t('common.code')" min-width="120" />
       <el-table-column prop="name" :label="t('common.name')" min-width="140" />
       <el-table-column prop="connType" :label="t('iot.connectionType')" width="100" />
@@ -171,66 +196,62 @@ function rowActions(r: unknown): ListAction[] {
       />
       <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
-    <ListPagination
-      :total="list.length"
-      :page-num="pageNum"
-      :page-size="pageSize"
-      @update:page-num="handlePageNumChange"
-      @update:page-size="handlePageSizeChange"
+
+    <template #empty-action>
+      <el-button type="primary" @click="openCreate">{{ t('iot.newProduct') }}</el-button>
+    </template>
+  </StandardListTemplate>
+
+  <el-dialog v-model="dialogVisible" :title="t('iot.newProduct')" width="480px">
+    <el-form label-width="90px">
+      <el-form-item :label="t('common.code')" required
+        ><el-input v-model="form.code"
+      /></el-form-item>
+      <el-form-item :label="t('common.name')" required
+        ><el-input v-model="form.name"
+      /></el-form-item>
+      <el-form-item :label="t('iot.connectionType')">
+        <el-select v-model="form.connType">
+          <el-option :label="t('iot.mqttSelfBuilt')" value="MQTT" />
+          <el-option :label="t('iot.tencentIot')" value="TENCENT" />
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="t('common.description')"
+        ><el-input v-model="form.description"
+      /></el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
+    </template>
+  </el-dialog>
+
+  <el-dialog
+    v-model="modelVisible"
+    :title="t('iot.thingModelDialogTitle', { name: currentProduct?.name ?? '' })"
+    width="760px"
+  >
+    <div style="margin-bottom: 8px">
+      <el-tag
+        v-for="v in modelVersions"
+        :key="v.id"
+        :type="v.status === 'PUBLISHED' ? 'success' : v.status === 'DRAFT' ? 'warning' : 'info'"
+        size="small"
+        style="margin-right: 6px"
+      >
+        v{{ v.modelVersion }} · {{ enumLabel('IOT_RELEASE_STATE', v.status) }}
+      </el-tag>
+    </div>
+    <el-input
+      v-model="modelText"
+      type="textarea"
+      :rows="16"
+      placeholder="properties/events/actions JSON"
     />
-    <el-empty v-if="isEmpty" :description="t('iot.noProducts')" />
-
-    <el-dialog v-model="dialogVisible" :title="t('iot.newProduct')" width="480px">
-      <el-form label-width="90px">
-        <el-form-item :label="t('common.code')" required
-          ><el-input v-model="form.code"
-        /></el-form-item>
-        <el-form-item :label="t('common.name')" required
-          ><el-input v-model="form.name"
-        /></el-form-item>
-        <el-form-item :label="t('iot.connectionType')">
-          <el-select v-model="form.connType">
-            <el-option :label="t('iot.mqttSelfBuilt')" value="MQTT" />
-            <el-option :label="t('iot.tencentIot')" value="TENCENT" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('common.description')"
-          ><el-input v-model="form.description"
-        /></el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="save">{{ t('common.save') }}</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog
-      v-model="modelVisible"
-      :title="t('iot.thingModelDialogTitle', { name: currentProduct?.name ?? '' })"
-      width="760px"
-    >
-      <div style="margin-bottom: 8px">
-        <el-tag
-          v-for="v in modelVersions"
-          :key="v.id"
-          :type="v.status === 'PUBLISHED' ? 'success' : v.status === 'DRAFT' ? 'warning' : 'info'"
-          size="small"
-          style="margin-right: 6px"
-        >
-          v{{ v.modelVersion }} · {{ enumLabel('IOT_RELEASE_STATE', v.status) }}
-        </el-tag>
-      </div>
-      <el-input
-        v-model="modelText"
-        type="textarea"
-        :rows="16"
-        placeholder="properties/events/actions JSON"
-      />
-      <template #footer>
-        <el-button @click="modelVisible = false">{{ t('common.close') }}</el-button>
-        <el-button @click="saveModel">{{ t('common.saveDraft') }}</el-button>
-        <el-button type="primary" @click="publishModel">{{ t('common.publish') }}</el-button>
-      </template>
-    </el-dialog>
-  </div>
+    <template #footer>
+      <el-button @click="modelVisible = false">{{ t('common.close') }}</el-button>
+      <el-button @click="saveModel">{{ t('common.saveDraft') }}</el-button>
+      <el-button type="primary" @click="publishModel">{{ t('common.publish') }}</el-button>
+    </template>
+  </el-dialog>
 </template>

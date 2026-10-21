@@ -60,6 +60,15 @@ vi.mock('vue-router', () => ({
   onBeforeRouteUpdate: vi.fn(),
 }))
 
+const mockPageProcessDefs = vi.fn()
+vi.mock('@/adapters/process-catalog', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/adapters/process-catalog')>()
+  return {
+    ...actual,
+    pageProcessDefs: (...args: unknown[]) => mockPageProcessDefs(...args),
+  }
+})
+
 import FormDesigner from './FormDesigner.vue'
 
 /** 关联流程面板桩暴露的「流程编号设置」入口（0.1.7 #25 回归：入口在工具条，由宿主转交） */
@@ -105,6 +114,7 @@ describe('FormDesigner 工作台（P52）', () => {
     mockGetFormDefById.mockResolvedValue(identityDto)
     mockGetFormDefinitionById.mockResolvedValue(definition)
     mockSaveDraftDefinition.mockResolvedValue({ id: 'uuid-1', status: 'DRAFT' })
+    mockPageProcessDefs.mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 10 })
   })
 
   async function mountDesigner() {
@@ -193,6 +203,26 @@ describe('FormDesigner 工作台（P52）', () => {
 
     await numberBtn!.trigger('click')
     expect(mockOpenNumberSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it('流程设计页签：单流程直接进入画布，不渲染关联流程列表', async () => {
+    mockPageProcessDefs.mockResolvedValueOnce({
+      list: [{ id: 9, name: '灾备演练审批' }],
+      total: '1',
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const wrapper = await mountDesigner()
+    const processTab = wrapper.findAll('.designer__tab').find((b) => b.text() === '流程设计')!
+
+    await processTab.trigger('click')
+    await flushPromises()
+
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      expect.stringContaining('/workflow/defs/9/design?from=form-workbench'),
+    )
+    expect(wrapper.find('.stub-processes').exists()).toBe(false)
+    expect(wrapper.findAll('button').some((b) => b.text().includes('编号设置'))).toBe(false)
   })
 
   it('保存成功 → 调用保存动作并显示「保存成功」', async () => {

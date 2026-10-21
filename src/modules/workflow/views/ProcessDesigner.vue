@@ -29,7 +29,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
 import {
   getProcessDefDefinition,
+  getDefVersionGraph,
   getProcessNodeCapabilities,
+  listDefVersions,
   saveProcessDefGraph,
   publishProcessDef,
   validateProcessDefGraph,
@@ -44,6 +46,7 @@ import type {
   FormSchemaField,
   GraphValidationError,
   ApproverCandidate,
+  ProcessDefVersionInfo,
 } from '@/modules/workflow/api'
 import type { ProcessDef } from '@/contracts/bpm'
 import type {
@@ -141,9 +144,19 @@ type DesignerGraph = ProcessGraphDocument & {
   triggers?: TriggerConfig[]
 }
 const graph = ref<DesignerGraph | null>(null)
+/** 表单工作台上下文：提供三类页签，画布与表单页签共享同一顶部切换。 */
+const workbenchFormId = computed(
+  () => returnFormId.value || returnAppForm.value?.formId || graph.value?.formDefId || '',
+)
 const capabilities = ref<BpmNodeCapability[]>([])
 let model: DesignerModel | null = null
 const version = ref(0) // 触发视图刷新的快照 serial
+
+/** 历史版本预览：非空时画布与属性面板切换为只读快照。 */
+const previewVersion = ref<number | null>(null)
+const isVersionPreview = computed(() => previewVersion.value != null)
+const versionHistory = ref<ProcessDefVersionInfo[]>([])
+const versionsLoading = ref(false)
 
 const SNAP_X = 20
 const SNAP_Y = 20
@@ -151,6 +164,67 @@ const SNAP_Y = 20
 /** P53 设计稿专用节点几何；其它流程图继续使用适配器默认尺寸。 */
 const P53_NODE_WIDTH = 160
 const P53_NODE_HEIGHT = 50
+
+/**
+ * 节点图标字形（20×20 坐标系，与左侧选择器同源）：画布与选择器共用同一份路径，
+ * 避免拖入后统一退化成通用文档图标。网关在画布上以菱形呈现，不使用字形。
+ */
+const NODE_ICON_PATHS: Record<string, readonly string[]> = {
+  START: ['M6.667 3.333L16.667 10L6.667 16.667V3.333Z'],
+  DRAFT: [
+    'M11.667 2.5H3.333V17.5H16.667V7.5H11.667V2.5ZM9.167 13.333L15.833 6.667L17.5 8.333L10.833 15L8.333 15.833L9.167 13.333Z',
+  ],
+  APPROVAL: [
+    'M17.5 11.667C18.881 11.667 20 10.547 20 9.167C20 7.786 18.881 6.667 17.5 6.667C16.119 6.667 15 7.786 15 9.167C15 10.547 16.119 11.667 17.5 11.667Z',
+    'M10.833 18.333C10.833 17.228 11.272 16.168 12.054 15.387C12.835 14.606 13.895 14.167 15 14.167C16.105 14.167 17.165 14.606 17.946 15.387C18.728 16.168 19.167 17.228 19.167 18.333',
+  ],
+  CONSENSUS: [
+    'M12.5 9.167C14.341 9.167 15.833 7.674 15.833 5.833C15.833 3.992 14.341 2.5 12.5 2.5C10.659 2.5 9.167 3.992 9.167 5.833C9.167 7.674 10.659 9.167 12.5 9.167Z',
+    'M3.333 17.5C3.333 15.732 4.036 14.036 5.286 12.786C6.536 11.536 8.232 10.833 10 10.833C11.768 10.833 13.464 11.536 14.714 12.786C15.964 14.036 16.667 15.732 16.667 17.5',
+  ],
+  CONDITION: ['M12 1.667L20.333 10L12 18.333L3.667 10L12 1.667Z'],
+  PARALLEL_GATEWAY: [
+    'M10 1.667L18.333 10L10 18.333L1.667 10L10 1.667Z',
+    'M10 6.667V13.333M6.667 10H13.333',
+  ],
+  NOTIFICATION: ['M11.667 1.667H4.167V18.333H15.833V5.833L11.667 1.667V1.667Z'],
+  IOT_COMMAND: [
+    'M13.333 5H6.667C5.746 5 5 5.746 5 6.667V13.333C5 14.254 5.746 15 6.667 15H13.333C14.254 15 15 14.254 15 13.333V6.667C15 5.746 14.254 5 13.333 5Z',
+    'M7.5 1.667V5M12.5 1.667V5M7.5 15V18.333M12.5 15V18.333M1.667 7.5H5M1.667 12.5H5M15 7.5H18.333M15 12.5H18.333',
+  ],
+  AGENT: [
+    'M15 4.167H5C3.619 4.167 2.5 5.286 2.5 6.667V14.167C2.5 15.547 3.619 16.667 5 16.667H15C16.381 16.667 17.5 15.547 17.5 14.167V6.667C17.5 5.286 16.381 4.167 15 4.167Z',
+    'M10 1.667V4.167M6.667 8.333H6.75M13.333 8.333H13.417M6.667 12.5H13.333',
+  ],
+  DEFAULT: [
+    'M15 3.333H5C4.079 3.333 3.333 4.08 3.333 5V15.833C3.333 16.754 4.079 17.5 5 17.5H15C15.92 17.5 16.667 16.754 16.667 15.833V5C16.667 4.08 15.92 3.333 15 3.333Z',
+    'M6.667 10L9.167 12.5L13.333 7.5M7.5 1.667H12.5V5H7.5V1.667Z',
+  ],
+}
+
+function nodeIconPaths(type: string): readonly string[] {
+  return NODE_ICON_PATHS[type] ?? NODE_ICON_PATHS.DEFAULT!
+}
+
+/** 节点类型灰色说明（与选择器同一能力清单的 displayName，缺省回退通用文案）。 */
+const NODE_TYPE_LABEL_KEYS: Record<string, string> = {
+  START: 'workflow.nodeTypeStart',
+  END: 'workflow.nodeTypeEnd',
+  APPROVAL: 'workflow.approvalNode',
+  CONSENSUS: 'workflow.nodeTypeConsensus',
+  COPY: 'workflow.ccNode',
+  CONDITION: 'workflow.nodeTypeCondition',
+  NOTIFICATION: 'workflow.nodeTypeNotification',
+}
+
+function nodeTypeHint(type: string): string {
+  const labelKey = NODE_TYPE_LABEL_KEYS[type]
+  if (labelKey) return t(labelKey)
+  const capability = capabilities.value.find((item) => item.type === type)
+  return capability?.displayName
+    ? t('workflow.nodeTypeGeneric', { name: capability.displayName })
+    : t('workflow.nodeTypeUnknown')
+}
 const P53_GATEWAY_RADIUS = 18
 
 /**
@@ -197,7 +271,7 @@ function undoLast() {
 
 /** 整理布局：默认走向「自上而下」重排全部节点（一次撤销单元；不同连线允许交叉）。 */
 function arrangeTopDown() {
-  if (!model) return
+  if (!model || isVersionPreview.value) return
   model.layoutTopDown()
   snapshot()
   fitViewport()
@@ -482,7 +556,7 @@ function onFieldStateChange(
   key: keyof NodeFieldState,
   value: unknown,
 ) {
-  if (!selectedNode.value || !model) return
+  if (!selectedNode.value || !model || isVersionPreview.value) return
   model.updateNodeConfig(selectedNode.value.id, {
     fieldStates: setFieldState(nodeFieldStates.value, field, key, Boolean(value)),
   })
@@ -1061,6 +1135,10 @@ const canvasEdges = computed(() => {
 })
 
 function startNodeDrag(event: PointerEvent, node: PositionedNode) {
+  if (isVersionPreview.value) {
+    selectNode(node.id)
+    return
+  }
   const point = screenToGraph(event)
   dragState.value = { id: node.id, dx: point.x - node.x, dy: point.y - node.y, type: 'node' }
   selectNode(node.id)
@@ -1102,6 +1180,7 @@ function startConnect(
   side: 'left' | 'right' | 'top' | 'bottom',
 ) {
   event.stopPropagation()
+  if (isVersionPreview.value) return
   const point = screenToGraph(event)
   pendingConnectNode.value = node.id
   pendingConnectPos.value = sidePoint(node, side)
@@ -1231,6 +1310,7 @@ function captureEdgeDragPointer(event: PointerEvent) {
 }
 
 function beginEndpointDrag(event: PointerEvent, edge: PositionedEdge, which: 'source' | 'target') {
+  if (isVersionPreview.value) return
   const points = pathPoints(edge.path)
   if (points.length < 2) return
   captureEdgeDragPointer(event)
@@ -1262,6 +1342,7 @@ function beginSegmentDrag(
   axis: 'x' | 'y',
   port: 'source' | 'target' | null = null,
 ) {
+  if (isVersionPreview.value) return
   captureEdgeDragPointer(event)
   edgeEdit.value = {
     edgeId: edge.id,
@@ -1333,6 +1414,7 @@ function beginSegmentDragFromHandle(
   edge: PositionedEdge,
   handle: EdgeSegmentHandle,
 ) {
+  if (isVersionPreview.value) return
   beginSegmentDrag(event, edge, handle.index, handle.axis, handle.port)
 }
 
@@ -1421,7 +1503,7 @@ function onNodeNameInput(value: string) {
 }
 
 function applyProps() {
-  if (!selectedNode.value || !model) return
+  if (!selectedNode.value || !model || isVersionPreview.value) return
   const patch: Record<string, unknown> = { ...propForm.value }
   // object 类型字段以 JSON 文本编辑，提交前解析回对象（服务端契约要求对象形态）
   for (const field of selectedCapability.value?.configFields ?? []) {
@@ -1439,14 +1521,47 @@ function applyProps() {
   snapshot()
 }
 
+/* ─────────── 会签结算：人数 / 比例（0.1.10） ─────────── */
+const CONSENSUS_MODE_OPTIONS = [
+  { label: '人数', value: 'COUNT' },
+  { label: '比例', value: 'RATIO' },
+  { label: '全部通过', value: 'ALL' },
+  { label: '一票否决', value: 'VETO' },
+  { label: '任一通过', value: 'ANY' },
+] as const
+
+function isPositiveInteger(value: unknown) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1
+}
+
+function onConsensusModeChange(value: string) {
+  const next: Record<string, unknown> = { ...propForm.value, mode: value }
+  // 切换口径时把另一口径的越界值收敛到合法缺省，避免把 67 人当 67% 或反之。
+  if (value === 'COUNT' && !isPositiveInteger(next.ratio)) next.ratio = 1
+  if (value === 'RATIO' && !isPositiveInteger(next.ratio)) next.ratio = 100
+  if (value === 'RATIO' && typeof next.ratio === 'number' && next.ratio > 100) next.ratio = 100
+  propForm.value = next
+  applyProps()
+}
+
+function onConsensusRatioChange(value: number | null | undefined) {
+  propForm.value = { ...propForm.value, ratio: value ?? 1 }
+  applyProps()
+}
+
+const consensusRatioLabel = computed(() =>
+  propForm.value.mode === 'COUNT' ? '通过人数' : '通过比例',
+)
+
 function removeSelected() {
-  if (!model || !selectionId.value) return
+  if (!model || !selectionId.value || isVersionPreview.value) return
   model.removeSelection()
   selectionId.value = null
   snapshot()
 }
 
 function undoEdit() {
+  if (isVersionPreview.value) return
   model?.undo()
   selectionId.value = null
   snapshot()
@@ -1467,6 +1582,7 @@ function onPaletteDragStart(event: DragEvent, capability: BpmNodeCapability) {
 
 function onCanvasDrop(event: DragEvent) {
   event.preventDefault()
+  if (isVersionPreview.value) return
   const raw = event.dataTransfer?.getData('application/json')
   if (!raw) return
   let capability: BpmNodeCapability | null
@@ -1492,7 +1608,7 @@ function onCanvasDrop(event: DragEvent) {
 
 /** V011-BUG-020：组件库点击添加（拖拽之外的可见创建路径），落点为画布中心。 */
 function onWorkbarClick(cap: BpmNodeCapability) {
-  if (!cap.supports.design || !model) return
+  if (!cap.supports.design || !model || isVersionPreview.value) return
   const x = Math.round((viewBox.value.x + viewBox.value.w / 2) / SNAP_X) * SNAP_X
   const y = Math.round((viewBox.value.y + viewBox.value.h / 2) / SNAP_Y) * SNAP_Y
   // P62 FD01：点击落点命中既有连线时与拖放同语义（插入该连线），避免产生
@@ -1539,7 +1655,7 @@ function buildGraphPayload(): Record<string, unknown> {
 
 /** 保存草稿；返回是否真实保存成功（发布前依赖该结果避免“发布旧图”）。 */
 async function save(): Promise<boolean> {
-  if (!model || !graph.value || !defId.value) return false
+  if (!model || !graph.value || !defId.value || isVersionPreview.value) return false
   if (!assertNodeSemantics()) return false
   saving.value = true
   errorMsg.value = ''
@@ -1558,7 +1674,7 @@ async function save(): Promise<boolean> {
 }
 
 async function validate() {
-  if (!model || !defId.value) return
+  if (!model || !defId.value || isVersionPreview.value) return
   // 本地语义校验未通过时不再请求服务端（错误口径一致且可先定位画布节点）
   if (!assertNodeSemantics()) {
     validationErrors.value = []
@@ -1582,7 +1698,7 @@ async function validate() {
 }
 
 async function publish() {
-  if (!defId.value) return
+  if (!defId.value || isVersionPreview.value) return
   try {
     await ElMessageBox.confirm(
       t('workflow.publishConfirmMessage'),
@@ -1747,7 +1863,7 @@ const participantLegacyNote = computed(() => {
 
 /** 参与人面板提交：写入 {strategy, value} 对象（object 字段 JSON 序列化路径既有）。 */
 function applyParticipant() {
-  if (!selectedNode.value || !model || !participantField.value) return
+  if (!selectedNode.value || !model || !participantField.value || isVersionPreview.value) return
   model.updateNodeConfig(selectedNode.value.id, {
     [participantField.value.key]: buildParticipantConfig(participantForm.value),
   })
@@ -1786,7 +1902,7 @@ const dynamicParallelForm = ref<DynamicParallelFormDraft>(buildDynamicParallelFo
 
 /** 动态并行面板提交：勾选新语义写 semanticVersion:2，旧语义不写该键（透传语义不受影响）。 */
 function applyDynamicParallel() {
-  if (!selectedNode.value || !model) return
+  if (!selectedNode.value || !model || isVersionPreview.value) return
   model.updateNodeConfig(selectedNode.value.id, {
     ...buildDynamicParallelConfig(dynamicParallelForm.value),
   })
@@ -2426,6 +2542,11 @@ watch(selectedNode, (node, prev) => {
         ? JSON.stringify(value)
         : value
   }
+  // 会签：旧图缺 mode 时按后端 ALL 缺省回显；人数模式缺人数时给合法缺省
+  if (node.type === 'CONSENSUS') {
+    if (draft.mode == null) draft.mode = 'ALL'
+    if (draft.mode === 'COUNT' && !isPositiveInteger(draft.ratio)) draft.ratio = 1
+  }
   propForm.value = draft
   if (participantKey) {
     // 旧图可能只有 legacy approver 键：面板回显兜底读取，写入仍走 participantKey
@@ -2505,8 +2626,11 @@ async function load() {
   loading.value = true
   errorMsg.value = ''
   try {
+    const versionToPreview = previewVersion.value
     const [definition, caps] = await Promise.all([
-      getProcessDefDefinition(defId.value),
+      versionToPreview == null
+        ? getProcessDefDefinition(defId.value)
+        : getDefVersionGraph(defId.value, versionToPreview),
       getProcessNodeCapabilities(),
     ])
     // BF20261013-019：子流程不再是独立节点——发起子流程配置在审批节点上，等待块由设计器自动生成
@@ -2515,7 +2639,7 @@ async function load() {
       processKey: definition.processKey,
       name: definition.name ?? '',
       formKey: definition.formKey ?? '',
-      version: definition.version,
+      version: definition.version ?? versionToPreview ?? undefined,
       contractVersion: (definition as { contractVersion?: number }).contractVersion,
       formName: (definition as { formName?: string }).formName,
       formDefId: (definition as { formDefId?: string }).formDefId,
@@ -2552,13 +2676,75 @@ async function load() {
     snapshot()
     fitViewport()
   } catch (err) {
-    errorMsg.value = (err as { msg?: string }).msg ?? t('workflow.processDefLoadFailed')
+    if (isVersionPreview.value) {
+      graph.value = null
+      model = null
+      selectionId.value = null
+      snapshot()
+    }
+    errorMsg.value =
+      (err as { msg?: string }).msg ??
+      (isVersionPreview.value
+        ? t('workflow.versionGraphLoadFailed')
+        : t('workflow.processDefLoadFailed'))
   } finally {
     loading.value = false
   }
 }
 
-watch(defId, () => void load(), { immediate: true })
+function formatVersionTime(value?: string | null): string {
+  if (!value) return '—'
+  const normalized = value.replace('T', ' ')
+  return normalized.length >= 16 ? normalized.slice(0, 16) : normalized
+}
+
+async function loadVersionHistory() {
+  if (!defId.value || versionsLoading.value) return
+  versionsLoading.value = true
+  try {
+    const rows = await listDefVersions(defId.value)
+    versionHistory.value = [...rows].sort((a, b) => b.graphVersion - a.graphVersion)
+  } catch (err) {
+    versionHistory.value = []
+    ElMessage.error((err as { msg?: string }).msg ?? t('workflow.versionHistoryLoadFailed'))
+  } finally {
+    versionsLoading.value = false
+  }
+}
+
+function onVersionMenuVisible(visible: boolean) {
+  if (visible) void loadVersionHistory()
+}
+
+function onVersionCommand(command: unknown) {
+  if (command && typeof command === 'object' && 'graphVersion' in command) {
+    void openVersion(command as ProcessDefVersionInfo)
+  }
+}
+
+async function openVersion(version: ProcessDefVersionInfo) {
+  if (!isVersionPreview.value && dirty.value) {
+    const proceed = await confirmLeaveIfDirty()
+    if (!proceed) return
+  }
+  previewVersion.value = version.graphVersion
+  await load()
+}
+
+function backToEditing() {
+  if (!isVersionPreview.value) return
+  previewVersion.value = null
+  void load()
+}
+
+watch(
+  defId,
+  () => {
+    previewVersion.value = null
+    void load()
+  },
+  { immediate: true },
+)
 
 let canvasObserver: ResizeObserver | null = null
 onMounted(() => {
@@ -2581,6 +2767,7 @@ onBeforeUnmount(() => {
 
 function onKeydown(event: KeyboardEvent) {
   if ((event.target as HTMLElement)?.tagName?.match?.(/input|textarea|select/i)) return
+  if (isVersionPreview.value) return
   if (event.key === 'Delete' || event.key === 'Backspace') {
     if (selectionId.value) {
       event.preventDefault()
@@ -2594,19 +2781,17 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
-function backToList() {
-  if (returnAppForm.value) {
-    void router.push({
-      name: 'form-app-manage-form',
-      params: { appId: returnAppForm.value.appId, formId: returnAppForm.value.formId },
-    })
-    return
-  }
-  if (returnFormId.value) {
-    void router.push({ path: `/form/designer/${returnFormId.value}`, query: { tab: 'processes' } })
-    return
-  }
-  void router.push('/workflow/defs')
+function goBack() {
+  router.back()
+}
+
+/** 顶部三类页签：字段清单 / 表单设计 / 流程设计（当前页）。 */
+function goWorkbenchTab(tab: 'fields' | 'design' | 'processes') {
+  if (tab === 'processes' || !workbenchFormId.value) return
+  void router.push({
+    path: `/form/designer/${workbenchFormId.value}`,
+    query: tab === 'fields' ? { tab: 'fields' } : {},
+  })
 }
 
 function nodeLabelLines(label: string) {
@@ -2617,32 +2802,95 @@ function nodeLabelLines(label: string) {
 <template>
   <div class="designer-page">
     <div class="designer-toolbar">
-      <el-button class="toolbar-settings" @click="backToList">
+      <el-button class="toolbar-settings" @click="goBack">
         <el-icon><ArrowLeft /></el-icon>
-        <span>
-          {{ returnFormId ? t('workflow.backToProcessList') : t('form.workbenchSettings') }}
-        </span>
+        <span>{{ t('common.back') }}</span>
       </el-button>
       <span class="designer-crumb">
         / {{ graph?.formName || graph?.name || t('router.processDesigner') }} /
         {{ graph?.name || t('router.processDesigner')
-        }}{{ graph?.version ? ` v${graph.version}` : '' }}
+        }}{{
+          isVersionPreview ? ` v${previewVersion}` : graph?.version ? ` v${graph.version}` : ''
+        }}
       </span>
+      <nav v-if="workbenchFormId" class="designer-workbench-tabs" aria-label="工作区切换">
+        <button type="button" class="designer-workbench-tab" @click="goWorkbenchTab('fields')">
+          {{ t('fieldList.button') }}
+        </button>
+        <button type="button" class="designer-workbench-tab" @click="goWorkbenchTab('design')">
+          {{ t('form.tabDesign') }}
+        </button>
+        <button
+          type="button"
+          class="designer-workbench-tab is-active"
+          aria-current="page"
+          @click="goWorkbenchTab('processes')"
+        >
+          {{ t('form.tabProcesses') }}
+        </button>
+      </nav>
       <span class="spacer" />
-      <span class="designer-saved">{{
+      <span v-if="isVersionPreview" class="designer-saved designer-saved--readonly">
+        {{ t('workflow.versionPreviewTag', { version: previewVersion }) }}
+      </span>
+      <span v-else class="designer-saved">{{
         dirty
           ? t('form.unsavedChanges')
           : savedAtText
             ? t('form.draftSavedAt', { time: savedAtText })
             : ''
       }}</span>
-      <!-- 设计09：右侧操作组 = 草稿历史 + 保存 + 发布（撤销/删除/适配保留在画布缩放控件与快捷键） -->
       <div class="toolbar-actions">
-        <el-button size="small" class="toolbar-drafts">{{ t('form.draftHistory') }}</el-button>
-        <el-button size="small" :loading="saving" @click="save">{{ t('common.save') }}</el-button>
-        <el-button size="small" type="primary" :loading="publishing" @click="publish">{{
-          t('common.publish')
-        }}</el-button>
+        <el-dropdown
+          trigger="click"
+          placement="bottom-end"
+          popper-class="version-history-popper"
+          @command="onVersionCommand"
+          @visible-change="onVersionMenuVisible"
+        >
+          <el-button size="small" class="toolbar-versions">
+            {{ t('workflow.versionHistory') }}
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu class="version-menu">
+              <el-dropdown-item v-if="versionsLoading" disabled>
+                {{ t('workflow.versionHistoryLoading') }}
+              </el-dropdown-item>
+              <el-dropdown-item v-else-if="versionHistory.length === 0" disabled>
+                {{ t('workflow.versionHistoryEmpty') }}
+              </el-dropdown-item>
+              <template v-else>
+                <el-dropdown-item
+                  v-for="item in versionHistory"
+                  :key="item.id"
+                  :command="item"
+                  :class="{
+                    'is-current': isVersionPreview && previewVersion === item.graphVersion,
+                  }"
+                >
+                  <span class="version-entry">
+                    <span class="version-entry__no">v{{ item.graphVersion }}</span>
+                    <span class="version-entry__time">{{
+                      formatVersionTime(item.publishedAt || item.updateTime)
+                    }}</span>
+                    <span class="version-entry__author">{{ item.publisherName || '—' }}</span>
+                  </span>
+                </el-dropdown-item>
+              </template>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <template v-if="isVersionPreview">
+          <el-button size="small" type="primary" @click="backToEditing">
+            {{ t('workflow.backToEditing') }}
+          </el-button>
+        </template>
+        <template v-else>
+          <el-button size="small" :loading="saving" @click="save">{{ t('common.save') }}</el-button>
+          <el-button size="small" type="primary" :loading="publishing" @click="publish">{{
+            t('common.publish')
+          }}</el-button>
+        </template>
       </div>
     </div>
 
@@ -2656,7 +2904,7 @@ function nodeLabelLines(label: string) {
     />
 
     <!-- 0.1.7 重构：第二行工具栏（撤销 / 整理布局 / 变量 / 触发器 / 高级配置 / 校验） -->
-    <div class="designer-toolbar2">
+    <div v-if="!isVersionPreview" class="designer-toolbar2">
       <el-button size="small" :disabled="!undoAvailable" @click="undoLast">{{
         t('common.undo')
       }}</el-button>
@@ -2674,7 +2922,7 @@ function nodeLabelLines(label: string) {
 
     <div class="designer-main">
       <!-- 0.1.7 重构：节点面板移到左侧竖栏（分组 + 图标块，拖拽/点击添加） -->
-      <aside class="designer-palette">
+      <aside v-if="!isVersionPreview" class="designer-palette">
         <section v-for="group in paletteGroups" :key="group.category" class="palette-group">
           <h4 class="palette-group__title">{{ group.label }}</h4>
           <div class="palette-group__grid">
@@ -2695,63 +2943,11 @@ function nodeLabelLines(label: string) {
                 viewBox="0 0 20 20"
                 aria-hidden="true"
               >
-                <template v-if="cap.type === 'START'">
-                  <path d="M6.667 3.333L16.667 10L6.667 16.667V3.333Z" />
-                </template>
-                <template v-else-if="cap.type === 'DRAFT'">
-                  <path
-                    d="M11.667 2.5H3.333V17.5H16.667V7.5H11.667V2.5ZM9.167 13.333L15.833 6.667L17.5 8.333L10.833 15L8.333 15.833L9.167 13.333Z"
-                  />
-                </template>
-                <template v-else-if="cap.type === 'APPROVAL'">
-                  <path
-                    d="M17.5 11.667C18.881 11.667 20 10.547 20 9.167C20 7.786 18.881 6.667 17.5 6.667C16.119 6.667 15 7.786 15 9.167C15 10.547 16.119 11.667 17.5 11.667Z"
-                  />
-                  <path
-                    d="M10.833 18.333C10.833 17.228 11.272 16.168 12.054 15.387C12.835 14.606 13.895 14.167 15 14.167C16.105 14.167 17.165 14.606 17.946 15.387C18.728 16.168 19.167 17.228 19.167 18.333"
-                  />
-                </template>
-                <template v-else-if="cap.type === 'CONSENSUS'">
-                  <path
-                    d="M12.5 9.167C14.341 9.167 15.833 7.674 15.833 5.833C15.833 3.992 14.341 2.5 12.5 2.5C10.659 2.5 9.167 3.992 9.167 5.833C9.167 7.674 10.659 9.167 12.5 9.167Z"
-                  />
-                  <path
-                    d="M3.333 17.5C3.333 15.732 4.036 14.036 5.286 12.786C6.536 11.536 8.232 10.833 10 10.833C11.768 10.833 13.464 11.536 14.714 12.786C15.964 14.036 16.667 15.732 16.667 17.5"
-                  />
-                </template>
-                <template v-else-if="cap.type === 'CONDITION'">
-                  <path d="M12 1.667L20.333 10L12 18.333L3.667 10L12 1.667Z" />
-                </template>
-                <!-- P63 并行网关与条件分支同为菱形语义（分叉/汇合） -->
-                <template v-else-if="cap.type === 'PARALLEL_GATEWAY'">
-                  <path d="M10 1.667L18.333 10L10 18.333L1.667 10L10 1.667Z" />
-                  <path d="M10 6.667V13.333M6.667 10H13.333" />
-                </template>
-                <template v-else-if="cap.type === 'NOTIFICATION'">
-                  <path d="M11.667 1.667H4.167V18.333H15.833V5.833L11.667 1.667V1.667Z" />
-                </template>
-                <template v-else-if="cap.type === 'IOT_COMMAND'">
-                  <path
-                    d="M13.333 5H6.667C5.746 5 5 5.746 5 6.667V13.333C5 14.254 5.746 15 6.667 15H13.333C14.254 15 15 14.254 15 13.333V6.667C15 5.746 14.254 5 13.333 5Z"
-                  />
-                  <path
-                    d="M7.5 1.667V5M12.5 1.667V5M7.5 15V18.333M12.5 15V18.333M1.667 7.5H5M1.667 12.5H5M15 7.5H18.333M15 12.5H18.333"
-                  />
-                </template>
-                <template v-else-if="cap.type === 'AGENT'">
-                  <path
-                    d="M15 4.167H5C3.619 4.167 2.5 5.286 2.5 6.667V14.167C2.5 15.547 3.619 16.667 5 16.667H15C16.381 16.667 17.5 15.547 17.5 14.167V6.667C17.5 5.286 16.381 4.167 15 4.167Z"
-                  />
-                  <path
-                    d="M10 1.667V4.167M6.667 8.333H6.75M13.333 8.333H13.417M6.667 12.5H13.333"
-                  />
-                </template>
-                <template v-else>
-                  <path
-                    d="M15 3.333H5C4.079 3.333 3.333 4.08 3.333 5V15.833C3.333 16.754 4.079 17.5 5 17.5H15C15.92 17.5 16.667 16.754 16.667 15.833V5C16.667 4.08 15.92 3.333 15 3.333Z"
-                  />
-                  <path d="M6.667 10L9.167 12.5L13.333 7.5M7.5 1.667H12.5V5H7.5V1.667Z" />
-                </template>
+                <path
+                  v-for="(pathData, pathIndex) in nodeIconPaths(cap.type)"
+                  :key="pathIndex"
+                  :d="pathData"
+                />
               </svg>
               <span class="palette-item__name">{{ cap.displayName }}</span>
             </button>
@@ -2887,7 +3083,7 @@ function nodeLabelLines(label: string) {
               </template>
               <!-- V011-BUG-023：四向锚点（上下左右缘中点）均可拖拽/点选拉线（ProcessOn 口径） -->
               <circle
-                v-if="selectionId === node.id && !isGatewayShape(node.type)"
+                v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="isEventShape(node.type) ? P53_NODE_WIDTH / 2 - 18 : 0"
                 :cy="P53_NODE_HEIGHT / 2"
                 r="3"
@@ -2895,7 +3091,7 @@ function nodeLabelLines(label: string) {
                 @pointerdown.stop="startConnect($event, node, 'left')"
               />
               <circle
-                v-if="selectionId === node.id && !isGatewayShape(node.type)"
+                v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="isEventShape(node.type) ? P53_NODE_WIDTH / 2 + 18 : P53_NODE_WIDTH"
                 :cy="P53_NODE_HEIGHT / 2"
                 r="3"
@@ -2903,7 +3099,7 @@ function nodeLabelLines(label: string) {
                 @pointerdown.stop="startConnect($event, node, 'right')"
               />
               <circle
-                v-if="selectionId === node.id && !isGatewayShape(node.type)"
+                v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="P53_NODE_WIDTH / 2"
                 :cy="isEventShape(node.type) ? P53_NODE_HEIGHT / 2 - 18 : 0"
                 r="3"
@@ -2911,7 +3107,7 @@ function nodeLabelLines(label: string) {
                 @pointerdown.stop="startConnect($event, node, 'top')"
               />
               <circle
-                v-if="selectionId === node.id && !isGatewayShape(node.type)"
+                v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="P53_NODE_WIDTH / 2"
                 :cy="isEventShape(node.type) ? P53_NODE_HEIGHT / 2 + 18 : P53_NODE_HEIGHT"
                 r="3"
@@ -2937,23 +3133,14 @@ function nodeLabelLines(label: string) {
                   />
                   <path d="M7.333 11L10.083 13.75L14.667 8.25M8.25 1.833H13.75V5.5H8.25V1.833Z" />
                 </template>
-                <template v-else-if="node.config?.nodeClass === 'draft'">
+                <!-- 0.1.10：非事件节点与左侧选择器共用同一份 20×20 字形（平移到 22×22 图标域） -->
+                <g v-else transform="translate(1 1)">
                   <path
-                    d="M12.833 2.75H3.667V19.25H18.333V8.25H12.833V2.75ZM10.083 14.667L17.417 7.333L19.25 9.167L11.917 16.5L9.167 17.417L10.083 14.667Z"
+                    v-for="(pathData, pathIndex) in nodeIconPaths(node.type)"
+                    :key="pathIndex"
+                    :d="pathData"
                   />
-                </template>
-                <template v-else>
-                  <path
-                    d="M15.583 2.75H3.667C3.16 2.75 2.75 3.16 2.75 3.667V18.333C2.75 18.84 3.16 19.25 3.667 19.25H15.583C16.09 19.25 16.5 18.84 16.5 18.333V3.667C16.5 3.16 16.09 2.75 15.583 2.75Z"
-                  />
-                  <path d="M5.5 6.417H12.833M5.5 10.083H11M5.5 13.75H9.167" />
-                  <path
-                    d="M16.5 15.583C18.019 15.583 19.25 14.352 19.25 12.833C19.25 11.315 18.019 10.083 16.5 10.083C14.981 10.083 13.75 11.315 13.75 12.833C13.75 14.352 14.981 15.583 16.5 15.583Z"
-                  />
-                  <path
-                    d="M11.917 20.167C11.917 18.951 12.4 17.785 13.259 16.926C14.119 16.066 15.285 15.583 16.5 15.583C17.716 15.583 18.881 16.066 19.741 16.926C20.601 17.785 21.083 18.951 21.083 20.167"
-                  />
-                </template>
+                </g>
               </g>
               <text
                 v-if="isEventShape(node.type)"
@@ -2992,7 +3179,7 @@ function nodeLabelLines(label: string) {
             </g>
             <!-- V011-BUG-025 / BF20261013-030：把连线编辑手柄放在节点之后，确保端点不被节点盒遮挡。 -->
             <template v-for="edge in canvasEdges" :key="'handles-' + edge.id">
-              <template v-if="selectionId === edge.id">
+              <template v-if="selectionId === edge.id && !isVersionPreview">
                 <!-- BF20261013-030：内段中点手柄（垂直段左右拖 / 水平段上下拖，方向光标随轴） -->
                 <rect
                   v-for="handle in edgeSegmentHandlesOf(edge)"
@@ -3036,9 +3223,7 @@ function nodeLabelLines(label: string) {
         <!-- 属性面板：字段由服务端能力 configFields + 参与人策略驱动 -->
         <div class="designer-props">
           <template v-if="selectedNode">
-            <div class="props-heading">
-              <span class="props-title">{{ t('workflow.nodePropsTitle') }}</span>
-            </div>
+            <!-- 0.1.10：去掉「节点属性」大标题，面板直接以页签/表单开始 -->
 
             <!-- BF20261013-013：页签（字段属性仅非结束节点） -->
             <div v-if="fieldConfigCapable" class="props-tabs">
@@ -3065,7 +3250,10 @@ function nodeLabelLines(label: string) {
                 {{ t('workflow.basicPropsSection') }}
               </div>
               <!-- 0.1.7 #36（Owner）：面板内不再混用 small 尺寸——输入框/选择器/按钮统一 32px 高 -->
-              <el-form label-position="top">
+              <el-form label-position="top" :inert="isVersionPreview">
+                <div v-if="selectedNode" class="props-node-type">
+                  {{ nodeTypeHint(selectedNode.type) }}
+                </div>
                 <el-form-item :label="t('workflow.nodeName')">
                   <el-input
                     :model-value="propForm.name as string"
@@ -3458,13 +3646,13 @@ function nodeLabelLines(label: string) {
                   </template>
                   <el-form-item label="完成模式">
                     <el-select v-model="dynamicParallelForm.mode" @change="applyDynamicParallel">
-                      <el-option label="全部通过（ALL）" value="ALL" />
-                      <el-option label="任一通过（ANY）" value="ANY" />
-                      <el-option label="按比例通过（RATIO）" value="RATIO" />
-                      <el-option label="一票否决（VETO）" value="VETO" />
+                      <el-option label="全部通过" value="ALL" />
+                      <el-option label="任一通过" value="ANY" />
+                      <el-option label="按比例通过" value="RATIO" />
+                      <el-option label="一票否决" value="VETO" />
                     </el-select>
                   </el-form-item>
-                  <el-form-item v-if="dynamicParallelForm.mode === 'RATIO'" label="通过比例（%）">
+                  <el-form-item v-if="dynamicParallelForm.mode === 'RATIO'" label="通过比例">
                     <el-input-number
                       v-model="dynamicParallelForm.ratio"
                       :min="1"
@@ -3530,6 +3718,35 @@ function nodeLabelLines(label: string) {
                       />
                     </el-select>
                   </el-form-item>
+                  <el-form-item
+                    v-else-if="field.key === 'mode' && selectedNode?.type === 'CONSENSUS'"
+                    :label="field.label"
+                  >
+                    <el-select
+                      :model-value="String(propForm.mode ?? 'ALL')"
+                      @change="onConsensusModeChange"
+                    >
+                      <el-option
+                        v-for="option in CONSENSUS_MODE_OPTIONS"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <template v-else-if="field.key === 'ratio' && selectedNode?.type === 'CONSENSUS'">
+                    <el-form-item
+                      v-if="propForm.mode === 'COUNT' || propForm.mode === 'RATIO'"
+                      :label="consensusRatioLabel"
+                    >
+                      <el-input-number
+                        :model-value="Number(propForm.ratio ?? 1)"
+                        :min="1"
+                        :max="propForm.mode === 'RATIO' ? 100 : undefined"
+                        @update:model-value="onConsensusRatioChange"
+                      />
+                    </el-form-item>
+                  </template>
                   <el-form-item v-else-if="field.type === 'string'" :label="field.label">
                     <el-input
                       v-model="propForm[field.key] as string"
@@ -3589,7 +3806,11 @@ function nodeLabelLines(label: string) {
 
             <!-- BF20261013-013：字段属性——该节点对每个表单字段的必填/编辑/隐藏三态 -->
             <template v-else>
-              <table v-if="mainFormFields.length" class="field-states__table">
+              <table
+                v-if="mainFormFields.length"
+                class="field-states__table"
+                :inert="isVersionPreview"
+              >
                 <thead>
                   <tr>
                     <th>{{ t('workflow.fieldStatesFieldName') }}</th>
@@ -4416,13 +4637,45 @@ function nodeLabelLines(label: string) {
   line-height: 16px;
   color: #7e89a1;
 }
-/* R5/G6b：窄视口面包屑单行省略，不逐字竖排挤压工具栏 */
+.designer-saved--readonly {
+  color: #6f2dff;
+}
+/* R5/G6b：窄视口面包屑单行省略，不逐字竖排挤压工具栏；为居中页签预留中部空间 */
 .designer-crumb {
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 24%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.designer-workbench-tabs {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  height: 56px;
+  gap: 24px;
+}
+.designer-workbench-tab {
+  height: 56px;
+  padding: 0 44px;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  line-height: 20px;
+  color: #8a96ad;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.designer-workbench-tab:hover {
+  color: var(--sw-color-primary);
+}
+.designer-workbench-tab.is-active {
+  color: var(--sw-color-primary);
+  border-bottom-color: var(--sw-color-primary);
 }
 .toolbar-actions {
   display: flex;
@@ -4438,8 +4691,41 @@ function nodeLabelLines(label: string) {
 .toolbar-actions :deep(.el-button + .el-button) {
   margin-left: 0;
 }
-.toolbar-actions :deep(.toolbar-drafts) {
+.toolbar-actions :deep(.toolbar-versions) {
   width: 88px;
+}
+:global(.version-history-popper .el-dropdown-menu) {
+  min-width: 360px;
+  padding: 6px;
+}
+:global(.version-history-popper .el-dropdown-menu__item) {
+  padding: 8px 12px;
+}
+:global(.version-history-popper .el-dropdown-menu__item.is-current) {
+  color: #6f2dff;
+  background: #f4efff;
+}
+:global(.version-history-popper .version-entry) {
+  display: grid;
+  grid-template-columns: 48px 132px minmax(80px, 1fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+:global(.version-history-popper .version-entry__no) {
+  font-weight: 600;
+  color: #344164;
+}
+:global(.version-history-popper .version-entry__time),
+:global(.version-history-popper .version-entry__author) {
+  font-size: 12px;
+  color: #5f6b85;
+}
+:global(.version-history-popper .version-entry__author) {
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .designer-toolbar :deep(.el-divider--vertical) {
   border-left-color: #d7deed;
@@ -4909,17 +5195,6 @@ function nodeLabelLines(label: string) {
   line-height: 17px;
   color: #303a55;
 }
-.props-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 31px;
-}
-.props-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #19233b;
-}
 .props-section {
   font-size: 13px;
   line-height: 19px;
@@ -4930,6 +5205,12 @@ function nodeLabelLines(label: string) {
 }
 .props-section--advanced {
   margin-bottom: 15px;
+}
+.props-node-type {
+  margin: 0 0 6px;
+  color: #8a98b0;
+  font-size: 12px;
+  line-height: 17px;
 }
 
 /* BF20261013-014：节点属性页签——一行占满的分段式切换（替代独立药丸按钮） */

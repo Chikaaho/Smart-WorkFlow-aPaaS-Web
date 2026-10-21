@@ -24,6 +24,7 @@ import { getErrorMessage } from '@/foundation/request/error-code-map'
 import type { FormSchema, IdValueProperty } from '@/contracts/form-schema'
 import type { PageResult } from '@/contracts/common'
 import DictTag from '@/foundation/dict/DictTag.vue'
+import { ListPagination } from '@/components/page-layout'
 
 /* ── Props ── */
 
@@ -285,22 +286,19 @@ function formatCellValue(row: Record<string, unknown>, col: ColumnConfig): strin
       </el-table>
 
       <!-- 分页 -->
-      <div class="reference-selector__pagination">
-        <span class="reference-selector__pagination-total">
-          {{ t('common.totalRecords', { total: result?.total ?? 0 }) }}
-        </span>
-        <el-pagination
-          :current-page="pageNum"
-          :page-size="pageSize"
-          :total="result?.total ?? 0"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-          background
-          small
-          @current-change="handlePageChange"
-          @size-change="handlePageSizeChange"
-        />
-      </div>
+      <ListPagination
+        :total="result?.total ?? 0"
+        :page-num="pageNum"
+        :page-size="pageSize"
+        layout="sizes, prev, pager, next"
+        :page-sizes="[10, 20, 50]"
+        small
+        total-text
+        align="space-between"
+        :inset="false"
+        @update:page-num="handlePageChange"
+        @update:page-size="handlePageSizeChange"
+      />
     </div>
 
     <template #footer>
@@ -323,17 +321,5 @@ function formatCellValue(row: Record<string, unknown>, col: ColumnConfig): strin
   display: flex;
   align-items: center;
   gap: var(--sw-space-8);
-}
-
-.reference-selector__pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: var(--sw-space-8);
-}
-
-.reference-selector__pagination-total {
-  font-size: var(--sw-font-secondary);
-  color: var(--sw-text-secondary);
 }
 </style>

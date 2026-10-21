@@ -11,7 +11,8 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import { hasPerm } from '@/foundation/permission'
-import { StandardFormTemplate } from '@/components/page-layout'
+import { StandardFormTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listResourcePolicies,
   createResourcePolicy,
@@ -153,6 +154,48 @@ async function precheck(row: ResourcePolicy | Record<string, unknown>): Promise<
   }
 }
 
+/** 统一操作列：启用仅草稿/已退役，停受理与停用仅生效中版本。 */
+function policyActions(raw: unknown): ListAction[] {
+  const row = raw as ResourcePolicy
+  const acting = actingId.value === row.id
+  const canEnable = row.status === 'DRAFT' || row.status === 'RETIRED'
+  return [
+    {
+      key: 'enable',
+      label: '启用',
+      testId: `enable-${row.policyVersion}`,
+      visible: canEnable,
+      loading: acting,
+      onClick: () => enable(row),
+    },
+    {
+      key: 'check',
+      label: '启用检查',
+      testId: `check-${row.policyVersion}`,
+      loading: acting,
+      onClick: () => precheck(row),
+    },
+    {
+      key: 'stop',
+      label: row.stopAcceptance ? '恢复受理' : '停新受理',
+      type: 'warning',
+      testId: `stop-${row.policyVersion}`,
+      visible: row.status === 'ACTIVE',
+      loading: acting,
+      onClick: () => toggleStop(row),
+    },
+    {
+      key: 'disable',
+      label: '停用',
+      type: 'danger',
+      testId: `disable-${row.policyVersion}`,
+      visible: row.status === 'ACTIVE',
+      loading: acting,
+      onClick: () => disable(row),
+    },
+  ]
+}
+
 onMounted(() => {
   if (canView.value) {
     void refresh()
@@ -267,48 +310,7 @@ onMounted(() => {
             {{ row.realtimeGlobalConcurrency }} / {{ row.realtimeTenantConcurrency }}
           </template>
         </el-table-column>
-        <el-table-column v-if="canManage" label="操作" width="250" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              v-if="row.status === 'DRAFT' || row.status === 'RETIRED'"
-              link
-              type="primary"
-              :data-test="`enable-${row.policyVersion}`"
-              :loading="actingId === row.id"
-              @click="enable(row)"
-            >
-              启用
-            </el-button>
-            <el-button
-              link
-              :data-test="`check-${row.policyVersion}`"
-              :loading="actingId === row.id"
-              @click="precheck(row)"
-            >
-              启用检查
-            </el-button>
-            <el-button
-              v-if="row.status === 'ACTIVE'"
-              link
-              type="warning"
-              :data-test="`stop-${row.policyVersion}`"
-              :loading="actingId === row.id"
-              @click="toggleStop(row)"
-            >
-              {{ row.stopAcceptance ? '恢复受理' : '停新受理' }}
-            </el-button>
-            <el-button
-              v-if="row.status === 'ACTIVE'"
-              link
-              type="danger"
-              :data-test="`disable-${row.policyVersion}`"
-              :loading="actingId === row.id"
-              @click="disable(row)"
-            >
-              停用
-            </el-button>
-          </template>
-        </el-table-column>
+        <ListActionsColumn v-if="canManage" :actions="policyActions" :width="250" />
       </el-table>
     </section>
   </StandardFormTemplate>

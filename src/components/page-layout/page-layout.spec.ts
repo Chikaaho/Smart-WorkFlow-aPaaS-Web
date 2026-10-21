@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
+import { ElPagination } from 'element-plus'
 import FormGrid from './FormGrid.vue'
 import FormSection from './FormSection.vue'
 import FormActions from './FormActions.vue'
@@ -8,6 +10,7 @@ import ListFilterBar from './ListFilterBar.vue'
 import ListFilterItem from './ListFilterItem.vue'
 import ListTable from './ListTable.vue'
 import ListPagination from './ListPagination.vue'
+import CategorySidebar from './CategorySidebar.vue'
 import ListEmpty from './ListEmpty.vue'
 import StandardFormTemplate from './StandardFormTemplate.vue'
 import StandardListTemplate from './StandardListTemplate.vue'
@@ -172,14 +175,81 @@ describe('ListTable', () => {
  * ═══════════════════════════════════════════════════ */
 
 describe('ListPagination', () => {
-  it('emits update:pageNum when page changes', async () => {
-    const wrapper = mount(ListPagination, {
-      props: { total: 100, pageNum: 1, pageSize: 10 },
-      global: { stubs: { ElPagination: false } },
+  function mountPagination(overrides: Record<string, unknown> = {}) {
+    return mount(ListPagination, {
+      props: { total: 100, pageNum: 1, pageSize: 10, ...overrides },
     })
-    // Force emit through the el-pagination (stubbed)
-    // Since ElPagination is a complex component, we test that props are passed through
-    expect(wrapper.props('total')).toBe(100)
+  }
+
+  it('默认整页布局：总数 + 每页条数 + 跳页', () => {
+    const wrapper = mountPagination()
+    const pager = wrapper.findComponent(ElPagination)
+    expect(pager.props('layout')).toBe('total, sizes, prev, pager, next, jumper')
+    expect(pager.props('total')).toBe(100)
+  })
+
+  it('total 为后端字符串时仍渲染分页条（V012-BUG-003）', () => {
+    const wrapper = mountPagination({ total: '100' })
+    expect(wrapper.find('.el-pagination').exists()).toBe(true)
+    expect(wrapper.findComponent(ElPagination).props('total')).toBe(100)
+  })
+
+  it('totalText：左侧展示记录总数，layout 自动去掉 total', () => {
+    const wrapper = mountPagination({
+      totalText: true,
+      layout: 'total, sizes, prev, pager, next',
+    })
+    expect(wrapper.find('.list-pagination__total').text()).toBe('共 100 条记录')
+    expect(wrapper.findComponent(ElPagination).props('layout')).toBe('sizes, prev, pager, next')
+  })
+
+  it('hideTotal / hideSizes 从 layout 移除对应区段', () => {
+    const wrapper = mountPagination({ hideTotal: true, hideSizes: true })
+    expect(wrapper.findComponent(ElPagination).props('layout')).toBe('prev, pager, next, jumper')
+  })
+
+  it('单页时 showWhenSinglePage=false 不渲染', () => {
+    const wrapper = mountPagination({ total: 5, showWhenSinglePage: false })
+    expect(wrapper.find('.list-pagination').exists()).toBe(false)
+  })
+
+  it('页码变化 emit update:pageNum', async () => {
+    const wrapper = mountPagination()
+    wrapper.findComponent(ElPagination).vm.$emit('update:current-page', 2)
+    await nextTick()
+    expect(wrapper.emitted('update:pageNum')).toEqual([[2]])
+  })
+})
+
+/* ═══════════════════════════════════════════════════
+ * CategorySidebar
+ * ═══════════════════════════════════════════════════ */
+
+describe('CategorySidebar', () => {
+  it('渲染标题与默认插槽', () => {
+    const wrapper = mount(CategorySidebar, {
+      props: { title: '分类' },
+      slots: { default: '<button class="nav-item">全部</button>' },
+    })
+    expect(wrapper.find('.category-sidebar__title').text()).toBe('分类')
+    expect(wrapper.find('.nav-item').text()).toBe('全部')
+  })
+
+  it('fill / sticky 以修饰类表达', () => {
+    const wrapper = mount(CategorySidebar, {
+      props: { fill: true, sticky: true },
+    })
+    expect(wrapper.classes()).toContain('category-sidebar--fill')
+    expect(wrapper.classes()).toContain('category-sidebar--sticky')
+  })
+
+  it('宿主属性透传到面板根节点', () => {
+    const wrapper = mount(CategorySidebar, {
+      attrs: { role: 'tree', 'aria-label': '流程中心', class: 'catalog-tree' },
+    })
+    expect(wrapper.attributes('role')).toBe('tree')
+    expect(wrapper.attributes('aria-label')).toBe('流程中心')
+    expect(wrapper.classes()).toContain('catalog-tree')
   })
 })
 
@@ -487,6 +557,21 @@ describe('ListActionsColumn', () => {
     })
     expect(wrapper.findAll('.stub-btn')).toHaveLength(3)
     expect(wrapper.find('.stub-dropdown').exists()).toBe(false)
+  })
+
+  it('testId 透传到操作按钮，便于页面回归定位', () => {
+    const wrapper = mount(ListActionsColumn, {
+      props: {
+        actions: () => [{ key: 'enable', label: '启用', testId: 'enable-3', onClick: vi.fn() }],
+      },
+      global: {
+        stubs: {
+          'el-table-column': { template: '<div><slot name="default" :row="row" /></div>' },
+          'el-button': { template: '<button class="stub-btn"><slot /></button>' },
+        },
+      },
+    })
+    expect(wrapper.find('[data-test="enable-3"]').text()).toBe('启用')
   })
 
   it('visible=false 的动作不渲染、不占直显名额', () => {

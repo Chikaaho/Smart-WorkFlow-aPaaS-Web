@@ -12,6 +12,7 @@ const { t } = useI18n()
 import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import DetailDialog from '@/components/DetailDialog.vue'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   queryNotifyRecords,
@@ -244,57 +245,52 @@ onMounted(loadList)
     </el-table>
   </StandardListTemplate>
 
-  <el-dialog v-model="detailVisible" :title="t('notify.sendLogTitle')" width="720px">
-    <div v-loading="detailLoading">
-      <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" show-icon />
-      <template v-if="detail">
-        <el-descriptions :column="2" border>
-          <el-descriptions-item :label="t('notify.recordId')">{{
-            detail.message.id
-          }}</el-descriptions-item>
-          <el-descriptions-item :label="t('common.status')">
-            <el-tag :type="STATUS_TAG[detail.message.deliveryStatus] ?? 'info'" size="small">
-              {{ enumLabel('NOTIFY_DELIVERY', detail.message.deliveryStatus) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('notify.recipient')">{{
-            detail.message.recipientId
-          }}</el-descriptions-item>
-          <el-descriptions-item :label="t('common.channel')">{{
-            detail.message.channel ?? '-'
-          }}</el-descriptions-item>
-          <el-descriptions-item :label="t('common.title')" :span="2">{{
-            detail.message.title
-          }}</el-descriptions-item>
-          <el-descriptions-item :label="t('common.failureReason')" :span="2">
-            {{ detail.message.failureReason ?? '-' }}
-          </el-descriptions-item>
-        </el-descriptions>
+  <DetailDialog
+    v-model="detailVisible"
+    :title="t('notify.sendLogTitle')"
+    :loading="detailLoading"
+    :error="detailError"
+  >
+    <template v-if="detail">
+      <el-descriptions :column="2" border>
+        <el-descriptions-item :label="t('notify.recordId')">{{
+          detail.message.id
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t('common.status')">
+          <el-tag :type="STATUS_TAG[detail.message.deliveryStatus] ?? 'info'" size="small">
+            {{ enumLabel('NOTIFY_DELIVERY', detail.message.deliveryStatus) }}
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('notify.recipient')">{{
+          detail.message.recipientId
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t('common.channel')">{{
+          detail.message.channel ?? '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t('common.title')" :span="2">{{
+          detail.message.title
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t('common.failureReason')" :span="2">
+          {{ detail.message.failureReason ?? '-' }}
+        </el-descriptions-item>
+      </el-descriptions>
 
-        <h4 class="log-section-title">{{ t('notify.deliveryAttempts') }}</h4>
-        <el-alert
-          v-if="detail.attempts.length === 0"
-          :title="t('notify.noAttempts')"
-          type="info"
-          :closable="false"
-          show-icon
-        />
-        <el-table v-else :data="detail.attempts" stripe size="small">
-          <el-table-column prop="attemptNo" label="#" width="60" />
-          <el-table-column prop="status" :label="t('common.result')" width="90" />
-          <el-table-column
-            prop="failureReason"
-            :label="t('common.failureReason')"
-            min-width="200"
-          />
-          <el-table-column prop="createTime" :label="t('common.time')" min-width="170" />
-        </el-table>
-      </template>
-    </div>
-    <template #footer>
-      <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
+      <h4 class="log-section-title">{{ t('notify.deliveryAttempts') }}</h4>
+      <el-alert
+        v-if="detail.attempts.length === 0"
+        :title="t('notify.noAttempts')"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <el-table v-else :data="detail.attempts" stripe size="small">
+        <el-table-column prop="attemptNo" label="#" width="60" />
+        <el-table-column prop="status" :label="t('common.result')" width="90" />
+        <el-table-column prop="failureReason" :label="t('common.failureReason')" min-width="200" />
+        <el-table-column prop="createTime" :label="t('common.time')" min-width="170" />
+      </el-table>
     </template>
-  </el-dialog>
+  </DetailDialog>
 </template>
 
 <style scoped>

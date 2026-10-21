@@ -577,8 +577,8 @@ export async function myProcessed(
 
 /** 发布版本行（不含 graph_json），对齐后端 BpmProcessDefVersion。 */
 export interface ProcessDefVersionInfo {
-  id: number
-  defId: number
+  id: number | string
+  defId: number | string
   graphVersion: number
   status: 'PUBLISHED' | 'SUSPENDED' | 'DISABLED'
   name: string
@@ -586,6 +586,11 @@ export interface ProcessDefVersionInfo {
   formVersion?: string | null
   functionVersions?: string | null
   publishedAt?: string | null
+  publishedBy?: number | string | null
+  updateTime?: string | null
+  updateBy?: number | string | null
+  /** 发布人展示名（版本列表响应回填）。 */
+  publisherName?: string | null
   deploymentId?: string | null
   processDefinitionId?: string | null
 }
@@ -610,7 +615,7 @@ export async function listDefVersions(defId: number | string): Promise<ProcessDe
 
 /** GET /workflow/defs/{id}/versions/{v}/graph → ProcessGraphPayload（冻结图） */
 export async function getDefVersionGraph(
-  defId: number,
+  defId: number | string,
   version: number,
 ): Promise<ProcessGraphPayload> {
   return request<ProcessGraphPayload>({
