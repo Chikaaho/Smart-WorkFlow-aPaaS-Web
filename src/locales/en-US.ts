@@ -6,6 +6,18 @@
  * 生成保证 zh-CN 与 en-US 结构一致，不存在缺键或键集漂移。
  */
 export default {
+  tenantAdmin: {
+    loginCode: 'Tenant code',
+    loginCodePlaceholder: 'Optional; required for duplicate account names',
+    manage: 'Manage administrator',
+    mode: 'Method',
+    existing: 'Choose an administrator',
+    create: 'Create first administrator',
+    loadFailed: 'Could not load administrators. Try again.',
+    chooseRequired: 'Choose an administrator',
+    credentialsRequired: 'Enter an administrator account and initial password',
+    none: 'No active administrator in this tenant',
+  },
   scriptWorkspace: {
     functions: 'Functions',
     search: 'Search functions',

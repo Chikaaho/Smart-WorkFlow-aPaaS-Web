@@ -173,19 +173,6 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
-        // 0.2.0 T020：租户管理的落点。菜单种子仍指向历史组件路径，
-        // 这里给出同路径的静态落点，避免菜单可见但路由无法解析。
-        path: 'system/tenant',
-        name: 'system-tenant',
-        component: () => import('@/modules/system/views/TenantList.vue'),
-        meta: {
-          get title() {
-            return i18n.global.t('system.tenantList')
-          },
-          authority: ['system:tenant:list'],
-        },
-      },
-      {
         // 应用中心（后台应用管理）。独立命名，避免被菜单动态路由（name=FormAppManage）按名替换。
         path: 'form/app-manage',
         name: 'form-app-manage',

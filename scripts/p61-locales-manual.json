@@ -254,6 +254,18 @@
       "notRun": "尚未运行",
       "cancelled": "预览已取消",
       "timeout": "预览超时，请重试"
+    },
+    "tenantAdmin": {
+      "manage": "管理员维护",
+      "mode": "维护方式",
+      "existing": "选择现有管理员",
+      "create": "创建首任管理员",
+      "loadFailed": "管理员列表加载失败，请重试",
+      "chooseRequired": "请选择管理员",
+      "credentialsRequired": "请填写管理员账号和初始密码",
+      "none": "该租户暂无有效管理员",
+      "loginCode": "租户编码",
+      "loginCodePlaceholder": "可选；同名账号需填写"
     }
   },
   "en-US": {
@@ -510,6 +522,18 @@
       "notRun": "Not run yet",
       "cancelled": "Preview cancelled",
       "timeout": "Preview timed out. Try again."
+    },
+    "tenantAdmin": {
+      "manage": "Manage administrator",
+      "mode": "Method",
+      "existing": "Choose an administrator",
+      "create": "Create first administrator",
+      "loadFailed": "Could not load administrators. Try again.",
+      "chooseRequired": "Choose an administrator",
+      "credentialsRequired": "Enter an administrator account and initial password",
+      "none": "No active administrator in this tenant",
+      "loginCode": "Tenant code",
+      "loginCodePlaceholder": "Optional; required for duplicate account names"
     }
   }
 }

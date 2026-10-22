@@ -6,6 +6,18 @@
  * 生成保证 zh-CN 与 en-US 结构一致，不存在缺键或键集漂移。
  */
 export default {
+  tenantAdmin: {
+    loginCode: '租户编码',
+    loginCodePlaceholder: '可选；同名账号需填写',
+    manage: '管理员维护',
+    mode: '维护方式',
+    existing: '选择现有管理员',
+    create: '创建首任管理员',
+    loadFailed: '管理员列表加载失败，请重试',
+    chooseRequired: '请选择管理员',
+    credentialsRequired: '请填写管理员账号和初始密码',
+    none: '该租户暂无有效管理员',
+  },
   scriptWorkspace: {
     functions: '函数',
     search: '搜索函数',

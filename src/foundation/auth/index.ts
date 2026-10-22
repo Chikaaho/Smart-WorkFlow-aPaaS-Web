@@ -45,6 +45,7 @@ export async function login(payload: LoginPayload): Promise<void> {
     url: '/auth/login',
     data: {
       username: payload.username,
+      ...(payload.tenantCode?.trim() ? { tenantCode: payload.tenantCode.trim() } : {}),
       password: encryptedPassword,
       captcha: payload.captcha,
       captchaId: payload.challenge.captchaId,

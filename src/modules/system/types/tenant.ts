@@ -22,4 +22,11 @@ export interface TenantCreatePayload {
   name: string
   adminUsername: string
   adminPassword: string
+  requestId: string
+}
+
+export interface TenantAdminCandidate {
+  id: string
+  username: string
+  realName?: string | null
 }

@@ -6,7 +6,12 @@
  */
 import { request } from '@/foundation/request'
 import type { PageQuery, PageResult } from '@/contracts/common'
-import type { SysTenant, TenantFilter, TenantCreatePayload } from '@/modules/system/types/tenant'
+import type {
+  SysTenant,
+  TenantFilter,
+  TenantCreatePayload,
+  TenantAdminCandidate,
+} from '@/modules/system/types/tenant'
 
 interface BackendPageResult<T> {
   records: T[]
@@ -60,4 +65,28 @@ export async function renameTenant(id: string, name: string): Promise<void> {
 /** PUT /system/tenant/{id}/status —— 0=启用 1=停用 */
 export async function updateTenantStatus(id: string, status: number): Promise<void> {
   return request<void>({ method: 'PUT', url: `/system/tenant/${id}/status`, data: { status } })
+}
+
+export function queryTenantAdministrators(id: string): Promise<TenantAdminCandidate[]> {
+  return request({ method: 'GET', url: `/system/tenant/${id}/administrators` })
+}
+
+export function assignTenantAdministrator(id: string, adminUserId: string): Promise<void> {
+  return request({
+    method: 'PUT',
+    url: `/system/tenant/${id}/administrator`,
+    data: { adminUserId },
+  })
+}
+
+export function createTenantAdministrator(
+  id: string,
+  adminUsername: string,
+  adminPassword: string,
+): Promise<string> {
+  return request({
+    method: 'POST',
+    url: `/system/tenant/${id}/administrator`,
+    data: { adminUsername, adminPassword },
+  })
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* global crypto */
 /**
  * TenantList — 租户管理列表页（0.2.0 T020 / 设计节点 458:12660、458:12871、458:12943）。
  *
@@ -16,8 +17,11 @@ import {
   createTenant,
   renameTenant,
   updateTenantStatus,
+  queryTenantAdministrators,
+  assignTenantAdministrator,
+  createTenantAdministrator,
 } from '@/modules/system/api/tenant'
-import type { SysTenant, TenantFilter } from '@/modules/system/types/tenant'
+import type { SysTenant, TenantFilter, TenantAdminCandidate } from '@/modules/system/types/tenant'
 import type { PageQuery } from '@/contracts/common'
 import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
@@ -91,6 +95,7 @@ const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
 const submitting = ref(false)
 const formError = ref('')
+const creationRequestId = ref('')
 
 const dialogTitle = computed(() =>
   editingId.value ? t('system.editTenant') : t('system.newTenant'),
@@ -112,6 +117,7 @@ function resetForm() {
 
 function openCreate() {
   resetForm()
+  creationRequestId.value = crypto.randomUUID()
   dialogVisible.value = true
 }
 
@@ -131,10 +137,12 @@ function openDetail(row: SysTenant) {
 }
 
 function closeDialog() {
+  if (submitting.value) return
   dialogVisible.value = false
 }
 
 async function handleSubmit() {
+  if (submitting.value) return
   if (!form.name.trim()) {
     formError.value = t('system.tenantNameRequired')
     return
@@ -161,10 +169,11 @@ async function handleSubmit() {
         name: form.name.trim(),
         adminUsername: form.adminUsername.trim(),
         adminPassword: form.adminPassword,
+        requestId: creationRequestId.value,
       })
       ElMessage.success(t('common.createSuccess'))
     }
-    closeDialog()
+    dialogVisible.value = false
     void loadList()
   } catch (err) {
     formError.value = err instanceof ApiError ? err.msg : t('common.saveFailed')
@@ -206,6 +215,85 @@ function isRootTenant(row: SysTenant) {
   return row.id === '0'
 }
 
+const adminDialogVisible = ref(false)
+const adminTenant = ref<SysTenant | null>(null)
+const adminCandidates = ref<TenantAdminCandidate[]>([])
+const adminLoading = ref(false)
+const adminSubmitting = ref(false)
+const adminError = ref('')
+const adminMode = ref<'existing' | 'create'>('existing')
+const administrator = reactive({ id: '', username: '', password: '' })
+let adminLoadGeneration = 0
+
+function resetAdminForm() {
+  adminLoadGeneration++
+  administrator.id = ''
+  administrator.username = ''
+  administrator.password = ''
+  adminCandidates.value = []
+  adminTenant.value = null
+  adminError.value = ''
+}
+
+async function openAdministrator(row: SysTenant) {
+  if (!canManage.value || isRootTenant(row)) return
+  resetAdminForm()
+  adminTenant.value = row
+  administrator.id = row.adminUserId ?? ''
+  adminMode.value = 'existing'
+  adminDialogVisible.value = true
+  adminLoading.value = true
+  const generation = ++adminLoadGeneration
+  try {
+    const candidates = await queryTenantAdministrators(row.id!)
+    if (generation !== adminLoadGeneration) return
+    adminCandidates.value = candidates
+    if (administrator.id && !candidates.some((candidate) => candidate.id === administrator.id)) {
+      administrator.id = ''
+    }
+    if (!row.adminUserId && !candidates.length) adminMode.value = 'create'
+  } catch (err) {
+    if (generation === adminLoadGeneration) {
+      adminError.value = err instanceof ApiError ? err.msg : t('tenantAdmin.loadFailed')
+    }
+  } finally {
+    if (generation === adminLoadGeneration) adminLoading.value = false
+  }
+}
+
+async function saveAdministrator() {
+  if (adminSubmitting.value || adminLoading.value || !adminTenant.value?.id) return
+  const tenantId = adminTenant.value.id
+  if (adminMode.value === 'existing' && !administrator.id) {
+    adminError.value = t('tenantAdmin.chooseRequired')
+    return
+  }
+  if (adminMode.value === 'create' && (!administrator.username.trim() || !administrator.password)) {
+    adminError.value = t('tenantAdmin.credentialsRequired')
+    return
+  }
+  adminSubmitting.value = true
+  adminError.value = ''
+  try {
+    if (adminMode.value === 'existing') {
+      await assignTenantAdministrator(tenantId, administrator.id)
+    } else {
+      await createTenantAdministrator(
+        tenantId,
+        administrator.username.trim(),
+        administrator.password,
+      )
+    }
+    adminDialogVisible.value = false
+    ElMessage.success(t('common.updateSuccess'))
+    void loadList()
+  } catch (err) {
+    adminError.value = err instanceof ApiError ? err.msg : t('common.saveFailed')
+  } finally {
+    adminSubmitting.value = false
+  }
+}
+
 /** 操作列：租户 0 只读；其余提供编辑与启停。 */
 function rowActions(r: unknown): ListAction[] {
   const row = r as SysTenant
@@ -213,6 +301,12 @@ function rowActions(r: unknown): ListAction[] {
     return [{ key: 'view', label: t('common.view'), onClick: () => openDetail(row) }]
   }
   return [
+    {
+      key: 'administrator',
+      label: t('tenantAdmin.manage'),
+      visible: canManage.value,
+      onClick: () => void openAdministrator(row),
+    },
     {
       key: 'edit',
       label: t('common.edit'),
@@ -231,6 +325,10 @@ function rowActions(r: unknown): ListAction[] {
 
 function statusLabel(status?: number) {
   return status === 0 ? t('common.statusNormal') : t('system.tenantStatusDisabled')
+}
+
+function displayTime(value?: string) {
+  return value ? value.replace('T', ' ').slice(0, 19) : '—'
 }
 
 onMounted(loadList)
@@ -294,7 +392,9 @@ onMounted(loadList)
           {{ statusLabel(row.status) }}
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" :label="t('common.createTime')" width="296" />
+      <el-table-column :label="t('common.createTime')" width="296">
+        <template #default="{ row }">{{ displayTime(row.createTime) }}</template>
+      </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="372" />
     </el-table>
 
@@ -312,6 +412,9 @@ onMounted(loadList)
     :title="dialogTitle"
     width="760px"
     :error="formError"
+    :show-close="!submitting"
+    :close-on-press-escape="!submitting"
+    :close-on-click-modal="false"
     @closed="resetForm"
   >
     <el-form label-position="top">
@@ -342,10 +445,90 @@ onMounted(loadList)
       </el-row>
     </el-form>
     <template #footer>
-      <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+      <el-button :disabled="submitting" @click="closeDialog">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
         t('common.save')
       }}</el-button>
+    </template>
+  </DetailDialog>
+
+  <DetailDialog
+    v-model="adminDialogVisible"
+    class="tenant-dialog"
+    appearance="design"
+    :title="t('tenantAdmin.manage')"
+    width="760px"
+    :error="adminError"
+    :loading="adminLoading"
+    :show-close="!adminSubmitting"
+    :close-on-press-escape="!adminSubmitting"
+    :close-on-click-modal="false"
+    @closed="resetAdminForm"
+  >
+    <el-form label-position="top">
+      <el-form-item :label="t('system.tenantName')"
+        ><el-input :model-value="adminTenant?.name ?? ''" readonly
+      /></el-form-item>
+      <el-form-item :label="t('tenantAdmin.mode')">
+        <el-radio-group v-model="adminMode" :disabled="adminSubmitting">
+          <el-radio-button value="existing">{{ t('tenantAdmin.existing') }}</el-radio-button>
+          <el-radio-button value="create" :disabled="!!adminTenant?.adminUserId">{{
+            t('tenantAdmin.create')
+          }}</el-radio-button>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item v-if="adminMode === 'existing'" :label="t('system.tenantAdmin')" required>
+        <el-select
+          v-model="administrator.id"
+          filterable
+          :placeholder="t('tenantAdmin.chooseRequired')"
+          :no-data-text="t('tenantAdmin.none')"
+          :disabled="adminSubmitting"
+        >
+          <el-option
+            v-for="candidate in adminCandidates"
+            :key="candidate.id"
+            :value="candidate.id"
+            :label="
+              candidate.realName && candidate.realName !== candidate.username
+                ? `${candidate.realName} (${candidate.username})`
+                : candidate.username
+            "
+          />
+        </el-select>
+      </el-form-item>
+      <el-row v-else :gutter="20">
+        <el-col :span="12"
+          ><el-form-item :label="t('system.tenantAdminAccount')" required>
+            <el-input
+              v-model="administrator.username"
+              maxlength="50"
+              :disabled="adminSubmitting"
+            /> </el-form-item
+        ></el-col>
+        <el-col :span="12"
+          ><el-form-item :label="t('system.tenantPassword')" required>
+            <el-input
+              v-model="administrator.password"
+              type="password"
+              show-password
+              maxlength="64"
+              :disabled="adminSubmitting"
+            /> </el-form-item
+        ></el-col>
+      </el-row>
+    </el-form>
+    <template #footer>
+      <el-button :disabled="adminSubmitting" @click="adminDialogVisible = false">{{
+        t('common.cancel')
+      }}</el-button>
+      <el-button
+        type="primary"
+        :loading="adminSubmitting"
+        :disabled="adminLoading"
+        @click="saveAdministrator"
+        >{{ t('common.save') }}</el-button
+      >
     </template>
   </DetailDialog>
 
@@ -364,7 +547,7 @@ onMounted(loadList)
         {{ statusLabel(detailRow.status) }}
       </el-descriptions-item>
       <el-descriptions-item :label="t('common.createTime')">
-        {{ detailRow.createTime }}
+        {{ displayTime(detailRow.createTime) }}
       </el-descriptions-item>
     </el-descriptions>
     <div class="tenant-create-hint">{{ t('system.tenantRootReadonly') }}</div>

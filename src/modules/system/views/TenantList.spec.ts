@@ -9,6 +9,9 @@ vi.mock('@/modules/system/api/tenant', () => ({
   createTenant: vi.fn(),
   renameTenant: vi.fn(),
   updateTenantStatus: vi.fn(),
+  queryTenantAdministrators: vi.fn(),
+  assignTenantAdministrator: vi.fn(),
+  createTenantAdministrator: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -16,7 +19,14 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {}, params: {} }),
 }))
 
-import { pageTenants, createTenant, updateTenantStatus } from '@/modules/system/api/tenant'
+import {
+  pageTenants,
+  createTenant,
+  updateTenantStatus,
+  queryTenantAdministrators,
+  assignTenantAdministrator,
+  createTenantAdministrator,
+} from '@/modules/system/api/tenant'
 import { useUserStore } from '@/stores/user'
 import type { SysTenant } from '@/modules/system/types/tenant'
 import TenantList from './TenantList.vue'
@@ -94,7 +104,109 @@ describe('TenantList', () => {
       name: '深圳中心',
       adminUsername: 'sz_admin',
       adminPassword: 'secret123',
+      requestId: expect.stringMatching(/^[A-Za-z0-9_-]{16,64}$/),
     })
+  })
+
+  it('retains one creation request ID across an uncertain response and retry', async () => {
+    vi.mocked(createTenant)
+      .mockRejectedValueOnce(new Error('connection lost'))
+      .mockResolvedValueOnce('100')
+    const wrapper = mountPage()
+    const vm = wrapper.vm as unknown as {
+      openCreate: () => void
+      form: { name: string; adminUsername: string; adminPassword: string }
+      handleSubmit: () => Promise<void>
+    }
+    vm.openCreate()
+    Object.assign(vm.form, {
+      name: '深圳中心',
+      adminUsername: 'sz_admin',
+      adminPassword: 'secret123',
+    })
+    await vm.handleSubmit()
+    await vm.handleSubmit()
+    const requests = vi.mocked(createTenant).mock.calls
+    expect(requests).toHaveLength(2)
+    expect(requests[0]![0].requestId).toBe(requests[1]![0].requestId)
+    vm.openCreate()
+    Object.assign(vm.form, {
+      name: '下一租户',
+      adminUsername: 'next_admin',
+      adminPassword: 'secret123',
+    })
+    await vm.handleSubmit()
+    expect(vi.mocked(createTenant).mock.calls[2]![0].requestId).not.toBe(requests[0]![0].requestId)
+    wrapper.unmount()
+  })
+
+  it('loads and assigns an administrator only for the selected tenant', async () => {
+    vi.mocked(queryTenantAdministrators).mockResolvedValue([
+      { id: '82001', username: 'target_admin' },
+    ])
+    const wrapper = mountPage()
+    const vm = wrapper.vm as unknown as {
+      openAdministrator: (row: SysTenant) => Promise<void>
+      administrator: { id: string }
+      saveAdministrator: () => Promise<void>
+    }
+    await vm.openAdministrator({ id: '82', name: '目标租户', adminUserId: null })
+    vm.administrator.id = '82001'
+    await vm.saveAdministrator()
+    expect(queryTenantAdministrators).toHaveBeenCalledWith('82')
+    expect(assignTenantAdministrator).toHaveBeenCalledWith('82', '82001')
+    expect(createTenantAdministrator).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('creates a first administrator for an unconfigured tenant and keeps root read-only', async () => {
+    vi.mocked(queryTenantAdministrators).mockResolvedValue([])
+    vi.mocked(createTenantAdministrator).mockResolvedValue('83001')
+    const wrapper = mountPage()
+    const vm = wrapper.vm as unknown as {
+      openAdministrator: (row: SysTenant) => Promise<void>
+      administrator: { username: string; password: string }
+      saveAdministrator: () => Promise<void>
+    }
+    await vm.openAdministrator({ id: '0', name: '超管' })
+    expect(queryTenantAdministrators).not.toHaveBeenCalled()
+    await vm.openAdministrator({ id: '83', name: '存量租户', adminUserId: null })
+    Object.assign(vm.administrator, { username: 'initial_admin', password: 'test-only-password' })
+    await vm.saveAdministrator()
+    expect(createTenantAdministrator).toHaveBeenCalledWith(
+      '83',
+      'initial_admin',
+      'test-only-password',
+    )
+    expect(assignTenantAdministrator).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('ignores administrator options that arrive after switching to another tenant', async () => {
+    let finishFirst!: (rows: { id: string; username: string }[]) => void
+    vi.mocked(queryTenantAdministrators).mockImplementation((id) =>
+      id === '81'
+        ? new Promise((resolve) => {
+            finishFirst = resolve
+          })
+        : Promise.resolve([{ id: '82001', username: 'tenant_b_admin' }]),
+    )
+    const wrapper = mountPage()
+    const vm = wrapper.vm as unknown as {
+      openAdministrator: (row: SysTenant) => Promise<void>
+      adminCandidates: { id: string }[]
+      administrator: { id: string }
+      saveAdministrator: () => Promise<void>
+    }
+    const first = vm.openAdministrator({ id: '81', name: '租户 A' })
+    await vm.openAdministrator({ id: '82', name: '租户 B' })
+    finishFirst([{ id: '81001', username: 'tenant_a_admin' }])
+    await first
+    expect(vm.adminCandidates.map((user) => user.id)).toEqual(['82001'])
+    vm.administrator.id = '82001'
+    await vm.saveAdministrator()
+    expect(assignTenantAdministrator).toHaveBeenCalledWith('82', '82001')
+    wrapper.unmount()
   })
 
   it('keeps the root tenant read-only in the action column', async () => {

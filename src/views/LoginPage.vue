@@ -175,14 +175,14 @@ function onSsoProviderSelect(key: SsoProvider): void {
           </span>
         </label>
         <label>
-          租户编码
+          {{ t('tenantAdmin.loginCode') }}
           <span class="login-page__input-wrap">
             <el-icon class="login-page__input-icon"><OfficeBuilding /></el-icon>
             <input
               v-model="tenantCode"
               type="text"
               autocomplete="organization"
-              placeholder="可选；同名账号需填写"
+              :placeholder="t('tenantAdmin.loginCodePlaceholder')"
             />
           </span>
         </label>
