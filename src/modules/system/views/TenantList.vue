@@ -245,12 +245,6 @@ onMounted(loadList)
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <template #toolbar-actions>
-      <el-button v-if="canManage" type="primary" @click="openCreate">{{
-        t('system.newTenant')
-      }}</el-button>
-    </template>
-
     <template #filter>
       <ListFilterItem :label="t('system.tenantName')">
         <el-input
@@ -270,6 +264,9 @@ onMounted(loadList)
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
       <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+      <el-button v-if="canManage" type="primary" @click="openCreate">{{
+        t('system.newTenant')
+      }}</el-button>
     </template>
 
     <el-alert
