@@ -6,7 +6,17 @@ import type { LoginChallengeDTO } from '@/foundation/auth'
 import { SSO_PROVIDERS, startSsoLoginAuthorize } from '@/foundation/auth/sso'
 import type { SsoProvider } from '@/foundation/auth/sso'
 import { useI18n } from '@/locales'
-import { Lock, Share, Document, House, MagicStick, User, View, Hide } from '@element-plus/icons-vue'
+import {
+  Lock,
+  Share,
+  Document,
+  House,
+  MagicStick,
+  User,
+  View,
+  Hide,
+  OfficeBuilding,
+} from '@element-plus/icons-vue'
 import LocaleSwitch from '@/components/LocaleSwitch.vue'
 
 // SSO 徽标字：label 经 i18n 解析，徽标按 provider key 固定映射（WECOM=企业微信）
@@ -20,6 +30,7 @@ const router = useRouter()
 const { fetchChallenge, login } = useAuth()
 
 const username = ref('')
+const tenantCode = ref('')
 const password = ref('')
 const passwordVisible = ref(false)
 const captcha = ref('')
@@ -62,6 +73,7 @@ async function onSubmit(): Promise<void> {
   try {
     await login({
       username: username.value,
+      tenantCode: tenantCode.value || undefined,
       password: password.value,
       captcha: captcha.value,
       challenge: challenge.value,
@@ -159,6 +171,18 @@ function onSsoProviderSelect(key: SsoProvider): void {
               autocomplete="username"
               placeholder="请输入账号"
               required
+            />
+          </span>
+        </label>
+        <label>
+          租户编码
+          <span class="login-page__input-wrap">
+            <el-icon class="login-page__input-icon"><OfficeBuilding /></el-icon>
+            <input
+              v-model="tenantCode"
+              type="text"
+              autocomplete="organization"
+              placeholder="可选；同名账号需填写"
             />
           </span>
         </label>
