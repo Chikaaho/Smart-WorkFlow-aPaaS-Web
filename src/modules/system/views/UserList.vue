@@ -20,9 +20,7 @@ import {
   updateUser,
   deleteUser,
   getUserRoles,
-  updateUserRoles,
   getUserPosts,
-  updateUserPosts,
 } from '@/modules/system/api/user'
 import { pageRoles } from '@/modules/system/api/role'
 import { listDeptTree } from '@/modules/system/api/dept'
@@ -55,6 +53,27 @@ import {
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { useUserStore } from '@/stores/user'
 import { InfoFilled, Plus, Search } from '@element-plus/icons-vue'
+
+import DetailDialog from '@/components/DetailDialog.vue'
+import TenantSelect from '@/modules/system/components/TenantSelect.vue'
+import TenantTargetDialog from '@/modules/system/components/TenantTargetDialog.vue'
+import { useManagementTenant } from '@/modules/system/composables/useManagementTenant'
+
+const {
+  filterTenant,
+  appliedTenant,
+  targetTenant,
+  pickerVisible,
+  choosing,
+  chooseForCreate,
+  selectTarget,
+  closePicker,
+  useObjectTarget,
+  applyFilter,
+  resetFilter,
+} = useManagementTenant()
+let editorGeneration = 0
+let optionsGeneration = 0
 
 // ─── 列表状态 ───
 
@@ -92,15 +111,19 @@ async function loadList() {
 }
 
 function handleQuery() {
+  applyFilter()
   Object.assign(currentFilter, {
     username: filter.username || undefined,
     status: filter.status,
+    tenantId: appliedTenant.value?.id,
   })
   pageNum.value = 1
   void loadList()
 }
 
 function handleReset() {
+  resetFilter()
+  currentFilter.tenantId = undefined
   filter.username = ''
   filter.status = undefined
   currentFilter.username = undefined
@@ -125,9 +148,8 @@ const userStore = useUserStore()
 const roleOptions = ref<SysRole[]>([])
 const roleOptionsLoading = ref(false)
 const roleIds = ref<string[]>([])
-/** 本次配置角色所属租户：编辑取用户详情，新建取当前登录租户 */
+/** 本次配置角色所属租户：编辑取用户详情，新建取明确目标租户 */
 const targetTenantId = ref<string | null>(null)
-const roleOptionsTenantId = ref<string | null>(null)
 const roleDialogVisible = ref(false)
 const roleDraft = ref<string[]>([])
 const roleKeyword = ref('')
@@ -175,39 +197,37 @@ function toPostPayload(): PostAssociation[] {
 }
 
 async function loadRoleOptions(tenantId: string | null) {
-  if (roleOptionsTenantId.value !== tenantId) {
-    roleOptions.value = []
-    roleOptionsTenantId.value = tenantId
-  }
+  const generation = ++optionsGeneration
+  roleOptions.value = []
+  postOptions.value = []
+  deptOptions.value = []
+  if (!tenantId) return
   roleOptionsLoading.value = true
-  try {
-    const filter: RoleFilter = tenantId ? { tenantId } : {}
-    const result = await pageRoles({ pageNum: 1, pageSize: 200 }, filter)
-    roleOptions.value = result.list
-  } catch {
-    ElMessage.error(t('system.roleLoadFailed'))
-    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
-    roleOptions.value = []
-  } finally {
-    roleOptionsLoading.value = false
-  }
-  try {
-    const result = await pagePosts({ pageNum: 1, pageSize: 200 }, {})
-    postOptions.value = result.list.filter((item) => item.status === undefined || item.status === 1)
-  } catch {
+  const results = await Promise.allSettled([
+    pageRoles({ pageNum: 1, pageSize: 200 }, { tenantId } satisfies RoleFilter),
+    pagePosts({ pageNum: 1, pageSize: 200 }, { tenantId }),
+    listDeptTree({ tenantId }),
+  ])
+  if (generation !== optionsGeneration) return
+  const [roles, posts, departments] = results
+  if (roles.status === 'fulfilled')
+    roleOptions.value = roles.value.list.filter((item) => String(item.tenantId) === tenantId)
+  if (posts.status === 'fulfilled')
+    postOptions.value = posts.value.list.filter(
+      (item) =>
+        String(item.tenantId) === tenantId && (item.status === undefined || item.status === 1),
+    )
+  if (departments.status === 'fulfilled')
+    deptOptions.value = departments.value.filter((item) => String(item.tenantId) === tenantId)
+  if (results.some((result) => result.status === 'rejected'))
     ElMessage.error(t('common.loadFailed'))
-    postOptions.value = []
-  }
-  try {
-    deptOptions.value = await listDeptTree()
-  } catch {
-    ElMessage.error(t('common.loadFailed'))
-    deptOptions.value = []
-  }
+  roleOptionsLoading.value = false
 }
 
 // ─── 弹窗状态 ───
 
+const protectedDetailsVisible = ref(false)
+const protectedDetails = ref<SysUser | null>(null)
 const dialogVisible = ref(false)
 const dialogTitle = computed(() => (editingId.value ? t('system.editUser') : t('system.newUser')))
 const editingId = ref<string | null>(null)
@@ -229,6 +249,11 @@ const form = reactive<UserFormRequest>({
 })
 
 function resetForm() {
+  editorGeneration++
+  optionsGeneration++
+  roleOptionsLoading.value = false
+  targetTenant.value = null
+  form.tenantId = undefined
   form.username = ''
   form.realName = ''
   form.email = ''
@@ -248,18 +273,30 @@ function resetForm() {
   Object.keys(postDeptMap).forEach((key) => delete postDeptMap[key])
 }
 
-function openCreate() {
+async function openCreate() {
+  if (submitting.value || choosing.value) return
   resetForm()
-  targetTenantId.value = userStore.user?.tenantId ?? null
-  void loadRoleOptions(targetTenantId.value)
+  const target = await chooseForCreate()
+  if (!target) return
+  targetTenantId.value = target.id
+  form.tenantId = target.id
   dialogVisible.value = true
+  await loadRoleOptions(target.id)
 }
 
 async function openEdit(row: SysUser) {
+  if (submitting.value) return
   resetForm()
+  const generation = editorGeneration
   editingId.value = row.id ?? null
   try {
-    const detail = await getUser(row.id!)
+    const [detail, roles, associations] = await Promise.all([
+      getUser(row.id!),
+      getUserRoles(row.id!),
+      getUserPosts(row.id!),
+    ])
+    if (generation !== editorGeneration) return
+    useObjectTarget(detail)
     form.username = detail.username
     form.realName = detail.realName ?? ''
     form.email = detail.email ?? ''
@@ -267,24 +304,22 @@ async function openEdit(row: SysUser) {
     form.sex = detail.sex ?? 0
     form.status = detail.status
     form.deptId = detail.deptId ?? ''
-    targetTenantId.value =
-      detail.tenantId != null ? String(detail.tenantId) : (userStore.user?.tenantId ?? null)
-    roleIds.value = await getUserRoles(row.id!)
-    const associations = await getUserPosts(row.id!)
+    form.tenantId = targetTenant.value!.id
+    targetTenantId.value = targetTenant.value!.id
+    roleIds.value = roles
     postIds.value = associations.map((item) => item.postId)
     associations.forEach((item) => {
       if (item.deptId) postDeptMap[item.postId] = item.deptId
     })
-    // 编辑模式不设置 plainPassword
+    dialogVisible.value = true
+    await loadRoleOptions(targetTenantId.value)
   } catch {
-    formError.value = t('system.userDetailLoadFailed')
-    return
+    if (generation === editorGeneration) ElMessage.error(t('system.userDetailLoadFailed'))
   }
-  dialogVisible.value = true
-  await loadRoleOptions(targetTenantId.value)
 }
 
 function closeDialog() {
+  if (submitting.value) return
   dialogVisible.value = false
 }
 
@@ -324,6 +359,11 @@ function confirmRoleDialog() {
 }
 
 async function handleSubmit() {
+  if (submitting.value || roleOptionsLoading.value) return
+  if (!targetTenant.value) {
+    formError.value = t('tenantContext.choose')
+    return
+  }
   if (!form.username.trim()) {
     formError.value = t('system.usernameRequired')
     return
@@ -336,17 +376,24 @@ async function handleSubmit() {
       // 编辑模式不传 plainPassword
       const { plainPassword: _, ...updateData } = form
       void _
-      await updateUser({ ...updateData, id: editingId.value })
-      await updateUserRoles(editingId.value, roleIds.value)
-      await updateUserPosts(editingId.value, toPostPayload())
+      await updateUser({
+        ...updateData,
+        id: editingId.value,
+        tenantId: targetTenant.value.id,
+        roleIds: roleIds.value,
+        posts: toPostPayload(),
+      })
       ElMessage.success(t('common.updateSuccess'))
     } else {
-      const id = await createUser({ ...form })
-      await updateUserRoles(id, roleIds.value)
-      await updateUserPosts(id, toPostPayload())
+      await createUser({
+        ...form,
+        tenantId: targetTenant.value.id,
+        roleIds: roleIds.value,
+        posts: toPostPayload(),
+      })
       ElMessage.success(t('common.createSuccess'))
     }
-    closeDialog()
+    dialogVisible.value = false
     void loadList()
   } catch (err) {
     if (err instanceof ApiError) {
@@ -400,6 +447,17 @@ function deleteRow(r: unknown) {
 
 /** 统一操作列（V012-BUG-002）：编辑/删除显隐由权限决定（服务端仍是最终权威） */
 function rowActions(r: unknown): ListAction[] {
+  if ((r as SysUser).protectedAccount)
+    return [
+      {
+        key: 'view',
+        label: t('common.view'),
+        onClick: () => {
+          protectedDetails.value = r as SysUser
+          protectedDetailsVisible.value = true
+        },
+      },
+    ]
   return [
     {
       key: 'edit',
@@ -438,6 +496,9 @@ onMounted(loadList)
 
     <!-- 筛选区 -->
     <template #filter>
+      <ListFilterItem v-if="userStore.superAdmin" :label="t('tenantContext.label')">
+        <TenantSelect v-model="filterTenant" />
+      </ListFilterItem>
       <ListFilterItem :label="t('common.username')">
         <el-input
           v-model="filter.username"
@@ -472,6 +533,12 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
     <el-table v-loading="loading" :data="list" stripe>
+      <el-table-column
+        v-if="userStore.superAdmin"
+        prop="tenantName"
+        :label="t('tenantContext.label')"
+        min-width="140"
+      />
       <el-table-column prop="username" :label="t('common.username')" min-width="120" />
       <el-table-column prop="realName" :label="t('system.fullName')" min-width="100" />
       <el-table-column
@@ -513,8 +580,12 @@ onMounted(loadList)
   <!-- 新建/编辑弹窗 -->
   <el-dialog
     v-model="dialogVisible"
+    class="system-user-editor"
+    align-center
     :title="dialogTitle"
     :close-on-click-modal="false"
+    :close-on-press-escape="!submitting"
+    :show-close="!submitting"
     destroy-on-close
     width="680px"
     @closed="resetForm"
@@ -526,6 +597,14 @@ onMounted(loadList)
 
       <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
+          <div class="form-field tenant-owner-field">
+            <label class="form-field__label">{{ t('tenantContext.label') }}</label>
+            <el-input
+              :model-value="targetTenant?.name ?? ''"
+              :aria-label="t('tenantContext.label')"
+              readonly
+            />
+          </div>
           <div class="form-field form-field--required">
             <label class="form-field__label">{{ t('common.username') }}</label>
             <el-input
@@ -658,14 +737,13 @@ onMounted(loadList)
           </div>
         </FormGrid>
       </FormSection>
-
-      <template #actions>
-        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
-          t('common.save')
-        }}</el-button>
-      </template>
     </StandardFormTemplate>
+    <template #footer>
+      <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+        t('common.save')
+      }}</el-button>
+    </template>
   </el-dialog>
 
   <!-- 配置角色：只展示目标用户所属租户下的角色 -->
@@ -759,6 +837,38 @@ onMounted(loadList)
       </div>
     </template>
   </el-dialog>
+  <TenantTargetDialog
+    :model-value="pickerVisible"
+    @update:model-value="closePicker"
+    @selected="selectTarget"
+  />
+  <DetailDialog
+    v-model="protectedDetailsVisible"
+    :title="t('tenantContext.userDetails')"
+    appearance="design"
+    width="760px"
+  >
+    <el-descriptions v-if="protectedDetails" :column="1" border>
+      <el-descriptions-item :label="t('tenantContext.label')">{{
+        protectedDetails.tenantName
+      }}</el-descriptions-item>
+      <el-descriptions-item :label="t('common.username')">{{
+        protectedDetails.username
+      }}</el-descriptions-item>
+      <el-descriptions-item :label="t('system.fullName')">{{
+        protectedDetails.realName
+      }}</el-descriptions-item>
+      <el-descriptions-item :label="t('system.email')">{{
+        protectedDetails.email || '—'
+      }}</el-descriptions-item>
+      <el-descriptions-item :label="t('system.phone')">{{
+        protectedDetails.phone || '—'
+      }}</el-descriptions-item>
+      <el-descriptions-item :label="t('common.status')">{{
+        userStatusLabel(protectedDetails.status)
+      }}</el-descriptions-item>
+    </el-descriptions>
+  </DetailDialog>
 </template>
 
 <style scoped>
@@ -1010,5 +1120,21 @@ onMounted(loadList)
 
 .role-assign__footer-actions .el-button + .el-button {
   margin-left: 0;
+}
+</style>
+
+<style scoped>
+.tenant-owner-field {
+  grid-column: 1 / -1;
+}
+</style>
+
+<style scoped>
+:global(.system-user-editor.el-dialog) {
+  max-width: calc(100vw - 32px);
+}
+:global(.system-user-editor .el-dialog__body) {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
 }
 </style>

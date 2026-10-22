@@ -59,7 +59,7 @@ describe('modules/system/api — I1 组织权限契约', () => {
     expect(posts).toEqual([{ postId: '1', deptId: '2' }, { postId: '3' }, { postId: '4' }])
   })
 
-  it('updateUserPosts: string 对象数组 → {postId: number, deptId?: number} 载荷', async () => {
+  it('updateUserPosts: 岗位与部门 Long 标识按字符串传输', async () => {
     mockRequest.mockResolvedValueOnce(undefined)
 
     await updateUserPosts('1', [{ postId: '1', deptId: '2' }, { postId: '2' }])
@@ -68,7 +68,7 @@ describe('modules/system/api — I1 组织权限契约', () => {
       expect.objectContaining({
         method: 'PUT',
         url: '/system/user/1/posts',
-        data: [{ postId: 1, deptId: 2 }, { postId: 2 }],
+        data: [{ postId: '1', deptId: '2' }, { postId: '2' }],
       }),
     )
   })

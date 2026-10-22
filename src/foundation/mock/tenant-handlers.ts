@@ -66,11 +66,66 @@ function accessGate() {
   return null
 }
 
+/** 既有组织演示数据固定归属租户 1；显式新建对象沿用自身归属。仅隔离 UI 数据。 */
+export function mockTenantView<T extends object>(row: T, defaultTenant = '1') {
+  const tenantId = String((row as { tenantId?: unknown }).tenantId ?? defaultTenant)
+  return {
+    ...row,
+    tenantId,
+    tenantName: MOCK_TENANTS.find((tenant) => tenant.id === tenantId)?.name ?? '',
+  }
+}
+
 export const tenantMockRegistrations: {
   method: MockMethod
   pattern: `/${string}`
   handler: MockHandler
 }[] = [
+  {
+    method: 'GET',
+    pattern: '/api/system/tenant-context/current',
+    handler: () => {
+      if (!getAccessToken() || !MOCK_CURRENT_SESSION.user.id)
+        return { code: 401, message: '未认证', data: null }
+      const tenant = MOCK_TENANTS.find((row) => row.id === MOCK_CURRENT_SESSION.user.tenantId)
+      return tenant
+        ? {
+            code: 0,
+            message: 'ok',
+            data: {
+              id: tenant.id,
+              code: tenant.code,
+              name: tenant.name,
+              writable: tenant.status === 0,
+            },
+          }
+        : { code: 404, message: '租户不存在', data: null }
+    },
+  },
+  {
+    method: 'GET',
+    pattern: '/api/system/tenant-context/options',
+    handler: (_params, query) => {
+      const denied = accessGate()
+      if (denied) return denied
+      const keyword = (query.keyword ?? '').trim()
+      return {
+        code: 0,
+        message: 'ok',
+        data: MOCK_TENANTS.filter(
+          (row) =>
+            (!keyword || row.name.includes(keyword) || row.code.includes(keyword)) &&
+            (query.creatable !== 'true' || row.status === 0),
+        ).map((row) => ({
+          id: row.id,
+          code: row.code,
+          name: row.name,
+          writable: row.status === 0,
+        })),
+      }
+    },
+  },
+
   {
     method: 'GET',
     pattern: '/api/system/tenant/page',

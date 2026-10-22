@@ -6,7 +6,7 @@ const { t } = useI18n()
  * DeptList — 部门管理列表页（树形表格）。
  *
  * 部门列表使用 el-table 树形表格（row-key + tree-props），不分页。
- * 不使用 StandardListTemplate（因无分页、无筛选区，与模板差异大）。
+ * 使用树形列表与名称、状态、租户筛选；超管全租户结果按归属分组。
  * 数据加载：listDeptTree() 返回 flat 数组 → 前端 buildTree() 转为嵌套结构。
  * 操作：新建 / 编辑 / 删除 + 上级部门选择（tree-select）。
  */
@@ -39,6 +39,32 @@ import {
 } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
+import { useUserStore } from '@/stores/user'
+import TenantSelect from '@/modules/system/components/TenantSelect.vue'
+import TenantTargetDialog from '@/modules/system/components/TenantTargetDialog.vue'
+import { useManagementTenant } from '@/modules/system/composables/useManagementTenant'
+import type { TenantContextOption } from '@/modules/system/types/tenant'
+
+const userStore = useUserStore()
+const {
+  filterTenant,
+  appliedTenant,
+  targetTenant,
+  pickerVisible,
+  choosing,
+  chooseForCreate,
+  selectTarget,
+  closePicker,
+  useObjectTarget,
+  applyFilter,
+  resetFilter,
+} = useManagementTenant()
+let editorGeneration = 0
+let optionsGeneration = 0
+const targetDeptOptions = ref<SysDept[]>([])
+const formLeaderOptions = ref<SysUser[]>([])
+const optionsLoading = ref(false)
+
 // ─── 列表状态 ───
 
 const treeData = ref<SysDept[]>([])
@@ -66,26 +92,57 @@ const statusFilterOptions: Array<{ label: string; value: number | '' }> = [
 ]
 
 /** 是否处于筛选状态（任一条件生效） */
-const hasFilter = computed(() => filter.name.trim() !== '' || filter.status !== '')
+const hasFilter = computed(
+  () => filter.name.trim() !== '' || filter.status !== '' || Boolean(appliedTenant.value),
+)
 
 /** 组装查询条件；无有效条件返回 undefined（等价无参调用） */
 function buildQuery(): DeptQuery | undefined {
   const name = filter.name.trim()
-  if (!name && filter.status === '') return undefined
+  if (!name && filter.status === '' && !appliedTenant.value) return undefined
   const query: DeptQuery = {}
+  if (appliedTenant.value) query.tenantId = appliedTenant.value.id
   if (name) query.name = name
   if (filter.status !== '') query.status = filter.status
   return query
 }
 
 /** flat 数组 → 嵌套树转换（筛选结果已含祖先，buildTree 后树形完整） */
-function buildTree(list: SysDept[], parentId = '0'): SysDept[] {
+function buildTree(
+  list: SysDept[],
+  parentId = '0',
+  tenantId?: string,
+  ancestors = new Set<string>(),
+): SysDept[] {
   return list
-    .filter((item) => item.parentId === parentId)
+    .filter(
+      (item) =>
+        (item.parentId ?? '0') === parentId &&
+        (tenantId === undefined || item.tenantId === tenantId) &&
+        !ancestors.has(item.id!),
+    )
     .map((item) => ({
       ...item,
-      children: buildTree(list, item.id!),
+      children: buildTree(list, item.id!, item.tenantId, new Set([...ancestors, item.id!])),
     }))
+}
+
+function groupTenantTrees(list: SysDept[]): SysDept[] {
+  if (!userStore.superAdmin || appliedTenant.value || !list.some((item) => item.tenantId != null))
+    return buildTree(list)
+  const tenants = new Map(
+    list.filter((row) => row.tenantId != null).map((row) => [row.tenantId!, row.tenantName]),
+  )
+  return [...tenants].map(([id, name]) => ({
+    id: `tenant:${id}`,
+    parentId: '0',
+    name: name || t('common.unknown'),
+    code: '',
+    tenantId: id,
+    tenantName: name,
+    tenantGroup: true,
+    children: buildTree(list, '0', id),
+  }))
 }
 
 async function loadTree() {
@@ -94,7 +151,7 @@ async function loadTree() {
   try {
     const query = buildQuery()
     flatData.value = query ? await listDeptTree(query) : await listDeptTree()
-    treeData.value = buildTree(flatData.value)
+    treeData.value = groupTenantTrees(flatData.value)
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
@@ -108,11 +165,13 @@ async function loadTree() {
 
 /** 查询：携带当前筛选条件重新加载 */
 function handleQuery() {
+  applyFilter()
   void loadTree()
 }
 
 /** 重置：清空筛选条件并恢复全量树 */
 function handleReset() {
+  resetFilter()
   filter.name = ''
   filter.status = ''
   void loadTree()
@@ -164,6 +223,13 @@ function leaderName(leaderId?: string): string {
 }
 
 function resetForm() {
+  editorGeneration++
+  optionsGeneration++
+  optionsLoading.value = false
+  targetDeptOptions.value = []
+  formLeaderOptions.value = []
+  targetTenant.value = null
+  form.tenantId = undefined
   form.name = ''
   form.code = ''
   form.parentId = '0'
@@ -174,58 +240,108 @@ function resetForm() {
   formError.value = ''
 }
 
-function openCreate(parentId?: string) {
+async function loadFormOptions(tenantId: string) {
+  const generation = ++optionsGeneration
+  targetDeptOptions.value = []
+  formLeaderOptions.value = []
+  optionsLoading.value = true
+  const results = await Promise.allSettled([
+    listDeptTree({ tenantId }),
+    pageUsers({ pageNum: 1, pageSize: 200 }, { status: 0, tenantId }),
+  ])
+  if (generation !== optionsGeneration) return
+  const [departments, users] = results
+  if (departments.status === 'fulfilled')
+    targetDeptOptions.value = departments.value.filter((row) => String(row.tenantId) === tenantId)
+  if (users.status === 'fulfilled')
+    formLeaderOptions.value = users.value.list.filter((row) => String(row.tenantId) === tenantId)
+  if (results.some((result) => result.status === 'rejected'))
+    ElMessage.error(t('common.loadFailed'))
+  optionsLoading.value = false
+}
+
+async function openCreate(parentId?: string) {
+  if (submitting.value || choosing.value) return
   resetForm()
+  let preferred: TenantContextOption | null = appliedTenant.value
+  if (parentId) {
+    const parent = flatData.value.find((row) => row.id === parentId)
+    if (!parent?.tenantId) {
+      ElMessage.error(t('tenantContext.missingOwner'))
+      return
+    }
+    preferred = {
+      id: parent.tenantId,
+      name: parent.tenantName || t('common.unknown'),
+      code: '',
+      writable: true,
+    }
+  }
+  const target = await chooseForCreate(preferred)
+  if (!target) return
   form.parentId = parentId ?? '0'
-  void loadLeaderOptions()
+  form.tenantId = target.id
   dialogVisible.value = true
+  await loadFormOptions(target.id)
 }
 
 async function openEdit(row: SysDept) {
+  if (submitting.value) return
   resetForm()
+  const generation = editorGeneration
   editingId.value = row.id ?? null
   try {
     const detail = await getDept(row.id!)
+    if (generation !== editorGeneration) return
+    useObjectTarget(detail)
     form.name = detail.name
     form.code = detail.code
     form.parentId = detail.parentId ?? '0'
     form.sort = detail.sort ?? 0
     form.status = detail.status
     form.leaderId = detail.leaderId ?? ''
+    form.tenantId = targetTenant.value!.id
+    dialogVisible.value = true
+    await loadFormOptions(targetTenant.value!.id)
   } catch {
-    formError.value = t('system.deptDetailLoadFailed')
-    return
+    if (generation === editorGeneration) ElMessage.error(t('system.deptDetailLoadFailed'))
   }
-  dialogVisible.value = true
 }
 
 function closeDialog() {
+  if (submitting.value) return
   dialogVisible.value = false
 }
 
-/** 收集当前编辑节点及其所有子孙 ID（用于上级部门选择器中过滤自身） */
-function collectDescendantIds(list: SysDept[]): string[] {
-  const ids: string[] = []
-  for (const item of list) {
-    ids.push(item.id!)
-    if (item.children) {
-      ids.push(...collectDescendantIds(item.children))
+const parentDeptOptions = computed(() => {
+  const excluded = new Set<string>()
+  if (editingId.value) {
+    const pending = [editingId.value]
+    while (pending.length) {
+      const id = pending.pop()!
+      if (excluded.has(id)) continue
+      excluded.add(id)
+      targetDeptOptions.value
+        .filter((row) => row.parentId === id)
+        .forEach((row) => pending.push(row.id!))
     }
   }
-  return ids
-}
-
-/** 可供选择的上级部门列表（排除当前编辑节点及其子孙） */
-const parentDeptOptions = computed(() => {
-  const excludeIds = new Set<string>()
-  if (editingId.value) {
-    excludeIds.add(editingId.value)
-    collectDescendantIds(treeData.value).forEach((id) => excludeIds.add(id))
-  }
-  return flatData.value.filter((item) => !excludeIds.has(item.id!))
+  return [
+    {
+      id: '0',
+      name: t('tenantContext.noParent'),
+      code: '',
+      children: buildTree(targetDeptOptions.value.filter((row) => !excluded.has(row.id!))),
+    },
+  ]
 })
 
 async function handleSubmit() {
+  if (submitting.value || optionsLoading.value) return
+  if (!targetTenant.value) {
+    formError.value = t('tenantContext.choose')
+    return
+  }
   if (!form.name.trim()) {
     formError.value = t('system.deptNameRequired')
     return
@@ -245,7 +361,7 @@ async function handleSubmit() {
       await createDept({ ...form })
       ElMessage.success(t('common.createSuccess'))
     }
-    closeDialog()
+    dialogVisible.value = false
     void loadTree()
   } catch (err) {
     if (err instanceof ApiError) {
@@ -302,6 +418,7 @@ function addChildRow(r: unknown) {
 
 /** 统一操作列（V012-BUG-002）：树形表格无分页；子部门/编辑/删除显隐由权限决定 */
 function rowActions(r: unknown): ListAction[] {
+  if ((r as SysDept).tenantGroup) return []
   return [
     {
       key: 'add-child',
@@ -335,7 +452,7 @@ onMounted(() => {
 <template>
   <div class="dept-list">
     <!-- 工具栏（复用 ListToolbar） -->
-    <ListToolbar :title="t('system.deptManagement')" :total="treeData.length">
+    <ListToolbar :title="t('system.deptManagement')" :total="flatData.length">
       <template #actions>
         <el-button v-perm="'system:dept:create'" type="primary" @click="openCreate()">{{
           t('system.newDept')
@@ -345,6 +462,11 @@ onMounted(() => {
 
     <!-- 筛选区：名称（Enter 触发查询）+ 状态（全部/正常/停用）+ 查询/重置 -->
     <div class="dept-list__filter">
+      <TenantSelect
+        v-if="userStore.superAdmin"
+        v-model="filterTenant"
+        class="dept-list__tenant-filter"
+      />
       <el-input
         v-model="filter.name"
         :placeholder="t('system.deptName')"
@@ -385,6 +507,13 @@ onMounted(() => {
         :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
       >
         <el-table-column prop="name" :label="t('system.deptName')" min-width="200" />
+        <el-table-column
+          v-if="userStore.superAdmin"
+          :label="t('tenantContext.label')"
+          min-width="140"
+        >
+          <template #default="{ row }">{{ row.tenantGroup ? '' : row.tenantName }}</template>
+        </el-table-column>
         <el-table-column prop="code" :label="t('system.deptCode')" min-width="120" />
         <el-table-column :label="t('system.owner')" width="110">
           <template #default="{ row }">
@@ -394,7 +523,7 @@ onMounted(() => {
         <el-table-column prop="sort" :label="t('common.sort')" width="70" />
         <el-table-column prop="status" :label="t('common.status')" width="80">
           <template #default="{ row }">
-            <el-tag :type="deptStatusTagType(row.status)" size="small">
+            <el-tag v-if="!row.tenantGroup" :type="deptStatusTagType(row.status)" size="small">
               {{ deptStatusLabel(row.status) }}
             </el-tag>
           </template>
@@ -417,8 +546,12 @@ onMounted(() => {
   <!-- 新建/编辑弹窗 -->
   <el-dialog
     v-model="dialogVisible"
+    class="system-dept-editor"
+    align-center
     :title="dialogTitle"
     :close-on-click-modal="false"
+    :close-on-press-escape="!submitting"
+    :show-close="!submitting"
     destroy-on-close
     width="680px"
     @closed="resetForm"
@@ -430,6 +563,14 @@ onMounted(() => {
 
       <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
+          <div class="form-field tenant-owner-field">
+            <label class="form-field__label">{{ t('tenantContext.label') }}</label>
+            <el-input
+              :model-value="targetTenant?.name ?? ''"
+              :aria-label="t('tenantContext.label')"
+              readonly
+            />
+          </div>
           <div class="form-field">
             <label class="form-field__label">{{ t('system.parentDept') }}</label>
             <el-tree-select
@@ -486,10 +627,10 @@ onMounted(() => {
               style="width: 100%"
             >
               <el-option
-                v-for="user in leaderOptions"
+                v-for="user in formLeaderOptions"
                 :key="user.id"
                 :label="
-                  user.realName
+                  user.realName && user.realName !== user.username
                     ? t('common.nameWithCode', { name: user.realName, code: user.username })
                     : user.username
                 "
@@ -499,15 +640,19 @@ onMounted(() => {
           </div>
         </FormGrid>
       </FormSection>
-
-      <template #actions>
-        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
-          t('common.save')
-        }}</el-button>
-      </template>
     </StandardFormTemplate>
+    <template #footer>
+      <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+        t('common.save')
+      }}</el-button>
+    </template>
   </el-dialog>
+  <TenantTargetDialog
+    :model-value="pickerVisible"
+    @update:model-value="closePicker"
+    @selected="selectTarget"
+  />
 </template>
 
 <style scoped>
@@ -558,5 +703,24 @@ onMounted(() => {
 .form-field--required .form-field__label::before {
   content: '* ';
   color: var(--sw-danger);
+}
+</style>
+
+<style scoped>
+.tenant-owner-field {
+  grid-column: 1 / -1;
+}
+.dept-list__tenant-filter {
+  max-width: 240px;
+}
+</style>
+
+<style scoped>
+:global(.system-dept-editor.el-dialog) {
+  max-width: calc(100vw - 32px);
+}
+:global(.system-dept-editor .el-dialog__body) {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
 }
 </style>

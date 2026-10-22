@@ -6,6 +6,17 @@
  * 生成保证 zh-CN 与 en-US 结构一致，不存在缺键或键集漂移。
  */
 export default {
+  tenantContext: {
+    noParent: '无上级部门',
+    userDetails: '用户详情',
+    label: '所属租户',
+    all: '全部租户',
+    choose: '请选择租户',
+    chooseTitle: '选择创建目标租户',
+    loadFailed: '租户信息加载失败',
+    unavailable: '目标租户已停用或过期，请选择有效租户',
+    missingOwner: '对象缺少所属租户，无法编辑',
+  },
   tenantAdmin: {
     loginCode: '租户编码',
     loginCodePlaceholder: '可选；同名账号需填写',
@@ -1911,7 +1922,7 @@ export default {
     usernameRequired: '用户名不能为空',
     configureRoles: '配置角色',
     roleDialogHintEdit: '仅展示该用户所属租户下的角色',
-    roleDialogHintCreate: '仅展示当前租户下的角色',
+    roleDialogHintCreate: '仅展示所属租户下的角色',
     roleSearchPlaceholder: '搜索角色名称或标识',
     roleSearchEmpty: '没有匹配的角色',
     roleTotal: '共 {count} 个角色',

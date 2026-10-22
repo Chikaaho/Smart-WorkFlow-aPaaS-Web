@@ -6,6 +6,17 @@
  * 生成保证 zh-CN 与 en-US 结构一致，不存在缺键或键集漂移。
  */
 export default {
+  tenantContext: {
+    noParent: 'No parent department',
+    userDetails: 'User details',
+    label: 'Tenant',
+    all: 'All tenants',
+    choose: 'Select tenant',
+    chooseTitle: 'Select target tenant',
+    loadFailed: 'Failed to load tenants',
+    unavailable: 'The tenant is disabled or expired. Select an available tenant.',
+    missingOwner: 'The object has no tenant identity and cannot be edited.',
+  },
   tenantAdmin: {
     loginCode: 'Tenant code',
     loginCodePlaceholder: 'Optional; required for duplicate account names',
@@ -1968,7 +1979,7 @@ export default {
     usernameRequired: 'Username is required.',
     configureRoles: 'Configure roles',
     roleDialogHintEdit: "Only roles in this user's tenant are shown",
-    roleDialogHintCreate: 'Only roles in the current tenant are shown',
+    roleDialogHintCreate: 'Only roles belonging to the target tenant are shown',
     roleSearchPlaceholder: 'Search role name or code',
     roleSearchEmpty: 'No matching roles',
     roleTotal: '{count} roles',

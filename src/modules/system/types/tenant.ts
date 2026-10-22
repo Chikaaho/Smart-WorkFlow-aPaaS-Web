@@ -30,3 +30,10 @@ export interface TenantAdminCandidate {
   username: string
   realName?: string | null
 }
+
+export interface TenantContextOption {
+  id: string
+  name: string
+  code: string
+  writable: boolean
+}
