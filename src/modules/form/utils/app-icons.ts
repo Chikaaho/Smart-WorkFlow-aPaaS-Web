@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+export { ICON_ASSETS, iconMask } from '@/components/appearance/icons'
 import {
   Folder,
   Grid,
@@ -16,6 +17,19 @@ import {
   DataLine,
   Promotion,
   Finished,
+  Setting,
+  Clock,
+  Calendar,
+  Upload,
+  View,
+  Connection,
+  Search,
+  Edit,
+  Check,
+  Plus,
+  VideoPlay,
+  VideoPause,
+  UserFilled,
 } from '@element-plus/icons-vue'
 
 /**
@@ -40,6 +54,19 @@ export const APP_ICON_MAP: Record<string, Component> = {
   DataLine,
   Promotion,
   Finished,
+  Setting,
+  Clock,
+  Calendar,
+  Upload,
+  View,
+  Connection,
+  Search,
+  Edit,
+  Check,
+  Plus,
+  Start: VideoPlay,
+  End: VideoPause,
+  Countersign: UserFilled,
 }
 
 /** 选择器数据源（稳定键名集合）。 */
@@ -50,19 +77,19 @@ export function resolveAppIcon(name?: string | null): Component {
   return (name && APP_ICON_MAP[name]) || Folder
 }
 
-/** 应用主题色预设（品牌紫莓主色在首位；未配置回退主色）。 */
+/** 应用颜色预设；历史有效 HEX 仍保持原值。 */
 export const APP_COLOR_PRESETS: string[] = [
-  '#7e306b',
-  '#409eff',
-  '#67c23a',
-  '#e6a23c',
-  '#f56c6c',
-  '#909399',
-  '#6f42c1',
-  '#17a2b8',
+  '#6f2dff',
+  '#2563eb',
+  '#0891b2',
+  '#059669',
+  '#d97706',
+  '#dc2626',
+  '#db2777',
+  '#64748b',
 ]
 
 /** 解析应用主题色；未配置或非法回退品牌主色。 */
 export function resolveAppColor(color?: string | null): string {
-  return color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#7e306b'
+  return color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#6f2dff'
 }

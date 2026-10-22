@@ -10,15 +10,29 @@ export const APP_PER_ROW_OPTIONS = [3, 4, 5, 6, 8] as const
 export const APP_PER_ROW_DEFAULT = 6
 
 function readPerRow(): number {
-  const raw = globalThis.localStorage?.getItem(APP_PER_ROW_KEY)
-  const parsed = raw ? Number(raw) : NaN
-  return (APP_PER_ROW_OPTIONS as readonly number[]).includes(parsed) ? parsed : APP_PER_ROW_DEFAULT
+  try {
+    const raw = globalThis.localStorage?.getItem(APP_PER_ROW_KEY)
+    const parsed = raw ? Number(raw) : NaN
+    return (APP_PER_ROW_OPTIONS as readonly number[]).includes(parsed)
+      ? parsed
+      : APP_PER_ROW_DEFAULT
+  } catch {
+    return APP_PER_ROW_DEFAULT
+  }
 }
 
 export function useAppPerRow() {
   const perRow = ref<number>(readPerRow())
   watch(perRow, (value) => {
-    globalThis.localStorage?.setItem(APP_PER_ROW_KEY, String(value))
+    if (!(APP_PER_ROW_OPTIONS as readonly number[]).includes(value)) {
+      perRow.value = APP_PER_ROW_DEFAULT
+      return
+    }
+    try {
+      globalThis.localStorage?.setItem(APP_PER_ROW_KEY, String(value))
+    } catch {
+      /* 存储不可用时，本页选择仍生效。 */
+    }
   })
   return { perRow, options: APP_PER_ROW_OPTIONS }
 }

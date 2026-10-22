@@ -1386,6 +1386,10 @@ export interface MockApp {
   sortNo: number
   visibleScopeType: 'ALL' | 'SPECIFIED'
   visibleUserIds: number[] | null
+  visibleDeptIds?: number[] | null
+  visibleRoleCodes?: string[] | null
+  visiblePostIds?: number[] | null
+  visibleTenantIds?: number[] | null
   status: 'ENABLED' | 'DISABLED'
   source: 'MANUAL' | 'LEGACY_CATEGORY' | 'LEGACY_UNCATEGORIZED'
   legacyCategoryId?: number | null

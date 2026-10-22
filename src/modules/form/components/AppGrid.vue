@@ -55,7 +55,7 @@ const { t } = useI18n()
         data-testid="app-card"
         @click="emit('select', app)"
       >
-        <AppIcon :icon="app.icon" :color="app.color" :size="20" />
+        <AppIcon :icon="app.icon" :color="app.color" :size="20" :box-size="36" soft />
         <span class="app-grid__body">
           <span class="app-grid__title">
             <span class="app-grid__name" data-testid="app-card-name" :title="app.name">
@@ -77,9 +77,15 @@ const { t } = useI18n()
         trigger="click"
         @command="(cmd: string) => emit('command', cmd, app)"
       >
-        <span class="app-grid__more-trigger" data-testid="app-card-more" @click.stop>
+        <button
+          type="button"
+          class="app-grid__more-trigger"
+          data-testid="app-card-more"
+          :aria-label="t('common.moreActions')"
+          @click.stop
+        >
           <el-icon><MoreFilled /></el-icon>
-        </span>
+        </button>
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item v-perm="'form:app:manage'" command="edit">
@@ -114,8 +120,10 @@ const { t } = useI18n()
 <style scoped>
 .app-grid {
   display: grid;
+  align-content: start;
+  align-items: start;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  gap: var(--sw-space-16);
   min-height: 120px;
 }
 
@@ -143,10 +151,12 @@ const { t } = useI18n()
   gap: 12px;
   min-width: 0;
   min-height: 88px;
-  padding: 16px;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  background: #fff;
+  box-sizing: border-box;
+  padding: 0 var(--sw-space-16);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  background: var(--sw-surface-card);
+  font-family: inherit;
   text-align: left;
   cursor: pointer;
   transition: box-shadow 0.2s;
@@ -194,24 +204,26 @@ const { t } = useI18n()
 
 .app-grid__name {
   overflow: hidden;
-  color: #303133;
-  font-size: 15px;
+  color: var(--sw-text-primary);
+  font-size: var(--sw-font-body);
   font-weight: 500;
+  line-height: 22px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .app-grid__meta {
   min-height: 16px;
-  margin-top: 2px;
-  color: #909399;
-  font-size: 12px;
+  margin-top: var(--sw-space-4);
+  color: var(--sw-text-secondary);
+  font-size: var(--sw-font-caption);
+  line-height: 18px;
 }
 
 .app-grid__more {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: var(--sw-space-8);
+  right: var(--sw-space-8);
 }
 
 .app-grid__more-trigger {
@@ -219,9 +231,12 @@ const { t } = useI18n()
   align-items: center;
   justify-content: center;
   width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  color: #909399;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: var(--sw-radius-base);
+  color: var(--sw-color-primary);
   cursor: pointer;
 }
 

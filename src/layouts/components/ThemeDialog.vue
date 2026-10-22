@@ -248,4 +248,16 @@ function reset() {
   background: var(--sw-color-primary-soft);
   border: none;
 }
+@media (max-width: 500px) {
+  .theme-dialog__presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    height: 100px;
+  }
+  .theme-dialog__custom {
+    gap: var(--sw-space-8);
+  }
+  .theme-dialog__custom .el-input {
+    width: 130px;
+  }
+}
 </style>

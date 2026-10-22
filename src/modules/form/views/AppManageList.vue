@@ -8,7 +8,8 @@ import AppGrid from '@/modules/form/components/AppGrid.vue'
 import AppGridToolbar from '@/modules/form/components/AppGridToolbar.vue'
 import AppPerRowSetting from '@/modules/form/components/AppPerRowSetting.vue'
 import { useAppPerRow } from '@/modules/form/components/useAppPerRow'
-import { APP_COLOR_PRESETS, APP_ICON_KEYS } from '@/modules/form/utils/app-icons'
+import AppAppearancePicker from '@/modules/form/components/AppAppearancePicker.vue'
+import DetailDialog from '@/components/DetailDialog.vue'
 import {
   createFormApp,
   deleteFormApp,
@@ -22,9 +23,7 @@ import { getErrorMessage } from '@/foundation/request/error-code-map'
 import { ApiError } from '@/foundation/request'
 
 /**
- * 应用管理（0.1.7 #3）：网格式画布——卡片上图标下名称，右上角三点弹「修改 / 删除」，
- * 最后一张固定为「新建应用」，点击直接新建；去掉分页与顶部新建按钮。
- * 颜色仅提供预设色板（0.1.7 #2：禁止自由输入 RGB/HEX）。
+ * 应用管理：共享网格卡片，筛选栏提供新建入口，卡片右上角菜单提供编辑/删除。
  */
 const { t } = useI18n()
 const router = useRouter()
@@ -55,6 +54,8 @@ async function loadList() {
 // ==================== 新建 / 修改对话框 ====================
 
 const dialogVisible = ref(false)
+const appearancePickerActive = ref(false)
+const scopeExpanded = ref(false)
 /** null=新建 */
 const editingId = ref<string | null>(null)
 const saving = ref(false)
@@ -77,10 +78,12 @@ const dialogTitle = computed(() =>
 
 function openCreate() {
   editingId.value = null
+  appearancePickerActive.value = false
+  scopeExpanded.value = false
   Object.assign(form, {
     name: '',
-    icon: 'Folder',
-    color: '#7e306b',
+    icon: 'Grid',
+    color: '#6f2dff',
     sortNo: 0,
     // 新建默认「指定范围」并预选创建者（保存时明确展示，不把空值误作全员）
     visibleScopeType: 'SPECIFIED',
@@ -95,10 +98,12 @@ function openCreate() {
 
 function openEdit(app: FormApp) {
   editingId.value = app.id
+  appearancePickerActive.value = false
+  scopeExpanded.value = false
   Object.assign(form, {
     name: app.name,
     icon: app.icon ?? 'Folder',
-    color: app.color ?? '#7e306b',
+    color: app.color ?? '#6f2dff',
     sortNo: app.sortNo ?? 0,
     visibleScopeType: app.visibleScopeType,
     userIds: app.visibleUserIds ? [...app.visibleUserIds] : [],
@@ -209,12 +214,21 @@ onMounted(() => {
   <div class="app-manage">
     <AppGridToolbar
       v-model="keyword"
-      :placeholder="t('form.appCenter.appSearchPlaceholder')"
+      :label="t('appearance.appName')"
+      :placeholder="t('common.pleaseInput')"
       test-id="app-manage-search"
       @search="loadList"
     >
       <template #actions>
         <AppPerRowSetting v-model="perRow" :options="perRowOptions" />
+        <el-button
+          v-perm="'form:app:manage'"
+          type="primary"
+          data-testid="app-create"
+          style="width: 80px; padding: 0"
+          @click="openCreate"
+          >{{ t('form.appCenter.newApp') }}</el-button
+        >
       </template>
     </AppGridToolbar>
 
@@ -228,51 +242,36 @@ onMounted(() => {
       :per-row="perRow"
       show-actions
       show-form-count
-      show-create
       @select="enterWorkspace"
       @command="onCardCommand"
       @create="openCreate"
     />
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="560px">
-      <el-form label-width="90px">
-        <el-form-item :label="t('form.appCenter.fieldName')" required>
+    <DetailDialog
+      :model-value="dialogVisible"
+      :title="dialogTitle"
+      width="600px"
+      appearance="design"
+      class="app-manage-dialog"
+      :class="{ 'app-manage-dialog--covered': appearancePickerActive }"
+      :destroy-on-close="false"
+      @update:model-value="dialogVisible = $event"
+    >
+      <el-form label-position="top">
+        <el-form-item :label="t('appearance.appName')" required>
           <el-input
             v-model="form.name"
             data-testid="app-name-input"
             maxlength="100"
-            show-word-limit
+            :placeholder="t('common.pleaseInput')"
           />
         </el-form-item>
-        <el-form-item :label="t('form.appCenter.fieldIcon')">
-          <div class="icon-picker">
-            <button
-              v-for="key in APP_ICON_KEYS"
-              :key="key"
-              type="button"
-              class="icon-picker__item"
-              :class="{ 'is-active': form.icon === key }"
-              @click="form.icon = key"
-            >
-              <AppIcon :icon="key" :color="form.color" :size="14" />
-            </button>
-          </div>
-        </el-form-item>
-        <!-- 0.1.7 #2：颜色固定预设几种，禁止自由输入 -->
-        <el-form-item :label="t('form.appCenter.fieldColor')">
-          <div class="color-picker">
-            <button
-              v-for="c in APP_COLOR_PRESETS"
-              :key="c"
-              type="button"
-              class="color-picker__item"
-              :class="{ 'is-active': form.color === c }"
-              :style="{ background: c }"
-              @click="form.color = c"
-            />
-          </div>
-        </el-form-item>
-        <el-form-item :label="t('form.appCenter.fieldScope')">
+        <AppAppearancePicker
+          v-model:icon="form.icon"
+          v-model:color="form.color"
+          @active="appearancePickerActive = $event"
+        />
+        <el-form-item v-if="scopeExpanded" :label="t('form.appCenter.fieldScope')">
           <el-radio-group v-model="form.visibleScopeType" data-testid="app-scope">
             <el-radio value="SPECIFIED">{{ t('form.appCenter.scopeSpecified') }}</el-radio>
             <el-radio value="ALL">{{ t('form.appCenter.scopeAllOption') }}</el-radio>
@@ -280,19 +279,27 @@ onMounted(() => {
         </el-form-item>
         <!-- 0.1.7 #1：可见范围按用户/部门/角色/岗位/租户多维度指定，任一维度命中即可见 -->
         <el-form-item
-          v-if="form.visibleScopeType === 'SPECIFIED'"
+          v-if="scopeExpanded && form.visibleScopeType === 'SPECIFIED'"
           :label="t('form.appCenter.fieldScope')"
         >
           <AppScopePicker :model-value="scopeValue" @update:model-value="applyScope" />
         </el-form-item>
       </el-form>
       <template #footer>
+        <el-button
+          link
+          type="primary"
+          class="app-manage-dialog__scope"
+          :aria-expanded="scopeExpanded"
+          @click="scopeExpanded = !scopeExpanded"
+          >{{ t('form.appCenter.fieldScope') }}</el-button
+        >
         <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="saving" @click="handleSave">
           {{ t('common.save') }}
         </el-button>
       </template>
-    </el-dialog>
+    </DetailDialog>
   </div>
 </template>
 
@@ -300,46 +307,27 @@ onMounted(() => {
 .app-manage {
   box-sizing: border-box;
   min-height: 100%;
-  padding: 20px 24px;
+  padding: var(--sw-space-20);
 }
 .app-manage__error {
   color: #f56c6c;
 }
-.icon-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+</style>
+
+<style>
+.el-overlay:has(.app-manage-dialog--covered) {
+  visibility: hidden;
 }
-.icon-picker__item {
-  padding: 2px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: none;
-  cursor: pointer;
+.app-manage-dialog .el-form-item {
+  margin-bottom: 12px;
 }
-.icon-picker__item.is-active {
-  border-color: #7e306b;
-}
-.color-picker {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.color-picker__item {
-  width: 22px;
+.app-manage-dialog .el-form-item__label {
   height: 22px;
-  border-radius: 4px;
-  border: 2px solid transparent;
-  cursor: pointer;
+  line-height: 22px;
+  margin-bottom: 6px;
   padding: 0;
 }
-.color-picker__item.is-active {
-  border-color: #303133;
-}
-.scope-users__hint {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #e6a23c;
+.app-manage-dialog .el-dialog__footer .app-manage-dialog__scope {
+  margin-right: auto;
 }
 </style>
