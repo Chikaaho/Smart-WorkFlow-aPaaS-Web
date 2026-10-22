@@ -21,6 +21,7 @@ withDefaults(
     showFooter?: boolean
     /** 嵌在滚动/裁剪容器内时挂到 body，避免被父级 overflow 裁切 */
     appendToBody?: boolean
+    appearance?: 'default' | 'design'
   }>(),
   {
     title: '',
@@ -30,6 +31,7 @@ withDefaults(
     destroyOnClose: true,
     showFooter: true,
     appendToBody: false,
+    appearance: 'default',
   },
 )
 
@@ -44,8 +46,10 @@ const emit = defineEmits<{
     :model-value="modelValue"
     :title="title || t('common.detail')"
     :width="width"
-    top="6vh"
+    :top="appearance === 'design' ? undefined : '6vh'"
+    :align-center="appearance === 'design'"
     class="sw-detail-dialog"
+    :class="{ 'sw-detail-dialog--design': appearance === 'design' }"
     :destroy-on-close="destroyOnClose"
     :append-to-body="appendToBody"
     @update:model-value="emit('update:modelValue', $event)"
@@ -83,5 +87,8 @@ const emit = defineEmits<{
 
 .sw-detail-dialog__alert {
   margin-bottom: 12px;
+}
+.sw-detail-dialog--design .sw-detail-dialog__body {
+  min-height: 0;
 }
 </style>

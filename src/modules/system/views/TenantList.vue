@@ -21,6 +21,7 @@ import type { SysTenant, TenantFilter } from '@/modules/system/types/tenant'
 import type { PageQuery } from '@/contracts/common'
 import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
+import DetailDialog from '@/components/DetailDialog.vue'
 
 const { t } = useI18n()
 const userStore = useUserStore()
@@ -237,6 +238,9 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
+    class="tenant-list"
+    appearance="design"
+    filter-layout="inline"
     :title="t('system.tenantList')"
     :total="total"
     :page-num="pageNum"
@@ -246,7 +250,7 @@ onMounted(loadList)
     @update:page-size="handlePageSizeChange"
   >
     <template #filter>
-      <ListFilterItem :label="t('system.tenantName')">
+      <ListFilterItem class="tenant-list__name-filter" :label="t('system.tenantName')">
         <el-input
           v-model="filter.name"
           :placeholder="t('common.pleaseInput')"
@@ -254,7 +258,7 @@ onMounted(loadList)
           @keyup.enter="handleQuery"
         />
       </ListFilterItem>
-      <ListFilterItem :label="t('common.status')">
+      <ListFilterItem class="tenant-list__status-filter" :label="t('common.status')">
         <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
           <el-option :label="t('common.statusNormal')" :value="0" />
           <el-option :label="t('system.tenantStatusDisabled')" :value="1" />
@@ -265,7 +269,7 @@ onMounted(loadList)
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
       <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
       <el-button v-if="canManage" type="primary" @click="openCreate">{{
-        t('system.newTenant')
+        t('system.addTenant')
       }}</el-button>
     </template>
 
@@ -277,23 +281,21 @@ onMounted(loadList)
       show-icon
       style="margin-bottom: 12px"
     />
-    <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column prop="code" :label="t('system.tenantCode')" min-width="140" />
-      <el-table-column prop="name" :label="t('system.tenantName')" min-width="160" />
-      <el-table-column :label="t('system.tenantAdmin')" min-width="140">
+    <el-table v-loading="loading" :data="list">
+      <el-table-column prop="code" :label="t('system.tenantCode')" width="166" />
+      <el-table-column prop="name" :label="t('system.tenantName')" width="356" />
+      <el-table-column :label="t('system.tenantAdmin')" width="276">
         <template #default="{ row }">
           {{ row.adminUsername || t('system.tenantAdminUnset') }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.status')" width="100">
+      <el-table-column :label="t('common.status')" width="176">
         <template #default="{ row }">
-          <el-tag :type="row.status === 0 ? 'success' : 'info'" size="small">
-            {{ statusLabel(row.status) }}
-          </el-tag>
+          {{ statusLabel(row.status) }}
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" :label="t('common.createTime')" min-width="170" />
-      <ListActionsColumn :actions="rowActions" :width="150" />
+      <el-table-column prop="createTime" :label="t('common.createTime')" width="296" />
+      <ListActionsColumn :actions="rowActions" :width="372" />
     </el-table>
 
     <template #empty-action>
@@ -303,22 +305,22 @@ onMounted(loadList)
     </template>
   </StandardListTemplate>
 
-  <el-dialog v-model="dialogVisible" :title="dialogTitle" width="760px" @closed="resetForm">
-    <el-alert
-      v-if="formError"
-      :title="formError"
-      type="error"
-      :closable="false"
-      show-icon
-      style="margin-bottom: 12px"
-    />
-    <el-form label-width="96px">
+  <DetailDialog
+    v-model="dialogVisible"
+    class="tenant-dialog"
+    appearance="design"
+    :title="dialogTitle"
+    width="760px"
+    :error="formError"
+    @closed="resetForm"
+  >
+    <el-form label-position="top">
       <el-form-item :label="t('system.tenantName')" required>
         <el-input v-model="form.name" :placeholder="t('common.pleaseInput')" maxlength="64" />
       </el-form-item>
-      <el-row v-if="!editingId" :gutter="24">
+      <el-row v-if="!editingId" :gutter="20">
         <el-col :span="12">
-          <el-form-item :label="t('system.tenantAdmin')" required>
+          <el-form-item :label="t('system.tenantAdminAccount')" required>
             <el-input
               v-model="form.adminUsername"
               :placeholder="t('common.pleaseInput')"
@@ -338,9 +340,6 @@ onMounted(loadList)
           </el-form-item>
         </el-col>
       </el-row>
-      <div v-if="!editingId" class="tenant-create-hint">
-        {{ t('system.tenantCreateHint') }}
-      </div>
     </el-form>
     <template #footer>
       <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
@@ -348,7 +347,7 @@ onMounted(loadList)
         t('common.save')
       }}</el-button>
     </template>
-  </el-dialog>
+  </DetailDialog>
 
   <el-dialog v-model="detailVisible" :title="t('system.tenantDetail')" width="560px">
     <el-descriptions v-if="detailRow" :column="1" border>
@@ -376,11 +375,104 @@ onMounted(loadList)
 </template>
 
 <style scoped>
+.tenant-list :deep(.list-filter-bar__fields) {
+  flex-wrap: nowrap;
+  gap: var(--sw-space-8);
+}
+.tenant-list :deep(.list-filter-bar__actions) {
+  margin-left: auto;
+}
+.tenant-list :deep(.list-filter-bar__actions .el-button) {
+  width: 72px;
+}
+.tenant-list :deep(.list-filter-item) {
+  display: flex;
+  flex: 0 0 auto;
+}
+.tenant-list :deep(.list-filter-item__label) {
+  color: var(--sw-text-regular);
+  font-size: var(--sw-font-body);
+  line-height: 22px;
+}
+.tenant-list :deep(.tenant-list__name-filter) {
+  width: 310px;
+}
+.tenant-list :deep(.tenant-list__name-filter .list-filter-item__control) {
+  width: 220px;
+}
+.tenant-list :deep(.tenant-list__status-filter .list-filter-item__control) {
+  width: 100px;
+}
+.tenant-list :deep(.list-actions) {
+  justify-content: flex-start;
+}
+@media (max-width: 1100px) {
+  .tenant-list :deep(.list-filter-bar__fields) {
+    flex-wrap: wrap;
+  }
+}
 .tenant-create-hint {
   margin-top: 4px;
   padding-left: 96px;
   color: var(--sw-text-secondary);
   font-size: var(--sw-font-caption);
   line-height: 20px;
+}
+</style>
+
+<style>
+.tenant-dialog.el-dialog {
+  box-sizing: border-box;
+  max-width: calc(100vw - var(--sw-space-32));
+  padding: var(--sw-space-24);
+  border: 1px solid var(--sw-border-light);
+}
+.tenant-dialog .el-dialog__header {
+  box-sizing: border-box;
+  height: 32px;
+  padding: 4px 32px 4px 0;
+  margin: 0 0 var(--sw-space-16);
+}
+.tenant-dialog .el-dialog__title {
+  font-size: var(--sw-font-h2);
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: var(--sw-space-24);
+}
+.tenant-dialog .el-dialog__headerbtn {
+  top: var(--sw-space-24);
+  right: var(--sw-space-24);
+  width: 32px;
+  height: 32px;
+}
+.tenant-dialog .el-dialog__body {
+  padding: 0;
+  overflow-x: hidden;
+}
+.tenant-dialog .el-form-item {
+  margin-bottom: var(--sw-space-12);
+}
+.tenant-dialog .el-form > .el-form-item:last-child,
+.tenant-dialog .el-row .el-form-item {
+  margin-bottom: 0;
+}
+.tenant-dialog .el-form-item__label {
+  height: 22px;
+  line-height: 22px;
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--sw-text-regular);
+}
+.tenant-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sw-space-8);
+  height: 36px;
+  margin-top: var(--sw-space-16);
+  padding: 0;
+}
+.tenant-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  margin: 0;
 }
 </style>

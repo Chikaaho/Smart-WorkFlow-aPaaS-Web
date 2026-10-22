@@ -20,10 +20,9 @@
    * 暗色模式将来通过 [data-theme='dark'] 覆盖。
    * ═══════════════════════════════════════════════════════ */
 
-  /* ── 字体（本地安全回退链，不引入外部字体文件；Inter/PingFang 仅在系统已装时生效；
-       实测 Windows 下 Noto 与 YaHei 差异互有胜负，维持 YaHei 回退） ── */
+  /* ── 字体（新稿优先 Noto Sans SC；沿用本地字体加载及安全回退链） ── */
   --sw-font-family:
-    'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+    'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 
   /* ── 中性色 ── */
   --sw-text-primary: #172033;
@@ -78,7 +77,6 @@
   --sw-info: #20b8cd;
   --sw-info-bg: #e7f8fa;
 
-
   /* ── 字号阶梯（size + weight 成对） ── */
   --sw-font-h1: 20px;
   --sw-font-weight-h1: 600;
@@ -120,6 +118,8 @@
   --sw-form-row-gap: 22px;
   --sw-table-row-height: 44px;
   --sw-table-row-height-compact: 38px;
+  --sw-list-design-header-height: 44px;
+  --sw-list-design-row-height: 53px; /* 新稿数据行 52px + 分隔线 1px */
   --sw-cell-padding-x: 16px;
   --sw-card-padding: 12px 16px;
   --sw-section-gap: 10px;

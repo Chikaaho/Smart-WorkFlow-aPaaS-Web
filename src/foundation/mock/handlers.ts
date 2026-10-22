@@ -32,6 +32,7 @@ import { buildMockXlsxBlob } from './mock-xlsx'
 import { getAccessToken } from '@/foundation/auth/token'
 import type { MockHandler, MockMethod } from './index'
 import { MOCK_WORKFLOW_NODE_CAPABILITIES } from './workflow-node-capabilities'
+import { tenantMockRegistrations } from './tenant-handlers'
 import {
   MOCK_CATEGORIES,
   MOCK_CATALOG_ITEMS,
@@ -1429,6 +1430,7 @@ const MOCK_IOT_RESERVATIONS: {
 ]
 
 export const mockRegistrations: MockRegistration[] = [
+  ...tenantMockRegistrations,
   // POST /api/workflow/txn-batch — 后台批量受理（P62 S5 mock，临时）
   // 同批次键幂等重放返回原批次（replay=true）；受理后转 PROCESSING，首次回查完成逐项结算。
   {

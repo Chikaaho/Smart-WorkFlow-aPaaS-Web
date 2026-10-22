@@ -36,6 +36,7 @@ const props = withDefaults(
     /** 仅一页时是否仍渲染；内嵌小列表传 false */
     showWhenSinglePage?: boolean
     testId?: string
+    appearance?: 'default' | 'design'
   }>(),
   {
     layout: 'total, sizes, prev, pager, next, jumper',
@@ -44,6 +45,7 @@ const props = withDefaults(
     inset: true,
     showWhenSinglePage: true,
     testId: undefined,
+    appearance: 'default',
   },
 )
 
@@ -92,10 +94,13 @@ const visible = computed(
   <div
     v-if="visible"
     class="list-pagination"
-    :class="[`list-pagination--${align}`, { 'list-pagination--flush': !inset }]"
+    :class="[
+      `list-pagination--${align}`,
+      { 'list-pagination--flush': !inset, 'list-pagination--design': appearance === 'design' },
+    ]"
   >
     <span v-if="totalText" class="list-pagination__total">{{
-      t('common.totalRecords', { total: pageTotal })
+      t(appearance === 'design' ? 'common.totalItems' : 'common.totalRecords', { total: pageTotal })
     }}</span>
     <el-pagination
       v-if="effectiveLayout"
@@ -106,6 +111,8 @@ const visible = computed(
       :layout="effectiveLayout"
       :small="small"
       :data-test="testId"
+      :prev-text="appearance === 'design' ? t('common.previousPage') : undefined"
+      :next-text="appearance === 'design' ? t('common.nextPage') : undefined"
       background
     />
   </div>
@@ -140,5 +147,30 @@ const visible = computed(
 
 .list-pagination__total {
   flex: 0 0 auto;
+}
+.list-pagination--design :deep(.el-pagination) {
+  gap: var(--sw-space-8);
+  --el-pagination-button-bg-color: var(--sw-surface-page);
+}
+.list-pagination--design :deep(.btn-prev),
+.list-pagination--design :deep(.btn-next) {
+  width: 80px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
+  margin: 0;
+}
+.list-pagination--design :deep(.el-pager li) {
+  margin: 0;
+  border-radius: var(--sw-radius-base);
+}
+.list-pagination--design :deep(.el-pagination__sizes),
+.list-pagination--design :deep(.el-pagination__jump) {
+  margin: 0;
+}
+.list-pagination--design :deep(.el-pagination__sizes .el-select) {
+  width: 112px;
+}
+.list-pagination--design :deep(.el-pagination__editor) {
+  width: 44px;
 }
 </style>

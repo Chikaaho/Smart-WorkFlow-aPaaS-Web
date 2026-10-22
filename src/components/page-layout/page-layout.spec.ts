@@ -388,6 +388,21 @@ describe('StandardFormTemplate', () => {
 describe('StandardListTemplate', () => {
   const baseProps = { total: 100, pageNum: 1, pageSize: 10 }
 
+  it('design card keeps a single pagination control and forwards page changes', async () => {
+    const wrapper = mount(StandardListTemplate, {
+      props: { ...baseProps, appearance: 'design' },
+      global: { stubs: { ElPagination: { template: '<div class="el-pagination" />' } } },
+    })
+    const pager = wrapper.findComponent(ListPagination)
+    expect(wrapper.findAllComponents(ListPagination)).toHaveLength(1)
+    expect(wrapper.find('.list-table .list-pagination').exists()).toBe(true)
+    expect(pager.text()).toContain('共 100 条')
+    await pager.vm.$emit('update:pageNum', 3)
+    await pager.vm.$emit('update:pageSize', 20)
+    expect(wrapper.emitted('update:pageNum')).toEqual([[3]])
+    expect(wrapper.emitted('update:pageSize')).toEqual([[20]])
+  })
+
   it('empty=true → 表头仍在（0.1.7 #7：空列表保留表头，不再整表换 ListEmpty）', () => {
     const wrapper = mount(StandardListTemplate, {
       props: { ...baseProps, empty: true },

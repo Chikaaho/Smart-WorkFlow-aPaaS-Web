@@ -131,8 +131,8 @@ const showAside = computed(
 }
 /* 0.2.0 新稿（458:12701）：管理端侧栏改为浅色表面，用户端仍为深色导航阶 */
 .basic-layout__aside--admin {
+  box-sizing: border-box;
   background: var(--sw-nav-sidebar-light-bg);
-  border-right: 1px solid var(--sw-nav-sidebar-light-border);
 }
 .basic-layout__content {
   flex: 1;

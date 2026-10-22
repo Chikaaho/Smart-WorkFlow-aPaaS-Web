@@ -223,6 +223,18 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
     hidden: false,
     children: [
       {
+        id: '19',
+        parentId: '1',
+        name: 'Tenant',
+        title: '租户管理',
+        path: 'system/tenant',
+        component: 'system/views/TenantList',
+        sort: 0,
+        menuType: 1,
+        permission: 'system:tenant:list',
+        hidden: false,
+      },
+      {
         id: '10',
         parentId: '1',
         name: 'dict',

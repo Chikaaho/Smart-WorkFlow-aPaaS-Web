@@ -21,12 +21,14 @@ const props = withDefaults(
     showToolbarTotal?: boolean
     /** 筛选区排布：grid（默认，12 格栅格）| inline（批量操作条等非搜索场景） */
     filterLayout?: 'grid' | 'inline'
+    /** 新稿列表：筛选、标题、按内容收高的表格与卡片内分页。 */
+    appearance?: 'default' | 'design'
     total: number
     pageNum: number
     pageSize: number
     empty?: boolean
   }>(),
-  { showToolbarTotal: false, filterLayout: 'grid' },
+  { showToolbarTotal: false, filterLayout: 'grid', appearance: 'default' },
 )
 
 const emit = defineEmits<{
@@ -36,7 +38,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="standard-list">
+  <div class="standard-list" :class="{ 'standard-list--design': appearance === 'design' }">
     <!-- 0.1.7 #25：搜索/筛选栏是页面最顶部的元素——原「工具栏」动作按钮（新建等）
          并入筛选栏动作区（toolbar-actions 在 filter-actions 之前），独立工具栏行取消；
          ListToolbar 仅在显式传 title/total 的页面保留（0.1.7 #10 已全局去标题）。 -->
@@ -71,10 +73,23 @@ const emit = defineEmits<{
       <div v-if="props.empty && $slots['empty-action']" class="standard-list__empty-actions">
         <slot name="empty-action" />
       </div>
+      <ListPagination
+        v-if="appearance === 'design'"
+        :total="props.total"
+        :page-num="props.pageNum"
+        :page-size="props.pageSize"
+        total-text
+        appearance="design"
+        align="space-between"
+        layout="prev, pager, next, sizes, jumper"
+        @update:page-num="emit('update:pageNum', $event)"
+        @update:page-size="emit('update:pageSize', $event)"
+      />
     </ListTable>
 
     <!-- 分页 -->
     <ListPagination
+      v-if="appearance !== 'design'"
       :total="props.total"
       :page-num="props.pageNum"
       :page-size="props.pageSize"
@@ -107,5 +122,59 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: space-between;
   margin: 0 0 var(--sw-space-8);
+}
+
+.standard-list--design {
+  --sw-list-table-header-background: var(--sw-surface-page);
+  min-height: 0;
+  padding: var(--sw-space-20);
+  gap: var(--sw-space-16);
+}
+.standard-list--design > .list-filter-bar {
+  order: 0;
+  margin: 0;
+  border: 1px solid var(--sw-border-light);
+  padding: calc(var(--sw-space-16) - 1px) var(--sw-space-16);
+  box-shadow: none;
+}
+.standard-list--design > .list-toolbar {
+  order: 1;
+  margin: 0;
+  min-height: var(--sw-space-24);
+}
+.standard-list--design :deep(.list-toolbar__title) {
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: var(--sw-space-24);
+}
+.standard-list--design > .list-table {
+  order: 2;
+  flex: 0 0 auto;
+  border: 1px solid var(--sw-border-light);
+  box-shadow: none;
+}
+.standard-list--design :deep(.list-pagination) {
+  box-sizing: border-box;
+  height: 50px;
+  padding: 0 var(--sw-space-16);
+  font-size: var(--sw-font-caption);
+}
+.standard-list--design :deep(.list-table .el-table__header-wrapper th) {
+  height: var(--sw-list-design-header-height);
+  background: var(--sw-surface-page);
+  font-weight: var(--sw-font-weight-body);
+}
+.standard-list--design :deep(.el-table__body-wrapper .el-table__row) {
+  height: var(--sw-list-design-row-height);
+}
+.standard-list--design :deep(.el-table .cell) {
+  text-align: left;
+  line-height: 22px;
+}
+.standard-list--design :deep(.el-table th .cell) {
+  line-height: 18px;
+}
+.standard-list--design :deep(.el-table),
+.standard-list--design :deep(.el-table__inner-wrapper::before) {
+  border-radius: 0;
 }
 </style>

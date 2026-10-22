@@ -21,6 +21,14 @@ void props
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 
 const area = computed(() => resolveArea(route.path))
+const adminSectionTitle = computed(() => {
+  if (area.value !== 'admin') return ''
+  return (
+    visibleMenuForArea(localizedMenu.value, 'admin').find((node) =>
+      subtreeContains(node, route.path),
+    )?.title ?? ''
+  )
+})
 
 /**
  * 工作台页轻量导航（V012-BUG-004）：/workspace 下侧栏仅保留 待办/已办/草稿
@@ -140,6 +148,9 @@ function resolveAdminActive(path: string): string {
     :default-active="activePath"
     :default-openeds="openeds"
   >
+    <li v-if="adminSectionTitle && !collapse" class="app-sidebar__section" role="presentation">
+      {{ adminSectionTitle }}
+    </li>
     <!-- 工作台固定项：流程中心/收件箱上下文不渲染（V012-BUG-006/008） -->
     <el-menu-item v-if="area === 'portal' && !catalogSlim && !inboxSlim" index="/workspace">
       <img class="app-sidebar__design-icon" :src="iconWorkspace" alt="" aria-hidden="true" />
@@ -378,5 +389,43 @@ function resolveAdminActive(path: string): string {
 .app-sidebar--admin :deep(.el-menu--inline .el-menu-item) {
   width: 176px;
   margin: 0 0 0 48px;
+}
+.app-sidebar--admin {
+  box-sizing: border-box;
+  padding: var(--sw-space-16);
+}
+.app-sidebar__section {
+  height: 18px;
+  margin-bottom: var(--sw-space-8);
+  color: var(--sw-text-secondary);
+  font-size: var(--sw-font-caption);
+  line-height: 18px;
+  list-style: none;
+}
+.app-sidebar--admin :deep(> .el-menu-item),
+.app-sidebar--admin :deep(.el-menu--inline .el-menu-item) {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  height: 40px;
+  line-height: 22px;
+  padding: 0;
+  margin: 0;
+}
+.app-sidebar--admin :deep(.el-menu-item .el-icon) {
+  display: none;
+}
+.app-sidebar--admin :deep(.el-menu-item > span) {
+  top: 0;
+}
+.app-sidebar--admin :deep(.el-menu-item.is-active) {
+  background: var(--sw-nav-sidebar-light-active-bg);
+  color: var(--sw-nav-sidebar-light-active-text);
+}
+.app-sidebar--admin :deep(.el-menu-item:hover) {
+  background: var(--sw-nav-sidebar-light-hover-bg);
+}
+.app-sidebar--admin :deep(.el-menu--inline)::before {
+  display: none;
 }
 </style>

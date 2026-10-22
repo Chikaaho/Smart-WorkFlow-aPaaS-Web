@@ -16,6 +16,7 @@ import type { MenuNode } from '@/contracts/menu'
  * 取值必须在渲染期进行：模块加载期预求值会把语言固化（同类缺陷已在 WorkspaceHome 复现并修复）。
  */
 export const NODE_TITLE_KEYS: Record<string, string> = {
+  Tenant: 'system.tenantList',
   Agent: 'menu.agent',
   AgentGraphDef: 'agent.graphDefManagement',
   AgentModel: 'agent.modelManagement',
