@@ -96,7 +96,7 @@ export async function saveListConfig(formId: string, config: ListConfig): Promis
   await request<void>({
     method: 'PUT',
     url: `/form/def/${formId}/list-config`,
-    data: { config },
+    data: { config: JSON.stringify(config) },
   })
 }
 

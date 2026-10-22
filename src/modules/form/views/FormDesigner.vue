@@ -39,6 +39,7 @@ import SubFieldDesigner from '../designer/SubFieldDesigner.vue'
 import PreviewModal from '../designer/PreviewModal.vue'
 import HistoryVersionsDialog from '../designer/HistoryVersionsDialog.vue'
 import RelatedProcessesPanel from '../designer/RelatedProcessesPanel.vue'
+import FormAccessPanel from '../designer/FormAccessPanel.vue'
 import { saveDraftDefinition, publishDefinition as publishDef } from '../designer/draft-actions'
 import { publishNewFormVersion } from '../api/form-def'
 import { findCategoryNameByFormKey } from '@/adapters/oa-catalog'
@@ -81,6 +82,8 @@ const items = ref<DesignerItem[]>([])
 const selectedId = ref<string | null>(null)
 /** 显隐联动规则（v0.0.2 P2）：按 target 存储每字段至多一条。 */
 const visibilityRules = ref<VisibilityRule[]>([])
+const fieldPermissions = ref<FormSchema['fieldPermissions']>({})
+const actionPermissions = ref<FormSchema['actionPermissions']>({})
 const previewVisible = ref(false)
 const loading = ref(false)
 /** 草稿已保存时间（P53 工作台文案：草稿已保存 HH:mm）。 */
@@ -98,6 +101,10 @@ const saveState = computed(() => resolveSaveState(isDirty.value, savePhase.value
 
 /* ── 已发布标记（驱动灰化） ── */
 const isPublished = computed(() => status.value === 'PUBLISHED')
+
+function clonePlain<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
 
 /* ── 工作区（表单设计 / 关联流程），路由 query 可恢复 ── */
 const activeTab = ref<WorkbenchTab>(parseWorkbenchTab(route.query.tab))
@@ -238,7 +245,10 @@ function closeTableEditor(subFields: TableSubField[]) {
 }
 
 function buildDefinition(): FormSchema {
-  return itemsToDefinition(items.value, title.value, visibilityRules.value, description.value)
+  return itemsToDefinition(items.value, title.value, visibilityRules.value, description.value, {
+    fieldPermissions: fieldPermissions.value,
+    actionPermissions: actionPermissions.value,
+  })
 }
 
 const previewSchema = computed<FormSchema>(() => buildDefinition())
@@ -261,6 +271,8 @@ async function loadForm(id: string) {
     description.value = schema.description
     items.value = definitionToItems(schema)
     visibilityRules.value = schema.rules?.visibility ? [...schema.rules.visibility] : []
+    fieldPermissions.value = schema.fieldPermissions ? clonePlain(schema.fieldPermissions) : {}
+    actionPermissions.value = schema.actionPermissions ? clonePlain(schema.actionPermissions) : {}
     rejected.value = false
     void loadBreadcrumbCategory()
     await nextTick()
@@ -301,6 +313,8 @@ function resetWorkbench() {
   rejectTitle.value = t('form.cannotOpenTitle')
   title.value = t('common.untitledForm')
   items.value = []
+  fieldPermissions.value = {}
+  actionPermissions.value = {}
   selectedId.value = null
   editingTableId.value = null
   baselineJson.value = JSON.stringify(buildDefinition())
@@ -394,6 +408,10 @@ async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
     // 放弃修改：以当前基线为准，丢弃未保存内容（含表单标题——title 不在 items 内，需一并还原）
     const baseline = JSON.parse(baselineJson.value) as FormSchema
     items.value = definitionToItems(baseline)
+    fieldPermissions.value = baseline.fieldPermissions ? clonePlain(baseline.fieldPermissions) : {}
+    actionPermissions.value = baseline.actionPermissions
+      ? clonePlain(baseline.actionPermissions)
+      : {}
     if (baseline.title) title.value = baseline.title
     baselineJson.value = currentJson.value
     return 'proceed'
@@ -744,6 +762,14 @@ async function loadBreadcrumbCategory() {
         >
           {{ t('form.tabProcesses') }}
         </button>
+        <button
+          type="button"
+          class="designer__tab"
+          :class="{ 'is-active': activeTab === 'permissions' }"
+          @click="onTabChange('permissions' as WorkbenchTab)"
+        >
+          {{ t('form.tabPermissions') }}
+        </button>
       </nav>
 
       <div class="designer__actions">
@@ -843,9 +869,19 @@ async function loadBreadcrumbCategory() {
         />
       </div>
 
+      <FormAccessPanel
+        v-else-if="activeTab === 'permissions'"
+        :form-id="formId"
+        :fields="items.map((item) => item.field)"
+        :field-permissions="fieldPermissions ?? {}"
+        :action-permissions="actionPermissions ?? {}"
+        @update:field-permissions="fieldPermissions = $event"
+        @update:action-permissions="actionPermissions = $event"
+      />
+
       <!-- ═══ 工作区：关联流程 ═══ -->
       <RelatedProcessesPanel
-        v-else
+        v-else-if="activeTab === 'processes'"
         ref="processPanelRef"
         :form-id="formId ?? ''"
         :form-key="formKey"

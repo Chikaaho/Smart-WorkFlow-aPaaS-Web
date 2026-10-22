@@ -49,6 +49,9 @@ function subFieldToField(sub: TableSubField): FormSchemaField {
   }
   if (sub.label !== undefined) field.label = sub.label
   if (sub.length !== undefined) field.length = sub.length
+  if (sub.minLength !== undefined) field.minLength = sub.minLength
+  if (sub.pattern !== undefined) field.pattern = sub.pattern
+  if (sub.patternMessage !== undefined) field.patternMessage = sub.patternMessage
   if (sub.type === 'DICT') {
     field.dictType = sub.dictType ?? ''
     if (sub.renderAs) field.renderAs = sub.renderAs
@@ -70,6 +73,11 @@ function fieldToSubField(field: FormSchemaField): TableSubField {
   if (field.label !== undefined) sub.label = field.label
   if (field.required) sub.required = true
   if ('length' in field && field.length !== undefined) sub.length = field.length
+  if ('minLength' in field && field.minLength !== undefined) sub.minLength = field.minLength
+  if ('pattern' in field && field.pattern !== undefined) sub.pattern = field.pattern
+  if ('patternMessage' in field && field.patternMessage !== undefined) {
+    sub.patternMessage = field.patternMessage
+  }
   if (field.type === 'DICT') {
     sub.dictType = field.dictType
     if (field.renderAs) sub.renderAs = field.renderAs

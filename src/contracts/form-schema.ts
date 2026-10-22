@@ -93,6 +93,12 @@ export interface TableSubField {
   label?: string
   required?: boolean
   length?: number
+  /** 非空文本的最小 Unicode 码点数。 */
+  minLength?: number
+  /** 文本完整匹配约束；由服务端线性时间正则引擎复核。 */
+  pattern?: string
+  /** 正则不匹配时的用户提示。 */
+  patternMessage?: string
   /** 字段描述（0.1.7 #38）：字段清单里可直接维护的说明；纯元数据，不参与校验与提交载荷。 */
   description?: string
   dictType?: string
@@ -126,6 +132,9 @@ interface BaseField {
   labelPosition?: FieldLabelPosition
   required?: boolean
   length?: number
+  minLength?: number
+  pattern?: string
+  patternMessage?: string
   /**
    * 字段描述（0.1.7 #38）：字段清单里可直接维护的字段说明（可写「本字段的含义/口径」）。
    * 纯元数据——不参与校验、不进入提交载荷、不影响动态列 DDL。
@@ -347,6 +356,8 @@ export interface FormSchema {
    * 构造请求携带无 edit 权字段被整请求拒绝。前端仅用于 UX 显隐提示。
    */
   fieldPermissions?: Record<string, FieldPermissionRule>
+  /** 表单动作权限：动作名 → role:/user:/dept: 主体；空数组表示不设限。 */
+  actionPermissions?: Record<string, string[]>
 }
 
 /** REFERENCE 选择器回填值：id 存库、value 展示。 */

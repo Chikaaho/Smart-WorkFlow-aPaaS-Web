@@ -62,6 +62,9 @@ interface RawSubFieldDef {
   label?: string
   required?: boolean
   length?: number
+  minLength?: number
+  pattern?: string
+  patternMessage?: string
   /** 字段描述（0.1.7 #38 定义契约键透传；纯元数据）。 */
   description?: string
   placeholder?: string
@@ -119,6 +122,9 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     ...(isFieldLabelPosition(raw.labelPosition) ? { labelPosition: raw.labelPosition } : {}),
     required: raw.required ?? false,
     ...(raw.length !== undefined ? { length: raw.length } : {}),
+    ...(raw.minLength !== undefined ? { minLength: raw.minLength } : {}),
+    ...(raw.pattern !== undefined ? { pattern: raw.pattern } : {}),
+    ...(raw.patternMessage !== undefined ? { patternMessage: raw.patternMessage } : {}),
     // 0.1.7 #38：字段描述（定义契约键透传；字段清单可直接维护）
     ...(raw.description !== undefined ? { description: raw.description } : {}),
     ...(raw.placeholder !== undefined ? { placeholder: raw.placeholder } : {}),
@@ -220,6 +226,9 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
         ...(sf.label !== undefined ? { label: sf.label } : {}),
         ...(sf.required !== undefined ? { required: sf.required } : {}),
         ...(sf.length !== undefined ? { length: sf.length } : {}),
+        ...(sf.minLength !== undefined ? { minLength: sf.minLength } : {}),
+        ...(sf.pattern !== undefined ? { pattern: sf.pattern } : {}),
+        ...(sf.patternMessage !== undefined ? { patternMessage: sf.patternMessage } : {}),
         // 0.1.7 #38：子表字段描述（字段清单可直接维护）
         ...(sf.description !== undefined ? { description: sf.description } : {}),
         ...(sf.dictType !== undefined ? { dictType: sf.dictType } : {}),
@@ -267,6 +276,13 @@ export function parseDefinition(rawJson: string): FormSchema {
       ? {
           fieldPermissions: (raw as unknown as { fieldPermissions: Record<string, unknown> })
             .fieldPermissions as FormSchema['fieldPermissions'],
+        }
+      : {}),
+    ...((raw as unknown as { actionPermissions?: Record<string, unknown> }).actionPermissions !==
+    undefined
+      ? {
+          actionPermissions: (raw as unknown as { actionPermissions: Record<string, string[]> })
+            .actionPermissions,
         }
       : {}),
   }

@@ -156,13 +156,13 @@ describe('FormDesigner 工作台（P52）', () => {
     expect(wrapper.findAll('button').some((b) => b.text() === '发布')).toBe(false)
   })
 
-  // 0.1.7 #39（Owner）：字段清单入口从「设置」下拉上收为居中页签，顺序=字段清单 / 表单设计 / 流程设计
-  it('工作区页签：三页签整组居中，字段清单在最左；「设置」下拉已去除', async () => {
+  // 字段清单、表单设计、流程设计与权限同处居中页签组。
+  it('工作区页签：完整页签整组居中，字段清单在最左；「设置」下拉已去除', async () => {
     const wrapper = await mountDesigner()
 
     const tabs = wrapper.findAll('.designer__tab')
-    expect(tabs.map((tab) => tab.text())).toEqual(['字段清单', '表单设计', '流程设计'])
-    // 三页签同处居中页签组（几何由浏览器自验，见台账 #39）
+    expect(tabs.map((tab) => tab.text())).toEqual(['字段清单', '表单设计', '流程设计', '权限'])
+    // 页签同处居中页签组（几何由浏览器自验，见台账 #39）
     expect(
       wrapper.findAll('.designer__tab').every((tab) => tab.element.closest('.designer__tabs')),
     ).toBe(true)

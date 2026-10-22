@@ -443,6 +443,34 @@ function validateRequiredFields(): boolean {
     if (hiddenAll.value.has(field.name)) continue
     if (fieldRequired(field) && isEmptyRequiredValue(formData[field.name])) {
       validationErrors[field.name] = t('form.fieldRequired')
+      continue
+    }
+    if (
+      (field.type === 'TEXT' || field.type === 'RICH_TEXT') &&
+      !isEmptyRequiredValue(formData[field.name])
+    ) {
+      const text = String(formData[field.name])
+      const codePoints = Array.from(text).length
+      if (field.minLength && field.minLength > 0 && codePoints < field.minLength) {
+        validationErrors[field.name] = t('form.fieldMinLength', { count: field.minLength })
+        continue
+      }
+      if (field.length && field.length > 0 && codePoints > field.length) {
+        validationErrors[field.name] = t('form.fieldMaxLength', { count: field.length })
+        continue
+      }
+      if (field.pattern?.trim()) {
+        let matches: boolean
+        try {
+          matches = new RegExp(`^(?:${field.pattern})$`, 'u').test(text)
+        } catch {
+          matches = false
+        }
+        if (!matches) {
+          validationErrors[field.name] =
+            field.patternMessage?.trim() || t('form.fieldPatternInvalid')
+        }
+      }
     }
   }
 

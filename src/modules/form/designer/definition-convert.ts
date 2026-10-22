@@ -16,6 +16,7 @@ export function itemsToDefinition(
   title: string,
   rules?: VisibilityRule[],
   description?: string,
+  permissions?: Pick<FormSchema, 'fieldPermissions' | 'actionPermissions'>,
 ): FormSchema {
   return {
     title: title.trim() || i18n.global.t('common.untitledForm'),
@@ -25,6 +26,12 @@ export function itemsToDefinition(
       return it.field.colSpan === colSpan ? it.field : { ...it.field, colSpan }
     }),
     ...(rules && rules.length ? { rules: { visibility: rules } } : {}),
+    ...(permissions?.fieldPermissions && Object.keys(permissions.fieldPermissions).length
+      ? { fieldPermissions: permissions.fieldPermissions }
+      : {}),
+    ...(permissions?.actionPermissions && Object.keys(permissions.actionPermissions).length
+      ? { actionPermissions: permissions.actionPermissions }
+      : {}),
   }
 }
 

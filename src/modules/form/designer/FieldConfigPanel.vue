@@ -238,6 +238,36 @@ function onFieldKeySuffix(raw: string) {
           @update:model-value="(v: number | undefined) => emit('update', { length: v })"
         />
       </div>
+      <template v-if="field.field.type === 'TEXT' || field.field.type === 'RICH_TEXT'">
+        <div class="config__row">
+          <label class="config__label">{{ t('form.minLength') }}</label>
+          <el-input-number
+            :model-value="field.field.minLength"
+            :min="0"
+            :controls="true"
+            :placeholder="t('form.unlimited')"
+            @update:model-value="(v: number | undefined) => emit('update', { minLength: v })"
+          />
+        </div>
+        <div class="config__row">
+          <label class="config__label">{{ t('form.pattern') }}</label>
+          <el-input
+            :model-value="field.field.pattern ?? ''"
+            maxlength="512"
+            :placeholder="t('form.patternPlaceholder')"
+            @update:model-value="(v: string) => emit('update', { pattern: v || undefined })"
+          />
+        </div>
+        <div class="config__row">
+          <label class="config__label">{{ t('form.patternMessage') }}</label>
+          <el-input
+            :model-value="field.field.patternMessage ?? ''"
+            maxlength="200"
+            :placeholder="t('form.patternMessagePlaceholder')"
+            @update:model-value="(v: string) => emit('update', { patternMessage: v || undefined })"
+          />
+        </div>
+      </template>
 
       <!-- 类型专属配置（注册表动态挂载；已发布只读时不出可编辑面板） -->
       <component
