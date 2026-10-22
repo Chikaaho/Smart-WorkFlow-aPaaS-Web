@@ -69,6 +69,7 @@
 
   /* ── 语义色（色值 + 浅底，P53 设计基线；同时重绑 EP 语义色保持组件一致） ── */
   --sw-success: #18a67a;
+  --sw-success-text: #12805c;
   --sw-success-bg: #eafbf7;
   --sw-warning: #f59e0b;
   --sw-warning-bg: #fff7e8;

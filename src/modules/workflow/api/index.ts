@@ -276,11 +276,13 @@ export interface ProcessScriptPreviewResult {
 export async function previewProcessScript(
   script: string,
   variables: Array<{ name: string; type?: string }>,
+  signal?: AbortSignal,
 ): Promise<ProcessScriptPreviewResult> {
   return request<ProcessScriptPreviewResult>({
     method: 'POST',
     url: '/workflow/scripts/preview',
     data: { script, variables },
+    signal,
   })
 }
 

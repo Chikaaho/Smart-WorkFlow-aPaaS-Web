@@ -6,6 +6,25 @@
  * 生成保证 zh-CN 与 en-US 结构一致，不存在缺键或键集漂移。
  */
 export default {
+  scriptWorkspace: {
+    functions: 'Functions',
+    search: 'Search functions',
+    help: 'Help for {name}',
+    noFunctions: 'No matching functions',
+    clear: 'Clear',
+    clearConfirm: 'Clear this script? Unapplied changes will be removed.',
+    placeholder: 'Write a script and use return to return its result',
+    result: 'Preview result',
+    success: 'Success',
+    failure: 'Failed',
+    returnValue: 'Return value: ',
+    run: 'Run',
+    apply: 'Apply',
+    running: 'Previewing…',
+    notRun: 'Not run yet',
+    cancelled: 'Preview cancelled',
+    timeout: 'Preview timed out. Try again.',
+  },
   appearance: {
     chooseIcon: 'Choose icon',
     chooseColor: 'Choose color',

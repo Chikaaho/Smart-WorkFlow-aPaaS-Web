@@ -235,6 +235,25 @@
       "tenantStatusChangeConfirm": "确认{action}租户「{name}」？",
       "tenantRootReadonly": "超管租户为保留对象，只能查看。",
       "noRolesInTenant": "当前租户下暂无角色"
+    },
+    "scriptWorkspace": {
+      "functions": "函数",
+      "search": "搜索函数",
+      "help": "{name} 的说明",
+      "noFunctions": "没有匹配的函数",
+      "clear": "清空",
+      "clearConfirm": "清空当前脚本？未应用的内容将被删除。",
+      "placeholder": "在此编写脚本，使用 return 返回结果",
+      "result": "预览结果",
+      "success": "成功",
+      "failure": "失败",
+      "returnValue": "返回值：",
+      "run": "运行",
+      "apply": "应用",
+      "running": "正在预览…",
+      "notRun": "尚未运行",
+      "cancelled": "预览已取消",
+      "timeout": "预览超时，请重试"
     }
   },
   "en-US": {
@@ -472,6 +491,25 @@
       "tenantStatusChangeConfirm": "Confirm to {action} tenant \"{name}\"?",
       "tenantRootReadonly": "The root tenant is read-only.",
       "noRolesInTenant": "No roles in this tenant"
+    },
+    "scriptWorkspace": {
+      "functions": "Functions",
+      "search": "Search functions",
+      "help": "Help for {name}",
+      "noFunctions": "No matching functions",
+      "clear": "Clear",
+      "clearConfirm": "Clear this script? Unapplied changes will be removed.",
+      "placeholder": "Write a script and use return to return its result",
+      "result": "Preview result",
+      "success": "Success",
+      "failure": "Failed",
+      "returnValue": "Return value: ",
+      "run": "Run",
+      "apply": "Apply",
+      "running": "Previewing…",
+      "notRun": "Not run yet",
+      "cancelled": "Preview cancelled",
+      "timeout": "Preview timed out. Try again."
     }
   }
 }

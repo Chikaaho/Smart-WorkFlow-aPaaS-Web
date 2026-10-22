@@ -4,7 +4,7 @@ import HintTip from '@/components/HintTip.vue'
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
-/* global HTMLElement,
+/* global HTMLElement, AbortSignal,
   ResizeObserver,
   SVGElement,
   SVGSVGElement,
@@ -2081,12 +2081,12 @@ function openProcessScriptDialog(title: string, code: string, target: ScriptDial
  * 流程脚本模拟运行：交给服务端脚本引擎（与运行期同一 GraalJS + # 语法糖），
  * 变量按图定义声明传给服务端，由其按类型生成示例值并加载真实组织目录。
  */
-async function simulateProcessScript(code: string) {
+async function simulateProcessScript(code: string, signal?: AbortSignal) {
   const variables = (graph.value?.variables ?? []).map((item) => ({
     name: item.varId,
     type: item.type,
   }))
-  const result = await previewProcessScript(code, variables)
+  const result = await previewProcessScript(code, variables, signal)
   if (result.kind === 'OK') {
     return { ok: true, value: result.value, log: [] }
   }

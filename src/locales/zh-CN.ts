@@ -6,6 +6,25 @@
  * 生成保证 zh-CN 与 en-US 结构一致，不存在缺键或键集漂移。
  */
 export default {
+  scriptWorkspace: {
+    functions: '函数',
+    search: '搜索函数',
+    help: '{name} 的说明',
+    noFunctions: '没有匹配的函数',
+    clear: '清空',
+    clearConfirm: '清空当前脚本？未应用的内容将被删除。',
+    placeholder: '在此编写脚本，使用 return 返回结果',
+    result: '预览结果',
+    success: '成功',
+    failure: '失败',
+    returnValue: '返回值：',
+    run: '运行',
+    apply: '应用',
+    running: '正在预览…',
+    notRun: '尚未运行',
+    cancelled: '预览已取消',
+    timeout: '预览超时，请重试',
+  },
   appearance: {
     chooseIcon: '选择图标',
     chooseColor: '选择颜色',
