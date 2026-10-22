@@ -206,6 +206,17 @@ function resolveAdminActive(path: string): string {
 .app-sidebar--portal {
   --sw-nav-subitem-active-bg: #29235c;
 }
+/* 0.2.0 新稿：管理端侧栏浅色主题（白底、深字、浅紫激活块） */
+.app-sidebar--admin {
+  --el-menu-text-color: var(--sw-nav-sidebar-light-text);
+  --el-menu-hover-text-color: var(--sw-nav-sidebar-light-active-text);
+  --el-menu-hover-bg-color: var(--sw-nav-sidebar-light-hover-bg);
+  --el-menu-active-color: var(--sw-nav-sidebar-light-text);
+}
+.app-sidebar--admin :deep(.el-menu-item.is-active) {
+  background: var(--sw-nav-sidebar-light-active-bg);
+  color: var(--sw-nav-sidebar-light-active-text);
+}
 .app-sidebar--detail {
   --sw-nav-subitem-active-bg: #29235c;
 }

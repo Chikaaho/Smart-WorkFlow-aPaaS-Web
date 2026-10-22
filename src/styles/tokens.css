@@ -54,6 +54,13 @@
   --el-overlay-color-lighter: rgba(16, 24, 47, 0.32);
   /* P53 设计（节点02）：侧栏描边盒边框色 */
   --sw-nav-box-border: #27345c;
+  /* 0.2.0 新稿：管理端侧栏为浅色表面（设计 458:12701），与用户端深色侧栏区分 */
+  --sw-nav-sidebar-light-bg: #ffffff;
+  --sw-nav-sidebar-light-border: #e9edf5;
+  --sw-nav-sidebar-light-text: #303a55;
+  --sw-nav-sidebar-light-hover-bg: #f4f6fb;
+  --sw-nav-sidebar-light-active-bg: #ece9ff;
+  --sw-nav-sidebar-light-active-text: #6f2dff;
   /* P53 设计（节点01/02）：侧栏底部空间卡 */
   --sw-nav-area-card-bg: #172447;
 
