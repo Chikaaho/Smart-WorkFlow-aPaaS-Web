@@ -173,4 +173,15 @@ const visible = computed(
 .list-pagination--design :deep(.el-pagination__editor) {
   width: 44px;
 }
+.list-pagination--design :deep(.el-pagination__jump) {
+  width: 124px;
+  justify-content: flex-start;
+  gap: var(--sw-space-8);
+  font-size: var(--sw-font-caption);
+  color: var(--sw-text-secondary);
+}
+.list-pagination--design :deep(.el-pagination__goto),
+.list-pagination--design :deep(.el-pagination__classifier) {
+  margin: 0;
+}
 </style>

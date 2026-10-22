@@ -244,7 +244,7 @@ html:root {
 /* P53 button/tag paint is audited from the locked SVG stroke declarations.
  * V012-BUG-015：操作列 link 按钮为纯文字（无底色/无描边），描边仅作用于实心/描边主按钮。 */
 :where(html) .el-button.el-button--primary:not(.is-link) {
-  border-color: #8552ff !important;
+  border-color: var(--sw-color-primary) !important;
 }
 :where(html) .el-tag.el-tag--success .el-tag__content {
   color: #18a67a !important;
@@ -269,12 +269,12 @@ html:root {
   border-color: #d8c9ff !important;
 }
 :where(html) .el-tag.el-tag--primary {
-  --el-tag-text-color: #6f2dff;
-  --el-tag-bg-color: #f6f1ff;
-  --el-tag-border-color: #d8c9ff;
-  color: #6f2dff !important;
-  background-color: #f6f1ff !important;
-  border-color: #d8c9ff !important;
+  --el-tag-text-color: var(--sw-color-primary);
+  --el-tag-bg-color: var(--sw-color-primary-soft);
+  --el-tag-border-color: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary) !important;
+  background-color: var(--sw-color-primary-soft) !important;
+  border-color: var(--sw-color-primary-soft) !important;
 }
 
 /**
@@ -299,7 +299,7 @@ body {
    比 :root 更近；因此直接落 th（含固定列），未走 ListTable 的页面也拿到同一底色，
    避免"表头白底压在白卡片上=看不见"与"表头色≈页面底色"两类撞色。 */
 #app .el-table th.el-table__cell {
-  background-color: #fafbfe;
+  background-color: var(--sw-list-table-header-background, #fafbfe);
 }
 
 /* P53 设计弹窗遮罩：设计 SVG 三层 #10182F@0.116 叠加的等效合成 32%，全局统一弹层背板

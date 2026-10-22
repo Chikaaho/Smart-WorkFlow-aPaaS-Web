@@ -6,6 +6,20 @@
  * 生成保证 zh-CN 与 en-US 结构一致，不存在缺键或键集漂移。
  */
 export default {
+  appearance: {
+    title: '主题',
+    color: '主题色',
+    purple: '默认',
+    blue: '蓝色',
+    teal: '青色',
+    custom: '自定义',
+    preview: '主题预览',
+    selected: '已选',
+    reset: '恢复默认',
+    done: '完成',
+    invalidColor: '请输入六位十六进制颜色，例如 #B45309',
+    modify: '修改',
+  },
   agent: {
     inputVariables: '输入变量 (Input)',
     outputResults: '输出结果 (Output)',
@@ -1461,6 +1475,10 @@ export default {
     system: '系统管理',
   },
   nav: {
+    adminWorkflow: '流程管理',
+    superTenant: '超管 · {tenant}',
+    tenant: '租户 · {tenant}',
+    operationManual: '操作手册',
     brandPortal: 'CH-aPaaS',
     brandAdmin: 'CH-aPaaS · 管理端',
     currentSpace: '当前空间',

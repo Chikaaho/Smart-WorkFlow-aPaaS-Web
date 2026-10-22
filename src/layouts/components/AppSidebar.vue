@@ -9,6 +9,8 @@ import { MenuType, type MenuNode } from '@/contracts/menu'
 import AppSidebarItem from './AppSidebarItem.vue'
 import iconWorkspace from '@/assets/brand/icon-workspace.png'
 import iconIntelligence from '@/assets/brand/icon-intelligence.png'
+import { projectAdminSections } from '../admin-sections'
+import { useI18n } from '@/locales'
 
 // 侧边栏（P53 深色导航阶）：只读 menu store（单一数据源），不二次拉取。
 // 选中态与展开态随当前路由派生；只渲染当前区域（前台/后台）的菜单分支。
@@ -16,6 +18,7 @@ const props = defineProps<{ collapse: boolean }>()
 
 const route = useRoute()
 const menuStore = useMenuStore()
+const { t } = useI18n()
 void props
 
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
@@ -24,7 +27,7 @@ const area = computed(() => resolveArea(route.path))
 const adminSectionTitle = computed(() => {
   if (area.value !== 'admin') return ''
   return (
-    visibleMenuForArea(localizedMenu.value, 'admin').find((node) =>
+    projectAdminSections(visibleMenuForArea(localizedMenu.value, 'admin'), t).find((node) =>
       subtreeContains(node, route.path),
     )?.title ?? ''
   )
@@ -57,7 +60,8 @@ const inboxSlim = computed(() => area.value === 'portal' && route.path.startsWit
  */
 const items = computed(() => {
   const current = resolveArea(route.path)
-  const scoped = visibleMenuForArea(localizedMenu.value, current)
+  const areaVisible = visibleMenuForArea(localizedMenu.value, current)
+  const scoped = current === 'admin' ? projectAdminSections(areaVisible, t) : areaVisible
   if (current !== 'admin') {
     // 工作台页轻量导航（V012-BUG-004/023）：固定本地直达项在模板渲染，树项不出现
     if (workspaceSlim.value) return []
@@ -410,7 +414,8 @@ function resolveAdminActive(path: string): string {
   height: 40px;
   line-height: 22px;
   padding: 0;
-  margin: 0;
+  margin: 0 0 var(--sw-space-8);
+  font-weight: var(--sw-font-weight-emphasis);
 }
 .app-sidebar--admin :deep(.el-menu-item .el-icon) {
   display: none;

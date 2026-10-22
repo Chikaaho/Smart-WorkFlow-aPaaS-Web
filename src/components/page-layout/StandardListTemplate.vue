@@ -126,6 +126,9 @@ const emit = defineEmits<{
 
 .standard-list--design {
   --sw-list-table-header-background: var(--sw-surface-page);
+  --el-border-color: var(--sw-border-light);
+  --el-input-border-color: var(--sw-border-light);
+  --el-select-border-color: var(--sw-border-light);
   min-height: 0;
   padding: var(--sw-space-20);
   gap: var(--sw-space-16);
@@ -162,6 +165,30 @@ const emit = defineEmits<{
   height: var(--sw-list-design-header-height);
   background: var(--sw-surface-page);
   font-weight: var(--sw-font-weight-body);
+  border-bottom-color: transparent;
+}
+.standard-list--design :deep(.el-table td .cell) {
+  color: var(--sw-text-primary);
+}
+.standard-list--design :deep(.el-input__wrapper) {
+  padding-inline: 13px;
+}
+.standard-list--design :deep(.el-select__wrapper) {
+  padding-inline: 13px;
+}
+.standard-list--design :deep(.el-select__placeholder.is-transparent) {
+  color: var(--sw-text-regular);
+}
+.standard-list--design :deep(.list-actions) {
+  gap: var(--sw-space-8);
+  height: 32px;
+}
+.standard-list--design :deep(.list-actions .el-button.is-link) {
+  min-width: 40px;
+  height: 32px;
+  font-size: var(--sw-font-body);
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: 22px;
 }
 .standard-list--design :deep(.el-table__body-wrapper .el-table__row) {
   height: var(--sw-list-design-row-height);

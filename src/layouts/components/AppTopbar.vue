@@ -11,6 +11,12 @@ import { clearDynamicRoutes } from '@/router/guard'
 import { canEnterAdminArea, firstAdminLeafPath, resolveArea } from '@/foundation/area'
 import { buildMenuTrail } from '../menu-utils'
 import { useLocalizedMenuTree } from '../menu-title'
+import ThemeDialog from './ThemeDialog.vue'
+import DetailDialog from '@/components/DetailDialog.vue'
+import operationManual from '../../../docs/user-guide/operation-manual.md?raw'
+import searchIcon from '@/assets/brand/search-020.svg'
+import bellIcon from '@/assets/brand/bell-020.svg'
+import arrowIcon from '@/assets/brand/arrow-down-020.svg'
 import {
   unreadNotifyCount,
   pageNotifyInbox,
@@ -36,6 +42,9 @@ const { logout } = useAuth()
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 const displayName = computed(() => userStore.user?.displayName || t('auth.notSignedIn'))
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
+const themeVisible = ref(false)
+const manualVisible = ref(false)
+const manualLines = operationManual.split('\n')
 
 // 通知铃铛：仅在服务端菜单树含收件箱入口时显示；未读数失败静默为 0（顶栏韧性）。
 const bellVisible = computed(() => {
@@ -140,6 +149,7 @@ async function onLogout(): Promise<void> {
 }
 
 function onCommand(command: string): void {
+  if (command === 'manual') manualVisible.value = true
   if (command === 'logout') {
     void onLogout()
   }
@@ -156,7 +166,20 @@ function onCommand(command: string): void {
 </script>
 
 <template>
-  <div class="app-topbar">
+  <div class="app-topbar" :class="`app-topbar--${currentArea}`">
+    <span
+      v-if="currentArea === 'admin' && userStore.user?.tenantId != null"
+      class="app-topbar__tenant"
+    >
+      {{
+        t(userStore.superAdmin ? 'nav.superTenant' : 'nav.tenant', {
+          tenant: userStore.user?.tenantId,
+        })
+      }}
+    </span>
+    <button class="app-topbar__theme" type="button" @click="themeVisible = true">
+      {{ t('common.theme') }}
+    </button>
     <!-- V011-BUG-005：多语言切换（主导航与搜索之间，Owner 2026-09-22 指定位置） -->
     <el-dropdown trigger="click" @command="onLocale">
       <button class="app-topbar__locale" type="button" :aria-label="t('locale.switch')">
@@ -177,8 +200,9 @@ function onCommand(command: string): void {
       </template>
     </el-dropdown>
     <span class="app-topbar__search" aria-hidden="true">
+      <img v-if="currentArea === 'admin'" :src="searchIcon" alt="" width="18" height="18" />
       <!-- P53 设计同源图标：路径取自锁定 SVG（1225,23 20×20 / 1263,23 20×20） -->
-      <svg viewBox="1225 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
+      <svg v-else viewBox="1225 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
         <path
           d="M1234.17 38.0002C1237.39 38.0002 1240 35.3885 1240 32.1668C1240 28.9452 1237.39 26.3335 1234.17 26.3335C1230.95 26.3335 1228.33 28.9452 1228.33 32.1668C1228.33 35.3885 1230.95 38.0002 1234.17 38.0002Z"
           stroke="#ECE9FF"
@@ -208,7 +232,15 @@ function onCommand(command: string): void {
       <template #reference>
         <button class="app-topbar__bell" type="button" :aria-label="t('nav.notifications')">
           <el-badge :value="unread" :hidden="unread <= 0" :max="99">
-            <svg viewBox="1263 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
+            <img v-if="currentArea === 'admin'" :src="bellIcon" alt="" width="18" height="18" />
+            <svg
+              v-else
+              viewBox="1263 22 20 20"
+              width="20"
+              height="20"
+              fill="none"
+              aria-hidden="true"
+            >
               <path
                 d="M1278 29.6665C1278 28.3404 1277.47 27.0687 1276.54 26.131C1275.6 25.1933 1274.33 24.6665 1273 24.6665C1271.67 24.6665 1270.4 25.1933 1269.46 26.131C1268.53 27.0687 1268 28.3404 1268 29.6665C1268 35.4998 1265.5 35.4998 1265.5 37.1665H1280.5C1280.5 35.4998 1278 35.4998 1278 29.6665Z"
                 stroke="#ECE9FF"
@@ -261,11 +293,13 @@ function onCommand(command: string): void {
       <span class="app-topbar__user">
         <span class="app-topbar__avatar" aria-hidden="true">{{ avatarText }}</span>
         <span class="app-topbar__user-name">{{ displayName }}</span>
-        <el-icon class="app-topbar__caret"><CaretBottom /></el-icon>
+        <img v-if="currentArea === 'admin'" :src="arrowIcon" alt="" width="12" height="12" />
+        <el-icon v-else class="app-topbar__caret"><CaretBottom /></el-icon>
       </span>
       <template #dropdown>
         <!-- V011-BUG-004：仅三个小菜单项，无摘要头 -->
         <el-dropdown-menu class="app-topbar__dropdown">
+          <el-dropdown-item command="manual">{{ t('nav.operationManual') }}</el-dropdown-item>
           <el-dropdown-item command="account-bindings">{{
             t('auth.accountBindings')
           }}</el-dropdown-item>
@@ -281,6 +315,15 @@ function onCommand(command: string): void {
         </el-dropdown-menu>
       </template>
     </el-dropdown>
+    <ThemeDialog v-model="themeVisible" />
+    <DetailDialog v-model="manualVisible" :title="t('nav.operationManual')" width="920px">
+      <article class="app-topbar__manual">
+        <template v-for="(line, index) in manualLines" :key="index">
+          <h3 v-if="line.startsWith('## ')">{{ line.slice(3) }}</h3>
+          <p v-else-if="line && !line.startsWith('# ')">{{ line }}</p>
+        </template>
+      </article>
+    </DetailDialog>
   </div>
 </template>
 
@@ -291,6 +334,68 @@ function onCommand(command: string): void {
   /* 设计（节点02）：搜索/铃铛/用户区间距 18px，个人区总宽 336 */
   gap: 18px;
   height: 100%;
+}
+.app-topbar__theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--sw-surface-card);
+  font: inherit;
+  font-size: var(--sw-font-caption);
+  cursor: pointer;
+}
+.app-topbar__tenant {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 88px;
+  height: 24px;
+  color: var(--sw-color-primary);
+  background: var(--sw-color-primary-soft);
+  border-radius: var(--sw-radius-base);
+  font-size: var(--sw-font-caption);
+  white-space: nowrap;
+}
+.app-topbar--admin {
+  gap: var(--sw-space-8);
+}
+.app-topbar--admin .app-topbar__locale {
+  padding: 0;
+  font-size: var(--sw-font-caption);
+}
+.app-topbar--admin .app-topbar__locale-caret {
+  display: none;
+}
+.app-topbar--admin .app-topbar__search,
+.app-topbar--admin .app-topbar__bell {
+  width: 18px;
+  height: 18px;
+}
+.app-topbar--admin .app-topbar__user {
+  gap: 8px;
+  min-width: 110px;
+}
+.app-topbar--admin .app-topbar__avatar {
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
+  font-weight: 500;
+  transform: none;
+}
+.app-topbar--admin .app-topbar__user-name {
+  max-width: 96px;
+}
+.app-topbar__manual {
+  color: var(--sw-text-primary);
+  line-height: 1.7;
+}
+.app-topbar__manual h3 {
+  color: var(--sw-color-primary);
 }
 .app-topbar__bell {
   display: inline-flex;

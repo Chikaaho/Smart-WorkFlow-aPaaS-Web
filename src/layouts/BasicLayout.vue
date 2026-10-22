@@ -84,7 +84,9 @@ const showAside = computed(
 .basic-layout__topbar--admin {
   box-sizing: border-box;
   background: var(--sw-nav-topbar-admin-bg);
-  border: 1px solid #27345c;
+  border: none;
+  gap: var(--sw-space-8);
+  padding: 0 var(--sw-space-24);
   flex: 0 0 auto;
   height: 64px;
 }
@@ -100,6 +102,11 @@ const showAside = computed(
   /* 设计（节点02）：搜索锚点原 1225；加语言入口后整体左移保持右缘对齐 */
   justify-content: flex-start;
   padding-left: 96px;
+}
+.basic-layout--admin .basic-layout__actions {
+  flex: 0 0 auto;
+  width: auto;
+  padding-left: 0;
 }
 .basic-layout__body {
   display: flex;

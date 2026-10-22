@@ -6,6 +6,20 @@
  * 生成保证 zh-CN 与 en-US 结构一致，不存在缺键或键集漂移。
  */
 export default {
+  appearance: {
+    title: 'Theme',
+    color: 'Theme color',
+    purple: 'Default',
+    blue: 'Blue',
+    teal: 'Teal',
+    custom: 'Custom',
+    preview: 'Theme preview',
+    selected: 'Selected',
+    reset: 'Restore default',
+    done: 'Done',
+    invalidColor: 'Enter a six-digit hexadecimal color, such as #B45309',
+    modify: 'Change',
+  },
   agent: {
     inputVariables: 'Input variables (Input)',
     outputResults: 'Output results (Output)',
@@ -1510,6 +1524,10 @@ export default {
     system: 'System',
   },
   nav: {
+    adminWorkflow: 'Workflows',
+    superTenant: 'Admin · {tenant}',
+    tenant: 'Tenant · {tenant}',
+    operationManual: 'User guide',
     brandPortal: 'CH-aPaaS',
     brandAdmin: 'CH-aPaaS · Admin',
     currentSpace: 'Current space',

@@ -8,6 +8,7 @@ import { visibleMenuForArea, toFullPath, buildMenuTrail } from './menu-utils'
 import { useLocalizedMenuTree } from './menu-title'
 import { MenuType } from '@/contracts/menu'
 import type { MenuNode } from '@/contracts/menu'
+import { projectAdminSections } from './admin-sections'
 
 /**
  * 顶部主导航（P53 设计节点 01/04）。
@@ -132,7 +133,8 @@ function isActive(to: string): boolean {
 }
 
 const items = computed<MainNavItem[]>(() => {
-  const visible = visibleMenuForArea(localizedMenu.value, area.value)
+  const areaVisible = visibleMenuForArea(localizedMenu.value, area.value)
+  const visible = area.value === 'admin' ? projectAdminSections(areaVisible, t) : areaVisible
   if (area.value === 'portal') {
     const result: MainNavItem[] = [
       {
@@ -243,6 +245,8 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
 }
 .app-main-nav--admin {
   --sw-nav-topbar-active-bg: var(--sw-nav-topbar-admin-active-bg);
+  align-items: center;
+  gap: var(--sw-space-8);
 }
 .app-main-nav::-webkit-scrollbar {
   display: none;
@@ -273,11 +277,18 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
   background: var(--sw-nav-topbar-active-bg);
 }
 .app-main-nav--admin .app-main-nav__item {
-  flex: 1 1 0;
+  flex: 0 0 112px;
+  box-sizing: border-box;
+  height: 40px;
+  font-weight: var(--sw-font-weight-emphasis);
+  border-radius: var(--sw-radius-base);
   /* RA03b 窄屏修复：显式 88px 会压过 flex 的 min-width:auto，nowrap 文字溢出与相邻项重叠；
      max-content 保底不压缩文字，宽屏仍均分、窄屏由容器横向滑动（方向 §4.5 不留不可操作元素） */
   min-width: max-content;
   padding: 0 12px;
+}
+.app-main-nav--admin .app-main-nav__item.is-active::after {
+  display: none;
 }
 /* 设计（节点02）：当前栏目指示线 48×2，居中（PNG 墨迹行 61-62） */
 .app-main-nav__item.is-active::after {

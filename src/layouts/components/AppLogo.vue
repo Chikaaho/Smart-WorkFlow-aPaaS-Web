@@ -6,14 +6,11 @@ import { useI18n } from '@/locales'
 // mark/wordmark 资产为 P53 锁定设计包原生裁切（docs/ui/png 24,12 40×42 / 77,20 90×26），与设计逐像素同源。
 import logoUrl from '@/assets/brand/logo-block.png'
 import wordmarkUrl from '@/assets/brand/wordmark.png'
+import adminLogoUrl from '@/assets/brand/logo-020.png'
 
 const props = defineProps<{ collapse: boolean; area: 'portal' | 'admin' }>()
 const { t } = useI18n()
 const brandLabel = computed(() => t(props.area === 'admin' ? 'nav.brandAdmin' : 'nav.brandPortal'))
-// 管理端字标 = 同一 wordmark 资产 + 语言文本后缀（zh:· 管理端 / en:· Admin）
-const brandAdminSuffix = computed(() =>
-  t('nav.brandAdmin').replace(t('nav.brandPortal'), '').trim(),
-)
 </script>
 
 <template>
@@ -23,9 +20,16 @@ const brandAdminSuffix = computed(() =>
     role="img"
     :aria-label="brandLabel"
   >
-    <img class="app-logo__mark-frame" :src="logoUrl" alt="" />
-    <img class="app-logo__wordmark" :src="wordmarkUrl" alt="" />
-    <span v-if="area === 'admin'" class="app-logo__text">{{ brandAdminSuffix }}</span>
+    <template v-if="area === 'admin'">
+      <span class="app-logo__admin-mark"
+        ><img :src="adminLogoUrl" alt="" width="30" height="32"
+      /></span>
+      <span class="app-logo__text">{{ brandLabel }}</span>
+    </template>
+    <template v-else>
+      <img class="app-logo__mark-frame" :src="logoUrl" alt="" />
+      <img class="app-logo__wordmark" :src="wordmarkUrl" alt="" />
+    </template>
   </div>
 </template>
 
@@ -75,14 +79,26 @@ const brandAdminSuffix = computed(() =>
   /* 0.1.7 #5：管理端侧栏 236px（BasicLayout .basic-layout__aside--admin 同值） */
   flex-basis: 236px;
   width: 236px;
-  gap: 12px;
+  gap: 10px;
+  height: 40px;
+  padding: 0;
 }
 .app-logo--admin .app-logo__wordmark {
   width: 70px;
   height: 20px;
 }
 .app-logo--admin .app-logo__text {
-  margin-left: -8px;
-  font-size: 13px;
+  font-size: var(--sw-font-h2);
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: 24px;
+}
+.app-logo__admin-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 34px;
+  height: 36px;
+  background: var(--sw-surface-card);
+  border-radius: var(--sw-radius-base);
 }
 </style>

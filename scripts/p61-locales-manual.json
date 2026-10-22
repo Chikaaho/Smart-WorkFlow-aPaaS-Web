@@ -57,7 +57,11 @@
       "adminConsole": "管理控制台",
       "notifications": "通知",
       "mainNav": "主导航",
-      "toggleSidebar": "收起或展开侧栏"
+      "toggleSidebar": "收起或展开侧栏",
+      "adminWorkflow": "流程管理",
+      "superTenant": "超管 · {tenant}",
+      "tenant": "租户 · {tenant}",
+      "operationManual": "操作手册"
     },
     "login": {
       "brandTagline": "企业智能流程与应用平台",
@@ -167,6 +171,43 @@
       "empty": "无匹配候选",
       "note": "候选来自服务端审批人候选接口；确认后写入节点审批人字段（用户 ID）。",
       "deptTabHidden": "部门 / 角色 / 动态规则暂无服务端契约，不提供。"
+    },
+    "appearance": {
+      "title": "主题",
+      "color": "主题色",
+      "purple": "默认",
+      "blue": "蓝色",
+      "teal": "青色",
+      "custom": "自定义",
+      "preview": "主题预览",
+      "selected": "已选",
+      "reset": "恢复默认",
+      "done": "完成",
+      "invalidColor": "请输入六位十六进制颜色，例如 #B45309",
+      "modify": "修改"
+    },
+    "system": {
+      "tenantList": "租户管理",
+      "tenantDetail": "租户详情",
+      "tenantCode": "租户编号",
+      "tenantName": "租户名称",
+      "tenantAdmin": "管理员",
+      "tenantAdminAccount": "管理员账号",
+      "tenantAdminUnset": "未配置",
+      "tenantPassword": "初始密码",
+      "tenantStatusDisabled": "停用",
+      "newTenant": "新增租户",
+      "addTenant": "新增",
+      "editTenant": "编辑租户",
+      "enableTenant": "启用",
+      "disableTenant": "停用",
+      "tenantListLoadFailed": "租户列表加载失败",
+      "tenantNameRequired": "请输入租户名称",
+      "tenantAdminRequired": "请输入管理员账号",
+      "tenantPasswordRequired": "请输入初始密码",
+      "tenantStatusChangeConfirm": "确认{action}租户「{name}」？",
+      "tenantRootReadonly": "超管租户为保留对象，只能查看。",
+      "noRolesInTenant": "当前租户下暂无角色"
     }
   },
   "en-US": {
@@ -226,7 +267,11 @@
       "adminConsole": "Admin console",
       "notifications": "Notifications",
       "mainNav": "Main navigation",
-      "toggleSidebar": "Toggle sidebar"
+      "toggleSidebar": "Toggle sidebar",
+      "adminWorkflow": "Workflows",
+      "superTenant": "Admin · {tenant}",
+      "tenant": "Tenant · {tenant}",
+      "operationManual": "User guide"
     },
     "login": {
       "brandTagline": "Enterprise workflow & application platform",
@@ -336,6 +381,43 @@
       "empty": "No matching candidates",
       "note": "Candidates come from the server approver-candidates API; picking writes the user ID into the node approver field.",
       "deptTabHidden": "Department / role / dynamic rules have no server contract yet and are not offered."
+    },
+    "appearance": {
+      "title": "Theme",
+      "color": "Theme color",
+      "purple": "Default",
+      "blue": "Blue",
+      "teal": "Teal",
+      "custom": "Custom",
+      "preview": "Theme preview",
+      "selected": "Selected",
+      "reset": "Restore default",
+      "done": "Done",
+      "invalidColor": "Enter a six-digit hexadecimal color, such as #B45309",
+      "modify": "Change"
+    },
+    "system": {
+      "tenantList": "Tenants",
+      "tenantDetail": "Tenant details",
+      "tenantCode": "Tenant code",
+      "tenantName": "Tenant name",
+      "tenantAdmin": "Administrator",
+      "tenantAdminAccount": "Administrator account",
+      "tenantAdminUnset": "Not configured",
+      "tenantPassword": "Initial password",
+      "tenantStatusDisabled": "Disabled",
+      "newTenant": "New tenant",
+      "addTenant": "Add",
+      "editTenant": "Edit tenant",
+      "enableTenant": "Enable",
+      "disableTenant": "Disable",
+      "tenantListLoadFailed": "Failed to load tenants",
+      "tenantNameRequired": "Enter the tenant name",
+      "tenantAdminRequired": "Enter the administrator account",
+      "tenantPasswordRequired": "Enter the initial password",
+      "tenantStatusChangeConfirm": "Confirm to {action} tenant \"{name}\"?",
+      "tenantRootReadonly": "The root tenant is read-only.",
+      "noRolesInTenant": "No roles in this tenant"
     }
   }
 }
