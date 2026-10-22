@@ -11,6 +11,7 @@ import type {
   TenantFilter,
   TenantCreatePayload,
   TenantAdminCandidate,
+  TenantStatusAudit,
 } from '@/modules/system/types/tenant'
 
 interface BackendPageResult<T> {
@@ -63,8 +64,21 @@ export async function renameTenant(id: string, name: string): Promise<void> {
 }
 
 /** PUT /system/tenant/{id}/status —— 0=启用 1=停用 */
-export async function updateTenantStatus(id: string, status: number): Promise<void> {
-  return request<void>({ method: 'PUT', url: `/system/tenant/${id}/status`, data: { status } })
+export async function updateTenantStatus(
+  id: string,
+  status: number,
+  reason: string,
+): Promise<void> {
+  return request<void>({
+    method: 'PUT',
+    url: `/system/tenant/${id}/status`,
+    data: { status, reason },
+  })
+}
+
+/** 租户启停与过期记录，按发生时间倒序。 */
+export function queryTenantStatusAudits(id: string): Promise<TenantStatusAudit[]> {
+  return request({ method: 'GET', url: `/system/tenant/${id}/status-audits` })
 }
 
 export function queryTenantAdministrators(id: string): Promise<TenantAdminCandidate[]> {

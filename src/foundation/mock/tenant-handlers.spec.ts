@@ -24,7 +24,7 @@ describe('tenant UI mock handlers', () => {
   it('filters and paginates the same tenant records', async () => {
     const page = await call('GET', '/page', undefined, { pageNum: 2, pageSize: 1 })
     expect(page?.data).toMatchObject({ total: 3, records: [{ code: '1' }] })
-    await call('PUT', '/2/status', { status: 1 })
+    await call('PUT', '/2/status', { status: 1, reason: '季度暂停' })
     const filtered = await call('GET', '/page', undefined, { name: '深圳', status: 1 })
     expect(filtered?.data).toMatchObject({ total: 1, records: [{ id: '2', status: 1 }] })
   })
@@ -41,6 +41,11 @@ describe('tenant UI mock handlers', () => {
     expect(created?.code).toBe(0)
     expect(MOCK_TENANTS.at(-1)).toMatchObject({ name: '分公司', adminUsername: 'admin' })
     expect(JSON.stringify(MOCK_TENANTS)).not.toContain('ui-only')
+  })
+
+  it('requires a reason before changing tenant status', async () => {
+    expect((await call('PUT', '/2/status', { status: 1 }))?.code).toBe(400)
+    expect(MOCK_TENANTS.find((row) => row.id === '2')?.status).toBe(0)
   })
 
   it('retries the same creation request without duplicating the tenant or administrator', async () => {
@@ -83,7 +88,7 @@ describe('tenant UI mock handlers', () => {
 
   it('keeps root read-only and rejects unauthenticated and ordinary sessions', async () => {
     expect((await call('PUT', '/0', { name: '改名' }))?.code).toBe(403)
-    expect((await call('PUT', '/0/status', { status: 1 }))?.code).toBe(403)
+    expect((await call('PUT', '/0/status', { status: 1, reason: '保留对象验证' }))?.code).toBe(403)
     switchMockSession('admin')
     expect((await call('GET', '/page'))?.code).toBe(403)
     setAccessToken(null)

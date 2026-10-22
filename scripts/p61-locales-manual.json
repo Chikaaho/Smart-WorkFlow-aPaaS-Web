@@ -233,6 +233,8 @@
       "tenantAdminRequired": "请输入管理员账号",
       "tenantPasswordRequired": "请输入初始密码",
       "tenantStatusChangeConfirm": "确认{action}租户「{name}」？",
+      "tenantStatusReasonPlaceholder": "填写变更原因",
+      "tenantStatusReasonRequired": "请填写变更原因",
       "tenantRootReadonly": "超管租户为保留对象，只能查看。",
       "noRolesInTenant": "当前租户下暂无角色",
       "roleDialogHintCreate": "仅展示所属租户下的角色"
@@ -513,6 +515,8 @@
       "tenantAdminRequired": "Enter the administrator account",
       "tenantPasswordRequired": "Enter the initial password",
       "tenantStatusChangeConfirm": "Confirm to {action} tenant \"{name}\"?",
+      "tenantStatusReasonPlaceholder": "Enter the reason for this change",
+      "tenantStatusReasonRequired": "Enter the reason for this change",
       "tenantRootReadonly": "The root tenant is read-only.",
       "noRolesInTenant": "No roles in this tenant",
       "roleDialogHintCreate": "Only roles belonging to the target tenant are shown"

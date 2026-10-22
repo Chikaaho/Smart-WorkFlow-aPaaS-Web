@@ -185,8 +185,9 @@ async function handleSubmit() {
 async function toggleStatus(row: SysTenant) {
   const next = row.status === 0 ? 1 : 0
   const action = next === 0 ? t('system.enableTenant') : t('system.disableTenant')
+  let reason: string
   try {
-    await ElMessageBox.confirm(
+    const result = await ElMessageBox.prompt(
       t('system.tenantStatusChangeConfirm', { action, name: row.name }),
       t('common.confirm'),
       {
@@ -197,13 +198,17 @@ async function toggleStatus(row: SysTenant) {
           return t('common.cancel')
         },
         type: 'warning',
+        inputPlaceholder: t('system.tenantStatusReasonPlaceholder'),
+        inputValidator: (value: string) =>
+          Boolean(value?.trim()) || t('system.tenantStatusReasonRequired'),
       },
     )
+    reason = result.value.trim()
   } catch {
     return
   }
   try {
-    await updateTenantStatus(row.id!, next)
+    await updateTenantStatus(row.id!, next, reason)
     ElMessage.success(t('common.updateSuccess'))
     void loadList()
   } catch (err) {

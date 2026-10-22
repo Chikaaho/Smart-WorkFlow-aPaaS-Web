@@ -1881,6 +1881,8 @@ export default {
     tenantAdminRequired: '请输入管理员账号',
     tenantPasswordRequired: '请输入初始密码',
     tenantStatusChangeConfirm: '确认{action}租户「{name}」？',
+    tenantStatusReasonPlaceholder: '填写变更原因',
+    tenantStatusReasonRequired: '请填写变更原因',
     tenantRootReadonly: '超管租户为保留对象，只能查看。',
     postCode: '岗位编码',
     postName: '岗位名称',

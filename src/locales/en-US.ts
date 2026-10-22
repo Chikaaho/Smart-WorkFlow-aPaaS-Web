@@ -1938,6 +1938,8 @@ export default {
     tenantAdminRequired: 'Enter the administrator account',
     tenantPasswordRequired: 'Enter the initial password',
     tenantStatusChangeConfirm: 'Confirm to {action} tenant "{name}"?',
+    tenantStatusReasonPlaceholder: 'Enter the reason for this change',
+    tenantStatusReasonRequired: 'Enter the reason for this change',
     tenantRootReadonly: 'The root tenant is read-only.',
     postCode: 'Position code',
     postName: 'Position name',

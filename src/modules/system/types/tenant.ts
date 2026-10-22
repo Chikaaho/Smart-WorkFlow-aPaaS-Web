@@ -31,6 +31,18 @@ export interface TenantAdminCandidate {
   realName?: string | null
 }
 
+export interface TenantStatusAudit {
+  id: string
+  action: 'DISABLE' | 'ENABLE' | 'EXPIRED'
+  oldStatus?: number | null
+  newStatus?: number | null
+  expireTime?: string | null
+  reason: string
+  operatorId: string
+  occurredAt: string
+  result: string
+}
+
 export interface TenantContextOption {
   id: string
   name: string

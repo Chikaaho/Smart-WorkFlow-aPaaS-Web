@@ -278,13 +278,16 @@ export const tenantMockRegistrations: {
       if (id === '0') return { code: 403, message: '超管租户只能查看', data: null }
       const row = MOCK_TENANTS.find((item) => item.id === id)
       if (!row) return { code: 404, message: '租户不存在', data: null }
-      const values = body as { name?: string; status?: number }
+      const values = body as { name?: string; status?: number; reason?: string }
       if (field === 'name') {
         if (!values?.name?.trim()) return { code: 400, message: '请输入租户名称', data: null }
         row.name = values.name.trim()
       } else {
         if (values?.status !== 0 && values?.status !== 1) {
           return { code: 400, message: '租户状态无效', data: null }
+        }
+        if (!values?.reason?.trim()) {
+          return { code: 400, message: '请填写变更原因', data: null }
         }
         row.status = values.status
       }

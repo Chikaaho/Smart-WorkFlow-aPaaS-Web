@@ -219,13 +219,13 @@ describe('TenantList', () => {
   })
 
   it('toggles a normal tenant status through the API', async () => {
-    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    vi.spyOn(ElMessageBox, 'prompt').mockResolvedValue({ value: '季度暂停' } as never)
     vi.mocked(updateTenantStatus).mockResolvedValue(undefined)
     const wrapper = mountPage()
     const vm = wrapper.vm as unknown as {
       toggleStatus: (row: SysTenant) => Promise<void>
     }
     await vm.toggleStatus({ id: '2', name: '深圳中心', status: 0 })
-    expect(updateTenantStatus).toHaveBeenCalledWith('2', 1)
+    expect(updateTenantStatus).toHaveBeenCalledWith('2', 1, '季度暂停')
   })
 })
