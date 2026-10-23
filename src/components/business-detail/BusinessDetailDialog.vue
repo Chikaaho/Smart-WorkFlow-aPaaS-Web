@@ -29,7 +29,7 @@ const props = withDefaults(
   }>(),
   {
     title: '',
-    width: '980px',
+    width: 'calc(100vw - 32px)',
     formKey: '',
     recordId: '',
     record: null,
@@ -112,7 +112,7 @@ watch(
     :model-value="modelValue"
     :title="title || t('common.detail')"
     :width="width"
-    top="6vh"
+    top="0"
     class="business-detail-dialog"
     @update:model-value="emit('update:modelValue', $event)"
   >
@@ -150,11 +150,33 @@ watch(
 <style scoped>
 /* 详情正文单独滚动；el-dialog 经 Teleport 渲染，需用 :global 穿透作用域。 */
 :global(.business-detail-dialog .el-dialog__body) {
-  max-height: 72vh;
+  max-height: calc(100vh - 96px);
   overflow-y: auto;
+}
+:global(.business-detail-dialog.el-dialog) {
+  height: calc(100vh - 32px);
+  margin: 16px auto !important;
+  border-radius: 0;
 }
 .business-detail-dialog__body {
   min-height: 120px;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+@media (max-width: 767px) {
+  :global(.business-detail-dialog.el-dialog) {
+    width: calc(100vw - 16px) !important;
+    height: calc(100vh - 16px);
+    margin: 8px auto !important;
+  }
+  :global(.business-detail-dialog .el-dialog__body) {
+    max-height: calc(100vh - 76px);
+    padding: 12px;
+  }
+  .business-detail-dialog__body {
+    max-width: 100%;
+  }
 }
 .business-detail-dialog__section {
   margin: 16px 0 8px;
