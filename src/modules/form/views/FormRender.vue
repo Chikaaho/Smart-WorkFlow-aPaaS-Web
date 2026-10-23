@@ -945,6 +945,8 @@ onMounted(() => {
                     :model-value="formData[field.name]"
                     :readonly="fieldReadonly(field)"
                     :reference-label="referenceLabels[field.name] ?? ''"
+                    :form-key="formKey"
+                    :record-id="recordId"
                     @update:model-value="formData[field.name] = $event"
                   />
                   <p

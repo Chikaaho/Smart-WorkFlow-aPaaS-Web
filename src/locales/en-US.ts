@@ -688,6 +688,9 @@ export default {
     totalItems: 'Total {total}',
   },
   component: {
+    downloadFileNamed: 'Download {name}',
+    attachmentDownloadFailed: 'Could not download the attachment. Try again.',
+    imagePreviewUnavailable: 'Image preview is unavailable',
     selectDataObject: 'Select a data object',
     selectUser: 'Select people',
     selectUsers: 'Select users (multiple)',

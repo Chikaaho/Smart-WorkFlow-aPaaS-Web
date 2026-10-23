@@ -83,6 +83,8 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
                 :model-value="tableRows[rowIdx]?.[sf.name] ?? ''"
                 :readonly="readonly"
                 :sub-field="true"
+                :form-key="formKey"
+                :record-id="recordId"
                 @update:model-value="updateCell(rowIdx, sf.name, $event)"
               />
             </td>

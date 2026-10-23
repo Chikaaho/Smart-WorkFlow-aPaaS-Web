@@ -966,6 +966,7 @@ onMounted(loadDetail)
       <BusinessFormReadonly
         v-if="detail.formKey && detail.businessKey"
         :form-key="detail.formKey"
+        :record-id="detail.businessKey"
         :record="formRecord"
         :loading="formRecordLoading"
       />

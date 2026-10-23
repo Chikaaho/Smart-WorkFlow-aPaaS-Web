@@ -26,6 +26,7 @@ import type { TaskDetail } from '@/contracts/bpm'
 import { ApiError } from '@/foundation/request'
 import { getFormData, getFormDefinition } from '@/adapters/form-runtime'
 import type { FormSchema } from '@/contracts/form-schema'
+import AttachmentControl from '@/components/dynamic-field-controls/AttachmentControl.vue'
 
 type MobileTab = 'todo' | 'initiated' | 'drafts'
 
@@ -218,13 +219,6 @@ const formFieldRows = computed(() => {
   }
   return out
 })
-
-/** 下载入口与详情同源：按记录（businessKey）对象权限放行，未授权由后端拒绝。 */
-const attachmentBase = '/api'
-
-function attachmentDownloadUrl(storageKey: string, name: string): string {
-  return `${attachmentBase}/workflow/attachments/${detail.value?.businessKey ?? ''}/download?storageKey=${encodeURIComponent(storageKey)}&name=${encodeURIComponent(name)}`
-}
 
 // ─── 正式意见表单：动态字段渲染（与 PC 同一配置与校验口径） ───
 const opinionFields = computed(() => detail.value?.opinionForm?.fields ?? [])
@@ -459,16 +453,15 @@ void (async () => {
             <template v-if="formFieldRows.length">
               <div v-for="row in formFieldRows" :key="row.key" class="m-kv">
                 <span>{{ row.label }}</span>
-                <span v-if="row.attachments" class="m-att-list">
-                  <a
-                    v-for="att in row.attachments"
-                    :key="att.storageKey"
-                    class="m-att-link"
-                    :href="attachmentDownloadUrl(att.storageKey, att.name)"
-                    target="_blank"
-                    >{{ att.name }}</a
-                  >
-                </span>
+                <AttachmentControl
+                  v-if="row.attachments"
+                  class="m-att-list"
+                  :field="{ name: row.key, type: 'ATTACHMENT' }"
+                  :model-value="row.attachments"
+                  :form-key="detail.formKey || ''"
+                  :record-id="detail.businessKey || ''"
+                  readonly
+                />
                 <b v-else>{{ row.value }}</b>
               </div>
             </template>
@@ -695,17 +688,8 @@ void (async () => {
   font-size: 13px;
 }
 .m-att-list {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
+  flex: 1;
   min-width: 0;
-}
-.m-att-link {
-  font-size: 13px;
-  color: var(--el-color-primary);
-  word-break: break-all;
-  text-align: right;
 }
 .m-opinion-field {
   margin-bottom: 10px;

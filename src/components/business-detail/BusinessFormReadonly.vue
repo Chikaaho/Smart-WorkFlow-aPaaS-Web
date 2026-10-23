@@ -14,11 +14,13 @@ import type { FormSchema } from '@/contracts/form-schema'
 const props = withDefaults(
   defineProps<{
     formKey?: string | null
+    recordId?: string | null
     record?: Record<string, unknown> | null
     loading?: boolean
   }>(),
   {
     formKey: '',
+    recordId: '',
     record: null,
     loading: false,
   },
@@ -31,6 +33,9 @@ const referenceLabels = ref<Record<string, string>>({})
 let loadToken = 0
 
 const effectiveLoading = computed(() => props.loading || schemaLoading.value)
+const effectiveRecordId = computed(
+  () => props.recordId || (typeof props.record?.id === 'string' ? props.record.id : ''),
+)
 
 /** 动态表列把多值字段落成 JSON 数组串；只读控件按数组形态回显选中项。 */
 const ARRAY_VALUE_TYPES = new Set(['MULTISELECT', 'ATTACHMENT', 'IMAGE', 'TABLE'])
@@ -154,6 +159,8 @@ watch(
             :model-value="item.value"
             readonly
             :reference-label="item.referenceLabel"
+            :form-key="props.formKey || ''"
+            :record-id="effectiveRecordId"
           />
         </div>
       </div>

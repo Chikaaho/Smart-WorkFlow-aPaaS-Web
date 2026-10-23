@@ -673,6 +673,9 @@ export default {
     totalItems: '共 {total} 条',
   },
   component: {
+    downloadFileNamed: '下载 {name}',
+    attachmentDownloadFailed: '附件下载失败，请重试',
+    imagePreviewUnavailable: '图片暂时无法预览',
     selectDataObject: '选择数据对象',
     selectUser: '选择人员',
     selectUsers: '选择人员（可多选）',

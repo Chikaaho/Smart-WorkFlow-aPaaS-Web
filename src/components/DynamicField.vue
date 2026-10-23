@@ -29,10 +29,14 @@ const props = withDefaults(
      * 只影响「显示」，底层 v-model 仍为 id。
      */
     referenceLabel?: string
+    formKey?: string
+    recordId?: string
   }>(),
   {
     readonly: false,
     referenceLabel: '',
+    formKey: '',
+    recordId: '',
   },
 )
 
@@ -72,6 +76,8 @@ function onControlUpdate(value: unknown) {
       :model-value="modelValue"
       :readonly="readonly"
       :reference-label="referenceLabel"
+      :form-key="formKey"
+      :record-id="recordId"
       @update:model-value="onControlUpdate"
     />
   </div>

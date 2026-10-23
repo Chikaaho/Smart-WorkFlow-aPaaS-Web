@@ -122,7 +122,12 @@ watch(
       <template v-else>
         <el-alert v-if="errorMsg" :title="errorMsg" type="warning" :closable="false" show-icon />
 
-        <BusinessFormReadonly v-if="formKey" :form-key="formKey" :record="effectiveRecord" />
+        <BusinessFormReadonly
+          v-if="formKey"
+          :form-key="formKey"
+          :record-id="recordId"
+          :record="effectiveRecord"
+        />
         <el-alert
           v-else
           :title="t('workflow.noFormData')"

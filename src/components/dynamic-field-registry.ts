@@ -54,6 +54,9 @@ export interface DynamicFieldControlProps {
   subField?: boolean
   /** REFERENCE 回显标签（仅影响显示，底层 v-model 仍为 id）。 */
   referenceLabel?: string
+  /** 已保存记录的附件访问上下文；只作定位，服务端重新检查对象和字段权限。 */
+  formKey?: string
+  recordId?: string
 }
 
 export interface DynamicFieldDescriptor {
