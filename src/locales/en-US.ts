@@ -724,7 +724,6 @@ export default {
     newAction: 'New action',
     editAction: 'Edit action',
     actionName: 'Action name',
-    confirmPlaceholder: 'Optional confirmation before running',
     actionKey: 'Action key',
     actionKeyHint:
       'Starts with a letter; letters/digits/underscores; used for invocation and lookup',
@@ -1323,6 +1322,7 @@ export default {
     addAction: 'Add action',
     actionDefaultName: 'Action {count}',
     actionName: 'Action name',
+    confirmPlaceholder: 'Optional confirmation before running',
     enabled: 'Enabled',
     editScript: 'Edit script',
     moveUp: 'Move up',

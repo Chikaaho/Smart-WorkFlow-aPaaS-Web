@@ -1040,6 +1040,7 @@ onMounted(() => {
   box-sizing: border-box;
   max-width: none !important;
   width: 100%;
+  overflow-x: hidden;
   padding: 0;
   background: var(--sw-surface-page, #f5f7fa);
 }
@@ -1192,11 +1193,27 @@ onMounted(() => {
 
 /* 窄屏：画布与顶栏收紧 */
 @media (max-width: 767px) {
+  .form-render-page__main {
+    max-width: 100%;
+    min-width: 0;
+  }
   .form-render-page__canvas {
     padding: 12px;
   }
   .form-render-page__sheet {
     padding: 16px 12px;
+  }
+  .form-render-page__group {
+    column-gap: 0;
+  }
+  /* 24 栅格在 375px 下按单列呈现，字段权限与字段顺序不变。 */
+  .form-render-page__field {
+    grid-column: 1 / -1 !important;
+  }
+  .form-render-page__flowpanel,
+  .form-render-page__actioncard {
+    max-width: 100%;
+    overflow-x: auto;
   }
 }
 
