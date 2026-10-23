@@ -130,8 +130,9 @@ describe('FormDesigner 工作台（P52）', () => {
     expect(mockGetFormDefinitionById).toHaveBeenCalledWith('uuid-1')
     // V011-BUG-006：formKey 不再入画布；身份见面包屑表单名
     expect(wrapper.text()).toContain('请假申请单')
-    // 工作台头部重构后：保存状态以『草稿已保存 HH:mm』呈现
-    expect(wrapper.text()).toContain('草稿已保存')
+    // 打开已有定义不会伪造保存时刻，也不会触发一次保存。
+    expect(wrapper.find('.designer__save-state').text()).toBe('已保存')
+    expect(mockSaveDraftDefinition).not.toHaveBeenCalled()
   })
 
   it('身份加载失败（不存在/无权）→ 拒绝态，不回退其他表单', async () => {

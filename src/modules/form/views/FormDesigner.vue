@@ -23,7 +23,6 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
-import { Back } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type {
   FormSchema,
@@ -289,7 +288,7 @@ async function loadForm(id: string) {
     void loadBreadcrumbCategory()
     await nextTick()
     baselineJson.value = JSON.stringify(buildDefinition())
-    savedAtText.value = formatClock(new Date())
+    savedAtText.value = ''
     savePhase.value = 'idle'
   } catch (err) {
     if (seq !== loadSeq) return
@@ -747,25 +746,24 @@ async function loadBreadcrumbCategory() {
 <template>
   <div class="designer">
     <!-- ═══ 顶部工作台（拒绝态下整体不渲染，操作区零暴露） ═══
-         0.1.7 #39：左「返回 + 保存状态 + 面包屑」/ 中三页签（字段清单·表单设计·流程设计，整组居中）
+         0.1.7 #39：左「返回 + 保存状态 + 面包屑」/ 中工作区页签（整组居中）
          / 右保存状态与操作组；「设置」下拉已去除（其唯一入口「字段清单」上收为页签） -->
     <header v-if="!rejected" class="designer__workbench">
       <div class="designer__crumb">
         <!-- V011-BUG-017：返回上一页 -->
         <el-button class="designer__back" @click="goBack">
-          <el-icon><Back /></el-icon>
           <span>{{ t('common.back') }}</span>
         </el-button>
-        <!-- V011-BUG-010：保存状态从动作组移到左侧信息簇，动作组只留可点按钮 -->
+        <span class="designer__crumb-path" :title="breadcrumbText">{{ breadcrumbText }}</span>
         <span class="designer__save-state" :class="'designer__save-state--' + saveState">
           {{
             saveState === 'unchanged'
-              ? t('form.draftSavedAt', { time: savedAtText })
+              ? savedAtText
+                ? t('form.draftSavedAt', { time: savedAtText })
+                : t('form.draftSaved')
               : t(saveStateKey(saveState))
           }}
         </span>
-        <!-- V011-BUG-011：面包屑=所属分类（可发起事项目录反查）→ 表单名 -->
-        <span class="designer__crumb-path">/ {{ breadcrumbText }}</span>
       </div>
 
       <nav class="designer__tabs" aria-label="工作区切换">
@@ -821,9 +819,12 @@ async function loadBreadcrumbCategory() {
         >
           {{ t('form.relatedProcessNumberSetting') }}
         </el-button>
-        <el-button :disabled="!formId" @click="historyVisible = true">{{
-          t('form.draftHistoryEntry')
-        }}</el-button>
+        <el-button
+          :aria-label="t('form.draftHistoryEntry')"
+          :disabled="!formId"
+          @click="historyVisible = true"
+          >{{ t('form.versionEntry') }}</el-button
+        >
         <!-- BF20261013-015：预览自画布头部行上收至工具条动作组 -->
         <el-button @click="previewVisible = true">{{ t('common.preview') }}</el-button>
         <!-- 0.1.7 #14：已发布表单解锁画布编辑——「保存」持久化工作定义（运行时仍走已发布快照），
@@ -963,16 +964,16 @@ async function loadBreadcrumbCategory() {
   position: relative;
 }
 
-/* ═══ 顶部工具条（节点 07：56px 白底；V011-BUG-010/012 重排：左信息簇 / 中居中 tab / 右动作组） ═══ */
+/* ═══ 顶部工具条（节点 07：48px 白底；V011-BUG-010/012 重排：左信息簇 / 中居中 tab / 右动作组） ═══ */
 .designer__workbench {
   box-sizing: border-box;
-  height: 56px;
-  flex: 0 0 56px;
+  height: 48px;
+  flex: 0 0 48px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 0 20px;
-  border-bottom: 1px solid #dde3ef;
+  gap: var(--sw-space-12);
+  padding: 0 var(--sw-space-16);
+  border-bottom: 0;
   background: #fff;
   position: relative;
 }
@@ -981,25 +982,30 @@ async function loadBreadcrumbCategory() {
 .designer__crumb {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--sw-space-12);
+  max-width: calc(50% - 328px);
   min-width: 0;
 }
 
 /* V011-BUG-017：返回表单列表为显式入口 */
 .designer__back {
+  width: 56px;
   height: 32px;
+  flex: 0 0 56px;
   padding: 0 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #303a55;
-}
-.designer__back :deep(.el-icon) {
-  margin-right: 4px;
+  border: 0;
+  border-radius: var(--sw-radius-base);
+  background: transparent;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: var(--sw-font-weight-emphasis);
+  color: var(--sw-color-primary);
 }
 
 .designer__crumb-path {
   font-size: 12px;
-  color: #7e89a1;
+  color: var(--sw-text-primary);
+  line-height: 18px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1009,24 +1015,27 @@ async function loadBreadcrumbCategory() {
 .designer__tabs {
   position: absolute;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: 0;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   height: 48px;
-  gap: 24px;
+  gap: 0;
 }
 
 .designer__tab {
+  position: relative;
+  width: 120px;
   height: 48px;
-  padding: 0 44px;
+  flex: 0 0 120px;
+  padding: 0 0 2px;
   border: 0;
   background: transparent;
   font-size: 14px;
-  line-height: 20px;
-  color: #8a96ad;
+  line-height: 22px;
+  font-weight: var(--sw-font-weight-emphasis);
+  color: var(--sw-text-secondary);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
 }
 
 .designer__tab:hover {
@@ -1035,43 +1044,75 @@ async function loadBreadcrumbCategory() {
 
 .designer__tab.is-active {
   color: var(--sw-color-primary);
-  font-weight: 600;
-  border-bottom-color: var(--sw-color-primary);
+  font-weight: var(--sw-font-weight-emphasis);
+}
+
+.designer__tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+  height: 2px;
+  background: var(--sw-color-primary);
 }
 
 .designer__actions {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sw-space-12);
+  flex-shrink: 0;
 }
 
 .designer__actions :deep(.el-button + .el-button) {
   margin-left: 0;
 }
 
-/* 设计07/08：草稿历史 88 / 保存 64 / 发布 64，12px 文本 16px 行盒 */
+/* 设计07：常规动作最小64×32，14px文本/22px行盒 */
 .designer__actions :deep(.el-button) {
-  width: 64px;
-  height: 28px;
-  padding: 0 8px;
-  font-size: 12px;
-  line-height: 16px;
+  min-width: 64px;
+  width: auto;
+  height: 32px;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: 22px;
   border-radius: 6px;
 }
 .designer__actions :deep(.el-button:not(.el-button--primary)) {
-  color: #19233b;
+  color: var(--sw-text-regular);
 }
 
-.designer__actions :deep(button.el-button:first-of-type) {
-  width: 88px;
+/* 窄桌面按实际内容分配工具条，关联流程的编号入口也保留操作空间。 */
+@media (max-width: 1440px) {
+  .designer__crumb {
+    max-width: 240px;
+  }
+  .designer__tabs {
+    position: static;
+    flex: 1 1 auto;
+    min-width: 0;
+    transform: none;
+    justify-content: center;
+  }
+  .designer__tab {
+    width: auto;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 120px;
+    padding-right: 8px;
+    padding-left: 8px;
+    white-space: nowrap;
+  }
 }
 
 /* 草稿状态：设计稿为纯文字态（含已保存时钟） */
 .designer__save-state {
   font-size: 12px;
-  line-height: 16px;
-  color: #8a96ad;
+  line-height: 18px;
+  flex-shrink: 0;
+  color: var(--sw-text-secondary);
   white-space: nowrap;
 }
 
@@ -1119,73 +1160,11 @@ async function loadBreadcrumbCategory() {
   box-sizing: border-box;
   width: 252px;
   flex: 0 0 252px;
-  padding: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 19px 20px 46px;
-  background: #fff;
-  border-right: 1px solid #d7deed;
-}
-
-.designer__palettecol :deep(.palette) {
-  width: auto;
-  flex: 1 1 auto;
-  min-height: 0;
   padding: 0;
-  border-right: 0;
-  overflow-y: auto;
-}
-
-.designer__palettecol :deep(.palette__title) {
-  margin: 0 0 14px;
-  font-size: 18px;
-}
-
-.designer__palettecol :deep(.palette__search) {
-  margin-bottom: 34px;
-}
-
-.designer__palettecol :deep(.palette-group:first-of-type) {
-  margin-top: 0;
-}
-
-.designer__palettecol :deep(.palette-group__title) {
-  margin: 0 0 3px;
-}
-
-.designer__palettecol :deep(.palette__list) {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px 9px;
-  transform: translateY(1px);
-}
-
-.designer__palettecol :deep(.palette__item) {
-  height: 38px;
-  gap: 6px;
-  padding: 0 8px;
-  font-size: 12px;
-  color: #71809e;
-  background: #fff;
-  border: 1px solid #cbd5e7;
-  border-radius: 6px;
-}
-.designer__palettecol :deep(.palette__icon) {
-  flex: 0 0 18px;
-  width: 18px;
-  height: 18px;
-  font-size: 18px;
-}
-
-.designer__palettecol :deep(.palette__item:hover) {
-  border-color: var(--sw-color-primary);
-  color: var(--sw-color-primary);
-}
-
-.designer__palettecol :deep(.palette--disabled .palette__item:hover) {
-  border-color: #cbd5e7;
-  color: #71809e;
+  background: var(--sw-bg-white, #fff);
 }
 
 .designer__palette-note {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import FieldPalette from './FieldPalette.vue'
+import { FIELD_TYPE_REGISTRY } from './field-types'
 
 /**
  * 控件库（设计器左栏）：
@@ -23,10 +24,10 @@ describe('FieldPalette 原生拖拽', () => {
     // 文字组件经本刀进入组件库
     expect(itemEl(wrapper, 'LABEL').exists()).toBe(true)
     expect(itemEl(wrapper, 'LABEL').attributes('draggable')).toBe('true')
-    // 流水号为设计锁定但契约未启用的占位条目
-    const serial = itemEl(wrapper, 'SERIAL')
-    expect(serial.attributes('disabled')).toBeDefined()
-    expect(serial.attributes('draggable')).toBe('false')
+    const richEditor = itemEl(wrapper, 'RICH_EDITOR')
+    expect(richEditor.attributes('disabled')).toBeDefined()
+    expect(richEditor.attributes('draggable')).toBe('false')
+    expect(richEditor.attributes('title')).toBe('该组件暂不可用')
   })
 
   it('dragstart 产出与点击添加同一形态的画布项并交给宿主', async () => {
@@ -52,7 +53,7 @@ describe('FieldPalette 原生拖拽', () => {
 
   it('未启用条目即便触发 dragstart 也不产出候选', async () => {
     const wrapper = mountPalette()
-    await itemEl(wrapper, 'SERIAL').trigger('dragstart')
+    await itemEl(wrapper, 'RICH_EDITOR').trigger('dragstart')
     expect(wrapper.emitted('drag-start')).toBeUndefined()
   })
 
@@ -115,22 +116,16 @@ describe('FieldPalette 选择类入口（BF20261013-009）', () => {
  * BF20261013-010：库内显示名 = 拖出后的默认字段名（注册表 descriptor 单一名称源）。
  */
 describe('FieldPalette 名称一致性（BF20261013-010）', () => {
-  const REGISTRY_TYPES = [
-    'TEXT',
-    'RICH_TEXT',
-    'NUMBER',
-    'DICT',
-    'BOOL',
-    'MULTISELECT',
-    'DATE',
-    'ATTACHMENT',
-    'LABEL',
-    'USER',
-    'DEPT',
-    'TABLE',
-    'FORMULA',
-    'DATASOURCE',
-  ]
+  const REGISTRY_TYPES = FIELD_TYPE_REGISTRY.map((descriptor) => descriptor.type)
+
+  it('全部已注册类型都有唯一主入口，字典保留下拉和单选两个变体', () => {
+    const wrapper = mountPalette()
+    for (const type of REGISTRY_TYPES) {
+      expect(wrapper.findAll(`.palette__item[data-field-type="${type}"]`)).toHaveLength(
+        type === 'DICT' ? 2 : 1,
+      )
+    }
+  })
 
   it('每个注册表入口：库内名称与点击添加后的默认字段名一致', async () => {
     for (const type of REGISTRY_TYPES) {
