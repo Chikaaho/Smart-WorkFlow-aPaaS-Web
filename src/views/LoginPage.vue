@@ -822,7 +822,7 @@ img.login-page__captcha {
     background: #f5f7fc;
   }
   .login-page__form {
-    max-width: 440px;
+    max-width: 500px;
     padding: 40px;
     border-color: #e6e8f0;
     border-radius: 22px;
@@ -830,6 +830,8 @@ img.login-page__captcha {
   }
   .login-page__welcome {
     color: #182037;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .login-page__secure {
     padding: 8px 13px;
