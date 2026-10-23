@@ -165,10 +165,10 @@ watch(
 <style scoped>
 .business-form-card {
   border: 1px solid var(--sw-border-light);
-  border-radius: 8px;
+  border-radius: 0;
 }
 .business-form-card :deep(.el-card__body) {
-  padding: 24px;
+  padding: 16px;
 }
 .business-form {
   min-height: 72px;
@@ -176,7 +176,14 @@ watch(
 .business-form__grid {
   display: grid;
   grid-template-columns: repeat(24, minmax(0, 1fr));
-  gap: 12px 16px;
+  gap: 16px 20px;
+}
+.business-form :deep(.dynamic-field__label) {
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: var(--sw-font-weight-body);
+  line-height: 22px;
+  color: var(--sw-text-regular);
 }
 .business-form__field {
   min-width: 0;

@@ -328,7 +328,7 @@ const opinionDetailAttachmentEntries = computed(() => {
 </script>
 
 <template>
-  <el-card class="instance-flow-panel">
+  <el-card class="instance-flow-panel" shadow="never">
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <!-- 流转记录：四列设计版式，行数据来自真实审批历史 -->
       <el-tab-pane name="records">
@@ -343,10 +343,14 @@ const opinionDetailAttachmentEntries = computed(() => {
           show-icon
         />
         <el-table v-else class="detail-flow-table" :data="flowRecordRows" stripe>
-          <el-table-column prop="time" :label="t('taskDetailUi.recordTime')" width="180" />
-          <el-table-column prop="node" :label="t('taskDetailUi.recordNode')" min-width="180" />
-          <el-table-column prop="operator" :label="t('taskDetailUi.operatorLabel')" width="180" />
-          <el-table-column prop="event" :label="t('taskDetailUi.recordEvent')" min-width="280" />
+          <el-table-column prop="time" :label="t('taskDetailUi.recordTime')" min-width="244" />
+          <el-table-column prop="node" :label="t('taskDetailUi.recordNode')" min-width="344" />
+          <el-table-column
+            prop="operator"
+            :label="t('taskDetailUi.operatorLabel')"
+            min-width="186"
+          />
+          <el-table-column prop="event" :label="t('taskDetailUi.recordEvent')" min-width="664" />
         </el-table>
       </el-tab-pane>
 
@@ -406,7 +410,9 @@ const opinionDetailAttachmentEntries = computed(() => {
       <!-- 审批详情列表：按真实历史逐人一行；已处理行可打开意见详情弹窗，会签节点可开聚合记录 -->
       <el-tab-pane name="people">
         <template #label
-          ><span class="detail-tab-label">{{ t('taskDetailUi.tabPeople') }}</span></template
+          ><span class="detail-tab-label detail-tab-label--people">{{
+            t('taskDetailUi.tabPeople')
+          }}</span></template
         >
         <el-table class="detail-flow-table" :data="peopleRows" stripe>
           <el-table-column prop="taskName" :label="t('workflow.approvalNode')" min-width="260" />
@@ -508,60 +514,83 @@ const opinionDetailAttachmentEntries = computed(() => {
 </template>
 
 <style scoped>
-/* ─── 页签几何（48px 页签 / 150px 页签宽）；内容由数据撑高，不占位撑满 ─── */
+/* 详情页签与表格使用同一内容宽度，原生页签保留键盘切换。 */
 .instance-flow-panel {
   box-sizing: border-box;
   margin-bottom: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .instance-flow-panel :deep(.el-card__body) {
   padding: 0;
 }
 .instance-flow-panel :deep(.el-tabs__header) {
-  height: 48px;
-  margin-bottom: 0;
-  background: #fafbfe;
+  height: 36px;
+  margin-bottom: 12px;
+  background: var(--sw-bg-white, #fff);
 }
 .instance-flow-panel :deep(.el-tabs__nav-wrap),
 .instance-flow-panel :deep(.el-tabs__nav-scroll),
 .instance-flow-panel :deep(.el-tabs__nav) {
-  height: 48px;
+  height: 36px;
 }
 .instance-flow-panel :deep(.el-tabs__nav) {
-  padding-left: 24px;
+  display: flex;
+  gap: 12px;
+  padding-left: 0;
+}
+.instance-flow-panel :deep(.el-tabs__active-bar),
+.instance-flow-panel :deep(.el-tabs__nav-wrap::after) {
+  display: none;
 }
 .instance-flow-panel :deep(.el-tabs__item) {
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 150px;
-  height: 48px;
-  padding: 0;
-  line-height: 19px;
+  width: auto;
+  height: 32px;
+  margin: 2px 0;
+  padding: 0 !important;
+  border-radius: var(--sw-radius-base);
+  color: var(--sw-color-primary);
+  font-size: 14px;
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: 22px;
   text-align: center;
+}
+.instance-flow-panel :deep(.el-tabs__item.is-active) {
+  background: var(--sw-color-primary);
+  color: #fff;
 }
 .instance-flow-panel :deep(.detail-tab-label) {
   display: inline-block;
-  line-height: 19px;
+  padding: 0 16px;
+  line-height: 22px;
+}
+.instance-flow-panel :deep(.detail-tab-label--people) {
+  padding: 0 12px;
 }
 /* 流转记录与审批详情列表共用同一套表格几何与字体；表格铺满卡片，四周不留白。 */
 .instance-flow-panel :deep(.detail-flow-table) {
   box-sizing: border-box;
   width: 100% !important;
   margin: 0;
+  border: 1px solid var(--sw-border-light);
   color: var(--sw-text-primary);
   font-size: 14px;
 }
 .instance-flow-panel :deep(.detail-flow-table .el-table__header-wrapper th) {
-  height: 44px;
+  height: 42px;
   padding: 0;
   background: var(--sw-fill-base);
   color: var(--sw-text-secondary);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 400;
 }
 .instance-flow-panel :deep(.detail-flow-table .el-table__body-wrapper td) {
-  height: 52px;
+  height: 39px;
   padding: 0;
 }
 .instance-flow-panel :deep(.detail-flow-table .cell) {

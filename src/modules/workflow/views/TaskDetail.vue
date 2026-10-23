@@ -37,6 +37,7 @@ import type { FormSchema } from '@/contracts/form-schema'
 import type { TaskNodeFormView } from '@/contracts/p64'
 import { getTaskNodeForm, saveTaskNodeFormDraft } from '@/modules/workflow/api/p64'
 import DynamicField from '@/components/DynamicField.vue'
+import HintTip from '@/components/HintTip.vue'
 import { createFieldScripts } from '@/adapters/form-runtime'
 import InstanceFlowPanel from '../components/InstanceFlowPanel.vue'
 import BusinessFormReadonly from '@/components/business-detail/BusinessFormReadonly.vue'
@@ -807,12 +808,6 @@ const canApprove = computed(() => canAct.value && nodeAllows('APPROVE'))
 const canReject = computed(() => canAct.value && nodeAllows('REJECT'))
 const canReturn = computed(() => canAct.value && nodeAllows('RETURN'))
 
-/** 嵌入统一详情弹窗时，仅在有流程信息时呈现「审批进度」区块。 */
-const hasFlow = computed(
-  () =>
-    (detail.value?.approvalHistory?.length ?? 0) > 0 || Boolean(detail.value?.processDefinitionKey),
-)
-
 /** 催办仅对流程发起人呈现（真实契约：POST /workflow/my/instances/{id}/urge）。 */
 const isInitiator = computed(() => {
   const d = detail.value
@@ -968,9 +963,6 @@ onMounted(loadDetail)
       </el-alert>
 
       <!-- 本次提交的表单数据：与抄送详情共用同一套业务表单只读展示 -->
-      <h4 v-if="embedded" class="task-detail__section">
-        {{ t('workflow.formDataReadonlySnapshot') }}
-      </h4>
       <BusinessFormReadonly
         v-if="detail.formKey && detail.businessKey"
         :form-key="detail.formKey"
@@ -1046,9 +1038,6 @@ onMounted(loadDetail)
     </div>
 
     <!-- 流程信息作为表单详情的外挂组件：与表单详情/任务详情共用同一控制面 -->
-    <h4 v-if="embedded && hasFlow" class="task-detail__section">
-      {{ t('workflow.approvalProgress') }}
-    </h4>
     <InstanceFlowPanel
       v-if="detail"
       :approval-history="detail.approvalHistory"
@@ -1166,7 +1155,7 @@ onMounted(loadDetail)
             {{ t('workflow.saveOpinionDraft') }}
           </el-button>
           <span v-if="opinionDraftLoaded">{{ t('workflow.opinionDraftRestored') }}</span>
-          <span class="opinion-draft-note">{{ t('workflow.opinionDraftNote') }}</span>
+          <HintTip :content="t('workflow.opinionDraftNote')" />
         </div>
         <!-- 主操作保持直达；有权限且被节点策略允许的转办/委托/沟通/加签与催办统一收进“更多”。 -->
         <div class="detail-actions__bar">
@@ -1236,12 +1225,12 @@ onMounted(loadDetail)
               </el-button>
               <el-button
                 v-if="canApprove"
-                type="success"
+                type="primary"
                 :loading="acting === 'approve'"
                 :disabled="acting !== null"
                 @click="quickApprove"
               >
-                {{ t('common.approve') }}
+                {{ t('workflow.approveTask') }}
               </el-button>
             </template>
           </div>
@@ -1395,13 +1384,6 @@ onMounted(loadDetail)
   overflow: visible;
   padding: 0;
   background: transparent;
-}
-/* 与统一只读详情弹窗的区块标题同一视觉口径。 */
-.task-detail__section {
-  margin: 16px 0 8px;
-  color: var(--sw-color-primary);
-  font-size: 13px;
-  font-weight: 600;
 }
 .detail-header__arrow {
   display: inline-flex;
@@ -1587,9 +1569,7 @@ onMounted(loadDetail)
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
-.opinion-draft-note {
-  margin-left: auto;
-}
+
 .opinion-field {
   display: flex;
   flex-direction: column;

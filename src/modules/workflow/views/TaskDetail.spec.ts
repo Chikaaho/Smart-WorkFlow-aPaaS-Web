@@ -594,7 +594,7 @@ describe('TaskDetail.vue', () => {
       expect.arrayContaining([
         i18n.global.t('common.moreActions'),
         i18n.global.t('common.reject'),
-        i18n.global.t('common.approve'),
+        i18n.global.t('workflow.approveTask'),
       ]),
     )
     for (const label of [
