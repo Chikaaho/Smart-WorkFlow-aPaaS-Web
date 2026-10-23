@@ -709,6 +709,7 @@ export default {
     newAction: '新建动作',
     editAction: '编辑动作',
     actionName: '动作名称',
+    confirmPlaceholder: '可选：执行前确认说明',
     actionKey: '动作标识',
     actionKeyHint: '字母开头，字母/数字/下划线，用于调用与回查',
     actionType: '动作类型',

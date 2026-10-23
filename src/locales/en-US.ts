@@ -724,6 +724,7 @@ export default {
     newAction: 'New action',
     editAction: 'Edit action',
     actionName: 'Action name',
+    confirmPlaceholder: 'Optional confirmation before running',
     actionKey: 'Action key',
     actionKeyHint:
       'Starts with a letter; letters/digits/underscores; used for invocation and lookup',

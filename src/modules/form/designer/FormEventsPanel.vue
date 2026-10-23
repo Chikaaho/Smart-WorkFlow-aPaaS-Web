@@ -117,6 +117,12 @@ defineExpose({ validateAll })
           class="events-panel__name"
           :aria-label="t('formEvents.actionName')"
         />
+        <el-input
+          v-model="action.confirmMessage"
+          class="events-panel__confirm"
+          :placeholder="t('formEvents.confirmPlaceholder')"
+          :aria-label="t('formEvents.confirmPlaceholder')"
+        />
         <el-switch v-model="action.enabled" :active-text="t('formEvents.enabled')" />
         <span class="events-panel__id">{{ action.id }}</span>
         <el-button link type="primary" @click="openEditor(action.id)">{{
@@ -176,7 +182,9 @@ defineExpose({ validateAll })
 }
 .events-panel__row {
   display: grid;
-  grid-template-columns: 32px minmax(180px, 1fr) 92px minmax(140px, 0.7fr) auto auto auto auto;
+  grid-template-columns:
+    32px minmax(150px, 1fr) minmax(150px, 1fr) 92px minmax(140px, 0.7fr) auto auto
+    auto auto;
   gap: 12px;
   align-items: center;
   min-height: 56px;
@@ -196,6 +204,9 @@ defineExpose({ validateAll })
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.events-panel__confirm {
+  min-width: 150px;
 }
 .events-panel__budget {
   margin-top: 16px;
