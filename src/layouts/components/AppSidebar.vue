@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Grid, Document, Clock, Check, Bell, EditPen } from '@element-plus/icons-vue'
+import sidebarGrid from '@/assets/navigation/sidebar-grid.svg'
+import sidebarDocument from '@/assets/navigation/sidebar-document.svg'
+import sidebarClock from '@/assets/navigation/sidebar-clock.svg'
+import sidebarCheck from '@/assets/navigation/sidebar-check.svg'
+import sidebarBell from '@/assets/navigation/sidebar-bell.svg'
+import sidebarEdit from '@/assets/navigation/sidebar-edit.svg'
 import { useRoute } from 'vue-router'
 import { useMenuStore } from '@/stores/menu'
 import { resolveArea } from '@/foundation/area'
@@ -166,30 +171,42 @@ function resolveAdminActive(path: string): string {
       index="/workspace"
       :aria-label="t('common.workspace')"
     >
-      <el-icon v-if="workspaceSlim" aria-hidden="true"><Grid /></el-icon>
+      <el-icon v-if="workspaceSlim" aria-hidden="true"
+        ><img :src="sidebarGrid" alt="" class="app-sidebar__native-icon"
+      /></el-icon>
       <img v-else class="app-sidebar__design-icon" :src="iconWorkspace" alt="" aria-hidden="true" />
       <template #title>{{ $t('common.workspace') }}</template>
     </el-menu-item>
     <!-- 工作台本地列表直达（V012-BUG-023）：个人办理列表留在工作台分区，不再跳流程中心 -->
     <template v-if="workspaceSlim">
       <el-menu-item index="/workspace/todo" :aria-label="t('workflow.myTodoTitle')">
-        <el-icon aria-hidden="true"><Document /></el-icon>
+        <el-icon aria-hidden="true"
+          ><img :src="sidebarDocument" alt="" class="app-sidebar__native-icon"
+        /></el-icon>
         <template #title>{{ t('workflow.myTodoTitle') }}</template>
       </el-menu-item>
       <el-menu-item index="/workspace/my-instances" :aria-label="t('common.startedByMe')">
-        <el-icon aria-hidden="true"><Clock /></el-icon>
+        <el-icon aria-hidden="true"
+          ><img :src="sidebarClock" alt="" class="app-sidebar__native-icon"
+        /></el-icon>
         <template #title>{{ t('common.startedByMe') }}</template>
       </el-menu-item>
       <el-menu-item index="/workspace/processed" :aria-label="t('workflow.processedNav')">
-        <el-icon aria-hidden="true"><Check /></el-icon>
+        <el-icon aria-hidden="true"
+          ><img :src="sidebarCheck" alt="" class="app-sidebar__native-icon"
+        /></el-icon>
         <template #title>{{ t('workflow.processedNav') }}</template>
       </el-menu-item>
       <el-menu-item index="/workspace/my-cc" :aria-label="t('router.myCc')">
-        <el-icon aria-hidden="true"><Bell /></el-icon>
+        <el-icon aria-hidden="true"
+          ><img :src="sidebarBell" alt="" class="app-sidebar__native-icon"
+        /></el-icon>
         <template #title>{{ t('router.myCc') }}</template>
       </el-menu-item>
       <el-menu-item index="/workspace/my-drafts" :aria-label="t('common.statusDraft')">
-        <el-icon aria-hidden="true"><EditPen /></el-icon>
+        <el-icon aria-hidden="true"
+          ><img :src="sidebarEdit" alt="" class="app-sidebar__native-icon"
+        /></el-icon>
         <template #title>{{ t('common.statusDraft') }}</template>
       </el-menu-item>
     </template>
@@ -460,6 +477,7 @@ function resolveAdminActive(path: string): string {
 .app-sidebar--workspace {
   box-sizing: border-box;
   padding: var(--sw-space-16);
+  --el-menu-base-level-padding: 12px;
   --el-menu-text-color: var(--sw-nav-topbar-text);
 }
 .app-sidebar--workspace .app-sidebar__section {
@@ -475,11 +493,11 @@ function resolveAdminActive(path: string): string {
   font-weight: var(--sw-font-weight-emphasis);
 }
 .app-sidebar--workspace :deep(> .el-menu-item .el-icon) {
-  flex: 0 0 16px;
-  width: 16px;
-  height: 16px;
-  margin-right: var(--sw-space-12);
-  font-size: 16px;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
+  font-size: 18px;
   color: inherit;
 }
 .app-sidebar--workspace :deep(.el-menu-item > span) {
@@ -506,5 +524,13 @@ function resolveAdminActive(path: string): string {
 .app-sidebar--workspace.el-menu--collapse :deep(.el-menu-tooltip__trigger) {
   justify-content: center;
   padding: 0;
+}
+</style>
+
+<style scoped>
+.app-sidebar__native-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 </style>
