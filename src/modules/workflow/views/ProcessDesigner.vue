@@ -53,7 +53,6 @@ import type {
 import type { ProcessDef } from '@/contracts/bpm'
 import type {
   BpmNodeCapability,
-  BpmNodeCategory,
   BpmNodeConfigField,
   ParticipantStrategy,
 } from '@/contracts/bpm-node'
@@ -100,6 +99,8 @@ import type {
   PositionedNode,
 } from '@/adapters/process-graph'
 import FormSelectDialog from './FormSelectDialog.vue'
+import ThemeRuleDialog from './ThemeRuleDialog.vue'
+import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import type { BpmVariableDef, TriggerConfig } from '@/contracts/p64'
 import {
   buildTriggerConfig,
@@ -161,6 +162,22 @@ const previewVersion = ref<number | null>(null)
 const isVersionPreview = computed(() => previewVersion.value != null)
 const versionHistory = ref<ProcessDefVersionInfo[]>([])
 const versionsLoading = ref(false)
+const processPreviewVisible = ref(false)
+const themeRuleVisible = ref(false)
+/** 编号设置弹窗只读取定义身份；编辑与保存继续由既有共用弹窗承接。 */
+const themeRuleDef = computed<ProcessDef | null>(() => {
+  if (!graph.value || !Number.isFinite(Number(defId.value))) return null
+  return {
+    id: Number(defId.value),
+    processKey: graph.value.processKey,
+    name: graph.value.name,
+    formKey: graph.value.formKey,
+    defVersion: graph.value.version ?? 0,
+    status: 'DRAFT',
+    createTime: '',
+    updateTime: '',
+  }
+})
 
 const SNAP_X = 20
 const SNAP_Y = 20
@@ -246,19 +263,52 @@ function snapshot() {
 /* ─────────── 0.1.7 重构：节点面板分组 / 整理布局（上下） / 画布框 ─────────── */
 
 /** 节点面板分组（能力契约 category → 面板分组标题）。 */
-const PALETTE_GROUP_KEYS: ReadonlyArray<readonly [BpmNodeCategory, string]> = [
-  ['EVENT', 'workflow.nodeCategoryEvent'],
-  ['TASK', 'workflow.nodeCategoryTask'],
-  ['GATEWAY', 'workflow.nodeCategoryGateway'],
-  ['OTHER', 'workflow.nodeCategoryOther'],
+const PALETTE_GROUP_TYPES: ReadonlyArray<{
+  key: string
+  labelKey: string
+  types: readonly string[]
+}> = [
+  {
+    key: 'event-control',
+    labelKey: 'workflow.paletteEventControl',
+    types: ['START', 'END', 'CONDITION', 'PARALLEL_GATEWAY'],
+  },
+  {
+    key: 'human',
+    labelKey: 'workflow.paletteHuman',
+    types: ['DRAFT', 'APPROVAL', 'CONSENSUS', 'DYNAMIC_PARALLEL'],
+  },
+  {
+    key: 'automatic',
+    labelKey: 'workflow.paletteAutomatic',
+    types: ['COPY', 'NOTIFICATION', 'TXN_ACTION', 'IOT_COMMAND', 'AGENT'],
+  },
 ]
-const paletteGroups = computed(() =>
-  PALETTE_GROUP_KEYS.map(([category, labelKey]) => ({
-    category,
-    label: t(labelKey),
-    items: capabilities.value.filter((cap) => cap.category === category),
-  })).filter((group) => group.items.length > 0),
-)
+
+/**
+ * 节点仍由服务端能力契约决定，前端仅按设计稿分组与排序。
+ * 未来新增但尚未归类的节点保留在「自动处理」末尾，避免因视觉分组隐藏合法能力。
+ */
+const paletteGroups = computed(() => {
+  const byType = new Map(capabilities.value.map((capability) => [capability.type, capability]))
+  const groupedTypes = new Set<string>()
+  const groups = PALETTE_GROUP_TYPES.map((group) => {
+    const items = group.types
+      .map((type) => byType.get(type))
+      .filter((capability): capability is BpmNodeCapability => {
+        if (!capability) return false
+        groupedTypes.add(capability.type)
+        return true
+      })
+    return { category: group.key, label: t(group.labelKey), items }
+  })
+  const remaining = capabilities.value.filter((capability) => !groupedTypes.has(capability.type))
+  if (remaining.length > 0) {
+    const automatic = groups.find((group) => group.category === 'automatic')
+    automatic?.items.push(...remaining)
+  }
+  return groups.filter((group) => group.items.length > 0)
+})
 
 /** 撤销可用性（version 每次画布变更自增，用于驱动按钮态）。 */
 const undoAvailable = computed(() => {
@@ -2960,6 +3010,14 @@ function nodeLabelLines(label: string) {
             : ''
       }}</span>
       <div class="toolbar-actions">
+        <el-button
+          v-if="workbenchFormId"
+          size="small"
+          class="toolbar-number"
+          @click="themeRuleVisible = true"
+        >
+          {{ t('workflow.designerNumberShort') }}
+        </el-button>
         <el-dropdown
           trigger="click"
           placement="bottom-end"
@@ -2968,7 +3026,9 @@ function nodeLabelLines(label: string) {
           @visible-change="onVersionMenuVisible"
         >
           <el-button size="small" class="toolbar-versions">
-            {{ t('workflow.versionHistory') }}
+            {{
+              workbenchFormId ? t('workflow.designerVersionShort') : t('workflow.versionHistory')
+            }}
           </el-button>
           <template #dropdown>
             <el-dropdown-menu class="version-menu">
@@ -3021,6 +3081,14 @@ function nodeLabelLines(label: string) {
           </el-button>
         </template>
         <template v-else>
+          <el-button
+            v-if="workbenchFormId"
+            size="small"
+            :disabled="!graph || loading"
+            @click="processPreviewVisible = true"
+          >
+            {{ t('common.preview') }}
+          </el-button>
           <el-button size="small" :loading="saving" @click="save">{{ t('common.save') }}</el-button>
           <el-button size="small" type="primary" :loading="publishing" @click="publish">{{
             t('common.publish')
@@ -3047,17 +3115,27 @@ function nodeLabelLines(label: string) {
       <span class="spacer" />
       <el-button size="small" class="workbar-advance" @click="openVariables">变量</el-button>
       <el-button size="small" class="workbar-advance" @click="openTriggers">触发器</el-button>
-      <el-button size="small" class="workbar-advance" @click="advancedConfigVisible = true">{{
-        t('workflow.advancedConfig')
-      }}</el-button>
-      <el-button size="small" class="workbar-verify" :loading="validating" @click="validate">{{
-        t('workflow.validateFlow')
-      }}</el-button>
+      <el-button
+        size="small"
+        class="workbar-advance"
+        :aria-label="t('workflow.advancedConfig')"
+        @click="advancedConfigVisible = true"
+        >{{ t('workflow.designerAdvancedShort') }}</el-button
+      >
+      <el-button
+        size="small"
+        class="workbar-verify"
+        :loading="validating"
+        :aria-label="t('workflow.validateFlow')"
+        @click="validate"
+        >{{ t('workflow.designerValidateShort') }}</el-button
+      >
     </div>
 
     <div class="designer-main">
       <!-- 0.1.7 重构：节点面板移到左侧竖栏（分组 + 图标块，拖拽/点击添加） -->
       <aside v-if="!isVersionPreview" class="designer-palette">
+        <h3 class="palette-title">{{ t('workflow.nodePalette') }}</h3>
         <section v-for="group in paletteGroups" :key="group.category" class="palette-group">
           <h4 class="palette-group__title">{{ group.label }}</h4>
           <div class="palette-group__grid">
@@ -4774,6 +4852,17 @@ function nodeLabelLines(label: string) {
         </el-button>
       </div>
     </el-card>
+
+    <el-dialog
+      v-model="processPreviewVisible"
+      :title="t('workflow.designerPreviewTitle')"
+      width="1440px"
+      class="process-preview-dialog"
+    >
+      <ProcessGraphView v-if="graph" :graph="graph" :height="640" />
+    </el-dialog>
+
+    <ThemeRuleDialog v-model:visible="themeRuleVisible" :def="themeRuleDef" @saved="load" />
   </div>
 </template>
 
@@ -4794,17 +4883,17 @@ function nodeLabelLines(label: string) {
   font-size: 14px;
 }
 
-/* ── 顶栏（fixture workbar：56px 白底 + 紧凑操作组） ── */
+/* ── 上下文栏（设计 42:4：48px 白底 + 居中工作区页签） ── */
 .designer-toolbar {
   position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 20px;
-  flex: 0 0 56px;
+  padding: 0 16px;
+  flex: 0 0 48px;
   box-sizing: border-box;
   background: #fff;
-  border-bottom: 1px solid #dde3ef;
+  box-shadow: inset 0 -1px 0 #dde3ef;
   color: #8b98af;
   font-size: 12px;
 }
@@ -4828,39 +4917,49 @@ function nodeLabelLines(label: string) {
 .designer-workbench-tabs {
   position: absolute;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: 0;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  height: 56px;
-  gap: 24px;
+  height: 48px;
+  gap: 0;
 }
 .designer-workbench-tab {
-  height: 56px;
-  padding: 0 44px;
+  position: relative;
+  width: 120px;
+  height: 48px;
+  padding: 0;
   border: 0;
   background: transparent;
   font-size: 14px;
   line-height: 20px;
   color: #8a96ad;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
 }
 .designer-workbench-tab:hover {
   color: var(--sw-color-primary);
 }
 .designer-workbench-tab.is-active {
   color: var(--sw-color-primary);
-  border-bottom-color: var(--sw-color-primary);
+}
+.designer-workbench-tab.is-active::after {
+  position: absolute;
+  bottom: 0;
+  left: 20px;
+  width: 80px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--sw-color-primary);
+  content: '';
 }
 .toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 .toolbar-actions :deep(.el-button) {
   width: 64px;
-  height: 28px;
+  height: 32px;
   padding: 0 8px;
   line-height: 16px;
 }
@@ -4868,7 +4967,10 @@ function nodeLabelLines(label: string) {
   margin-left: 0;
 }
 .toolbar-actions :deep(.toolbar-versions) {
-  width: 88px;
+  width: 64px;
+}
+.toolbar-actions :deep(.toolbar-number) {
+  width: 56px;
 }
 :global(.version-history-popper .el-dropdown-menu) {
   min-width: 360px;
@@ -4931,7 +5033,7 @@ function nodeLabelLines(label: string) {
   padding: 0;
 }
 .designer-toolbar :deep(.el-button) {
-  height: 28px;
+  height: 32px;
   padding: 0 12px;
   border: 1px solid #cbd6e8;
   border-radius: 6px;
@@ -4972,13 +5074,15 @@ function nodeLabelLines(label: string) {
   display: flex;
   align-items: center;
   gap: 8px;
+  height: 40px;
   box-sizing: border-box;
-  padding: 8px 18px;
+  flex: 0 0 40px;
+  padding: 4px 16px;
   background: #fff;
-  border-bottom: 1px solid #e1e5ef;
+  box-shadow: inset 0 -1px 0 #e1e5ef;
 }
 .designer-toolbar2 :deep(.el-button--small) {
-  height: 30px;
+  height: 32px;
   padding: 0 12px;
   border: 1px solid #cbd6e8;
   border-radius: 6px;
@@ -4987,13 +5091,14 @@ function nodeLabelLines(label: string) {
   font-size: 12px;
 }
 .designer-toolbar2 :deep(.workbar-advance) {
-  min-width: 76px;
+  min-width: 72px;
 }
 .designer-toolbar2 :deep(.el-button.workbar-verify) {
-  margin-left: 4px;
+  min-width: 56px;
+  margin-left: 0;
 }
 
-/* ── 0.1.7 重构：左栏节点面板（分组 + 双列图标块） ── */
+/* ── 设计 42:4：220px 节点库，分组内单列 188×34 节点入口 ── */
 .designer-main {
   display: flex;
   flex: 1;
@@ -5001,38 +5106,47 @@ function nodeLabelLines(label: string) {
 }
 .designer-palette {
   box-sizing: border-box;
-  flex: 0 0 196px;
-  width: 196px;
-  padding: 12px 10px 20px;
+  flex: 0 0 220px;
+  width: 220px;
+  padding: 16px;
   overflow-y: auto;
   background: #fff;
   border-right: 1px solid #e1e5ef;
 }
+.palette-title {
+  margin: 0 0 12px;
+  color: #1f2a44;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+}
 .palette-group + .palette-group {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 .palette-group__title {
-  margin: 0 0 8px 4px;
+  margin: 0 0 12px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
+  line-height: 18px;
   color: #7e89a1;
 }
 .palette-group__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .palette-item {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  justify-content: flex-start;
+  gap: 10px;
   box-sizing: border-box;
-  min-height: 62px;
-  padding: 8px 4px;
+  width: 188px;
+  height: 34px;
+  padding: 0 8px;
   border: 1px solid #e0e6f2;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #fbfcff;
   color: #344164;
   font-size: 12px;
@@ -5051,7 +5165,9 @@ function nodeLabelLines(label: string) {
   opacity: 0.55;
 }
 .palette-item__name {
+  font-size: 14px;
   font-weight: 500;
+  line-height: 22px;
   white-space: nowrap;
 }
 .palette-item .workbar-icon {
@@ -5076,6 +5192,7 @@ function nodeLabelLines(label: string) {
   position: relative;
   flex: 1;
   min-width: 0;
+  margin: 16px;
   overflow: hidden;
   /* P53 节点09：画布底 #F8FAFE + 24px 网格线 #E8EDF6 */
   background: #f8fafe;
@@ -5085,15 +5202,16 @@ function nodeLabelLines(label: string) {
 }
 .canvas-zoom {
   position: absolute;
-  right: 24px;
-  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  top: auto;
   display: flex;
   align-items: center;
   gap: 16px;
-  width: 225px;
-  height: 44px;
+  width: 300px;
+  height: 36px;
   box-sizing: border-box;
-  padding: 0 15px;
+  padding: 0 12px;
   background: #fff;
   border: 1px solid #d8e0ee;
   border-radius: 8px;

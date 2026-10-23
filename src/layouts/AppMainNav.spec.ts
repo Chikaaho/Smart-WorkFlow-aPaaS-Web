@@ -74,6 +74,31 @@ const PORTAL_MENU_WITHOUT_APP_CENTER: MenuNode[] = [
   },
 ]
 
+const ADMIN_MENU: MenuNode[] = [
+  {
+    id: 'form-top',
+    parentId: null,
+    name: 'FormAdmin',
+    title: '表单管理',
+    path: 'form/form-def-list',
+    component: 'form/views/FormDefList',
+    sort: 1,
+    menuType: MenuType.MENU,
+    topbar: 1,
+  },
+  {
+    id: 'workflow-top',
+    parentId: null,
+    name: 'WorkflowAdmin',
+    title: '流程管理',
+    path: 'workflow/defs',
+    component: 'workflow/views/ProcessDefList',
+    sort: 2,
+    menuType: MenuType.MENU,
+    topbar: 2,
+  },
+]
+
 function mountNav(
   menu: MenuNode[],
   path = '/workspace',
@@ -134,6 +159,21 @@ describe('AppMainNav（用户端主导航）', () => {
     expect(nav[0]!.active).toBe(false)
     expect(nav[2]!.active).toBe(true)
     expect(nav[3]!.active).toBe(false)
+  })
+
+  it('表单工作台内流程设计保持表单管理选中，直接流程设计保持流程管理选中', () => {
+    const workbench = items(
+      mountNav(ADMIN_MENU, '/workflow/defs/123/design', {
+        from: 'form-workbench',
+        formId: 'form-1',
+      }),
+    )
+    expect(workbench[0]!.active).toBe(true)
+    expect(workbench[1]!.active).toBe(false)
+
+    const direct = items(mountNav(ADMIN_MENU, '/workflow/defs/123/design'))
+    expect(direct[0]!.active).toBe(false)
+    expect(direct[1]!.active).toBe(true)
   })
 
   it('侧栏可用时提供带可访问名称和展开状态的收起入口', async () => {

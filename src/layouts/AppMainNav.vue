@@ -118,6 +118,11 @@ function isActive(to: string): boolean {
       (route.path.startsWith('/form/designer/') && route.query.tab === 'processes')
     )
   }
+  if (to === '/workflow/defs') {
+    // 同一设计器路由在表单工作台内属于表单管理；直接流程设计仍属于流程管理。
+    if (route.query.from === 'form-workbench' && route.path.endsWith('/design')) return false
+    return route.path === to || route.path.startsWith(`${to}/`)
+  }
   // 应用中心：应用内容（/form/app-center/:appId）与表单数据列表（/form/app-form/:formKey）
   // 都是该栏目的下钻页面，保持顶栏选中态。
   if (to === APP_CENTER_PATH) {
@@ -132,7 +137,9 @@ function isActive(to: string): boolean {
     return (
       route.path === to ||
       (route.path.startsWith('/form/') &&
-        !(route.path.startsWith('/form/designer/') && route.query.tab === 'processes'))
+        !(route.path.startsWith('/form/designer/') && route.query.tab === 'processes')) ||
+      // 表单工作台中的流程设计仍属于「表单管理」；直接进入流程管理设计器则保持流程管理选中。
+      (route.query.from === 'form-workbench' && route.path.endsWith('/design'))
     )
   }
   if (to === '/workflow/analytics') {
