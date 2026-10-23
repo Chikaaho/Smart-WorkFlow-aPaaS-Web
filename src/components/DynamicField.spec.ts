@@ -73,16 +73,17 @@ function mountField(field: FormSchemaField, modelValue: unknown = '', readonly =
  * ═══════════════════════════════════════════════════ */
 
 describe('DynamicField — readonly', () => {
-  it('TEXT readonly → el-input 设 readonly', () => {
+  it('TEXT readonly 显示完整值且没有可编辑输入', () => {
     const wrapper = mountField({ name: 'f1', type: 'TEXT' }, 'hello', true)
-    expect(wrapper.findComponent({ name: 'ElInput' }).props('readonly')).toBe(true)
+    expect(wrapper.find('.readonly-value').text()).toBe('hello')
+    expect(wrapper.find('input').exists()).toBe(false)
   })
 
-  it('NUMBER readonly → el-input-number 设 disabled', () => {
+  it('NUMBER readonly 保留零值且没有步进操作', () => {
     const wrapper = mountField({ name: 'f3', type: 'NUMBER' }, 0, true)
-    const input = wrapper.find('[data-testid="input-number"]')
-    expect(input.exists()).toBe(true)
-    expect(input.attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.readonly-value').text()).toBe('0')
+    expect(wrapper.find('[data-testid="input-number"]').exists()).toBe(false)
+    expect(wrapper.find('button').exists()).toBe(false)
   })
 
   it('BOOL readonly → el-switch 设 disabled', () => {

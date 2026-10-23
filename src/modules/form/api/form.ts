@@ -2,6 +2,7 @@ import { request } from '@/foundation/request'
 import type { PageQuery, PageResult } from '@/contracts/common'
 import { parseDefinition } from '@/adapters/form-designer'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
+import { normalizeFormDateFields, normalizeFormDateValue } from '@/contracts/form-date'
 
 export interface FormDefDTO {
   formKey: string
@@ -96,7 +97,8 @@ export function normalizeSubmitData(
       case 'DATE':
         // 可选日期未填写时传 null，避免动态 TIMESTAMP 列收到空字符串而被数据库拒绝。
         // P63 format=datetime：保留完整 "YYYY-MM-DD HH:mm[:ss]" 串（后端按 LocalDateTime 解析）。
-        result[field.name] = String(value).trim() ? String(value) : null
+        result[field.name] =
+          normalizeFormDateValue(value, field.format === 'datetime').trim() || null
         break
       case 'USER':
       case 'DEPT':
@@ -115,7 +117,9 @@ export function normalizeSubmitData(
         break
       case 'TABLE': {
         const rows = Array.isArray(value) ? (value as Record<string, unknown>[]) : []
-        result[field.name] = rows.map(({ _rowAction, _rowId, ...clean }) => clean)
+        result[field.name] = rows.map(({ _rowAction, _rowId, ...clean }) =>
+          normalizeFormDateFields(clean, field.subFields),
+        )
         break
       }
       default:

@@ -97,6 +97,7 @@ declare module 'vue' {
     NumberControl: typeof import('./../components/dynamic-field-controls/NumberControl.vue')['default']
     PlaceholderControl: typeof import('./../components/dynamic-field-controls/PlaceholderControl.vue')['default']
     ProcessGraphView: typeof import('./../components/ProcessGraphView.vue')['default']
+    ReadonlyValue: typeof import('./../components/dynamic-field-controls/ReadonlyValue.vue')['default']
     ReferenceControl: typeof import('./../components/dynamic-field-controls/ReferenceControl.vue')['default']
     RichTextControl: typeof import('./../components/dynamic-field-controls/RichTextControl.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

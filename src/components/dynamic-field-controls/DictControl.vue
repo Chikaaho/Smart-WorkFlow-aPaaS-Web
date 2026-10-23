@@ -14,6 +14,8 @@ import {
 } from '@/contracts/form-schema'
 import { useDict } from '@/foundation/dict'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
+import ReadonlyValue from './ReadonlyValue.vue'
+import arrowDownIcon from '@/assets/form-palette/arrow-down.svg'
 
 const { t } = useI18n()
 
@@ -74,6 +76,16 @@ const selectedKeys = computed(
     ),
 )
 
+const readonlyLabel = computed(
+  () =>
+    Array.from(selectedKeys.value)
+      .map(
+        (key) =>
+          options.value.find((item) => item.key === key)?.label || t('component.optionUnavailable'),
+      )
+      .join('、') || t('form.notSelected'),
+)
+
 function onChange(next: unknown) {
   if (multiple.value) {
     emit('update:modelValue', Array.isArray(next) ? next : [])
@@ -99,19 +111,14 @@ function onChange(next: unknown) {
     :placeholder="t('form.configureDataPrompt')"
   />
 
-  <!-- 只读回看（下拉形态）：按设计器同一套选择项呈现，不渲染禁用输入框 -->
-  <div v-else-if="readonly && renderAs === 'select'" class="readonly-options">
-    <span
-      v-for="opt in options"
-      :key="opt.key"
-      class="readonly-option"
-      :class="{ 'is-selected': selectedKeys.has(opt.key) }"
-    >
-      <span class="readonly-option__mark">{{ selectedKeys.has(opt.key) ? '✓' : '' }}</span>
-      {{ opt.label }}
-    </span>
-    <span v-if="options.length === 0" class="readonly-options__empty">未选择</span>
-  </div>
+  <ReadonlyValue
+    v-else-if="readonly && renderAs === 'select'"
+    class="readonly-options"
+    :plain="subField"
+    :trailing-icon="arrowDownIcon"
+  >
+    <span class="readonly-options__value">{{ readonlyLabel }}</span>
+  </ReadonlyValue>
 
   <el-select
     v-else-if="renderAs === 'select'"
@@ -138,40 +145,8 @@ function onChange(next: unknown) {
 </template>
 
 <style scoped>
-.readonly-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-  padding: 6px 0;
-}
-.readonly-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--sw-text-secondary);
-  line-height: 22px;
-}
-.readonly-option__mark {
-  box-sizing: border-box;
-  width: 16px;
-  height: 16px;
-  border: 1px solid var(--sw-border-base);
-  border-radius: 3px;
-  color: #fff;
-  font-size: 11px;
-  line-height: 14px;
-  text-align: center;
-}
-.readonly-option.is-selected {
-  color: #5b4bdb;
-  font-weight: 500;
-}
-.readonly-option.is-selected .readonly-option__mark {
-  border-color: #5b4bdb;
-  background: #5b4bdb;
-}
-.readonly-options__empty {
-  color: var(--sw-text-secondary);
-  line-height: 22px;
+.readonly-options__value {
+  flex: 1;
+  min-width: 0;
 }
 </style>

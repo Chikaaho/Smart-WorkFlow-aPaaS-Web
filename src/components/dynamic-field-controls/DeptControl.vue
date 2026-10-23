@@ -18,6 +18,8 @@ import { Search, CircleClose } from '@element-plus/icons-vue'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
 import { normalizeIdList } from '../dynamic-field-registry'
 import { loadDeptChoices } from '@/modules/form/api/i2-choices'
+import ReadonlyValue from './ReadonlyValue.vue'
+import folderIcon from '@/assets/form-palette/folder.svg'
 
 const props = defineProps<DynamicFieldControlProps>()
 const emit = defineEmits<{ 'update:modelValue': [value: unknown] }>()
@@ -75,6 +77,13 @@ const readonlyText = computed(() => {
     ? t('component.selectedDeptCount', { count: selectedIds.value.length })
     : t('component.selectedDept')
 })
+const unresolvedCount = computed(() =>
+  Math.max(
+    0,
+    (isMultiple.value ? selectedIds.value.length : hasValue.value ? 1 : 0) -
+      resolvedLabels.value.length,
+  ),
+)
 
 onMounted(async () => {
   try {
@@ -134,10 +143,18 @@ function clearValue(): void {
 
 <template>
   <!-- 只读回看：按业务名称静态展示，不再渲染成禁用输入框 -->
-  <div v-if="readonly" class="dept-readonly">
-    <span v-if="readonlyText">{{ readonlyText }}</span>
-    <span v-else class="dept-readonly__empty">{{ t('common.notSelected') }}</span>
-  </div>
+  <ReadonlyValue v-if="readonly" class="dept-readonly" :plain="subField" :leading-icon="folderIcon">
+    <template v-if="resolvedLabels.length">
+      <span v-for="(label, index) in resolvedLabels" :key="index" class="dept-readonly__tag">{{
+        label
+      }}</span>
+      <span v-if="unresolvedCount">{{
+        t('component.selectedDeptCount', { count: unresolvedCount })
+      }}</span>
+    </template>
+    <span v-else-if="readonlyText">{{ readonlyText }}</span>
+    <span v-else class="dept-readonly__empty">{{ t('form.notSelected') }}</span>
+  </ReadonlyValue>
 
   <el-input
     v-else
@@ -188,12 +205,15 @@ function clearValue(): void {
 
 <style scoped>
 .dept-readonly {
-  display: flex;
-  align-items: center;
-  min-height: 40px;
-  color: var(--sw-text-primary);
+  flex-wrap: wrap;
+}
+.dept-readonly__tag {
+  padding: 0 8px;
+  border-radius: var(--sw-radius-sm);
+  background: var(--sw-fill-base);
+  color: var(--sw-text-secondary);
+  font-size: 12px;
   line-height: 22px;
-  word-break: break-all;
 }
 .dept-readonly__empty {
   color: var(--sw-text-secondary);

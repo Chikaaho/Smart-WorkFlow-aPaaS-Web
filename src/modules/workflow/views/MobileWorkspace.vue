@@ -24,9 +24,8 @@ import {
 import type { PageQuery } from '@/contracts/common'
 import type { TaskDetail } from '@/contracts/bpm'
 import { ApiError } from '@/foundation/request'
-import { getFormData, getFormDefinition } from '@/adapters/form-runtime'
-import type { FormSchema } from '@/contracts/form-schema'
-import AttachmentControl from '@/components/dynamic-field-controls/AttachmentControl.vue'
+import { getFormData } from '@/adapters/form-runtime'
+import BusinessFormReadonly from '@/components/business-detail/BusinessFormReadonly.vue'
 
 type MobileTab = 'todo' | 'initiated' | 'drafts'
 
@@ -45,6 +44,7 @@ interface Row {
   taskId?: string
   id?: string | number
   name?: string
+  processName?: string | null
   processDefinitionKey?: string
   formKey?: string
   status?: string
@@ -58,24 +58,9 @@ const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref<TaskDetail | null>(null)
 const formRecord = ref<Record<string, unknown> | null>(null)
-const formSchema = ref<FormSchema | null>(null)
-/** REFERENCE 字段显示名缓存（id→可读关联对象信息，授权单查解析，取不到回退 id）。 */
-const refDisplayMap = ref<Record<string, string>>({})
 const opinionData = ref<Record<string, unknown>>({})
 const submitting = ref(false)
 const submitError = ref('')
-
-/** 表单宽表的系统列：与业务数据无关，不在详情展示（与 PC TaskDetail 同一口径）。 */
-const SYSTEM_COLUMNS = new Set([
-  'id',
-  'create_by',
-  'create_time',
-  'update_by',
-  'update_time',
-  'del_flag',
-  'tenant_id',
-  'version',
-])
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && rows.value.length === 0)
 
@@ -100,25 +85,6 @@ async function loadTab(tab: MobileTab) {
   }
 }
 
-async function resolveRefDisplays() {
-  refDisplayMap.value = {}
-  if (!formSchema.value || !formRecord.value) return
-  const { resolveReferenceDisplay } = await import('@/adapters/form-runtime')
-  for (const field of formSchema.value.fields) {
-    if (field.type !== 'REFERENCE') continue
-    const refId = formRecord.value['ref_' + field.name + '_id']
-    if (refId == null || refId === '') continue
-    try {
-      refDisplayMap.value[field.name] = await resolveReferenceDisplay(
-        String(field.targetFormId ?? ''),
-        String(refId),
-      )
-    } catch {
-      refDisplayMap.value[field.name] = String(refId)
-    }
-  }
-}
-
 async function openTask(row: Row) {
   const taskId = String(row.taskId ?? '')
   if (!taskId) return
@@ -126,7 +92,6 @@ async function openTask(row: Row) {
   detailLoading.value = true
   detail.value = null
   formRecord.value = null
-  formSchema.value = null
   opinionData.value = {}
   submitError.value = ''
   try {
@@ -135,12 +100,6 @@ async function openTask(row: Row) {
     if (detail.value?.formKey && detail.value?.businessKey) {
       try {
         formRecord.value = await getFormData(detail.value.formKey, detail.value.businessKey)
-        try {
-          formSchema.value = await getFormDefinition(detail.value.formKey)
-        } catch {
-          formSchema.value = null
-        }
-        await resolveRefDisplays()
       } catch {
         formRecord.value = null
       }
@@ -151,74 +110,6 @@ async function openTask(row: Row) {
     detailLoading.value = false
   }
 }
-
-/** 表单数据行：按 schema 字段顺序输出业务标签（外键/业务值经只读接口授权回显）。 */
-const formFieldRows = computed(() => {
-  if (!formRecord.value) return []
-  const out: {
-    key: string
-    label: string
-    value: string
-    attachments?: { storageKey: string; name: string }[]
-  }[] = []
-  const seen = new Set<string>()
-  if (formSchema.value) {
-    for (const field of formSchema.value.fields) {
-      const recordKey = field.type === 'REFERENCE' ? 'ref_' + field.name + '_id' : field.name
-      if (SYSTEM_COLUMNS.has(field.name) || !(recordKey in formRecord.value)) continue
-      seen.add(field.name)
-      const v = formRecord.value[recordKey]
-      // ATTACHMENT/IMAGE 字段：除 storageKey 原始值外，给出授权下载入口（文件名 + key 元数据）
-      let attachments: { storageKey: string; name: string }[] | undefined
-      if (field.type === 'ATTACHMENT' || field.type === 'IMAGE') {
-        try {
-          const parsed = typeof v === 'string' ? JSON.parse(v) : v
-          if (Array.isArray(parsed)) {
-            // 契约值 = storageKey 字符串数组；兼容携带文件名的对象数组
-            attachments = parsed
-              .map((it): { storageKey: string; name: string } | null => {
-                if (typeof it === 'string' && it !== '') {
-                  const seg = it.split('/').pop() ?? it
-                  return { storageKey: it, name: seg }
-                }
-                if (
-                  it &&
-                  typeof it === 'object' &&
-                  typeof (it as { storageKey?: unknown }).storageKey === 'string'
-                ) {
-                  const key = it.storageKey as string
-                  const name = (it as { name?: unknown }).name
-                  return typeof name === 'string' && name !== ''
-                    ? { storageKey: key, name }
-                    : { storageKey: key, name: key.split('/').pop() ?? key }
-                }
-                return null
-              })
-              .filter((it): it is { storageKey: string; name: string } => it !== null)
-          }
-        } catch {
-          attachments = undefined
-        }
-      }
-      out.push({
-        key: field.name,
-        label: field.label || field.name,
-        value:
-          v == null || v === ''
-            ? '-'
-            : field.type === 'REFERENCE'
-              ? (refDisplayMap.value[field.name] ?? String(v))
-              : String(v),
-        attachments,
-      })
-    }
-  }
-  for (const [k, v] of Object.entries(formRecord.value)) {
-    if (SYSTEM_COLUMNS.has(k) || seen.has(k)) continue
-    out.push({ key: k, label: k, value: v == null || v === '' ? '-' : String(v) })
-  }
-  return out
-})
 
 // ─── 正式意见表单：动态字段渲染（与 PC 同一配置与校验口径） ───
 const opinionFields = computed(() => detail.value?.opinionForm?.fields ?? [])
@@ -315,7 +206,7 @@ async function submitHandle(action: 'APPROVE' | 'DISAPPROVE') {
 }
 
 function rowTitle(row: Row): string {
-  return row.name || row.processDefinitionKey || String(row.taskId ?? row.id ?? '')
+  return row.processName || row.name || t('workflow.taskDetail')
 }
 
 function handleTabChange(tab: string | number) {
@@ -372,7 +263,11 @@ void (async () => {
         <div class="m-item-title">{{ rowTitle(row) }}</div>
         <div class="m-item-meta">
           <span>{{
-            row.status || (activeTab === 'todo' ? t('workflow.pendingHandle') : '—')
+            activeTab === 'todo'
+              ? t('workflow.pendingHandle')
+              : activeTab === 'drafts'
+                ? t('common.statusDraft')
+                : enumLabel('WORKFLOW_INSTANCE', row.status)
           }}</span>
           <span>{{ row.createTime || '' }}</span>
         </div>
@@ -450,21 +345,13 @@ void (async () => {
 
           <section class="m-section">
             <h3 class="m-section-title">{{ t('workflow.formDataThisSubmission') }}</h3>
-            <template v-if="formFieldRows.length">
-              <div v-for="row in formFieldRows" :key="row.key" class="m-kv">
-                <span>{{ row.label }}</span>
-                <AttachmentControl
-                  v-if="row.attachments"
-                  class="m-att-list"
-                  :field="{ name: row.key, type: 'ATTACHMENT' }"
-                  :model-value="row.attachments"
-                  :form-key="detail.formKey || ''"
-                  :record-id="detail.businessKey || ''"
-                  readonly
-                />
-                <b v-else>{{ row.value }}</b>
-              </div>
-            </template>
+            <BusinessFormReadonly
+              v-if="detail.formKey && formRecord"
+              :form-key="detail.formKey"
+              :record-id="detail.businessKey"
+              :record="formRecord"
+              class="m-business-form"
+            />
             <p v-else class="m-empty-line">{{ t('workflow.formRecordUnavailable') }}</p>
           </section>
 
@@ -687,9 +574,11 @@ void (async () => {
   color: var(--sw-text-secondary);
   font-size: 13px;
 }
-.m-att-list {
-  flex: 1;
-  min-width: 0;
+.m-business-form :deep(.business-form__grid) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.m-business-form :deep(.business-form__field) {
+  grid-column: 1 / -1 !important;
 }
 .m-opinion-field {
   margin-bottom: 10px;

@@ -675,6 +675,7 @@ export default {
   component: {
     downloadFileNamed: '下载 {name}',
     attachmentDownloadFailed: '附件下载失败，请重试',
+    optionUnavailable: '选项暂不可用',
     imagePreviewUnavailable: '图片暂时无法预览',
     selectDataObject: '选择数据对象',
     selectUser: '选择人员',

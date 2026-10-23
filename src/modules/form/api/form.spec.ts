@@ -146,6 +146,25 @@ describe('modules/form/api/form', () => {
 /* ── normalizeSubmitData ──────────────────────────────────── */
 
 describe('normalizeSubmitData', () => {
+  it('查询时间戳再次保存时保持原本地钟面值，主表与子表一致', () => {
+    vi.stubEnv('TZ', 'Asia/Shanghai')
+    try {
+      const data = {
+        when: '2026-10-25T01:00:00.000+00:00',
+        lines: [{ day: '2026-10-24T16:00:00Z', _rowAction: 'ADD' }],
+      }
+      expect(
+        normalizeSubmitData(data, [
+          { name: 'when', type: 'DATE', format: 'datetime' },
+          { name: 'lines', type: 'TABLE', subFields: [{ name: 'day', type: 'DATE' }] },
+        ]),
+      ).toEqual({ when: '2026-10-25 09:00:00', lines: [{ day: '2026-10-25' }] })
+      expect(data.when).toBe('2026-10-25T01:00:00.000+00:00')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('converts BOOL true → 1 and false → 0', () => {
     const fields = [
       { name: 'active', type: 'BOOL' as const },

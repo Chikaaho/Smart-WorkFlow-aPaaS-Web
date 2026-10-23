@@ -165,47 +165,49 @@ function removeItem(item: AttachmentItem) {
   <div class="attachment-control" :class="{ 'attachment-control--readonly': readonly }">
     <ul v-if="items.length" class="attachment-control__list">
       <li v-for="item in items" :key="item.storageKey" class="attachment-control__row">
-        <img
-          v-if="isImage && previewSources[item.storageKey] && !previewFailed[item.storageKey]"
-          :src="previewSources[item.storageKey]"
-          :alt="item.name"
-          class="attachment-control__thumb"
-          @error="previewFailed[item.storageKey] = true"
-        />
-        <img
-          v-else
-          :src="documentIcon"
-          class="attachment-control__icon"
-          alt=""
-          aria-hidden="true"
-        />
-        <span class="attachment-control__name" :title="item.name">{{ item.name }}</span>
-        <span
-          v-if="previewFailed[item.storageKey]"
-          class="attachment-control__preview-error"
-          role="status"
-        >
-          {{ t('component.imagePreviewUnavailable') }}
-        </span>
-        <el-button
-          v-if="readonly && canDownload"
-          class="attachment-control__download"
-          link
-          type="primary"
-          :aria-label="t('component.downloadFileNamed', { name: item.name })"
-          :loading="downloadingKey === item.storageKey"
-          :disabled="downloadingKey !== null"
-          @click="downloadItem(item)"
-          >{{ t('common.download') }}</el-button
-        >
-        <el-button
-          v-if="!readonly"
-          :icon="Delete"
-          size="small"
-          text
-          type="danger"
-          @click="removeItem(item)"
-        />
+        <div class="attachment-control__entry">
+          <img
+            v-if="isImage && previewSources[item.storageKey] && !previewFailed[item.storageKey]"
+            :src="previewSources[item.storageKey]"
+            :alt="item.name"
+            class="attachment-control__thumb"
+            @error="previewFailed[item.storageKey] = true"
+          />
+          <img
+            v-else
+            :src="documentIcon"
+            class="attachment-control__icon"
+            alt=""
+            aria-hidden="true"
+          />
+          <span class="attachment-control__name" :title="item.name">{{ item.name }}</span>
+          <span
+            v-if="previewFailed[item.storageKey]"
+            class="attachment-control__preview-error"
+            role="status"
+          >
+            {{ t('component.imagePreviewUnavailable') }}
+          </span>
+          <el-button
+            v-if="readonly && canDownload"
+            class="attachment-control__download"
+            link
+            type="primary"
+            :aria-label="t('component.downloadFileNamed', { name: item.name })"
+            :loading="downloadingKey === item.storageKey"
+            :disabled="downloadingKey !== null"
+            @click="downloadItem(item)"
+            >{{ t('common.download') }}</el-button
+          >
+          <el-button
+            v-if="!readonly"
+            :icon="Delete"
+            size="small"
+            text
+            type="danger"
+            @click="removeItem(item)"
+          />
+        </div>
       </li>
     </ul>
     <label v-if="!readonly" class="attachment-control__upload">
@@ -234,10 +236,13 @@ function removeItem(item: AttachmentItem) {
   gap: 8px;
 }
 .attachment-control__row {
+  padding: 4px 0;
+}
+.attachment-control__entry {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0;
+  min-height: 28px;
 }
 .attachment-control__name {
   flex: 1;
@@ -265,6 +270,8 @@ function removeItem(item: AttachmentItem) {
   min-width: 56px;
   height: 32px;
   padding: 0 12px;
+  margin-block: -2px;
+  font-family: inherit;
   font-size: 14px;
   line-height: 22px;
 }

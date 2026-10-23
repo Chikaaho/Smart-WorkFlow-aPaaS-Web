@@ -33,6 +33,8 @@ import {
 } from '@/modules/form/api/form'
 import { ApiError, getErrorMessage } from '@/foundation/request'
 import DynamicField from '@/components/DynamicField.vue'
+import { normalizeFormDateFields } from '@/contracts/form-date'
+import { normalizeFormFieldValue } from '@/contracts/form-value'
 import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-display'
 import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
 import { createFieldScripts } from '@/modules/form/utils/field-scripts'
@@ -361,7 +363,10 @@ async function loadRecord(schema: FormSchema): Promise<boolean> {
           const arr: unknown = typeof raw === 'string' ? tryParseJSON(raw, []) : (raw ?? [])
           formData[field.name] = Array.isArray(arr)
             ? arr.map((row: unknown) => {
-                const r = row as Record<string, unknown>
+                const r = { ...(row as Record<string, unknown>) }
+                for (const sub of field.subFields) {
+                  if (sub.name in r) r[sub.name] = normalizeFormFieldValue(sub, r[sub.name])
+                }
                 return {
                   ...r,
                   _rowAction: 'UNCHANGED' as const,
@@ -388,7 +393,7 @@ async function loadRecord(schema: FormSchema): Promise<boolean> {
         }
         default: {
           const val = record[field.name]
-          formData[field.name] = val !== null && val !== undefined ? val : ''
+          formData[field.name] = normalizeFormFieldValue(field, val ?? '')
         }
       }
     }
@@ -459,7 +464,7 @@ function buildUpdatePayload(): {
         const entry: SubTableRowAction = { action }
         if (_rowId) entry.id = String(_rowId)
         if (action !== 'DELETE') {
-          entry.data = businessData as Record<string, unknown>
+          entry.data = normalizeFormDateFields(businessData, field.subFields)
         }
         return entry
       })

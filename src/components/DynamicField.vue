@@ -15,11 +15,8 @@ const props = withDefaults(
     field: FormSchemaField
     modelValue: unknown
     /**
-     * 只读模式（语义随控件类型，见各控件实现）：
-     * - TEXT / RICH_TEXT → readonly
-     * - NUMBER / DATE / BOOL / DICT → disabled
-     * - REFERENCE → 只读输入框，禁用「选择」按钮
-     * - TABLE → 隐藏添加/删除按钮，子控件 disabled
+     * 只读模式按字段类型显示实际值或禁用状态；子表隐藏增删操作，
+     * 附件读取仍由服务端核实记录和字段权限。
      */
     readonly?: boolean
     /**

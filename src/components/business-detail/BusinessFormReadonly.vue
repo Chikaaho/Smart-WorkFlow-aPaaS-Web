@@ -10,6 +10,7 @@ import DynamicField from '@/components/DynamicField.vue'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 import { getFormDefinition, resolveReferenceDisplay } from '@/adapters/form-runtime'
 import type { FormSchema } from '@/contracts/form-schema'
+import { normalizeFormFieldValue } from '@/contracts/form-value'
 
 const props = withDefaults(
   defineProps<{
@@ -37,33 +38,6 @@ const effectiveRecordId = computed(
   () => props.recordId || (typeof props.record?.id === 'string' ? props.record.id : ''),
 )
 
-/** 动态表列把多值字段落成 JSON 数组串；只读控件按数组形态回显选中项。 */
-const ARRAY_VALUE_TYPES = new Set(['MULTISELECT', 'ATTACHMENT', 'IMAGE', 'TABLE'])
-
-function normalizeFieldValue(field: FormSchema['fields'][number], raw: unknown): unknown {
-  if (raw == null || Array.isArray(raw)) return raw
-  const expectsArray =
-    ARRAY_VALUE_TYPES.has(field.type) ||
-    ((field.type === 'USER' || field.type === 'DEPT') && field.multiple === true)
-  if (!expectsArray || typeof raw !== 'string') return raw
-  const text = raw.trim()
-  if (text.startsWith('[')) {
-    try {
-      const decoded = JSON.parse(text)
-      if (Array.isArray(decoded)) return decoded
-    } catch {
-      // 非合法 JSON 时按逗号分隔值兜底。
-    }
-  }
-  if (field.type === 'USER' || field.type === 'DEPT' || field.type === 'MULTISELECT') {
-    return text
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
-  }
-  return raw
-}
-
 const formItems = computed(() => {
   if (!schema.value) return []
   return schema.value.fields.map((field) => {
@@ -71,7 +45,7 @@ const formItems = computed(() => {
     return {
       field,
       colSpan: normalizeFormFieldColSpan(field.colSpan, field.type),
-      value: normalizeFieldValue(field, props.record?.[recordKey]),
+      value: normalizeFormFieldValue(field, props.record?.[recordKey]),
       referenceLabel: field.type === 'REFERENCE' ? (referenceLabels.value[field.name] ?? '') : '',
     }
   })

@@ -96,7 +96,7 @@ function onChange(value: unknown) {
   <!-- 只读回看：按业务名称静态展示，不再渲染成禁用下拉框 -->
   <div v-if="readonly" class="user-readonly">
     <span v-if="readonlyText">{{ readonlyText }}</span>
-    <span v-else class="user-readonly__empty">{{ t('common.notSelected') }}</span>
+    <span v-else class="user-readonly__empty">{{ t('form.notSelected') }}</span>
   </div>
 
   <el-select

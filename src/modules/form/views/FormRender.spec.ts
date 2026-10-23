@@ -90,6 +90,7 @@ const baseStubs = {
   ElAlert: { props: ['title'], template: '<div class="el-alert">{{ title }}</div>' },
   ElButton: { template: '<button><slot /></button>' },
   DynamicField: {
+    name: 'DynamicField',
     props: ['field', 'modelValue', 'readonly', 'referenceLabel'],
     template:
       '<div class="dynamic-field-stub" :data-field-name="field.name" :data-readonly="readonly" :data-reference-label="referenceLabel" :data-model-value="String(modelValue)"><label>{{ field.label ?? field.name }}</label></div>',
@@ -349,6 +350,40 @@ describe('FormRender', () => {
     expect(refField.attributes('data-reference-label')).toBe('ref-display')
     // 编辑模式不 readonly
     expect(refField.attributes('data-readonly')).toBe('false')
+  })
+
+  it('编辑回填还原主表附件、多选及子表图片，保留实际文件键与名称', async () => {
+    mockQuery = { recordId: 'rec_001', mode: 'edit' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '文件',
+      fields: [
+        { name: 'files', type: 'ATTACHMENT' },
+        { name: 'choices', type: 'DICT', dictType: '', multiple: true },
+        { name: 'lines', type: 'TABLE', subFields: [{ name: 'photos', type: 'IMAGE' }] },
+      ],
+    })
+    const file = { storageKey: 'stored-key', name: '方案.pdf' }
+    vi.mocked(getFormData).mockResolvedValueOnce({
+      id: 'rec_001',
+      version: 1,
+      files: JSON.stringify([file]),
+      choices: '["a","b"]',
+      lines: [{ id: 'line-1', photos: JSON.stringify([file]) }],
+    })
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    const fields = wrapper.findAllComponents({ name: 'DynamicField' })
+    expect(fields.find((w) => w.props('field').name === 'files')?.props('modelValue')).toEqual([
+      file,
+    ])
+    expect(fields.find((w) => w.props('field').name === 'choices')?.props('modelValue')).toEqual([
+      'a',
+      'b',
+    ])
+    const rows = fields.find((w) => w.props('field').name === 'lines')?.props('modelValue')
+    expect(rows).toEqual([
+      { id: 'line-1', photos: [file], _rowAction: 'UNCHANGED', _rowId: 'line-1' },
+    ])
   })
 
   it('shows submit button for new form (no recordId)', async () => {

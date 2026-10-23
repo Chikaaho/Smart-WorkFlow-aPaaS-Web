@@ -690,6 +690,7 @@ export default {
   component: {
     downloadFileNamed: 'Download {name}',
     attachmentDownloadFailed: 'Could not download the attachment. Try again.',
+    optionUnavailable: 'Option unavailable',
     imagePreviewUnavailable: 'Image preview is unavailable',
     selectDataObject: 'Select a data object',
     selectUser: 'Select people',

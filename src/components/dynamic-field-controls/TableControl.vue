@@ -65,7 +65,7 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
 </script>
 
 <template>
-  <div class="dynamic-field__table">
+  <div class="dynamic-field__table" :class="{ 'dynamic-field__table--readonly': readonly }">
     <table class="dynamic-field__table-inner">
       <thead>
         <tr>
@@ -125,5 +125,39 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
   font-size: var(--sw-font-caption);
   font-weight: var(--sw-font-weight-caption);
   background: var(--sw-fill-base);
+}
+.dynamic-field__table--readonly .dynamic-field__table-inner {
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-bottom: 0;
+  border: 1px solid var(--sw-border-light);
+}
+.dynamic-field__table--readonly th,
+.dynamic-field__table--readonly td {
+  box-sizing: border-box;
+  height: 38px;
+  padding: 7px 12px;
+  border: 0;
+  border-right: 1px solid var(--sw-border-light);
+  text-align: left;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+.dynamic-field__table--readonly th {
+  color: var(--sw-text-secondary);
+  background: var(--sw-fill-base);
+  font-size: 12px;
+  line-height: 18px;
+}
+.dynamic-field__table--readonly th:last-child,
+.dynamic-field__table--readonly td:last-child {
+  border-right: 0;
+}
+.dynamic-field__table--readonly th,
+.dynamic-field__table--readonly tbody tr:not(:last-child) td {
+  border-bottom: 1px solid var(--sw-border-light);
 }
 </style>
