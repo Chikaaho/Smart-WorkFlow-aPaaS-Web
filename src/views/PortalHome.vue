@@ -95,16 +95,20 @@ const focus = computed(() => [
   {
     key: 'todo',
     label: t('portal.todoTasks'),
-    subtitle: '2 项即将超时',
+    subtitle: todoTotal.value
+      ? t('portal.focusTodoCount', { count: todoTotal.value })
+      : t('portal.focusNoTodo'),
     value: todoTotal.value,
-    to: '',
+    to: '/workflow/todo',
     tone: 'primary',
   },
   {
     key: 'unread',
     icon: Bell,
     label: t('portal.unreadNotifications'),
-    subtitle: '含 1 条系统告警',
+    subtitle: unread.value
+      ? t('portal.focusUnreadCount', { count: unread.value })
+      : t('portal.focusNoUnread'),
     value: unread.value,
     to: reachable.value.has('/notify/inbox') ? '/notify/inbox' : '',
     tone: 'warning',
@@ -113,7 +117,10 @@ const focus = computed(() => [
     key: 'device-alerts',
     icon: Share,
     label: t('portal.deviceAlerts'),
-    subtitle: '校园北门离线',
+    subtitle:
+      (analytics.value?.deviceAlerts ?? 0)
+        ? t('portal.focusDeviceCount', { count: analytics.value?.deviceAlerts ?? 0 })
+        : t('portal.focusNoDevice'),
     value: analytics.value?.deviceAlerts ?? 0,
     to: reachable.value.has('/iot') ? '/iot' : '',
     tone: 'danger',
@@ -162,14 +169,14 @@ function searchPortal(): void {
 </script>
 
 <template>
-  <div v-loading="loading" class="portal">
+  <div class="portal" :aria-busy="loading">
     <section class="portal__hero">
       <div class="portal__hero-copy">
         <div class="portal__hero-text">
           <h2>{{ t('portal.heroTitle') }}</h2>
-          <p>{{ t('portal.heroSub') }}</p>
         </div>
         <form class="portal__hero-search" @submit.prevent="searchPortal">
+          <span class="portal__hero-search-label">{{ t('portal.serviceLabel') }}</span>
           <el-input v-model="searchQuery" :placeholder="t('portal.searchPlaceholder')" />
           <el-button type="primary" native-type="submit">{{ t('portal.search') }}</el-button>
         </form>
@@ -299,9 +306,9 @@ function searchPortal(): void {
 .portal {
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  max-width: 1408px;
-  padding: 32px 32px 32px;
+  gap: 24px;
+  max-width: none !important;
+  padding: 24px;
   margin: 0 auto;
 }
 .portal__hero {
@@ -309,28 +316,27 @@ function searchPortal(): void {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  height: 228px;
-  min-height: 228px;
-  padding: 36px 40px;
+  min-height: 126px;
+  padding: 22px 24px;
   box-sizing: border-box;
   border-radius: var(--sw-radius-lg);
-  background:
-    radial-gradient(700px 340px at 88% -30%, rgba(111, 45, 255, 0.45), transparent 62%),
-    linear-gradient(150deg, #111b3b 0%, #172033 100%);
-  color: #ffffff;
+  background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
+  box-shadow: var(--sw-shadow-card);
+  color: var(--sw-text-primary);
   position: relative;
 }
 .portal__hero-copy {
   display: flex;
   flex-direction: column;
-  gap: 34px;
-  flex: 0 0 560px;
-  width: 560px;
+  gap: 14px;
+  flex: 0 1 900px;
+  width: min(900px, 55%);
   min-width: 0;
 }
 .portal__hero-text h2 {
-  margin: 0 0 8px;
-  font-size: 24px;
+  margin: 0;
+  font-size: 17px;
   font-weight: 700;
 }
 .portal__hero-text p {
@@ -340,10 +346,18 @@ function searchPortal(): void {
   line-height: 1.8;
   color: #c9d1e8;
 }
+.portal__hero-search-label {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
 .portal__hero-search {
   display: flex;
-  width: min(560px, 100%);
-  height: 54px;
+  width: min(900px, 100%);
+  height: 44px;
 }
 .portal__hero-search :deep(.el-input) {
   flex: 1;
@@ -354,61 +368,57 @@ function searchPortal(): void {
   box-shadow: none;
 }
 .portal__hero-search :deep(.el-button) {
-  height: 54px;
-  min-width: 86px;
+  height: 44px;
+  min-width: 80px;
   margin-left: 0;
   border-radius: 0 8px 8px 0;
 }
 .portal__hero-stats {
-  position: absolute;
-  top: 16px;
-  right: 60px;
+  position: static;
   display: flex;
-  gap: 20px;
-  align-items: flex-start;
+  gap: 74px;
+  align-items: center;
   margin-right: 0;
+  padding-right: 48px;
 }
 .portal__hero-stat {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 190px;
+  min-width: 110px;
   box-sizing: border-box;
-  padding: 34px 22px;
-  border-radius: var(--sw-radius-base);
-  background: #202f63;
-  height: 156px;
-  margin-top: 10px;
+  padding: 0;
+  background: transparent;
+  height: auto;
+  margin-top: 0;
   align-items: center;
 }
 .portal__hero-stat--primary {
-  background: var(--sw-color-primary);
-  min-width: 132px;
-  margin-top: 30px;
-  height: 116px;
-  margin-right: -4px;
-  padding: 28px 22px;
+  background: transparent;
+  min-width: 110px;
+  margin-top: 0;
+  height: auto;
+  margin-right: 0;
+  padding: 0;
 }
 .portal__hero-stat--primary strong {
-  position: relative;
-  top: -6px;
+  position: static;
 }
 .portal__hero-stat--accent {
-  background: #20b8cd;
-  min-width: 130px;
-  padding: 34px 16px;
-  height: 166px;
+  background: transparent;
+  min-width: 110px;
+  padding: 0;
+  height: auto;
   margin-top: 0;
 }
 .portal__hero-stat--accent strong {
-  position: relative;
-  top: 2px;
-  font-size: 22px;
+  position: static;
+  font-size: 26px;
 }
 .portal__hero-stat strong {
   width: 100%;
   text-align: center;
-  font-size: 28px;
+  font-size: 26px;
   line-height: 34px;
   font-weight: 700;
 }
@@ -417,11 +427,15 @@ function searchPortal(): void {
 }
 .portal__hero-stat span {
   font-size: 12px;
-  color: #dde0ff;
+  color: var(--sw-text-secondary);
 }
 .portal > .portal__section {
-  margin-right: 24px;
-  margin-left: 16px;
+  margin: 0;
+  padding: 20px 24px 24px;
+  background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  box-shadow: var(--sw-shadow-card);
 }
 .portal__section-title {
   margin: 0 0 20px;
@@ -432,18 +446,18 @@ function searchPortal(): void {
 .portal__services {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 24px;
+  gap: 16px;
 }
 .portal-service {
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: 18px;
-  min-height: 126px;
+  min-height: 100px;
   padding: 18px 16px;
   text-align: left;
   background: var(--sw-surface-card);
-  border: 0;
+  border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
   box-shadow: none;
   cursor: pointer;
@@ -497,8 +511,7 @@ function searchPortal(): void {
   display: grid;
   grid-template-columns: minmax(0, 1.783333fr) minmax(320px, 1fr);
   gap: 24px;
-  margin-left: 16px;
-  margin-top: -5px;
+  margin: 0;
 }
 .portal__analytics,
 .portal__focus-section {
@@ -658,19 +671,66 @@ function searchPortal(): void {
 }
 /* BF20261013-046：移除 .el-button > span 的 left:18px 位移 hack（曾把「查看」推离按钮中心） */
 @media (max-width: 767px) {
+  .portal {
+    gap: 16px;
+    padding: 12px;
+  }
   .portal__hero {
     flex-direction: column;
     align-items: stretch;
-    padding: 24px 20px;
+    padding: 18px 16px;
+  }
+  .portal__hero-copy {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  .portal__hero-search {
+    flex-wrap: wrap;
+    height: auto;
+  }
+  .portal__hero-search-label {
+    width: 100%;
+    padding: 0;
   }
   .portal__hero-stats {
+    width: 100%;
     flex-wrap: wrap;
+    gap: 20px;
+    padding: 0;
   }
   .portal__hero-stat {
     flex: 1 1 40%;
+    width: auto;
+  }
+  .portal__services {
+    grid-template-columns: 1fr;
+  }
+  .portal__section {
+    padding: 16px !important;
   }
   .portal__lower {
     grid-template-columns: 1fr;
+  }
+  .portal__analytics,
+  .portal__focus-section {
+    height: auto;
+    min-height: 0;
+  }
+  .portal__analytics-summary {
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .portal__analytics-chart-label {
+    position: static;
+    margin-top: 24px;
+  }
+  .portal__analytics-bars {
+    position: static;
+    height: 180px;
+    margin-top: 12px;
+  }
+  .portal__focus {
+    margin-top: 12px;
   }
 }
 </style>

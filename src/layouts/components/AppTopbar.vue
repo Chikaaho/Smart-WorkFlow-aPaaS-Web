@@ -348,6 +348,8 @@ function onCommand(command: string): void {
   font: inherit;
   font-size: var(--sw-font-caption);
   cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .app-topbar__tenant {
   display: inline-flex;
@@ -561,6 +563,8 @@ function onCommand(command: string): void {
   color: rgba(255, 255, 255, 0.92);
   font-size: 13px;
   cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .app-topbar__locale:hover {
   background: var(--sw-nav-hover-bg);
@@ -631,5 +635,18 @@ function onCommand(command: string): void {
 }
 .app-topbar__dropdown .app-topbar__logout {
   color: #e04b55;
+}
+@media (max-width: 767px) {
+  .app-topbar {
+    gap: 8px;
+  }
+  .app-topbar__search,
+  .app-topbar__user-name,
+  .app-topbar__caret {
+    display: none;
+  }
+  .app-topbar__user {
+    gap: 0;
+  }
 }
 </style>
