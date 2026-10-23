@@ -19,9 +19,9 @@ const { t } = useI18n()
  * - REFERENCE 显示名：resolveReferenceDisplay → referenceLabels[name]
  *   显示名单独注入 DynamicField 的 referenceLabel prop，不污染 v-model
  */
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import type { SubTableRowAction, SubTableRowActionType } from '@/modules/form/api/form'
 import {
@@ -36,6 +36,8 @@ import DynamicField from '@/components/DynamicField.vue'
 import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-display'
 import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
 import { createFieldScripts } from '@/modules/form/utils/field-scripts'
+import { createFormEvents } from '@/modules/form/utils/form-events'
+import { useUserStore } from '@/stores/user'
 import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 import { InstanceFlowPanel } from '@/adapters/instance-flow'
 import {
@@ -114,6 +116,10 @@ const draftId = route.query.draftId ? String(route.query.draftId) : ''
 const schema = ref<FormSchema | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
+const submissionFinalized = ref(false)
+const postSubmitEventError = ref('')
+const lastSubmittedId = ref('')
+const postEventRetrying = ref(false)
 const errorMsg = ref('')
 const formData = reactive<Record<string, unknown>>({})
 /** 客户端提交校验提示：与字段同处网格单元，提示出现时自然撑高当前行。 */
@@ -129,9 +135,47 @@ const fieldScripts = createFieldScripts({
   getSchema: () => schema.value,
   model: formData,
   // 只读查看态不执行脚本（不产生任何写入/状态变化）
-  enabled: () => !isViewMode.value,
+  enabled: () => !isViewMode.value && !submissionFinalized.value,
 })
 onUnmounted(() => fieldScripts.dispose())
+let userStore: ReturnType<typeof useUserStore> | null = null
+try {
+  userStore = useUserStore()
+} catch {
+  // 组件单测与独立预览无 Pinia；身份函数按无登录态处理。
+}
+const formEvents = createFormEvents({
+  getSchema: () => schema.value,
+  model: formData,
+  controls: fieldScripts.overrides,
+  writable: () => !isViewMode.value && !submissionFinalized.value,
+  identity: () =>
+    userStore?.user
+      ? {
+          userId: userStore.user.id,
+          userName: userStore.user.displayName,
+          deptId: userStore.user.deptId,
+        }
+      : null,
+  processContext: () => ({
+    status: relation.value?.instance?.status ?? '',
+    taskId: relation.value?.pendingTaskId ?? '',
+  }),
+  allowedIntegrations: () => [],
+  confirm: async (message) => {
+    try {
+      await ElMessageBox.confirm(message, t('form.fillDraftTitle'), {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      })
+      return true
+    } catch {
+      return false
+    }
+  },
+  notify: (kind, message) => ElMessage({ type: kind, message }),
+})
 /** 脚本隐藏与声明式隐藏合并：脚本 true 加隐藏、false 显式放行（提交与渲染同口径）。 */
 const hiddenAll = computed(() => {
   const merged = new Set(hiddenFields.value)
@@ -150,7 +194,11 @@ function fieldRequired(field: FormSchemaField): boolean {
   return fieldScripts.overrides.required[field.name] ?? field.required ?? false
 }
 function fieldReadonly(field: FormSchemaField): boolean {
-  return isViewMode.value || (fieldScripts.overrides.readonly[field.name] ?? false)
+  return (
+    isViewMode.value ||
+    submissionFinalized.value ||
+    (fieldScripts.overrides.readonly[field.name] ?? false)
+  )
 }
 /** 渲染用字段（必填覆盖写回字段对象，供 DynamicField 星标与校验同源）。 */
 const renderFields = computed(() =>
@@ -276,6 +324,11 @@ async function loadSchema() {
     }
     // BF20261013-021：数据装载完成后执行 onLoad 字段脚本（新建/草稿/回显三态同口径）
     fieldScripts.runOnLoad()
+    fieldScripts.resetBaseline()
+    const eventResult = await formEvents.runOnLoad()
+    if (!eventResult.ok) {
+      ElMessage.warning(`表单已加载，加载事件未完成：${eventResult.error ?? '未知错误'}`)
+    }
   } catch {
     errorMsg.value = t('form.definitionLoadFailed')
   } finally {
@@ -483,6 +536,20 @@ async function handleSubmit() {
   submitting.value = true
   errorMsg.value = ''
 
+  // 提交前事件先结清已有字段联动，再执行脚本及其联动，最后做最终客户端校验。
+  await nextTick()
+  fieldScripts.resetBaseline()
+  const before = await formEvents.runBeforeSubmit()
+  if (!before.ok) {
+    errorMsg.value = before.cancelled
+      ? `提交已取消：${before.error ?? ''}`
+      : `提交前处理失败：${before.error ?? '未知错误'}`
+    submitting.value = false
+    return
+  }
+  fieldScripts.resetBaseline()
+  await nextTick()
+
   if (!validateRequiredFields()) {
     errorMsg.value = t('form.completeRequired')
     submitting.value = false
@@ -494,6 +561,14 @@ async function handleSubmit() {
     try {
       const payload = buildUpdatePayload()
       await updateFormData(formKey, recordId, payload)
+      submissionFinalized.value = true
+      postSubmitEventError.value = ''
+      lastSubmittedId.value = recordId
+      const after = await formEvents.runAfterSubmit(recordId)
+      if (!after.ok) {
+        postSubmitEventError.value = after.error ?? '提交后动作失败'
+        ElMessage.warning(`已保存，后续处理失败：${postSubmitEventError.value}`)
+      }
       ElMessage.success(t('common.saveSuccess'))
       // 保存成功后重新加载记录（版本号已变，拉取最新数据）
       if (schema.value) await loadRecord(schema.value)
@@ -536,6 +611,15 @@ async function handleSubmit() {
     }
     const id = await submitForm(formKey, submitData, schema.value?.fields)
 
+    submissionFinalized.value = true
+    postSubmitEventError.value = ''
+    lastSubmittedId.value = id
+    const after = await formEvents.runAfterSubmit(id)
+    if (!after.ok) {
+      postSubmitEventError.value = after.error ?? '提交后动作失败'
+      ElMessage.warning(`已提交，后续处理失败：${postSubmitEventError.value}`)
+    }
+
     // 探测实例是否真实创建（决定确认后的去向）；提示文案统一为「提交成功」。
     // 实例由表单提交事件在事务提交后异步创建，短暂轮询等待其可见（最多约 5s）。
     const started = await waitForInstanceByBusinessKey(formKey, id)
@@ -550,6 +634,19 @@ async function handleSubmit() {
     }
   } finally {
     submitting.value = false
+  }
+}
+
+async function retryPostSubmitEvents() {
+  if (!lastSubmittedId.value || postEventRetrying.value) return
+  postEventRetrying.value = true
+  const result = await formEvents.runAfterSubmit(lastSubmittedId.value, true)
+  postEventRetrying.value = false
+  if (result.ok) {
+    postSubmitEventError.value = ''
+    ElMessage.success('后续处理已完成')
+  } else {
+    postSubmitEventError.value = result.error ?? '提交后动作失败'
   }
 }
 
@@ -740,6 +837,25 @@ onMounted(() => {
         :closable="false"
         class="form-render-page__alert"
       />
+      <el-alert
+        v-if="postSubmitEventError"
+        type="warning"
+        :title="`业务数据已提交，后续处理失败：${postSubmitEventError}`"
+        :closable="false"
+        show-icon
+        class="form-render-page__alert"
+      >
+        <template #default>
+          <el-button
+            link
+            type="primary"
+            :loading="postEventRetrying"
+            @click="retryPostSubmitEvents"
+          >
+            重试后续处理
+          </el-button>
+        </template>
+      </el-alert>
 
       <el-empty v-if="!schema && !errorMsg" :description="t('form.notFoundOrLoadFailed')" />
 

@@ -3,6 +3,7 @@ import {
   fieldLabelPositionClass,
   isFieldLabelPosition,
   isFieldTextAlign,
+  normalizeFormEvents,
   parseFormFieldOptions,
   type FieldScript,
   type FormFieldOption,
@@ -285,6 +286,10 @@ export function parseDefinition(rawJson: string): FormSchema {
             .actionPermissions,
         }
       : {}),
+    ...(() => {
+      const events = normalizeFormEvents((raw as unknown as { events?: unknown }).events)
+      return events ? { events } : {}
+    })(),
   }
 }
 

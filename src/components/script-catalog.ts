@@ -119,4 +119,58 @@ export const FORM_SCRIPT_FUNCTIONS: ScriptFunctionDoc[] = [
     desc: '返回当前登录用户部门ID。',
     snippet: '#获取当前部门()',
   },
+  {
+    name: '#获取子表字段值',
+    category: '子表',
+    desc: '读取已授权子表的指定行、指定列。行号从 0 开始。',
+    snippet: '#获取子表字段值(items, 0, qty)',
+  },
+  {
+    name: '#设置子表字段值',
+    category: '子表',
+    desc: '修改已授权子表的指定行、指定列；只读详情与越权列会拒绝。',
+    snippet: '#设置子表字段值(items, 0, qty, 2)',
+  },
+  {
+    name: '#获取流程变量',
+    category: '流程上下文',
+    desc: '读取当前办理上下文已授权的流程变量。',
+    snippet: '#获取流程变量(var_example)',
+  },
+  {
+    name: '#获取流程状态',
+    category: '流程上下文',
+    desc: '读取当前流程实例状态；新建且未发起时返回空文本。',
+    snippet: '#获取流程状态()',
+  },
+  {
+    name: '#文本转大写',
+    category: '转换',
+    desc: '把文本值转为大写。',
+    snippet: '#文本转大写(#获取字段值(code))',
+  },
+  {
+    name: '#文本转小写',
+    category: '转换',
+    desc: '把文本值转为小写。',
+    snippet: '#文本转小写(#获取字段值(code))',
+  },
+  {
+    name: '#去除首尾空格',
+    category: '转换',
+    desc: '去除文本首尾空格。',
+    snippet: '#去除首尾空格(#获取字段值(title))',
+  },
+  {
+    name: '#文本转数字',
+    category: '转换',
+    desc: '把文本转为数字；非数字结果不可用于业务提交。',
+    snippet: '#文本转数字(#获取字段值(amount))',
+  },
+  {
+    name: '#调用集成',
+    category: '受控集成',
+    desc: '只调用当前表单和身份已授权的稳定集成标识；未授权、只读详情和参数对象不支持时返回明确错误。',
+    snippet: '#调用集成(integration_key)',
+  },
 ]

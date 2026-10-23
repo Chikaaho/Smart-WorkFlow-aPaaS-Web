@@ -28,6 +28,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type {
   FormSchema,
   FormSchemaField,
+  FormEvents,
   TableSubField,
   VisibilityRule,
 } from '@/contracts/form-schema'
@@ -40,6 +41,7 @@ import PreviewModal from '../designer/PreviewModal.vue'
 import HistoryVersionsDialog from '../designer/HistoryVersionsDialog.vue'
 import RelatedProcessesPanel from '../designer/RelatedProcessesPanel.vue'
 import FormAccessPanel from '../designer/FormAccessPanel.vue'
+import FormEventsPanel from '../designer/FormEventsPanel.vue'
 import { saveDraftDefinition, publishDefinition as publishDef } from '../designer/draft-actions'
 import { publishNewFormVersion } from '../api/form-def'
 import { findCategoryNameByFormKey } from '@/adapters/oa-catalog'
@@ -56,6 +58,7 @@ import {
 import { applyFieldPatch, type FieldPatch } from '../designer/field-config'
 import { ApiError } from '@/foundation/request'
 import { itemsToDefinition, definitionToItems } from '../designer/definition-convert'
+import { validateFormEvents } from '../utils/form-events'
 import { getFormDefinitionById, getFormDefById, type FormDefStatus } from '../api/form-def'
 import type { ProcessDef } from '@/contracts/bpm'
 import type { DesignerItem } from '../designer/types'
@@ -84,6 +87,7 @@ const selectedId = ref<string | null>(null)
 const visibilityRules = ref<VisibilityRule[]>([])
 const fieldPermissions = ref<FormSchema['fieldPermissions']>({})
 const actionPermissions = ref<FormSchema['actionPermissions']>({})
+const formEvents = ref<FormEvents>({})
 const previewVisible = ref(false)
 const loading = ref(false)
 /** 草稿已保存时间（P53 工作台文案：草稿已保存 HH:mm）。 */
@@ -245,10 +249,17 @@ function closeTableEditor(subFields: TableSubField[]) {
 }
 
 function buildDefinition(): FormSchema {
-  return itemsToDefinition(items.value, title.value, visibilityRules.value, description.value, {
-    fieldPermissions: fieldPermissions.value,
-    actionPermissions: actionPermissions.value,
-  })
+  return itemsToDefinition(
+    items.value,
+    title.value,
+    visibilityRules.value,
+    description.value,
+    {
+      fieldPermissions: fieldPermissions.value,
+      actionPermissions: actionPermissions.value,
+    },
+    formEvents.value,
+  )
 }
 
 const previewSchema = computed<FormSchema>(() => buildDefinition())
@@ -273,6 +284,7 @@ async function loadForm(id: string) {
     visibilityRules.value = schema.rules?.visibility ? [...schema.rules.visibility] : []
     fieldPermissions.value = schema.fieldPermissions ? clonePlain(schema.fieldPermissions) : {}
     actionPermissions.value = schema.actionPermissions ? clonePlain(schema.actionPermissions) : {}
+    formEvents.value = schema.events ? clonePlain(schema.events) : {}
     rejected.value = false
     void loadBreadcrumbCategory()
     await nextTick()
@@ -315,6 +327,7 @@ function resetWorkbench() {
   items.value = []
   fieldPermissions.value = {}
   actionPermissions.value = {}
+  formEvents.value = {}
   selectedId.value = null
   editingTableId.value = null
   baselineJson.value = JSON.stringify(buildDefinition())
@@ -412,6 +425,7 @@ async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
     actionPermissions.value = baseline.actionPermissions
       ? clonePlain(baseline.actionPermissions)
       : {}
+    formEvents.value = baseline.events ? clonePlain(baseline.events) : {}
     if (baseline.title) title.value = baseline.title
     baselineJson.value = currentJson.value
     return 'proceed'
@@ -494,6 +508,12 @@ async function doSave(): Promise<boolean> {
   // 保存只更新草稿定义，经「发布新版本」才生效到线上版本与列结构）
   if (savePhase.value === 'saving') return false // 保存中防重复提交
 
+  const eventErrors = validateFormEvents(formEvents.value)
+  if (eventErrors.length) {
+    ElMessage.warning(eventErrors[0])
+    return false
+  }
+
   const definition = buildDefinition()
   const key = formKey.value || generateFormKey(title.value)
   const seq = loadSeq
@@ -532,6 +552,11 @@ async function saveDraft() {
 async function publishNewVersion() {
   if (rejected.value || !formId.value) return
   if (savePhase.value === 'saving') return
+  const eventErrors = validateFormEvents(formEvents.value)
+  if (eventErrors.length) {
+    ElMessage.warning(eventErrors[0])
+    return
+  }
   const preCheckError = preValidateBeforePublish(items.value)
   if (preCheckError) {
     ElMessage.warning(preCheckError)
@@ -573,6 +598,12 @@ async function publish() {
   // 有未保存修改：先走统一保护；保存失败/用户取消不得继续发布
   const verdict = await guardUnsavedChanges()
   if (verdict === 'abort') return
+
+  const eventErrors = validateFormEvents(formEvents.value)
+  if (eventErrors.length) {
+    ElMessage.warning(eventErrors[0])
+    return
+  }
 
   // 客户端预校验（减往返 UX）
   const preCheckError = preValidateBeforePublish(items.value)
@@ -770,6 +801,14 @@ async function loadBreadcrumbCategory() {
         >
           {{ t('form.tabPermissions') }}
         </button>
+        <button
+          type="button"
+          class="designer__tab"
+          :class="{ 'is-active': activeTab === 'events' }"
+          @click="onTabChange('events' as WorkbenchTab)"
+        >
+          {{ t('form.tabEvents') }}
+        </button>
       </nav>
 
       <div class="designer__actions">
@@ -878,6 +917,8 @@ async function loadBreadcrumbCategory() {
         @update:field-permissions="fieldPermissions = $event"
         @update:action-permissions="actionPermissions = $event"
       />
+
+      <FormEventsPanel v-else-if="activeTab === 'events'" v-model="formEvents" />
 
       <!-- ═══ 工作区：关联流程 ═══ -->
       <RelatedProcessesPanel

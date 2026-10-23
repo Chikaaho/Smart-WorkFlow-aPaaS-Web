@@ -44,13 +44,14 @@ export function isDefinitionDirty(baseline: string, current: string): boolean {
 }
 
 /** 工作台工作区（字段清单 / 表单设计 / 权限 / 流程）。 */
-export type WorkbenchTab = 'fields' | 'design' | 'permissions' | 'processes'
+export type WorkbenchTab = 'fields' | 'design' | 'permissions' | 'events' | 'processes'
 
 /** 路由 query 中工作区参数的合法值校验（深链恢复用，非法值回退 design）。 */
 export function parseWorkbenchTab(raw: unknown): WorkbenchTab {
   if (raw === 'processes') return 'processes'
   if (raw === 'fields') return 'fields'
   if (raw === 'permissions') return 'permissions'
+  if (raw === 'events') return 'events'
   return 'design'
 }
 

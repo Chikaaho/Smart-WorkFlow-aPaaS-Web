@@ -1,5 +1,10 @@
 import { i18n } from '@/locales'
-import type { FormSchema, FormSchemaField, VisibilityRule } from '@/contracts/form-schema'
+import type {
+  FormEvents,
+  FormSchema,
+  FormSchemaField,
+  VisibilityRule,
+} from '@/contracts/form-schema'
 import type { DesignerItem } from './types'
 import { nextDesignerItemId } from './types'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
@@ -17,6 +22,7 @@ export function itemsToDefinition(
   rules?: VisibilityRule[],
   description?: string,
   permissions?: Pick<FormSchema, 'fieldPermissions' | 'actionPermissions'>,
+  events?: FormEvents,
 ): FormSchema {
   return {
     title: title.trim() || i18n.global.t('common.untitledForm'),
@@ -32,6 +38,7 @@ export function itemsToDefinition(
     ...(permissions?.actionPermissions && Object.keys(permissions.actionPermissions).length
       ? { actionPermissions: permissions.actionPermissions }
       : {}),
+    ...(events && Object.values(events).some((actions) => actions?.length) ? { events } : {}),
   }
 }
 

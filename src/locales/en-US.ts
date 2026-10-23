@@ -871,6 +871,7 @@ export default {
     tabDesign: 'Form design',
     tabProcesses: 'Process design',
     tabPermissions: 'Permissions',
+    tabEvents: 'Events',
     permissionTitle: 'Form permissions',
     permissionHint:
       'Permissions follow the published form definition. Empty means no additional restriction.',
@@ -1305,6 +1306,34 @@ export default {
   'form-designer': {
     referenceFieldSelector: 'Reference field selector',
   },
+  formEvents: {
+    title: 'Form events',
+    subtitle:
+      'Enabled scripts run in order. Load runs once; a failed pre-submit action blocks submission; post-submit failures never resubmit business data.',
+    onLoad: 'Loaded',
+    onLoadHint:
+      'Runs once after identity, bound version, fields, and initial values load. Read-only details allow reads only.',
+    beforeSubmit: 'Before submit',
+    beforeSubmitHint:
+      'Runs after field linkage settles and before final validation. false, an error, timeout, or cancellation preserves input and blocks submission.',
+    afterSubmit: 'After submit',
+    afterSubmitHint:
+      'Runs once after confirmed success and does not wait for process completion. Failure never resubmits business data.',
+    addAction: 'Add action',
+    actionDefaultName: 'Action {count}',
+    actionName: 'Action name',
+    enabled: 'Enabled',
+    editScript: 'Edit script',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    empty: 'No actions configured for this event.',
+    removeTitle: 'Delete script action',
+    removeConfirm: 'This takes effect after saving and publishing a new version. Delete it?',
+    scriptTitle: 'Edit form event script',
+    budget:
+      'Limits: 5 seconds per action and host call, 15 seconds per event. Confirmation has a separate 60-second limit. Drafts and approval stashes do not trigger submit events.',
+  },
+
   formSide: {
     formTitle: 'Application form',
     infoTitle: 'Process notes',

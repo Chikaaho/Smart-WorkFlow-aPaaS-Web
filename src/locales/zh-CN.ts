@@ -835,6 +835,7 @@ export default {
     tabDesign: '表单设计',
     tabProcesses: '流程设计',
     tabPermissions: '权限',
+    tabEvents: '事件',
     permissionTitle: '表单权限',
     permissionHint: '权限按已发布表单定义生效；内容为空表示不额外限制。',
     permissionSubjectHint:
@@ -1267,6 +1268,32 @@ export default {
   'form-designer': {
     referenceFieldSelector: '引用字段选择器',
   },
+  formEvents: {
+    title: '表单事件',
+    subtitle:
+      '按顺序运行已启用的脚本。加载事件只执行一次；提交前失败会阻止提交；提交后失败不会重发业务提交。',
+    onLoad: '加载完成',
+    onLoadHint: '身份、绑定版本、字段与初始值完成加载后执行一次。只读详情只允许读取。',
+    beforeSubmit: '提交前',
+    beforeSubmitHint:
+      '字段联动完成后、最终校验前执行。返回 false、异常、超时或取消都会保留输入并阻止提交。',
+    afterSubmit: '提交后',
+    afterSubmitHint: '业务提交确认成功后执行一次，不等待流程结束；失败不会重发业务数据。',
+    addAction: '添加动作',
+    actionDefaultName: '动作 {count}',
+    actionName: '动作名称',
+    enabled: '启用',
+    editScript: '编辑脚本',
+    moveUp: '上移',
+    moveDown: '下移',
+    empty: '当前事件尚未配置动作',
+    removeTitle: '删除脚本动作',
+    removeConfirm: '删除后需保存并发布新版本才会生效，确认删除？',
+    scriptTitle: '编辑表单事件脚本',
+    budget:
+      '资源边界：单个动作及宿主调用 5 秒，单个事件 15 秒；用户确认单独计时，最长 60 秒。草稿和审批暂存不会触发提交事件。',
+  },
+
   formSide: {
     formTitle: '填写申请表单',
     infoTitle: '流程说明',

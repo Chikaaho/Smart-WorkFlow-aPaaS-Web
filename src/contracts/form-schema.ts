@@ -358,6 +358,62 @@ export interface FormSchema {
   fieldPermissions?: Record<string, FieldPermissionRule>
   /** 表单动作权限：动作名 → role:/user:/dept: 主体；空数组表示不设限。 */
   actionPermissions?: Record<string, string[]>
+  /**
+   * 表单生命周期事件。动作按 order 升序执行，id 在事件内稳定；
+   * 缺省不产生任何隐式动作，兼容历史定义。
+   */
+  events?: FormEvents
+}
+
+export type FormEventName = 'onLoad' | 'beforeSubmitHandler' | 'afterSubmitHandler'
+
+export interface FormEventAction {
+  /** 发布快照内稳定标识，用于结果诊断和提交后幂等重试。 */
+  id: string
+  name: string
+  enabled: boolean
+  order: number
+  script: string
+  /** 有值时先请求用户确认；确认等待独立计时并可在 60 秒内取消。 */
+  confirmMessage?: string
+}
+
+export interface FormEvents {
+  onLoad?: FormEventAction[]
+  beforeSubmitHandler?: FormEventAction[]
+  afterSubmitHandler?: FormEventAction[]
+}
+
+/** 把持久化 JSON 归一为安全事件模型；旧定义缺省事件时保持为空。 */
+export function normalizeFormEvents(raw: unknown): FormEvents | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const source = raw as Record<string, unknown>
+  const events: FormEvents = {}
+  for (const eventName of ['onLoad', 'beforeSubmitHandler', 'afterSubmitHandler'] as const) {
+    const value = source[eventName]
+    if (!Array.isArray(value)) continue
+    const actions = value.flatMap((entry): FormEventAction[] => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
+      const item = entry as Record<string, unknown>
+      const id = typeof item.id === 'string' ? item.id.trim() : ''
+      if (!id || typeof item.script !== 'string') return []
+      const order = typeof item.order === 'number' && Number.isFinite(item.order) ? item.order : 0
+      return [
+        {
+          id,
+          name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : id,
+          enabled: item.enabled !== false,
+          order,
+          script: item.script,
+          ...(typeof item.confirmMessage === 'string' && item.confirmMessage.trim()
+            ? { confirmMessage: item.confirmMessage.trim() }
+            : {}),
+        },
+      ]
+    })
+    if (actions.length) events[eventName] = actions
+  }
+  return Object.keys(events).length ? events : undefined
 }
 
 /** REFERENCE 选择器回填值：id 存库、value 展示。 */

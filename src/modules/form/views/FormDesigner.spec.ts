@@ -161,7 +161,13 @@ describe('FormDesigner 工作台（P52）', () => {
     const wrapper = await mountDesigner()
 
     const tabs = wrapper.findAll('.designer__tab')
-    expect(tabs.map((tab) => tab.text())).toEqual(['字段清单', '表单设计', '流程设计', '权限'])
+    expect(tabs.map((tab) => tab.text())).toEqual([
+      '字段清单',
+      '表单设计',
+      '流程设计',
+      '权限',
+      '事件',
+    ])
     // 页签同处居中页签组（几何由浏览器自验，见台账 #39）
     expect(
       wrapper.findAll('.designer__tab').every((tab) => tab.element.closest('.designer__tabs')),
