@@ -296,6 +296,12 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
+/* 宽桌面按 1920 画框直接呈现主导航；收起能力只在空间不足的桌面宽度显示。 */
+@media (min-width: 1441px) {
+  .app-main-nav__sidebar-toggle {
+    display: none;
+  }
+}
 .app-main-nav {
   display: flex;
   flex: 1;
