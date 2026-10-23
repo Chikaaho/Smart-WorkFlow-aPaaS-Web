@@ -948,6 +948,7 @@ async function loadBreadcrumbCategory() {
       :form-key="formKey"
       :form-version="formVersion"
       :form-version-label="formVersionLabel"
+      :form-status="status"
       @restored="reloadAfterRestore"
     />
   </div>

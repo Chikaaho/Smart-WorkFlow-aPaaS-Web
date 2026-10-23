@@ -14,19 +14,26 @@ const { t } = useI18n()
  *   - 恢复此草稿 = 以快照 definition 保存为**新的草稿**（saveDraftDefinition 既有契约），
  *     不覆盖已发布版本；恢复后由宿主重新加载工作台。
  */
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { listFormSnapshots, getFormSnapshotDefinition, type FormSnapshotDTO } from '../api/form-def'
+import {
+  listFormSnapshots,
+  getFormSnapshotDefinition,
+  type FormDefStatus,
+  type FormSnapshotDTO,
+} from '../api/form-def'
 import { saveDraftDefinition } from './draft-actions'
 import { parseDefinition } from '@/adapters/form-designer'
 import type { FormSchema } from '@/contracts/form-schema'
 import PreviewModal from './PreviewModal.vue'
+import PublishedSnapshotViewer from './PublishedSnapshotViewer.vue'
 
 const props = defineProps<{
   formId: string
   formKey: string
   formVersion?: number | null
   formVersionLabel?: string | null
+  formStatus?: FormDefStatus
 }>()
 const visible = defineModel<boolean>('visible', { required: true })
 const emit = defineEmits<{ restored: [] }>()
@@ -34,6 +41,8 @@ const emit = defineEmits<{ restored: [] }>()
 const snapshots = ref<FormSnapshotDTO[]>([])
 const loading = ref(false)
 const selectedVersion = ref<number | null>(null)
+const fullSnapshotVisible = ref(false)
+const fullSnapshotRow = ref<FormSnapshotDTO | null>(null)
 
 /* ── 只读对比预览（历史版本标识经 PreviewModal badge 呈现） ── */
 const previewVisible = ref(false)
@@ -75,19 +84,35 @@ function formatTime(value: string): string {
   return normalized.length >= 16 ? normalized.slice(0, 16) : normalized
 }
 
-/** 徽标：已发布快照显示版本，首条草稿=当前草稿，其余=历史草稿。 */
+const currentVersionText = computed(() => props.formVersionLabel ?? props.formVersion ?? 1)
+const currentFormStatus = computed<FormDefStatus>(() => props.formStatus ?? 'DRAFT')
+const currentVersionHeader = computed(() =>
+  currentFormStatus.value === 'DRAFT'
+    ? t('form.currentDraftHeader', { version: currentVersionText.value })
+    : t('form.currentVersionHeader', { version: currentVersionText.value }),
+)
+const currentVersionBadge = computed(() => {
+  if (currentFormStatus.value === 'PUBLISHED') return t('form.publishedBadge')
+  if (currentFormStatus.value === 'DISABLED') return t('form.disabledBadge')
+  return t('form.unpublishedBadge')
+})
+const currentVersionBadgeClass = computed(() => {
+  if (currentFormStatus.value === 'PUBLISHED') return 'history-card__badge--published'
+  if (currentFormStatus.value === 'DISABLED') return 'history-card__badge--disabled'
+  return 'history-card__badge--draft'
+})
+
+/** 服务端快照只在 publish/publishNewVersion 时插入；缺省 status 即历史已发布版本。 */
 function badgeOf(row: FormSnapshotDTO, index: number): string {
-  if (row.status === 'PUBLISHED') {
-    return t('form.publishedSnapshotBadge', { version: row.versionLabel ?? row.formVersion })
-  }
   if (row.status === 'DRAFT' && index === 0) return t('form.currentDraftBadge')
-  return t('form.historyDraftBadge')
+  if (row.status === 'DRAFT') return t('form.historyDraftBadge')
+  return t('form.publishedSnapshotBadge', { version: row.versionLabel ?? row.formVersion })
 }
 
 function badgeClass(row: FormSnapshotDTO, index: number): string {
-  if (row.status === 'PUBLISHED') return 'history-card__badge--published'
   if (row.status === 'DRAFT' && index === 0) return 'history-card__badge--current'
-  return 'history-card__badge--draft'
+  if (row.status === 'DRAFT') return 'history-card__badge--draft'
+  return 'history-card__badge--published'
 }
 
 async function openCompare() {
@@ -100,6 +125,13 @@ async function openCompare() {
   } catch {
     ElMessage.error(t('form.historyReadFailed'))
   }
+}
+
+function openFullSnapshot() {
+  const selected = snapshots.value.find((row) => row.formVersion === selectedVersion.value)
+  if (!selected) return
+  fullSnapshotRow.value = selected
+  fullSnapshotVisible.value = true
 }
 
 /** 恢复此草稿：以快照 definition 保存为新草稿（不覆盖已发布版本），宿主随后重载。 */
@@ -129,7 +161,7 @@ async function restoreSelected() {
   <el-dialog
     v-model="visible"
     :title="t('form.draftHistoryTitle')"
-    width="538px"
+    width="640px"
     append-to-body
     class="history-dialog"
     modal-class="p53-dialog-overlay-35"
@@ -139,14 +171,10 @@ async function restoreSelected() {
     </p>
 
     <div class="history-dialog__current">
-      <span>{{
-        t('form.currentDraftHeader', {
-          version: props.formVersionLabel ?? props.formVersion ?? 1,
-        })
-      }}</span>
-      <span class="history-card__badge history-card__badge--draft">{{
-        t('form.unpublishedBadge')
-      }}</span>
+      <span>{{ currentVersionHeader }}</span>
+      <span class="history-card__badge" :class="currentVersionBadgeClass">
+        {{ currentVersionBadge }}
+      </span>
     </div>
 
     <div v-if="loading" class="history-dialog__loading">{{ t('common.loading') }}</div>
@@ -175,6 +203,9 @@ async function restoreSelected() {
 
     <template #footer>
       <div class="history-dialog__footer">
+        <el-button :disabled="selectedVersion == null" @click="openFullSnapshot">{{
+          t('form.snapshotViewer.open')
+        }}</el-button>
         <el-button :disabled="selectedVersion == null" @click="openCompare">{{
           t('form.compareCurrent')
         }}</el-button>
@@ -194,6 +225,13 @@ async function restoreSelected() {
       v-model:visible="previewVisible"
       :schema="previewSchema"
       :badge="t('form.historyBadge', { previewVersion })"
+    />
+    <PublishedSnapshotViewer
+      v-if="fullSnapshotRow"
+      v-model:visible="fullSnapshotVisible"
+      :form-id="formId"
+      :form-key="formKey"
+      :snapshot="fullSnapshotRow"
     />
   </el-dialog>
 </template>
@@ -312,6 +350,11 @@ async function restoreSelected() {
   background: #e6f8f2;
 }
 
+.history-card__badge--disabled {
+  color: var(--sw-text-secondary);
+  background: var(--sw-fill-base);
+}
+
 .history-card__meta {
   font-size: 12px;
   line-height: 18px;
@@ -331,7 +374,7 @@ async function restoreSelected() {
 }
 
 .history-dialog__footer :deep(.el-button) {
-  min-width: 96px;
+  min-width: 112px;
   margin: 0;
 }
 

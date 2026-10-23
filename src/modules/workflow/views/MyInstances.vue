@@ -18,6 +18,7 @@ import {
   myInstanceDetail,
   withdrawInstance,
   discardInstance,
+  supplementSignInstance,
 } from '@/modules/workflow/api'
 import { urgeMyInstance } from '@/modules/workflow/api/oa'
 import type { ProcessInstance, MyInstanceDetail } from '@/contracts/bpm'
@@ -25,6 +26,7 @@ import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 import { hasPerm } from '@/foundation/permission'
 import BusinessDetailDialog from '@/components/business-detail/BusinessDetailDialog.vue'
+import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 
 const router = useRouter()
 
@@ -254,6 +256,98 @@ async function urge(row: ProcessInstance) {
   }
 }
 
+// ─── 终态补签：仅补充既有责任，不重开或改写流程终态 ───
+const supplementVisible = ref(false)
+const supplementTarget = ref<ProcessInstance | null>(null)
+const supplementNodeKey = ref('')
+const supplementNodeOptions = ref<Array<{ nodeKey: string; label: string }>>([])
+const supplementParticipants = ref<string[]>([])
+const supplementMessage = ref('')
+const supplementLoading = ref(false)
+const supplementSubmitting = ref(false)
+const supplementError = ref('')
+
+function isTerminalInstance(status: string): boolean {
+  return status !== 'RUNNING'
+}
+
+async function openSupplement(row: ProcessInstance): Promise<void> {
+  supplementTarget.value = row
+  supplementVisible.value = true
+  supplementLoading.value = true
+  supplementNodeKey.value = ''
+  supplementNodeOptions.value = []
+  supplementParticipants.value = []
+  supplementMessage.value = ''
+  supplementError.value = ''
+  try {
+    const detail = await myInstanceDetail(row.id)
+    const nodes = new Map<string, string>()
+    for (const item of detail.history) {
+      if (item.nodeKey && !nodes.has(item.nodeKey)) {
+        nodes.set(item.nodeKey, item.taskName || item.nodeKey)
+      }
+    }
+    for (const item of detail.progress) {
+      if (item.nodeKey && !nodes.has(item.nodeKey)) {
+        nodes.set(item.nodeKey, item.taskName || item.nodeKey)
+      }
+    }
+    supplementNodeOptions.value = [...nodes].map(([nodeKey, label]) => ({ nodeKey, label }))
+    supplementNodeKey.value = supplementNodeOptions.value.at(-1)?.nodeKey ?? ''
+    if (!supplementNodeKey.value) supplementError.value = t('workflow.supplementNoNode')
+  } catch (err) {
+    supplementError.value = err instanceof ApiError ? err.msg : t('workflow.supplementLoadFailed')
+  } finally {
+    supplementLoading.value = false
+  }
+}
+
+function closeSupplement(): void {
+  supplementVisible.value = false
+}
+
+function resetSupplement(): void {
+  supplementTarget.value = null
+  supplementNodeKey.value = ''
+  supplementNodeOptions.value = []
+  supplementParticipants.value = []
+  supplementMessage.value = ''
+  supplementError.value = ''
+  supplementLoading.value = false
+  supplementSubmitting.value = false
+}
+
+async function submitSupplement(): Promise<void> {
+  const target = supplementTarget.value
+  if (!target || supplementSubmitting.value) return
+  if (!supplementNodeKey.value) {
+    ElMessage.warning(t('workflow.supplementNoNode'))
+    return
+  }
+  if (supplementParticipants.value.length === 0) {
+    ElMessage.warning(t('workflow.participantsRequired'))
+    return
+  }
+  supplementSubmitting.value = true
+  supplementError.value = ''
+  try {
+    const comment = supplementMessage.value.trim()
+    await supplementSignInstance(target.processInstanceId, {
+      participants: [...supplementParticipants.value],
+      nodeKey: supplementNodeKey.value,
+      ...(comment ? { comment } : {}),
+    })
+    ElMessage.success(t('workflow.supplementSubmitted'))
+    closeSupplement()
+    await loadList()
+  } catch (err) {
+    supplementError.value = err instanceof ApiError ? err.msg : t('workflow.supplementFailed')
+  } finally {
+    supplementSubmitting.value = false
+  }
+}
+
 /**
  * 操作列（V012-BUG-002）：详情直显；催办/撤回仅 RUNNING 且有对应权限时可见
  * （原 v-if + v-perm 显隐转为 visible 表达式，服务端仍是最终权威）。
@@ -265,6 +359,13 @@ function rowActions(row: unknown): ListAction[] {
       key: 'detail',
       label: t('common.viewDetails'),
       onClick: () => void openDetail(item),
+    },
+    {
+      key: 'supplement',
+      label: t('workflow.supplementSign'),
+      visible: isTerminalInstance(item.status) && hasPerm('workflow:task:add-sign'),
+      testId: 'instance-supplement',
+      onClick: () => void openSupplement(item),
     },
     {
       key: 'urge',
@@ -406,7 +507,7 @@ onMounted(loadList)
           {{ formatTime(row.createTime) }}
         </template>
       </el-table-column>
-      <ListActionsColumn :actions="rowActions" :width="150" />
+      <ListActionsColumn :actions="rowActions" :width="180" />
     </el-table>
 
     <!-- 详情弹窗 -->
@@ -420,6 +521,65 @@ onMounted(loadList)
     :process-definition-key="detail?.instance.processDefKey ?? ''"
     :current-node-key="detail?.progress?.[0]?.nodeKey ?? ''"
   />
+  <el-dialog
+    v-model="supplementVisible"
+    :title="t('workflow.supplementSign')"
+    width="520px"
+    :close-on-click-modal="false"
+    @closed="resetSupplement"
+  >
+    <div v-loading="supplementLoading" class="supplement-dialog">
+      <p class="supplement-dialog__hint">{{ t('workflow.supplementDialogHint') }}</p>
+      <el-alert
+        v-if="supplementError"
+        :title="supplementError"
+        type="error"
+        :closable="false"
+        show-icon
+      />
+      <el-form label-position="top" size="small">
+        <el-form-item :label="t('workflow.supplementTargetNode')" required>
+          <el-select v-model="supplementNodeKey" :disabled="supplementLoading" style="width: 100%">
+            <el-option
+              v-for="node in supplementNodeOptions"
+              :key="node.nodeKey"
+              :label="node.label"
+              :value="node.nodeKey"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('workflow.supplementConfirmerLabel')" required>
+          <UserRemoteSelect
+            v-model="supplementParticipants"
+            multiple
+            :placeholder="t('workflow.pickConfirmers')"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item :label="t('common.description')">
+          <el-input
+            v-model="supplementMessage"
+            type="textarea"
+            :rows="3"
+            :placeholder="t('workflow.supplementTriggerNote')"
+          />
+        </el-form-item>
+      </el-form>
+    </div>
+    <template #footer>
+      <el-button :disabled="supplementSubmitting" @click="closeSupplement">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="supplementSubmitting"
+        :disabled="supplementLoading || !supplementNodeKey || supplementParticipants.length === 0"
+        @click="submitSupplement"
+      >
+        {{ t('workflow.supplementSign') }}
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -505,6 +665,19 @@ onMounted(loadList)
   line-height: 28px;
   /* BF20261013-046：状态徽标文字居中（原定宽 72px + 左对齐，文字贴左） */
   text-align: center;
+}
+
+.supplement-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sw-space-12);
+}
+
+.supplement-dialog__hint {
+  margin: 0;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
 }
 </style>
 

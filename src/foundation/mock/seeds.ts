@@ -1385,7 +1385,7 @@ export interface MockApp {
   color: string | null
   sortNo: number
   visibleScopeType: 'ALL' | 'SPECIFIED'
-  visibleUserIds: number[] | null
+  visibleUserIds: Array<number | string> | null
   visibleDeptIds?: number[] | null
   visibleRoleCodes?: string[] | null
   visiblePostIds?: number[] | null

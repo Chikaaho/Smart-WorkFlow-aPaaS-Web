@@ -30,6 +30,8 @@ export interface TaskDetail {
   instanceStatus?: ProcessInstance['status'] | 'FAILED' | 'TERMINATED' | null
   /** 当前登录用户是否可办理该任务（服务端判定；已办/无权限身份为 false） */
   canHandle?: boolean
+  /** 当前部署节点允许的操作；页面再与办理状态、账号权限取交集，缺省兼容旧后端。 */
+  allowedActions?: string[]
   nodeKey?: string | null
   processInstanceId: string
   processDefinitionKey: string

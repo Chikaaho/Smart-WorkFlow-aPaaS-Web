@@ -1,3 +1,5 @@
+@import './fonts.css';
+
 /**
  * 品牌色单一数据源（P53 全局 UI 视觉基线，取代 0.1.0 紫莓 #7e306b 基线）。
  * 品牌主色 #6F2DFF 与深色导航阶 #17213A/#19233B/#172033、语义色 #18A67A/#F59E0B/#E5484D/#20B8CD
@@ -20,7 +22,7 @@
    * 暗色模式将来通过 [data-theme='dark'] 覆盖。
    * ═══════════════════════════════════════════════════════ */
 
-  /* ── 字体（新稿优先 Noto Sans SC；沿用本地字体加载及安全回退链） ── */
+  /* ── 字体（自托管 Noto Sans SC，保留系统字体回退链） ── */
   --sw-font-family:
     'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 

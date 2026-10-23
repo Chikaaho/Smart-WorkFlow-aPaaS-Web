@@ -23,8 +23,8 @@ import { pageProcessDefs } from '@/modules/workflow/api'
 import type { ProcessDef } from '@/contracts/bpm'
 
 // V012-BUG-019：来源/目标用户改用户选择器；范围改流程定义多选（提交仍为 defKeys）
-const fromUserId = ref<number | undefined>()
-const toUserId = ref<number | undefined>()
+const fromUserId = ref<string | undefined>()
+const toUserId = ref<string | undefined>()
 const scopeDefKeys = ref<string[]>([])
 const defOptions = ref<ProcessDef[]>([])
 const includeProxyRules = ref(false)

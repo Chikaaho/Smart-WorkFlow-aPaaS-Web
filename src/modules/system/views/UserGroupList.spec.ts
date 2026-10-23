@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 vi.mock('@/modules/system/api/userGroup', () => ({
@@ -211,12 +211,13 @@ describe('UserGroupList', () => {
       .findAll('button')
       .find((b) => b.text().includes('编辑'))
       ?.trigger('click')
-    await nextTick()
-    await nextTick()
+    await flushPromises()
 
     // 失效成员标签：赵六（已停用或不可见）
-    expect(wrapper.text()).toContain('赵六')
-    expect(wrapper.text()).toContain('已停用或不可见')
+    const staleArea = wrapper.get('.stale-members')
+    expect(staleArea.text()).toContain('赵六')
+    expect(staleArea.text()).toContain('已停用或不可见')
+    expect(staleArea.text()).not.toContain('张三')
   })
 
   it('权限：无 manage 权限 → 不渲染新建/停用/删除管理按钮', async () => {
@@ -226,6 +227,7 @@ describe('UserGroupList', () => {
     await nextTick()
 
     expect(wrapper.text()).not.toContain('新建')
+    expect(findRealButton(wrapper, '编辑')).toBeUndefined()
     expect(wrapper.findAll('button').find((b) => b.text().includes('删除'))).toBeUndefined()
     expect(wrapper.findAll('button').find((b) => b.text().includes('停用'))).toBeUndefined()
     __perms.manage = true

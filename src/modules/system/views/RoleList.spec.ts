@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 vi.mock('@/modules/system/api/role', () => ({
@@ -10,6 +10,25 @@ vi.mock('@/modules/system/api/role', () => ({
   deleteRole: vi.fn(),
   getRoleMenus: vi.fn(),
   updateRoleMenus: vi.fn(),
+  getRoleMembers: vi.fn(),
+}))
+
+vi.mock('@/modules/system/api/user', () => ({
+  updateUserRoles: vi.fn(),
+  pageUsers: vi.fn(),
+  getUserRoles: vi.fn(),
+}))
+
+const permissionState = vi.hoisted(() => ({
+  canUpdate: true,
+  canDelete: true,
+}))
+vi.mock('@/foundation/permission', () => ({
+  hasPerm: (code: string) => {
+    if (code === 'system:role:update') return permissionState.canUpdate
+    if (code === 'system:role:delete') return permissionState.canDelete
+    return true
+  },
 }))
 
 // loadPermissionTree 走 loadMenu()；权限树为 mock 菜单树 + 按钮节点（menuType=2）
@@ -30,7 +49,9 @@ import {
   deleteRole,
   getRoleMenus,
   updateRoleMenus,
+  getRoleMembers,
 } from '@/modules/system/api/role'
+import { pageUsers } from '@/modules/system/api/user'
 import { loadMenu } from '@/foundation/menu'
 import type { MenuNode } from '@/contracts/menu'
 import type { SysRole } from '@/modules/system/types/role'
@@ -100,9 +121,13 @@ function stubPageResult() {
 describe('RoleList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    permissionState.canUpdate = true
+    permissionState.canDelete = true
     vi.mocked(pageRoles).mockResolvedValue(stubPageResult())
     vi.mocked(getRoleMenus).mockResolvedValue([])
     vi.mocked(loadMenu).mockResolvedValue(MENU_TREE)
+    vi.mocked(pageUsers).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 50 })
+    vi.mocked(getRoleMembers).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 10 })
   })
 
   const minimalStubs = {
@@ -132,6 +157,34 @@ describe('RoleList', () => {
       { pageNum: 1, pageSize: 10 },
       expect.objectContaining({}),
     )
+  })
+
+  it('角色成员候选按角色所属租户查询', async () => {
+    const role: SysRole = { id: '42', name: '租户管理员', code: 'tenant-admin', tenantId: '9001' }
+    const wrapper = mount(RoleList, { global: { stubs: minimalStubs } })
+    await nextTick()
+    const vm = wrapper.vm as unknown as { openMembers: (row: SysRole) => void }
+
+    vm.openMembers(role)
+    await flushPromises()
+
+    expect(pageUsers).toHaveBeenCalledWith(
+      { pageNum: 1, pageSize: 50 },
+      expect.objectContaining({ status: 0, tenantId: '9001' }),
+    )
+  })
+
+  it('编辑与删除操作分别服从 update/delete 权限', () => {
+    permissionState.canUpdate = false
+    permissionState.canDelete = false
+    const wrapper = mount(RoleList, { global: { stubs: minimalStubs } })
+    const vm = wrapper.vm as unknown as {
+      rowActions: (row: SysRole) => Array<{ key: string; visible?: boolean }>
+    }
+    const actions = vm.rowActions({ id: '1', name: '普通角色', code: 'normal' })
+
+    expect(actions.find((item) => item.key === 'edit')?.visible).toBe(false)
+    expect(actions.find((item) => item.key === 'delete')?.visible).toBe(false)
   })
 
   // ─── 分页 ───

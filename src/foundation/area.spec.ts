@@ -29,6 +29,7 @@ describe('foundation/area 页面归属清单', () => {
     expect(resolveArea('/workflow/my-cc')).toBe('portal')
     expect(resolveArea('/workflow/todo')).toBe('portal')
     expect(resolveArea('/workflow/my-instances')).toBe('portal')
+    expect(resolveArea('/workspace/my-instances')).toBe('portal')
     expect(resolveArea('/notify/inbox')).toBe('portal')
   })
 

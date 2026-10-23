@@ -58,6 +58,18 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // 个人实例与待办一样由登录身份定域，菜单缺省不影响本人申请回看。
+        path: 'workspace/my-instances',
+        alias: '/workflow/my-instances',
+        name: 'my-instances-static',
+        component: () => import('@/modules/workflow/views/MyInstances.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('common.startedByMe')
+          },
+        },
+      },
+      {
         path: 'workspace/my-drafts',
         name: 'workspace-my-drafts',
         component: () => import('@/modules/workflow/views/MyDrafts.vue'),

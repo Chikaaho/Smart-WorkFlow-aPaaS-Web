@@ -707,13 +707,13 @@ export async function discardInstance(
   })
 }
 export async function expressSign(
-  recordId: number,
+  recordId: number | string,
   data: Partial<ApprovalActionRequest>,
 ): Promise<void> {
   await request<void>({ method: 'POST', url: `/workflow/sign/${recordId}/express`, data })
 }
 export interface PendingSignItem {
-  recordId: number
+  recordId: number | string
   taskId: string
   processInstanceId: string
   nodeKey: string | null

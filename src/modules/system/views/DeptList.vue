@@ -547,7 +547,9 @@ onMounted(() => {
       </div>
       <!-- 空态：无筛选条件且数据为空（新建部门入口） -->
       <div v-else-if="isEmpty" class="dept-list__empty">
-        <el-button type="primary" @click="openCreate()">{{ t('system.newDept') }}</el-button>
+        <el-button v-if="hasPerm('system:dept:create')" type="primary" @click="openCreate()">{{
+          t('system.newDept')
+        }}</el-button>
       </div>
     </div>
   </div>

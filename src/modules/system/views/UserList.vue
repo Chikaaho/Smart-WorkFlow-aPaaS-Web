@@ -897,10 +897,10 @@ onMounted(loadList)
   align-items: center;
   gap: 6px;
   width: 100%;
-  min-height: 36px;
+  min-height: var(--sw-control-height);
   padding: 5px 8px;
-  border: 1px solid var(--el-border-color);
-  border-radius: var(--el-border-radius-base);
+  border: 1px solid var(--sw-border-base);
+  border-radius: var(--sw-radius-base);
   box-sizing: border-box;
   background: var(--el-fill-color-blank);
   transition: border-color 0.2s;
@@ -963,8 +963,8 @@ onMounted(loadList)
   align-items: center;
   gap: 8px;
   padding: 9px 12px;
-  border-radius: 8px;
-  background: #f6f8fc;
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-fill-base);
   color: var(--sw-text-secondary);
   font-size: 13px;
   line-height: 18px;
@@ -1022,8 +1022,8 @@ onMounted(loadList)
   height: auto;
   margin: 0;
   padding: 9px 12px;
-  border: 1px solid #e6eaf2;
-  border-radius: 8px;
+  border: 1px solid var(--sw-border-lighter);
+  border-radius: var(--sw-radius-base);
   box-sizing: border-box;
   white-space: normal;
   transition:
@@ -1033,16 +1033,16 @@ onMounted(loadList)
 
 .role-row:hover {
   border-color: var(--el-color-primary-light-7);
-  background: #faf9ff;
+  background: var(--sw-fill-base);
 }
 
 .role-row.is-checked {
   border-color: var(--el-color-primary-light-5);
-  background: #f6f3ff;
+  background: var(--sw-color-primary-softer);
 }
 
 .role-row.is-disabled {
-  background: #fafafa;
+  background: var(--sw-fill-base);
 }
 
 .role-row :deep(.el-checkbox__input) {

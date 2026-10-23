@@ -17,6 +17,13 @@ vi.mock('@/modules/workflow/api', () => ({
   queryTaskDetail: vi.fn(),
   acceptTaskAction: vi.fn(),
   pollCommandStatus: vi.fn(),
+  latestTaskCommand: vi.fn(),
+  transferTask: vi.fn(),
+  delegateTask: vi.fn(),
+  communicateTask: vi.fn(),
+  addSignTask: vi.fn(),
+  getApprovalOpinionDraft: vi.fn(),
+  saveApprovalOpinionDraft: vi.fn(),
 }))
 
 // P64 节点业务表单：办理页读取绑定与数据（默认未绑定，用例内按需 stub）
@@ -48,7 +55,17 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
-import { queryTaskDetail, acceptTaskAction, pollCommandStatus } from '@/modules/workflow/api'
+import {
+  queryTaskDetail,
+  acceptTaskAction,
+  pollCommandStatus,
+  latestTaskCommand,
+  transferTask,
+  delegateTask,
+  communicateTask,
+  addSignTask,
+  getApprovalOpinionDraft,
+} from '@/modules/workflow/api'
 import { getTaskNodeForm } from '@/modules/workflow/api/p64'
 import { listReservationsByInstance, cancelReservation } from '@/adapters/iot-reservation'
 import { permissionDirective } from '@/foundation/permission'
@@ -90,11 +107,43 @@ const stubs = {
     template: '<button @click="$emit(\'click\')"><slot/></button>',
     emits: ['click'],
   },
+  'el-dropdown': {
+    props: ['disabled', 'trigger'],
+    emits: ['command'],
+    template:
+      '<div class="stub-dropdown"><slot/><div class="stub-dropdown-menu"><slot name="dropdown"/></div></div>',
+  },
+  'el-dropdown-menu': { template: '<div><slot/></div>' },
+  'el-dropdown-item': {
+    props: ['command', 'divided', 'disabled'],
+    template: '<div class="stub-dropdown-item" :data-command="command"><slot/></div>',
+  },
+  'el-icon': { template: '<span><slot/></span>' },
+}
+
+interface ApprovalActionVm {
+  canAct: boolean
+  canUrge: boolean
+  approvalMoreActions: Array<{ command: string; label: string; divided?: boolean }>
+  lifecycleDialog: {
+    kind: 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN'
+    targetUserId?: string
+    message?: string
+    receivers?: string
+    participants?: string
+    mode?: 'SERIAL' | 'PARALLEL'
+    signPosition?: 'BEFORE' | 'AFTER'
+  } | null
+  opinionComment: string
+  handleApprovalMore: (command: string) => void
+  submitLifecycle: () => Promise<void>
 }
 
 const mockDetail: TaskDetail = {
   taskId: 'task-001',
   taskName: '审批',
+  taskStatus: 'RUNNING',
+  canHandle: true,
   processInstanceId: 'pi-001',
   processDefinitionKey: 'skeleton_approval',
   processName: '单节点审批',
@@ -120,7 +169,54 @@ describe('TaskDetail.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockRoute.query = {}
+    vi.mocked(getTaskNodeForm).mockResolvedValue({ bound: false } as never)
+    vi.mocked(getApprovalOpinionDraft).mockResolvedValue(null as never)
+    vi.mocked(latestTaskCommand).mockResolvedValue(null)
+    vi.mocked(transferTask).mockResolvedValue(undefined)
+    vi.mocked(delegateTask).mockResolvedValue(undefined)
+    vi.mocked(communicateTask).mockResolvedValue(undefined)
+    vi.mocked(addSignTask).mockResolvedValue(undefined)
   })
+
+  const allLifecyclePermissions = [
+    'workflow:task:transfer',
+    'workflow:task:delegate',
+    'workflow:task:communicate',
+    'workflow:task:add-sign',
+  ]
+
+  async function mountActionable(
+    overrides: Partial<TaskDetail> & { allowedActions?: string[] } = {},
+    permissionCodes = allLifecyclePermissions,
+  ) {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '2',
+        username: 'approver',
+        displayName: '审批人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set(permissionCodes),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      canHandle: true,
+      taskStatus: 'RUNNING',
+      instanceStatus: 'RUNNING',
+      ...overrides,
+    })
+    const wrapper = mount(TaskDetailView, {
+      global: { plugins: [i18n, pinia], stubs },
+    })
+    await nextTick()
+    await flushPromises()
+    return wrapper
+  }
 
   it('calls queryTaskDetail with taskId on mount', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
@@ -479,6 +575,169 @@ describe('TaskDetail.vue', () => {
     const vm = wrapper.vm as unknown as { canAct: boolean }
     expect(vm.canAct).toBe(true)
     expect(wrapper.findAll('.detail-card--actions')).toHaveLength(1)
+  })
+
+  it('W020: secondary approval actions are grouped under More while primary actions and opinion draft stay visible', async () => {
+    const wrapper = await mountActionable()
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+
+    expect(vm.approvalMoreActions.map((action) => action.command)).toEqual([
+      'TRANSFER',
+      'DELEGATE',
+      'COMMUNICATE',
+      'ADD_SIGN',
+    ])
+    const actionBar = wrapper.find('.detail-actions__btns')
+    expect(actionBar.find('[data-testid="approval-more-trigger"]').exists()).toBe(true)
+    const directButtons = actionBar.findAll('button').map((button) => button.text())
+    expect(directButtons).toEqual(
+      expect.arrayContaining([
+        i18n.global.t('common.moreActions'),
+        i18n.global.t('common.reject'),
+        i18n.global.t('common.approve'),
+      ]),
+    )
+    for (const label of [
+      i18n.global.t('workflow.transferOwnTask'),
+      i18n.global.t('workflow.delegateAction'),
+      i18n.global.t('workflow.consultTask'),
+      i18n.global.t('workflow.addSign'),
+    ]) {
+      expect(directButtons).not.toContain(label)
+      expect(wrapper.text()).toContain(label)
+    }
+    expect(wrapper.find('.opinion-draft-actions').text()).toContain(
+      i18n.global.t('workflow.saveOpinionDraft'),
+    )
+  })
+
+  it('W020: every More command opens its existing lifecycle flow', async () => {
+    const wrapper = await mountActionable()
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+
+    for (const command of ['TRANSFER', 'DELEGATE', 'COMMUNICATE', 'ADD_SIGN'] as const) {
+      vm.handleApprovalMore(command)
+      expect(vm.lifecycleDialog?.kind).toBe(command)
+    }
+  })
+
+  it('W020: transfer and delegate preserve a 64-bit user ID as an exact string', async () => {
+    const wrapper = await mountActionable()
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+    const largeUserId = '2113516346351312898'
+
+    vm.handleApprovalMore('TRANSFER')
+    vm.lifecycleDialog!.targetUserId = largeUserId
+    vm.opinionComment = '保留原任务责任'
+    await vm.submitLifecycle()
+    expect(transferTask).toHaveBeenCalledWith('task-001', {
+      targetUserId: largeUserId,
+      reason: '保留原任务责任',
+    })
+
+    vm.handleApprovalMore('DELEGATE')
+    vm.lifecycleDialog!.targetUserId = largeUserId
+    vm.opinionComment = '授权办理'
+    await vm.submitLifecycle()
+    expect(delegateTask).toHaveBeenCalledWith('task-001', {
+      targetUserId: largeUserId,
+      reason: '授权办理',
+    })
+  })
+
+  it('W020: communication and add-sign submit exact ID strings and semantic fields', async () => {
+    const wrapper = await mountActionable()
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+    const firstId = '2113516346351312898'
+    const secondId = '2113516346351312899'
+
+    vm.handleApprovalMore('COMMUNICATE')
+    vm.lifecycleDialog!.receivers = `${firstId},${secondId}`
+    vm.lifecycleDialog!.message = '协同确认'
+    await vm.submitLifecycle()
+    expect(communicateTask).toHaveBeenCalledWith('task-001', {
+      receivers: [firstId, secondId],
+      message: '协同确认',
+    })
+
+    vm.opinionComment = ''
+    vm.handleApprovalMore('ADD_SIGN')
+    vm.lifecycleDialog!.participants = `${firstId},${secondId}`
+    vm.lifecycleDialog!.mode = 'SERIAL'
+    vm.lifecycleDialog!.signPosition = 'AFTER'
+    await vm.submitLifecycle()
+    expect(addSignTask).toHaveBeenCalledWith('task-001', {
+      action: 'ADD_SIGN',
+      participants: [firstId, secondId],
+      mode: 'SERIAL',
+      signPosition: 'AFTER',
+    })
+  })
+
+  it('W020: lifecycle menu intersects permissions and server node allowedActions', async () => {
+    const wrapper = await mountActionable({ allowedActions: ['TRANSFER', 'ADD_SIGN'] }, [
+      'workflow:task:transfer',
+      'workflow:task:delegate',
+      'workflow:task:communicate',
+    ])
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+
+    expect(vm.approvalMoreActions.map((action) => action.command)).toEqual(['TRANSFER'])
+  })
+
+  it('W020: explicit empty allowedActions rejects every secondary action and supplement is not an active-task action', async () => {
+    const wrapper = await mountActionable({ allowedActions: [] })
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+
+    expect(vm.approvalMoreActions).toEqual([])
+    expect(wrapper.find('[data-testid="approval-more-trigger"]').exists()).toBe(false)
+    expect(wrapper.find('.detail-actions__btns').text()).not.toContain(
+      i18n.global.t('common.approve'),
+    )
+    expect(wrapper.find('.detail-actions__btns').text()).not.toContain(
+      i18n.global.t('common.reject'),
+    )
+    vm.handleApprovalMore('ADD_SIGN')
+    expect(vm.lifecycleDialog).toBeNull()
+  })
+
+  it('W020: initiator without handle permission gets only Urge under More', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '1',
+        username: 'initiator',
+        displayName: '发起人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set<string>(),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      taskStatus: 'RUNNING',
+      instanceStatus: 'RUNNING',
+      canHandle: false,
+    })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, pinia], stubs } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+
+    expect(vm.canAct).toBe(false)
+    expect(vm.canUrge).toBe(true)
+    expect(vm.approvalMoreActions).toEqual([
+      expect.objectContaining({ command: 'URGE', divided: false }),
+    ])
+    expect(wrapper.find('[data-testid="approval-more-trigger"]').exists()).toBe(true)
+    const directButtons = wrapper
+      .find('.detail-actions__btns')
+      .findAll('button')
+      .map((button) => button.text())
+    expect(directButtons).toEqual([i18n.global.t('common.moreActions')])
+    expect(wrapper.text()).toContain(i18n.global.t('taskDetailUi.urgeAction'))
   })
 })
 

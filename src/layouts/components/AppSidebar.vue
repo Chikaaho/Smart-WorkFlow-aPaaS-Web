@@ -34,8 +34,8 @@ const adminSectionTitle = computed(() => {
 })
 
 /**
- * 工作台页轻量导航（V012-BUG-004）：/workspace 下侧栏仅保留 待办/已办/草稿
- * 三个直达项（工作台固定项另渲染）。仍只读菜单单一数据源——从当前区域树中
+ * 工作台页轻量导航（V012-BUG-004）：/workspace 下侧栏保留待办、已办、我发起的和草稿
+ * 四个直达项（工作台固定项另渲染）。仍只读菜单单一数据源——从当前区域树中
  * 按路径平铺挑出目标页面节点，不二次拉取、不另设菜单源。
  */
 const workspaceSlim = computed(() => area.value === 'portal' && route.path.startsWith('/workspace'))
@@ -55,7 +55,7 @@ const inboxSlim = computed(() => area.value === 'portal' && route.path.startsWit
 /**
  * 后台侧栏按**顶部导航分区**收敛：只渲染当前分区（与顶栏同一份菜单数据）。
  * 顶栏进入「系统管理」时，侧栏不应再出现「流程管理」等其它分区的页面。
- * 前台（portal）按页面上下文收敛：工作台页三直达项、流程中心仅流程管理分组
+ * 前台（portal）按页面上下文收敛：工作台页四直达项、流程中心仅流程管理分组
  * （V012-BUG-006）、收件箱仅分类项（V012-BUG-008）；其余保持原有派生。
  */
 const items = computed(() => {
@@ -160,13 +160,16 @@ function resolveAdminActive(path: string): string {
       <img class="app-sidebar__design-icon" :src="iconWorkspace" alt="" aria-hidden="true" />
       <template #title>{{ $t('common.workspace') }}</template>
     </el-menu-item>
-    <!-- 工作台本地列表直达（V012-BUG-023）：待办/已办/草稿留在工作台分区，不再跳流程中心 -->
+    <!-- 工作台本地列表直达（V012-BUG-023）：个人办理列表留在工作台分区，不再跳流程中心 -->
     <template v-if="workspaceSlim">
       <el-menu-item index="/workspace/todo">
         <template #title>{{ $t('workflow.todoTasks') }}</template>
       </el-menu-item>
       <el-menu-item index="/workspace/processed">
         <template #title>{{ $t('workflow.processedTasks') }}</template>
+      </el-menu-item>
+      <el-menu-item index="/workspace/my-instances">
+        <template #title>{{ $t('common.startedByMe') }}</template>
       </el-menu-item>
       <el-menu-item index="/workspace/my-drafts">
         <template #title>{{ $t('workflow.myDrafts') }}</template>

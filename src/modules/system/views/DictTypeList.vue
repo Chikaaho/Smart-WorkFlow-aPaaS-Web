@@ -221,7 +221,7 @@ async function handleDelete(row: SysDictType) {
 
 function handleManageData(row: SysDictType) {
   void router.push({
-    path: '/dict-data',
+    name: 'system-dict-data',
     query: { dictCode: row.code, dictName: row.name },
   })
 }

@@ -265,7 +265,7 @@ function goEdit(row: FormDefListItem) {
 
 const visibilityDialogVisible = ref(false)
 const visibilityForm = ref<FormDefListItem | null>(null)
-const visibilityUserIds = ref<number[]>([]) // V012-BUG-019：用户选择器（存 id 显示姓名）
+const visibilityUserIds = ref<Array<number | string>>([]) // 64 位 ID 以字符串承载，避免精度丢失
 const visibilitySaving = ref(false)
 
 // I2 生命周期：停用/启用（PUBLISHED ↔ DISABLED），成功后刷新列表
@@ -320,9 +320,9 @@ function openVisibility(row: FormDefListItem) {
   try {
     const parsed = row.visibilityScope ? JSON.parse(row.visibilityScope) : null
     const ids: unknown[] = Array.isArray(parsed?.userIds) ? parsed.userIds : []
-    visibilityUserIds.value = ids.filter(
-      (id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0,
-    )
+    visibilityUserIds.value = ids
+      .map((id) => String(id))
+      .filter((id) => /^\d+$/.test(id) && !/^0+$/.test(id))
   } catch {
     visibilityUserIds.value = []
   }

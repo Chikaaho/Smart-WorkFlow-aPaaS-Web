@@ -32,6 +32,11 @@ const overlayStubs = {
     props: ['modelValue'],
   },
   PreviewModal: { template: '<div class="stub-preview" />' },
+  PublishedSnapshotViewer: {
+    name: 'PublishedSnapshotViewer',
+    props: ['visible', 'formId', 'formKey', 'snapshot'],
+    template: '<div class="stub-published-snapshot" />',
+  },
 }
 
 const snapshots = [
@@ -51,9 +56,14 @@ describe('HistoryVersionsDialog', () => {
     })
   })
 
-  async function mountOpen() {
+  async function mountOpen(extra: Record<string, unknown> = {}) {
     const wrapper = mount(HistoryVersionsDialog, {
-      props: { formId: 'uuid-1', formKey: 'contract-approval', visible: true },
+      props: {
+        formId: 'uuid-1',
+        formKey: 'contract-approval',
+        visible: true,
+        ...extra,
+      },
       global: { stubs: overlayStubs },
     })
     await flushPromises()
@@ -95,6 +105,61 @@ describe('HistoryVersionsDialog', () => {
     const wrapper = await mountOpen()
 
     expect(wrapper.text()).toContain('尚未发布过')
+  })
+
+  it('服务端未给 status 的快照按已发布呈现，宿主已发布状态不显示当前草稿', async () => {
+    mockListFormSnapshots.mockResolvedValue([
+      {
+        formVersion: 2,
+        versionLabel: '3.2',
+        createTime: '2026-10-23 10:30:00',
+      },
+    ])
+    const wrapper = await mountOpen({
+      formVersion: 2,
+      formVersionLabel: '3.2',
+      formStatus: 'PUBLISHED',
+    })
+
+    const current = wrapper.find('.history-dialog__current')
+    expect(current.text()).toContain('当前版本 v3.2')
+    expect(current.text()).toContain('已发布')
+    expect(current.text()).not.toContain('当前草稿')
+    expect(current.text()).not.toContain('未发布')
+    expect(wrapper.find('.history-card').text()).toContain('已发布 v3.2')
+  })
+
+  it('宿主为草稿时仍标记未发布，缺 status 的历史快照不会被带成草稿', async () => {
+    mockListFormSnapshots.mockResolvedValue([{ formVersion: 2, createTime: '2026-10-23 10:30:00' }])
+    const wrapper = await mountOpen({
+      formVersion: 2,
+      formStatus: 'DRAFT',
+    })
+
+    const current = wrapper.find('.history-dialog__current')
+    expect(current.text()).toContain('当前草稿 v2')
+    expect(current.text()).toContain('未发布')
+    expect(wrapper.find('.history-card').text()).toContain('已发布 v2')
+  })
+
+  it('把选中版本交给完整只读快照查看器', async () => {
+    const wrapper = await mountOpen()
+    const card = wrapper.findAll('.history-card').find((c) => c.text().includes('2026-05-11 14:00'))
+    expect(card).toBeTruthy()
+    await card!.trigger('click')
+
+    const openButton = wrapper.findAll('button').find((b) => b.text().includes('查看完整快照'))
+    expect(openButton).toBeTruthy()
+    await openButton!.trigger('click')
+
+    const viewer = wrapper.findComponent({ name: 'PublishedSnapshotViewer' })
+    expect(viewer.exists()).toBe(true)
+    expect(viewer.props()).toMatchObject({
+      visible: true,
+      formId: 'uuid-1',
+      formKey: 'contract-approval',
+      snapshot: expect.objectContaining({ formVersion: 1 }),
+    })
   })
 
   it('组件零回写路径：不引入 save/publish（结构断言）', async () => {

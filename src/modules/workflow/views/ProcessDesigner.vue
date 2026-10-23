@@ -64,6 +64,8 @@ import {
   buildParticipantConfig,
   buildParticipantFormDraft,
   emptyParticipantFormDraft,
+  NODE_ALLOWED_ACTION_VALUES,
+  resolveNodeAllowedActions,
   validateNodeConfigSemantics,
 } from '@/modules/workflow/utils/node-capabilities'
 import type {
@@ -2555,6 +2557,13 @@ watch(selectedNode, (node, prev) => {
         ? JSON.stringify(value)
         : value
   }
+  const allowedActionsField = fields.find((field) => field.key === 'allowedActions')
+  if (allowedActionsField && !('allowedActions' in (node.config ?? {}))) {
+    draft.allowedActions = resolveNodeAllowedActions(
+      undefined,
+      configArrayValues(allowedActionsField),
+    )
+  }
   // 会签：旧图缺 mode 时按后端 ALL 缺省回显；人数模式缺人数时给合法缺省
   if (node.type === 'CONSENSUS') {
     if (draft.mode == null) draft.mode = 'ALL'
@@ -2612,6 +2621,67 @@ const returnTargetsValue = computed<string[]>(() => {
 
 function onReturnTargetsChange(value: string[]) {
   propForm.value['returnTargets'] = value
+  applyProps()
+}
+
+function isArrayConfigField(field: BpmNodeConfigField): boolean {
+  const type = field.type.toLowerCase()
+  return field.key === 'allowedActions' || type === 'array' || type === 'multiselect'
+}
+
+function configArrayValues(field: BpmNodeConfigField): unknown {
+  return (
+    field.validation?.['values'] ??
+    field.validation?.['options'] ??
+    field.validation?.['allowedActions']
+  )
+}
+
+function configArrayOptions(field: BpmNodeConfigField): Array<{ value: string; label: string }> {
+  const declared = configArrayValues(field)
+  const values =
+    Array.isArray(declared) && declared.length > 0
+      ? declared.map((item) => String(item))
+      : field.key === 'allowedActions'
+        ? [...NODE_ALLOWED_ACTION_VALUES]
+        : []
+  return values.map((value) => ({
+    value,
+    label: field.key === 'allowedActions' ? allowedActionLabel(value) : value,
+  }))
+}
+
+function allowedActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    APPROVE: t('common.approve'),
+    DISAPPROVE: t('workflow.disapprove'),
+    REJECT: t('common.reject'),
+    RETURN: t('common.returnBack'),
+    TRANSFER: t('workflow.transferOwnTask'),
+    DELEGATE: t('workflow.delegateAction'),
+    COMMUNICATE: t('workflow.consultTask'),
+    ADD_SIGN: t('workflow.addSign'),
+  }
+  return labels[action] ?? action
+}
+
+function configArrayValue(fieldKey: string): string[] {
+  const raw = propForm.value[fieldKey]
+  if (Array.isArray(raw)) return raw.map((item) => String(item))
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
+function onConfigArrayChange(fieldKey: string, value: unknown): void {
+  propForm.value = {
+    ...propForm.value,
+    [fieldKey]: Array.isArray(value) ? value.map((item) => String(item)) : [],
+  }
   applyProps()
 }
 
@@ -3812,6 +3882,28 @@ function nodeLabelLines(label: string) {
                       />
                     </el-form-item>
                   </template>
+                  <el-form-item v-else-if="isArrayConfigField(field)" :label="field.label">
+                    <el-select
+                      :model-value="configArrayValue(field.key)"
+                      multiple
+                      filterable
+                      clearable
+                      style="width: 100%"
+                      @update:model-value="
+                        (value: unknown) => onConfigArrayChange(field.key, value)
+                      "
+                    >
+                      <el-option
+                        v-for="option in configArrayOptions(field)"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      />
+                    </el-select>
+                    <small v-if="field.key === 'allowedActions'" class="config-array-hint">
+                      未设置时兼容旧版；清空后保存表示本节点不允许任何审批操作。
+                    </small>
+                  </el-form-item>
                   <el-form-item v-else-if="field.type === 'string'" :label="field.label">
                     <el-input
                       v-model="propForm[field.key] as string"
@@ -5399,6 +5491,14 @@ function nodeLabelLines(label: string) {
   line-height: 16px;
   color: #99a5bb;
   white-space: normal;
+}
+
+.config-array-hint {
+  display: block;
+  margin-top: 5px;
+  color: var(--sw-text-secondary);
+  font-size: 11px;
+  line-height: 17px;
 }
 .participant-legacy-note {
   margin-bottom: 15px;

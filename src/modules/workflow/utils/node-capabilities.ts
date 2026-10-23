@@ -21,6 +21,37 @@ import type {
 /** 现有流程主链的稳定类型，非节点目录；用于保留 P57 既有兼容入口。 */
 export const REQUIRED_WORKFLOW_NODE_TYPES = ['START', 'END', 'APPROVAL'] as const
 
+export const NODE_ALLOWED_ACTION_VALUES = [
+  'APPROVE',
+  'DISAPPROVE',
+  'REJECT',
+  'RETURN',
+  'TRANSFER',
+  'DELEGATE',
+  'COMMUNICATE',
+  'ADD_SIGN',
+] as const
+
+/**
+ * Editable node policy projection: missing metadata keeps legacy (all supported
+ * actions), while an explicit empty array denies every action.
+ */
+export function resolveNodeAllowedActions(raw: unknown, declaredOptions?: unknown): string[] {
+  const available =
+    Array.isArray(declaredOptions) && declaredOptions.length > 0
+      ? declaredOptions.map((item) => String(item))
+      : [...NODE_ALLOWED_ACTION_VALUES]
+  if (raw === undefined) return available
+  if (Array.isArray(raw)) return raw.map((item) => String(item))
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
 export type WorkflowMiddleNodeType =
   | 'APPROVAL'
   | 'CONSENSUS'

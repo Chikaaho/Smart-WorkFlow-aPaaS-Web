@@ -270,12 +270,13 @@ describe('layouts/AppSidebar', () => {
     const wrapper = mountSidebar()
 
     const indexes = wrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))
-    // 工作台固定项 + 本地三直达项（V012-BUG-023：/workspace/* 不再跳流程中心）
+    // 工作台固定项 + 本地四直达项（V012-BUG-023：/workspace/* 不再跳流程中心）
     expect(indexes).toContain('/workspace')
     expect(indexes).toEqual([
       '/workspace',
       '/workspace/todo',
       '/workspace/processed',
+      '/workspace/my-instances',
       '/workspace/my-drafts',
     ])
     expect(wrapper.findAll('.stub-sub')).toHaveLength(0)

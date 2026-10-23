@@ -10,7 +10,16 @@ vi.mock('@/modules/system/api/dept', () => ({
   deleteDept: vi.fn(),
 }))
 
-const tenantStore = vi.hoisted(() => ({ user: { tenantId: '1' }, superAdmin: false }))
+const tenantStore = vi.hoisted(() => ({
+  user: { tenantId: '1' },
+  superAdmin: false,
+  permissions: new Set([
+    'system:dept:list',
+    'system:dept:create',
+    'system:dept:update',
+    'system:dept:delete',
+  ]),
+}))
 vi.mock('@/stores/user', () => ({ useUserStore: () => tenantStore }))
 vi.mock('@/modules/system/api/tenant-context', () => ({
   currentTenantContext: vi.fn(),
@@ -42,6 +51,12 @@ describe('DeptList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     tenantStore.superAdmin = false
+    tenantStore.permissions = new Set([
+      'system:dept:list',
+      'system:dept:create',
+      'system:dept:update',
+      'system:dept:delete',
+    ])
     vi.mocked(currentTenantContext).mockResolvedValue({
       id: '1',
       name: '本租户',
@@ -309,6 +324,18 @@ describe('DeptList', () => {
     const emptyArea = wrapper.find('.dept-list__empty')
     expect(emptyArea.text()).toContain('新建部门')
     expect(emptyArea.text()).not.toContain('无匹配部门')
+  })
+
+  it('无创建权限时，空态不展示新建部门入口', async () => {
+    tenantStore.permissions = new Set(['system:dept:list'])
+    vi.mocked(listDeptTree).mockResolvedValue([])
+    const wrapper = mount(DeptList, { global: { stubs: minimalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const emptyArea = wrapper.find('.dept-list__empty')
+    expect(emptyArea.exists()).toBe(true)
+    expect(emptyArea.text()).not.toContain('新建部门')
   })
 
   // ─── 加载态 ───

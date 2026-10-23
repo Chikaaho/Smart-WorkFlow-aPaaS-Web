@@ -203,6 +203,7 @@ onMounted(loadList)
             <el-table-column :label="t('common.actions')" width="100">
               <template #default="{ row: c }">
                 <el-button
+                  v-if="canManage"
                   link
                   type="primary"
                   size="small"
@@ -247,16 +248,19 @@ onMounted(loadList)
         <el-form-item :label="t('system.menuIcon')">
           <!-- 通用图标库白名单选择器（非必填） -->
           <div class="icon-picker">
-            <div
+            <button
               v-for="key in MENU_ICON_KEYS"
               :key="key"
+              type="button"
               class="icon-picker__cell"
               :class="{ 'icon-picker__cell--active': editIcon === key }"
-              :title="key"
+              :aria-label="`${t('system.menuIcon')}: ${key}`"
+              :aria-pressed="editIcon === key"
+              :title="`${t('system.menuIcon')}: ${key}`"
               @click="editIcon = editIcon === key ? null : key"
             >
               <el-icon><component :is="menuIcon(key) as Component" /></el-icon>
-            </div>
+            </button>
           </div>
           <div class="icon-picker__current">
             {{ editIcon ?? t('system.menuIconNone') }}
@@ -297,8 +301,11 @@ onMounted(loadList)
   align-items: center;
   justify-content: center;
   height: 32px;
-  border: 1px solid var(--sw-border-light, #ebeef5);
-  border-radius: 4px;
+  padding: 0;
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-sm);
+  background: transparent;
+  color: inherit;
   cursor: pointer;
 }
 .icon-picker__cell--active {
@@ -309,6 +316,6 @@ onMounted(loadList)
 .icon-picker__current {
   margin-top: 6px;
   font-size: 12px;
-  color: var(--sw-text-secondary, #606266);
+  color: var(--sw-text-secondary);
 }
 </style>

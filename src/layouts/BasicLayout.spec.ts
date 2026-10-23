@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 /**
@@ -17,15 +17,24 @@ vi.mock('vue-router', () => ({
   }),
 }))
 
+const appStoreMock = vi.hoisted(() => ({
+  sidebarCollapsed: false,
+  toggleSidebar: vi.fn(),
+}))
 vi.mock('@/stores/app', () => ({
-  useAppStore: () => ({ sidebarCollapsed: false }),
+  useAppStore: () => appStoreMock,
 }))
 
 import BasicLayout from './BasicLayout.vue'
 
 const stubs = {
   AppLogo: { template: '<div class="logo-stub" />' },
-  AppMainNav: { template: '<nav class="nav-stub" />' },
+  AppMainNav: {
+    props: ['showSidebarToggle', 'sidebarCollapsed'],
+    emits: ['toggle-sidebar'],
+    template:
+      '<nav class="nav-stub" :data-show-toggle="String(showSidebarToggle)" :data-collapsed="String(sidebarCollapsed)"><button class="toggle-stub" @click="$emit(\'toggle-sidebar\')" /></nav>',
+  },
   AppTopbar: { template: '<div class="topbar-stub" />' },
   AppSidebar: { template: '<div class="sidebar-stub" />' },
   'router-view': { template: '<div class="router-view-stub" />' },
@@ -36,6 +45,11 @@ function mountLayout() {
 }
 
 describe('BasicLayout 深色侧栏渲染口径', () => {
+  beforeEach(() => {
+    appStoreMock.sidebarCollapsed = false
+    appStoreMock.toggleSidebar.mockClear()
+  })
+
   it('应用管理列表页不渲染侧栏（该分区仅自身一个菜单项）', () => {
     mockPath = '/form/app-manage'
     const wrapper = mountLayout()
@@ -57,10 +71,26 @@ describe('BasicLayout 深色侧栏渲染口径', () => {
 
     expect(wrapper.find('.basic-layout__aside').exists()).toBe(true)
     expect(wrapper.find('.sidebar-stub').exists()).toBe(true)
+    expect(wrapper.find('.nav-stub').attributes('data-show-toggle')).toBe('true')
   })
 
   it('前台工作台仍不渲染侧栏（既有口径回归保护）', () => {
     mockPath = '/portal'
-    expect(mountLayout().find('.basic-layout__aside').exists()).toBe(false)
+    const wrapper = mountLayout()
+    expect(wrapper.find('.basic-layout__aside').exists()).toBe(false)
+    expect(wrapper.find('.nav-stub').attributes('data-show-toggle')).toBe('false')
+  })
+
+  it('转发侧栏收起状态，点击入口调用唯一侧栏状态动作', async () => {
+    mockPath = '/system/user'
+    appStoreMock.sidebarCollapsed = true
+    const wrapper = mountLayout()
+
+    expect(wrapper.find('.nav-stub').attributes('data-collapsed')).toBe('true')
+    expect(wrapper.find('.basic-layout__aside--collapsed').exists()).toBe(true)
+    expect(wrapper.find('#app-sidebar').exists()).toBe(true)
+
+    await wrapper.find('.toggle-stub').trigger('click')
+    expect(appStoreMock.toggleSidebar).toHaveBeenCalledTimes(1)
   })
 })

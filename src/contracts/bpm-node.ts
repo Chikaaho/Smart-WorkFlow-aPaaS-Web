@@ -154,7 +154,7 @@ export interface ApprovalActionRequest {
   /** I3：转入人/受托人/代理受托人目标；64 位用户 ID 以十进制字符串保持精度。 */
   targetUserId?: number | string
   /** I3：加签/补签参与人。 */
-  participants?: number[]
+  participants?: Array<number | string>
   /** I3：SERIAL / PARALLEL。 */
   mode?: 'SERIAL' | 'PARALLEL'
   /** I3：BEFORE=原办理人前加签（旧请求缺省）；AFTER=原办理意见后的追加确认。 */
@@ -170,7 +170,7 @@ export interface ApprovalActionRequest {
   /** I3：撤回/废弃理由。 */
   reason?: string
   /** I3：沟通接收人。 */
-  receivers?: number[]
+  receivers?: Array<number | string>
   /** I3：沟通内容/回复。 */
   message?: string
   /** P64 阶段Ⅰ：节点业务表单数据（任务绑定节点表单时随合法动作最终提交；服务端与任务完成同事务落库）。 */

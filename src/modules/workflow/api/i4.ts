@@ -256,8 +256,8 @@ export interface HandoverItem {
 }
 
 export async function submitHandover(req: {
-  fromUserId: number
-  toUserId: number
+  fromUserId: number | string
+  toUserId: number | string
   scopeDefKeys?: string[]
   includeProxyRules?: boolean
 }): Promise<HandoverResult> {

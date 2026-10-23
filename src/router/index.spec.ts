@@ -240,3 +240,19 @@ describe('router/index 表单数据列表准入', () => {
     expect(route?.meta.authority).toEqual(['form:data:query'])
   })
 })
+
+describe('router/index 系统字典项深链', () => {
+  it('提供 /system/dict-data 页面与字典查看权限', () => {
+    const route = router.getRoutes().find((item) => item.name === 'system-dict-data')
+    expect(route?.path).toBe('/system/dict-data')
+    expect(route?.meta.authority).toEqual(['system:dict:view'])
+  })
+})
+
+describe('个人实例入口', () => {
+  it('无业务菜单时仍可进入本人实例列表，并兼容既有深链', () => {
+    expect(router.resolve('/workspace/my-instances').name).toBe('my-instances-static')
+    expect(router.resolve('/workflow/my-instances').name).toBe('my-instances-static')
+    expect(router.resolve('/workspace/my-instances').meta.authority).toBeUndefined()
+  })
+})

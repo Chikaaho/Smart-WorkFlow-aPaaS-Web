@@ -87,7 +87,7 @@ function openCreate() {
     sortNo: 0,
     // 新建默认「指定范围」并预选创建者（保存时明确展示，不把空值误作全员）
     visibleScopeType: 'SPECIFIED',
-    userIds: userStore.user?.id ? [Number(userStore.user.id)] : [],
+    userIds: userStore.user?.id ? [userStore.user.id] : [],
     deptIds: [],
     roleCodes: [],
     postIds: [],

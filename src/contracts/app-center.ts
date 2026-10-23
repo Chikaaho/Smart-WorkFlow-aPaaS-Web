@@ -17,7 +17,7 @@ export interface FormApp {
   /** ALL=本租户全部用户；SPECIFIED=按维度指定（维度集合全空=无人可见）。 */
   visibleScopeType: 'ALL' | 'SPECIFIED'
   /** SPECIFIED 时的指定用户集合（USER 维度；ALL 时为 null）。 */
-  visibleUserIds?: number[] | null
+  visibleUserIds?: Array<number | string> | null
   /** 指定可见部门集合（0.1.7 #1；DEPT 维度，按用户主属部门命中）。 */
   visibleDeptIds?: number[] | null
   /** 指定可见角色 code 集合（0.1.7 #1；ROLE 维度）。 */
@@ -44,7 +44,7 @@ export interface FormAppSaveReq {
   sortNo?: number
   visibleScopeType: 'ALL' | 'SPECIFIED'
   /** USER 维度：指定可见用户。 */
-  userIds?: number[]
+  userIds?: Array<number | string>
   /** DEPT 维度：指定可见部门（0.1.7 #1）。 */
   deptIds?: number[]
   /** ROLE 维度：指定可见角色 code（0.1.7 #1）。 */

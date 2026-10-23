@@ -32,8 +32,8 @@ const loading = ref(false)
 const errorMsg = ref('')
 const claimingId = ref<string | null>(null) // 正在领取的候选任务 ID（P64 阶段Ⅱ）
 const pendingSigns = ref<PendingSignItem[]>([])
-const signingId = ref<number | null>(null)
-const signComments = reactive<Record<number, string>>({})
+const signingId = ref<number | string | null>(null)
+const signComments = reactive<Record<string, string>>({})
 
 // ─── 详情弹窗（与已办/抄送/表单数据共用同一只读详情布局；待办额外带审批区） ───
 const detailVisible = ref(false)

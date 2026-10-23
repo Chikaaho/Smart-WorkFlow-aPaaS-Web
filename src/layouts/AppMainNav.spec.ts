@@ -74,12 +74,20 @@ const PORTAL_MENU_WITHOUT_APP_CENTER: MenuNode[] = [
   },
 ]
 
-function mountNav(menu: MenuNode[], path = '/workspace', query: Record<string, unknown> = {}) {
+function mountNav(
+  menu: MenuNode[],
+  path = '/workspace',
+  query: Record<string, unknown> = {},
+  props: { showSidebarToggle?: boolean; sidebarCollapsed?: boolean } = {},
+) {
   mockPath = path
   mockQuery = query
   setActivePinia(createPinia())
   useMenuStore().setMenu(menu)
-  return mount(AppMainNav, { global: { stubs: { RouterLink: routerLinkStub } } })
+  return mount(AppMainNav, {
+    props,
+    global: { stubs: { RouterLink: routerLinkStub } },
+  })
 }
 
 function items(wrapper: ReturnType<typeof mountNav>) {
@@ -118,5 +126,31 @@ describe('AppMainNav（用户端主导航）', () => {
     expect(nav[0]!.active).toBe(false)
     expect(nav[2]!.active).toBe(true)
     expect(nav[3]!.active).toBe(false)
+  })
+
+  it('侧栏可用时提供带可访问名称和展开状态的收起入口', async () => {
+    const wrapper = mountNav([], '/system/user', {}, { showSidebarToggle: true })
+    const button = wrapper.get('[data-test="sidebar-toggle"]')
+
+    expect(button.attributes('type')).toBe('button')
+    expect(button.attributes('aria-label')).toBe('收起或展开侧栏')
+    expect(button.attributes('aria-expanded')).toBe('true')
+    expect(button.attributes('aria-controls')).toBe('app-sidebar')
+
+    await button.trigger('click')
+    expect(wrapper.emitted('toggle-sidebar')).toHaveLength(1)
+  })
+
+  it('收起后入口报告 aria-expanded=false，无侧栏时入口不渲染', () => {
+    const collapsed = mountNav(
+      [],
+      '/system/user',
+      {},
+      { showSidebarToggle: true, sidebarCollapsed: true },
+    )
+    expect(collapsed.get('[data-test="sidebar-toggle"]').attributes('aria-expanded')).toBe('false')
+
+    const noSidebar = mountNav([], '/portal')
+    expect(noSidebar.find('[data-test="sidebar-toggle"]').exists()).toBe(false)
   })
 })

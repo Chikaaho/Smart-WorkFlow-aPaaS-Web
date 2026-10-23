@@ -9,8 +9,9 @@ import AppTopbar from './components/AppTopbar.vue'
 import AppSidebar from './components/AppSidebar.vue'
 
 /**
- * 根布局（常量路由 app-root）：顶部主导航条 + 深色侧栏 + 内容区（P53 设计节点 01/04）。
- * 用户端与管理端顶栏使用 Figma 页面级表面色，主操作继续使用品牌主色；侧栏恒为深色导航阶。
+ * 根布局（常量路由 app-root）：顶部主导航条 + 侧栏 + 内容区（P53 设计节点 01/04）。
+ * 用户端与管理端顶栏使用 Figma 页面级表面色，主操作继续使用品牌主色；
+ * 用户端侧栏为深色导航阶，管理端侧栏使用新稿浅色表面。
  * 动态业务路由由 router/guard 挂为本布局子路由；菜单数据保持单一数据源。
  * V011-BUG-003：移除侧栏底部空间提醒卡（Owner 裁决，用户端/管理端一致）。
  */
@@ -41,12 +42,18 @@ const showAside = computed(
   <div class="basic-layout" :class="`basic-layout--${area}`">
     <header class="basic-layout__topbar" :class="`basic-layout__topbar--${area}`">
       <AppLogo :collapse="false" :area="area" />
-      <AppMainNav class="basic-layout__nav" />
+      <AppMainNav
+        class="basic-layout__nav"
+        :show-sidebar-toggle="showAside"
+        :sidebar-collapsed="collapsed"
+        @toggle-sidebar="appStore.toggleSidebar()"
+      />
       <AppTopbar class="basic-layout__actions" />
     </header>
     <div class="basic-layout__body">
       <aside
         v-if="showAside"
+        id="app-sidebar"
         class="basic-layout__aside"
         :class="[{ 'basic-layout__aside--collapsed': collapsed }, `basic-layout__aside--${area}`]"
       >
@@ -125,6 +132,10 @@ const showAside = computed(
     width 0.2s ease,
     flex-basis 0.2s ease;
   overflow: hidden;
+}
+.basic-layout__aside--collapsed {
+  flex-basis: var(--sw-layout-aside-width-collapsed);
+  width: var(--sw-layout-aside-width-collapsed);
 }
 .basic-layout__menu {
   flex: 1;

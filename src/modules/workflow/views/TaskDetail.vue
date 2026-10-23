@@ -13,7 +13,7 @@ const { t } = useI18n()
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import {
   queryTaskDetail,
@@ -24,12 +24,12 @@ import {
   delegateTask,
   communicateTask,
   addSignTask,
-  supplementSignInstance,
   getApprovalOpinionDraft,
   saveApprovalOpinionDraft,
   type TaskActionSegment,
 } from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
+import { hasPerm } from '@/foundation/permission'
 import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 import type { ApprovalHistoryItem, TaskDetail } from '@/contracts/bpm'
 import type { ApprovalActionRequest, ApprovalOpinionConfig } from '@/contracts/bpm-node'
@@ -598,7 +598,7 @@ async function runAction(
 }
 
 async function handleApprove() {
-  if (acting.value) return
+  if (acting.value || !canApprove.value) return
   if (!ensureOpinionData()) return
   // P64 阶段Ⅰ：节点表单必填客户端预检（服务端 2433 为权威口径）
   if (nodeFormBound.value && !nodeFormSubmitted.value && !validateNodeFormRequired()) {
@@ -614,7 +614,7 @@ async function handleApprove() {
 }
 
 async function handleReject() {
-  if (acting.value) return
+  if (acting.value || !canReject.value) return
   if (!ensureOpinionData()) return
   acting.value = 'reject'
   try {
@@ -625,7 +625,7 @@ async function handleReject() {
 }
 
 async function handleReturn() {
-  if (acting.value) return
+  if (acting.value || !canReturn.value) return
   const target = returnTargetNodeId.value || returnTargets.value[0]?.nodeKey
   if (!target) {
     ElMessage.warning(t('workflow.noReturnTargets'))
@@ -653,17 +653,17 @@ async function handleReturn() {
   )
 }
 
-// ═════════ I3 生命周期动作（转办/委托/沟通/加签/补签） ═══════════════════
+// ═════════ I3 生命周期动作（转办/委托/沟通/加签） ═══════════════════════
 
 // V012-BUG-019：生命周期弹窗用户输入改选择器；仍以 CSV 字符串承载提交契约
-function csvToIds(value: string | undefined): number[] {
+function csvToIds(value: string | undefined): string[] {
   return (value ?? '')
     .split(',')
-    .map((item) => Number(item.trim()))
-    .filter((id) => Number.isInteger(id) && id > 0)
+    .map((item) => item.trim())
+    .filter((id) => /^\d+$/.test(id) && !/^0+$/.test(id))
 }
-function idsToCsv(ids: number[] | null | undefined): string {
-  return (ids ?? []).join(',')
+function idsToCsv(ids: Array<number | string> | null | undefined): string {
+  return (ids ?? []).map(String).join(',')
 }
 
 const lifecycleDialogVisible = computed({
@@ -673,8 +673,10 @@ const lifecycleDialogVisible = computed({
   },
 })
 
+type LifecycleKind = 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN'
+
 const lifecycleDialog = ref<null | {
-  kind: 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN' | 'SUPPLEMENT_SIGN'
+  kind: LifecycleKind
   targetUserId?: string
   message?: string
   receivers?: string
@@ -709,19 +711,9 @@ const LIFECYCLE_META: Record<string, { title: string; confirm: string }> = {
     },
     confirm: t('workflow.addSignConfirm'),
   },
-  SUPPLEMENT_SIGN: {
-    get title() {
-      return t('workflow.supplementSign')
-    },
-    get confirm() {
-      return t('workflow.supplementSignConfirm')
-    },
-  },
 }
 
-function openLifecycle(
-  kind: 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN' | 'SUPPLEMENT_SIGN',
-) {
+function openLifecycle(kind: LifecycleKind) {
   if (acting.value) return
   lifecycleDialog.value = { kind, mode: 'PARALLEL', signPosition: 'BEFORE' }
 }
@@ -739,33 +731,23 @@ async function submitLifecycle() {
     }
     payload = { targetUserId: target, reason: opinionComment.value || undefined }
   } else if (dialog.kind === 'COMMUNICATE') {
-    const receivers = (dialog.receivers ?? '')
-      .split(',')
-      .map((item) => Number(item.trim()))
-      .filter((item) => Number.isInteger(item) && item > 0)
+    const receivers = csvToIds(dialog.receivers)
     if (receivers.length === 0) {
       ElMessage.warning(t('workflow.consultReceiversRequired'))
       return
     }
     payload = { receivers, message: dialog.message ?? '' }
   } else {
-    const raw = (dialog.participants ?? '')
-      .split(',')
-      .map((item) => Number(item.trim()))
-      .filter((item) => Number.isInteger(item) && item > 0)
+    const raw = csvToIds(dialog.participants)
     if (raw.length === 0) {
       ElMessage.warning(t('workflow.participantsRequired'))
       return
     }
-    if (dialog.kind === 'ADD_SIGN') {
-      payload = {
-        ...(actionPayload('ADD_SIGN') ?? { action: 'ADD_SIGN' }),
-        participants: raw,
-        mode: dialog.mode ?? 'PARALLEL',
-        signPosition: dialog.signPosition ?? 'BEFORE',
-      }
-    } else {
-      payload = { participants: raw, nodeKey: detail.value.processDefinitionKey ?? undefined }
+    payload = {
+      ...(actionPayload('ADD_SIGN') ?? { action: 'ADD_SIGN' }),
+      participants: raw,
+      mode: dialog.mode ?? 'PARALLEL',
+      signPosition: dialog.signPosition ?? 'BEFORE',
     }
   }
   lifecycleSubmitting.value = true
@@ -776,10 +758,8 @@ async function submitLifecycle() {
       await delegateTask(taskId, payload)
     } else if (dialog.kind === 'COMMUNICATE') {
       await communicateTask(taskId, payload)
-    } else if (dialog.kind === 'ADD_SIGN') {
-      await addSignTask(taskId, payload)
     } else {
-      await supplementSignInstance(detail.value.processInstanceId, payload)
+      await addSignTask(taskId, payload)
     }
     ElMessage.success(meta.title + t('common.statusSubmitted'))
     lifecycleDialog.value = null
@@ -807,6 +787,26 @@ const canAct = computed(
   () => detail.value?.taskStatus !== 'FINISHED' && detail.value?.canHandle === true,
 )
 
+type NodeActionCode =
+  | 'APPROVE'
+  | 'DISAPPROVE'
+  | 'REJECT'
+  | 'RETURN'
+  | 'TRANSFER'
+  | 'DELEGATE'
+  | 'COMMUNICATE'
+  | 'ADD_SIGN'
+
+/** Missing metadata keeps legacy behavior; an explicit array is the node policy boundary. */
+function nodeAllows(action: NodeActionCode): boolean {
+  const allowed = detail.value?.allowedActions
+  return !Array.isArray(allowed) || allowed.includes(action)
+}
+
+const canApprove = computed(() => canAct.value && nodeAllows('APPROVE'))
+const canReject = computed(() => canAct.value && nodeAllows('REJECT'))
+const canReturn = computed(() => canAct.value && nodeAllows('RETURN'))
+
 /** 嵌入统一详情弹窗时，仅在有流程信息时呈现「审批进度」区块。 */
 const hasFlow = computed(
   () =>
@@ -829,6 +829,64 @@ const flowActive = computed(() => {
 })
 
 const canUrge = computed(() => isInitiator.value && flowActive.value)
+
+type ApprovalMoreCommand = LifecycleKind | 'URGE'
+interface ApprovalMoreAction {
+  command: ApprovalMoreCommand
+  label: string
+  divided?: boolean
+}
+
+const LIFECYCLE_PERMISSIONS: Record<LifecycleKind, string> = {
+  TRANSFER: 'workflow:task:transfer',
+  DELEGATE: 'workflow:task:delegate',
+  COMMUNICATE: 'workflow:task:communicate',
+  ADD_SIGN: 'workflow:task:add-sign',
+}
+
+/** Permission, task state and server-supplied node policy form the UI intersection. */
+function lifecycleVisible(command: LifecycleKind): boolean {
+  if (!canAct.value || !hasPerm(LIFECYCLE_PERMISSIONS[command])) return false
+  return nodeAllows(command)
+}
+
+const approvalMoreActions = computed<ApprovalMoreAction[]>(() => {
+  const actions: ApprovalMoreAction[] = []
+  if (lifecycleVisible('TRANSFER')) {
+    actions.push({ command: 'TRANSFER', label: t('workflow.transferOwnTask') })
+  }
+  if (lifecycleVisible('DELEGATE')) {
+    actions.push({ command: 'DELEGATE', label: t('workflow.delegateAction') })
+  }
+  if (lifecycleVisible('COMMUNICATE')) {
+    actions.push({ command: 'COMMUNICATE', label: t('workflow.consultTask') })
+  }
+  if (lifecycleVisible('ADD_SIGN')) {
+    actions.push({ command: 'ADD_SIGN', label: t('workflow.addSign') })
+  }
+  if (canUrge.value) {
+    actions.push({
+      command: 'URGE',
+      label: t('taskDetailUi.urgeAction'),
+      divided: actions.length > 0,
+    })
+  }
+  return actions
+})
+const hasApprovalMoreActions = computed(() => approvalMoreActions.value.length > 0)
+
+function isLifecycleKind(value: string): value is LifecycleKind {
+  return ['TRANSFER', 'DELEGATE', 'COMMUNICATE', 'ADD_SIGN'].includes(value)
+}
+
+function handleApprovalMore(command: string): void {
+  if (acting.value) return
+  if (command === 'URGE') {
+    if (canUrge.value) void onUrge()
+    return
+  }
+  if (isLifecycleKind(command) && lifecycleVisible(command)) openLifecycle(command)
+}
 
 async function onUrge(): Promise<void> {
   const d = detail.value
@@ -1107,9 +1165,9 @@ onMounted(loadDetail)
           <span v-if="opinionDraftLoaded">{{ t('workflow.opinionDraftRestored') }}</span>
           <span class="opinion-draft-note">{{ t('workflow.opinionDraftNote') }}</span>
         </div>
-        <!-- 0.1.7 #18：所有操作按钮统一放右下角（退回/转办/委托/沟通/加签/补签/驳回/同意/催办） -->
+        <!-- 主操作保持直达；有权限且被节点策略允许的转办/委托/沟通/加签与催办统一收进“更多”。 -->
         <div class="detail-actions__bar">
-          <div v-if="canAct && returnTargets.length > 0" class="return-config">
+          <div v-if="canReturn && returnTargets.length > 0" class="return-config">
             <span>{{ t('workflow.returnToLabel') }}</span>
             <el-select
               v-model="returnTargetNodeId"
@@ -1132,26 +1190,39 @@ onMounted(loadDetail)
             >
           </div>
           <div class="detail-actions__btns">
-            <el-button v-if="canUrge" :disabled="acting !== null" @click="onUrge">
-              {{ t('taskDetailUi.urgeAction') }}
-            </el-button>
-            <template v-if="canAct">
-              <el-button :disabled="acting !== null" @click="openLifecycle('TRANSFER')">
-                {{ t('workflow.transferOwnTask') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('DELEGATE')">
-                {{ t('workflow.delegateAction') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('COMMUNICATE')">
-                {{ t('workflow.consultTask') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('ADD_SIGN')">
-                {{ t('workflow.addSign') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('SUPPLEMENT_SIGN')">
-                {{ t('workflow.supplementSign') }}
-              </el-button>
+            <el-dropdown
+              v-if="hasApprovalMoreActions"
+              class="detail-actions__more"
+              trigger="click"
+              :disabled="acting !== null"
+              @command="handleApprovalMore"
+            >
               <el-button
+                class="detail-actions__more-trigger"
+                :disabled="acting !== null"
+                data-testid="approval-more-trigger"
+              >
+                {{ t('common.moreActions') }}
+                <el-icon><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu class="detail-actions__more-menu">
+                  <el-dropdown-item
+                    v-for="action in approvalMoreActions"
+                    :key="action.command"
+                    :command="action.command"
+                    :divided="action.divided"
+                    :disabled="acting !== null"
+                    :data-testid="`approval-more-${action.command.toLowerCase()}`"
+                  >
+                    {{ action.label }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <template v-if="canAct">
+              <el-button
+                v-if="canReject"
                 type="danger"
                 plain
                 :loading="acting === 'reject'"
@@ -1161,6 +1232,7 @@ onMounted(loadDetail)
                 {{ t('common.reject') }}
               </el-button>
               <el-button
+                v-if="canApprove"
                 type="success"
                 :loading="acting === 'approve'"
                 :disabled="acting !== null"
@@ -1188,13 +1260,11 @@ onMounted(loadDetail)
           <el-form-item :label="t('workflow.targetUser')">
             <!-- V012-BUG-019：目标用户改选择器（存 id 显示姓名） -->
             <UserRemoteSelect
-              :model-value="
-                lifecycleDialog.targetUserId ? Number(lifecycleDialog.targetUserId) : undefined
-              "
+              :model-value="lifecycleDialog.targetUserId || undefined"
               :placeholder="t('workflow.pickTargetUser')"
               style="width: 100%"
               @update:model-value="
-                (v: number | number[] | null) => {
+                (v: string | string[] | null) => {
                   if (!lifecycleDialog) return
                   lifecycleDialog.targetUserId = v == null || Array.isArray(v) ? '' : String(v)
                 }
@@ -1211,7 +1281,7 @@ onMounted(loadDetail)
               :placeholder="t('workflow.pickReceivers')"
               style="width: 100%"
               @update:model-value="
-                (v: number | number[] | null) => {
+                (v: string | string[] | null) => {
                   if (!lifecycleDialog) return
                   lifecycleDialog.receivers = Array.isArray(v) ? idsToCsv(v) : ''
                 }
@@ -1231,7 +1301,7 @@ onMounted(loadDetail)
               :placeholder="t('workflow.pickParticipants')"
               style="width: 100%"
               @update:model-value="
-                (v: number | number[] | null) => {
+                (v: string | string[] | null) => {
                   if (!lifecycleDialog) return
                   lifecycleDialog.participants = Array.isArray(v) ? idsToCsv(v) : ''
                 }
@@ -1249,29 +1319,6 @@ onMounted(loadDetail)
               <el-radio value="BEFORE">{{ t('workflow.signBefore') }}</el-radio>
               <el-radio value="AFTER">{{ t('workflow.signAfter') }}</el-radio>
             </el-radio-group>
-          </el-form-item>
-        </template>
-        <template v-if="lifecycleDialog?.kind === 'SUPPLEMENT_SIGN'">
-          <el-form-item :label="t('workflow.supplementConfirmerLabel')">
-            <!-- V012-BUG-019：补充确认人改选择器（存 id 显示姓名） -->
-            <UserRemoteSelect
-              :model-value="csvToIds(lifecycleDialog.participants)"
-              multiple
-              :placeholder="t('workflow.pickConfirmers')"
-              style="width: 100%"
-              @update:model-value="
-                (v: number | number[] | null) => {
-                  if (!lifecycleDialog) return
-                  lifecycleDialog.participants = Array.isArray(v) ? idsToCsv(v) : ''
-                }
-              "
-            />
-          </el-form-item>
-          <el-form-item :label="t('common.description')">
-            <el-input
-              v-model="lifecycleDialog.message"
-              :placeholder="t('workflow.supplementTriggerNote')"
-            />
           </el-form-item>
         </template>
         <el-form-item
@@ -1504,6 +1551,12 @@ onMounted(loadDetail)
   justify-content: flex-end;
   flex-wrap: wrap;
   margin-left: auto;
+}
+.detail-actions__more {
+  flex: 0 0 auto;
+}
+.detail-actions__more-trigger :deep(.el-icon) {
+  margin-left: 4px;
 }
 .return-config {
   display: flex;

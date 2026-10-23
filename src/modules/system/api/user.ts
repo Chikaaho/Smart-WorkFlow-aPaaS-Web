@@ -129,7 +129,8 @@ export async function updateUserPosts(id: string, posts: PostAssociation[]): Pro
 
 /** 用户候选选项（V012-BUG-019 选择器数据源）：最小展示字段，租户内启用用户。 */
 export interface UserOption {
-  id: number
+  /** 后端以字符串承载 64 位用户 ID，禁止转 Number 以免精度丢失。 */
+  id: string
   username: string
   realName: string | null
 }
