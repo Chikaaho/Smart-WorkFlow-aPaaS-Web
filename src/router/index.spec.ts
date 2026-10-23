@@ -256,3 +256,8 @@ describe('个人实例入口', () => {
     expect(router.resolve('/workspace/my-instances').meta.authority).toBeUndefined()
   })
 })
+
+it('本人抄送提供工作台入口并沿用身份定域', () => {
+  expect(router.resolve('/workspace/my-cc').name).toBe('workspace-my-cc')
+  expect(router.resolve('/workspace/my-cc').meta.authority).toBeUndefined()
+})

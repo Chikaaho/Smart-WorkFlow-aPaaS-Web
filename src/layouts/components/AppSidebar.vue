@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { Grid, Document, Clock, Check, Bell, EditPen } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
 import { useMenuStore } from '@/stores/menu'
 import { resolveArea } from '@/foundation/area'
@@ -34,8 +35,8 @@ const adminSectionTitle = computed(() => {
 })
 
 /**
- * 工作台页轻量导航（V012-BUG-004）：/workspace 下侧栏保留待办、已办、我发起的和草稿
- * 四个直达项（工作台固定项另渲染）。仍只读菜单单一数据源——从当前区域树中
+ * 工作台页轻量导航（V012-BUG-004）：/workspace 下侧栏保留待办、我发起的、已处理、抄送和草稿
+ * 五个直达项（工作台固定项另渲染）。仍只读菜单单一数据源——从当前区域树中
  * 按路径平铺挑出目标页面节点，不二次拉取、不另设菜单源。
  */
 const workspaceSlim = computed(() => area.value === 'portal' && route.path.startsWith('/workspace'))
@@ -55,7 +56,7 @@ const inboxSlim = computed(() => area.value === 'portal' && route.path.startsWit
 /**
  * 后台侧栏按**顶部导航分区**收敛：只渲染当前分区（与顶栏同一份菜单数据）。
  * 顶栏进入「系统管理」时，侧栏不应再出现「流程管理」等其它分区的页面。
- * 前台（portal）按页面上下文收敛：工作台页四直达项、流程中心仅流程管理分组
+ * 前台（portal）按页面上下文收敛：工作台页五直达项、流程中心仅流程管理分组
  * （V012-BUG-006）、收件箱仅分类项（V012-BUG-008）；其余保持原有派生。
  */
 const items = computed(() => {
@@ -142,6 +143,7 @@ function resolveAdminActive(path: string): string {
     :class="[
       `app-sidebar--${area}`,
       {
+        'app-sidebar--workspace': workspaceSlim,
         'app-sidebar--detail': detailFrame,
         'app-sidebar--task-detail': taskDetailFrame,
         'app-sidebar--catalog': activePath.startsWith('/workflow/catalog'),
@@ -155,24 +157,40 @@ function resolveAdminActive(path: string): string {
     <li v-if="adminSectionTitle && !collapse" class="app-sidebar__section" role="presentation">
       {{ adminSectionTitle }}
     </li>
+    <li v-if="workspaceSlim && !collapse" class="app-sidebar__section" role="presentation">
+      {{ t('workflow.collaborationSection') }}
+    </li>
     <!-- 工作台固定项：流程中心/收件箱上下文不渲染（V012-BUG-006/008） -->
-    <el-menu-item v-if="area === 'portal' && !catalogSlim && !inboxSlim" index="/workspace">
-      <img class="app-sidebar__design-icon" :src="iconWorkspace" alt="" aria-hidden="true" />
+    <el-menu-item
+      v-if="area === 'portal' && !catalogSlim && !inboxSlim"
+      index="/workspace"
+      :aria-label="t('common.workspace')"
+    >
+      <el-icon v-if="workspaceSlim" aria-hidden="true"><Grid /></el-icon>
+      <img v-else class="app-sidebar__design-icon" :src="iconWorkspace" alt="" aria-hidden="true" />
       <template #title>{{ $t('common.workspace') }}</template>
     </el-menu-item>
     <!-- 工作台本地列表直达（V012-BUG-023）：个人办理列表留在工作台分区，不再跳流程中心 -->
     <template v-if="workspaceSlim">
-      <el-menu-item index="/workspace/todo">
-        <template #title>{{ $t('workflow.todoTasks') }}</template>
+      <el-menu-item index="/workspace/todo" :aria-label="t('workflow.myTodoTitle')">
+        <el-icon aria-hidden="true"><Document /></el-icon>
+        <template #title>{{ t('workflow.myTodoTitle') }}</template>
       </el-menu-item>
-      <el-menu-item index="/workspace/processed">
-        <template #title>{{ $t('workflow.processedTasks') }}</template>
+      <el-menu-item index="/workspace/my-instances" :aria-label="t('common.startedByMe')">
+        <el-icon aria-hidden="true"><Clock /></el-icon>
+        <template #title>{{ t('common.startedByMe') }}</template>
       </el-menu-item>
-      <el-menu-item index="/workspace/my-instances">
-        <template #title>{{ $t('common.startedByMe') }}</template>
+      <el-menu-item index="/workspace/processed" :aria-label="t('workflow.processedNav')">
+        <el-icon aria-hidden="true"><Check /></el-icon>
+        <template #title>{{ t('workflow.processedNav') }}</template>
       </el-menu-item>
-      <el-menu-item index="/workspace/my-drafts">
-        <template #title>{{ $t('workflow.myDrafts') }}</template>
+      <el-menu-item index="/workspace/my-cc" :aria-label="t('router.myCc')">
+        <el-icon aria-hidden="true"><Bell /></el-icon>
+        <template #title>{{ t('router.myCc') }}</template>
+      </el-menu-item>
+      <el-menu-item index="/workspace/my-drafts" :aria-label="t('common.statusDraft')">
+        <el-icon aria-hidden="true"><EditPen /></el-icon>
+        <template #title>{{ t('common.statusDraft') }}</template>
       </el-menu-item>
     </template>
     <!-- 收件箱分类直达（V012-BUG-008）：全部/已读/未读，query 驱动列表过滤 -->
@@ -435,5 +453,58 @@ function resolveAdminActive(path: string): string {
 }
 .app-sidebar--admin :deep(.el-menu--inline)::before {
   display: none;
+}
+</style>
+
+<style scoped>
+.app-sidebar--workspace {
+  box-sizing: border-box;
+  padding: var(--sw-space-16);
+  --el-menu-text-color: var(--sw-nav-topbar-text);
+}
+.app-sidebar--workspace .app-sidebar__section {
+  color: var(--sw-nav-topbar-text);
+}
+.app-sidebar--workspace :deep(> .el-menu-item) {
+  width: 100%;
+  height: 42px;
+  margin: 0 0 var(--sw-space-8);
+  padding: 0 var(--sw-space-12);
+  line-height: 22px;
+  font-size: var(--sw-font-body);
+  font-weight: var(--sw-font-weight-emphasis);
+}
+.app-sidebar--workspace :deep(> .el-menu-item .el-icon) {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin-right: var(--sw-space-12);
+  font-size: 16px;
+  color: inherit;
+}
+.app-sidebar--workspace :deep(.el-menu-item > span) {
+  top: 0;
+}
+.app-sidebar--workspace :deep(.el-menu-item.is-active) {
+  background: var(--sw-nav-sidebar-active-bg);
+}
+.app-sidebar--workspace.el-menu--collapse {
+  width: var(--sw-layout-aside-width-collapsed);
+  padding: var(--sw-space-12) 0;
+}
+.app-sidebar--workspace.el-menu--collapse :deep(> .el-menu-item) {
+  width: 40px;
+  margin-inline: auto;
+  padding: 0 var(--sw-space-12);
+}
+.app-sidebar--workspace.el-menu--collapse :deep(> .el-menu-item .el-icon) {
+  margin-right: 0;
+}
+</style>
+
+<style scoped>
+.app-sidebar--workspace.el-menu--collapse :deep(.el-menu-tooltip__trigger) {
+  justify-content: center;
+  padding: 0;
 }
 </style>

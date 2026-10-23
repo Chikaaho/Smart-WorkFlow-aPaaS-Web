@@ -19,6 +19,7 @@ export const PORTAL_MENU_PATHS: ReadonlySet<string> = new Set([
   'workspace/todo',
   'workspace/processed',
   'workspace/my-instances',
+  'workspace/my-cc',
   'workspace/my-drafts',
   'portal',
   'workflow/catalog',

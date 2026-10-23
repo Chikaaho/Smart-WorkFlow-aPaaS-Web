@@ -70,6 +70,16 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'workspace/my-cc',
+        name: 'workspace-my-cc',
+        component: () => import('@/modules/workflow/views/MyCc.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('router.myCc')
+          },
+        },
+      },
+      {
         path: 'workspace/my-drafts',
         name: 'workspace-my-drafts',
         component: () => import('@/modules/workflow/views/MyDrafts.vue'),

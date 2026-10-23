@@ -389,3 +389,9 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
   display: none;
 }
 </style>
+
+<style scoped>
+.app-main-nav--portal .app-main-nav__item.is-active {
+  color: var(--sw-nav-topbar-text);
+}
+</style>

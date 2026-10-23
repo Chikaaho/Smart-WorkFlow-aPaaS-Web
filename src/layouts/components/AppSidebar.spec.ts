@@ -191,7 +191,7 @@ describe('layouts/AppSidebar', () => {
     expect(wrapper.find('.stub-menu').attributes('data-active')).toBe('/form/form')
   })
 
-  it('V012-BUG-004: /workspace 侧栏精简为 待办/已办/草稿 三个直达项', () => {
+  it('工作台侧栏包含全部个人办理入口且顺序对应设计', () => {
     useMenuStore().setMenu([
       {
         id: 'w',
@@ -270,16 +270,34 @@ describe('layouts/AppSidebar', () => {
     const wrapper = mountSidebar()
 
     const indexes = wrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))
-    // 工作台固定项 + 本地四直达项（V012-BUG-023：/workspace/* 不再跳流程中心）
+    // 工作台固定项 + 本地五直达项（V012-BUG-023：/workspace/* 不再跳流程中心）
     expect(indexes).toContain('/workspace')
     expect(indexes).toEqual([
       '/workspace',
       '/workspace/todo',
-      '/workspace/processed',
       '/workspace/my-instances',
+      '/workspace/processed',
+      '/workspace/my-cc',
       '/workspace/my-drafts',
     ])
     expect(wrapper.findAll('.stub-sub')).toHaveLength(0)
+  })
+
+  it('工作台分区标题展开可见，折叠时隐藏，抄送仍留在个人分区', () => {
+    mockPath = '/workspace/my-cc'
+    const expanded = mountSidebar()
+    expect(expanded.find('.app-sidebar__section').text()).toBe('流程协同')
+    expect(expanded.find('.stub-menu').attributes('data-active')).toBe('/workspace/my-cc')
+    const collapsed = mountSidebar(true)
+    expect(collapsed.find('.app-sidebar__section').exists()).toBe(false)
+    expect(collapsed.findAll('.stub-item').map((item) => item.attributes('aria-label'))).toEqual([
+      '工作台',
+      '我的待办',
+      '我发起的',
+      '已处理',
+      '抄送我的',
+      '草稿',
+    ])
   })
 
   it('V012-BUG-006: 流程中心上下文仅流程管理分组子项（无工作台固定项/通知/门户）', () => {

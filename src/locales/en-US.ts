@@ -2746,6 +2746,8 @@ export default {
     approvalCommentFormal: 'Approval comment (formal form)',
     approvalComment: 'Approval comment',
     todoTaskLoadFailed: 'Could not load the to-do tasks',
+    collaborationSection: 'Workflow collaboration',
+    processedNav: 'Processed',
     myTodoTitle: 'My to-dos',
     compatLayoutNotice:
       'This historical graph has no canvas coordinates, so it is rendered with a deterministic compatibility layout. The topology is fully usable.',

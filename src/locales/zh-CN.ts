@@ -2661,6 +2661,8 @@ export default {
     approvalCommentFormal: '审批意见（正式意见表单）',
     approvalComment: '审批意见',
     todoTaskLoadFailed: '加载待办任务失败',
+    collaborationSection: '流程协同',
+    processedNav: '已处理',
     myTodoTitle: '我的待办',
     compatLayoutNotice: '历史图缺少画布坐标，已按确定性兼容布局展示；图形拓扑完整可用',
     edgeNotTaken: '未经过',
