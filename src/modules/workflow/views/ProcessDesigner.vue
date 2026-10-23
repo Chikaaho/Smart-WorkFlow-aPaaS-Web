@@ -3145,6 +3145,7 @@ function nodeLabelLines(label: string) {
               type="button"
               class="palette-item"
               :class="{ 'palette-item--disabled': !cap.supports.design }"
+              :data-node-type="cap.type"
               :draggable="cap.supports.design"
               @dragstart="onPaletteDragStart($event, cap)"
               @click="onWorkbarClick(cap)"
@@ -5136,6 +5137,7 @@ function nodeLabelLines(label: string) {
   gap: 12px;
 }
 .palette-item {
+  --palette-accent: var(--sw-color-primary);
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -5166,7 +5168,7 @@ function nodeLabelLines(label: string) {
 }
 .palette-item__name {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 22px;
   white-space: nowrap;
 }
@@ -5176,10 +5178,25 @@ function nodeLabelLines(label: string) {
 }
 .palette-item .workbar-icon path {
   fill: none;
-  stroke: var(--sw-color-primary);
+  stroke: var(--palette-accent);
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.palette-item[data-node-type='START'] {
+  --palette-accent: #12805c;
+}
+.palette-item[data-node-type='END'] {
+  --palette-accent: #c2303a;
+}
+.palette-item[data-node-type='CONDITION'],
+.palette-item[data-node-type='PARALLEL_GATEWAY'] {
+  --palette-accent: #d98c10;
+}
+.palette-item[data-node-type='DYNAMIC_PARALLEL'],
+.palette-item[data-node-type='NOTIFICATION'],
+.palette-item[data-node-type='IOT_COMMAND'] {
+  --palette-accent: #945f00;
 }
 
 /* 0.1.7：开始/结束小圆形图标节点（无卡片盒） */
