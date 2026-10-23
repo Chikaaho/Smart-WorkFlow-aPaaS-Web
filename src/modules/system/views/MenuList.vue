@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from '@/locales'
 import { ApiError } from '@/foundation/request'
+import { hasPerm } from '@/foundation/permission'
 import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { listMenuItems, updateMenuItem, type MenuManageItem } from '@/modules/system/api/menu'
@@ -27,6 +28,10 @@ const editIcon = ref<string | null>(null)
 const editSort = ref<number | null>(null)
 const editHidden = ref(false)
 const saving = ref(false)
+const canManage = hasPerm('system:menu:manage')
+const menuTable = ref<{ toggleRowExpansion: (row: unknown, expanded?: boolean) => void } | null>(
+  null,
+)
 
 async function loadList() {
   loading.value = true
@@ -40,12 +45,14 @@ async function loadList() {
   }
 }
 
-/** 两级树：目录 → 其子项；keyword 过滤标题/路径。 */
+/** 目录 → 后代菜单的扁平展开；命中深层菜单时保留其祖先和必要路径。 */
 const tree = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   const match = (i: MenuManageItem) =>
-    !kw || i.title.toLowerCase().includes(kw) || i.path.toLowerCase().includes(kw)
-  const dirs = items.value.filter((i) => i.menuType === 0 && i.parentId === null)
+    !kw || i.title.toLowerCase().includes(kw) || (i.path ?? '').toLowerCase().includes(kw)
+  const dirs = items.value
+    .filter((i) => i.menuType === 0 && i.parentId === null)
+    .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
   const byParent = new Map<string, MenuManageItem[]>()
   for (const item of items.value) {
     if (item.parentId == null) continue
@@ -53,25 +60,30 @@ const tree = computed(() => {
     list.push(item)
     byParent.set(item.parentId, list)
   }
+  for (const children of byParent.values()) {
+    children.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+  }
+
+  const descendants = (parentId: string, ancestorMatched: boolean): MenuManageItem[] => {
+    const result: MenuManageItem[] = []
+    for (const child of byParent.get(parentId) ?? []) {
+      const childMatched = ancestorMatched || match(child)
+      const nested = descendants(child.id, childMatched)
+      if (childMatched || nested.length > 0) result.push(child, ...nested)
+    }
+    return result
+  }
+
   return dirs
     .map((dir) => {
-      // 子项按 sort 排列；子目录（如 字典管理）其后内联展示二级子项
-      const subItems: MenuManageItem[] = []
-      for (const child of byParent.get(dir.id) ?? []) {
-        if (!match(child)) continue
-        subItems.push(child)
-        if (child.menuType === 0) {
-          for (const grand of byParent.get(child.id) ?? []) {
-            if (match(grand)) subItems.push(grand)
-          }
-        }
-      }
+      const subItems = descendants(dir.id, match(dir))
       return { dir, subItems }
     })
     .filter((g) => match(g.dir) || g.subItems.length > 0)
 })
 
 function openEdit(row: MenuManageItem) {
+  if (!canManage) return
   editing.value = row
   editTitle.value = row.title
   editIcon.value = row.icon
@@ -82,7 +94,20 @@ function openEdit(row: MenuManageItem) {
 
 function rowActions(r: unknown): ListAction[] {
   const row = r as MenuManageItem
-  return [{ key: 'edit', label: t('common.edit'), onClick: () => openEdit(row) }]
+  return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      visible: canManage,
+      onClick: () => openEdit(row),
+    },
+  ]
+}
+
+function setAllExpanded(expanded: boolean) {
+  for (const group of tree.value) {
+    menuTable.value?.toggleRowExpansion(group, expanded)
+  }
 }
 
 async function save() {
@@ -110,12 +135,20 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
+    appearance="design"
     :total="tree.length"
     :page-num="1"
     :page-size="10"
     :empty="tree.length === 0 && !loading"
     hide-pagination
   >
+    <template #table-title>
+      <strong>{{ t('system.menuManagement') }}</strong>
+      <div class="table-tree-actions">
+        <el-button @click="setAllExpanded(true)">{{ t('common.expand') }}</el-button>
+        <el-button @click="setAllExpanded(false)">{{ t('common.collapse') }}</el-button>
+      </div>
+    </template>
     <template #filter>
       <ListFilterItem :label="t('system.menuTitle')">
         <el-input
@@ -135,7 +168,7 @@ onMounted(loadList)
       show-icon
       style="margin-bottom: 12px"
     />
-    <el-table v-loading="loading" :data="tree" stripe>
+    <el-table ref="menuTable" v-loading="loading" :data="tree" row-key="id">
       <el-table-column type="expand">
         <template #default="{ row }">
           <el-table
@@ -248,6 +281,11 @@ onMounted(loadList)
 </template>
 
 <style scoped>
+.table-tree-actions {
+  display: flex;
+  gap: var(--sw-space-8);
+}
+
 .icon-picker {
   display: grid;
   grid-template-columns: repeat(8, 34px);
@@ -264,9 +302,9 @@ onMounted(loadList)
   cursor: pointer;
 }
 .icon-picker__cell--active {
-  border-color: var(--sw-primary, #7e306b);
-  color: var(--sw-primary, #7e306b);
-  background: var(--sw-primary-5, #f2eaf0);
+  border-color: var(--sw-color-primary);
+  color: var(--sw-color-primary);
+  background: var(--sw-color-primary-soft);
 }
 .icon-picker__current {
   margin-top: 6px;

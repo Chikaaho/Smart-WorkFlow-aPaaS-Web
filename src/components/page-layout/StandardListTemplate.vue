@@ -23,12 +23,21 @@ const props = withDefaults(
     filterLayout?: 'grid' | 'inline'
     /** 新稿列表：筛选、标题、按内容收高的表格与卡片内分页。 */
     appearance?: 'default' | 'design'
+    /** 树形或一次加载完成的列表可隐藏分页控件。 */
+    hidePagination?: boolean
     total: number
     pageNum: number
     pageSize: number
     empty?: boolean
   }>(),
-  { showToolbarTotal: false, filterLayout: 'grid', appearance: 'default' },
+  {
+    title: '',
+    description: '',
+    showToolbarTotal: false,
+    filterLayout: 'grid',
+    appearance: 'default',
+    hidePagination: false,
+  },
 )
 
 const emit = defineEmits<{
@@ -57,8 +66,14 @@ const emit = defineEmits<{
     >
       <slot name="filter" />
       <template v-if="$slots['filter-actions'] || $slots['toolbar-actions']" #actions>
-        <slot name="toolbar-actions" />
-        <slot name="filter-actions" />
+        <template v-if="appearance === 'design'">
+          <slot name="filter-actions" />
+          <slot name="toolbar-actions" />
+        </template>
+        <template v-else>
+          <slot name="toolbar-actions" />
+          <slot name="filter-actions" />
+        </template>
       </template>
     </ListFilterBar>
 
@@ -74,7 +89,7 @@ const emit = defineEmits<{
         <slot name="empty-action" />
       </div>
       <ListPagination
-        v-if="appearance === 'design'"
+        v-if="appearance === 'design' && !props.hidePagination"
         :total="props.total"
         :page-num="props.pageNum"
         :page-size="props.pageSize"
@@ -89,7 +104,7 @@ const emit = defineEmits<{
 
     <!-- 分页 -->
     <ListPagination
-      v-if="appearance !== 'design'"
+      v-if="appearance !== 'design' && !props.hidePagination"
       :total="props.total"
       :page-num="props.pageNum"
       :page-size="props.pageSize"

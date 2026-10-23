@@ -245,6 +245,8 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
+    appearance="design"
+    :title="t('system.postManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

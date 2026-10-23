@@ -71,6 +71,9 @@ const treeData = ref<SysDept[]>([])
 const flatData = ref<SysDept[]>([])
 const loading = ref(false)
 const errorMsg = ref('')
+const deptTable = ref<{ toggleRowExpansion: (row: unknown, expanded?: boolean) => void } | null>(
+  null,
+)
 
 // ─── 筛选状态 ───
 
@@ -412,6 +415,12 @@ function editRow(r: unknown) {
 function deleteRow(r: unknown) {
   handleDelete(r as SysDept)
 }
+
+function setAllExpanded(expanded: boolean) {
+  for (const row of treeData.value) {
+    deptTable.value?.toggleRowExpansion(row, expanded)
+  }
+}
 function addChildRow(r: unknown) {
   openCreate((r as SysDept).id)
 }
@@ -451,15 +460,6 @@ onMounted(() => {
 
 <template>
   <div class="dept-list">
-    <!-- 工具栏（复用 ListToolbar） -->
-    <ListToolbar :title="t('system.deptManagement')" :total="flatData.length">
-      <template #actions>
-        <el-button v-perm="'system:dept:create'" type="primary" @click="openCreate()">{{
-          t('system.newDept')
-        }}</el-button>
-      </template>
-    </ListToolbar>
-
     <!-- 筛选区：名称（Enter 触发查询）+ 状态（全部/正常/停用）+ 查询/重置 -->
     <div class="dept-list__filter">
       <TenantSelect
@@ -484,7 +484,17 @@ onMounted(() => {
       </el-select>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
       <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+      <el-button v-perm="'system:dept:create'" type="primary" @click="openCreate()">{{
+        t('system.newDept')
+      }}</el-button>
     </div>
+
+    <ListToolbar :title="t('system.deptManagement')">
+      <template #actions>
+        <el-button @click="setAllExpanded(true)">{{ t('common.expand') }}</el-button>
+        <el-button @click="setAllExpanded(false)">{{ t('common.collapse') }}</el-button>
+      </template>
+    </ListToolbar>
 
     <!-- 错误提示 -->
     <el-alert
@@ -499,11 +509,10 @@ onMounted(() => {
     <!-- 表格区 -->
     <div class="dept-list__table-card">
       <el-table
+        ref="deptTable"
         v-loading="loading"
         :data="treeData"
         row-key="id"
-        stripe
-        default-expand-all
         :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
       >
         <el-table-column prop="name" :label="t('system.deptName')" min-width="200" />
@@ -657,15 +666,19 @@ onMounted(() => {
 
 <style scoped>
 .dept-list {
-  padding: var(--sw-space-24);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sw-space-16);
+  padding: var(--sw-space-20);
 }
 
 /* BF20261013-038 全局巡检：卡片不再包住表格留 16px 内距（表头灰底与行分隔线随卡片圆角铺满，
    左右不留白）；空态自带内距，不贴卡片边缘。 */
 .dept-list__table-card {
-  background: var(--sw-bg-white, #fff);
+  background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
-  box-shadow: var(--sw-shadow-card);
+  box-shadow: none;
   overflow: hidden;
   padding: 0;
 }
@@ -674,13 +687,17 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--sw-space-12);
-  margin-bottom: var(--sw-space-16);
+  margin: 0;
+  padding: calc(var(--sw-space-16) - 1px) var(--sw-space-16);
+  background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
 }
 
 .dept-list__empty {
   text-align: center;
-  padding: var(--sw-space-40) var(--sw-space-16);
-  color: var(--sw-text-tertiary);
+  padding: var(--sw-space-32) var(--sw-space-16);
+  color: var(--sw-text-secondary);
 }
 
 .dept-list__empty-text {

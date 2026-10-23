@@ -256,7 +256,14 @@ async function loadMembers() {
 
 async function loadCandidates(keyword = '') {
   try {
-    const result = await pageUsers({ pageNum: 1, pageSize: 50 }, { username: keyword, status: 0 })
+    const result = await pageUsers(
+      { pageNum: 1, pageSize: 50 },
+      {
+        username: keyword,
+        status: 0,
+        ...(membersRole.value?.tenantId ? { tenantId: membersRole.value.tenantId } : {}),
+      },
+    )
     candidateOptions.value = result.list
   } catch {
     ElMessage.error(t('common.loadFailed'))
@@ -515,12 +522,14 @@ function rowActions(r: unknown): ListAction[] {
     {
       key: 'edit',
       label: t('common.edit'),
+      visible: hasPerm('system:role:update'),
       disabled: !canEditRole(row),
       onClick: () => openEdit(row),
     },
     {
       key: 'delete',
       label: t('common.delete'),
+      visible: hasPerm('system:role:delete'),
       type: 'danger',
       disabled: !canEditRole(row),
       onClick: () => handleDelete(row),
@@ -533,6 +542,8 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
+    appearance="design"
+    :title="t('system.roleManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -829,6 +840,6 @@ onMounted(loadList)
 
 .dept-tree-box--tip {
   font-size: var(--sw-font-body);
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
 }
 </style>

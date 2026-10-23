@@ -388,6 +388,6 @@ describe('DeptList', () => {
     expect(vm.treeData.map((row) => row.name)).toEqual(['租户甲', '租户乙'])
     expect(vm.treeData[0].children?.map((row) => row.id)).toEqual(['1'])
     expect(vm.rowActions(vm.treeData[0])).toEqual([])
-    expect(wrapper.findComponent({ name: 'ListToolbar' }).props('total')).toBe(3)
+    expect(wrapper.findComponent({ name: 'ListToolbar' }).props('title')).toBe('部门管理')
   })
 })

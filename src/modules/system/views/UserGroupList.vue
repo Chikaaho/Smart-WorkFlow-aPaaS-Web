@@ -176,6 +176,7 @@ function openCreate() {
 }
 
 async function openEdit(row: SysUserGroup) {
+  if (!canManage.value) return
   resetForm()
   editingId.value = row.id ?? null
   try {
@@ -186,10 +187,13 @@ async function openEdit(row: SysUserGroup) {
     form.remark = detail.remark ?? ''
     const members = await getUserGroupMembers(row.id!)
     memberIds.value = [...members]
+    await loadCandidates()
     // 失效成员回显：仅当详情成员不在候选（启用可见）中时标记为失效展示
     staleMembers.value = []
     if (members.length > 0) {
-      const visible = new Set(candidateOptions.value.map((u) => u.id))
+      const visible = new Set(
+        candidateOptions.value.filter((user) => user.status === 0).map((user) => user.id),
+      )
       for (const uid of members) {
         if (!visible.has(uid)) {
           const cand = candidateOptions.value.find((u) => u.id === uid)
@@ -209,7 +213,6 @@ async function openEdit(row: SysUserGroup) {
     return
   }
   dialogVisible.value = true
-  await loadCandidates()
 }
 
 function closeDialog() {
@@ -320,6 +323,7 @@ function rowActions(r: unknown): ListAction[] {
     {
       key: 'edit',
       label: t('common.edit'),
+      visible: canManage.value,
       onClick: () => editRow(row),
     },
     {
@@ -344,6 +348,8 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
+    appearance="design"
+    :title="t('system.userGroupManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"

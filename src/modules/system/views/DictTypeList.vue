@@ -264,6 +264,8 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
+    appearance="design"
+    :title="t('system.dictManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -320,7 +322,7 @@ onMounted(loadList)
       <el-table-column prop="code" :label="t('system.dictCode')" min-width="140" />
       <el-table-column prop="status" :label="t('common.status')" width="80">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
+          <el-tag :type="row.status === 0 ? 'success' : 'info'" size="small">
             {{ row.status === 0 ? t('common.statusNormal') : t('common.disable') }}
           </el-tag>
         </template>

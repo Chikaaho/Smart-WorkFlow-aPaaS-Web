@@ -480,6 +480,8 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
+    appearance="design"
+    :title="t('system.userManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -912,7 +914,7 @@ onMounted(loadList)
   justify-content: flex-start;
   gap: 6px;
   border-style: dashed;
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
   font: inherit;
   font-size: var(--sw-font-body);
   cursor: pointer;
@@ -929,7 +931,7 @@ onMounted(loadList)
 
 .role-picker__more {
   font-size: 12px;
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
 }
 
 .role-picker__add {
@@ -983,7 +985,7 @@ onMounted(loadList)
 
 .role-assign__count {
   font-size: 13px;
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
 }
 
 .role-assign__search {
@@ -1089,7 +1091,7 @@ onMounted(loadList)
 }
 
 .role-row__code {
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
   font-size: 12px;
   line-height: 16px;
 }
@@ -1109,7 +1111,7 @@ onMounted(loadList)
 }
 
 .role-assign__selected {
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
   font-size: 13px;
 }
 

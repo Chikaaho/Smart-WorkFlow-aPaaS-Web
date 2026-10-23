@@ -163,6 +163,18 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // 字典类型页与独立菜单均跳转到该上下文页；保持动态菜单可选、深链始终可达。
+        path: 'system/dict-data',
+        name: 'system-dict-data',
+        component: () => import('@/modules/system/views/DictDataList.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('system.dictItemManagement')
+          },
+          authority: ['system:dict:view'],
+        },
+      },
+      {
         path: 'form/form-def-list',
         name: 'form-def-list',
         component: () => import('@/modules/form/views/FormDefList.vue'),

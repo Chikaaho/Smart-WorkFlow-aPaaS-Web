@@ -9,7 +9,7 @@ const { t } = useI18n()
  * 使用 StandardListTemplate 槽位模板，数据外部进。
  * 新建/编辑走 el-dialog 内嵌 StandardFormTemplate + 手写控件（高代码轨）。
  */
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
@@ -41,8 +41,9 @@ const router = useRouter()
 const dictCode = ref(String(route.query.dictCode ?? ''))
 const dictName = ref(String(route.query.dictName ?? ''))
 const typeOptions = ref<{ code: string; name: string }[]>([])
+const typeError = ref('')
 
-void (async () => {
+async function initialize() {
   try {
     const page = await pageDictTypes({ pageNum: 1, pageSize: 200 }, {})
     typeOptions.value = page.list
@@ -53,18 +54,30 @@ void (async () => {
       dictCode.value = typeOptions.value[0]!.code
       dictName.value = typeOptions.value[0]!.name
     }
-    if (dictCode.value) void loadList()
-  } catch {
+  } catch (err) {
+    typeError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
     // 类型列表加载失败不阻塞页面，用户仍可手动刷新
   }
-})
+  if (dictCode.value) await loadList()
+}
 
 function onTypeChange(code: string) {
-  dictCode.value = code
-  dictName.value = typeOptions.value.find((item) => item.code === code)?.name ?? ''
-  pageNum.value = 1
-  void loadList()
+  const name = typeOptions.value.find((item) => item.code === code)?.name ?? ''
+  void router.replace({ query: { ...route.query, dictCode: code, dictName: name } })
 }
+
+watch(
+  () => [route.query.dictCode, route.query.dictName] as const,
+  ([nextCode, nextName]) => {
+    const code = String(nextCode ?? '')
+    const name = String(nextName ?? '')
+    if (code === dictCode.value && name === dictName.value) return
+    dictCode.value = code
+    dictName.value = name
+    pageNum.value = 1
+    void loadList()
+  },
+)
 
 // ─── 列表状态 ───
 
@@ -212,6 +225,7 @@ function resetForm() {
 }
 
 function openCreate() {
+  if (!dictCode.value) return
   resetForm()
   dialogVisible.value = true
 }
@@ -334,9 +348,7 @@ function rowActions(r: unknown): ListAction[] {
   ]
 }
 
-onMounted(() => {
-  if (dictCode.value) void loadList()
-})
+onMounted(() => void initialize())
 </script>
 
 <template>
@@ -352,8 +364,18 @@ onMounted(() => {
       <template v-else>{{ t('system.dictCodeLabel', { dictCode }) }}</template>
     </span>
   </div>
+  <el-alert
+    v-if="typeError"
+    :title="typeError"
+    type="error"
+    :closable="false"
+    show-icon
+    style="margin: 0 20px 12px"
+  />
 
   <StandardListTemplate
+    appearance="design"
+    :title="t('system.dictItemManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -363,7 +385,9 @@ onMounted(() => {
   >
     <!-- 工具栏：新建按钮 -->
     <template #toolbar-actions>
-      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
+      <el-button type="primary" :disabled="!dictCode" @click="openCreate">{{
+        t('common.create')
+      }}</el-button>
     </template>
 
     <!-- 筛选区 -->
@@ -427,7 +451,7 @@ onMounted(() => {
       <el-table-column prop="sort" :label="t('common.sort')" width="80" align="center" />
       <el-table-column prop="status" :label="t('common.status')" width="80">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
+          <el-tag :type="row.status === 0 ? 'success' : 'info'" size="small">
             {{ row.status === 0 ? t('common.statusNormal') : t('common.disable') }}
           </el-tag>
         </template>
@@ -444,7 +468,9 @@ onMounted(() => {
 
     <!-- 空态操作 -->
     <template #empty-action>
-      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
+      <el-button type="primary" :disabled="!dictCode" @click="openCreate">{{
+        t('common.create')
+      }}</el-button>
     </template>
   </StandardListTemplate>
 
