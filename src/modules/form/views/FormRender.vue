@@ -149,6 +149,7 @@ const formEvents = createFormEvents({
   model: formData,
   controls: fieldScripts.overrides,
   writable: () => !isViewMode.value && !submissionFinalized.value,
+  sideEffectsAllowed: () => !isViewMode.value,
   identity: () =>
     userStore?.user
       ? {

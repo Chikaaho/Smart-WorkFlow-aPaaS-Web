@@ -102,4 +102,19 @@ describe('form events', () => {
     expect(result.error).toContain('只读')
     expect(model.count).toBe(0)
   })
+
+  it('allows authorized integration after submit while field writes stay locked', async () => {
+    const integration = vi.fn(() => 'ok')
+    const runtime = createFormEvents({
+      getSchema: () =>
+        schema({ afterSubmitHandler: [action('audit', 0, 'return #调用集成(sync_audit)')] }),
+      model: { count: 1 },
+      writable: () => false,
+      sideEffectsAllowed: () => true,
+      allowedIntegrations: () => ['sync_audit'],
+      callIntegration: integration,
+    })
+    expect(await runtime.runAfterSubmit('record-1')).toMatchObject({ ok: true })
+    expect(integration).toHaveBeenCalledWith('sync_audit', {})
+  })
 })

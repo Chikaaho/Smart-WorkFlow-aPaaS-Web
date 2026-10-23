@@ -52,6 +52,8 @@ export interface FormEventRuntimeOptions {
   controls?: FormEventControlOverrides
   /** 只读详情不开放写字段、控件或集成副作用。 */
   writable?: () => boolean
+  /** 提交后页面会转只读，但已确认提交的受控集成仍可执行；查看态必须返回 false。 */
+  sideEffectsAllowed?: () => boolean
   identity?: () => FormEventIdentity | null
   processContext?: () => Record<string, unknown>
   /** 已由服务端授权、且当前宿主允许的稳定集成标识集合。 */
@@ -86,6 +88,7 @@ export function validateFormEvents(events: FormEvents | undefined): string[] {
 export function createFormEvents(options: FormEventRuntimeOptions) {
   const getModel = () => (typeof options.model === 'function' ? options.model() : options.model)
   const writable = () => options.writable?.() ?? true
+  const sideEffectsAllowed = () => options.sideEffectsAllowed?.() ?? writable()
   const controls: FormEventControlOverrides = options.controls ?? {
     required: {},
     hidden: {},
@@ -215,7 +218,7 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
     提示消息: (value) => options.notify?.('info', String(value ?? '')),
     showMessage: (value) => options.notify?.('info', String(value ?? '')),
     调用集成: (key, input) => {
-      assertWritable()
+      if (!sideEffectsAllowed()) throw new Error('只读查看状态不允许执行表单事件副作用')
       const identity = String(key ?? '')
       if (!allowedIntegrations().has(identity)) throw new Error(`集成能力未授权「${identity}」`)
       const payload =
@@ -225,7 +228,7 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
       return options.callIntegration?.(identity, payload)
     },
     callIntegration: (key, input) => {
-      assertWritable()
+      if (!sideEffectsAllowed()) throw new Error('只读查看状态不允许执行表单事件副作用')
       const identity = String(key ?? '')
       if (!allowedIntegrations().has(identity)) throw new Error(`集成能力未授权「${identity}」`)
       const payload =
