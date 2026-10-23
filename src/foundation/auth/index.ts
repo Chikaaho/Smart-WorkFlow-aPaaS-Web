@@ -66,6 +66,16 @@ export async function logout(): Promise<void> {
   }
 }
 
+export interface ChangePasswordPayload {
+  oldPassword: string
+  newPassword: string
+}
+
+/** 当前登录账号修改密码；成功后服务端会驱逐既有登录态。 */
+export async function changePassword(payload: ChangePasswordPayload): Promise<void> {
+  await request<null>({ method: 'POST', url: '/auth/password', data: payload })
+}
+
 export async function refresh(): Promise<void> {
   // 单飞：如果已有 refresh 在进行中，等它完成
   if (refreshPromise) {
@@ -95,6 +105,7 @@ export function useAuth() {
     fetchChallenge,
     login,
     logout,
+    changePassword,
     refresh,
   }
 }

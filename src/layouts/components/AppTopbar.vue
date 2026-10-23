@@ -12,6 +12,7 @@ import { canEnterAdminArea, firstAdminLeafPath, resolveArea } from '@/foundation
 import { buildMenuTrail } from '../menu-utils'
 import { useLocalizedMenuTree } from '../menu-title'
 import ThemeDialog from './ThemeDialog.vue'
+import ChangePasswordDialog from './ChangePasswordDialog.vue'
 import DetailDialog from '@/components/DetailDialog.vue'
 import operationManual from '../../../docs/user-guide/operation-manual.md?raw'
 import searchIcon from '@/assets/brand/search-020.svg'
@@ -44,6 +45,7 @@ const displayName = computed(() => userStore.user?.displayName || t('auth.notSig
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const themeVisible = ref(false)
 const manualVisible = ref(false)
+const passwordVisible = ref(false)
 const manualLines = operationManual.split('\n')
 
 // 通知铃铛：仅在服务端菜单树含收件箱入口时显示；未读数失败静默为 0（顶栏韧性）。
@@ -148,8 +150,15 @@ async function onLogout(): Promise<void> {
   await router.push('/login')
 }
 
+async function onPasswordChanged(): Promise<void> {
+  passwordVisible.value = false
+  clearDynamicRoutes(router)
+  await router.push('/login')
+}
+
 function onCommand(command: string): void {
   if (command === 'manual') manualVisible.value = true
+  if (command === 'change-password') passwordVisible.value = true
   if (command === 'logout') {
     void onLogout()
   }
@@ -303,6 +312,9 @@ function onCommand(command: string): void {
           <el-dropdown-item command="account-bindings">{{
             t('auth.accountBindings')
           }}</el-dropdown-item>
+          <el-dropdown-item command="change-password">{{
+            t('auth.changePassword')
+          }}</el-dropdown-item>
           <el-dropdown-item v-if="showEnterAdmin" command="enter-admin">
             {{ t('auth.enterBackend') }}
           </el-dropdown-item>
@@ -316,6 +328,7 @@ function onCommand(command: string): void {
       </template>
     </el-dropdown>
     <ThemeDialog v-model="themeVisible" />
+    <ChangePasswordDialog v-model="passwordVisible" @changed="onPasswordChanged" />
     <DetailDialog v-model="manualVisible" :title="t('nav.operationManual')" width="920px">
       <article class="app-topbar__manual">
         <template v-for="(line, index) in manualLines" :key="index">
