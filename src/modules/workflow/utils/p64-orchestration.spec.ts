@@ -113,6 +113,17 @@ describe('p64-orchestration 触发器草稿', () => {
     })
     expect(config.nodeKey).toBeUndefined()
     expect(config.branches[0]?.matchType).toBe('BOOLEAN')
+
+    const startConfig = buildTriggerConfig({
+      ...emptyTriggerDraft(),
+      triggerId: 'trg-start',
+      event: 'PROCESS_START',
+      nodeKey: 'stale-node',
+      enabled: false,
+    })
+    expect(startConfig.nodeKey).toBeUndefined()
+    expect(startConfig.enabled).toBe(false)
+    expect(toTriggerDraft({ ...startConfig, enabled: undefined }).enabled).toBe(true)
   })
 
   it('validateTriggerDraft：重复分支/同类型同值重复/集合动作缺来源/未授权变量拒绝', () => {

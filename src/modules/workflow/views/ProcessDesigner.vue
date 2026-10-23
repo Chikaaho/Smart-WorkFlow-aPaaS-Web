@@ -2428,6 +2428,7 @@ function applySubflow() {
     const draft: TriggerDraft = {
       triggerId,
       name: `子流程发起·${node.label || node.id}`,
+      enabled: true,
       event: 'TASK_SUBMITTED',
       nodeKey: node.id,
       script: form.script.trim() || 'return 1;',
@@ -2647,7 +2648,10 @@ async function load() {
       formDefId: (definition as { formDefId?: string }).formDefId,
       advancedConfig: (definition as { advancedConfig?: GraphAdvancedConfig }).advancedConfig,
       variables: (definition as { variables?: BpmVariableDef[] }).variables ?? [],
-      triggers: (definition as { triggers?: TriggerConfig[] }).triggers ?? [],
+      triggers: ((definition as { triggers?: TriggerConfig[] }).triggers ?? []).map((trigger) => ({
+        ...trigger,
+        enabled: trigger.enabled !== false,
+      })),
       elements: (definition.elements ??
         []) as import('@/contracts/process-graph').ProcessGraphElement[],
       canvas: definition.canvas ?? {},
@@ -4235,19 +4239,24 @@ function nodeLabelLines(label: string) {
     <!-- ═══ P64 阶段Ⅰ：触发规则配置弹窗 ═══ -->
     <el-dialog
       v-model="triggersVisible"
-      title="触发器"
+      title="事件监听"
       width="min(980px, 94vw)"
       class="p64-dialog"
       append-to-body
     >
       <div class="p64-toolbar">
-        <el-button size="small" type="primary" @click="resetTriggerDraft">新增触发器</el-button>
+        <el-button size="small" type="primary" @click="resetTriggerDraft">新增监听</el-button>
         <HintTip
-          content="流程发起和流程结束时自动执行；节点的开始前/结束触发器在节点属性中配置。"
+          content="流程发起在实例建立后执行，流程结束在合法终态提交后执行；节点事件仍在节点属性中配置。监听与旧触发器共用同一版本化定义和发布快照。"
         />
       </div>
       <el-table :data="graph?.triggers ?? []" size="small" class="p64-table">
         <el-table-column prop="name" label="名称" width="150" />
+        <el-table-column label="启用" width="80">
+          <template #default="{ row }">
+            <el-switch v-model="row.enabled" :active-value="true" :inactive-value="false" />
+          </template>
+        </el-table-column>
         <el-table-column label="触发时机" width="190">
           <template #default="{ row }">{{ labelOf(TRIGGER_EVENT_LABELS, row.event) }}</template>
         </el-table-column>
@@ -4289,6 +4298,9 @@ function nodeLabelLines(label: string) {
           </el-form-item>
           <el-form-item label="名称">
             <el-input v-model="triggerDraft.name" />
+          </el-form-item>
+          <el-form-item label="启用">
+            <el-switch v-model="triggerDraft.enabled" />
           </el-form-item>
           <el-form-item label="触发时机">
             <el-select v-model="triggerDraft.event">

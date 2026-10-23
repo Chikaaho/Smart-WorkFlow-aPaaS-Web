@@ -192,6 +192,7 @@ export interface TriggerBranchDraft {
 export interface TriggerDraft {
   triggerId: string
   name: string
+  enabled: boolean
   event: TriggerConfig['event']
   nodeKey: string
   script: string
@@ -237,6 +238,7 @@ export function emptyTriggerDraft(): TriggerDraft {
   return {
     triggerId: '',
     name: '',
+    enabled: true,
     // BF20261013-022⑥：全局触发器默认「流程发起」
     event: 'PROCESS_START',
     nodeKey: '',
@@ -318,8 +320,12 @@ export function buildTriggerConfig(draft: TriggerDraft): TriggerConfig {
   return {
     triggerId: draft.triggerId.trim(),
     name: draft.name.trim() || draft.triggerId.trim(),
+    enabled: draft.enabled,
     event: draft.event,
-    nodeKey: draft.event === 'PROCESS_COMPLETED' ? undefined : draft.nodeKey.trim(),
+    nodeKey:
+      draft.event === 'PROCESS_COMPLETED' || draft.event === 'PROCESS_START'
+        ? undefined
+        : draft.nodeKey.trim(),
     script: draft.script,
     variables: draft.variables,
     branches: draft.branches.map(buildBranch),
@@ -332,6 +338,7 @@ export function toTriggerDraft(config: TriggerConfig): TriggerDraft {
   return {
     triggerId: config.triggerId,
     name: config.name ?? config.triggerId,
+    enabled: config.enabled !== false,
     event: config.event,
     nodeKey: config.nodeKey ?? '',
     script: config.script,
@@ -393,7 +400,7 @@ export function validateTriggerDraft(
   const triggerId = draft.triggerId.trim()
   if (!triggerId) errors.push('规则标识不能为空')
   if (existingTriggerIds.includes(triggerId)) errors.push(`规则标识重复：${triggerId}`)
-  if (draft.event !== 'PROCESS_COMPLETED') {
+  if (draft.event !== 'PROCESS_COMPLETED' && draft.event !== 'PROCESS_START') {
     if (!draft.nodeKey.trim()) errors.push('该触发时机必须选择来源节点')
     else if (!nodeKeys.includes(draft.nodeKey.trim())) errors.push('来源节点不存在')
   }

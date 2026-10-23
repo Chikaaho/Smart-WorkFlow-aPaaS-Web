@@ -106,6 +106,8 @@ export interface TriggerBranch {
 export interface TriggerConfig {
   triggerId: string
   name?: string
+  /** 缺省或 null=启用，兼容旧定义。 */
+  enabled?: boolean
   /** BF20261013-022：新增 节点开始前(NODE_ENTERING) / 流程发起(PROCESS_START)；全局触发器=流程发起/结束，节点触发器=开始前/结束。 */
   event:
     | 'TASK_SUBMITTED'
