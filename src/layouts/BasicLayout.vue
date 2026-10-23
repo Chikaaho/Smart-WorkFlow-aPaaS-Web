@@ -32,6 +32,7 @@ const showAside = computed(
     !route.path.endsWith('/design') &&
     !route.path.startsWith('/form/app-center') &&
     !route.path.startsWith('/form/app-form/') &&
+    !route.path.startsWith('/workflow/catalog') &&
     !/^\/form\/app-manage\/[^/]+/.test(route.path),
 )
 </script>

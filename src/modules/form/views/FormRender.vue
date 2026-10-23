@@ -561,10 +561,10 @@ async function handleSubmit() {
     try {
       const payload = buildUpdatePayload()
       await updateFormData(formKey, recordId, payload)
-      submissionFinalized.value = true
       postSubmitEventError.value = ''
       lastSubmittedId.value = recordId
       const after = await formEvents.runAfterSubmit(recordId)
+      submissionFinalized.value = true
       if (!after.ok) {
         postSubmitEventError.value = after.error ?? '提交后动作失败'
         ElMessage.warning(`已保存，后续处理失败：${postSubmitEventError.value}`)
@@ -611,10 +611,10 @@ async function handleSubmit() {
     }
     const id = await submitForm(formKey, submitData, schema.value?.fields)
 
-    submissionFinalized.value = true
     postSubmitEventError.value = ''
     lastSubmittedId.value = id
     const after = await formEvents.runAfterSubmit(id)
+    submissionFinalized.value = true
     if (!after.ok) {
       postSubmitEventError.value = after.error ?? '提交后动作失败'
       ElMessage.warning(`已提交，后续处理失败：${postSubmitEventError.value}`)

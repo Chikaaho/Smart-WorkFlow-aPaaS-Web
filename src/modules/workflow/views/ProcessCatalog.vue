@@ -267,50 +267,54 @@ onMounted(() => {
           class="catalog-page__alert"
         />
 
-        <!-- 常用流程 Top5（租户内发起总量） -->
-        <section v-if="frequentItems.length" class="catalog-section">
-          <h3 class="catalog-section__title">{{ t('catalog.frequentlyStarted') }}</h3>
-          <div class="catalog-section__chips">
-            <button
-              v-for="(entry, index) in frequentItems"
-              :key="entry.processKey"
-              type="button"
-              class="catalog-mini"
-              @click="openByKey(entry)"
-            >
-              <span class="catalog-mini__rank">{{ index + 1 }}</span>
-              <span class="catalog-mini__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
-                  <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
-                </svg>
-              </span>
-              <span class="catalog-mini__name">{{ entry.name }}</span>
-            </button>
-          </div>
-        </section>
+        <div class="catalog-sections">
+          <!-- 常用流程 Top5（租户内发起总量） -->
+          <section class="catalog-section">
+            <h3 class="catalog-section__title">{{ t('catalog.frequentlyStarted') }}</h3>
+            <div v-if="frequentItems.length" class="catalog-section__chips">
+              <button
+                v-for="(entry, index) in frequentItems"
+                :key="entry.processKey"
+                type="button"
+                class="catalog-mini"
+                @click="openByKey(entry)"
+              >
+                <span class="catalog-mini__rank">{{ index + 1 }}</span>
+                <span class="catalog-mini__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
+                    <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
+                  </svg>
+                </span>
+                <span class="catalog-mini__name">{{ entry.name }}</span>
+              </button>
+            </div>
+            <p v-else class="catalog-section__empty">{{ t('workflow.noCatalogItems') }}</p>
+          </section>
 
-        <!-- 最近使用 Top5（本人最近发起） -->
-        <section v-if="recentItems.length" class="catalog-section">
-          <h3 class="catalog-section__title">{{ t('catalog.recentlyUsed') }}</h3>
-          <div class="catalog-section__chips">
-            <button
-              v-for="entry in recentItems"
-              :key="entry.processKey"
-              type="button"
-              class="catalog-mini"
-              @click="openByKey(entry)"
-            >
-              <span class="catalog-mini__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
-                  <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
-                </svg>
-              </span>
-              <span class="catalog-mini__name">{{ entry.name }}</span>
-            </button>
-          </div>
-        </section>
+          <!-- 最近使用 Top5（本人最近发起） -->
+          <section class="catalog-section">
+            <h3 class="catalog-section__title">{{ t('catalog.recentlyUsed') }}</h3>
+            <div v-if="recentItems.length" class="catalog-section__chips">
+              <button
+                v-for="entry in recentItems"
+                :key="entry.processKey"
+                type="button"
+                class="catalog-mini"
+                @click="openByKey(entry)"
+              >
+                <span class="catalog-mini__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
+                    <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
+                  </svg>
+                </span>
+                <span class="catalog-mini__name">{{ entry.name }}</span>
+              </button>
+            </div>
+            <p v-else class="catalog-section__empty">{{ t('workflow.noCatalogItems') }}</p>
+          </section>
+        </div>
 
         <!-- V012-BUG-009 复开：流程用列表不用卡片——分类分组带 + 多列「图标+名称」条目（参考蓝凌） -->
         <div v-loading="loading" class="catalog-list">
@@ -364,11 +368,11 @@ onMounted(() => {
 /* P53 设计节点21/22-26 基础上 V012-BUG-009 改双栏：左分类树 240 + 右内容。 */
 .catalog-page {
   /* V012-BUG-009 复开：内容铺满内容区，消除宽屏左右大留白 */
-  padding: 28px 32px 32px;
+  padding: 24px;
 }
 .catalog-layout {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 225px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -415,7 +419,7 @@ onMounted(() => {
 }
 .catalog-page__toolbar {
   margin-bottom: 16px;
-  padding: 19px 21px 25px;
+  padding: 20px 21px;
   background: var(--sw-surface-card);
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
@@ -427,8 +431,7 @@ onMounted(() => {
   gap: 12px;
 }
 .catalog-page__search {
-  flex: 0 0 auto;
-  width: 420px;
+  flex: 0 0 420px;
   max-width: 100%;
 }
 .catalog-page__search :deep(.el-input__wrapper) {
@@ -438,6 +441,7 @@ onMounted(() => {
   color: #a1aabe;
 }
 .catalog-page__query {
+  margin-left: 120px;
   width: 96px;
   height: 34px;
 }
@@ -450,6 +454,11 @@ onMounted(() => {
 .catalog-page__alert {
   margin-bottom: 12px;
 }
+.catalog-sections {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 16px;
+}
 .catalog-section {
   margin-bottom: 14px;
   padding: 14px 18px;
@@ -457,6 +466,15 @@ onMounted(() => {
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
   box-shadow: var(--sw-shadow-card);
+}
+.catalog-section__empty {
+  min-height: 120px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sw-text-secondary);
+  font-size: 13px;
 }
 .catalog-section__title {
   margin: 0 0 10px;
@@ -500,7 +518,11 @@ onMounted(() => {
 }
 /* V012-BUG-009 复开：列表化（不用卡片）——分类分组带 + 多列条目，参考蓝凌流程发起 */
 .catalog-list {
-  min-height: 120px;
+  min-height: 260px;
+  padding: 12px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  box-shadow: var(--sw-shadow-card);
   background: #fff;
 }
 .catalog-group {

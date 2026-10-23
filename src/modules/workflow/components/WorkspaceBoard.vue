@@ -495,6 +495,16 @@ const DEFAULT_CARD_HEIGHTS: Record<string, number> = {
   drafts: 220,
   messages: 220,
 }
+/** 默认画布按设计稿分层：待办与动态占主栏，快捷与效能占右栏。 */
+const DEFAULT_CARD_GEOMETRY: Record<string, { x: number; y: number; w: number; h: number }> = {
+  stats: { x: 0, y: 0, w: 1, h: 168 },
+  todo: { x: 0, y: 188, w: 0.66, h: 480 },
+  favorites: { x: 0.68, y: 188, w: 0.32, h: 300 },
+  efficiency: { x: 0.68, y: 508, w: 0.32, h: 340 },
+  activity: { x: 0, y: 688, w: 0.66, h: 320 },
+  drafts: { x: 0, y: 1028, w: 0.48, h: 220 },
+  messages: { x: 0.52, y: 1028, w: 0.48, h: 220 },
+}
 const EDGES = ['n', 's', 'e', 'w'] as const
 const CORNERS = ['ne', 'nw', 'se', 'sw'] as const
 
@@ -541,12 +551,20 @@ function ensureGeometry() {
   let bottom = 0
   for (const component of [...components.value].sort((a, b) => a.order - b.order)) {
     if (!geometryMap.value[component.key]) {
-      geometryMap.value[component.key] = {
-        x: 0,
-        y: bottom,
-        w: Math.max(WORKSPACE_MIN_W, Math.round(width)),
-        h: defaultCardHeight(component.key),
-      }
+      const design = DEFAULT_CARD_GEOMETRY[rendererKeyOf(component.key)]
+      geometryMap.value[component.key] = design
+        ? {
+            x: Math.round(width * design.x),
+            y: design.y,
+            w: Math.max(WORKSPACE_MIN_W, Math.round(width * design.w)),
+            h: design.h,
+          }
+        : {
+            x: 0,
+            y: bottom,
+            w: Math.max(WORKSPACE_MIN_W, Math.round(width)),
+            h: defaultCardHeight(component.key),
+          }
     }
     const rect = geometryMap.value[component.key]
     bottom = Math.max(bottom, rect.y + rect.h + 20)
