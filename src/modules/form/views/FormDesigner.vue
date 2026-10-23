@@ -465,6 +465,12 @@ async function onTabChange(tab: WorkbenchTab) {
   }
 }
 
+function onConfigurationCommand(command: unknown) {
+  if (command === 'permissions' || command === 'events') {
+    void onTabChange(command)
+  }
+}
+
 function handleBeforeUnload(e: { preventDefault: () => void; returnValue: string }) {
   if (isDirty.value) {
     e.preventDefault()
@@ -791,25 +797,36 @@ async function loadBreadcrumbCategory() {
         >
           {{ t('form.tabProcesses') }}
         </button>
-        <button
-          type="button"
-          class="designer__tab"
-          :class="{ 'is-active': activeTab === 'permissions' }"
-          @click="onTabChange('permissions' as WorkbenchTab)"
-        >
-          {{ t('form.tabPermissions') }}
-        </button>
-        <button
-          type="button"
-          class="designer__tab"
-          :class="{ 'is-active': activeTab === 'events' }"
-          @click="onTabChange('events' as WorkbenchTab)"
-        >
-          {{ t('form.tabEvents') }}
-        </button>
       </nav>
 
       <div class="designer__actions">
+        <el-dropdown trigger="click" @command="onConfigurationCommand">
+          <el-button
+            class="designer__settings"
+            :class="{ 'is-active': activeTab === 'permissions' || activeTab === 'events' }"
+            :aria-current="
+              activeTab === 'permissions' || activeTab === 'events' ? 'page' : undefined
+            "
+            :aria-label="t('form.workbenchSettings')"
+            :disabled="loading"
+          >
+            {{
+              activeTab === 'permissions'
+                ? t('form.tabPermissions')
+                : activeTab === 'events'
+                  ? t('form.tabEvents')
+                  : t('form.workbenchSettings')
+            }}
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="permissions">{{
+                t('form.tabPermissions')
+              }}</el-dropdown-item>
+              <el-dropdown-item command="events">{{ t('form.tabEvents') }}</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <!-- 0.1.7 #25 回归：关联流程工作区的「流程编号设置」置于工具条右上角（仅流程设计页签可见） -->
         <el-button
           v-if="activeTab === 'processes'"
@@ -1082,6 +1099,10 @@ async function loadBreadcrumbCategory() {
 }
 .designer__actions :deep(.el-button:not(.el-button--primary)) {
   color: var(--sw-text-regular);
+}
+.designer__actions :deep(.designer__settings.is-active) {
+  color: var(--sw-color-primary);
+  border-color: var(--sw-color-primary);
 }
 
 /* 窄桌面按实际内容分配工具条，关联流程的编号入口也保留操作空间。 */
