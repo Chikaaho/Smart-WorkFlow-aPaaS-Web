@@ -11,6 +11,8 @@
  */
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import HintTip from '@/components/HintTip.vue'
+import { useI18n } from '@/locales'
 import { ApiError } from '@/foundation/request'
 import { hasPerm } from '@/foundation/permission'
 import { StandardFormTemplate } from '@/components/page-layout'
@@ -20,6 +22,8 @@ import {
   type TxnBatchView,
   type TxnBatchItemReq,
 } from '@/modules/workflow/api/txn-batch'
+
+const { t } = useI18n()
 
 const INVOKE_PERM = 'form:action:invoke'
 const canSubmit = computed(() => hasPerm(INVOKE_PERM))
@@ -170,17 +174,9 @@ function statusTagType(
 </script>
 
 <template>
-  <StandardFormTemplate
-    title="后台批量调用"
-    subtitle="受控动作批量调用：受理为异步语义，结果按批次键回查；同批次键重放返回原批次，已成功项不重做"
-  >
+  <StandardFormTemplate title="后台批量调用">
     <template #alert>
-      <el-alert
-        type="info"
-        :closable="false"
-        show-icon
-        title="每批 1—500 项；项键批次内唯一且为稳定键（重试/重放按项键幂等，不产生第二次业务效果）"
-      />
+      <div class="configuration-help"><HintTip :content="t('workflow.txnBatchHelp')" /></div>
     </template>
 
     <!-- 批量受理 -->
@@ -340,6 +336,11 @@ function statusTagType(
 </template>
 
 <style scoped>
+.configuration-help {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .batch-section {
   margin-bottom: 20px;
 }

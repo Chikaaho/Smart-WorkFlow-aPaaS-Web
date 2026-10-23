@@ -358,7 +358,6 @@ watch(
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('overview') }}</h3>
-                <p>{{ t('form.snapshotViewer.overviewHint') }}</p>
               </div>
             </div>
             <dl class="snapshot-meta">
@@ -430,7 +429,6 @@ watch(
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('fields') }}</h3>
-                <p>{{ t('form.snapshotViewer.fieldsHint') }}</p>
               </div>
             </div>
             <p v-if="fields.length === 0" class="snapshot-empty">
@@ -475,7 +473,6 @@ watch(
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('scripts') }}</h3>
-                <p>{{ t('form.snapshotViewer.scriptsHint') }}</p>
               </div>
             </div>
             <p v-if="scripts.length === 0" class="snapshot-empty">
@@ -506,7 +503,6 @@ watch(
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('validation') }}</h3>
-                <p>{{ t('form.snapshotViewer.validationHint') }}</p>
               </div>
             </div>
             <p v-if="constraints.length === 0" class="snapshot-empty">
@@ -540,7 +536,6 @@ watch(
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('visibility') }}</h3>
-                <p>{{ t('form.snapshotViewer.visibilityHint') }}</p>
               </div>
             </div>
             <p v-if="visibility.length === 0" class="snapshot-empty">
@@ -571,7 +566,6 @@ watch(
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('columns') }}</h3>
-                <p>{{ t('form.snapshotViewer.columnsHint') }}</p>
               </div>
             </div>
             <p v-if="!listConfig" class="snapshot-limitation">
@@ -634,7 +628,6 @@ watch(
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('permissions') }}</h3>
-                <p>{{ t('form.snapshotViewer.permissionsHint') }}</p>
               </div>
             </div>
             <p v-if="permissions.length === 0" class="snapshot-empty">
@@ -676,7 +669,6 @@ watch(
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('nodes') }}</h3>
-                <p>{{ t('form.snapshotViewer.nodesHint') }}</p>
               </div>
             </div>
             <p v-if="nodes.length === 0" class="snapshot-empty">
@@ -720,7 +712,6 @@ watch(
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('variables') }}</h3>
-                <p>{{ t('form.snapshotViewer.variablesHint') }}</p>
               </div>
             </div>
             <p v-if="variables.length === 0" class="snapshot-empty">
@@ -757,7 +748,6 @@ watch(
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('triggers') }}</h3>
-                <p>{{ t('form.snapshotViewer.triggersHint') }}</p>
               </div>
             </div>
             <p v-if="triggers.length === 0" class="snapshot-empty">
@@ -792,7 +782,6 @@ watch(
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('approvalScripts') }}</h3>
-                <p>{{ t('form.snapshotViewer.approvalScriptsHint') }}</p>
               </div>
             </div>
             <p v-if="approvalScripts.length === 0" class="snapshot-empty">
@@ -970,12 +959,6 @@ watch(
   margin: 0;
   color: var(--sw-text-primary);
   font-size: 16px;
-}
-
-.snapshot-section__head p {
-  margin: 4px 0 0;
-  color: var(--sw-text-secondary);
-  font-size: 12px;
 }
 
 .snapshot-meta {

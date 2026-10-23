@@ -257,7 +257,7 @@ describe('PublishedSnapshotViewer', () => {
     const wrapper = await mountViewer()
     await openSection(wrapper, '列表列配置')
 
-    expect(wrapper.text()).toContain('不会用当前正在使用的列配置替代冻结值')
+    expect(wrapper.text()).toContain('该历史版本未保存列表配置，无法展示。')
   })
 
   it('脚本区展示字段脚本、表单事件、监听脚本和审批人表达式', async () => {

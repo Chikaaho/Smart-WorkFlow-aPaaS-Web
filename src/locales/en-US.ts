@@ -1200,7 +1200,6 @@ export default {
       note: 'Change note',
       schemaVersion: 'Definition version',
       overview: 'Overview',
-      overviewHint: 'Check snapshot identity, publication metadata and matching workflow versions.',
       processSnapshots: 'Linked workflow snapshots',
       noMatchingProcess: 'No frozen workflow version matched this form version.',
       processReadFailed: 'Could not read the frozen graph for {name}: {message}',
@@ -1208,8 +1207,6 @@ export default {
       rawProcessGraph: 'Raw frozen workflow graph',
       rawDefinition: 'Raw frozen definition',
       fields: 'Frozen fields',
-      fieldsHint:
-        'Main-form and subtable fields come from the selected published version. Expand a row to inspect its raw field configuration.',
       fieldPath: 'Field path',
       label: 'Name',
       type: 'Type',
@@ -1218,44 +1215,30 @@ export default {
       description: 'Description',
       rawConfig: 'Raw configuration',
       scripts: 'Scripts',
-      scriptsHint:
-        'Field scripts, form events, node scripts and inline node expressions in one place.',
       validation: 'Validation',
-      validationHint: 'Frozen required, length, pattern and message constraints.',
       rule: 'Rule',
       value: 'Value',
       visibility: 'Visibility',
-      visibilityHint: 'Field visibility rules and their frozen conditions.',
       columns: 'List columns',
-      columnsHint: 'Only list columns, filters, sorting and actions frozen with this definition.',
-      listConfigMissing:
-        'This backend snapshot does not include versioned list configuration. The viewer does not substitute the current live columns for frozen values.',
+      listConfigMissing: 'This historical version has no saved list configuration to display.',
       filters: 'Filters',
       defaultSort: 'Default sort',
       actions: 'Actions',
       permissions: 'Field permissions',
-      permissionsHint: 'Field view/edit principals and form action permissions.',
       noFieldPermissions: 'No field permissions were configured in this version.',
       viewPrincipals: 'View principals',
       editPrincipals: 'Edit principals',
       actionPermissions: 'Action permissions',
       unrestricted: 'Unrestricted',
       nodes: 'Node configuration',
-      nodesHint:
-        'Node settings and process-level advanced configuration from the frozen workflow graph.',
       advancedConfig: 'Advanced workflow configuration',
       variables: 'Variables',
-      variablesHint: 'Workflow variable definitions frozen at publication time.',
       variableId: 'Variable ID',
       source: 'Source',
       triggers: 'Triggers',
-      triggersHint:
-        'Listener timing, scripts, authorized variables, result branches and raw frozen configuration.',
       enabled: 'Enabled',
       disabled: 'Disabled',
       approvalScripts: 'Approver scripts',
-      approvalScriptsHint:
-        'Node approver expressions and scripts frozen for node entry and node completion.',
       noData: 'No configuration of this type was frozen in this version.',
       constraintRequired: 'Required',
       constraintMinLength: 'Minimum length',
@@ -1371,8 +1354,7 @@ export default {
     confirmSelection: 'Confirm selection',
     clearSelection: 'Clear selection',
     editSubTable: 'Edit sub-table',
-    historyPreviewNote:
-      'Published versions only (read-only). Previewing history never changes the current draft; rollback is out of scope for this release.',
+    historyPreviewNote: 'Published versions only. Contents are read-only.',
     noHistoryVersions: 'This form has never been published, so there is no version history.',
     noFormKeyHint:
       'The form is not saved yet, so there is no stable form key. Save a draft in the design area before managing related processes.',
@@ -2429,6 +2411,11 @@ export default {
     confirmBind: 'Confirm binding',
   },
   workflow: {
+    resourcePolicyHelp:
+      'New policies start disabled and apply only to new requests when enabled. Production, OA and shared capacity must total the global limit. Activation checks capacity, workers and processing budgets.',
+    txnBatchHelp:
+      'Each batch accepts 1–500 items with unique item keys. Look up results by batch key. Reuse the original batch and item keys when retrying; successful items are not repeated.',
+
     childBatchWriteback: 'Child workflow batches and writeback',
     triggerMatched: 'Matched',
     triggerUnmatched: 'Not matched',

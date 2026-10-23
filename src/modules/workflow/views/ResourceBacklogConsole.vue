@@ -149,10 +149,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <StandardFormTemplate
-    title="资源积压与配额"
-    subtitle="命令积压与引擎目标积压分层展示；占用计数与持久事实勾稽；拒绝审计独立可查"
-  >
+  <StandardFormTemplate title="资源积压与配额">
     <!-- 汇总 -->
     <section class="res-section">
       <h2 class="res-section__title">
