@@ -863,6 +863,16 @@ function removeTrigger(index: number) {
   onModelChanged()
 }
 
+function moveTrigger(index: number, offset: number) {
+  const list = [...(graph.value?.triggers ?? [])]
+  const target = index + offset
+  if (target < 0 || target >= list.length) return
+  const [item] = list.splice(index, 1)
+  list.splice(target, 0, item)
+  graph.value = { ...(graph.value ?? {}), triggers: list } as DesignerGraph
+  onModelChanged()
+}
+
 /** JSON 批量导入（模板/批量配置场景）：解析后整体替换，发布校验仍为权威。 */
 
 function addTriggerBranch() {
@@ -4251,6 +4261,9 @@ function nodeLabelLines(label: string) {
         />
       </div>
       <el-table :data="graph?.triggers ?? []" size="small" class="p64-table">
+        <el-table-column label="顺序" width="60">
+          <template #default="{ $index }">{{ $index + 1 }}</template>
+        </el-table-column>
         <el-table-column prop="name" label="名称" width="150" />
         <el-table-column label="启用" width="80">
           <template #default="{ row }">
@@ -4275,8 +4288,18 @@ function nodeLabelLines(label: string) {
             }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140">
+        <el-table-column label="操作" width="220">
           <template #default="{ $index }">
+            <el-button size="small" link :disabled="$index === 0" @click="moveTrigger($index, -1)"
+              >上移</el-button
+            >
+            <el-button
+              size="small"
+              link
+              :disabled="$index === (graph?.triggers?.length ?? 0) - 1"
+              @click="moveTrigger($index, 1)"
+              >下移</el-button
+            >
             <el-button size="small" link type="primary" @click="editTrigger($index)"
               >编辑</el-button
             >
