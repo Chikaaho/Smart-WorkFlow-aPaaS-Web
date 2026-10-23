@@ -12,6 +12,13 @@ const css: string = readFileSync(resolve(process.cwd(), 'src/styles/tokens.css')
 
 // 移除注释，避免注释中的 token 名造成误匹配
 const rootBlock = css.replace(/\/\*[\s\S]*?\*\//g, '')
+const workflowDesigner = readFileSync(
+  resolve(process.cwd(), 'src/modules/workflow/views/ProcessDesigner.vue'),
+  'utf-8',
+)
+const workflowDesignerCss = workflowDesigner
+  .slice(workflowDesigner.indexOf('<style scoped>'))
+  .replace(/\/\*[\s\S]*?\*\//g, '')
 
 // 13 类 token 各抽查代表性变量（P53：新增品牌阶/深色导航/表面/字体族基线）
 const CATEGORIES: Record<string, string[]> = {
@@ -58,4 +65,11 @@ describe('styles/tokens.css', () => {
       }
     })
   }
+
+  it('流程设计器品牌态引用全局 token，随紫/蓝/青/自定义主题切换', () => {
+    expect(workflowDesignerCss).not.toMatch(
+      /#(?:6f2dff|5f24e0|f0eaff|f4efff|f7f2ff|f7f4ff|b9a4ff)\b/i,
+    )
+    expect(workflowDesignerCss).toContain('var(--sw-color-primary)')
+  })
 })

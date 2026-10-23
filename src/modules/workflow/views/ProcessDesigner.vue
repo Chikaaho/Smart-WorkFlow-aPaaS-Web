@@ -4724,7 +4724,7 @@ function nodeLabelLines(label: string) {
   color: #7e89a1;
 }
 .designer-saved--readonly {
-  color: #6f2dff;
+  color: var(--sw-color-primary);
 }
 /* R5/G6b：窄视口面包屑单行省略，不逐字竖排挤压工具栏；为居中页签预留中部空间 */
 .designer-crumb {
@@ -4788,8 +4788,8 @@ function nodeLabelLines(label: string) {
   padding: 8px 12px;
 }
 :global(.version-history-popper .el-dropdown-menu__item.is-current) {
-  color: #6f2dff;
-  background: #f4efff;
+  color: var(--sw-color-primary);
+  background: var(--sw-color-primary-soft);
 }
 :global(.version-history-popper .version-entry) {
   display: grid;
@@ -4826,8 +4826,8 @@ function nodeLabelLines(label: string) {
   font-size: 12px;
 }
 .designer-version.el-tag {
-  background: #f0eaff;
-  color: #6f2dff;
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
   border-color: transparent;
   border-radius: 6px;
   font-size: 11px;
@@ -4854,14 +4854,14 @@ function nodeLabelLines(label: string) {
   padding: 0 16px;
 }
 .designer-toolbar :deep(.el-button--primary) {
-  background: #6f2dff;
-  border-color: #6f2dff;
+  background: var(--sw-color-primary);
+  border-color: var(--sw-color-primary);
   color: #fff;
 }
 .designer-toolbar :deep(.el-button--primary:hover),
 .designer-toolbar :deep(.el-button--primary:focus) {
-  background: #5f24e0;
-  border-color: #5f24e0;
+  background: var(--sw-color-primary-dark);
+  border-color: var(--sw-color-primary-dark);
   color: #fff;
 }
 .spacer {
@@ -4950,8 +4950,8 @@ function nodeLabelLines(label: string) {
   cursor: grab;
 }
 .palette-item:hover {
-  border-color: #b9a4ff;
-  background: #f7f4ff;
+  border-color: var(--sw-color-primary-light);
+  background: var(--sw-color-primary-soft);
 }
 .palette-item:active {
   cursor: grabbing;
@@ -4970,7 +4970,7 @@ function nodeLabelLines(label: string) {
 }
 .palette-item .workbar-icon path {
   fill: none;
-  stroke: #6f2dff;
+  stroke: var(--sw-color-primary);
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -5035,7 +5035,7 @@ function nodeLabelLines(label: string) {
 }
 .zoom-btn:hover,
 .zoom-fit:hover {
-  color: #6f2dff;
+  color: var(--sw-color-primary);
 }
 .canvas-hint {
   position: absolute;
@@ -5086,8 +5086,8 @@ function nodeLabelLines(label: string) {
   stroke: #7e8799;
 }
 .designer-node-selected .designer-node-rect {
-  fill: #f7f2ff;
-  stroke: #6f2dff;
+  fill: var(--sw-color-primary-softer);
+  stroke: var(--sw-color-primary);
   stroke-width: 2;
 }
 .designer-node-error .designer-node-rect {
@@ -5136,24 +5136,24 @@ function nodeLabelLines(label: string) {
   pointer-events: none;
 }
 .designer-node-selected .designer-node-label {
-  fill: #6f2dff;
+  fill: var(--sw-color-primary);
 }
 .designer-node-port {
   fill: #a4adbe;
-  stroke: #6f2dff;
+  stroke: var(--sw-color-primary);
   stroke-width: 1.5;
   cursor: crosshair;
 }
 /* BF20261013-030：内段中点手柄——实心方块（方向光标由拖动轴内联给出） */
 .designer-edge-segment-handle {
-  fill: #6f2dff;
+  fill: var(--sw-color-primary);
   stroke: #fff;
   stroke-width: 1.5;
   pointer-events: all;
 }
 .designer-edge-endpoint {
-  fill: #f7f2ff;
-  stroke: #6f2dff;
+  fill: var(--sw-color-primary-softer);
+  stroke: var(--sw-color-primary);
   stroke-width: 2;
   pointer-events: all;
   cursor: grab;
@@ -5184,7 +5184,7 @@ function nodeLabelLines(label: string) {
   pointer-events: none;
 }
 .designer-edge-visual.designer-edge-selected {
-  stroke: #6f2dff;
+  stroke: var(--sw-color-primary);
   stroke-width: 2;
   marker-end: url(#designer-edge-arrow-selected);
 }
@@ -5193,7 +5193,7 @@ function nodeLabelLines(label: string) {
   stroke: none;
 }
 .designer-edge-arrow-selected {
-  fill: #6f2dff;
+  fill: var(--sw-color-primary);
   stroke: none;
 }
 .designer-edge-pending {
@@ -5244,7 +5244,7 @@ function nodeLabelLines(label: string) {
 
 .listener-row__phase--before {
   color: var(--sw-color-primary);
-  background: #f0eaff;
+  background: var(--sw-color-primary-soft);
 }
 
 .listener-row__phase--after {
@@ -5389,7 +5389,7 @@ function nodeLabelLines(label: string) {
 }
 .participant-picker-row :deep(.el-button) {
   border-color: #cbd6e8;
-  color: #6f2dff;
+  color: var(--sw-color-primary);
   background: #fff;
 }
 .participant-hint {
@@ -5534,7 +5534,7 @@ function nodeLabelLines(label: string) {
   padding: 2px 9px;
   font-size: 12px;
   color: var(--sw-color-primary);
-  background: #f0eaff;
+  background: var(--sw-color-primary-soft);
   border-radius: 6px;
   position: relative;
   left: 3px;
@@ -5604,7 +5604,7 @@ function nodeLabelLines(label: string) {
   text-align: left;
   font-size: 12px;
   color: var(--sw-color-primary);
-  background: #f0eaff;
+  background: var(--sw-color-primary-soft);
   border-radius: 5px;
 }
 
@@ -5797,14 +5797,14 @@ function nodeLabelLines(label: string) {
   color: #344164;
 }
 .approver-dialog-host :deep(.el-table .el-button.is-link) {
-  color: #6f2dff;
+  color: var(--sw-color-primary);
 }
 .approver-dialog-host :deep(.approver-picker__empty),
 .approver-dialog-host :deep(.approver-picker__note) {
   color: #8393b5;
 }
 .approver-dialog-host :deep(.approver-picker__picked) {
-  color: #6f2dff;
+  color: var(--sw-color-primary);
 }
 
 /*
