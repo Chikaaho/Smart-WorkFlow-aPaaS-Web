@@ -3,9 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from '@/locales'
 
 // 左上角品牌 logo：资源与文案只在本组件维护，不写死进其它位置。
-// mark/wordmark 资产为 P53 锁定设计包原生裁切（docs/ui/png 24,12 40×42 / 77,20 90×26），与设计逐像素同源。
-import logoUrl from '@/assets/brand/logo-block.png'
-import wordmarkUrl from '@/assets/brand/wordmark.png'
+// 图形复用原生品牌资产，文字使用当前设计字体。
 import adminLogoUrl from '@/assets/brand/logo-020.png'
 
 const props = defineProps<{ collapse: boolean; area: 'portal' | 'admin' }>()
@@ -27,8 +25,10 @@ const brandLabel = computed(() => t(props.area === 'admin' ? 'nav.brandAdmin' : 
       <span class="app-logo__text">{{ brandLabel }}</span>
     </template>
     <template v-else>
-      <img class="app-logo__mark-frame" :src="logoUrl" alt="" />
-      <img class="app-logo__wordmark" :src="wordmarkUrl" alt="" />
+      <span class="app-logo__portal-mark"
+        ><img :src="adminLogoUrl" alt="" width="30" height="32"
+      /></span>
+      <span class="app-logo__text app-logo__portal-text">{{ brandLabel }}</span>
     </template>
   </div>
 </template>
@@ -53,21 +53,22 @@ const brandLabel = computed(() => t(props.area === 'admin' ? 'nav.brandAdmin' : 
   justify-content: center;
   padding: 0;
 }
-.app-logo__mark-frame {
-  box-sizing: border-box;
-  background-color: #ffffff;
-  display: inline-flex;
-  flex: 0 0 40px;
-  width: 40px;
-  height: 42px;
-  margin-top: 2px;
-  border-radius: 8px;
+.app-logo__portal-mark {
+  display: flex;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  background: var(--sw-surface-card);
+  border-radius: var(--sw-radius-base);
 }
-.app-logo__wordmark {
-  flex: 0 0 auto;
-  width: 90px;
-  height: 26px;
-  margin-top: 2px;
+.app-logo--portal {
+  gap: 10px;
+}
+.app-logo--portal .app-logo__portal-text {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
 }
 .app-logo__text {
   font-size: 14px;
@@ -82,10 +83,6 @@ const brandLabel = computed(() => t(props.area === 'admin' ? 'nav.brandAdmin' : 
   gap: 10px;
   height: 40px;
   padding: 0;
-}
-.app-logo--admin .app-logo__wordmark {
-  width: 70px;
-  height: 20px;
 }
 .app-logo--admin .app-logo__text {
   font-size: var(--sw-font-h2);

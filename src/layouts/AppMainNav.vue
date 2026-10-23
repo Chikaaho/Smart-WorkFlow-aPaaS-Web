@@ -155,7 +155,7 @@ const items = computed<MainNavItem[]>(() => {
         key: 'workspace',
         label: t('common.workspace'),
         to: '/workspace',
-        active: route.path === '/workspace',
+        active: route.path === '/workspace' || route.path.startsWith('/workspace/'),
       },
     ]
     const before = result.length
@@ -228,7 +228,10 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
 </script>
 
 <template>
-  <div class="app-main-nav-shell" :class="[`app-main-nav-shell--${area}`]">
+  <div
+    class="app-main-nav-shell"
+    :class="[`app-main-nav-shell--${area}`, { 'has-sidebar-toggle': showSidebarToggle }]"
+  >
     <button
       v-if="showSidebarToggle"
       type="button"
@@ -359,5 +362,30 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
   height: 2px;
   transform: translateX(-50%);
   background: var(--sw-nav-topbar-active-indicator);
+}
+</style>
+
+<style scoped>
+.app-main-nav-shell--portal .app-main-nav__sidebar-toggle {
+  flex-basis: 36px;
+  width: 36px;
+}
+.app-main-nav-shell--portal:not(.has-sidebar-toggle) {
+  box-sizing: border-box;
+  padding-left: 44px;
+}
+.app-main-nav--portal {
+  align-items: center;
+  gap: var(--sw-space-8);
+}
+.app-main-nav--portal .app-main-nav__item {
+  box-sizing: border-box;
+  flex-basis: 124px;
+  height: 40px;
+  border-radius: var(--sw-radius-base);
+  font-weight: var(--sw-font-weight-emphasis);
+}
+.app-main-nav--portal .app-main-nav__item.is-active::after {
+  display: none;
 }
 </style>

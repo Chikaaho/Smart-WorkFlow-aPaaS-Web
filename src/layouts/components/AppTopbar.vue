@@ -299,7 +299,7 @@ function onCommand(command: string): void {
     </el-popover>
 
     <el-dropdown trigger="click" @command="onCommand">
-      <span class="app-topbar__user">
+      <span class="app-topbar__user" :aria-label="displayName">
         <span class="app-topbar__avatar" aria-hidden="true">{{ avatarText }}</span>
         <span class="app-topbar__user-name">{{ displayName }}</span>
         <img v-if="currentArea === 'admin'" :src="arrowIcon" alt="" width="12" height="12" />
@@ -661,5 +661,33 @@ function onCommand(command: string): void {
   .app-topbar__user {
     gap: 0;
   }
+}
+</style>
+
+<style scoped>
+.app-topbar--portal {
+  gap: var(--sw-space-8);
+}
+.app-topbar--portal .app-topbar__avatar {
+  flex: 0 0 32px;
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
+  font-weight: var(--sw-font-weight-emphasis);
+  transform: none;
+}
+.app-topbar--portal .app-topbar__user {
+  min-width: 0;
+  gap: var(--sw-space-8);
+}
+.app-topbar--portal .app-topbar__user-name {
+  min-width: 0;
+  font-weight: var(--sw-font-weight-body);
+}
+.app-topbar--portal .app-topbar__search,
+.app-topbar--portal .app-topbar__bell {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 </style>

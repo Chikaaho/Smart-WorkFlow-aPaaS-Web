@@ -115,6 +115,14 @@ describe('AppMainNav（用户端主导航）', () => {
     expect(nav[2]!.to).toBe('/form/app-center')
   })
 
+  it('个人办理子页面保持工作台顶栏选中，其他栏目不误选', () => {
+    for (const path of ['/workspace/todo', '/workspace/processed', '/workspace/my-instances']) {
+      const nav = items(mountNav(PORTAL_MENU, path))
+      expect(nav[0]!.active).toBe(true)
+      expect(nav.slice(1).some((item) => item.active)).toBe(false)
+    }
+  })
+
   it('应用中心下钻页面（应用内容 / 表单数据列表）保持选中态', () => {
     expect(items(mountNav(PORTAL_MENU, '/form/app-center'))[3]!.active).toBe(true)
     expect(items(mountNav(PORTAL_MENU, '/form/app-center/app-1'))[3]!.active).toBe(true)

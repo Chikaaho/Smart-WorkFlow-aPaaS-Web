@@ -87,7 +87,7 @@ const showAside = computed(
   /* 设计（节点02）：品牌区自带 24px 左内距，顶栏不再叠加 */
   padding: 0 0 0 0;
   background: var(--sw-nav-topbar-portal-bg);
-  border: 1px solid #352c88;
+  border: none;
 }
 .basic-layout__topbar--admin {
   box-sizing: border-box;
@@ -104,17 +104,18 @@ const showAside = computed(
 }
 .basic-layout__actions {
   box-sizing: border-box;
-  /* V011-BUG-005：个人区加入顶栏语言入口，宽度 336→400，左内距相应收敛 */
-  flex: 0 0 400px;
-  width: 400px;
-  /* 设计（节点02）：搜索锚点原 1225；加语言入口后整体左移保持右缘对齐 */
-  justify-content: flex-start;
-  padding-left: 96px;
+  flex: 0 0 auto;
+  width: auto;
+  max-width: min(400px, 50vw);
+  min-width: 0;
+  justify-content: flex-end;
+  padding: 0 var(--sw-space-24) 0 var(--sw-space-8);
 }
 .basic-layout--admin .basic-layout__actions {
   flex: 0 0 auto;
   width: auto;
-  padding-left: 0;
+  padding: 0;
+  max-width: none;
 }
 .basic-layout__body {
   display: flex;
@@ -196,6 +197,8 @@ const showAside = computed(
     flex: 1 1 auto;
     width: auto;
     min-width: 0;
+    max-width: none;
+    padding-left: 0;
     padding-right: 12px;
   }
 }
