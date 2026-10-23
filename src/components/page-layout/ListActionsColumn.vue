@@ -31,8 +31,10 @@ const props = withDefaults(
     actions: (row: unknown) => ListAction[]
     label?: string
     width?: number | string
+    /** 窄操作列可收拢次要动作，默认仍直显最多三个。 */
+    inlineLimit?: 1 | 2 | 3
   }>(),
-  { width: 140, label: undefined },
+  { width: 140, label: undefined, inlineLimit: 3 },
 )
 
 function visibleActions(row: unknown): ListAction[] {
@@ -40,11 +42,11 @@ function visibleActions(row: unknown): ListAction[] {
 }
 
 function directActions(row: unknown): ListAction[] {
-  return visibleActions(row).slice(0, 3)
+  return visibleActions(row).slice(0, props.inlineLimit)
 }
 
 function restActions(row: unknown): ListAction[] {
-  return visibleActions(row).slice(3)
+  return visibleActions(row).slice(props.inlineLimit)
 }
 
 function onCommand(row: unknown, command: string | number | object) {

@@ -574,6 +574,41 @@ describe('ListActionsColumn', () => {
     expect(wrapper.find('.stub-dropdown').exists()).toBe(false)
   })
 
+  it('窄列保留查看与更多，隐藏动作不进入菜单，菜单仍执行原动作', async () => {
+    const supplement = vi.fn()
+    const wrapper = mount(ListActionsColumn, {
+      props: {
+        inlineLimit: 1,
+        actions: () => [
+          { key: 'view', label: '查看', onClick: vi.fn() },
+          { key: 'hidden', label: '无权动作', visible: false, onClick: vi.fn() },
+          { key: 'supplement', label: '补签', onClick: supplement },
+        ],
+      },
+      global: {
+        stubs: {
+          'el-table-column': { template: '<div><slot name="default" :row="{}" /></div>' },
+          'el-button': { template: '<button class="stub-btn"><slot /></button>' },
+          'el-dropdown': {
+            name: 'ActionMenuStub',
+            template: '<div class="stub-dropdown"><slot/><slot name="dropdown"/></div>',
+            emits: ['command'],
+          },
+          'el-dropdown-menu': { template: '<div><slot/></div>' },
+          'el-dropdown-item': {
+            template: '<div class="stub-item"><slot/></div>',
+            props: ['command'],
+          },
+        },
+      },
+    })
+    expect(wrapper.findAll('.stub-btn').map((b) => b.text())).toEqual(['查看', '更多'])
+    expect(wrapper.findAll('.stub-item').map((b) => b.text())).toEqual(['补签'])
+    wrapper.findComponent({ name: 'ActionMenuStub' }).vm.$emit('command', 'supplement')
+    await wrapper.vm.$nextTick()
+    expect(supplement).toHaveBeenCalledOnce()
+  })
+
   it('testId 透传到操作按钮，便于页面回归定位', () => {
     const wrapper = mount(ListActionsColumn, {
       props: {
