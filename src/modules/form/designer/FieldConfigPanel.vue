@@ -280,7 +280,7 @@ function onFieldKeySuffix(raw: string) {
         @update="(p: FieldPatch) => emit('update', p)"
       />
       <p v-else-if="!readonly" class="config__placeholder">
-        「{{ descriptor?.label ?? t('form.thisField') }}」配置项待接入（后续刀）
+        {{ t('form.unsupportedConfig') }}
       </p>
 
       <!-- BF20261013-021：高级编辑（脚本）——值变更时执行的字段脚本（已发布只读不回显可编辑面板） -->

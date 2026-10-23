@@ -181,7 +181,7 @@ describe('FormRender', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('表单定义加载失败')
+    expect(wrapper.text()).toContain('表单配置加载失败，请稍后重试或联系管理员')
   })
 
   it('passes readonly=true when mode=view with recordId', async () => {

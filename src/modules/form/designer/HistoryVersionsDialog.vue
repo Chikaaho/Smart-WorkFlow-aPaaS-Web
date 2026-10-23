@@ -166,10 +166,6 @@ async function restoreSelected() {
     class="history-dialog"
     modal-class="p53-dialog-overlay-35"
   >
-    <p class="history-dialog__hint">
-      {{ t('form.draftHistorySubtitle') }}
-    </p>
-
     <div class="history-dialog__current">
       <span>{{ currentVersionHeader }}</span>
       <span class="history-card__badge" :class="currentVersionBadgeClass">
@@ -237,13 +233,6 @@ async function restoreSelected() {
 </template>
 
 <style scoped>
-.history-dialog__hint {
-  margin: 0 0 18px;
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--sw-text-secondary, #909399);
-}
-
 .history-dialog__loading,
 .history-dialog__empty {
   padding: var(--sw-space-24) 0;

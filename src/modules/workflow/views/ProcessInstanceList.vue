@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { useI18n } from '@/locales'
+import { enumLabel } from '@/foundation/i18n/enum-label'
 
 const { t } = useI18n()
 /**
@@ -575,7 +576,7 @@ function rowActions(row: unknown): ListAction[] {
                         "
                         size="small"
                       >
-                        {{ row.status }}
+                        {{ enumLabel('WORKFLOW_TRIGGER', row.status) }}
                       </el-tag>
                       <span class="p64-cell-note"
                         >{{ row.resultType }}={{ row.resultValue ?? '-' }}</span
@@ -610,7 +611,7 @@ function rowActions(row: unknown): ListAction[] {
                         "
                         size="small"
                       >
-                        {{ row.status }}
+                        {{ enumLabel('WORKFLOW_ACTION_REF', row.status) }}
                       </el-tag>
                     </template>
                   </el-table-column>
@@ -653,7 +654,7 @@ function rowActions(row: unknown): ListAction[] {
               </div>
             </template>
             <template v-if="p64Batches.length > 0">
-              <h4 class="p64-section-title">子流程批次与回写（P64 阶段Ⅱ）</h4>
+              <h4 class="p64-section-title">{{ t('workflow.childBatchWriteback') }}</h4>
               <div v-for="batch in p64Batches" :key="batch.id" class="child-batch-block">
                 <div class="child-batch-meta">
                   <el-tag
@@ -668,16 +669,21 @@ function rowActions(row: unknown): ListAction[] {
                             : 'warning'
                     "
                   >
-                    {{ batch.status }}
+                    {{ enumLabel('WORKFLOW_CHILD_BATCH', batch.status) }}
                   </el-tag>
                   <span
-                    >动作 {{ batch.actionId }} · 第 {{ batch.roundNo }} 轮 · 策略
-                    {{ batch.waitPolicy
-                    }}<template v-if="batch.waitCount != null"
-                      >（K={{ batch.waitCount }}）</template
-                    >
-                    · 预期 {{ batch.expectedCount }} / 已结算 {{ batch.settledCount ?? 0 }} · 深度
-                    {{ batch.parentDepth }}</span
+                    >{{
+                      t('workflow.batchSummary', {
+                        action: batch.actionId,
+                        round: batch.roundNo,
+                        policy: enumLabel('WORKFLOW_WAIT_POLICY', batch.waitPolicy),
+                        expected: batch.expectedCount,
+                        settled: batch.settledCount ?? 0,
+                        depth: batch.parentDepth,
+                      })
+                    }}<template v-if="batch.waitCount != null">{{
+                      t('workflow.batchWaitCount', { count: batch.waitCount })
+                    }}</template></span
                   >
                 </div>
                 <!-- 复审05 P2-02b-V-C：阻断原因只在未决批次（WAITING/BLOCKED）按当前待处置呈现；
@@ -693,7 +699,12 @@ function rowActions(row: unknown): ListAction[] {
                   v-else-if="batch.blockReason"
                   class="child-batch-reason child-batch-reason--history"
                 >
-                  历史诊断（批次已 {{ batch.status }}）：{{ batch.blockReason }}
+                  {{
+                    t('workflow.historyDiagnosis', {
+                      status: enumLabel('WORKFLOW_CHILD_BATCH', batch.status),
+                      reason: batch.blockReason,
+                    })
+                  }}
                 </div>
                 <div class="p64-table-scroll">
                   <el-table :data="batch.items" stripe size="small">
@@ -712,7 +723,7 @@ function rowActions(row: unknown): ListAction[] {
                                   : 'info'
                           "
                         >
-                          {{ row.status }}
+                          {{ enumLabel('WORKFLOW_CHILD_ITEM', row.status) }}
                         </el-tag>
                       </template>
                     </el-table-column>
@@ -755,7 +766,10 @@ function rowActions(row: unknown): ListAction[] {
                           {{
                             isItemDiagnosisCurrent(row.status)
                               ? row.errorText
-                              : `历史诊断（${row.status}）：${row.errorText}`
+                              : t('workflow.historyDiagnosis', {
+                                  status: enumLabel('WORKFLOW_CHILD_ITEM', row.status),
+                                  reason: row.errorText,
+                                })
                           }}
                         </span>
                       </template>

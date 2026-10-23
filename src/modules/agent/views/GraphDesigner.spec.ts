@@ -570,20 +570,25 @@ describe('GraphDesigner.vue', () => {
     wrapper.unmount()
   })
 
-  it('FORK/JOIN 节点选中：属性面板显示静态说明文本，无 config 编辑项', async () => {
+  it('FORK/JOIN 节点说明可从问号读取，配置项保持为空', async () => {
     const wrapper = await mountLoadedWith(mockLoopGraph)
     const [, data, events] = lastMountCall()
 
     events.onNodeClick?.(nodeById(data, 'fork-1'))
     await nextTick()
     const forkPanel = wrapper.find('.property-panel')
-    expect(forkPanel.text()).toContain('出边数 = 并行分支数（≥2）')
+    expect(forkPanel.get('button.hint-tip').attributes('aria-label')).toContain(
+      '出边数 = 并行分支数（≥2）',
+    )
+    expect(forkPanel.get('button.hint-tip').attributes('type')).toBe('button')
     expect(forkPanel.findAll('.el-input')).toHaveLength(0)
 
     events.onNodeClick?.(nodeById(data, 'join-1'))
     await nextTick()
     const joinPanel = wrapper.find('.property-panel')
-    expect(joinPanel.text()).toContain('入边数 = 汇合分支数（≥2）')
+    expect(joinPanel.get('button.hint-tip').attributes('aria-label')).toContain(
+      '入边数 = 汇合分支数（≥2）',
+    )
     expect(joinPanel.findAll('.el-input')).toHaveLength(0)
     wrapper.unmount()
   })

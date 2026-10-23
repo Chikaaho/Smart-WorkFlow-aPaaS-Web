@@ -3715,7 +3715,7 @@ function nodeLabelLines(label: string) {
                       />
                     </el-select>
                   </el-form-item>
-                  <!-- 对象类型仅新语义（按对象分支）下有意义，随 semanticVersion 开关显示 -->
+                  <!-- 对象类型仅按对象分支时使用，随 semanticVersion 开关显示 -->
                   <el-form-item v-if="dynamicParallelForm.objectSemantic" label="对象类型">
                     <el-radio-group
                       v-model="dynamicParallelForm.objectType"
@@ -3826,7 +3826,7 @@ function nodeLabelLines(label: string) {
                         v-model="dynamicParallelForm.objectSemantic"
                         @change="applyDynamicParallel"
                       >
-                        新语义（按对象分支）
+                        {{ t('workflow.branchPerObject') }}
                       </el-checkbox>
                     </div>
                   </el-form-item>
@@ -3901,7 +3901,7 @@ function nodeLabelLines(label: string) {
                       />
                     </el-select>
                     <small v-if="field.key === 'allowedActions'" class="config-array-hint">
-                      未设置时兼容旧版；清空后保存表示本节点不允许任何审批操作。
+                      {{ t('workflow.allowedActionsHint') }}
                     </small>
                   </el-form-item>
                   <el-form-item v-else-if="field.type === 'string'" :label="field.label">
@@ -4348,9 +4348,7 @@ function nodeLabelLines(label: string) {
     >
       <div class="p64-toolbar">
         <el-button size="small" type="primary" @click="resetTriggerDraft">新增监听</el-button>
-        <HintTip
-          content="流程发起在实例建立后执行，流程结束在合法终态提交后执行；节点事件仍在节点属性中配置。监听与旧触发器共用同一版本化定义和发布快照。"
-        />
+        <HintTip :content="t('workflow.listenerTimingHelp')" />
       </div>
       <el-table :data="graph?.triggers ?? []" size="small" class="p64-table">
         <el-table-column label="顺序" width="60">

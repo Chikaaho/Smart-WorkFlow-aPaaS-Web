@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from '@/locales'
+import HintTip from '@/components/HintTip.vue'
 import type { FormSchemaField } from '@/contracts/form-schema'
 import { getListConfig, saveListConfig, type ListConfig } from '@/modules/form/api/i2-choices'
 import { ApiError } from '@/foundation/request'
@@ -132,8 +133,7 @@ watch(() => props.formId, load)
   <article v-loading="loading" class="list-config">
     <header class="list-config__header">
       <div>
-        <h3>{{ t('form.listDefaults') }}</h3>
-        <p>{{ t('form.listDefaultsHint') }}</p>
+        <h3>{{ t('form.listDefaults') }} <HintTip :content="t('form.listDefaultsHint')" /></h3>
       </div>
       <el-button type="primary" :loading="saving" @click="save">
         {{ t('form.saveListDefaults') }}
@@ -233,11 +233,6 @@ watch(() => props.formId, load)
 }
 .list-config__header h3 {
   font-size: var(--sw-font-h2);
-}
-.list-config__header p {
-  margin: var(--sw-space-4) 0 0;
-  color: var(--sw-text-secondary);
-  font-size: var(--sw-font-caption);
 }
 .list-config__body {
   display: grid;

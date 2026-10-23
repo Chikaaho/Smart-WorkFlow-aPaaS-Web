@@ -958,9 +958,13 @@ onMounted(loadDetail)
         show-icon
       >
         <p>
-          上次提交的审批命令已过期：{{ lastExpired.reason || '准入截止到期且未执行（效果未发生）' }}
+          {{
+            t('workflow.approvalExpired', {
+              reason: lastExpired.reason || t('workflow.approvalExpiredDefault'),
+            })
+          }}
         </p>
-        <p>可直接重试本次操作（将重新提交审批命令，原过期记录保留可查）。</p>
+        <p>{{ t('workflow.approvalExpiredRetry') }}</p>
       </el-alert>
 
       <!-- 本次提交的表单数据：与抄送详情共用同一套业务表单只读展示 -->
@@ -979,7 +983,6 @@ onMounted(loadDetail)
         <template #header>
           <div class="card-head">
             <span>IoT 预约</span>
-            <span class="card-head__hint">设备动作预约下发记录</span>
           </div>
         </template>
         <div v-loading="reservationsLoading" class="iot-reservations">
@@ -1453,11 +1456,6 @@ onMounted(loadDetail)
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 0;
-}
-.card-head__hint {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--sw-text-secondary);
 }
 /* 数据表单与发起页同款（V012-BUG-013）：字段名在上，值落入带边框灰底只读盒 */
 .data-rows {

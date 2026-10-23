@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from '@/locales'
+import HintTip from '@/components/HintTip.vue'
 import { usePermission } from '@/foundation/permission'
 import type { FormSchema, FormSchemaField, FieldPermissionRule } from '@/contracts/form-schema'
 import FormListConfigEditor from './FormListConfigEditor.vue'
@@ -99,8 +100,7 @@ function resetPermissions() {
   <section class="access-panel">
     <header class="access-panel__header">
       <div>
-        <h2>{{ t('form.permissionTitle') }}</h2>
-        <p>{{ t('form.permissionHint') }}</p>
+        <h2>{{ t('form.permissionTitle') }} <HintTip :content="t('form.permissionHint')" /></h2>
       </div>
       <div class="access-panel__actions">
         <el-button v-if="canManageDatasources" @click="datasourceDialogVisible = true">
@@ -111,8 +111,7 @@ function resetPermissions() {
     </header>
 
     <article class="access-card">
-      <h3>{{ t('form.fieldAccess') }}</h3>
-      <p class="access-card__hint">{{ t('form.permissionSubjectHint') }}</p>
+      <h3>{{ t('form.fieldAccess') }} <HintTip :content="t('form.permissionSubjectHint')" /></h3>
       <el-table :data="rows" max-height="420">
         <el-table-column prop="label" :label="t('form.field')" min-width="240" />
         <el-table-column prop="kind" :label="t('form.dataType')" width="130" />
@@ -148,8 +147,7 @@ function resetPermissions() {
     </article>
 
     <article class="access-card">
-      <h3>{{ t('form.actionAccess') }}</h3>
-      <p class="access-card__hint">{{ t('form.actionPermissionHint') }}</p>
+      <h3>{{ t('form.actionAccess') }} <HintTip :content="t('form.actionPermissionHint')" /></h3>
       <div class="action-grid">
         <label v-for="[key, label] in actions" :key="key" class="action-row">
           <span>{{ t(label) }}</span>
@@ -200,13 +198,6 @@ function resetPermissions() {
   font-size: var(--sw-font-h2);
   line-height: var(--sw-space-24);
 }
-.access-panel__header p,
-.access-card__hint {
-  margin: var(--sw-space-4) 0 0;
-  color: var(--sw-text-secondary);
-  font-size: var(--sw-font-caption);
-  line-height: var(--sw-space-20);
-}
 .access-card {
   padding: var(--sw-space-20);
   margin-bottom: var(--sw-space-16);
@@ -216,9 +207,6 @@ function resetPermissions() {
 }
 .access-card h3 {
   font-size: var(--sw-font-h2);
-}
-.access-card__hint {
-  margin-bottom: var(--sw-space-12);
 }
 .access-card :deep(.el-select) {
   width: 100%;
