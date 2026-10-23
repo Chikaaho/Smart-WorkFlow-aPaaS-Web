@@ -13,7 +13,12 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ListActionsColumn, ListFilterItem, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
-import { myInstances, myInstanceDetail, withdrawInstance } from '@/modules/workflow/api'
+import {
+  myInstances,
+  myInstanceDetail,
+  withdrawInstance,
+  discardInstance,
+} from '@/modules/workflow/api'
 import { urgeMyInstance } from '@/modules/workflow/api/oa'
 import type { ProcessInstance, MyInstanceDetail } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
@@ -74,6 +79,7 @@ const STATUS_TAG: Record<
 
 /** I3 §4.7：发起人撤回（尚未越过不可撤回边界时可用；重复请求幂等）。 */
 const withdrawingId = ref<string | null>(null)
+const discardingId = ref<string | null>(null)
 
 function asInstance(row: unknown): ProcessInstance {
   return row as ProcessInstance
@@ -107,6 +113,38 @@ async function withdrawRow(rowRaw: unknown) {
     ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.withdrawFailed'))
   } finally {
     withdrawingId.value = null
+  }
+}
+
+async function discardRow(rowRaw: unknown) {
+  const row = asInstance(rowRaw)
+  let reason: string
+  try {
+    const prompt = await ElMessageBox.prompt(
+      t('workflow.discardReasonPrompt'),
+      t('workflow.discardTitle'),
+      {
+        confirmButtonText: t('workflow.discardAction'),
+        cancelButtonText: t('common.cancel'),
+        inputType: 'textarea',
+        inputValidator: (value: string) =>
+          Boolean(value?.trim()) || t('workflow.discardReasonRequired'),
+        type: 'warning',
+      },
+    )
+    reason = prompt.value.trim()
+  } catch {
+    return
+  }
+  discardingId.value = row.processInstanceId
+  try {
+    await discardInstance(row.processInstanceId, { reason, action: 'DISCARD' })
+    ElMessage.success(t('workflow.statusDiscarded'))
+    await loadList()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.discardFailed'))
+  } finally {
+    discardingId.value = null
   }
 }
 
@@ -243,6 +281,14 @@ function rowActions(row: unknown): ListAction[] {
       visible: item.status === 'RUNNING' && hasPerm('workflow:task:withdraw'),
       disabled: withdrawingId.value === item.processInstanceId,
       onClick: () => void withdrawRow(item),
+    },
+    {
+      key: 'discard',
+      label: t('workflow.discardAction'),
+      type: 'danger',
+      visible: item.status === 'RUNNING' && hasPerm('workflow:task:discard'),
+      disabled: discardingId.value === item.processInstanceId,
+      onClick: () => void discardRow(item),
     },
   ]
 }

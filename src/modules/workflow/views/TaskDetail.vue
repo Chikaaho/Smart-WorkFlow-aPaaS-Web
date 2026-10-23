@@ -25,6 +25,8 @@ import {
   communicateTask,
   addSignTask,
   supplementSignInstance,
+  getApprovalOpinionDraft,
+  saveApprovalOpinionDraft,
   type TaskActionSegment,
 } from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
@@ -66,6 +68,8 @@ const acting = ref<string | null>(null) // 'approve' | 'reject' | null
 const lastExpired = ref<{ reason: string } | null>(null)
 const opinionComment = ref('')
 const opinionData = ref<Record<string, unknown>>({})
+const opinionDraftSaving = ref(false)
+const opinionDraftLoaded = ref(false)
 const returnTargetNodeId = ref('')
 /** 本次提交的表单记录数据（businessKey = 表单记录 ID，经 form 模块只读接口回查） */
 const formRecord = ref<Record<string, unknown> | null>(null)
@@ -77,6 +81,7 @@ async function loadDetail() {
   try {
     detail.value = await queryTaskDetail(taskId)
     initializeOpinionData(detail.value)
+    void loadOpinionDraft()
     void loadFormRecord()
     void loadReservations()
     void loadLastExpired()
@@ -89,6 +94,45 @@ async function loadDetail() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+async function loadOpinionDraft() {
+  if (!detail.value?.canHandle) return
+  try {
+    const draft = await getApprovalOpinionDraft(taskId)
+    const form = detail.value.opinionForm
+    if (
+      draft &&
+      (!form?.formId || draft.opinionFormId === form.formId) &&
+      (!form?.version || draft.opinionFormVersion === form.version)
+    ) {
+      opinionComment.value = draft.comment ?? ''
+      opinionData.value = { ...draft.opinionData }
+      opinionDraftLoaded.value = true
+    }
+  } catch {
+    // 暂存读取失败不阻断正式办理，页面给出可重试的保存入口。
+  }
+}
+
+async function saveOpinionDraft() {
+  if (opinionDraftSaving.value || !detail.value?.canHandle) return
+  opinionDraftSaving.value = true
+  try {
+    const form = detail.value.opinionForm
+    await saveApprovalOpinionDraft(taskId, {
+      opinionFormId: form?.formId,
+      opinionFormVersion: form?.version,
+      comment: opinionComment.value,
+      opinionData: { ...opinionData.value },
+    })
+    opinionDraftLoaded.value = true
+    ElMessage.success(t('workflow.opinionDraftSaved'))
+  } catch (error) {
+    ElMessage.error(error instanceof ApiError ? error.msg : t('workflow.opinionDraftSaveFailed'))
+  } finally {
+    opinionDraftSaving.value = false
   }
 }
 
@@ -636,6 +680,7 @@ const lifecycleDialog = ref<null | {
   receivers?: string
   participants?: string
   mode?: 'SERIAL' | 'PARALLEL'
+  signPosition?: 'BEFORE' | 'AFTER'
 }>(null)
 const lifecycleSubmitting = ref(false)
 
@@ -678,7 +723,7 @@ function openLifecycle(
   kind: 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN' | 'SUPPLEMENT_SIGN',
 ) {
   if (acting.value) return
-  lifecycleDialog.value = { kind, mode: 'PARALLEL' }
+  lifecycleDialog.value = { kind, mode: 'PARALLEL', signPosition: 'BEFORE' }
 }
 
 async function submitLifecycle() {
@@ -714,9 +759,10 @@ async function submitLifecycle() {
     }
     if (dialog.kind === 'ADD_SIGN') {
       payload = {
+        ...(actionPayload('ADD_SIGN') ?? { action: 'ADD_SIGN' }),
         participants: raw,
         mode: dialog.mode ?? 'PARALLEL',
-        comment: opinionComment.value || undefined,
+        signPosition: dialog.signPosition ?? 'BEFORE',
       }
     } else {
       payload = { participants: raw, nodeKey: detail.value.processDefinitionKey ?? undefined }
@@ -1054,6 +1100,13 @@ onMounted(loadDetail)
           rows="3"
           :placeholder="t('workflow.remarkOptional')"
         />
+        <div v-if="canAct" class="opinion-draft-actions">
+          <el-button size="small" :loading="opinionDraftSaving" @click="saveOpinionDraft">
+            {{ t('workflow.saveOpinionDraft') }}
+          </el-button>
+          <span v-if="opinionDraftLoaded">{{ t('workflow.opinionDraftRestored') }}</span>
+          <span class="opinion-draft-note">{{ t('workflow.opinionDraftNote') }}</span>
+        </div>
         <!-- 0.1.7 #18：所有操作按钮统一放右下角（退回/转办/委托/沟通/加签/补签/驳回/同意/催办） -->
         <div class="detail-actions__bar">
           <div v-if="canAct && returnTargets.length > 0" class="return-config">
@@ -1189,6 +1242,12 @@ onMounted(loadDetail)
             <el-radio-group v-model="lifecycleDialog.mode">
               <el-radio value="PARALLEL">{{ t('workflow.parallel') }}</el-radio>
               <el-radio value="SERIAL">{{ t('workflow.serial') }}</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item :label="t('workflow.signPosition')">
+            <el-radio-group v-model="lifecycleDialog.signPosition">
+              <el-radio value="BEFORE">{{ t('workflow.signBefore') }}</el-radio>
+              <el-radio value="AFTER">{{ t('workflow.signAfter') }}</el-radio>
             </el-radio-group>
           </el-form-item>
         </template>
@@ -1468,6 +1527,17 @@ onMounted(loadDetail)
   flex-direction: column;
   gap: 12px;
   width: 100%;
+}
+.opinion-draft-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 12px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.opinion-draft-note {
+  margin-left: auto;
 }
 .opinion-field {
   display: flex;

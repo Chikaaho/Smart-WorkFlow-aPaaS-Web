@@ -696,11 +696,14 @@ export async function withdrawInstance(
     data,
   })
 }
-export async function discardInstance(instanceId: string): Promise<void> {
+export async function discardInstance(
+  instanceId: string,
+  data: Partial<ApprovalActionRequest> = {},
+): Promise<void> {
   await request<void>({
     method: 'POST',
     url: `/workflow/instances/${instanceId}/discard`,
-    data: {},
+    data,
   })
 }
 export async function expressSign(
@@ -709,11 +712,67 @@ export async function expressSign(
 ): Promise<void> {
   await request<void>({ method: 'POST', url: `/workflow/sign/${recordId}/express`, data })
 }
+export interface PendingSignItem {
+  recordId: number
+  taskId: string
+  processInstanceId: string
+  nodeKey: string | null
+  taskName?: string
+  processDefinitionKey?: string
+  signType: 'ADD_SIGN' | 'SUPPLEMENT_SIGN'
+  modeType: 'SERIAL' | 'PARALLEL'
+  seqNo: number
+  signPosition: 'BEFORE' | 'AFTER'
+  comment: string
+  serialBlocked: boolean
+}
+
+export async function queryPendingSigns(): Promise<PendingSignItem[]> {
+  return request<PendingSignItem[]>({ method: 'GET', url: '/workflow/sign/pending' })
+}
 export async function cancelSign(
   recordId: number,
   data: Partial<ApprovalActionRequest>,
 ): Promise<void> {
   await request<void>({ method: 'POST', url: `/workflow/sign/${recordId}/cancel`, data })
+}
+
+export interface ApprovalOpinionDraft {
+  taskId: string
+  processInstanceId: string
+  nodeKey: string | null
+  roundNo: number
+  assigneeId: string
+  opinionFormId?: string | null
+  opinionFormVersion?: string | null
+  comment?: string | null
+  opinionData: Record<string, unknown>
+  updateTime?: string | null
+}
+
+export async function getApprovalOpinionDraft(
+  taskId: string,
+): Promise<ApprovalOpinionDraft | null> {
+  return request<ApprovalOpinionDraft | null>({
+    method: 'GET',
+    url: `/workflow/tasks/${taskId}/opinion-draft`,
+  })
+}
+
+export async function saveApprovalOpinionDraft(
+  taskId: string,
+  data: {
+    opinionFormId?: string
+    opinionFormVersion?: string
+    comment: string
+    opinionData: Record<string, unknown>
+  },
+): Promise<ApprovalOpinionDraft> {
+  return request<ApprovalOpinionDraft>({
+    method: 'PUT',
+    url: `/workflow/tasks/${taskId}/opinion-draft`,
+    data,
+  })
 }
 export async function replyCommunication(
   communicationId: number,

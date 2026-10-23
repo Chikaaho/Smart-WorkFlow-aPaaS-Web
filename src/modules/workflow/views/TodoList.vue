@@ -8,11 +8,17 @@ const { t } = useI18n()
  * 展示当前用户待审批任务，提供「审批通过」「驳回」操作按钮，
  * 支持行点击导航到任务详情页。真分页模式。
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
-import { queryTodoTasks, claimTask } from '@/modules/workflow/api'
+import {
+  queryTodoTasks,
+  claimTask,
+  queryPendingSigns,
+  expressSign,
+  type PendingSignItem,
+} from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
 import type { TodoTask } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
@@ -25,6 +31,9 @@ const total = ref(0)
 const loading = ref(false)
 const errorMsg = ref('')
 const claimingId = ref<string | null>(null) // 正在领取的候选任务 ID（P64 阶段Ⅱ）
+const pendingSigns = ref<PendingSignItem[]>([])
+const signingId = ref<number | null>(null)
+const signComments = reactive<Record<number, string>>({})
 
 // ─── 详情弹窗（与已办/抄送/表单数据共用同一只读详情布局；待办额外带审批区） ───
 const detailVisible = ref(false)
@@ -61,6 +70,42 @@ async function loadList() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+async function loadPendingSigns() {
+  try {
+    pendingSigns.value = await queryPendingSigns()
+  } catch {
+    pendingSigns.value = []
+  }
+}
+
+async function respondSign(itemRaw: unknown, action: 'APPROVE' | 'DISAPPROVE') {
+  const item = itemRaw as PendingSignItem
+  if (item.serialBlocked || signingId.value !== null) return
+  try {
+    await ElMessageBox.confirm(
+      t(action === 'APPROVE' ? 'workflow.signApproveConfirm' : 'workflow.signRejectConfirm'),
+      t('workflow.signResponseTitle'),
+      {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+  signingId.value = item.recordId
+  try {
+    await expressSign(item.recordId, { action, comment: signComments[item.recordId] || undefined })
+    ElMessage.success(t('workflow.signResponseSaved'))
+    await Promise.all([loadList(), loadPendingSigns()])
+  } catch (error) {
+    ElMessage.error(error instanceof ApiError ? error.msg : t('workflow.signResponseFailed'))
+  } finally {
+    signingId.value = null
   }
 }
 
@@ -145,7 +190,7 @@ function handleRowClick(row: TodoTask) {
   openDetail(row)
 }
 
-onMounted(loadList)
+onMounted(() => Promise.all([loadList(), loadPendingSigns()]))
 </script>
 
 <template>
@@ -173,6 +218,57 @@ onMounted(loadList)
       show-icon
       style="margin-bottom: 12px"
     />
+
+    <el-card v-if="pendingSigns.length" shadow="never" class="todo-sign-card">
+      <template #header>{{ t('workflow.pendingSignTitle') }}</template>
+      <el-table :data="pendingSigns" size="small">
+        <el-table-column :label="t('workflow.pendingSignTask')" min-width="180">
+          <template #default="{ row }">{{ row.taskName || row.nodeKey }}</template>
+        </el-table-column>
+        <el-table-column :label="t('workflow.pendingSignPosition')" width="110">
+          <template #default="{ row }">
+            {{
+              t(
+                row.signPosition === 'AFTER'
+                  ? 'workflow.signAfterShort'
+                  : 'workflow.signBeforeShort',
+              )
+            }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('workflow.pendingSignOrder')" width="90">
+          <template #default="{ row }">{{ row.seqNo + 1 }}</template>
+        </el-table-column>
+        <el-table-column :label="t('workflow.pendingSignComment')" min-width="180">
+          <template #default="{ row }">
+            <el-input
+              v-model="signComments[row.recordId]"
+              :placeholder="row.comment || t('workflow.pendingSignCommentPlaceholder')"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.action')" width="180">
+          <template #default="{ row }">
+            <el-button
+              size="small"
+              type="success"
+              :disabled="row.serialBlocked || signingId !== null"
+              :loading="signingId === row.recordId"
+              @click="respondSign(row, 'APPROVE')"
+              >{{ t('common.approve') }}</el-button
+            >
+            <el-button
+              size="small"
+              type="danger"
+              plain
+              :disabled="row.serialBlocked || signingId !== null"
+              @click="respondSign(row, 'DISAPPROVE')"
+              >{{ t('common.reject') }}</el-button
+            >
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
 
     <!-- 表格 -->
     <el-table

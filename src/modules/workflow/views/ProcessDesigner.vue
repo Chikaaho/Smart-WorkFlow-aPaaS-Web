@@ -38,6 +38,8 @@ import {
   publishedFormDefinition,
   pageProcessDefs,
   previewProcessScript,
+  suspendDefVersion,
+  activateDefVersion,
 } from '@/modules/workflow/api'
 import { pageFormDefs } from '@/adapters/form-catalog'
 import ScriptDialog from '@/components/ScriptDialog.vue'
@@ -2712,6 +2714,39 @@ async function loadVersionHistory() {
   }
 }
 
+const changingVersionId = ref<number | string | null>(null)
+
+async function toggleVersionAvailability(item: ProcessDefVersionInfo) {
+  if (!defId.value || changingVersionId.value !== null) return
+  const suspending = item.status === 'PUBLISHED'
+  try {
+    await ElMessageBox.confirm(
+      t(suspending ? 'workflow.suspendVersionConfirm' : 'workflow.activateVersionConfirm', {
+        version: item.graphVersion,
+      }),
+      t(suspending ? 'workflow.suspendVersion' : 'workflow.activateVersion'),
+      {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+  changingVersionId.value = item.id
+  try {
+    if (suspending) await suspendDefVersion(Number(defId.value), item.graphVersion)
+    else await activateDefVersion(Number(defId.value), item.graphVersion)
+    ElMessage.success(t('workflow.versionAvailabilityChanged'))
+    await loadVersionHistory()
+  } catch (error) {
+    ElMessage.error((error as { msg?: string }).msg ?? t('workflow.versionAvailabilityFailed'))
+  } finally {
+    changingVersionId.value = null
+  }
+}
+
 function onVersionMenuVisible(visible: boolean) {
   if (visible) void loadVersionHistory()
 }
@@ -2874,6 +2909,22 @@ function nodeLabelLines(label: string) {
                       formatVersionTime(item.publishedAt || item.updateTime)
                     }}</span>
                     <span class="version-entry__author">{{ item.publisherName || '—' }}</span>
+                    <el-tag v-if="item.status === 'SUSPENDED'" type="warning" size="small">{{
+                      t('workflow.versionSuspended')
+                    }}</el-tag>
+                    <el-button
+                      link
+                      :loading="changingVersionId === item.id"
+                      @click.stop="toggleVersionAvailability(item)"
+                    >
+                      {{
+                        t(
+                          item.status === 'PUBLISHED'
+                            ? 'workflow.suspendVersion'
+                            : 'workflow.activateVersion',
+                        )
+                      }}
+                    </el-button>
                   </span>
                 </el-dropdown-item>
               </template>

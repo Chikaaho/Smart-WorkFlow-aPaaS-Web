@@ -157,6 +157,8 @@ export interface ApprovalActionRequest {
   participants?: number[]
   /** I3：SERIAL / PARALLEL。 */
   mode?: 'SERIAL' | 'PARALLEL'
+  /** I3：BEFORE=原办理人前加签（旧请求缺省）；AFTER=原办理意见后的追加确认。 */
+  signPosition?: 'BEFORE' | 'AFTER'
   /** I3：代理规则 ID 与范围。 */
   ruleId?: number
   scopeType?: 'GLOBAL' | 'PROCESS' | 'NODE' | 'BUSINESS'
