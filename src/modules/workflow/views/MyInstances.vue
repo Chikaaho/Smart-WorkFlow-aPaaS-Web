@@ -413,7 +413,7 @@ onMounted(loadList)
   </StandardListTemplate>
   <BusinessDetailDialog
     v-model="detailVisible"
-    :title="t('workflow.instanceDetail')"
+    :title="t('common.detail')"
     :form-key="detail?.formKey ?? ''"
     :record-id="detail?.businessKey ?? ''"
     :approval-history="detail?.history ?? []"

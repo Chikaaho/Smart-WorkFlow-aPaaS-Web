@@ -34,7 +34,7 @@ function onCompleted() {
 <template>
   <BusinessDetailDialog
     :model-value="modelValue"
-    :title="title || t('workflow.instanceDetail')"
+    :title="title || t('common.detail')"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <template #task>
