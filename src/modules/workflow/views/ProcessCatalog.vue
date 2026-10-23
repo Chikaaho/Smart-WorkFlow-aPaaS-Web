@@ -28,7 +28,7 @@ import {
   type FavoriteItem,
 } from '@/modules/workflow/api/oa'
 import { ApiError } from '@/foundation/request'
-import { CategorySidebar } from '@/components/page-layout'
+import { CategorySidebar, ListPagination } from '@/components/page-layout'
 
 const router = useRouter()
 
@@ -37,6 +37,8 @@ const total = ref(0)
 const loading = ref(false)
 const errorMsg = ref('')
 const keyword = ref('')
+const pageNum = ref(1)
+const pageSize = ref(20)
 // '' = 全部；0 = 未分类；其余为分类 id
 const activeCategory = ref<number | ''>('')
 
@@ -91,6 +93,7 @@ function itemCountOf(categoryId: number | ''): number {
 function resetFilter(): void {
   keyword.value = ''
   activeCategory.value = ''
+  pageNum.value = 1
   void loadCatalog()
 }
 
@@ -109,7 +112,7 @@ async function loadCatalog() {
   try {
     const [page, categoryList] = await Promise.all([
       queryCatalogItems(
-        { pageNum: 1, pageSize: 60 },
+        { pageNum: pageNum.value, pageSize: pageSize.value },
         {
           keyword: keyword.value.trim() || undefined,
           categoryId: activeCategory.value === '' ? undefined : Number(activeCategory.value),
@@ -145,6 +148,23 @@ async function loadUsageSections() {
 
 function selectCategory(id: number | '') {
   activeCategory.value = id
+  pageNum.value = 1
+  void loadCatalog()
+}
+
+function searchCatalog() {
+  pageNum.value = 1
+  void loadCatalog()
+}
+
+function handlePageNumChange(value: number) {
+  pageNum.value = value
+  void loadCatalog()
+}
+
+function handlePageSizeChange(value: number) {
+  pageSize.value = value
+  pageNum.value = 1
   void loadCatalog()
 }
 
@@ -246,10 +266,10 @@ onMounted(() => {
               class="catalog-page__search"
               :placeholder="t('workflow.searchCatalogPlaceholder')"
               clearable
-              @keyup.enter="loadCatalog"
-              @clear="loadCatalog"
+              @keyup.enter="searchCatalog"
+              @clear="searchCatalog"
             />
-            <el-button type="primary" class="catalog-page__query" @click="loadCatalog">{{
+            <el-button type="primary" class="catalog-page__query" @click="searchCatalog">{{
               t('common.query')
             }}</el-button>
             <el-button class="catalog-page__reset" @click="resetFilter">{{
@@ -359,6 +379,18 @@ onMounted(() => {
             </div>
           </section>
         </div>
+        <ListPagination
+          :total="total"
+          :page-num="pageNum"
+          :page-size="pageSize"
+          :page-sizes="[20, 40, 60, 100]"
+          appearance="design"
+          align="space-between"
+          layout="prev, pager, next, sizes, jumper"
+          total-text
+          @update:page-num="handlePageNumChange"
+          @update:page-size="handlePageSizeChange"
+        />
       </div>
     </div>
   </div>

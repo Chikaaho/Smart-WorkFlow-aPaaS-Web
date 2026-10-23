@@ -49,6 +49,12 @@ const stubs = {
     template: '<div class="el-empty">{{ description }}</div>',
     props: ['description', 'imageSize'],
   },
+  ListPagination: {
+    template:
+      '<button class="pagination-stub" @click="$emit(\'update:pageNum\', 2)">page2</button>',
+    props: ['total', 'pageNum', 'pageSize'],
+    emits: ['update:pageNum', 'update:pageSize'],
+  },
 }
 
 function mountCatalog() {
@@ -108,6 +114,22 @@ describe('ProcessCatalog 前台流程中心（BF20261013-051：分类维护移�
     await flushPromises()
 
     expect(wrapper.find('.catalog-page__search').exists()).toBe(true)
+  })
+
+  it('分页可请求第二页且首次查询使用 20 条分页', async () => {
+    const wrapper = mountCatalog()
+    await flushPromises()
+    expect(vi.mocked(oa.queryCatalogItems).mock.calls.at(-1)?.[0]).toMatchObject({
+      pageNum: 1,
+      pageSize: 20,
+    })
+
+    await wrapper.find('.pagination-stub').trigger('click')
+    await flushPromises()
+    expect(vi.mocked(oa.queryCatalogItems).mock.calls.at(-1)?.[0]).toMatchObject({
+      pageNum: 2,
+      pageSize: 20,
+    })
   })
 
   // 0.1.7 #25 回归：左上角标题/描述与「可发起 N 个流程」「全部流程 · N 个可发起」汇总计数为噪音
