@@ -1,117 +1,124 @@
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
-import SubFieldDesigner from './SubFieldDesigner.vue'
-import { ALLOWED_SUBFIELD_TYPES } from './subfield-convert'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { i18n } from '@/locales'
+import type { DesignerItem } from './types'
 import type { TableSubField } from '@/contracts/form-schema'
+import SubFieldDesigner from './SubFieldDesigner.vue'
 
-/**
- * SubFieldDesigner（盖层子画布）：
- *  ① 控件库只露六种（allowed-types = ALLOWED_SUBFIELD_TYPES）；画布内排序 group 独立
- *  ② 子画布从 subFields 播种为 items；列名集（查重范围）取自子画布、限子表内部
- *  ③ 「返回」把子画布 items 转回 subFields 抛 close（写回宿主）
- *  ④ readonly 透传给控件库/画布/配置面板
- *
- * 子组件 stub 成属性探针，只验组合接线与状态隔离，不拉起 SortableJS / form-create。
- */
-
-let paletteProps: Record<string, unknown> = {}
-let canvasProps: Record<string, unknown> = {}
-let configProps: Record<string, unknown> = {}
-
-const PaletteStub = {
-  props: ['existingNames', 'allowedTypes', 'group', 'disabled'],
-  setup(p: Record<string, unknown>) {
-    paletteProps = p
-    return () => null
-  },
-}
-const CanvasStub = {
-  props: ['items', 'selectedId', 'group', 'readonly', 'pendingItem'],
-  setup(p: Record<string, unknown>) {
-    canvasProps = p
-    return () => null
-  },
-}
-const ConfigStub = {
-  props: ['field', 'otherNames', 'readonly'],
-  setup(p: Record<string, unknown>) {
-    configProps = p
-    return () => null
-  },
-}
+vi.mock('element-plus', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessageBox: { confirm: vi.fn() },
+}))
 
 const stubs = {
-  FieldPalette: PaletteStub,
-  DesignerCanvas: CanvasStub,
-  FieldConfigPanel: ConfigStub,
+  'el-dialog': {
+    props: ['modelValue', 'title'],
+    emits: ['update:modelValue'],
+    template: '<div class="dialog"><slot name="header"/><slot/><slot name="footer"/></div>',
+  },
+  'el-button': {
+    props: ['disabled', 'icon', 'ariaLabel'],
+    emits: ['click'],
+    template:
+      '<button :disabled="disabled" :aria-label="ariaLabel" @click="$emit(\'click\')"><slot/></button>',
+  },
+  'el-table': { template: '<div><slot/></div>' },
+  'el-table-column': { template: '<div/>' },
+  FieldConfigPanel: {
+    props: ['field', 'otherNames', 'readonly', 'subfield'],
+    emits: ['update'],
+    template: '<div class="field-config"/>',
+  },
+}
+
+type Vm = {
+  working: TableSubField[]
+  configVisible: boolean
+  configItem: DesignerItem | null
+  otherNames: string[]
+  openAdd: () => void
+  openConfig: (index: number) => void
+  patchConfig: (patch: Record<string, unknown>) => void
+  saveConfig: () => void
+  cancelConfig: () => void
+  moveField: (index: number, offset: number) => void
+  confirmFields: () => void
+  cancel: () => void
 }
 
 function mountEditor(subFields: TableSubField[], readonly = false) {
   return mount(SubFieldDesigner, {
     props: { tableLabel: '明细', subFields, readonly },
-    global: { stubs },
+    global: { plugins: [i18n], stubs },
   })
 }
 
-describe('SubFieldDesigner (盖层子画布)', () => {
-  it('palette exposes only the six allowed types; canvas keeps an isolated sort group', () => {
-    mountEditor([{ name: 'c1', type: 'TEXT' }])
-    expect(paletteProps.allowedTypes).toEqual(ALLOWED_SUBFIELD_TYPES)
-    // 组件库改走原生 DnD：不再声明 SortableJS group（group 只属于画布内排序）
-    expect(paletteProps.group).toBeUndefined()
-    expect(canvasProps.group).toBe('designer-subfields')
+describe('SubFieldDesigner modal', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('renders the field table and keeps a local working copy', () => {
+    const subFields: TableSubField[] = [{ name: 'c1', type: 'TEXT', label: '列一' }]
+    const wrapper = mountEditor(subFields)
+    const vm = wrapper.vm as unknown as Vm
+
+    expect(vm.working).toEqual(subFields)
+    expect(vm.working).not.toBe(subFields)
+    expect(wrapper.text()).toContain('子表字段编辑 · 明细')
+    expect(wrapper.text()).toContain('1 个子字段')
   })
 
-  it('拖拽接线：drag-start 进入落点预览，add 按落点插入子字段并清预览', async () => {
+  it('adds and configures a field before writing it back on confirm', async () => {
     const wrapper = mountEditor([{ name: 'c1', type: 'TEXT' }])
-    const pending = { id: 'di_pending', field: { name: 'c2', type: 'NUMBER' } }
+    const vm = wrapper.vm as unknown as Vm
 
-    wrapper.findComponent(PaletteStub).vm.$emit('drag-start', pending)
-    await wrapper.vm.$nextTick()
-    expect(canvasProps.pendingItem).toEqual(pending)
+    vm.openAdd()
+    expect(vm.configVisible).toBe(true)
+    vm.patchConfig({ name: 'c2', label: '数量', type: 'NUMBER', required: true })
+    vm.saveConfig()
+    vm.confirmFields()
+    await flushPromises()
 
-    wrapper.findComponent(CanvasStub).vm.$emit('add', pending, 1)
-    await wrapper.vm.$nextTick()
-    expect((canvasProps.items as { field: { name: string } }[]).map((it) => it.field.name)).toEqual(
-      ['c1', 'c2'],
-    )
-    expect(canvasProps.pendingItem).toBeNull()
+    const emitted = wrapper.emitted('close')?.at(-1)?.[0] as TableSubField[]
+    expect(emitted).toContainEqual({ name: 'c2', type: 'NUMBER', label: '数量', required: true })
   })
 
-  it('seeds canvas items from subFields; dedup name set scoped to sub-table fields', () => {
-    mountEditor([
-      { name: 'c1', type: 'TEXT' },
-      { name: 'c2', type: 'NUMBER' },
+  it('edits and reorders an existing field', () => {
+    const wrapper = mountEditor([
+      { name: 'c1', type: 'TEXT', label: '列一' },
+      { name: 'c2', type: 'NUMBER', label: '数量' },
     ])
-    const items = canvasProps.items as { field: { name: string } }[]
-    expect(items.map((it) => it.field.name)).toEqual(['c1', 'c2'])
-    // 列名查重范围 = 子表内部字段（不掺主表）
-    expect(paletteProps.existingNames).toEqual(['c1', 'c2'])
+    const vm = wrapper.vm as unknown as Vm
+    vm.moveField(1, -1)
+    expect(vm.working.map((field) => field.name)).toEqual(['c2', 'c1'])
+
+    vm.openConfig(0)
+    vm.patchConfig({ label: '数量（调整）' })
+    vm.saveConfig()
+    expect(vm.working[0]?.label).toBe('数量（调整）')
   })
 
-  it('emits close with subFields converted back when 返回 is clicked', async () => {
-    const wrapper = mountEditor([{ name: 'c1', type: 'TEXT', label: '列1' }])
-    await wrapper.find('.sub-designer__back').trigger('click')
-    const emitted = wrapper.emitted('close')?.at(-1)?.[0] as TableSubField[]
-    expect(emitted).toEqual([{ name: 'c1', type: 'TEXT', label: '列1' }])
-  })
-
-  it('writes a palette-added item into the isolated sub-table context', async () => {
-    const wrapper = mountEditor([])
-    wrapper.findComponent(PaletteStub).vm.$emit('add', {
-      id: 'sub-item-1',
-      field: { name: 'c1', type: 'TEXT' },
-    })
-    await wrapper.find('.sub-designer__back').trigger('click')
+  it('cancels without applying local edits', async () => {
+    const original: TableSubField[] = [{ name: 'c1', type: 'TEXT', label: '列一' }]
+    const wrapper = mountEditor(original)
+    const vm = wrapper.vm as unknown as Vm
+    vm.openAdd()
+    vm.saveConfig()
+    vm.cancel()
+    await flushPromises()
 
     const emitted = wrapper.emitted('close')?.at(-1)?.[0] as TableSubField[]
-    expect(emitted).toEqual([{ name: 'c1', type: 'TEXT' }])
+    expect(emitted).toEqual(original)
+    expect(emitted).not.toBe(original)
   })
 
-  it('propagates readonly to palette / canvas / config', () => {
-    mountEditor([{ name: 'c1', type: 'TEXT' }], true)
-    expect(paletteProps.disabled).toBe(true)
-    expect(canvasProps.readonly).toBe(true)
-    expect(configProps.readonly).toBe(true)
+  it('blocks add and reorder in read-only mode', () => {
+    const wrapper = mountEditor([{ name: 'c1', type: 'TEXT' }], true)
+    const vm = wrapper.vm as unknown as Vm
+    vm.openAdd()
+    vm.moveField(0, 1)
+
+    expect(vm.configVisible).toBe(false)
+    expect(vm.working).toEqual([{ name: 'c1', type: 'TEXT' }])
   })
 })

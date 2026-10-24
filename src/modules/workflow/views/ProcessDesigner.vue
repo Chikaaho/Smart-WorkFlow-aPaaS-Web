@@ -2870,8 +2870,8 @@ async function toggleVersionAvailability(item: ProcessDefVersionInfo) {
   }
   changingVersionId.value = item.id
   try {
-    if (suspending) await suspendDefVersion(Number(defId.value), item.graphVersion)
-    else await activateDefVersion(Number(defId.value), item.graphVersion)
+    if (suspending) await suspendDefVersion(defId.value, item.graphVersion)
+    else await activateDefVersion(defId.value, item.graphVersion)
     ElMessage.success(t('workflow.versionAvailabilityChanged'))
     await loadVersionHistory()
   } catch (error) {

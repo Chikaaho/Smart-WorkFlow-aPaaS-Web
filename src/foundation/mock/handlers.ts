@@ -34,6 +34,8 @@ import type { MockHandler, MockMethod } from './index'
 import { MOCK_WORKFLOW_NODE_CAPABILITIES } from './workflow-node-capabilities'
 import { tenantMockRegistrations, mockTenantView } from './tenant-handlers'
 import { appManagementMockRegistrations } from './app-management-handlers'
+import { f020DatasourceMockRegistrations } from './f020-datasource-mocks'
+import { w020AuthorizeMockRegistrations } from './w020-authorize-mocks'
 import {
   MOCK_CATEGORIES,
   MOCK_CATALOG_ITEMS,
@@ -1431,6 +1433,8 @@ const MOCK_IOT_RESERVATIONS: {
 ]
 
 export const mockRegistrations: MockRegistration[] = [
+  ...(f020DatasourceMockRegistrations as MockRegistration[]),
+  ...(w020AuthorizeMockRegistrations as MockRegistration[]),
   ...tenantMockRegistrations,
   ...appManagementMockRegistrations,
   // POST /api/workflow/txn-batch — 后台批量受理（P62 S5 mock，临时）

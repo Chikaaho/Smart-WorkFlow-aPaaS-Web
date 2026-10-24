@@ -308,6 +308,16 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'workflow/authorize-rules',
+        name: 'workflow-authorize-rules',
+        component: () => import('@/modules/workflow/views/AuthorizeRules.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.authorizeRulesTitle')
+          },
+        },
+      },
+      {
         // I3 第一方流程设计器：统一节点能力端点构建面板与配置，ProcessGraph 单一图契约。
         path: 'workflow/defs/:defId/design',
         name: 'workflow-def-designer',

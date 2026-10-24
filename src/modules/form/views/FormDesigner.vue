@@ -949,7 +949,7 @@ async function loadBreadcrumbCategory() {
       />
     </template>
 
-    <!-- 子表盖层子画布：盖在主画布之上，独立状态编辑该子表的内部字段 -->
+    <!-- 子表字段弹窗：独立工作副本，确认后写回该子表字段 -->
     <SubFieldDesigner
       v-if="editingTableField && activeTab === 'design'"
       :table-label="editingTableField.label || editingTableField.name"

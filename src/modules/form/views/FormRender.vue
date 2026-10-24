@@ -538,23 +538,65 @@ function validateRequiredFields(): boolean {
 
 /* ── 提交 / 保存 ── */
 
+/**
+ * 提交前的统一时序：先结清已有字段联动，再执行提交前事件及其联动，
+ * 最后交给调用方做最终校验。草稿保存不经过此入口。
+ */
+async function settleBeforeSubmitEvents(): Promise<boolean> {
+  try {
+    await nextTick()
+    fieldScripts.resetBaseline()
+    const before = await formEvents.runBeforeSubmit()
+    if (!before.ok) {
+      errorMsg.value = before.cancelled
+        ? `提交已取消：${before.error ?? ''}`
+        : `提交前处理失败：${before.error ?? '未知错误'}`
+      return false
+    }
+    fieldScripts.resetBaseline()
+    await nextTick()
+    return true
+  } catch (err) {
+    errorMsg.value = `提交前处理失败：${err instanceof Error ? err.message : String(err)}`
+    return false
+  }
+}
+
+/** 命令结果在不同后端版本中可能是对象或 JSON 字符串；只在确有稳定记录 ID 时返回。 */
+function readRecordIdFromCommandResult(result: unknown): string {
+  let parsed = result
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed)
+    } catch {
+      return ''
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return ''
+  const recordId = (parsed as Record<string, unknown>).recordId
+  if (typeof recordId === 'string') return recordId.trim()
+  if (typeof recordId === 'number' && Number.isFinite(recordId)) return String(recordId)
+  return ''
+}
+
+/** 草稿提交完成后，命令结果或草稿回读的 resultRecordId 是提交后动作的稳定业务标识。 */
+async function resolveDraftSubmissionId(commandResult: unknown): Promise<string> {
+  const fromCommand = readRecordIdFromCommandResult(commandResult)
+  if (fromCommand) return fromCommand
+  const { getDraft } = await getProcessDraftApi()
+  const draft = await getDraft(draftId)
+  return draft.resultRecordId?.trim() ?? ''
+}
+
 async function handleSubmit() {
   submitting.value = true
   errorMsg.value = ''
 
   // 提交前事件先结清已有字段联动，再执行脚本及其联动，最后做最终客户端校验。
-  await nextTick()
-  fieldScripts.resetBaseline()
-  const before = await formEvents.runBeforeSubmit()
-  if (!before.ok) {
-    errorMsg.value = before.cancelled
-      ? `提交已取消：${before.error ?? ''}`
-      : `提交前处理失败：${before.error ?? '未知错误'}`
+  if (!(await settleBeforeSubmitEvents())) {
     submitting.value = false
     return
   }
-  fieldScripts.resetBaseline()
-  await nextTick()
 
   if (!validateRequiredFields()) {
     errorMsg.value = t('form.completeRequired')
@@ -644,15 +686,28 @@ async function handleSubmit() {
 }
 
 async function retryPostSubmitEvents() {
-  if (!lastSubmittedId.value || postEventRetrying.value) return
+  if (postEventRetrying.value) return
   postEventRetrying.value = true
-  const result = await formEvents.runAfterSubmit(lastSubmittedId.value, true)
-  postEventRetrying.value = false
-  if (result.ok) {
-    postSubmitEventError.value = ''
-    ElMessage.success('后续处理已完成')
-  } else {
-    postSubmitEventError.value = result.error ?? '提交后动作失败'
+  try {
+    // 草稿命令已完成但首次未取到稳定记录标识时，重试先回读草稿，不重发业务提交。
+    if (!lastSubmittedId.value && isDraftMode.value && draftId) {
+      lastSubmittedId.value = await resolveDraftSubmissionId(null)
+    }
+    if (!lastSubmittedId.value) {
+      postSubmitEventError.value = '尚未取得稳定记录标识，后续处理未执行'
+      return
+    }
+    const result = await formEvents.runAfterSubmit(lastSubmittedId.value, true)
+    if (result.ok) {
+      postSubmitEventError.value = ''
+      ElMessage.success('后续处理已完成')
+    } else {
+      postSubmitEventError.value = result.error ?? '提交后动作失败'
+    }
+  } catch (err) {
+    postSubmitEventError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    postEventRetrying.value = false
   }
 }
 
@@ -771,13 +826,15 @@ async function handleSaveDraft() {
 /** 提交草稿：先保存控件值（updateDraft），再受理提交并轮询命令终态 */
 async function handleSubmitDraft() {
   if (!schema.value) return
-  if (!validateRequiredFields()) {
-    errorMsg.value = t('form.completeRequired')
-    return
-  }
   draftSaving.value = true
   errorMsg.value = ''
   try {
+    // 草稿转正式提交复用正式提交语义；保存草稿本身不经过这里。
+    if (!(await settleBeforeSubmitEvents())) return
+    if (!validateRequiredFields()) {
+      errorMsg.value = t('form.completeRequired')
+      return
+    }
     const { updateDraft, submitDraft, pollCommandStatus } = await getProcessDraftApi()
     await updateDraft(draftId, {
       title: draftTitle.value.trim() || null,
@@ -787,11 +844,35 @@ async function handleSubmitDraft() {
     const accept = await submitDraft(draftId)
     const finalStatus = await pollCommandStatus(accept.commandId)
     if (finalStatus?.status === 'COMPLETED') {
+      postSubmitEventError.value = ''
+      let afterOk = false
+      try {
+        const submissionId = await resolveDraftSubmissionId(finalStatus.result)
+        if (!submissionId) {
+          postSubmitEventError.value = '尚未取得稳定记录标识，后续处理未执行'
+        } else {
+          lastSubmittedId.value = submissionId
+          const after = await formEvents.runAfterSubmit(submissionId)
+          afterOk = after.ok
+          if (!after.ok) {
+            postSubmitEventError.value = after.error ?? '提交后动作失败'
+            ElMessage.warning(`已提交，后续处理失败：${postSubmitEventError.value}`)
+          }
+        }
+      } catch (err) {
+        postSubmitEventError.value = err instanceof Error ? err.message : String(err)
+        ElMessage.warning(`已提交，后续处理失败：${postSubmitEventError.value}`)
+      } finally {
+        submissionFinalized.value = true
+      }
       ElMessage.success(t('common.submitSuccess'))
-      // eslint-disable-next-line no-undef
-      window.setTimeout(() => {
-        void router.push('/workflow/my-drafts')
-      }, 1200)
+      // 后续处理失败时留在本页，使用原稳定标识显式重试；不重发业务提交。
+      if (afterOk) {
+        // eslint-disable-next-line no-undef
+        window.setTimeout(() => {
+          void router.push('/workflow/my-drafts')
+        }, 1200)
+      }
     } else if (finalStatus?.status === 'FAILED') {
       errorMsg.value = finalStatus.failureReason ?? t('common.submitFailed')
     } else {

@@ -11,6 +11,23 @@ test.describe('0.2.0 流程设计器会签选中态（mock 隔离）', () => {
 
     const palette = page.locator('.designer-palette')
     await expect(palette).toBeVisible()
+    await expect(palette.getByRole('button', { name: '动态并行', exact: true })).toBeVisible()
+    await expect
+      .poll(() =>
+        palette
+          .locator("button[data-node-type='CONSENSUS'] .workbar-icon path")
+          .first()
+          .evaluate((element) => getComputedStyle(element).stroke),
+      )
+      .toBe('rgb(148, 95, 0)')
+    await expect
+      .poll(() =>
+        palette
+          .locator("button[data-node-type='DYNAMIC_PARALLEL'] .workbar-icon path")
+          .first()
+          .evaluate((element) => getComputedStyle(element).stroke),
+      )
+      .toBe('rgb(37, 99, 235)')
     await expect(page.locator('.pg-svg text', { hasText: '科技负责人会签' })).toBeVisible()
     await expect(page.locator('.pg-svg text')).toHaveCount(13)
     await page.locator('.designer-node').filter({ hasText: '科技负责人会签' }).click()

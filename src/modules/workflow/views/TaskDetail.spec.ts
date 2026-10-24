@@ -24,6 +24,11 @@ vi.mock('@/modules/workflow/api', () => ({
   addSignTask: vi.fn(),
   getApprovalOpinionDraft: vi.fn(),
   saveApprovalOpinionDraft: vi.fn(),
+  myInstances: vi.fn(),
+}))
+
+vi.mock('@/modules/workflow/api/oa', () => ({
+  urgeMyInstance: vi.fn(),
 }))
 
 // P64 节点业务表单：办理页读取绑定与数据（默认未绑定，用例内按需 stub）
@@ -65,7 +70,10 @@ import {
   communicateTask,
   addSignTask,
   getApprovalOpinionDraft,
+  saveApprovalOpinionDraft,
+  myInstances,
 } from '@/modules/workflow/api'
+import { urgeMyInstance } from '@/modules/workflow/api/oa'
 import { getTaskNodeForm } from '@/modules/workflow/api/p64'
 import { listReservationsByInstance, cancelReservation } from '@/adapters/iot-reservation'
 import { permissionDirective } from '@/foundation/permission'
@@ -176,6 +184,7 @@ describe('TaskDetail.vue', () => {
     vi.mocked(delegateTask).mockResolvedValue(undefined)
     vi.mocked(communicateTask).mockResolvedValue(undefined)
     vi.mocked(addSignTask).mockResolvedValue(undefined)
+    vi.mocked(myInstances).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 100 })
   })
 
   const allLifecyclePermissions = [
@@ -492,7 +501,7 @@ describe('TaskDetail.vue', () => {
         deptId: null,
         tenantId: null,
       },
-      permissions: new Set<string>(),
+      permissions: new Set(['workflow:urge']),
       roles: new Set<string>(),
       superAdmin: false,
     })
@@ -515,7 +524,39 @@ describe('TaskDetail.vue', () => {
     expect(wrapper.text()).not.toContain(i18n.global.t('taskDetailUi.urgeAction'))
   })
 
-  it('running task still shows urge to the initiator', async () => {
+  it('running task shows urge only to the initiator with workflow:urge', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '1',
+        username: 'initiator',
+        displayName: '发起人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set(['workflow:urge']),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      taskStatus: 'RUNNING',
+      instanceStatus: 'RUNNING',
+      canHandle: false,
+    })
+    const wrapper = mount(TaskDetailView, {
+      global: { plugins: [i18n, pinia], stubs },
+    })
+    await nextTick()
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as { canUrge: boolean }
+    expect(vm.canUrge).toBe(true)
+    expect(wrapper.text()).toContain(i18n.global.t('taskDetailUi.urgeAction'))
+  })
+
+  it('hides urge when the initiator lacks workflow:urge', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     useUserStore(pinia).setSession({
@@ -543,8 +584,65 @@ describe('TaskDetail.vue', () => {
     await flushPromises()
 
     const vm = wrapper.vm as unknown as { canUrge: boolean }
-    expect(vm.canUrge).toBe(true)
-    expect(wrapper.text()).toContain(i18n.global.t('taskDetailUi.urgeAction'))
+    expect(vm.canUrge).toBe(false)
+    expect(wrapper.text()).not.toContain(i18n.global.t('taskDetailUi.urgeAction'))
+  })
+
+  it('resolves the stable BPM instance id before urging a Flowable string id', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '1',
+        username: 'initiator',
+        displayName: '发起人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set(['workflow:urge']),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      taskStatus: 'RUNNING',
+      instanceStatus: 'RUNNING',
+      canHandle: false,
+    })
+    vi.mocked(myInstances).mockResolvedValueOnce({
+      list: [
+        {
+          id: 42,
+          processInstanceId: 'pi-001',
+          processDefKey: 'skeleton_approval',
+          processName: '单节点审批',
+          businessKey: 'fd_001',
+          formKey: 'leave-request',
+          initiatorId: 1,
+          status: 'RUNNING',
+          createTime: '2026-07-17T09:00:00',
+        },
+      ],
+      total: 1,
+      pageNum: 1,
+      pageSize: 100,
+    })
+    vi.mocked(urgeMyInstance).mockResolvedValueOnce({
+      result: 'ACCEPTED',
+      detail: '已催办',
+      recordId: '2100424929376403601',
+    })
+    const wrapper = mount(TaskDetailView, {
+      global: { plugins: [i18n, pinia], stubs },
+    })
+    await nextTick()
+    await flushPromises()
+
+    await (wrapper.vm as unknown as { onUrge: () => Promise<void> }).onUrge()
+
+    expect(myInstances).toHaveBeenCalledWith({ pageNum: 1, pageSize: 100 }, { keyword: 'fd_001' })
+    expect(urgeMyInstance).toHaveBeenCalledWith(42)
+    expect(ElMessage.success).toHaveBeenCalledWith('已催办')
   })
 
   it('V012-BUG-001: running task without handle permission hides approval actions', async () => {
@@ -575,6 +673,24 @@ describe('TaskDetail.vue', () => {
     const vm = wrapper.vm as unknown as { canAct: boolean }
     expect(vm.canAct).toBe(true)
     expect(wrapper.findAll('.detail-card--actions')).toHaveLength(1)
+  })
+
+  it('does not label a freshly saved opinion draft as restored', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({ ...mockDetail, canHandle: true })
+    vi.mocked(saveApprovalOpinionDraft).mockResolvedValueOnce({} as never)
+    const wrapper = mount(TaskDetailView, {
+      global: { plugins: [i18n, createPinia()], stubs },
+    })
+    await nextTick()
+    await flushPromises()
+
+    await (wrapper.vm as unknown as { saveOpinionDraft: () => Promise<void> }).saveOpinionDraft()
+    await flushPromises()
+
+    expect(saveApprovalOpinionDraft).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.opinion-draft-actions').text()).not.toContain(
+      i18n.global.t('workflow.opinionDraftRestored'),
+    )
   })
 
   it('W020: secondary approval actions are grouped under More while primary actions and opinion draft stay visible', async () => {
@@ -712,7 +828,7 @@ describe('TaskDetail.vue', () => {
         deptId: null,
         tenantId: null,
       },
-      permissions: new Set<string>(),
+      permissions: new Set(['workflow:urge']),
       roles: new Set<string>(),
       superAdmin: false,
     })

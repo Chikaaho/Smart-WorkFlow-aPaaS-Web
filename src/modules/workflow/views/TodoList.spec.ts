@@ -5,6 +5,9 @@ import { nextTick } from 'vue'
 vi.mock('@/modules/workflow/api', () => ({
   queryTodoTasks: vi.fn(),
   claimTask: vi.fn(),
+  queryPendingSigns: vi.fn(),
+  expressSign: vi.fn(),
+  cancelSign: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -27,7 +30,8 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
-import { queryTodoTasks, claimTask } from '@/modules/workflow/api'
+import { queryTodoTasks, claimTask, cancelSign, queryPendingSigns } from '@/modules/workflow/api'
+import type { PendingSignItem } from '@/modules/workflow/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
 import type { TodoTask } from '@/contracts/bpm'
@@ -68,6 +72,7 @@ const mockPageResult = {
 describe('TodoList.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(queryPendingSigns).mockResolvedValue([])
   })
 
   it('calls queryTodoTasks with pagination on mount', async () => {
@@ -187,5 +192,32 @@ describe('TodoList.vue', () => {
     await nextTick()
 
     expect(claimTask).not.toHaveBeenCalled()
+  })
+
+  it('cancels a pending sign with its string record id and reloads the queue', async () => {
+    vi.mocked(queryTodoTasks).mockResolvedValue(mockPageResult)
+    vi.mocked(cancelSign).mockResolvedValueOnce(undefined)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+    const wrapper = mount(TodoList, { global: { stubs } })
+    await nextTick()
+
+    await (
+      wrapper.vm as unknown as { cancelPendingSign: (item: PendingSignItem) => Promise<void> }
+    ).cancelPendingSign({
+      recordId: '2100424929376403458',
+      taskId: 'task-1',
+      processInstanceId: 'pi-1',
+      nodeKey: null,
+      signType: 'ADD_SIGN',
+      modeType: 'PARALLEL',
+      seqNo: 0,
+      signPosition: 'AFTER',
+      comment: '',
+      serialBlocked: false,
+    })
+
+    expect(cancelSign).toHaveBeenCalledWith('2100424929376403458')
+    expect(ElMessage.success).toHaveBeenCalledWith('加签事项已取消')
+    expect(queryPendingSigns).toHaveBeenCalledTimes(2)
   })
 })

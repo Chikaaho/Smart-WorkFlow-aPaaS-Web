@@ -20,6 +20,7 @@ import {
   acceptTaskAction,
   latestTaskCommand,
   pollCommandStatus,
+  myInstances,
   transferTask,
   delegateTask,
   communicateTask,
@@ -70,7 +71,7 @@ const lastExpired = ref<{ reason: string } | null>(null)
 const opinionComment = ref('')
 const opinionData = ref<Record<string, unknown>>({})
 const opinionDraftSaving = ref(false)
-const opinionDraftLoaded = ref(false)
+const opinionDraftRestored = ref(false)
 const returnTargetNodeId = ref('')
 /** 本次提交的表单记录数据（businessKey = 表单记录 ID，经 form 模块只读接口回查） */
 const formRecord = ref<Record<string, unknown> | null>(null)
@@ -79,6 +80,7 @@ const formRecordLoading = ref(false)
 async function loadDetail() {
   loading.value = true
   errorMsg.value = ''
+  opinionDraftRestored.value = false
   try {
     detail.value = await queryTaskDetail(taskId)
     initializeOpinionData(detail.value)
@@ -110,7 +112,7 @@ async function loadOpinionDraft() {
     ) {
       opinionComment.value = draft.comment ?? ''
       opinionData.value = { ...draft.opinionData }
-      opinionDraftLoaded.value = true
+      opinionDraftRestored.value = true
     }
   } catch {
     // 暂存读取失败不阻断正式办理，页面给出可重试的保存入口。
@@ -128,7 +130,8 @@ async function saveOpinionDraft() {
       comment: opinionComment.value,
       opinionData: { ...opinionData.value },
     })
-    opinionDraftLoaded.value = true
+    // 保存成功仅更新草稿，不代表本次打开时已从服务器恢复。
+    opinionDraftRestored.value = false
     ElMessage.success(t('workflow.opinionDraftSaved'))
   } catch (error) {
     ElMessage.error(error instanceof ApiError ? error.msg : t('workflow.opinionDraftSaveFailed'))
@@ -823,7 +826,7 @@ const flowActive = computed(() => {
   return d.taskStatus === 'RUNNING'
 })
 
-const canUrge = computed(() => isInitiator.value && flowActive.value)
+const canUrge = computed(() => isInitiator.value && flowActive.value && hasPerm('workflow:urge'))
 
 type ApprovalMoreCommand = LifecycleKind | 'URGE'
 interface ApprovalMoreAction {
@@ -885,12 +888,30 @@ function handleApprovalMore(command: string): void {
 
 async function onUrge(): Promise<void> {
   const d = detail.value
-  if (!d?.processInstanceId) return
+  if (!d?.processInstanceId || !canUrge.value) return
   try {
+    const page = await myInstances(
+      { pageNum: 1, pageSize: 100 },
+      d.businessKey ? { keyword: d.businessKey } : undefined,
+    )
+    const instance = page.list.find(
+      (item) =>
+        item.processInstanceId === d.processInstanceId &&
+        String(item.initiatorId) === String(d.initiatorId),
+    )
+    if (!instance) {
+      ElMessage.info(t('workflow.urgeNotAvailable'))
+      return
+    }
     const { urgeMyInstance } = await import('@/modules/workflow/api/oa')
-    const resp = await urgeMyInstance(Number(d.processInstanceId))
-    void resp
-    ElMessage.success(t('workflow.urgeSent'))
+    const resp = await urgeMyInstance(instance.id)
+    if (resp.result === 'ACCEPTED') {
+      ElMessage.success(resp.detail || t('workflow.urgeSent'))
+    } else if (resp.result === 'COOLDOWN') {
+      ElMessage.warning(resp.detail || t('workflow.urgeCoolingDown'))
+    } else {
+      ElMessage.info(resp.detail || t('workflow.urgeNotAvailable'))
+    }
   } catch (err) {
     ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.urgeFailed'))
   }
@@ -1155,7 +1176,7 @@ onMounted(loadDetail)
           <el-button size="small" :loading="opinionDraftSaving" @click="saveOpinionDraft">
             {{ t('workflow.saveOpinionDraft') }}
           </el-button>
-          <span v-if="opinionDraftLoaded">{{ t('workflow.opinionDraftRestored') }}</span>
+          <span v-if="opinionDraftRestored">{{ t('workflow.opinionDraftRestored') }}</span>
           <HintTip :content="t('workflow.opinionDraftNote')" />
         </div>
         <!-- 主操作保持直达；有权限且被节点策略允许的转办/委托/沟通/加签与催办统一收进“更多”。 -->

@@ -236,7 +236,7 @@ async function openDetail(row: ProcessInstance) {
 }
 
 // ─── 催办（v0.0.2：发起人对运行中实例催办当前待办人；10 分钟冷却） ───
-const urgingId = ref<number | null>(null)
+const urgingId = ref<number | string | null>(null)
 
 async function urge(row: ProcessInstance) {
   urgingId.value = row.id

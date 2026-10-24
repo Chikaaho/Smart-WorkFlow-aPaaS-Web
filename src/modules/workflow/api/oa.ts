@@ -186,11 +186,11 @@ export async function queryMyCopyDetail(id: number): Promise<MyCopyDetail> {
 export interface UrgeResp {
   result: 'ACCEPTED' | 'COOLDOWN' | 'REJECTED'
   detail: string
-  recordId: number
+  recordId: number | string
 }
 
 /** POST /workflow/my/instances/{id}/urge — 发起人催办（10 分钟冷却，重复请求返回冷却信息）。 */
-export async function urgeMyInstance(instanceId: number): Promise<UrgeResp> {
+export async function urgeMyInstance(instanceId: number | string): Promise<UrgeResp> {
   return request<UrgeResp>({
     method: 'POST',
     url: `/workflow/my/instances/${instanceId}/urge`,

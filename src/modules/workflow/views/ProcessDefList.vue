@@ -23,7 +23,15 @@ import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { ElMessage } from 'element-plus'
-import { CircleCheck, EditPen, Plus, Tickets, VideoPause } from '@element-plus/icons-vue'
+import {
+  CircleCheck,
+  Connection,
+  EditPen,
+  Plus,
+  Tickets,
+  VideoPause,
+} from '@element-plus/icons-vue'
+import { hasPerm } from '@/foundation/permission'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import CreateProcessDefDialog from './CreateProcessDefDialog.vue'
 import ThemeRuleDialog from './ThemeRuleDialog.vue'
@@ -198,6 +206,9 @@ const createDialogVisible = ref(false)
 // ─── 表单工作台回跳上下文（P52） ───
 const route = useRoute()
 const router = useRouter()
+const canAuthorize = computed(
+  () => hasPerm('workflow:task:authorize') || hasPerm('workflow:def:design'),
+)
 const returnFormId = computed(() =>
   route.query?.from === 'form-workbench' && typeof route.query?.formId === 'string'
     ? route.query.formId
@@ -378,6 +389,13 @@ onMounted(loadList)
         <el-button v-if="returnFormId" @click="backToWorkbench">{{
           t('workflow.backToFormWorkbench')
         }}</el-button>
+        <el-button
+          v-if="canAuthorize"
+          :icon="Connection"
+          @click="router.push('/workflow/authorize-rules')"
+        >
+          {{ t('workflow.authorizeRulesEntry') }}
+        </el-button>
         <el-button type="primary" class="heading-primary" @click="createDialogVisible = true">
           <el-icon><Plus /></el-icon>
           {{ t('workflow.createProcessDefAction') }}

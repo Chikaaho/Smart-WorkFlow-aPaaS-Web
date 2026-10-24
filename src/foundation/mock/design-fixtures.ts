@@ -1107,7 +1107,7 @@ function designProcessGraphPayload(): Record<string, unknown> {
       },
     ],
     elements: [
-      { id: 'start', kind: 'node', type: 'START', x: 416, y: 54, config: { name: '开始节点' } },
+      { id: 'start', kind: 'node', type: 'START', x: 416, y: 54, config: { name: '开始' } },
       {
         id: 'draft',
         kind: 'node',
@@ -1115,7 +1115,7 @@ function designProcessGraphPayload(): Record<string, unknown> {
         x: 416,
         y: 145,
         config: {
-          name: '起草节点',
+          name: '起草',
           nodeClass: 'draft',
           approver: JSON.stringify({ type: 'DESIGNATED', value: ['2', '103'] }),
         },
@@ -1214,7 +1214,7 @@ function designProcessGraphPayload(): Record<string, unknown> {
         y: 667,
         config: { name: '会签部门意见' },
       },
-      { id: 'end', kind: 'node', type: 'END', x: 416, y: 748, config: { name: '结束节点' } },
+      { id: 'end', kind: 'node', type: 'END', x: 416, y: 748, config: { name: '结束' } },
       { id: 'e1', kind: 'edge', source: 'start', target: 'draft' },
       { id: 'e2', kind: 'edge', source: 'draft', target: 'dept' },
       { id: 'e3', kind: 'edge', source: 'dept', target: 'tech' },
@@ -1302,6 +1302,7 @@ function processDesignerGraphFixtures(): Record<string, DesignMockHandler> {
           },
           MOCK_WORKFLOW_NODE_CAPABILITIES.find((cap) => cap.type === 'APPROVAL'),
           MOCK_WORKFLOW_NODE_CAPABILITIES.find((cap) => cap.type === 'CONSENSUS'),
+          MOCK_WORKFLOW_NODE_CAPABILITIES.find((cap) => cap.type === 'DYNAMIC_PARALLEL'),
           {
             ...MOCK_WORKFLOW_NODE_CAPABILITIES.find((cap) => cap.type === 'CONDITION'),
             displayName: '条件网关',
@@ -1408,6 +1409,18 @@ const DESIGNER_FORM_DEFINITION = JSON.stringify({
       required: false,
       placeholder: '点击上传或将文件拖拽到此处',
       colSpan: 24,
+    },
+    {
+      name: 'drill_resources',
+      label: '演练资源',
+      type: 'TABLE',
+      required: false,
+      colSpan: 24,
+      subFields: [
+        { name: 'resource_name', label: '资源名称', type: 'TEXT', required: true },
+        { name: 'quantity', label: '数量', type: 'NUMBER', required: false },
+        { name: 'owner', label: '负责人', type: 'USER', required: false },
+      ],
     },
   ],
 })

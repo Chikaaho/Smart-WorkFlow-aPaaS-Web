@@ -17,6 +17,7 @@ import {
   claimTask,
   queryPendingSigns,
   expressSign,
+  cancelSign,
   type PendingSignItem,
 } from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
@@ -104,6 +105,30 @@ async function respondSign(itemRaw: unknown, action: 'APPROVE' | 'DISAPPROVE') {
     await Promise.all([loadList(), loadPendingSigns()])
   } catch (error) {
     ElMessage.error(error instanceof ApiError ? error.msg : t('workflow.signResponseFailed'))
+  } finally {
+    signingId.value = null
+  }
+}
+
+async function cancelPendingSign(itemRaw: unknown) {
+  const item = itemRaw as PendingSignItem
+  if (signingId.value !== null) return
+  try {
+    await ElMessageBox.confirm(t('workflow.cancelSignConfirm'), t('workflow.cancelSignTitle'), {
+      confirmButtonText: t('workflow.cancelSignConfirmAction'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  signingId.value = item.recordId
+  try {
+    await cancelSign(item.recordId)
+    ElMessage.success(t('workflow.signCancelled'))
+    await Promise.all([loadList(), loadPendingSigns()])
+  } catch (error) {
+    ElMessage.error(error instanceof ApiError ? error.msg : t('workflow.signCancelFailed'))
   } finally {
     signingId.value = null
   }
@@ -247,7 +272,7 @@ onMounted(() => Promise.all([loadList(), loadPendingSigns()]))
             />
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.action')" width="180">
+        <el-table-column :label="t('common.action')" width="238">
           <template #default="{ row }">
             <el-button
               size="small"
@@ -264,6 +289,13 @@ onMounted(() => Promise.all([loadList(), loadPendingSigns()]))
               :disabled="row.serialBlocked || signingId !== null"
               @click="respondSign(row, 'DISAPPROVE')"
               >{{ t('common.reject') }}</el-button
+            >
+            <el-button
+              size="small"
+              plain
+              :disabled="signingId !== null"
+              @click="cancelPendingSign(row)"
+              >{{ t('workflow.cancelSignAction') }}</el-button
             >
           </template>
         </el-table-column>

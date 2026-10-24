@@ -627,7 +627,7 @@ export async function getDefVersionGraph(
 }
 
 /** POST /workflow/defs/{id}/versions/{v}/suspend */
-export async function suspendDefVersion(defId: number, version: number): Promise<void> {
+export async function suspendDefVersion(defId: number | string, version: number): Promise<void> {
   return request<void>({
     method: 'POST',
     url: `/workflow/defs/${defId}/versions/${version}/suspend`,
@@ -635,7 +635,7 @@ export async function suspendDefVersion(defId: number, version: number): Promise
 }
 
 /** POST /workflow/defs/{id}/versions/{v}/activate */
-export async function activateDefVersion(defId: number, version: number): Promise<void> {
+export async function activateDefVersion(defId: number | string, version: number): Promise<void> {
   return request<void>({
     method: 'POST',
     url: `/workflow/defs/${defId}/versions/${version}/activate`,
@@ -731,8 +731,8 @@ export async function queryPendingSigns(): Promise<PendingSignItem[]> {
   return request<PendingSignItem[]>({ method: 'GET', url: '/workflow/sign/pending' })
 }
 export async function cancelSign(
-  recordId: number,
-  data: Partial<ApprovalActionRequest>,
+  recordId: number | string,
+  data: Partial<ApprovalActionRequest> = {},
 ): Promise<void> {
   await request<void>({ method: 'POST', url: `/workflow/sign/${recordId}/cancel`, data })
 }
@@ -784,20 +784,33 @@ export async function replyCommunication(
     data,
   })
 }
-export async function saveAuthorizeRule(data: Partial<ApprovalActionRequest>): Promise<number> {
-  return request<number>({ method: 'POST', url: '/workflow/authorize-rules', data })
-}
-export async function revokeAuthorizeRule(ruleId: number): Promise<void> {
+export async function revokeAuthorizeRule(ruleId: number | string): Promise<void> {
   await request<void>({ method: 'DELETE', url: `/workflow/authorize-rules/${ruleId}` })
 }
 export interface AuthorizeRule {
-  id: number
-  principalId: number
-  agentId: number
+  id: string
+  principalId: string
+  agentId: string
   scopeType: string
+  processDefKey?: string | null
+  nodeKey?: string | null
+  businessKey?: string | null
   startAt?: string
   endAt?: string
   status: string
+}
+export interface AuthorizeRuleInput {
+  /** 受托人；Long 用户 ID 保持字符串。授权人由当前登录账号确定。 */
+  targetUserId: string
+  scopeType: 'GLOBAL' | 'PROCESS' | 'NODE' | 'BUSINESS'
+  processDefKey?: string
+  nodeKey?: string
+  businessKey?: string
+  startAt?: string
+  endAt?: string
+}
+export async function createAuthorizeRule(data: AuthorizeRuleInput): Promise<string> {
+  return request<string>({ method: 'POST', url: '/workflow/authorize-rules', data })
 }
 export async function listAuthorizeRules(): Promise<AuthorizeRule[]> {
   return request<AuthorizeRule[]>({ method: 'GET', url: '/workflow/authorize-rules' })
