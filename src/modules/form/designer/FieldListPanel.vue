@@ -276,9 +276,9 @@ function patchDescription(row: FieldRow, description: string) {
   cursor: pointer;
 }
 .field-list__scope.is-active {
-  border-color: var(--el-color-primary, #6f2dff);
+  border-color: var(--el-color-primary);
   background: #fff;
-  color: var(--el-color-primary, #6f2dff);
+  color: var(--el-color-primary);
   font-weight: 600;
 }
 

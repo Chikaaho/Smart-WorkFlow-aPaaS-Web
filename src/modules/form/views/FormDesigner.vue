@@ -1242,7 +1242,7 @@ async function loadBreadcrumbCategory() {
 
 .designer-main-canvas :deep(.field-shell--active) {
   border-color: var(--sw-color-primary);
-  box-shadow: 0 0 0 2px var(--sw-color-primary-soft, #ece9ff);
+  box-shadow: 0 0 0 2px var(--sw-color-primary-soft);
 }
 
 /* 节点07 画布行距：设计 label→label 节距 ≈97px */

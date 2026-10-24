@@ -1,20 +1,19 @@
 @import './fonts.css';
 
 /**
- * 品牌色单一数据源（P53 全局 UI 视觉基线，取代 0.1.0 紫莓 #7e306b 基线）。
- * 品牌主色 #6F2DFF 与深色导航阶 #17213A/#19233B/#172033、语义色 #18A67A/#F59E0B/#E5484D/#20B8CD
- * 均来自 P53 设计包（docs/ui/，身份见 search_fallback/p53-figma-ui-current-seams-supplement-01.md G1）。
+ * 品牌色单一数据源。0.2.0 默认蓝色 #2563EB，紫色 #6F2DFF 继续作为可切换主题保留。
+ * 深色导航阶与结果语义色独立于主题；品牌色阶、选中态、焦点和导航强调由主题运行时覆盖。
  * 换色只改 --sw-color-primary 这一行，其余各档由 color-mix 运行时派生，
  * 与 Element Plus 自身派生算法一致（light-i = i×10% 白色混入，dark-2 = 20% 黑色）。
  * color-mix 现代浏览器（2023+）均支持；若某目标浏览器不支持，退路是用硬编码色值覆盖。
  */
 :root {
   --el-overlay-color-lighter: rgba(16, 24, 47, 0.32);
-  --sw-color-primary: #6f2dff; /* 唯一品牌色源（P53 设计包） */
+  --sw-color-primary: #2563eb; /* 默认蓝色主题；紫色、青色和自定义由主题模块覆盖 */
   --sw-color-primary-dark: color-mix(in srgb, var(--sw-color-primary) 85%, black);
-  --sw-color-primary-light: #bfa7ff; /* 设计确认的浅强调变体（登录页） */
-  --sw-color-primary-soft: #ece9ff; /* 主色浅底（标签/选中底） */
-  --sw-color-primary-softer: #e9e1ff; /* 主色最浅底 */
+  --sw-color-primary-light: color-mix(in srgb, var(--sw-color-primary) 40%, white); /* 浅强调 */
+  --sw-color-primary-soft: color-mix(in srgb, var(--sw-color-primary) 10%, white); /* 标签/选中底 */
+  --sw-color-primary-softer: color-mix(in srgb, var(--sw-color-primary) 14%, white); /* 最浅底 */
 
   /* ═══════════════════════════════════════════════════════
    * 设计系统 Token 全量（P53 设计基线 · 工程宪法 §5 结构保留）
@@ -38,20 +37,20 @@
 
   /* ── 深色导航阶（侧栏/管理端顶栏；#7E89A1 on #17213A 对比度 4.55:1 ≥ AA 4.5:1） ── */
   --sw-nav-sidebar-bg: #111b3b;
-  --sw-nav-item-active-bg: #6f2dff;
-  --sw-nav-subitem-active-bg: #29235c;
-  --sw-nav-topbar-portal-bg: #40369a;
-  --sw-nav-topbar-portal-active-bg: #332b81;
+  --sw-nav-item-active-bg: var(--sw-color-primary);
+  --sw-nav-subitem-active-bg: color-mix(in srgb, var(--sw-color-primary) 20%, #111b3b);
+  --sw-nav-topbar-portal-bg: color-mix(in srgb, var(--sw-color-primary) 60%, #111b3b);
+  --sw-nav-topbar-portal-active-bg: color-mix(in srgb, var(--sw-color-primary) 45%, #111b3b);
   --sw-nav-topbar-admin-bg: #111b3b;
-  --sw-nav-topbar-admin-active-bg: #27345c;
-  --sw-nav-topbar-text: #ece9ff;
-  --sw-nav-sidebar-active-bg: #27345c;
-  --sw-nav-topbar-active-indicator: #d8c9ff;
+  --sw-nav-topbar-admin-active-bg: color-mix(in srgb, var(--sw-color-primary) 30%, #111b3b);
+  --sw-nav-topbar-text: color-mix(in srgb, var(--sw-color-primary) 10%, white);
+  --sw-nav-sidebar-active-bg: color-mix(in srgb, var(--sw-color-primary) 30%, #111b3b);
+  --sw-nav-topbar-active-indicator: color-mix(in srgb, var(--sw-color-primary) 30%, white);
   --sw-nav-bg-raised: #19233b;
   --sw-nav-text: #ffffff;
   --sw-nav-text-secondary: #7e89a1;
   --sw-nav-border: rgba(201, 209, 232, 0.16);
-  --sw-nav-hover-bg: rgba(111, 45, 255, 0.28);
+  --sw-nav-hover-bg: color-mix(in srgb, var(--sw-color-primary) 28%, transparent);
   /* P53 设计（节点15-18）：弹窗蒙层为轻压暗（非 EP 默认 50% 黑） */
   --el-overlay-color-lighter: rgba(16, 24, 47, 0.32);
   /* P53 设计（节点02）：侧栏描边盒边框色 */
@@ -61,8 +60,8 @@
   --sw-nav-sidebar-light-border: #e9edf5;
   --sw-nav-sidebar-light-text: #303a55;
   --sw-nav-sidebar-light-hover-bg: #f4f6fb;
-  --sw-nav-sidebar-light-active-bg: #ece9ff;
-  --sw-nav-sidebar-light-active-text: #6f2dff;
+  --sw-nav-sidebar-light-active-bg: var(--sw-color-primary-soft);
+  --sw-nav-sidebar-light-active-text: var(--sw-color-primary);
   /* P53 设计（节点01/02）：侧栏底部空间卡 */
   --sw-nav-area-card-bg: #172447;
 
@@ -80,6 +79,10 @@
   --sw-danger-bg: #fff0f0;
   --sw-info: #20b8cd;
   --sw-info-bg: #e7f8fa;
+
+  /* 流程设计器节点语义色：会签保持独立棕色，动态并行跟随当前品牌主题。 */
+  --sw-process-consensus: #945f00;
+  --sw-process-dynamic-parallel: var(--sw-color-primary);
 
   /* ── 字号阶梯（size + weight 成对） ── */
   --sw-font-h1: 20px;
@@ -266,11 +269,11 @@ html:root {
 }
 :where(html) .el-tag.el-tag--info {
   --el-tag-text-color: #0e7a8a;
-  --el-tag-bg-color: #f0eaff;
-  --el-tag-border-color: #d8c9ff;
+  --el-tag-bg-color: var(--sw-color-primary-soft);
+  --el-tag-border-color: var(--sw-nav-topbar-active-indicator);
   color: #0e7a8a !important;
-  background-color: #f0eaff !important;
-  border-color: #d8c9ff !important;
+  background-color: var(--sw-color-primary-soft) !important;
+  border-color: var(--sw-nav-topbar-active-indicator) !important;
 }
 :where(html) .el-tag.el-tag--primary {
   --el-tag-text-color: var(--sw-color-primary);

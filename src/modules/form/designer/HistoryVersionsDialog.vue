@@ -285,8 +285,8 @@ async function restoreSelected() {
 }
 
 .history-card--active {
-  background: #fbf8ff;
-  box-shadow: 0 0 0 2px var(--sw-color-primary-soft, #ece9ff);
+  background: var(--sw-color-primary-softer);
+  box-shadow: 0 0 0 2px var(--sw-color-primary-soft);
 }
 
 .history-card__head {
@@ -325,13 +325,13 @@ async function restoreSelected() {
 }
 
 .history-card__badge--current {
-  color: #6f2dff;
-  background: #eee7ff;
+  color: var(--sw-color-primary);
+  background: var(--sw-color-primary-soft);
 }
 
 .history-card__badge--draft {
-  color: #6f2dff;
-  background: #f0eaff;
+  color: var(--sw-color-primary);
+  background: var(--sw-color-primary-soft);
 }
 
 .history-card__badge--published {

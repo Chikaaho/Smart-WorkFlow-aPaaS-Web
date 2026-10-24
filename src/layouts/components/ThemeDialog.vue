@@ -2,7 +2,15 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from '@/locales'
 import DetailDialog from '@/components/DetailDialog.vue'
-import { applyTheme, readTheme, themeColor, type ThemeName } from '@/foundation/theme'
+import {
+  applyTheme,
+  DEFAULT_THEME,
+  isReadableThemeColor,
+  readTheme,
+  resetTheme,
+  themeCssVariables,
+  type ThemeName,
+} from '@/foundation/theme'
 import purpleIcon from '@/assets/theme/purple.svg'
 import blueIcon from '@/assets/theme/blue.svg'
 import tealIcon from '@/assets/theme/teal.svg'
@@ -14,6 +22,7 @@ const { t } = useI18n()
 const draft = reactive(readTheme())
 const colorInput = ref(draft.customColor)
 const error = ref('')
+const resetPending = ref(false)
 const options: { name: ThemeName; icon: string }[] = [
   { name: 'purple', icon: purpleIcon },
   { name: 'blue', icon: blueIcon },
@@ -27,32 +36,41 @@ watch(
     Object.assign(draft, readTheme())
     colorInput.value = draft.customColor
     error.value = ''
+    resetPending.value = false
   },
 )
-const previewStyle = computed(() => ({
-  '--sw-color-primary': themeColor(draft),
-  '--sw-color-primary-soft':
-    draft.name === 'purple' ? '#ece9ff' : `color-mix(in srgb, ${themeColor(draft)} 10%, white)`,
-}))
+const previewStyle = computed(() => themeCssVariables(draft))
+function selectPreset(name: ThemeName) {
+  draft.name = name
+  error.value = ''
+  resetPending.value = false
+}
 function changeCustom() {
   if (!/^#[0-9a-f]{6}$/i.test(colorInput.value)) {
     error.value = t('appearance.invalidColor')
     return false
   }
+  if (!isReadableThemeColor(colorInput.value)) {
+    error.value = t('appearance.invalidContrast')
+    return false
+  }
   draft.customColor = colorInput.value.toLowerCase()
   draft.name = 'custom'
   error.value = ''
+  resetPending.value = false
   return true
 }
 function save() {
   if (draft.name === 'custom' && !changeCustom()) return
-  applyTheme(draft)
+  if (resetPending.value) resetTheme()
+  else applyTheme(draft)
   emit('update:modelValue', false)
 }
 function reset() {
-  Object.assign(draft, { name: 'purple', customColor: '#b45309' })
+  Object.assign(draft, DEFAULT_THEME)
   colorInput.value = draft.customColor
   error.value = ''
+  resetPending.value = true
 }
 </script>
 
@@ -74,7 +92,7 @@ function reset() {
           :key="option.name"
           type="button"
           :aria-pressed="draft.name === option.name"
-          @click="draft.name = option.name"
+          @click="selectPreset(option.name)"
         >
           <img :src="option.icon" alt="" width="18" height="18" />{{
             t(`appearance.${option.name}`)

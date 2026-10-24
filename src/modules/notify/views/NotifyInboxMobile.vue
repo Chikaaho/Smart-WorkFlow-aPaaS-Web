@@ -196,7 +196,7 @@ onMounted(() => void loadList(true))
   flex: none;
 }
 .m-notify-item.unread .dot {
-  background: var(--el-color-primary, #6f2dff);
+  background: var(--el-color-primary);
 }
 .m-notify-item .body {
   flex: 1;

@@ -347,7 +347,7 @@ function statusTagType(
 .batch-section__title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--sw-color-primary, #7e306b);
+  color: var(--sw-color-primary);
   border-bottom: 1px solid var(--el-border-color-light, #ebeef5);
   padding-bottom: 8px;
   margin: 0 0 16px;

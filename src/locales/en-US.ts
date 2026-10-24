@@ -78,7 +78,7 @@ export default {
     },
     title: 'Theme',
     color: 'Theme color',
-    purple: 'Default',
+    purple: 'Purple',
     blue: 'Blue',
     teal: 'Teal',
     custom: 'Custom',
@@ -87,6 +87,7 @@ export default {
     reset: 'Restore default',
     done: 'Done',
     invalidColor: 'Enter a six-digit hexadecimal color, such as #B45309',
+    invalidContrast: 'Choose a theme color with enough contrast against white text and the page',
     modify: 'Change',
   },
   agent: {

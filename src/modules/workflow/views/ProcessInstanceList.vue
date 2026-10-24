@@ -831,7 +831,7 @@ function rowActions(row: unknown): ListAction[] {
   margin: 8px 0;
   font-size: 13px;
   font-weight: 600;
-  color: #7e306b;
+  color: var(--sw-color-primary);
 }
 .p64-cell-note {
   margin-left: 6px;

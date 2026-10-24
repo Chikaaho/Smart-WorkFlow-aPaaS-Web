@@ -214,14 +214,14 @@ function onCommand(command: string): void {
       <svg v-else viewBox="1225 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
         <path
           d="M1234.17 38.0002C1237.39 38.0002 1240 35.3885 1240 32.1668C1240 28.9452 1237.39 26.3335 1234.17 26.3335C1230.95 26.3335 1228.33 28.9452 1228.33 32.1668C1228.33 35.3885 1230.95 38.0002 1234.17 38.0002Z"
-          stroke="#ECE9FF"
+          stroke="currentColor"
           stroke-width="1.41667"
           stroke-linecap="round"
           stroke-linejoin="round"
         />
         <path
           d="M1238.33 36.3335L1241.67 39.6668"
-          stroke="#ECE9FF"
+          stroke="currentColor"
           stroke-width="1.41667"
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -252,14 +252,14 @@ function onCommand(command: string): void {
             >
               <path
                 d="M1278 29.6665C1278 28.3404 1277.47 27.0687 1276.54 26.131C1275.6 25.1933 1274.33 24.6665 1273 24.6665C1271.67 24.6665 1270.4 25.1933 1269.46 26.131C1268.53 27.0687 1268 28.3404 1268 29.6665C1268 35.4998 1265.5 35.4998 1265.5 37.1665H1280.5C1280.5 35.4998 1278 35.4998 1278 29.6665Z"
-                stroke="#ECE9FF"
+                stroke="currentColor"
                 stroke-width="1.41667"
                 stroke-linecap="round"
                 stroke-linejoin="round"
               />
               <path
                 d="M1271.33 40.5H1274.67"
-                stroke="#ECE9FF"
+                stroke="currentColor"
                 stroke-width="1.41667"
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -477,7 +477,7 @@ function onCommand(command: string): void {
   border-bottom: none;
 }
 .app-bell-panel__item:hover {
-  background: var(--sw-color-primary-light-5, #f2eaf0);
+  background: var(--sw-color-primary-soft);
 }
 .app-bell-panel__dot {
   flex: 0 0 auto;
@@ -485,7 +485,7 @@ function onCommand(command: string): void {
   height: 8px;
   margin-top: 5px;
   border-radius: 50%;
-  background: var(--el-color-primary, #7e306b);
+  background: var(--el-color-primary);
 }
 .app-bell-panel__dot.is-read {
   background: transparent;
@@ -595,7 +595,7 @@ function onCommand(command: string): void {
 .app-topbar__locale-menu .el-dropdown-menu__item.is-current {
   color: var(--sw-color-primary);
   font-weight: 600;
-  background: var(--sw-color-primary-light-5, #f2eaf0);
+  background: var(--sw-color-primary-soft);
 }
 /* 铃铛通知面板 popper（V012-BUG-007）：白卡 + 无箭头 */
 .el-popper.app-bell-popover {
@@ -644,7 +644,7 @@ function onCommand(command: string): void {
   justify-content: flex-start;
 }
 .app-topbar__dropdown .el-dropdown-menu__item:not(.is-disabled):hover {
-  background: var(--sw-color-primary-light-5, #f2eaf0);
+  background: var(--sw-color-primary-soft);
 }
 .app-topbar__dropdown .app-topbar__logout {
   color: #e04b55;

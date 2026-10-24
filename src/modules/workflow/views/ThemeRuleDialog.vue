@@ -479,12 +479,12 @@ async function saveThemeRule() {
   cursor: pointer;
 }
 .theme-dialog__palette-item:hover {
-  border-color: var(--el-color-primary, #6f2dff);
-  color: var(--el-color-primary, #6f2dff);
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
 }
 .theme-dialog__clear {
   margin-left: auto;
-  color: var(--el-color-primary, #6f2dff);
+  color: var(--el-color-primary);
 }
 .theme-dialog__clear:disabled {
   color: #a8abb2;
@@ -518,7 +518,7 @@ async function saveThemeRule() {
 }
 .theme-dialog__chip.is-active {
   border-color: #e3e8f4;
-  border-bottom-color: var(--el-color-primary, #6f2dff);
+  border-bottom-color: var(--el-color-primary);
   background: #fff;
 }
 /* 要素有错：红框 + 右上角感叹号（与顶部「存在 N 个错误」同源） */
@@ -551,7 +551,7 @@ async function saveThemeRule() {
   line-height: 18px;
 }
 .theme-dialog__chip-value {
-  color: #6f2dff;
+  color: var(--sw-color-primary);
   font-size: 12px;
   line-height: 16px;
 }
@@ -619,8 +619,8 @@ async function saveThemeRule() {
   cursor: pointer;
 }
 .theme-dialog__var:hover {
-  border-color: var(--el-color-primary, #6f2dff);
-  color: var(--el-color-primary, #6f2dff);
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
 }
 .theme-dialog__hint {
   margin: 10px 0 0;

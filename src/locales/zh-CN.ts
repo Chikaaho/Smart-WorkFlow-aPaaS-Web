@@ -78,7 +78,7 @@ export default {
     },
     title: '主题',
     color: '主题色',
-    purple: '默认',
+    purple: '紫色',
     blue: '蓝色',
     teal: '青色',
     custom: '自定义',
@@ -87,6 +87,7 @@ export default {
     reset: '恢复默认',
     done: '完成',
     invalidColor: '请输入六位十六进制颜色，例如 #B45309',
+    invalidContrast: '主题色需要与白色文字和页面背景保持足够对比度',
     modify: '修改',
   },
   agent: {

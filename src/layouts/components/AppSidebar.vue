@@ -256,10 +256,7 @@ function resolveAdminActive(path: string): string {
   padding-top: 18px;
   border-right: none;
 }
-.app-sidebar--portal {
-  --sw-nav-subitem-active-bg: #29235c;
-}
-/* 0.2.0 新稿：管理端侧栏浅色主题（白底、深字、浅紫激活块） */
+/* 0.2.0 新稿：管理端侧栏浅色主题（白底、深字、品牌浅底激活块） */
 .app-sidebar--admin {
   --el-menu-text-color: var(--sw-nav-sidebar-light-text);
   --el-menu-hover-text-color: var(--sw-nav-sidebar-light-active-text);
@@ -270,11 +267,7 @@ function resolveAdminActive(path: string): string {
   background: var(--sw-nav-sidebar-light-active-bg);
   color: var(--sw-nav-sidebar-light-active-text);
 }
-.app-sidebar--detail {
-  --sw-nav-subitem-active-bg: #29235c;
-}
 .app-sidebar--catalog {
-  --sw-nav-subitem-active-bg: #282052;
   --sw-nav-text-secondary: #c8d0e0;
 }
 .app-sidebar--portal :deep(.el-menu--inline > .el-menu-item:nth-child(2)) {
@@ -345,7 +338,7 @@ function resolveAdminActive(path: string): string {
   color: #ffffff;
   font-weight: 500;
 }
-/* 设计（节点04）：二级子项激活块为深紫蓝 #29235C，顶级激活保持品牌紫（V012-BUG-005 去描边） */
+/* 设计（节点04）：二级子项激活块使用深品牌底，顶级激活保持品牌色（V012-BUG-005 去描边） */
 .app-sidebar :deep(.el-menu--inline .el-menu-item.is-active) {
   background: var(--sw-nav-subitem-active-bg);
 }

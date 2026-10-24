@@ -20,7 +20,7 @@ const workflowDesignerCss = workflowDesigner
   .slice(workflowDesigner.indexOf('<style scoped>'))
   .replace(/\/\*[\s\S]*?\*\//g, '')
 
-// 13 类 token 各抽查代表性变量（P53：新增品牌阶/深色导航/表面/字体族基线）
+// 13 类 token 各抽查代表性变量（0.2.0：蓝色默认主题、品牌阶、深色导航与字体族基线）
 const CATEGORIES: Record<string, string[]> = {
   品牌色: ['--sw-color-primary'],
   品牌阶: ['--sw-color-primary-dark', '--sw-color-primary-light', '--sw-color-primary-soft'],
@@ -39,7 +39,13 @@ const CATEGORIES: Record<string, string[]> = {
   ],
   表面: ['--sw-surface-page', '--sw-surface-card'],
   中性色: ['--sw-text-primary', '--sw-text-regular', '--sw-border-base'],
-  语义色: ['--sw-success', '--sw-danger', '--sw-warning-bg'],
+  语义色: [
+    '--sw-success',
+    '--sw-danger',
+    '--sw-warning-bg',
+    '--sw-process-consensus',
+    '--sw-process-dynamic-parallel',
+  ],
   字号: ['--sw-font-h1', '--sw-font-body', '--sw-font-caption'],
   字体族: ['--sw-font-family'],
   圆角: ['--sw-radius-sm', '--sw-radius-base', '--sw-radius-lg'],
@@ -50,11 +56,13 @@ const CATEGORIES: Record<string, string[]> = {
 }
 
 describe('styles/tokens.css', () => {
-  it('P53 品牌基线：主色与深色导航色值来自设计包', () => {
-    expect(rootBlock).toContain('--sw-color-primary: #6f2dff')
+  it('0.2.0 品牌基线：默认蓝色与深色导航色由主题 token 派生', () => {
+    expect(rootBlock).toContain('--sw-color-primary: #2563eb')
     // 2026-09-17 设计包 PNG 采样复核：侧栏基色为 #111B3B（原 #17213A 为初版误读）
     expect(rootBlock).toContain('--sw-nav-sidebar-bg: #111b3b')
-    expect(rootBlock).toContain('--sw-nav-topbar-portal-bg: #40369a')
+    expect(rootBlock).toContain(
+      '--sw-nav-topbar-portal-bg: color-mix(in srgb, var(--sw-color-primary) 60%, #111b3b)',
+    )
     expect(rootBlock).toContain('--sw-nav-topbar-admin-bg: #111b3b')
   })
 
@@ -71,5 +79,16 @@ describe('styles/tokens.css', () => {
       /#(?:6f2dff|5f24e0|f0eaff|f4efff|f7f2ff|f7f4ff|b9a4ff)\b/i,
     )
     expect(workflowDesignerCss).toContain('var(--sw-color-primary)')
+  })
+
+  it('流程设计器会签使用独立棕色，动态并行跟随品牌主题', () => {
+    expect(rootBlock).toContain('--sw-process-consensus: #945f00')
+    expect(rootBlock).toContain('--sw-process-dynamic-parallel: var(--sw-color-primary)')
+    expect(workflowDesignerCss).toMatch(
+      /\.palette-item\[data-node-type='CONSENSUS'\]\s*\{\s*--palette-accent:\s*var\(--sw-process-consensus\)/,
+    )
+    expect(workflowDesignerCss).toMatch(
+      /\.palette-item\[data-node-type='DYNAMIC_PARALLEL'\]\s*\{\s*--palette-accent:\s*var\(--sw-process-dynamic-parallel\)/,
+    )
   })
 })

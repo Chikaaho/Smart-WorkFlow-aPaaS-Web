@@ -314,10 +314,26 @@ function onSsoProviderSelect(key: SsoProvider): void {
   flex: 1 1 50%;
   padding: 64px 72px;
   background:
+    radial-gradient(
+      circle 280px at 84.52% 10.74%,
+      color-mix(in srgb, var(--sw-color-primary) 42%, transparent),
+      transparent 100%
+    ),
+    radial-gradient(circle 310px at 10.71% 90.82%, rgba(35, 199, 217, 0.26), transparent 100%),
+    linear-gradient(
+      111.75deg,
+      #0c1533 0%,
+      color-mix(in srgb, var(--sw-color-primary) 32%, #0c1533) 52%,
+      #102b4b 100%
+    );
+  color: #ffffff;
+}
+/* 保留 P53 紫色设计稿的登录背景；蓝色及后续主题使用品牌令牌派生。 */
+html[data-theme='purple'] .login-page__brand {
+  background:
     radial-gradient(circle 280px at 84.52% 10.74%, rgba(111, 45, 255, 0.42), transparent 100%),
     radial-gradient(circle 310px at 10.71% 90.82%, rgba(35, 199, 217, 0.26), transparent 100%),
     linear-gradient(111.75deg, #0c1533 0%, #25134e 52%, #102b4b 100%);
-  color: #ffffff;
 }
 .login-page__brand-head {
   display: flex;
@@ -403,7 +419,7 @@ function onSsoProviderSelect(key: SsoProvider): void {
   color: #91e7c9;
 }
 .login-page__pill:nth-child(3) .login-page__pill-icon {
-  color: #bfa7ff;
+  color: var(--sw-color-primary-light);
 }
 .login-page__pill-title {
   font-size: 14px;
@@ -802,7 +818,7 @@ img.login-page__captcha {
     line-height: 24px;
     margin-top: 4px;
     font-weight: 500;
-    color: #ece9ff;
+    color: var(--sw-nav-topbar-text);
   }
   .login-page__badge {
     display: block;
@@ -813,7 +829,7 @@ img.login-page__captcha {
     background: transparent;
     font-size: 12px;
     line-height: 18px;
-    color: #ece9ff;
+    color: var(--sw-nav-topbar-text);
   }
   .login-page__headline {
     max-width: 700px;
@@ -826,7 +842,7 @@ img.login-page__captcha {
     max-width: 900px;
     margin-top: 28px;
     line-height: 22px;
-    color: #ece9ff;
+    color: var(--sw-nav-topbar-text);
   }
   .login-page__pills {
     max-width: 896px;
@@ -854,7 +870,7 @@ img.login-page__captcha {
   .login-page__pill:nth-child(1) .login-page__pill-icon,
   .login-page__pill:nth-child(2) .login-page__pill-icon,
   .login-page__pill:nth-child(3) .login-page__pill-icon {
-    color: #ece9ff;
+    color: var(--sw-nav-topbar-text);
   }
   .login-page__pill-title {
     font-size: 16px;
@@ -863,14 +879,14 @@ img.login-page__captcha {
   .login-page__pill-sub {
     font-size: 14px;
     line-height: 22px;
-    color: #ece9ff;
+    color: var(--sw-nav-topbar-text);
   }
   .login-page__footnote {
     margin-top: 30px;
     padding: 0;
     background: transparent;
     line-height: 18px;
-    color: #ece9ff;
+    color: var(--sw-nav-topbar-text);
   }
   .login-page__panel {
     box-sizing: border-box;

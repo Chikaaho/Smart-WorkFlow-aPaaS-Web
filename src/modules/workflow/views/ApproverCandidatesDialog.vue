@@ -452,7 +452,7 @@ const RULE_TYPES = [
 }
 
 .approver-user.is-picked {
-  background: #f0eaff;
+  background: var(--sw-color-primary-soft);
 }
 
 .approver-user__avatar {

@@ -4870,7 +4870,7 @@ function nodeLabelLines(label: string) {
 <style scoped>
 /* ==================================================================
    P53 节点09/12/13 设计还原（按 P53 设计包几何移植；
-   色值原样搬运：#6F2DFF/#8393B5/#A4ADBE/#E8EDF6/#F8FAFE 等）。
+   品牌相关表面、选中态、连线与动态并行图标引用全局主题 token）。
    ================================================================== */
 .designer-page {
   display: flex;
@@ -5193,10 +5193,15 @@ function nodeLabelLines(label: string) {
 .palette-item[data-node-type='PARALLEL_GATEWAY'] {
   --palette-accent: #d98c10;
 }
-.palette-item[data-node-type='DYNAMIC_PARALLEL'],
+.palette-item[data-node-type='CONSENSUS'] {
+  --palette-accent: var(--sw-process-consensus);
+}
+.palette-item[data-node-type='DYNAMIC_PARALLEL'] {
+  --palette-accent: var(--sw-process-dynamic-parallel);
+}
 .palette-item[data-node-type='NOTIFICATION'],
 .palette-item[data-node-type='IOT_COMMAND'] {
-  --palette-accent: #945f00;
+  --palette-accent: var(--sw-process-consensus);
 }
 
 /* 0.1.7：开始/结束小圆形图标节点（无卡片盒） */
@@ -5277,7 +5282,7 @@ function nodeLabelLines(label: string) {
   line-height: 16px;
 }
 
-/* ── 节点卡片（fixture 终版几何：158.8×48.8 / 胶囊 24.4 / 选中 #F7F2FF+#6F2DFF） ── */
+/* ── 节点卡片（fixture 终版几何：158.8×48.8 / 胶囊 24.4 / 选中态跟随品牌主题） ── */
 .designer-node {
   cursor: move;
 }
@@ -5551,7 +5556,7 @@ function nodeLabelLines(label: string) {
   border-left: 1px solid #e3e8f4;
 }
 .props-tab.is-active {
-  background: var(--el-color-primary-light-9, #ece9ff);
+  background: var(--sw-color-primary-soft);
   color: var(--sw-color-primary);
   font-weight: 500;
 }
@@ -6213,15 +6218,15 @@ function nodeLabelLines(label: string) {
 .p64-subtitle {
   font-size: 13px;
   font-weight: 600;
-  color: #7e306b;
+  color: var(--sw-color-primary);
 }
 /* BF20261013-021：脚本内置函数参考（触发器判断脚本下方） */
 .script-help {
   margin: -6px 0 10px;
   padding: 8px 10px;
   border-radius: 6px;
-  background: #f6f4fb;
-  border: 1px solid #e8e3f5;
+  background: var(--sw-color-primary-softer);
+  border: 1px solid var(--sw-color-primary-light);
 }
 .script-help__title {
   margin: 0 0 4px;

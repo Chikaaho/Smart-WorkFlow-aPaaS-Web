@@ -452,7 +452,7 @@ defineExpose({ fitViewport, zoom, locateCurrent })
   stroke-width: 1.2;
 }
 .pg-state-current.pg-node-rect {
-  fill: #f7f2ff;
+  fill: var(--sw-color-primary-softer);
   stroke: var(--sw-color-primary);
   stroke-width: 2;
 }

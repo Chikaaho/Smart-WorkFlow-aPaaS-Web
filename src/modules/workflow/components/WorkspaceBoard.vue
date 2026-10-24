@@ -2100,7 +2100,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 3px 12px rgb(74 43 175 / 10%);
 }
 .wsd-palette-item.is-used {
-  background: #fbfaff;
+  background: var(--sw-color-primary-softer);
 }
 .wsd-palette-item__grip {
   color: var(--sw-text-tertiary, #98a2b3);

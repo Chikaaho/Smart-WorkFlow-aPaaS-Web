@@ -742,8 +742,8 @@ const opinionDetailAttachmentEntries = computed(() => {
   color: #15a77f;
 }
 .p53-graph-legend__chip--current {
-  background: #f0eaff;
-  color: #6f2dff;
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
 }
 .p53-graph-legend__chip--pending {
   background: #f0f3f9;
@@ -891,8 +891,8 @@ const opinionDetailAttachmentEntries = computed(() => {
   justify-content: center;
   padding: 10px 18px;
   border-radius: 7px;
-  background: #f0ecff;
-  color: var(--sw-color-primary, #6f2dff);
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
   font-size: 12px;
   text-align: center;
   overflow: hidden;
