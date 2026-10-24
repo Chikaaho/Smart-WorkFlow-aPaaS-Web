@@ -1093,6 +1093,19 @@ function designProcessGraphPayload(): Record<string, unknown> {
       postPurpose: '用途：业务状态同步、数据回写、事件通知',
       postFailure: '失败策略：记录日志并按配置重试',
     },
+    triggers: [
+      {
+        triggerId: 'node_enter_sign',
+        name: '科技负责人会签开始前',
+        event: 'NODE_ENTERING',
+        nodeKey: 'tech',
+        script: 'return true;',
+        variables: [],
+        branches: [],
+        unmatchedDisposition: 'IGNORE',
+        errorDisposition: 'IGNORE',
+      },
+    ],
     elements: [
       { id: 'start', kind: 'node', type: 'START', x: 416, y: 54, config: { name: '开始节点' } },
       {
@@ -1121,15 +1134,25 @@ function designProcessGraphPayload(): Record<string, unknown> {
       {
         id: 'tech',
         kind: 'node',
-        type: 'APPROVAL',
+        type: 'CONSENSUS',
         x: 416,
         y: 327,
         config: {
-          name: '办公室资产管理员意见',
-          nodeKey: 'NODE_ASSET_MANAGER',
-          approveMode: '单人审批',
-          approverName: '资产管理员',
-          approver: JSON.stringify({ type: 'DESIGNATED', value: ['2', '103'] }),
+          name: '科技负责人会签',
+          participant: { type: 'DESIGNATED', value: ['2', '103'] },
+          mode: 'RATIO',
+          ratio: 75,
+          nodeForm: { formKey: 'form_approval_comment' },
+          allowedActions: [
+            'APPROVE',
+            'DISAPPROVE',
+            'REJECT',
+            'RETURN',
+            'TRANSFER',
+            'DELEGATE',
+            'COMMUNICATE',
+            'ADD_SIGN',
+          ],
           listeners: [
             {
               phase: 'before',
