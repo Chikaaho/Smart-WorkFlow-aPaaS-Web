@@ -227,7 +227,7 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     expect(r.value).toBe('')
   })
 
-  it('maps RICH_TEXT to input with textarea props and TODO note', () => {
+  it('maps RICH_TEXT to the shared RichTextControl', () => {
     const schema = {
       title: 'F',
       fields: [{ name: 'bio', type: 'RICH_TEXT' as const }],
@@ -236,10 +236,11 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     expect(rules).toHaveLength(1)
 
     const r = rules[0] as Record<string, unknown>
-    expect(r.type).toBe('input')
-    expect((r.props as Record<string, unknown>).type).toBe('textarea')
-    // 设计（节点07）：画布富文本降高为 2 行
-    expect((r.props as Record<string, unknown>).rows).toBe(2)
+    expect(r.type).toBe('RichTextControl')
+    expect((r.props as Record<string, unknown>).field).toMatchObject({
+      name: 'bio',
+      type: 'RICH_TEXT',
+    })
     expect(r.value).toBe('')
   })
 
@@ -721,7 +722,7 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     const types = (rules as Record<string, unknown>[]).map((r) => r.type)
     expect(types).toEqual([
       'input',
-      'input',
+      'RichTextControl',
       'inputNumber',
       'datePicker',
       'switch',

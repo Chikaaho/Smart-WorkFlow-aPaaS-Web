@@ -361,13 +361,10 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     }
 
     case 'RICH_TEXT': {
-      // TODO(rich-text): 接入富文本编辑器，当前降级为多行 textarea
-      rule.type = 'input'
-      rule.props = {
-        type: 'textarea',
-        rows: 2,
-        ...(field.placeholder ? { placeholder: field.placeholder } : {}),
-      }
+      // 复用动态控件同一份 RichTextControl（受控字体/字号/颜色、粘贴清洗、旧值兼容）。
+      rule.type = 'RichTextControl'
+      rule.value = (field as { defaultValue?: unknown }).defaultValue ?? ''
+      rule.props = { field, readonly: false }
       break
     }
 
@@ -572,7 +569,9 @@ function mapSubFieldToCreateRule(sf: TableSubField): Record<string, unknown> {
       break
 
     case 'RICH_TEXT':
-      rule.props = { type: 'textarea', rows: 3 }
+      rule.type = 'RichTextControl'
+      rule.value = ''
+      rule.props = { field: sf, readonly: false, subField: true }
       break
 
     case 'NUMBER':

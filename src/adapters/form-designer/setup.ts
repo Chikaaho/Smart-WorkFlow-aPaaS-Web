@@ -55,8 +55,10 @@ import {
 } from 'element-plus'
 
 import type { App } from 'vue'
+import { i18n } from '@/locales'
 import AttachmentControl from '@/components/dynamic-field-controls/AttachmentControl.vue'
 import LabelControl from '@/components/dynamic-field-controls/LabelControl.vue'
+import RichTextControl from '@/components/dynamic-field-controls/RichTextControl.vue'
 
 const EP_COMPONENTS = [
   ElForm,
@@ -92,6 +94,8 @@ const EP_COMPONENTS = [
 export function setupFcApp(app: App): void {
   // 注册 <form-create> 组件（form-create 默认导出自带 install）。
   app.use(formCreate)
+  // 自定义控件（RichTextControl/LabelControl）经 useI18n() 取文案，子 app 必须安装同一 i18n。
+  app.use(i18n)
 
   for (const comp of EP_COMPONENTS) {
     // 先登记进 form-create 内部 registry（兼容性），再 Vue 全局注册供 resolveComponent 解析。
@@ -106,4 +110,8 @@ export function setupFcApp(app: App): void {
   // 文字组件（LABEL）复用同一份 LabelControl，设计态预览与填报态样式同源。
   formCreate.component('TextDisplay', LabelControl)
   app.component('TextDisplay', LabelControl)
+
+  // 富文本控件：设计态显示与填报态同源工具栏/受控格式，不再降级 textarea。
+  formCreate.component('RichTextControl', RichTextControl)
+  app.component('RichTextControl', RichTextControl)
 }
