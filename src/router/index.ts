@@ -330,6 +330,18 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // 50:88 流程设置：结束通知配置（随定义版本冻结）。
+        path: 'workflow/defs/:defId/settings',
+        name: 'workflow-def-settings',
+        component: () => import('@/modules/workflow/views/ProcessSettings.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.processSettings')
+          },
+          authority: ['workflow:def:design'],
+        },
+      },
+      {
         path: 'workflow/task/:taskId',
         name: 'TaskDetail',
         component: () => import('@/modules/workflow/views/TaskDetail.vue'),

@@ -3118,6 +3118,12 @@ function nodeLabelLines(label: string) {
       <el-button
         size="small"
         class="workbar-advance"
+        @click="router.push(`/workflow/defs/${defId}/settings`)"
+        >{{ t('workflow.processSettings') }}</el-button
+      >
+      <el-button
+        size="small"
+        class="workbar-advance"
         :aria-label="t('workflow.advancedConfig')"
         @click="advancedConfigVisible = true"
         >{{ t('workflow.designerAdvancedShort') }}</el-button

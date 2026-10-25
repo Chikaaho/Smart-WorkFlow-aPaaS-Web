@@ -371,6 +371,15 @@ export interface ProcessGraphPayload {
   variables?: import('@/contracts/p64').BpmVariableDef[]
   /** P64 阶段Ⅰ：Trigger 判断配置（文档级）。 */
   triggers?: import('@/contracts/p64').TriggerConfig[]
+  /** 50:88 结束通知配置（随版本冻结；缺省 = 旧定义原行为）。 */
+  notification?: ProcessNotificationConfigPayload
+}
+
+export interface ProcessNotificationConfigPayload {
+  initiator?: boolean
+  approvers?: boolean
+  otherRecipientIds?: Array<number | string>
+  channels?: string[]
 }
 
 // ═══════════════════════════════════════
