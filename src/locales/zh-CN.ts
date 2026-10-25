@@ -2922,6 +2922,8 @@ export default {
     batchApprove: '批量通过',
     batchDisapprove: '不通过',
     disapprove: '不通过',
+    confirmDisapprove: '确认提交不通过意见？',
+    statusDisapproved: '已提交不通过意见',
     urge: '催办',
     viewDiagram: '流程图',
     advancedConfig: '高级配置',

@@ -40,10 +40,10 @@ export async function acceptTaskAction(
 export async function createTaskApproval(handlers: {
   taskId: () => string | null | undefined
   buildPayload?: (action: 'APPROVE' | 'REJECT') => Record<string, unknown> | undefined
-  onCompleted?: (action: 'APPROVE' | 'REJECT') => void | Promise<void>
+  onCompleted?: (action: 'APPROVE' | 'REJECT' | 'DISAPPROVE') => void | Promise<void>
 }): Promise<{
   submitting: import('vue').Ref<'' | 'approve' | 'reject'>
-  submit: (action: 'APPROVE' | 'REJECT') => Promise<void>
+  submit: (action: 'APPROVE' | 'REJECT' | 'DISAPPROVE') => Promise<void>
 }> {
   const { useTaskApproval } = await import('@/modules/workflow/composables/use-task-approval')
   return useTaskApproval({

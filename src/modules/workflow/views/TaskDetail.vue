@@ -644,7 +644,7 @@ const rejectReason = ref('')
 const rejectSubmitting = ref(false)
 
 function handleReject() {
-  if (acting.value || !canReject.value) return
+  if (acting.value || !negativeAction.value) return
   if (!ensureOpinionData()) return
   rejectReason.value = ''
   rejectDialogVisible.value = true
@@ -664,7 +664,7 @@ async function confirmReject(): Promise<void> {
   rejectSubmitting.value = true
   acting.value = 'reject'
   try {
-    await taskApproval.submit('REJECT', { skipConfirm: true })
+    await taskApproval.submit(negativeAction.value ?? 'REJECT', { skipConfirm: true })
     rejectDialogVisible.value = false
   } finally {
     rejectSubmitting.value = false
@@ -862,6 +862,13 @@ function nodeAllows(action: NodeActionCode): boolean {
 const canApprove = computed(() => canAct.value && nodeAllows('APPROVE'))
 const canReject = computed(() => canAct.value && nodeAllows('REJECT'))
 const canReturn = computed(() => canAct.value && nodeAllows('RETURN'))
+const canDisapprove = computed(() => canAct.value && nodeAllows('DISAPPROVE'))
+/** 负向动作按节点策略路由：REJECT=流程级终态优先；仅允许 DISAPPROVE 时呈现「不通过」（节点结算）。 */
+const negativeAction = computed<'REJECT' | 'DISAPPROVE' | null>(() => {
+  if (canReject.value) return 'REJECT'
+  if (canDisapprove.value) return 'DISAPPROVE'
+  return null
+})
 
 /** 催办仅对流程发起人呈现（真实契约：POST /workflow/my/instances/{id}/urge）。 */
 const isInitiator = computed(() => {
@@ -1291,14 +1298,15 @@ onMounted(loadDetail)
             </el-dropdown>
             <template v-if="canAct">
               <el-button
-                v-if="canReject"
+                v-if="negativeAction"
                 type="danger"
                 plain
+                data-testid="negative-action-button"
                 :loading="acting === 'reject'"
                 :disabled="acting !== null"
                 @click="quickReject"
               >
-                {{ t('common.reject') }}
+                {{ negativeAction === 'REJECT' ? t('common.reject') : t('workflow.disapprove') }}
               </el-button>
               <el-button
                 v-if="canApprove"

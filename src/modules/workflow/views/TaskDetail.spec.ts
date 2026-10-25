@@ -1111,3 +1111,43 @@ describe('TaskDetail 校验提示弹窗（设计 300:1808）', () => {
     expect(acceptTaskAction).toHaveBeenCalled()
   })
 })
+
+describe('TaskDetail 单任务 DISAPPROVE 路由（W020）', () => {
+  it('节点仅允许 APPROVE/DISAPPROVE：负向按钮为「不通过」，提交走 disapprove 段', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      allowedActions: ['APPROVE', 'DISAPPROVE'],
+    })
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
+
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      handleReject: () => void
+      rejectDialogVisible: boolean
+      confirmReject: () => Promise<void>
+      negativeAction: string | null
+    }
+    expect(vm.negativeAction).toBe('DISAPPROVE')
+    vm.handleReject()
+    expect(vm.rejectDialogVisible).toBe(true)
+    await vm.confirmReject()
+    await nextTick()
+
+    expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'disapprove', undefined)
+    expect(ElMessage.success).toHaveBeenCalledWith('已提交不通过意见')
+  })
+
+  it('未配置节点策略（旧定义）：负向按钮保持 REJECT 流程级语义不变', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as { negativeAction: string | null }
+    expect(vm.negativeAction).toBe('REJECT')
+  })
+})

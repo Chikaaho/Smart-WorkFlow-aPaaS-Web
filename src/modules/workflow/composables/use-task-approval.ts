@@ -15,11 +15,13 @@ export interface TaskApprovalHandlers {
   /** 目标任务号（响应式取值）。 */
   taskId: () => string | null | undefined
   /** 提交前置校验（意见必填/节点表单预检等）；返回 false 中止。 */
-  preCheck?: (action: 'APPROVE' | 'REJECT') => boolean
+  preCheck?: (action: 'APPROVE' | 'REJECT' | 'DISAPPROVE') => boolean
   /** 组装动作负载（意见表单/节点表单数据等）；缺省仅带 action。 */
-  buildPayload?: (action: 'APPROVE' | 'REJECT') => Partial<ApprovalActionRequest> | undefined
+  buildPayload?: (
+    action: 'APPROVE' | 'REJECT' | 'DISAPPROVE',
+  ) => Partial<ApprovalActionRequest> | undefined
   /** 命令 COMPLETED 后回调（导航/刷新关系等）。 */
-  onCompleted?: (action: 'APPROVE' | 'REJECT') => void | Promise<void>
+  onCompleted?: (action: 'APPROVE' | 'REJECT' | 'DISAPPROVE') => void | Promise<void>
 }
 
 export function useTaskApproval(handlers: TaskApprovalHandlers) {
@@ -27,7 +29,7 @@ export function useTaskApproval(handlers: TaskApprovalHandlers) {
   const submitting = ref<'' | 'approve' | 'reject'>('')
 
   async function submit(
-    action: 'APPROVE' | 'REJECT',
+    action: 'APPROVE' | 'REJECT' | 'DISAPPROVE',
     opts?: { skipConfirm?: boolean },
   ): Promise<void> {
     const taskId = handlers.taskId()
@@ -38,7 +40,11 @@ export function useTaskApproval(handlers: TaskApprovalHandlers) {
     // 同意仍用通用确认。
     if (!opts?.skipConfirm) {
       const confirmText =
-        action === 'APPROVE' ? t('workflow.confirmApprove') : t('workflow.confirmReject')
+        action === 'APPROVE'
+          ? t('workflow.confirmApprove')
+          : action === 'DISAPPROVE'
+            ? t('workflow.confirmDisapprove')
+            : t('workflow.confirmReject')
       try {
         await ElMessageBox.confirm(confirmText, t('workflow.approveConfirmTitle'), {
           type: 'info',
@@ -59,13 +65,17 @@ export function useTaskApproval(handlers: TaskApprovalHandlers) {
       const payload = handlers.buildPayload ? handlers.buildPayload(action) : { action }
       const accept = await acceptTaskAction(
         taskId,
-        action === 'APPROVE' ? 'complete' : 'reject',
+        action === 'APPROVE' ? 'complete' : action === 'DISAPPROVE' ? 'disapprove' : 'reject',
         payload,
       )
       const final = await pollCommandStatus(accept.commandId)
       if (final?.status === 'COMPLETED') {
         ElMessage.success(
-          action === 'APPROVE' ? t('common.statusApproved') : t('common.statusRejected'),
+          action === 'APPROVE'
+            ? t('common.statusApproved')
+            : action === 'DISAPPROVE'
+              ? t('workflow.statusDisapproved')
+              : t('common.statusRejected'),
         )
         await handlers.onCompleted?.(action)
       } else if (final?.status === 'FAILED') {

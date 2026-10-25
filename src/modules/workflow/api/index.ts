@@ -78,7 +78,7 @@ export async function claimTask(taskId: string): Promise<void> {
 // ═══════════════════════════════════════
 
 /** 审批动作的 URL action 段（对齐后端 /workflow/commands/tasks/{taskId}/{action}） */
-export type TaskActionSegment = 'complete' | 'reject' | 'return'
+export type TaskActionSegment = 'complete' | 'reject' | 'return' | 'disapprove'
 
 /**
  * POST /workflow/commands/tasks/{taskId}/{action} → CommandAcceptResp

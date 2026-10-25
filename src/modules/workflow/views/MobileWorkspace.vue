@@ -182,9 +182,10 @@ async function submitHandle(action: 'APPROVE' | 'DISAPPROVE') {
         }
       : { comment: '' }
     // 与 PC 同一命令受理链：受理后轮询命令终态，不以受理代替成功
+    // 不通过意见走 disapprove 段（节点结算）；REJECT 是流程级终态，不再被移动端误用
     const accepted = await acceptTaskAction(
       detail.value.taskId,
-      action === 'APPROVE' ? 'complete' : 'reject',
+      action === 'APPROVE' ? 'complete' : 'disapprove',
       payload,
     )
     const finalStatus = await pollCommandStatus(accepted.commandId)
