@@ -118,6 +118,10 @@ import {
   CHILD_WAIT_POLICIES,
   DEFAULT_MAX_DISPATCH,
   compatibleVariableTypes,
+  BPM_AGGREGATIONS,
+  BPM_SYSTEM_FIELDS,
+  BPM_VARIABLE_SOURCES,
+  BPM_VARIABLE_TYPES,
 } from '@/modules/workflow/utils/p64-orchestration'
 import type { TriggerDraft, VariableDraft } from '@/modules/workflow/utils/p64-orchestration'
 
@@ -777,6 +781,63 @@ function removeVariable(index: number) {
   list.splice(index, 1)
   graph.value = { ...(graph.value ?? {}), variables: list } as DesignerGraph
   onModelChanged()
+}
+
+/* P64 变量创建：来源/字段/类型/聚合必须与校验器同口径，不能只填标识和名称。 */
+const VARIABLE_TYPE_LABELS: Record<string, string> = {
+  NUMBER: '数字',
+  STRING: '文本',
+  BOOLEAN: '布尔',
+  USER: '用户',
+  DEPT: '部门',
+  USER_SET: '用户集合',
+  DEPT_SET: '部门集合',
+  ROWS: '明细行',
+}
+const VARIABLE_SOURCE_LABELS: Record<string, string> = {
+  MAIN_FORM: '主表字段',
+  NODE_FORM: '节点表单',
+  SYSTEM: '系统字段',
+}
+const VARIABLE_AGGREGATION_LABELS: Record<string, string> = {
+  NONE: '不聚合',
+  UNION: '并集去重',
+  CONCAT: '拼接',
+}
+
+const variableSourceFormKey = computed(() => {
+  const nodeKey = variableDraft.value.sourceNodeKey
+  return nodeFormBindings.value.find((item) => item.nodeKey === nodeKey)?.formKey ?? ''
+})
+
+function onVariableSourceFieldChange(fieldName: string) {
+  const field = mainFormFields.value.find((item) => item.name === fieldName)
+  if (!field) return
+  const type = compatibleVariableTypes(field.type, Boolean(field.multiple))[0]
+  if (type) variableDraft.value.type = type
+  if (!variableDraft.value.name.trim()) variableDraft.value.name = field.label || field.name
+}
+
+function onVariableSourceChange() {
+  variableDraft.value.sourceField = ''
+  variableDraft.value.sourceNodeKey = ''
+  variableDraft.value.sourceFormField = ''
+}
+
+function onVariableSourceNodeChange(nodeKey: string) {
+  variableDraft.value.sourceFormField = ''
+  const binding = nodeFormBindings.value.find((item) => item.nodeKey === nodeKey)
+  if (binding) void ensureFormFields(binding.formKey)
+}
+
+function onVariableNodeFieldChange(fieldName: string) {
+  const field = formFieldOptions(variableSourceFormKey.value).find(
+    (item) => item.name === fieldName,
+  )
+  if (!field) return
+  const type = compatibleVariableTypes(field.type, false)[0]
+  if (type) variableDraft.value.type = type
+  if (!variableDraft.value.name.trim()) variableDraft.value.name = field.label || field.name
 }
 
 /* ─── BF20261013-018：P64 配置面板业务化文案（枚举值不变，仅展示中文化） ─── */
@@ -4476,6 +4537,89 @@ function nodeLabelLines(label: string) {
           </el-form-item>
           <el-form-item label="变量名称">
             <el-input v-model="variableDraft.name" />
+          </el-form-item>
+          <el-form-item label="变量类型">
+            <el-select v-model="variableDraft.type">
+              <el-option
+                v-for="type in BPM_VARIABLE_TYPES"
+                :key="type"
+                :label="VARIABLE_TYPE_LABELS[type] ?? type"
+                :value="type"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="数据来源">
+            <el-select v-model="variableDraft.source" @change="onVariableSourceChange">
+              <el-option
+                v-for="source in BPM_VARIABLE_SOURCES"
+                :key="source"
+                :label="VARIABLE_SOURCE_LABELS[source] ?? source"
+                :value="source"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="variableDraft.source === 'MAIN_FORM'" label="主表字段">
+            <el-select
+              v-model="variableDraft.sourceField"
+              filterable
+              @change="onVariableSourceFieldChange"
+            >
+              <el-option
+                v-for="field in mainFormFields"
+                :key="field.name"
+                :label="`${field.label || field.name}（${field.name}）`"
+                :value="field.name"
+              />
+            </el-select>
+          </el-form-item>
+          <template v-else-if="variableDraft.source === 'NODE_FORM'">
+            <el-form-item label="来源节点">
+              <el-select v-model="variableDraft.sourceNodeKey" @change="onVariableSourceNodeChange">
+                <el-option
+                  v-for="binding in nodeFormBindings"
+                  :key="binding.nodeKey"
+                  :label="`${binding.nodeName}（${binding.nodeKey}）`"
+                  :value="binding.nodeKey"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="节点表单字段">
+              <el-select
+                v-model="variableDraft.sourceFormField"
+                filterable
+                @change="onVariableNodeFieldChange"
+              >
+                <el-option
+                  v-for="field in formFieldOptions(variableSourceFormKey)"
+                  :key="field.name"
+                  :label="`${field.label || field.name}（${field.name}）`"
+                  :value="field.name"
+                />
+              </el-select>
+            </el-form-item>
+          </template>
+          <el-form-item v-else label="系统字段">
+            <el-select v-model="variableDraft.sourceField" filterable>
+              <el-option
+                v-for="field in BPM_SYSTEM_FIELDS"
+                :key="field"
+                :label="field"
+                :value="field"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="聚合方式">
+            <el-select v-model="variableDraft.aggregation">
+              <el-option
+                v-for="item in BPM_AGGREGATIONS"
+                :key="item"
+                :label="VARIABLE_AGGREGATION_LABELS[item] ?? item"
+                :value="item"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="允许空值">
+            <el-switch v-model="variableDraft.nullable" />
           </el-form-item>
         </div>
         <div v-if="variableErrors.length" class="p64-errors">
