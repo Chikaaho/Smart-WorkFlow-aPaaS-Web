@@ -586,8 +586,9 @@ const OVERRIDES: Record<string, Record<string, DesignMockHandler>> = {
       taskName: '会签审批',
       assigneeName: '赵辰',
       createTime: '2026-09-15 09:24:00',
-      endTime: null,
-      opinionData: { comment: '' },
+      endTime: '2026-09-15 10:31:00',
+      approvalResult: 'REJECTED',
+      opinionData: { comment: '票据不合规，驳回。' },
     }),
   ]),
   node17: taskDetailWithHistory([
