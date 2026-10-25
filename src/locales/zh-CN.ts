@@ -2084,6 +2084,7 @@ export default {
     enableTenant: '启用',
     disableTenant: '停用',
     tenantListLoadFailed: '租户列表加载失败',
+    tenantSuperAdminOnly: '仅系统超级管理员可以维护租户',
     tenantNameRequired: '请输入租户名称',
     tenantAdminRequired: '请输入管理员账号',
     tenantPasswordRequired: '请输入初始密码',

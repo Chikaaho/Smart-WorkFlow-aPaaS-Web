@@ -87,6 +87,15 @@ describe('TenantList', () => {
     )
   })
 
+  it('非系统超管不发起租户分页请求并显示权限说明', async () => {
+    useUserStore().superAdmin = false
+    const wrapper = mountPage()
+    await nextTick()
+    expect(pageTenants).not.toHaveBeenCalled()
+    const vm = wrapper.vm as unknown as { errorMsg: string }
+    expect(vm.errorMsg).toContain('仅系统超级管理员')
+  })
+
   it('submits the new tenant with name, administrator and initial password', async () => {
     vi.mocked(createTenant).mockResolvedValue('100')
     const wrapper = mountPage()

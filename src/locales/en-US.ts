@@ -2143,6 +2143,7 @@ export default {
     enableTenant: 'Enable',
     disableTenant: 'Disable',
     tenantListLoadFailed: 'Failed to load tenants',
+    tenantSuperAdminOnly: 'Only the system super administrator can maintain tenants',
     tenantNameRequired: 'Enter the tenant name',
     tenantAdminRequired: 'Enter the administrator account',
     tenantPasswordRequired: 'Enter the initial password',

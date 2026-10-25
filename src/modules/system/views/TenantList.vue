@@ -44,8 +44,17 @@ const filter = reactive<TenantFilter>({ name: '', status: undefined })
 const currentFilter = reactive<TenantFilter>({ ...filter })
 
 async function loadList() {
-  loading.value = true
   errorMsg.value = ''
+  // 租户维护是租户0系统超管专属能力；普通租户管理员不发起越权查询，
+  // 直接给出可定位的权限说明，避免把服务端 403 误显为“请求参数有误”。
+  if (!canManage.value) {
+    list.value = []
+    total.value = 0
+    loading.value = false
+    errorMsg.value = t('system.tenantSuperAdminOnly')
+    return
+  }
+  loading.value = true
   try {
     const pageQuery: PageQuery = { pageNum: pageNum.value, pageSize: pageSize.value }
     const result = await pageTenants(pageQuery, currentFilter)
