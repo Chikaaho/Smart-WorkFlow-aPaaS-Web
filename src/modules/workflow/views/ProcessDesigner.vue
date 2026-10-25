@@ -49,7 +49,9 @@ import type {
   GraphValidationError,
   ApproverCandidate,
   ProcessDefVersionInfo,
+  ProcessNotificationConfigPayload,
 } from '@/modules/workflow/api'
+import { buildDesignerGraphPayload } from '@/modules/workflow/utils/graph-payload'
 import type { ProcessDef } from '@/contracts/bpm'
 import type {
   BpmNodeCapability,
@@ -147,6 +149,8 @@ type DesignerGraph = ProcessGraphDocument & {
   /** P64 阶段Ⅰ：BPM 变量与触发器（文档级；随图保存/发布冻结）。 */
   variables?: BpmVariableDef[]
   triggers?: TriggerConfig[]
+  /** 50:88 结束通知：设计器不编辑，但保存/发布必须原样保留。 */
+  notification?: ProcessNotificationConfigPayload | null
 }
 const graph = ref<DesignerGraph | null>(null)
 /** 表单工作台上下文：提供三类页签，画布与表单页签共享同一顶部切换。 */
@@ -1724,12 +1728,12 @@ function assertNodeSemantics(): boolean {
   return false
 }
 
-/** 保存载荷：serialize() 只含画布契约字段，文档级 P64 配置（变量/触发器）在此合并。 */
+/** 保存载荷：serialize() 只含画布契约字段，文档级 P64/通知配置在此合并。 */
 function buildGraphPayload(): Record<string, unknown> {
-  const payload = { ...(model?.serialize() ?? {}) } as Record<string, unknown>
-  payload.variables = graph.value?.variables ?? []
-  payload.triggers = graph.value?.triggers ?? []
-  return payload
+  return buildDesignerGraphPayload(
+    (model?.serialize() ?? {}) as Record<string, unknown>,
+    graph.value,
+  )
 }
 
 /** 保存草稿；返回是否真实保存成功（发布前依赖该结果避免“发布旧图”）。 */
@@ -2798,6 +2802,8 @@ async function load() {
         ...trigger,
         enabled: trigger.enabled !== false,
       })),
+      notification: (definition as { notification?: ProcessNotificationConfigPayload })
+        .notification,
       elements: (definition.elements ??
         []) as import('@/contracts/process-graph').ProcessGraphElement[],
       canvas: definition.canvas ?? {},
