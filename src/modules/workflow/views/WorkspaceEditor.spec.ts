@@ -155,8 +155,8 @@ describe('WorkspaceEditor 独立全屏编辑页 —— 所见即所得（V011-BU
 
     expect(saveWorkspaceLayout).toHaveBeenCalledTimes(1)
     const payload = saveWorkspaceLayout.mock.calls[0][0]
-    // 默认布局按桌面设计把待办放在主栏，几何仍按分数契约持久化。
-    expect(payload.cards[0].metadata.geometry).toEqual({ x: 0, y: 188, w: 0.66, h: 480 })
+    // 默认布局按 3:2 设计把待办放在主栏（y=120/486），几何仍按分数契约持久化。
+    expect(payload.cards[0].metadata.geometry).toEqual({ x: 0, y: 120, w: 0.6317, h: 486 })
   })
 
   it('退出编辑返回工作台', async () => {

@@ -209,10 +209,14 @@ export function toAbsoluteRect(raw: unknown, canvasW: number): CardRect | null {
     return { x: cx, y: Math.round(y), w: cw, h: Math.round(h) }
   }
   if (!Number.isFinite(canvasW) || canvasW <= 0) return null
+  // 用户自定义布局可能因编辑画布/只读画布宽度差导致 x+w 略大于画布；
+  // 展开时把整卡收回画布内，避免右列越界产生横向裁切。
+  const cw = Math.min(Math.round(w * canvasW), Math.round(canvasW))
+  const cx = Math.min(Math.round(x * canvasW), Math.max(0, Math.round(canvasW) - cw))
   return {
-    x: Math.round(x * canvasW),
+    x: cx,
     y: Math.round(y),
-    w: Math.round(w * canvasW),
+    w: cw,
     h: Math.round(h),
   }
 }

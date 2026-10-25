@@ -3,14 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/locales'
 import { useMenuStore } from '@/stores/menu'
-import { Share, Document, MagicStick, Cpu, Bell } from '@element-plus/icons-vue'
 import { queryCatalogItems } from '@/modules/workflow/api/oa'
 import { myInstances, queryTodoTasks } from '@/modules/workflow/api'
 import { queryAnalyticsSummary, type AnalyticsSummary } from '@/modules/workflow/api/i4'
 import { unreadNotifyCount } from '@/modules/notify/api'
 import { toFullPath } from '@/layouts/menu-utils'
 import { useLocalizedMenuTree } from '@/layouts/menu-title'
-import type { Component } from 'vue'
 import type { MenuNode } from '@/contracts/menu'
 
 /**
@@ -50,7 +48,6 @@ const reachable = computed(() => {
 
 interface ServiceCard {
   key: string
-  icon: Component
   title: string
   desc: string
   to: string
@@ -60,29 +57,25 @@ const services = computed<ServiceCard[]>(() => {
   const all: ServiceCard[] = [
     {
       key: 'process',
-      icon: Share,
       title: t('portal.svcProcess'),
       desc: t('portal.svcProcessDesc'),
       to: '/workflow/catalog',
     },
     {
       key: 'form',
-      icon: Document,
       title: t('portal.svcForm'),
       desc: t('portal.svcFormDesc'),
       to: '/form/form-def-list',
     },
     {
       key: 'agent',
-      icon: MagicStick,
       title: t('portal.svcAgent'),
       desc: t('portal.svcAgentDesc'),
       to: '/agent/conversations/list',
     },
-    { key: 'iot', icon: Cpu, title: t('portal.svcIot'), desc: t('portal.svcIotDesc'), to: '/iot' },
+    { key: 'iot', title: t('portal.svcIot'), desc: t('portal.svcIotDesc'), to: '/iot' },
     {
       key: 'notify',
-      icon: Bell,
       title: t('portal.svcNotify'),
       desc: t('portal.svcNotifyDesc'),
       to: '/notify/inbox',
@@ -100,22 +93,18 @@ const focus = computed(() => [
       : t('portal.focusNoTodo'),
     value: todoTotal.value,
     to: '/workflow/todo',
-    tone: 'primary',
   },
   {
     key: 'unread',
-    icon: Bell,
     label: t('portal.unreadNotifications'),
     subtitle: unread.value
       ? t('portal.focusUnreadCount', { count: unread.value })
       : t('portal.focusNoUnread'),
     value: unread.value,
     to: reachable.value.has('/notify/inbox') ? '/notify/inbox' : '',
-    tone: 'warning',
   },
   {
     key: 'device-alerts',
-    icon: Share,
     label: t('portal.deviceAlerts'),
     subtitle:
       (analytics.value?.deviceAlerts ?? 0)
@@ -123,7 +112,6 @@ const focus = computed(() => [
         : t('portal.focusNoDevice'),
     value: analytics.value?.deviceAlerts ?? 0,
     to: reachable.value.has('/iot') ? '/iot' : '',
-    tone: 'danger',
   },
 ])
 
@@ -193,7 +181,7 @@ function searchPortal(): void {
         <div class="portal__hero-stat portal__hero-stat--accent">
           <strong>{{
             analytics && analytics.launched > 0
-              ? `${((analytics.completed / analytics.launched) * 100).toFixed(1)}%`
+              ? `${Math.round((analytics.completed / analytics.launched) * 100)}%`
               : '—'
           }}</strong>
           <span>{{ t('portal.heroStatOnTime') }}</span>
@@ -205,26 +193,16 @@ function searchPortal(): void {
       <h3 class="portal__section-title">{{ t('portal.quickServices') }}</h3>
       <div class="portal__services">
         <button
-          v-for="(svc, index) in services"
+          v-for="svc in services"
           :key="svc.key"
           type="button"
           class="portal-service"
           @click="open(svc.to)"
         >
-          <el-icon
-            :size="22"
-            class="portal-service__icon"
-            :class="{
-              'portal-service__icon--alt': index % 2 === 1,
-              'portal-service__icon--warn': svc.key === 'notify',
-            }"
-            ><component :is="svc.icon"
-          /></el-icon>
           <span class="portal-service__body">
             <strong>{{ svc.title }}</strong>
             <span>{{ svc.desc }}</span>
           </span>
-          <span class="portal-service__enter">{{ t('portal.enter') }} →</span>
         </button>
       </div>
     </section>
@@ -287,14 +265,12 @@ function searchPortal(): void {
             :disabled="!item.to"
             @click="open(item.to)"
           >
-            <span class="portal-focus__badge" :class="`portal-focus__badge--${item.tone}`">{{
-              item.value
-            }}</span>
+            <span class="portal-focus__badge">{{ item.value }}</span>
             <span class="portal-focus__body">
               <strong>{{ item.label }}</strong>
               <small>{{ item.subtitle }}</small>
             </span>
-            <el-button size="small" plain>{{ t('portal.view') }}</el-button>
+            <span class="portal-focus__view">{{ t('portal.view') }}</span>
           </button>
         </div>
       </section>
@@ -306,9 +282,9 @@ function searchPortal(): void {
 .portal {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
   max-width: none !important;
-  padding: 24px;
+  padding: 20px;
   margin: 0 auto;
 }
 .portal__hero {
@@ -316,28 +292,30 @@ function searchPortal(): void {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  min-height: 126px;
-  padding: 22px 24px;
+  height: 144px;
+  min-height: 144px;
+  padding: 24px;
   box-sizing: border-box;
   border-radius: var(--sw-radius-lg);
   background: var(--sw-surface-card);
   border: 1px solid var(--sw-border-light);
-  box-shadow: var(--sw-shadow-card);
+  box-shadow: none;
   color: var(--sw-text-primary);
   position: relative;
 }
 .portal__hero-copy {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  flex: 0 1 900px;
-  width: min(900px, 55%);
+  gap: 12px;
+  flex: 0 1 1034px;
+  width: min(1034px, 56%);
   min-width: 0;
 }
 .portal__hero-text h2 {
   margin: 0;
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
 }
 .portal__hero-text p {
   margin: 0;
@@ -356,46 +334,49 @@ function searchPortal(): void {
 }
 .portal__hero-search {
   display: flex;
-  width: min(900px, 100%);
-  height: 44px;
+  width: min(1034px, 100%);
+  height: 36px;
 }
 .portal__hero-search :deep(.el-input) {
   flex: 1;
 }
 .portal__hero-search :deep(.el-input__wrapper) {
+  height: 36px;
   padding-left: 9px;
-  border-radius: 8px 0 0 8px;
+  border-radius: 6px 0 0 6px;
   box-shadow: none;
 }
 .portal__hero-search :deep(.el-button) {
-  height: 44px;
-  min-width: 80px;
+  height: 36px;
+  min-width: 88px;
   margin-left: 0;
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 6px 6px 0;
 }
 .portal__hero-stats {
   position: static;
   display: flex;
-  gap: 74px;
+  gap: 24px;
   align-items: center;
+  align-self: center;
   margin-right: 0;
-  padding-right: 48px;
+  padding-right: 0;
 }
 .portal__hero-stat {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 110px;
+  min-width: 160px;
+  min-height: 70px;
   box-sizing: border-box;
   padding: 0;
   background: transparent;
   height: auto;
   margin-top: 0;
-  align-items: center;
+  align-items: flex-start;
 }
 .portal__hero-stat--primary {
   background: transparent;
-  min-width: 110px;
+  min-width: 160px;
   margin-top: 0;
   height: auto;
   margin-right: 0;
@@ -406,7 +387,7 @@ function searchPortal(): void {
 }
 .portal__hero-stat--accent {
   background: transparent;
-  min-width: 110px;
+  min-width: 160px;
   padding: 0;
   height: auto;
   margin-top: 0;
@@ -417,29 +398,28 @@ function searchPortal(): void {
 }
 .portal__hero-stat strong {
   width: 100%;
-  text-align: center;
+  text-align: left;
   font-size: 26px;
   line-height: 34px;
   font-weight: 700;
 }
-.portal__hero-stat--accent strong {
-  font-size: 22px;
-}
 .portal__hero-stat span {
   font-size: 12px;
+  text-align: left;
   color: var(--sw-text-secondary);
 }
 .portal > .portal__section {
   margin: 0;
-  padding: 20px 24px 24px;
+  padding: 20px 21px;
   background: var(--sw-surface-card);
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
-  box-shadow: var(--sw-shadow-card);
+  box-shadow: none;
 }
 .portal__section-title {
-  margin: 0 0 20px;
+  margin: 0 0 12px;
   font-size: 16px;
+  line-height: 24px;
   font-weight: 600;
   color: var(--sw-text-primary);
 }
@@ -450,11 +430,10 @@ function searchPortal(): void {
 }
 .portal-service {
   position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 18px;
-  min-height: 100px;
-  padding: 18px 16px;
+  display: block;
+  min-height: 80px;
+  height: 80px;
+  padding: 14px 17px;
   text-align: left;
   background: var(--sw-surface-card);
   border: 1px solid var(--sw-border-light);
@@ -465,65 +444,47 @@ function searchPortal(): void {
 .portal-service:hover {
   border-color: var(--sw-color-primary);
 }
-.portal-service__icon {
-  flex: 0 0 auto;
-  width: 48px;
-  color: var(--sw-color-primary);
-  text-align: left;
-}
-.portal-service__icon--alt {
-  color: var(--sw-info);
-}
-.portal-service__icon--warn {
-  color: var(--sw-warning);
-}
 .portal-service__body {
   display: flex;
   flex-direction: column;
-  gap: 11px;
-  flex: 1;
+  gap: 4px;
   min-width: 0;
 }
 .portal-service__body strong {
   font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
   color: var(--sw-text-primary);
 }
 .portal-service__body span {
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 18px;
   color: var(--sw-text-secondary);
-}
-.portal-service__enter {
-  position: absolute;
-  bottom: 22px;
-  left: 20px;
-  font-size: 12px;
-  color: #8b5cf6;
-  white-space: nowrap;
 }
 .portal__focus {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
-  margin-top: 30px;
+  gap: 0;
+  margin-top: 10px;
 }
 .portal__lower {
   display: grid;
-  grid-template-columns: minmax(0, 1.783333fr) minmax(320px, 1fr);
-  gap: 24px;
-  margin: 0;
+  grid-template-columns: minmax(0, 3.227fr) minmax(300px, 1fr);
+  gap: 20px;
+  margin: 6px 0 0;
 }
 .portal__analytics,
 .portal__focus-section {
   position: relative;
   min-width: 0;
   box-sizing: border-box;
-  height: 400px;
-  min-height: 400px;
-  padding: 25px 24px 20px;
+  height: 440px;
+  min-height: 440px;
+  padding: 20px 21px;
   background: var(--sw-surface-card);
+  border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
-  box-shadow: var(--sw-shadow-card);
+  box-shadow: none;
 }
 .portal__lower-head {
   display: flex;
@@ -536,8 +497,8 @@ function searchPortal(): void {
 }
 .portal__analytics-summary {
   display: flex;
-  gap: 52px;
-  margin: 7px 0 8px;
+  gap: 60px;
+  margin: 12px 0 0;
 }
 .portal__analytics-summary div {
   display: flex;
@@ -545,44 +506,40 @@ function searchPortal(): void {
   gap: 2px;
 }
 .portal__analytics-summary strong {
-  order: 2;
   color: var(--sw-text-primary);
   font-size: 26px;
-  line-height: normal;
-  position: relative;
-  top: 11px;
+  line-height: 32px;
+  font-weight: 600;
 }
 .portal__analytics-summary em {
-  order: 3;
   color: var(--sw-success);
   font-size: 11px;
   font-style: normal;
-  margin-top: 8px;
+  margin-top: 2px;
 }
 .portal__analytics-summary div:nth-child(3) em {
   color: var(--sw-danger);
 }
 .portal__analytics-summary span {
-  order: 1;
   color: var(--sw-text-secondary);
   font-size: 12px;
 }
 .portal__analytics-chart-label {
   position: absolute;
-  top: 192px;
-  left: 24px;
+  top: 165px;
+  left: 21px;
   color: var(--sw-text-secondary);
   font-size: 12px;
 }
 .portal__analytics-bars {
   position: absolute;
-  right: 48px;
-  bottom: 49px;
-  left: 24px;
+  right: 40px;
+  bottom: 40px;
+  left: 21px;
   display: flex;
   align-items: flex-end;
   gap: 28px;
-  height: 220px;
+  height: 215px;
   padding: 8px 4px 0;
   border-bottom: 1px solid var(--sw-border-light);
 }
@@ -600,9 +557,9 @@ function searchPortal(): void {
   width: min(34px, 100%);
   min-height: 18px;
   border-radius: 5px 5px 0 0;
-  background: #cdd3f8;
+  background: #e3def8;
 }
-.portal__analytics-bar:nth-child(2n) span {
+.portal__analytics-bar:last-child span {
   background: var(--sw-color-primary);
 }
 .portal__analytics-bar small {
@@ -610,18 +567,23 @@ function searchPortal(): void {
   font-size: 11px;
 }
 .portal-focus {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  min-height: 58px;
-  height: 58px;
-  padding: 10px 14px;
-  background: #f8f9fc;
+  min-height: 90px;
+  height: 90px;
+  padding: 0;
+  background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-bottom: 1px solid var(--sw-border-light);
+  border-radius: 0;
   font-size: 13px;
   color: var(--sw-text-regular);
   cursor: pointer;
+}
+.portal-focus:last-child {
+  border-bottom: 0;
 }
 .portal-focus:disabled {
   cursor: default;
@@ -630,44 +592,37 @@ function searchPortal(): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 36px;
-  height: 36px;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-}
-.portal-focus__badge--primary {
-  background: var(--sw-color-primary);
-}
-.portal-focus__badge--warning {
-  background: var(--sw-warning);
-}
-.portal-focus__badge--danger {
-  background: var(--sw-danger);
+  min-width: 32px;
+  height: auto;
+  border-radius: 0;
+  background: transparent;
+  color: var(--sw-color-primary);
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 600;
 }
 .portal-focus__body {
   display: flex;
-  flex: 0 0 110px;
+  flex: 1;
   flex-direction: column;
   gap: 4px;
-  width: 110px;
-  min-width: 110px;
+  width: auto;
+  min-width: 0;
   text-align: left;
 }
 .portal-focus__body strong {
   color: var(--sw-text-primary);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
 }
 .portal-focus__body small {
   color: var(--sw-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
-.portal-focus :deep(.el-button) {
-  width: 64px;
-  padding: 0;
-  justify-content: center;
-  margin-left: auto;
+.portal-focus__view {
+  color: var(--sw-color-primary);
+  font-size: 14px;
+  white-space: nowrap;
 }
 /* BF20261013-046：移除 .el-button > span 的 left:18px 位移 hack（曾把「查看」推离按钮中心） */
 @media (max-width: 767px) {
@@ -678,6 +633,8 @@ function searchPortal(): void {
   .portal__hero {
     flex-direction: column;
     align-items: stretch;
+    height: auto;
+    min-height: 0;
     padding: 18px 16px;
   }
   .portal__hero-copy {

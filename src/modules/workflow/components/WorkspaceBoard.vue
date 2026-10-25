@@ -16,17 +16,7 @@ const { t } = useI18n()
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import {
-  Setting,
-  Clock,
-  Promotion,
-  CircleCheck,
-  EditPen,
-  ShoppingCart,
-  Aim,
-  Key,
-  MoreFilled,
-} from '@element-plus/icons-vue'
+import { Clock, Promotion, CircleCheck, EditPen, Document } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import {
   getWorkspaceLayout,
@@ -123,12 +113,12 @@ const greeting = computed(() => {
   return t('workspace.greetingEvening')
 })
 
-/** 统计卡图标与底色（视觉取设计01；数值仍全部为真实 total） */
+/** 统计卡图标（设计01：右上简洁小图标，无彩色底块；数值仍全部为真实 total） */
 const STAT_ICONS: Record<string, { icon: unknown; bg: string; color: string }> = {
-  todo: { icon: Clock, bg: '#f3eeff', color: 'var(--sw-color-primary)' },
-  initiated: { icon: Promotion, bg: 'var(--sw-info-bg)', color: 'var(--sw-info)' },
-  processed: { icon: CircleCheck, bg: 'var(--sw-success-bg)', color: 'var(--sw-success)' },
-  drafts: { icon: EditPen, bg: 'var(--sw-warning-bg)', color: 'var(--sw-warning)' },
+  todo: { icon: Clock, bg: 'transparent', color: 'var(--sw-color-primary)' },
+  initiated: { icon: Promotion, bg: 'transparent', color: 'var(--sw-color-primary)' },
+  processed: { icon: CircleCheck, bg: 'transparent', color: 'var(--sw-color-primary)' },
+  drafts: { icon: EditPen, bg: 'transparent', color: 'var(--sw-color-primary)' },
 }
 
 const stats = computed(() => [
@@ -136,25 +126,26 @@ const stats = computed(() => [
     key: 'todo',
     label: t('workspace.statMyTodo'),
     value: todoTotal.value,
-    badge: todoExtra.value.badge,
+    // 设计01：辅助文字右对齐；临期数来自真实分页附加字段（缺省 0，不伪造）
+    helper: t('workspace.urgentCount', { count: todoExtra.value.urgentTotal ?? 0 }),
   },
   {
     key: 'initiated',
     label: t('workspace.statInitiated'),
     value: initiatedTotal.value,
-    badge: initiatedExtra.value.badge,
+    helper: initiatedExtra.value.badge,
   },
   {
     key: 'processed',
     label: t('workspace.statProcessed'),
     value: processedTotal.value,
-    badge: processedExtra.value.badge,
+    helper: processedExtra.value.badge ?? t('workspace.viewRecord'),
   },
   {
     key: 'drafts',
     label: t('workspace.statDrafts'),
     value: draftsTotal.value,
-    badge: draftsExtra.value.badge,
+    helper: draftsExtra.value.badge ?? t('workflow.continueEditing'),
   },
 ])
 
@@ -226,6 +217,12 @@ function rowMeta(row: Record<string, unknown>): string {
   const due = String(row.dueText ?? '')
   const meta = (base.length ? base.join(' · ') : '') + (due ? (base.length ? ' · ' : '') + due : '')
   return meta
+}
+
+/** 设计01 待办行期限标签：仅使用接口真实 `dueText`，无值不渲染（不编造期限）。 */
+function dueChip(row: Record<string, unknown>): string {
+  const due = row.dueText
+  return typeof due === 'string' && due.trim() ? due.trim() : ''
 }
 
 /** 待办面板深链：已办页签携带 source=processed，详情页按已办只读渲染并回跳（V012-BUG-001）。 */
@@ -326,21 +323,10 @@ const activityChips = computed(() => [
   { key: 'message' as const, label: t('common.message') },
 ])
 
-/** 快捷发起：常用事项（真实收藏）；图标/底色按序轮换（纯视觉）。 */
-const QUICK_ICONS = [Promotion, ShoppingCart, Aim, Setting, Key, MoreFilled]
-const QUICK_COLORS = [
-  'var(--sw-color-primary)',
-  'var(--sw-success)',
-  'var(--sw-info)',
-  '#545e73',
-  'var(--sw-danger)',
-  'var(--sw-text-secondary)',
-]
+/** 快捷发起：设计01 文本瓦片，只列真实收藏常用事项。 */
 const quickActions = computed(() =>
-  favoriteItems.value.slice(0, 6).map((item, index) => ({
+  favoriteItems.value.slice(0, 5).map((item) => ({
     label: item.name,
-    icon: QUICK_ICONS[index % QUICK_ICONS.length],
-    color: QUICK_COLORS[index % QUICK_COLORS.length],
     formKey: item.formKey,
   })),
 )
@@ -429,13 +415,19 @@ async function loadLayout() {
       WorkspaceCard | WorkspaceComponent
     >
     components.value = withNewComponents(
-      rawCards.map((card) => ({
-        key: 'typeCode' in card ? card.typeCode : card.key,
-        visible: card.visible,
-        order: card.order,
-        span: card.span,
-        metadata: card.metadata,
-      })),
+      rawCards.map((card) => {
+        const key = 'typeCode' in card ? card.typeCode : card.key
+        return {
+          key,
+          // 设计01 默认布局只呈现统计/待办/快捷/效能/动态；草稿与消息保留为
+          // 组件库能力，默认隐藏，明确自定义布局按用户保存值原样承接。
+          visible: custom.value ? card.visible : DESIGN_DEFAULT_TYPES.has(key) && card.visible,
+          order: card.order,
+          span: card.span,
+          metadata: card.metadata,
+        }
+      }),
+      custom.value,
     )
     hydrateGeometry()
     favoriteKeys.value = resp.layout.favoriteItemKeys
@@ -456,13 +448,21 @@ async function loadAnalytics() {
   }
 }
 
-/** 后端卡片类型变化后，用户布局缺失的新类型回落为默认卡片。 */
-function withNewComponents(list: WorkspaceComponent[]): WorkspaceComponent[] {
+/** 设计01 默认页面的五块；其余卡片类型只在自定义布局/编辑面板中启用。 */
+const DESIGN_DEFAULT_TYPES = new Set(['stats', 'todo', 'favoriteItems', 'activity', 'efficiency'])
+
+/**
+ * 后端卡片类型变化后补默认卡片。
+ * - 默认布局：只补设计01 的五块，草稿/消息等不凭空出现在首页；
+ * - 用户自定义布局：尊重保存的卡片集合，不把用户主动移除的卡片塞回来。
+ */
+function withNewComponents(list: WorkspaceComponent[], isCustom: boolean): WorkspaceComponent[] {
+  if (isCustom) return [...list]
   const keys = new Set(list.map((c) => c.key))
   const merged = [...list]
   const defaults: WorkspaceComponent[] = cardTypes.value.map((type) => ({
     key: type.typeCode,
-    visible: true,
+    visible: DESIGN_DEFAULT_TYPES.has(type.typeCode),
     order: type.defaultOrder,
     span: type.defaultSpan,
     metadata: defaultMetadata(type),
@@ -495,15 +495,18 @@ const DEFAULT_CARD_HEIGHTS: Record<string, number> = {
   drafts: 220,
   messages: 220,
 }
-/** 默认画布按设计稿分层：待办与动态占主栏，快捷与效能占右栏。 */
+/**
+ * 默认画布按设计稿 3:2 分层（内容宽 1656 @1920）：
+ * 统计卡 96、主区 112—598（左 1047 / 右 589）、动态通栏 618—878。
+ */
 const DEFAULT_CARD_GEOMETRY: Record<string, { x: number; y: number; w: number; h: number }> = {
-  stats: { x: 0, y: 0, w: 1, h: 168 },
-  todo: { x: 0, y: 188, w: 0.66, h: 480 },
-  favorites: { x: 0.68, y: 188, w: 0.32, h: 300 },
-  efficiency: { x: 0.68, y: 508, w: 0.32, h: 340 },
-  activity: { x: 0, y: 688, w: 0.66, h: 320 },
-  drafts: { x: 0, y: 1028, w: 0.48, h: 220 },
-  messages: { x: 0.52, y: 1028, w: 0.48, h: 220 },
+  stats: { x: 0, y: 0, w: 1, h: 96 },
+  todo: { x: 0, y: 120, w: 0.632, h: 486 },
+  favorites: { x: 0.644, y: 120, w: 0.356, h: 208 },
+  efficiency: { x: 0.644, y: 344, w: 0.356, h: 262 },
+  activity: { x: 0, y: 621, w: 1, h: 260 },
+  drafts: { x: 0, y: 901, w: 0.48, h: 220 },
+  messages: { x: 0.52, y: 901, w: 0.48, h: 220 },
 }
 const EDGES = ['n', 's', 'e', 'w'] as const
 const CORNERS = ['ne', 'nw', 'se', 'sw'] as const
@@ -583,8 +586,12 @@ const canvasItems = computed(() =>
 )
 
 const canvasHeight = computed(() => {
-  const bottom = Object.values(geometryMap.value).reduce((max, r) => Math.max(max, r.y + r.h), 0)
-  return Math.round(Math.max(editing.value ? 720 : 520, bottom + 80))
+  // 只按实际呈现的卡片计算高度：隐藏组件不制造底部空白滚动。
+  const bottom = canvasItems.value.reduce((max, component) => {
+    const r = rectOf(component.key)
+    return Math.max(max, r.y + r.h)
+  }, 0)
+  return Math.round(Math.max(editing.value ? 720 : 520, bottom + (editing.value ? 80 : 24)))
 })
 
 function itemStyle(key: string) {
@@ -887,6 +894,10 @@ async function saveConfig() {
       cards: components.value.map((c) => {
         const rect = geometryMap.value[c.key]
         const relative = rect ? toRelativeRect(rect, canvasW) : null
+        if (relative) {
+          // 持久化契约要求 x/w 落在 0..1；跨编辑/只读画布宽度保存时也不越界。
+          relative.x = Math.min(relative.x, Math.max(0, 1 - relative.w))
+        }
         return {
           typeCode: c.key,
           visible: c.visible,
@@ -965,7 +976,7 @@ onBeforeUnmount(() => {
         :aria-label="t('workspace.configureWorkspace')"
         @click="onGearClick"
       >
-        <el-icon :size="16"><Setting /></el-icon>
+        <span>{{ t('workspace.layoutEntry') }}</span>
       </button>
     </header>
 
@@ -1098,17 +1109,12 @@ onBeforeUnmount(() => {
               <div v-for="s in stats" :key="s.key" class="wsd-stat">
                 <span class="wsd-stat__label">{{ s.label }}</span>
                 <span class="wsd-stat__value">{{ s.value }}</span>
-                <span
-                  v-if="s.badge"
-                  class="wsd-stat__badge"
-                  :class="{ 'wsd-stat__badge--indent': s.key === 'drafts' }"
-                  >{{ s.badge }}</span
-                >
+                <span v-if="s.helper" class="wsd-stat__badge">{{ s.helper }}</span>
                 <span
                   class="wsd-stat__iconbg"
                   :style="{ background: STAT_ICONS[s.key]?.bg, color: STAT_ICONS[s.key]?.color }"
                 >
-                  <el-icon :size="24"><component :is="STAT_ICONS[s.key]?.icon" /></el-icon>
+                  <el-icon :size="20"><component :is="STAT_ICONS[s.key]?.icon" /></el-icon>
                 </span>
               </div>
             </div>
@@ -1142,10 +1148,17 @@ onBeforeUnmount(() => {
               </p>
               <ul v-else class="wsd-taskrows">
                 <li v-for="(row, index) in panelRows" :key="index" class="wsd-task">
-                  <button class="wsd-task__title" type="button" @click="openPanelTask(row)">
-                    {{ rowTitle(row) }}
+                  <el-icon class="wsd-task__icon" :size="18"><Document /></el-icon>
+                  <span class="wsd-task__main">
+                    <button class="wsd-task__title" type="button" @click="openPanelTask(row)">
+                      {{ rowTitle(row) }}
+                    </button>
+                    <span class="wsd-task__meta">{{ rowMeta(row) }}</span>
+                  </span>
+                  <span v-if="dueChip(row)" class="wsd-task__due">{{ dueChip(row) }}</span>
+                  <button class="wsd-task__action" type="button" @click="openPanelTask(row)">
+                    {{ t('workspace.handleTask') }}
                   </button>
-                  <span class="wsd-task__meta">{{ rowMeta(row) }}</span>
                 </li>
               </ul>
             </section>
@@ -1171,19 +1184,12 @@ onBeforeUnmount(() => {
                   type="button"
                   @click="openForm(q.formKey)"
                 >
-                  <span class="wsd-quick__icon" :style="{ color: q.color }">
-                    <el-icon :size="22"><component :is="q.icon" /></el-icon>
-                  </span>
                   <span class="wsd-quick__label">{{ q.label }}</span>
                 </button>
                 <button class="wsd-quick" type="button" @click="onGearClick">
-                  <span class="wsd-quick__icon wsd-quick__icon--more">
-                    <el-icon :size="22"><MoreFilled /></el-icon>
-                  </span>
                   <span class="wsd-quick__label">{{ t('workspace.moreItems') }}</span>
                 </button>
               </div>
-              <p class="wsd-quick__footer">{{ t('workspace.quickFooter') }}</p>
             </section>
 
             <section
@@ -1192,29 +1198,29 @@ onBeforeUnmount(() => {
             >
               <div class="wsd-panel__head">
                 <h3 class="wsd-panel__title">{{ t('workspace.activityTitle') }}</h3>
-              </div>
-              <div class="wsd-chiprow wsd-chiprow--activity">
-                <button
-                  v-for="c in activityChips"
-                  :key="c.key"
-                  class="wsd-chip"
-                  :class="{ 'is-active': activityFilter === c.key }"
-                  type="button"
-                  @click="activityFilter = c.key"
-                >
-                  {{ c.label }}
-                </button>
+                <div class="wsd-chiprow wsd-chiprow--activity">
+                  <button
+                    v-for="c in activityChips"
+                    :key="c.key"
+                    class="wsd-chip"
+                    :class="{ 'is-active': activityFilter === c.key }"
+                    type="button"
+                    @click="activityFilter = c.key"
+                  >
+                    {{ c.label }}
+                  </button>
+                </div>
               </div>
               <p v-if="activityRows.length === 0" class="wsd-panel__empty">
                 {{ t('workspace.noActivity') }}
               </p>
               <ul v-else class="wsd-actrows">
                 <li v-for="(row, index) in activityRows" :key="index" class="wsd-act">
-                  <div class="wsd-act__main">
-                    <span class="wsd-act__title">{{ row.title }}</span>
+                  <span class="wsd-act__title">{{ row.title }}</span>
+                  <span class="wsd-act__right">
                     <span class="wsd-act__meta">{{ row.meta }}</span>
-                  </div>
-                  <span class="wsd-act__time">{{ row.time }}</span>
+                    <span class="wsd-act__time">{{ row.time }}</span>
+                  </span>
                 </li>
               </ul>
             </section>
@@ -1225,32 +1231,24 @@ onBeforeUnmount(() => {
             >
               <div class="wsd-panel__head">
                 <h3 class="wsd-panel__title">{{ t('workspace.efficiencyTitle') }}</h3>
+                <span class="wsd-panel__hint">{{ t('workspace.last7Days') }}</span>
               </div>
-              <div class="wsd-eff-hero">
-                <div class="wsd-eff-hero__main">
-                  <span class="wsd-eff-hero__label">{{ t('workspace.avgDuration') }}</span>
-                  <span class="wsd-eff-hero__value">{{ avgDurationText }}</span>
+              <div class="wsd-eff-top">
+                <div class="wsd-eff-metric">
+                  <span class="wsd-eff-metric__label">{{ t('workspace.avgDuration') }}</span>
+                  <strong class="wsd-eff-metric__value">{{ avgDurationText }}</strong>
                 </div>
-              </div>
-              <div class="wsd-eff-rate">
-                <div class="wsd-eff-rate__head">
-                  <span>{{ t('workspace.completionRate') }}</span>
-                  <span class="wsd-eff-rate__num">{{
+                <div class="wsd-eff-metric">
+                  <span class="wsd-eff-metric__label">{{ t('workspace.completionRate') }}</span>
+                  <strong class="wsd-eff-metric__value">{{
                     completionPct != null ? completionPct + '%' : '—'
-                  }}</span>
-                </div>
-                <div class="wsd-eff-rate__bar">
-                  <span
-                    v-if="completionPct != null"
-                    class="wsd-eff-rate__fill"
-                    :style="{ width: completionPct + '%' }"
-                  />
+                  }}</strong>
                 </div>
               </div>
-              <div class="wsd-eff-grid">
+              <div class="wsd-eff-bottom">
                 <div v-for="b in effBoxes" :key="b.label" class="wsd-eff-box">
                   <span class="wsd-eff-box__label">{{ b.label }}</span>
-                  <span class="wsd-eff-box__value" :style="{ color: b.color }">{{ b.value }}</span>
+                  <strong class="wsd-eff-box__value">{{ b.value }}</strong>
                 </div>
               </div>
             </section>
@@ -1333,7 +1331,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   width: 100%;
-  padding: 28px 32px 32px;
+  /* 设计01：内容左右 20px、顶部 20px，统计卡顶边与设计 144px 对齐 */
+  padding: 20px 20px 24px;
   overflow-x: hidden;
 }
 @media (max-width: 767px) {
@@ -1343,41 +1342,42 @@ onBeforeUnmount(() => {
 }
 .wsd-hero {
   position: relative;
-  height: 64px;
+  height: 60px;
 }
 .wsd-hero__greeting {
-  margin: 2px 0 0;
+  margin: 0;
   font-size: 26px;
   line-height: 28px;
   font-weight: 600;
   color: var(--sw-text-primary);
 }
 .wsd-hero__sub {
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   font-size: 14px;
-  line-height: 28px;
+  line-height: 20px;
   color: var(--sw-text-secondary);
 }
+/* 设计01 右上「布局」文字入口（原齿轮图标） */
 .wsd-hero__config {
   position: absolute;
   right: 0;
-  top: 10px;
+  top: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 1px solid var(--sw-border);
-  border-radius: 50%;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
-  color: var(--sw-text-secondary);
+  color: var(--sw-color-primary);
+  font-size: 14px;
   cursor: pointer;
 }
 .wsd-hero__config:hover,
 .wsd-hero__config:focus-visible {
-  border-color: var(--sw-color-primary);
+  background: var(--sw-color-primary-softer);
   color: var(--sw-color-primary);
 }
 .wsd-toolbar {
@@ -1421,7 +1421,7 @@ onBeforeUnmount(() => {
 }
 .wsd-canvas-wrap {
   position: relative;
-  margin-top: 12px;
+  margin-top: 0;
 }
 .wsd.is-editing {
   max-width: none;
@@ -1707,16 +1707,15 @@ onBeforeUnmount(() => {
 }
 .wsd-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
   align-content: start;
 }
 .wsd-stat {
   position: relative;
   box-sizing: border-box;
   min-height: 96px;
-  /* BUG-003：右侧预留图标位，窄屏（4:3）下标签/数值不与角标图标重叠 */
-  padding: 18px 76px 18px 20px;
+  padding: 16px 48px 16px 20px;
   background: #ffffff;
   border: 1px solid var(--sw-border);
   border-radius: 10px;
@@ -1724,39 +1723,36 @@ onBeforeUnmount(() => {
 .wsd-stat__label {
   display: block;
   overflow-wrap: break-word;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 14px;
+  line-height: 22px;
   color: var(--sw-text-secondary);
 }
 .wsd-stat__value {
   display: block;
-  margin-top: 6px;
+  margin-top: 2px;
   font-size: 30px;
-  line-height: 36px;
+  line-height: 38px;
   font-weight: 600;
   color: var(--sw-text-primary);
 }
 .wsd-stat__badge {
   position: absolute;
-  left: 20px;
-  bottom: 12px;
+  right: 20px;
+  bottom: 14px;
+  left: auto;
   font-size: 12px;
   line-height: 16px;
   color: var(--sw-text-secondary);
 }
-.wsd-stat__badge--indent {
-  left: 32px;
-}
 .wsd-stat__iconbg {
   position: absolute;
   right: 20px;
-  top: 18px;
+  top: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
+  width: 24px;
+  height: 24px;
 }
 .wsd-panel {
   box-sizing: border-box;
@@ -1773,14 +1769,20 @@ onBeforeUnmount(() => {
 .wsd-panel__head .wsd-btn {
   margin-right: 16px;
 }
+/* 设计01：「全部待办」为无边框文字入口 */
 .wsd-panel--todo .wsd-btn {
   box-sizing: border-box;
-  width: 87px;
+  width: auto;
+  height: auto;
+  margin-right: 0;
   padding: 0;
-  transform: translateY(-3px);
+  border: 0;
+  background: transparent;
+  color: var(--sw-color-primary);
+  transform: none;
 }
 .wsd-panel__head .wsd-pill {
-  margin-right: 20px;
+  margin-right: 0;
 }
 .wsd-panel__title {
   margin: 0;
@@ -1795,8 +1797,9 @@ onBeforeUnmount(() => {
   margin-right: 6px;
 }
 .wsd-panel--eff .wsd-panel__hint {
-  width: 60px;
-  margin-right: 1px;
+  width: auto;
+  margin-right: 0;
+  font-size: 12px;
 }
 .wsd-panel--activity .wsd-panel__hint {
   width: 80px;
@@ -1820,77 +1823,85 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .wsd-pill {
-  height: 26px;
-  padding: 0 10px;
-  margin-top: 4px;
-  border: 1px solid var(--sw-border);
-  border-radius: 999px;
-  background: #ffffff;
-  font-size: 11px;
-  color: var(--sw-text-primary);
+  height: auto;
+  padding: 0;
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+  color: var(--sw-color-primary);
   cursor: pointer;
 }
 .wsd-chiprow {
   display: flex;
-  gap: 10px;
-  margin-top: 13px;
+  gap: 4px;
+  margin-top: 0;
 }
 .wsd-chip {
   display: inline-flex;
   align-items: center;
-  height: 30px;
-  padding: 0 21px;
-  border: 1px solid var(--sw-border-light);
+  height: 32px;
+  padding: 0 16px;
+  border: 0;
   border-radius: 6px;
-  font-size: 13px;
+  background: transparent;
+  font-size: 14px;
   color: var(--sw-text-secondary);
 }
 .wsd-chip.is-active {
-  border-color: var(--sw-color-primary);
-  background: #f2ecff;
-  color: var(--sw-color-primary);
-  font-weight: 600;
+  background: var(--sw-color-primary);
+  color: #ffffff;
+  font-weight: 500;
 }
 .wsd-tabrow {
   display: flex;
-  gap: 28px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 12px;
 }
 .wsd-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   position: relative;
+  height: 32px;
+  padding: 0 14px;
   border: none;
+  border-radius: 6px;
   background: none;
-  padding: 0 0 7px;
   font-size: 14px;
   color: var(--sw-text-secondary);
   cursor: pointer;
 }
-.wsd-tab__count {
-  margin-left: 2px;
-}
 .wsd-tab.is-active {
-  color: var(--sw-color-primary);
-  font-weight: 600;
-}
-.wsd-tab.is-active::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  border-radius: 1px;
   background: var(--sw-color-primary);
+  color: #ffffff;
+  font-weight: 500;
 }
 .wsd-taskrows {
   list-style: none;
-  margin: 12px 0 0;
+  margin: 8px 0 0;
   padding: 0;
 }
 .wsd-task {
-  display: block;
-  padding: 12px 15px 14px;
-  border-radius: 6px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--sw-border-light);
+}
+.wsd-task:last-child {
+  border-bottom: 0;
+}
+.wsd-task__icon {
+  color: var(--sw-color-primary);
+}
+.wsd-task__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 .wsd-task__title {
   display: block;
@@ -1900,9 +1911,9 @@ onBeforeUnmount(() => {
   padding: 0;
   text-align: left;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 20px;
-  color: var(--sw-text-primary);
+  color: #17213a;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -1910,46 +1921,56 @@ onBeforeUnmount(() => {
 }
 .wsd-task__meta {
   display: block;
-  margin-top: 6px;
-  font-size: 14px;
-  line-height: 16px;
+  font-size: 13px;
+  line-height: 18px;
   color: var(--sw-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.wsd-task__due {
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: #f2ecff;
+  color: var(--sw-color-primary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.wsd-task__action {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--sw-color-primary);
+  font-size: 14px;
+  cursor: pointer;
+}
 .wsd-quickgrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px 12px;
-  margin-top: 9px;
-}
-.wsd-quick__icon--more {
-  color: var(--sw-text-secondary);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin-top: 12px;
 }
 .wsd-quick__label {
-  width: 96px;
-  line-height: 22px;
-}
-.wsd-quick__footer {
-  margin: 14px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--sw-border-light);
-  font-size: 12px;
-  color: var(--sw-text-tertiary, var(--sw-text-secondary));
+  width: 100%;
+  line-height: 20px;
+  text-align: center;
 }
 .wsd-quick {
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 62px;
-  padding: 0 17px 0 14px;
+  justify-content: center;
+  height: 40px;
+  padding: 0 12px;
   border: 1px solid var(--sw-border-light);
-  border-radius: 8px;
+  border-radius: 6px;
   background: #ffffff;
   font-size: 14px;
   color: var(--sw-text-primary);
   cursor: pointer;
+}
+.wsd-quick:hover {
+  border-color: var(--sw-color-primary);
+  color: var(--sw-color-primary);
 }
 .wsd-actrows {
   list-style: none;
@@ -1957,28 +1978,27 @@ onBeforeUnmount(() => {
   padding: 0;
 }
 .wsd-chiprow--activity {
-  margin-left: -4px;
-  margin-top: 7px;
-  gap: 0;
+  margin-left: 0;
+  margin-top: 0;
+  gap: 4px;
+}
+.wsd-actrows {
+  margin-top: 8px;
 }
 .wsd-act {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   height: 51px;
-  padding: 0 16px 0 16px;
-  border-radius: 6px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--sw-border-light);
 }
-.wsd-act:nth-child(odd) {
-  background: #f7f8fc;
-}
-.wsd-act__main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+.wsd-act:last-child {
+  border-bottom: 0;
 }
 .wsd-act__title {
+  min-width: 0;
   font-size: 14px;
   font-weight: 500;
   color: #17213a;
@@ -1986,85 +2006,58 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.wsd-act__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
 .wsd-act__meta {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--sw-text-secondary);
+  white-space: nowrap;
 }
 .wsd-act__time {
   font-size: 13px;
   color: var(--sw-text-secondary);
+  white-space: nowrap;
 }
-.wsd-eff-hero {
+/* 设计01：效能卡上方双指标、下方三分项，无进度条/彩色边框盒 */
+.wsd-eff-top {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 12px;
+}
+.wsd-eff-metric {
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  gap: 24px;
-  margin-top: 9px;
-  padding: 16px 18px;
-  background: var(--sw-surface-page);
-  border: 1px solid #e8e0ff;
-  border-radius: 8px;
+  flex-direction: column;
+  gap: 2px;
 }
-.wsd-eff-hero__label {
-  display: block;
+.wsd-eff-metric__label {
   font-size: 12px;
   color: var(--sw-text-secondary);
 }
-.wsd-eff-hero__value {
-  margin-top: 2px;
+.wsd-eff-metric__value {
   font-size: 28px;
   line-height: 36px;
   font-weight: 600;
   color: var(--sw-text-primary);
 }
-.wsd-eff-hero__pill {
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: var(--sw-success-bg);
-  color: var(--sw-success);
-  font-size: 13px;
-  margin-right: 46px;
-}
-.wsd-eff-rate {
-  margin-top: 32px;
-}
-.wsd-eff-rate__head {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  color: #697386;
-}
-.wsd-eff-rate__num {
-  color: var(--sw-success);
-  font-weight: 600;
-}
-.wsd-eff-rate__bar {
-  height: 8px;
-  margin-top: 8px;
-  border-radius: 999px;
-  background: #eef0f5;
-  overflow: hidden;
-}
-.wsd-eff-rate__fill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--sw-success);
-}
-.wsd-eff-grid {
+.wsd-eff-bottom {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 9px;
-  margin-top: 17px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--sw-border-light);
 }
 .wsd-eff-box {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 12px 10px 12px 10px;
-  border: 1px solid var(--sw-border-light);
-  border-radius: 8px;
+  padding: 0;
+  border: 0;
 }
 .wsd-eff-box__label {
   font-size: 12px;
@@ -2074,6 +2067,7 @@ onBeforeUnmount(() => {
   font-size: 20px;
   line-height: 24px;
   font-weight: 600;
+  color: var(--sw-text-primary);
 }
 .wsd-palette-list {
   display: flex;
