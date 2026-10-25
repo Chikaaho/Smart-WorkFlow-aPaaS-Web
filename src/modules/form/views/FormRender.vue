@@ -188,9 +188,35 @@ const hiddenAll = computed(() => {
   }
   return merged
 })
-/** 渲染列表：过滤隐藏字段（LABEL 说明文字照常渲染）。 */
+/**
+ * A09 字段查看权限：设计配置的 view 主体（user:/role:/dept:）在渲染层一致执行；
+ * 空/缺省=不设限。服务端数据查询与提交校验仍是权威（此过滤只影响界面呈现）。
+ */
+const viewDeniedFields = computed<Set<string>>(() => {
+  const perms = schema.value?.fieldPermissions
+  if (!perms || Object.keys(perms).length === 0) return new Set()
+  const mine = new Set<string>()
+  const user = userStore?.user
+  if (user && userStore) {
+    mine.add('user:' + String(user.id))
+    userStore.roles.forEach((code) => mine.add('role:' + code))
+    if (user.deptId != null) mine.add('dept:' + String(user.deptId))
+  }
+  const denied = new Set<string>()
+  for (const [name, rule] of Object.entries(perms)) {
+    const subjects = rule?.view
+    if (!subjects || subjects.length === 0) continue
+    if (!subjects.some((subject) => mine.has(subject))) denied.add(name)
+  }
+  return denied
+})
+/** 渲染列表：过滤隐藏字段与无查看权字段（LABEL 说明文字照常渲染）。 */
 const visibleSchemaFields = computed(() =>
-  schema.value ? schema.value.fields.filter((f) => !hiddenAll.value.has(f.name)) : [],
+  schema.value
+    ? schema.value.fields.filter(
+        (f) => !hiddenAll.value.has(f.name) && !viewDeniedFields.value.has(f.name),
+      )
+    : [],
 )
 /** 有效必填 / 有效只读（脚本覆盖优先，静态配置兜底）。 */
 function fieldRequired(field: FormSchemaField): boolean {

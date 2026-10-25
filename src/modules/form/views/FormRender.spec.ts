@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { useUserStore } from '@/stores/user'
+import type { SessionUser } from '@/contracts/session'
 
 /* ── 可变的 route mock：测试间可修改 query ── */
 let mockQuery: Record<string, string> = {}
@@ -1039,5 +1042,97 @@ describe('FormRender draft mode', () => {
     )
     expect(updateDraft).not.toHaveBeenCalled()
     expect(ElMessage.success).toHaveBeenCalledWith('草稿已创建')
+  })
+})
+
+describe('FormRender 字段查看权限渲染过滤（A09）', () => {
+  beforeEach(() => {
+    mockGetInstanceRelation.mockReset()
+    mockGetInstanceRelation.mockResolvedValue({ relation: 'NONE' })
+    vi.mocked(getFormDefinition).mockReset()
+    mockQuery = {}
+    setActivePinia(createPinia())
+  })
+
+  const asUser = (id: string, roles: string[]): void => {
+    const userStore = useUserStore()
+    userStore.user = {
+      id,
+      username: 'u' + id,
+      displayName: '用户' + id,
+      deptId: '100',
+      tenantId: '100',
+    } as SessionUser
+    userStore.roles = new Set(roles)
+  }
+
+  it('无匹配主体：无查看权字段不渲染，其余照常', async () => {
+    asUser('9101', ['tenant_admin'])
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '权限表单',
+      fields: [
+        { name: 'open', type: 'TEXT', required: false },
+        { name: 'only9001', type: 'TEXT', required: false },
+        { name: 'onlyOtherRole', type: 'TEXT', required: false },
+      ],
+      fieldPermissions: {
+        only9001: { view: ['user:9001'] },
+        onlyOtherRole: { view: ['role:other_role'] },
+      },
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+
+    expect(
+      wrapper.findAll('[data-field-name]').map((n) => n.attributes('data-field-name')),
+    ).toEqual(['open'])
+  })
+
+  it('命中 user: 主体：字段照常渲染', async () => {
+    asUser('9001', ['tenant_admin'])
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '权限表单',
+      fields: [
+        { name: 'open', type: 'TEXT', required: false },
+        { name: 'only9001', type: 'TEXT', required: false },
+        { name: 'onlyOtherRole', type: 'TEXT', required: false },
+      ],
+      fieldPermissions: {
+        only9001: { view: ['user:9001'] },
+        onlyOtherRole: { view: ['role:other_role'] },
+      },
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+
+    expect(
+      wrapper.findAll('[data-field-name]').map((n) => n.attributes('data-field-name')),
+    ).toEqual(['open', 'only9001'])
+  })
+
+  it('命中 role:/dept: 主体与空 view（不设限）均照常渲染', async () => {
+    asUser('9101', ['tenant_admin'])
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: 'P',
+      fields: [
+        { name: 'a', type: 'TEXT', required: false },
+        { name: 'b', type: 'TEXT', required: false },
+        { name: 'c', type: 'TEXT', required: false },
+      ],
+      fieldPermissions: {
+        a: { view: ['role:tenant_admin'] },
+        b: { view: ['dept:100'] },
+        c: { view: [] },
+      },
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+
+    expect(
+      wrapper.findAll('[data-field-name]').map((n) => n.attributes('data-field-name')),
+    ).toEqual(['a', 'b', 'c'])
   })
 })
