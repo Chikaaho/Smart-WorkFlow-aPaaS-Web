@@ -1051,3 +1051,63 @@ describe('TaskDetail P63 IoT 预约区块', () => {
     expect(ElMessage.warning).toHaveBeenCalledWith('请填写取消原因')
   })
 })
+
+describe('TaskDetail 校验提示弹窗（设计 300:1808）', () => {
+  it('意见必填缺失：提交打开校验弹窗列出清单，不进入提交链', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      opinionForm: {
+        formId: 'f-opinion',
+        version: '1',
+        fields: [
+          { key: 'comment', label: '审批意见', type: 'TEXTAREA', required: true },
+          { key: 'note', label: '备注', type: 'TEXT', required: false },
+        ],
+      },
+    })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      validationDialogVisible: boolean
+      validationItems: string[]
+    }
+    await vm.handleApprove()
+
+    expect(vm.validationDialogVisible).toBe(true)
+    expect(vm.validationItems).toEqual(['请填写审批意见'])
+    expect(acceptTaskAction).not.toHaveBeenCalled()
+  })
+
+  it('补齐必填后：弹窗不出现，提交链正常进入', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      opinionForm: {
+        formId: 'f-opinion',
+        version: '1',
+        fields: [{ key: 'comment', label: '审批意见', type: 'TEXTAREA', required: true }],
+      },
+    })
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      opinionData: Record<string, unknown>
+      validationDialogVisible: boolean
+    }
+    vm.opinionData = { comment: '同意' }
+    await vm.handleApprove()
+    await nextTick()
+
+    expect(vm.validationDialogVisible).toBe(false)
+    expect(acceptTaskAction).toHaveBeenCalled()
+  })
+})

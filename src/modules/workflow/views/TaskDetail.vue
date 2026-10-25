@@ -252,10 +252,10 @@ watch([nodeForm, formRecord], () => {
   prefillNodeFormTables()
 })
 
-/** 节点表单必填校验（客户端 UX 提示；服务端提交仍全量校验，1401/2433 为权威口径）。 */
-function validateNodeFormRequired(): boolean {
-  nodeFormErrors.value = []
-  if (!nodeFormBound.value || nodeFormSubmitted.value) return true
+/** 节点表单必填缺失字段名（单一判定源；内联错误与校验弹窗共用）。 */
+function collectNodeFormMissingLabels(): string[] {
+  if (!nodeFormBound.value || nodeFormSubmitted.value) return []
+  const missing: string[] = []
   for (const field of nodeFormFields.value) {
     if (nodeFormHiddenAll.value.has(field.name)) continue
     if (!nodeFieldRequired(field)) continue
@@ -264,9 +264,19 @@ function validateNodeFormRequired(): boolean {
       value == null ||
       (typeof value === 'string' && value.trim() === '') ||
       (Array.isArray(value) && value.length === 0)
-    if (empty) nodeFormErrors.value.push(`${field.label || field.name}: 必填`)
+    if (empty) missing.push(field.label || field.name)
   }
+  return missing
+}
+
+/** 节点表单必填校验（客户端 UX 提示；服务端提交仍全量校验，1401/2433 为权威口径）。 */
+function validateNodeFormRequired(): boolean {
+  nodeFormErrors.value = collectNodeFormMissingLabels().map((label) => `${label}: 必填`)
   return nodeFormErrors.value.length === 0
+}
+
+function nodeFormMissingItems(): string[] {
+  return collectNodeFormMissingLabels().map((label) => t('workflow.validationFillPrefix') + label)
 }
 
 async function handleNodeFormDraft() {
@@ -426,7 +436,7 @@ const taskApproval = useTaskApproval({
       !nodeFormSubmitted.value &&
       !validateNodeFormRequired()
     ) {
-      ElMessage.error(nodeFormErrors.value[0] ?? t('workflow.taskFormValidationFailed'))
+      openValidationDialog(nodeFormMissingItems())
       return false
     }
     return true
@@ -552,18 +562,29 @@ function setOpinionFieldValue(key: string, value: unknown) {
   opinionData.value[key] = value
 }
 
-function opinionFieldRequiredMissing(): boolean {
-  return visibleOpinionFields.value.some((field) => {
-    if (!field.required || field.type === 'NOTE') return false
-    const value = opinionData.value[field.key]
-    return value == null || (typeof value === 'string' && value.trim() === '')
-  })
+// ── 设计 300:1808 校验提示弹窗：提交前必填缺失聚合为清单（红条目 + 说明行） ──
+const validationDialogVisible = ref(false)
+const validationItems = ref<string[]>([])
+
+function openValidationDialog(items: string[]): boolean {
+  if (items.length === 0) return true
+  validationItems.value = items
+  validationDialogVisible.value = true
+  return false
+}
+
+function opinionMissingItems(): string[] {
+  return visibleOpinionFields.value
+    .filter((field) => {
+      if (!field.required || field.type === 'NOTE') return false
+      const value = opinionData.value[field.key]
+      return value == null || (typeof value === 'string' && value.trim() === '')
+    })
+    .map((field) => t('workflow.validationFillPrefix') + (field.label || field.key))
 }
 
 function ensureOpinionData(): boolean {
-  if (!opinionFieldRequiredMissing()) return true
-  ElMessage.warning(t('workflow.commentRequired'))
-  return false
+  return openValidationDialog(opinionMissingItems())
 }
 
 /**
@@ -606,7 +627,7 @@ async function handleApprove() {
   if (!ensureOpinionData()) return
   // P64 阶段Ⅰ：节点表单必填客户端预检（服务端 2433 为权威口径）
   if (nodeFormBound.value && !nodeFormSubmitted.value && !validateNodeFormRequired()) {
-    ElMessage.error(nodeFormErrors.value[0] ?? t('workflow.taskFormValidationFailed'))
+    openValidationDialog(nodeFormMissingItems())
     return
   }
   acting.value = 'approve'
@@ -1509,6 +1530,32 @@ onMounted(loadDetail)
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 校验提示弹窗（设计 300:1808）：必填缺失清单（红条目 + 说明行） -->
+    <el-dialog
+      v-model="validationDialogVisible"
+      :title="t('workflow.validationDialogTitle')"
+      width="480px"
+      data-testid="validation-dialog"
+    >
+      <p class="validation-dialog__hint">{{ t('workflow.validationDialogHint') }}</p>
+      <ul class="validation-dialog__list">
+        <li
+          v-for="(item, index) in validationItems"
+          :key="index"
+          class="validation-dialog__item"
+          data-testid="validation-item"
+        >
+          <span class="validation-dialog__icon" aria-hidden="true">!</span>
+          <span>{{ item }}</span>
+        </li>
+      </ul>
+      <template #footer>
+        <el-button type="primary" @click="validationDialogVisible = false">
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -1944,6 +1991,41 @@ onMounted(loadDetail)
   gap: 12px;
 }
 
+.validation-dialog__hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--sw-text-secondary, #909399);
+}
+.validation-dialog__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.validation-dialog__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #fef0f0;
+  color: #ef5d71;
+  font-size: 13px;
+}
+.validation-dialog__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-size: 11px;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
 .return-dialog__hint {
   display: block;
   margin-top: 6px;
