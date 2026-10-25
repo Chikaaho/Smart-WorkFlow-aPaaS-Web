@@ -3,7 +3,6 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from '@/locales'
 import { useMenuStore } from '@/stores/menu'
-import { Expand, Fold } from '@element-plus/icons-vue'
 import { filterMenuByArea, resolveArea } from '@/foundation/area'
 import { visibleMenuForArea, toFullPath, buildMenuTrail } from './menu-utils'
 import { useLocalizedMenuTree } from './menu-title'
@@ -30,19 +29,6 @@ interface MainNavItem {
   to: string
   active: boolean
 }
-
-withDefaults(
-  defineProps<{
-    showSidebarToggle?: boolean
-    sidebarCollapsed?: boolean
-  }>(),
-  {
-    showSidebarToggle: false,
-    sidebarCollapsed: false,
-  },
-)
-
-const emit = defineEmits<{ 'toggle-sidebar': [] }>()
 
 const route = useRoute()
 const menuStore = useMenuStore()
@@ -235,26 +221,7 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
 </script>
 
 <template>
-  <div
-    class="app-main-nav-shell"
-    :class="[`app-main-nav-shell--${area}`, { 'has-sidebar-toggle': showSidebarToggle }]"
-  >
-    <button
-      v-if="showSidebarToggle"
-      type="button"
-      class="app-main-nav__sidebar-toggle"
-      data-test="sidebar-toggle"
-      :aria-label="t('nav.toggleSidebar')"
-      :aria-expanded="!sidebarCollapsed"
-      aria-controls="app-sidebar"
-      :title="t('nav.toggleSidebar')"
-      @click="emit('toggle-sidebar')"
-    >
-      <el-icon :size="18" aria-hidden="true">
-        <Expand v-if="sidebarCollapsed" />
-        <Fold v-else />
-      </el-icon>
-    </button>
+  <div class="app-main-nav-shell" :class="[`app-main-nav-shell--${area}`]">
     <nav class="app-main-nav" :class="[`app-main-nav--${area}`]" :aria-label="t('nav.mainNav')">
       <router-link
         v-for="item in items"
@@ -276,31 +243,6 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
   gap: var(--sw-space-8);
   height: 100%;
   min-width: 0;
-}
-.app-main-nav__sidebar-toggle {
-  display: inline-flex;
-  flex: 0 0 40px;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  align-self: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--sw-radius-base);
-  background: transparent;
-  color: var(--sw-nav-topbar-text);
-  cursor: pointer;
-}
-.app-main-nav__sidebar-toggle:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-}
-/* 宽桌面按 1920 画框直接呈现主导航；收起能力只在空间不足的桌面宽度显示。 */
-@media (min-width: 1441px) {
-  .app-main-nav__sidebar-toggle {
-    display: none;
-  }
 }
 .app-main-nav {
   display: flex;
@@ -379,11 +321,7 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
 </style>
 
 <style scoped>
-.app-main-nav-shell--portal .app-main-nav__sidebar-toggle {
-  flex-basis: 36px;
-  width: 36px;
-}
-.app-main-nav-shell--portal:not(.has-sidebar-toggle) {
+.app-main-nav-shell--portal {
   box-sizing: border-box;
   padding-left: 44px;
 }

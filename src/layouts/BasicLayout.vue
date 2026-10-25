@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { Expand, Fold } from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
+import { useI18n } from '@/locales'
 import { resolveArea } from '@/foundation/area'
 import AppLogo from './components/AppLogo.vue'
 import AppMainNav from './AppMainNav.vue'
@@ -14,9 +16,12 @@ import AppSidebar from './components/AppSidebar.vue'
  * 用户端侧栏为深色导航阶，管理端侧栏使用新稿浅色表面。
  * 动态业务路由由 router/guard 挂为本布局子路由；菜单数据保持单一数据源。
  * V011-BUG-003：移除侧栏底部空间提醒卡（Owner 裁决，用户端/管理端一致）。
+ * 0.2.0（Owner 反馈 + 401:8637 SidebarToggle 规范）：侧栏收起/展开入口从顶栏主导航
+ * 移至侧栏与正文交界处，顶栏主导航起点不因该入口改变。
  */
 const appStore = useAppStore()
 const route = useRoute()
+const { t } = useI18n()
 const collapsed = computed(() => appStore.sidebarCollapsed)
 const area = computed(() => resolveArea(route.path))
 /** 企业门户（节点05）为顶栏全宽；表单/流程设计器（节点07-14）为全宽三栏画布；
@@ -42,15 +47,27 @@ const showAside = computed(
   <div class="basic-layout" :class="`basic-layout--${area}`">
     <header class="basic-layout__topbar" :class="`basic-layout__topbar--${area}`">
       <AppLogo :collapse="false" :area="area" />
-      <AppMainNav
-        class="basic-layout__nav"
-        :show-sidebar-toggle="showAside"
-        :sidebar-collapsed="collapsed"
-        @toggle-sidebar="appStore.toggleSidebar()"
-      />
+      <AppMainNav class="basic-layout__nav" />
       <AppTopbar class="basic-layout__actions" />
     </header>
     <div class="basic-layout__body">
+      <button
+        v-if="showAside"
+        type="button"
+        class="basic-layout__sidebar-toggle"
+        data-test="sidebar-toggle"
+        :class="{ 'is-collapsed': collapsed }"
+        :aria-label="t('nav.toggleSidebar')"
+        :aria-expanded="!collapsed"
+        aria-controls="app-sidebar"
+        :title="t('nav.toggleSidebar')"
+        @click="appStore.toggleSidebar()"
+      >
+        <el-icon :size="14" aria-hidden="true">
+          <Expand v-if="collapsed" />
+          <Fold v-else />
+        </el-icon>
+      </button>
       <aside
         v-if="showAside"
         id="app-sidebar"
@@ -118,9 +135,40 @@ const showAside = computed(
   max-width: none;
 }
 .basic-layout__body {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
+}
+/* 0.2.0：侧栏收起/展开入口位于侧栏与正文交界（401:8637 SidebarToggle 规范），
+ * 不参与顶栏横向布局；收起态贴收起宽度边缘，仍可展开。 */
+.basic-layout__sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--sw-layout-aside-width) - 10px);
+  transform: translateY(-50%);
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--sw-border-color, #dcdfe6);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-bg-color, #fff);
+  color: var(--sw-text-secondary, #606266);
+  cursor: pointer;
+  transition: left 0.2s ease;
+}
+.basic-layout__sidebar-toggle:hover {
+  color: var(--sw-brand-color, #2563eb);
+}
+.basic-layout__sidebar-toggle.is-collapsed {
+  left: calc(var(--sw-layout-aside-width-collapsed) - 10px);
+}
+.basic-layout--admin .basic-layout__sidebar-toggle:not(.is-collapsed) {
+  left: 226px;
 }
 .basic-layout__aside {
   display: flex;
