@@ -879,6 +879,34 @@ describe('TaskDetail.vue', () => {
     expect(directButtons).toEqual([i18n.global.t('common.moreActions')])
     expect(wrapper.text()).toContain(i18n.global.t('taskDetailUi.urgeAction'))
   })
+
+  it('273:2001 退回弹窗的退回说明随 RETURN 命令提交', async () => {
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
+    const wrapper = await mountActionable({
+      allowedActions: ['RETURN'],
+      approvalHistory: [{ ...mockDetail.approvalHistory[0], nodeKey: 'node_prev' }] as never,
+    })
+    const vm = wrapper.vm as unknown as {
+      returnTargetNodeId: string
+      returnComment: string
+      confirmReturn: () => Promise<void>
+    }
+    vm.returnTargetNodeId = 'node_prev'
+    vm.returnComment = '请补充材料'
+    await vm.confirmReturn()
+
+    expect(acceptTaskAction).toHaveBeenCalledWith(
+      'task-001',
+      'return',
+      expect.objectContaining({
+        action: 'RETURN',
+        returnTargetNodeId: 'node_prev',
+        comment: '请补充材料',
+        opinionData: expect.objectContaining({ comment: '请补充材料' }),
+      }),
+    )
+  })
 })
 
 // ═════════ P63 IoT 预约区块（实例维度查询 + v-perm 取消入口） ═════════
@@ -1073,11 +1101,17 @@ describe('TaskDetail 校验提示弹窗（设计 300:1808）', () => {
       handleApprove: () => Promise<void>
       validationDialogVisible: boolean
       validationItems: string[]
+      opinionFieldInvalid: (key: string) => boolean
+      opinionData: Record<string, unknown>
     }
     await vm.handleApprove()
 
     expect(vm.validationDialogVisible).toBe(true)
     expect(vm.validationItems).toEqual(['请填写审批意见'])
+    expect(vm.opinionFieldInvalid('comment')).toBe(true)
+    vm.opinionData = { comment: '已补充' }
+    await nextTick()
+    expect(vm.opinionFieldInvalid('comment')).toBe(false)
     expect(acceptTaskAction).not.toHaveBeenCalled()
   })
 

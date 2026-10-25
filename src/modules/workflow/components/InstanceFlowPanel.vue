@@ -612,11 +612,15 @@ const opinionDetailAttachmentEntries = computed(() => {
           <el-tab-pane :label="t('taskDetailUi.signTabRejected')" name="rejected" />
         </el-tabs>
         <p class="p53-sign-stats" data-testid="sign-records-stats">
+          <span> {{ activeSignGroup.rows.length }}{{ t('taskDetailUi.signParticipants') }} </span>
           <span class="is-success">
-            {{ activeSignGroup.approved }}{{ t('taskDetailUi.signAgreed') }}
+            · {{ activeSignGroup.approved }}{{ t('taskDetailUi.signAgreed') }}
           </span>
           <span v-if="activeSignGroup.rejected" class="is-danger">
-            ，{{ activeSignGroup.rejected }}{{ t('taskDetailUi.signRejected') }}
+            · {{ activeSignGroup.rejected }}{{ t('taskDetailUi.signRejected') }}
+          </span>
+          <span v-if="activeSignGroup.pending" class="is-warning">
+            · {{ activeSignGroup.pending }}{{ t('taskDetailUi.signPending') }}
           </span>
           <span class="p53-sign-stats__rule">{{ t('taskDetailUi.parallelSignRule') }}</span>
         </p>
@@ -653,6 +657,13 @@ const opinionDetailAttachmentEntries = computed(() => {
               >
                 {{ getApprovalResultLabel(row.approvalResult) }}
               </span>
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('common.actions')" width="80" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" size="small" @click="openOpinionDetailRow(row)">
+                {{ t('common.view') }}
+              </el-button>
             </template>
           </el-table-column>
         </el-table>

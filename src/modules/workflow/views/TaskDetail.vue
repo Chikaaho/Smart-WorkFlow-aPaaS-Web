@@ -583,17 +583,32 @@ function openValidationDialog(items: string[]): boolean {
   return false
 }
 
+function opinionMissingFields() {
+  return visibleOpinionFields.value.filter((field) => {
+    if (!field.required || field.type === 'NOTE') return false
+    const value = opinionData.value[field.key]
+    return value == null || (typeof value === 'string' && value.trim() === '')
+  })
+}
+
+const opinionErrorKeys = ref<string[]>([])
+
+function opinionFieldInvalid(key: string): boolean {
+  return (
+    opinionErrorKeys.value.includes(key) &&
+    opinionMissingFields().some((field) => field.key === key)
+  )
+}
+
 function opinionMissingItems(): string[] {
-  return visibleOpinionFields.value
-    .filter((field) => {
-      if (!field.required || field.type === 'NOTE') return false
-      const value = opinionData.value[field.key]
-      return value == null || (typeof value === 'string' && value.trim() === '')
-    })
-    .map((field) => t('workflow.validationFillPrefix') + (field.label || field.key))
+  return opinionMissingFields().map(
+    (field) => t('workflow.validationFillPrefix') + (field.label || field.key),
+  )
 }
 
 function ensureOpinionData(): boolean {
+  const missing = opinionMissingFields()
+  opinionErrorKeys.value = missing.map((field) => field.key)
   return openValidationDialog(opinionMissingItems())
 }
 
@@ -685,6 +700,7 @@ async function confirmReject(): Promise<void> {
 // ── 设计 273:2001 退回申请弹窗：退回目标选择收进弹窗（说明行 + 取消/确定） ──
 const returnDialogVisible = ref(false)
 const returnSubmitting = ref(false)
+const returnComment = ref('')
 
 function handleReturn() {
   if (acting.value || !canReturn.value) return
@@ -693,6 +709,7 @@ function handleReturn() {
     ElMessage.warning(t('workflow.noReturnTargets'))
     return
   }
+  returnComment.value = ''
   returnDialogVisible.value = true
 }
 
@@ -707,9 +724,18 @@ async function confirmReturn(): Promise<void> {
   acting.value = 'return'
   try {
     returnDialogVisible.value = false
+    const base = actionPayload('RETURN')
+    const comment = returnComment.value.trim()
+    const payload = comment
+      ? {
+          ...(base ?? { action: 'RETURN' as const }),
+          comment,
+          opinionData: { ...(base?.opinionData ?? {}), comment },
+        }
+      : base
     await runAction(
       'return',
-      { action: 'RETURN', returnTargetNodeId: target, ...actionPayload('RETURN') },
+      { action: 'RETURN', returnTargetNodeId: target, ...payload },
       t('common.statusReturned'),
       t('workflow.returnFailed'),
     )
@@ -1185,7 +1211,12 @@ onMounted(loadDetail)
           </div>
         </div>
         <div v-if="canAct && visibleOpinionFields.length > 0" class="opinion-form">
-          <div v-for="field in visibleOpinionFields" :key="field.key" class="opinion-field">
+          <div
+            v-for="field in visibleOpinionFields"
+            :key="field.key"
+            class="opinion-field"
+            :class="{ 'is-invalid': opinionFieldInvalid(field.key) }"
+          >
             <template v-if="field.type === 'NOTE'">
               <span class="opinion-note">{{ field.label }}</span>
             </template>
@@ -1247,6 +1278,9 @@ onMounted(loadDetail)
                 "
               />
             </template>
+            <p v-if="opinionFieldInvalid(field.key)" class="opinion-field__error" role="alert">
+              {{ t('workflow.validationRequiredInline', { label: field.label || field.key }) }}
+            </p>
           </div>
         </div>
         <textarea
@@ -1503,6 +1537,16 @@ onMounted(loadDetail)
             />
           </el-select>
           <span class="return-dialog__hint">{{ t('workflow.returnRoundHint') }}</span>
+        </el-form-item>
+        <el-form-item :label="t('workflow.returnCommentLabel')">
+          <el-input
+            v-model="returnComment"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            show-word-limit
+            data-testid="return-comment"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -1798,6 +1842,17 @@ onMounted(loadDetail)
   flex-direction: column;
   gap: 6px;
   margin-bottom: 0;
+}
+.opinion-field.is-invalid input,
+.opinion-field.is-invalid textarea,
+.opinion-field.is-invalid select {
+  border-color: var(--el-color-danger);
+}
+.opinion-field__error {
+  margin: 0;
+  color: var(--el-color-danger);
+  font-size: 12px;
+  line-height: 18px;
 }
 .opinion-field input,
 .opinion-field textarea,

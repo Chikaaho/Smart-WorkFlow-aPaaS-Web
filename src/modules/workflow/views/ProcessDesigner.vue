@@ -1923,8 +1923,15 @@ const PARTICIPANT_STRATEGY_LABELS: Record<ParticipantStrategy, string> = {
   NODE_FORM_AGGREGATE: '节点表单聚合',
 }
 
-/** BF20261013-022④：参与人策略收敛为五项（其余仅作旧数据回显，不再提供新选）。 */
-const ALLOWED_PARTICIPANT_STRATEGIES = ['FIXED_USER', 'DEPT_LEADER', 'ROLE', 'POST', 'EXPRESSION']
+/** 设计 42:4：提供选择人员/表单字段/表达式等业务策略；旧数据仍可回显其他策略。 */
+const ALLOWED_PARTICIPANT_STRATEGIES = [
+  'FIXED_USER',
+  'DEPT_LEADER',
+  'ROLE',
+  'POST',
+  'FORM_FIELD',
+  'EXPRESSION',
+]
 
 /** 参与人字段：真实契约的 participant、mock APPROVAL 的 approver，或带 approverTypes 的兼容 object 字段。 */
 const participantField = computed<BpmNodeConfigField | null>(() => {
