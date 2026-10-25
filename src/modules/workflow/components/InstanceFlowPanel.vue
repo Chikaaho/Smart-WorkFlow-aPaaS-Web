@@ -179,6 +179,59 @@ const flowRail = computed<FlowRailEntry[]>(() => {
 /** 流程图右侧状态卡数据源：仅真实进行中的节点；无进行中节点时不渲染。 */
 const currentRailEntry = computed(() => flowRail.value.find((e) => e.state === 'current') ?? null)
 
+// ─── 会签聚合（设计 60:190）：多人节点聚合入口 + 会签记录弹窗 ───
+interface SignGroup {
+  key: string
+  name: string
+  rows: ApprovalHistoryItem[]
+  approved: number
+  rejected: number
+  pending: number
+}
+
+/** 会签组 = 同一 nodeKey 下存在多名真实参与人的审批组（派发通知行不计）。 */
+const signGroups = computed<SignGroup[]>(() => {
+  const groups = new Map<string, { name: string; rows: ApprovalHistoryItem[] }>()
+  for (const row of props.approvalHistory) {
+    if (typeof row.nodeKey !== 'string' || !row.nodeKey) continue
+    const g = groups.get(row.nodeKey) ?? { name: row.taskName, rows: [] }
+    g.rows.push(row)
+    groups.set(row.nodeKey, g)
+  }
+  const result: SignGroup[] = []
+  for (const [key, g] of groups) {
+    const real = g.rows.filter((r) => !(r.approvalResult == null && r.endTime != null))
+    if (real.length < 2) continue
+    result.push({
+      key,
+      name: g.name,
+      rows: real,
+      approved: real.filter((r) => r.approvalResult === 'APPROVED').length,
+      rejected: real.filter((r) => r.approvalResult === 'REJECTED').length,
+      pending: real.filter((r) => r.approvalResult == null && r.endTime == null).length,
+    })
+  }
+  return result
+})
+
+const signDialogVisible = ref(false)
+const signFilter = ref<'all' | 'agreed' | 'rejected'>('all')
+const activeSignGroup = ref<SignGroup | null>(null)
+
+function openSignDialog(key: string) {
+  activeSignGroup.value = signGroups.value.find((g) => g.key === key) ?? null
+  signFilter.value = 'all'
+  signDialogVisible.value = true
+}
+
+const signDialogRows = computed(() => {
+  const g = activeSignGroup.value
+  if (!g) return []
+  if (signFilter.value === 'agreed') return g.rows.filter((r) => r.approvalResult === 'APPROVED')
+  if (signFilter.value === 'rejected') return g.rows.filter((r) => r.approvalResult === 'REJECTED')
+  return g.rows
+})
+
 /** 图画布高度：默认 740；高视口（长页基线 1512）下 800。 */
 const graphCanvasHeight = computed(() =>
   typeof window !== 'undefined' && window.innerHeight >= 1100 ? 784 : 740,
@@ -414,6 +467,33 @@ const opinionDetailAttachmentEntries = computed(() => {
             t('taskDetailUi.tabPeople')
           }}</span></template
         >
+        <!-- 会签聚合（设计 60:190）：多人节点聚合入口，点击进会签记录弹窗 -->
+        <div v-if="signGroups.length" class="sign-groups" data-testid="sign-groups">
+          <button
+            v-for="g in signGroups"
+            :key="g.key"
+            type="button"
+            class="sign-group"
+            data-testid="sign-group"
+            @click="openSignDialog(g.key)"
+          >
+            <span class="sign-group__title">
+              {{ t('taskDetailUi.signGroupTitle') }} · {{ g.name }}
+            </span>
+            <span class="sign-group__stats">
+              <span class="sign-group__stat sign-group__stat--success">
+                {{ g.approved }}{{ t('taskDetailUi.signAgreed') }}
+              </span>
+              <span v-if="g.rejected" class="sign-group__stat sign-group__stat--danger">
+                {{ g.rejected }}{{ t('taskDetailUi.signRejected') }}
+              </span>
+              <span v-if="g.pending" class="sign-group__stat">
+                {{ g.pending }}{{ t('taskDetailUi.signPending') }}
+              </span>
+            </span>
+            <span class="sign-group__link">{{ t('taskDetailUi.viewAllSignRecords') }}</span>
+          </button>
+        </div>
         <el-table class="detail-flow-table" :data="peopleRows" stripe>
           <el-table-column prop="taskName" :label="t('workflow.approvalNode')" min-width="260" />
           <el-table-column :label="t('workflow.approver')" width="120">
@@ -508,6 +588,74 @@ const opinionDetailAttachmentEntries = computed(() => {
             <div class="p53-opinion-attachment">{{ entry.value }}</div>
           </div>
         </template>
+      </div>
+    </el-dialog>
+
+    <!-- 会签记录弹窗（设计 60:190）：说明 + 状态筛选 + 统计行 + 记录表 -->
+    <el-dialog
+      v-model="signDialogVisible"
+      width="780px"
+      top="12vh"
+      class="p53-sign-dialog"
+      data-testid="sign-records-dialog"
+    >
+      <template #header>
+        <div class="p53-sign-dialog__head">
+          <h2>{{ t('taskDetailUi.signGroupTitle') }}</h2>
+          <p>{{ t('taskDetailUi.signGroupHint') }}</p>
+        </div>
+      </template>
+      <div v-if="activeSignGroup" class="p53-sign-panel">
+        <el-tabs v-model="signFilter" class="p53-sign-tabs">
+          <el-tab-pane :label="t('common.all')" name="all" />
+          <el-tab-pane :label="t('common.resultAgreed')" name="agreed" />
+          <el-tab-pane :label="t('taskDetailUi.signTabRejected')" name="rejected" />
+        </el-tabs>
+        <p class="p53-sign-stats" data-testid="sign-records-stats">
+          <span class="is-success">
+            {{ activeSignGroup.approved }}{{ t('taskDetailUi.signAgreed') }}
+          </span>
+          <span v-if="activeSignGroup.rejected" class="is-danger">
+            ，{{ activeSignGroup.rejected }}{{ t('taskDetailUi.signRejected') }}
+          </span>
+          <span class="p53-sign-stats__rule">{{ t('taskDetailUi.parallelSignRule') }}</span>
+        </p>
+        <el-table class="detail-flow-table" :data="signDialogRows" stripe>
+          <el-table-column :label="t('workflow.approver')" min-width="120">
+            <template #default="{ row }">
+              {{ row.assigneeName ?? row.assignee ?? '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('taskDetailUi.opinionDeptLabel')" min-width="160">
+            <template #default="{ row }">
+              {{ row.assigneeDept || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('workflow.actionOpinion')" min-width="280">
+            <template #default="{ row }">
+              {{
+                row.opinionFormId
+                  ? t('taskDetailUi.customFormLabel')
+                  : (row.opinionData?.comment ?? row.action ?? '-')
+              }}
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('taskDetailUi.approvalTimeLabel')" width="132">
+            <template #default="{ row }">
+              {{ formatWhen(row.endTime ?? row.createTime) || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('common.status')" width="96">
+            <template #default="{ row }">
+              <span
+                class="people-status"
+                :class="`people-status--${getApprovalResultType(row.approvalResult)}`"
+              >
+                {{ getApprovalResultLabel(row.approvalResult) }}
+              </span>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
     </el-dialog>
   </el-card>
@@ -612,6 +760,81 @@ const opinionDetailAttachmentEntries = computed(() => {
 }
 .people-status--info {
   color: var(--sw-text-secondary);
+}
+/* ─── 会签聚合入口（设计 60:190）：多人节点一行聚合，右缘查看全部 ─── */
+.sign-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 4px;
+}
+.sign-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fafbfd;
+  cursor: pointer;
+  text-align: left;
+}
+.sign-group:hover {
+  border-color: var(--sw-color-primary, #409eff);
+}
+.sign-group__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+}
+.sign-group__stats {
+  display: inline-flex;
+  gap: 12px;
+  font-size: 13px;
+}
+.sign-group__stat {
+  color: var(--sw-text-secondary);
+}
+.sign-group__stat--success {
+  color: #12aa83;
+}
+.sign-group__stat--danger {
+  color: #ef5d71;
+}
+.sign-group__link {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--sw-color-primary, #409eff);
+}
+/* ─── 会签记录弹窗（设计 60:190）：说明 + 筛选 + 统计行 ─── */
+.p53-sign-dialog__head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+}
+.p53-sign-dialog__head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+.p53-sign-panel {
+  padding: 0 24px 20px;
+}
+.p53-sign-stats {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+.p53-sign-stats .is-success {
+  color: #12aa83;
+}
+.p53-sign-stats .is-danger {
+  color: #ef5d71;
+}
+.p53-sign-stats__rule {
+  margin-left: 12px;
+  font-size: 12px;
 }
 /* 表格页签无内边距；仅空态提示保留与卡片边缘的间距。 */
 .instance-flow-panel :deep(.el-tab-pane > .el-alert) {

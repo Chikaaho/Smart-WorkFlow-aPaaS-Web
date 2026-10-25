@@ -93,8 +93,9 @@ describe('AppCenterDetail（应用内页：目录/表单导航 + 数据列表）
     expect(name.exists()).toBe(true)
     expect(name.text()).toBe('报销应用')
     expect(name.attributes('title')).toBe('报销应用')
-    // 返回箭头 + 图标（测试桩）+ 名称三项同排
-    expect(wrapper.find('.app-tree-nav__head').element.children).toHaveLength(3)
+    // 返回箭头 + 图标（测试桩）+ 名称 + 整栏收起按钮四项同排（设计 272:1296）
+    expect(wrapper.find('.app-tree-nav__head').element.children).toHaveLength(4)
+    expect(wrapper.find('[data-testid="app-tree-nav-collapse"]').exists()).toBe(true)
   })
 
   it('选中态跟随路由 query.formKey（刷新后仍停留在同一表单）', async () => {

@@ -139,8 +139,9 @@ describe('AppWorkspace（应用管理上下文）', () => {
     expect(name.text()).toBe('报销应用')
     // 截断只发生在视觉层（CSS 5em + 省略号）：完整名称仍需可读
     expect(name.attributes('title')).toBe('报销应用')
-    // 图标组件在测试里以桩渲染：只断言「返回箭头 + 图标 + 名称」三项同排
-    expect(wrapper.find('.app-tree-nav__head').element.children).toHaveLength(3)
+    // 图标组件在测试里以桩渲染：断言「返回箭头 + 图标 + 名称 + 整栏收起按钮」四项同排（设计 272:1296）
+    expect(wrapper.find('.app-tree-nav__head').element.children).toHaveLength(4)
+    expect(wrapper.find('[data-testid="app-tree-nav-collapse"]').exists()).toBe(true)
   })
 
   it('0.1.7 #34：左下角「新建」入口在侧栏底部且占满整栏', async () => {

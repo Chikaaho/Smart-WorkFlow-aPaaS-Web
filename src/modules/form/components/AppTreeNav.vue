@@ -6,7 +6,14 @@
  * 目录/表单管理菜单按 form:app:manage 权限显隐。
  */
 import { computed, ref } from 'vue'
-import { ArrowLeft, CaretRight, Folder, MoreFilled } from '@element-plus/icons-vue'
+import {
+  ArrowLeft,
+  CaretRight,
+  DArrowLeft,
+  DArrowRight,
+  Folder,
+  MoreFilled,
+} from '@element-plus/icons-vue'
 import type { FormAppDir, FormAppFormItem } from '@/contracts/app-center'
 import { hasPerm } from '@/foundation/permission'
 import { useI18n } from '@/locales'
@@ -57,158 +64,187 @@ function toggleDir(dirId: string) {
     ? collapsedDirIds.value.filter((id) => id !== dirId)
     : [...collapsedDirIds.value, dirId]
 }
+
+/** 整栏收起（设计 272:1296）：收起后左缘保留浮动展开按钮，展开态按钮位于应用名行右端。 */
+const navCollapsed = ref(false)
 </script>
 
 <template>
-  <aside class="app-tree-nav">
-    <div v-if="backTitle || appName" class="app-tree-nav__head">
-      <button
-        v-if="backTitle"
-        type="button"
-        class="app-tree-nav__back"
-        :data-testid="backTestId"
-        :title="backTitle"
-        @click="emit('back')"
-      >
-        <el-icon><ArrowLeft /></el-icon>
-      </button>
-      <template v-if="appName">
-        <AppIcon
-          class="app-tree-nav__app-icon"
-          :icon="props.appIcon"
-          :color="props.appColor"
-          :size="13"
-        />
-        <span class="app-tree-nav__app-name" :data-testid="nameTestId" :title="appName">
-          {{ appName }}
-        </span>
-      </template>
-    </div>
+  <aside class="app-tree-nav" :class="{ 'is-collapsed': navCollapsed }">
+    <button
+      v-if="navCollapsed"
+      type="button"
+      class="app-tree-nav__expander"
+      data-testid="app-tree-nav-expand"
+      :title="t('form.appCenter.expandNav')"
+      :aria-label="t('form.appCenter.expandNav')"
+      @click="navCollapsed = false"
+    >
+      <el-icon><DArrowRight /></el-icon>
+    </button>
 
-    <nav class="app-tree-nav__tree" :aria-label="t('form.appCenter.appNavTitle')">
-      <template v-for="dir in dirs" :key="dir.id">
-        <div
-          class="app-tree-nav__dir"
-          data-testid="app-tree-dir"
-          role="button"
-          tabindex="0"
-          :aria-expanded="isDirExpanded(dir.id)"
-          @click="toggleDir(dir.id)"
-          @keydown.enter.prevent="toggleDir(dir.id)"
-          @keydown.space.prevent="toggleDir(dir.id)"
+    <template v-else>
+      <div v-if="backTitle || appName" class="app-tree-nav__head">
+        <button
+          v-if="backTitle"
+          type="button"
+          class="app-tree-nav__back"
+          :data-testid="backTestId"
+          :title="backTitle"
+          @click="emit('back')"
         >
-          <el-icon
-            class="app-tree-nav__dir-caret"
-            :class="{ 'is-collapsed': !isDirExpanded(dir.id) }"
-            aria-hidden="true"
-          >
-            <CaretRight />
-          </el-icon>
-          <el-icon class="app-tree-nav__dir-icon"><Folder /></el-icon>
-          <span class="app-tree-nav__dir-name">{{ dir.name }}</span>
-          <el-dropdown
-            v-if="canManage"
-            class="app-tree-nav__more"
-            trigger="click"
-            @command="(cmd: string) => emit('dir-command', cmd, dir)"
-          >
-            <span
-              class="app-tree-nav__more-trigger"
-              :data-testid="'dir-more-' + dir.id"
-              @click.stop
-            >
-              <el-icon><MoreFilled /></el-icon>
-            </span>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
-                <el-dropdown-item command="form">
-                  {{ t('form.appCenter.newFormInDir') }}
-                </el-dropdown-item>
-                <el-dropdown-item command="delete" divided>
-                  {{ t('common.delete') }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
+          <el-icon><ArrowLeft /></el-icon>
+        </button>
+        <template v-if="appName">
+          <AppIcon
+            class="app-tree-nav__app-icon"
+            :icon="props.appIcon"
+            :color="props.appColor"
+            :size="13"
+          />
+          <span class="app-tree-nav__app-name" :data-testid="nameTestId" :title="appName">
+            {{ appName }}
+          </span>
+        </template>
+        <button
+          type="button"
+          class="app-tree-nav__collapse"
+          data-testid="app-tree-nav-collapse"
+          :title="t('form.appCenter.collapseNav')"
+          :aria-label="t('form.appCenter.collapseNav')"
+          @click="navCollapsed = true"
+        >
+          <el-icon><DArrowLeft /></el-icon>
+        </button>
+      </div>
 
-        <template v-if="isDirExpanded(dir.id)">
-          <button
-            v-for="item in dir.forms ?? []"
-            :key="item.formId"
-            type="button"
-            class="app-tree-nav__form"
-            :class="{ 'is-active': item.formKey === selectedFormKey }"
-            data-testid="app-tree-form"
-            :data-form-key="item.formKey"
-            @click="emit('select', item)"
+      <nav class="app-tree-nav__tree" :aria-label="t('form.appCenter.appNavTitle')">
+        <template v-for="dir in dirs" :key="dir.id">
+          <div
+            class="app-tree-nav__dir"
+            data-testid="app-tree-dir"
+            role="button"
+            tabindex="0"
+            :aria-expanded="isDirExpanded(dir.id)"
+            @click="toggleDir(dir.id)"
+            @keydown.enter.prevent="toggleDir(dir.id)"
+            @keydown.space.prevent="toggleDir(dir.id)"
           >
-            <span class="app-tree-nav__form-name">{{ item.name }}</span>
+            <el-icon
+              class="app-tree-nav__dir-caret"
+              :class="{ 'is-collapsed': !isDirExpanded(dir.id) }"
+              aria-hidden="true"
+            >
+              <CaretRight />
+            </el-icon>
+            <el-icon class="app-tree-nav__dir-icon"><Folder /></el-icon>
+            <span class="app-tree-nav__dir-name">{{ dir.name }}</span>
             <el-dropdown
               v-if="canManage"
               class="app-tree-nav__more"
               trigger="click"
-              @command="(cmd: string) => emit('form-command', cmd, item)"
+              @command="(cmd: string) => emit('dir-command', cmd, dir)"
             >
-              <span class="app-tree-nav__more-trigger" @click.stop>
+              <span
+                class="app-tree-nav__more-trigger"
+                :data-testid="'dir-more-' + dir.id"
+                @click.stop
+              >
                 <el-icon><MoreFilled /></el-icon>
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="design">
-                    {{ t('form.appCenter.enterFormDesign') }}
-                  </el-dropdown-item>
                   <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
+                  <el-dropdown-item command="form">
+                    {{ t('form.appCenter.newFormInDir') }}
+                  </el-dropdown-item>
                   <el-dropdown-item command="delete" divided>
                     {{ t('common.delete') }}
                   </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-          </button>
-          <p v-if="(dir.forms?.length ?? 0) === 0" class="app-tree-nav__empty">
-            {{ t('form.appCenter.emptyDir') }}
-          </p>
-        </template>
-      </template>
+          </div>
 
-      <button
-        v-for="item in directForms"
-        :key="item.formId"
-        type="button"
-        class="app-tree-nav__form app-tree-nav__form--root"
-        :class="{ 'is-active': item.formKey === selectedFormKey }"
-        data-testid="app-tree-form"
-        :data-form-key="item.formKey"
-        @click="emit('select', item)"
-      >
-        <span class="app-tree-nav__form-name">{{ item.name }}</span>
-        <el-dropdown
-          v-if="canManage"
-          class="app-tree-nav__more"
-          trigger="click"
-          @command="(cmd: string) => emit('form-command', cmd, item)"
-        >
-          <span class="app-tree-nav__more-trigger" @click.stop>
-            <el-icon><MoreFilled /></el-icon>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="design">
-                {{ t('form.appCenter.enterFormDesign') }}
-              </el-dropdown-item>
-              <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
-              <el-dropdown-item command="delete" divided>{{ t('common.delete') }}</el-dropdown-item>
-            </el-dropdown-menu>
+          <template v-if="isDirExpanded(dir.id)">
+            <button
+              v-for="item in dir.forms ?? []"
+              :key="item.formId"
+              type="button"
+              class="app-tree-nav__form"
+              :class="{ 'is-active': item.formKey === selectedFormKey }"
+              data-testid="app-tree-form"
+              :data-form-key="item.formKey"
+              @click="emit('select', item)"
+            >
+              <span class="app-tree-nav__form-name">{{ item.name }}</span>
+              <el-dropdown
+                v-if="canManage"
+                class="app-tree-nav__more"
+                trigger="click"
+                @command="(cmd: string) => emit('form-command', cmd, item)"
+              >
+                <span class="app-tree-nav__more-trigger" @click.stop>
+                  <el-icon><MoreFilled /></el-icon>
+                </span>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="design">
+                      {{ t('form.appCenter.enterFormDesign') }}
+                    </el-dropdown-item>
+                    <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
+                    <el-dropdown-item command="delete" divided>
+                      {{ t('common.delete') }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </button>
+            <p v-if="(dir.forms?.length ?? 0) === 0" class="app-tree-nav__empty">
+              {{ t('form.appCenter.emptyDir') }}
+            </p>
           </template>
-        </el-dropdown>
-      </button>
-    </nav>
+        </template>
 
-    <div v-if="$slots.footer" class="app-tree-nav__foot">
-      <slot name="footer" />
-    </div>
+        <button
+          v-for="item in directForms"
+          :key="item.formId"
+          type="button"
+          class="app-tree-nav__form app-tree-nav__form--root"
+          :class="{ 'is-active': item.formKey === selectedFormKey }"
+          data-testid="app-tree-form"
+          :data-form-key="item.formKey"
+          @click="emit('select', item)"
+        >
+          <span class="app-tree-nav__form-name">{{ item.name }}</span>
+          <el-dropdown
+            v-if="canManage"
+            class="app-tree-nav__more"
+            trigger="click"
+            @command="(cmd: string) => emit('form-command', cmd, item)"
+          >
+            <span class="app-tree-nav__more-trigger" @click.stop>
+              <el-icon><MoreFilled /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="design">
+                  {{ t('form.appCenter.enterFormDesign') }}
+                </el-dropdown-item>
+                <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
+                <el-dropdown-item command="delete" divided>{{
+                  t('common.delete')
+                }}</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </button>
+      </nav>
+
+      <div v-if="$slots.footer" class="app-tree-nav__foot">
+        <slot name="footer" />
+      </div>
+    </template>
   </aside>
 </template>
 
@@ -221,6 +257,57 @@ function toggleDir(dirId: string) {
   min-height: 0;
   background: #fff;
   border-right: 1px solid #ebeef5;
+}
+
+/* 整栏收起：面板隐藏为 0 宽，仅保留左缘浮动展开按钮（设计 272:1296） */
+.app-tree-nav.is-collapsed {
+  flex-basis: 0;
+  width: 0;
+  border-right: none;
+  position: relative;
+}
+
+.app-tree-nav__expander {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 40px;
+  border: 1px solid #e4e7ed;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  background: #fff;
+  color: #606266;
+  cursor: pointer;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.04);
+}
+
+.app-tree-nav__expander:hover {
+  color: var(--sw-color-primary, #409eff);
+}
+
+.app-tree-nav__collapse {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #909399;
+  cursor: pointer;
+}
+
+.app-tree-nav__collapse:hover {
+  color: #303133;
+  background: #f5f7fa;
 }
 
 .app-tree-nav__head {
