@@ -189,11 +189,16 @@ export interface UrgeResp {
   recordId: number | string
 }
 
-/** POST /workflow/my/instances/{id}/urge — 发起人催办（10 分钟冷却，重复请求返回冷却信息）。 */
-export async function urgeMyInstance(instanceId: number | string): Promise<UrgeResp> {
+/** POST /workflow/my/instances/{id}/urge — 发起人催办（10 分钟冷却；message 为可选留言，服务端限 200 字）。 */
+export async function urgeMyInstance(
+  instanceId: number | string,
+  message?: string,
+): Promise<UrgeResp> {
+  const trimmed = message?.trim()
   return request<UrgeResp>({
     method: 'POST',
     url: `/workflow/my/instances/${instanceId}/urge`,
+    data: trimmed ? { message: trimmed } : undefined,
   })
 }
 

@@ -12,7 +12,7 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import {
@@ -617,44 +617,75 @@ async function handleApprove() {
   }
 }
 
-async function handleReject() {
+// ── 设计 272:1746 驳回申请弹窗：驳回原因（可选）收进弹窗，确认后直提 ──
+const rejectDialogVisible = ref(false)
+const rejectReason = ref('')
+const rejectSubmitting = ref(false)
+
+function handleReject() {
   if (acting.value || !canReject.value) return
   if (!ensureOpinionData()) return
+  rejectReason.value = ''
+  rejectDialogVisible.value = true
+}
+
+async function confirmReject(): Promise<void> {
+  if (rejectSubmitting.value) return
+  if (!ensureOpinionData()) return
+  const reason = rejectReason.value.trim()
+  if (reason) {
+    if (visibleOpinionFields.value.length === 0) {
+      opinionComment.value = reason
+    } else if (typeof opinionData.value.comment !== 'string' || !opinionData.value.comment) {
+      opinionData.value = { ...opinionData.value, comment: reason }
+    }
+  }
+  rejectSubmitting.value = true
   acting.value = 'reject'
   try {
-    await taskApproval.submit('REJECT')
+    await taskApproval.submit('REJECT', { skipConfirm: true })
+    rejectDialogVisible.value = false
   } finally {
+    rejectSubmitting.value = false
     acting.value = null
   }
 }
 
-async function handleReturn() {
+// ── 设计 273:2001 退回申请弹窗：退回目标选择收进弹窗（说明行 + 取消/确定） ──
+const returnDialogVisible = ref(false)
+const returnSubmitting = ref(false)
+
+function handleReturn() {
   if (acting.value || !canReturn.value) return
+  if (!returnTargetNodeId.value) returnTargetNodeId.value = returnTargets.value[0]?.nodeKey ?? ''
+  if (!returnTargetNodeId.value) {
+    ElMessage.warning(t('workflow.noReturnTargets'))
+    return
+  }
+  returnDialogVisible.value = true
+}
+
+async function confirmReturn(): Promise<void> {
+  if (returnSubmitting.value) return
   const target = returnTargetNodeId.value || returnTargets.value[0]?.nodeKey
   if (!target) {
     ElMessage.warning(t('workflow.noReturnTargets'))
     return
   }
-  try {
-    await ElMessageBox.confirm(t('workflow.confirmReturn'), t('workflow.returnConfirmTitle'), {
-      get confirmButtonText() {
-        return t('common.returnBack')
-      },
-      get cancelButtonText() {
-        return t('common.cancel')
-      },
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+  returnSubmitting.value = true
   acting.value = 'return'
-  await runAction(
-    'return',
-    { action: 'RETURN', returnTargetNodeId: target, ...actionPayload('RETURN') },
-    t('common.statusReturned'),
-    t('workflow.returnFailed'),
-  )
+  try {
+    returnDialogVisible.value = false
+    await runAction(
+      'return',
+      { action: 'RETURN', returnTargetNodeId: target, ...actionPayload('RETURN') },
+      t('common.statusReturned'),
+      t('workflow.returnFailed'),
+    )
+  } finally {
+    returnSubmitting.value = false
+    acting.value = null
+  }
 }
 
 // ═════════ I3 生命周期动作（转办/委托/沟通/加签） ═══════════════════════
@@ -880,13 +911,28 @@ function isLifecycleKind(value: string): value is LifecycleKind {
 function handleApprovalMore(command: string): void {
   if (acting.value) return
   if (command === 'URGE') {
-    if (canUrge.value) void onUrge()
+    openUrgeDialog()
     return
   }
   if (isLifecycleKind(command) && lifecycleVisible(command)) openLifecycle(command)
 }
 
-async function onUrge(): Promise<void> {
+// ── 设计 273:2025 催办弹窗：说明 + 催办留言（可空，服务端限 200 字） ──
+const urgeDialogVisible = ref(false)
+const urgeMessage = ref('')
+
+function openUrgeDialog(): void {
+  if (acting.value || !canUrge.value) return
+  urgeMessage.value = ''
+  urgeDialogVisible.value = true
+}
+
+async function confirmUrge(): Promise<void> {
+  await onUrge(urgeMessage.value.trim())
+  urgeDialogVisible.value = false
+}
+
+async function onUrge(message?: string): Promise<void> {
   const d = detail.value
   if (!d?.processInstanceId || !canUrge.value) return
   try {
@@ -904,7 +950,7 @@ async function onUrge(): Promise<void> {
       return
     }
     const { urgeMyInstance } = await import('@/modules/workflow/api/oa')
-    const resp = await urgeMyInstance(instance.id)
+    const resp = await urgeMyInstance(instance.id, message)
     if (resp.result === 'ACCEPTED') {
       ElMessage.success(resp.detail || t('workflow.urgeSent'))
     } else if (resp.result === 'COOLDOWN') {
@@ -1182,23 +1228,11 @@ onMounted(loadDetail)
         <!-- 主操作保持直达；有权限且被节点策略允许的转办/委托/沟通/加签与催办统一收进“更多”。 -->
         <div class="detail-actions__bar">
           <div v-if="canReturn && returnTargets.length > 0" class="return-config">
-            <span>{{ t('workflow.returnToLabel') }}</span>
-            <el-select
-              v-model="returnTargetNodeId"
-              :placeholder="t('workflow.selectApprovedNode')"
-              style="width: 180px"
-            >
-              <el-option
-                v-for="target in returnTargets"
-                :key="target.nodeKey"
-                :label="target.taskName"
-                :value="target.nodeKey"
-              />
-            </el-select>
             <el-button
               type="warning"
               :loading="acting === 'return'"
               :disabled="acting !== null"
+              data-testid="return-open-dialog"
               @click="handleReturn"
               >{{ t('common.returnBack') }}</el-button
             >
@@ -1370,6 +1404,108 @@ onMounted(loadDetail)
         <el-button @click="cancelDialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="cancelSubmitting" @click="submitCancelReservation">
           确认取消
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 驳回申请弹窗（设计 272:1746）：驳回原因可选，确认后直提 REJECT -->
+    <el-dialog
+      v-model="rejectDialogVisible"
+      :title="t('workflow.rejectDialogTitle')"
+      width="550px"
+      :close-on-click-modal="false"
+      data-testid="reject-dialog"
+    >
+      <el-form label-position="top" size="small" @submit.prevent>
+        <el-form-item :label="t('workflow.rejectReasonLabel')">
+          <el-input
+            v-model="rejectReason"
+            :placeholder="t('workflow.rejectReasonPlaceholder')"
+            data-testid="reject-reason-input"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="rejectSubmitting" @click="rejectDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="rejectSubmitting"
+          data-testid="reject-confirm"
+          @click="confirmReject"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 退回申请弹窗（设计 273:2001）：退回目标选择 + 轮次说明 -->
+    <el-dialog
+      v-model="returnDialogVisible"
+      :title="t('workflow.returnDialogTitle')"
+      width="550px"
+      :close-on-click-modal="false"
+      data-testid="return-dialog"
+    >
+      <el-form label-position="top" size="small" @submit.prevent>
+        <el-form-item :label="t('workflow.returnTargetLabel')">
+          <el-select
+            v-model="returnTargetNodeId"
+            :placeholder="t('workflow.selectApprovedNode')"
+            style="width: 100%"
+            data-testid="return-target-select"
+          >
+            <el-option
+              v-for="target in returnTargets"
+              :key="target.nodeKey"
+              :label="target.taskName"
+              :value="target.nodeKey"
+            />
+          </el-select>
+          <span class="return-dialog__hint">{{ t('workflow.returnRoundHint') }}</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="returnSubmitting" @click="returnDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="returnSubmitting"
+          data-testid="return-confirm"
+          @click="confirmReturn"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 催办弹窗（设计 273:2025）：说明 + 催办留言（可空） -->
+    <el-dialog
+      v-model="urgeDialogVisible"
+      :title="t('workflow.urgeDialogTitle')"
+      width="480px"
+      :close-on-click-modal="false"
+      data-testid="urge-dialog"
+    >
+      <p class="urge-dialog__hint">{{ t('workflow.urgeDialogHint') }}</p>
+      <el-form label-position="top" size="small" @submit.prevent>
+        <el-form-item :label="t('workflow.urgeMessageLabel')">
+          <el-input
+            v-model="urgeMessage"
+            type="textarea"
+            :rows="3"
+            maxlength="200"
+            :placeholder="t('workflow.urgeMessagePlaceholder')"
+            data-testid="urge-message-input"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="urgeDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" data-testid="urge-confirm" @click="confirmUrge">
+          {{ t('common.confirm') }}
         </el-button>
       </template>
     </el-dialog>
@@ -1806,5 +1942,17 @@ onMounted(loadDetail)
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.return-dialog__hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--sw-text-secondary, #909399);
+}
+.urge-dialog__hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--sw-text-secondary, #909399);
 }
 </style>

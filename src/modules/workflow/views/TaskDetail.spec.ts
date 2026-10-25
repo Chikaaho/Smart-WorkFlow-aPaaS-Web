@@ -397,10 +397,24 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await nextTick()
 
-    await (wrapper.vm as unknown as { handleReject: () => Promise<void> }).handleReject()
+    // 设计 272:1746：驳回走专用弹窗（原因可选），确认后跳过内建 confirm 直提
+    const vm = wrapper.vm as unknown as {
+      handleReject: () => void
+      rejectDialogVisible: boolean
+      rejectReason: string
+      confirmReject: () => Promise<void>
+    }
+    vm.handleReject()
+    expect(vm.rejectDialogVisible).toBe(true)
+    vm.rejectReason = '材料不足'
+    await vm.confirmReject()
     await nextTick()
 
-    expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'reject', undefined)
+    expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'reject', {
+      action: 'REJECT',
+      comment: '材料不足',
+      opinionData: { comment: '材料不足' },
+    })
     expect(pollCommandStatus).toHaveBeenCalledWith('cmd-1')
     expect(ElMessage.success).toHaveBeenCalledWith('已驳回')
     expect(mockPush).toHaveBeenCalledWith({ name: 'workspace-todo' })
@@ -638,10 +652,20 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await flushPromises()
 
-    await (wrapper.vm as unknown as { onUrge: () => Promise<void> }).onUrge()
+    // 设计 273:2025：催办留言（可空）随请求带给服务端
+    const vm = wrapper.vm as unknown as {
+      openUrgeDialog: () => void
+      urgeDialogVisible: boolean
+      urgeMessage: string
+      confirmUrge: () => Promise<void>
+    }
+    vm.openUrgeDialog()
+    expect(vm.urgeDialogVisible).toBe(true)
+    vm.urgeMessage = '请尽快处理报销单'
+    await vm.confirmUrge()
 
     expect(myInstances).toHaveBeenCalledWith({ pageNum: 1, pageSize: 100 }, { keyword: 'fd_001' })
-    expect(urgeMyInstance).toHaveBeenCalledWith(42)
+    expect(urgeMyInstance).toHaveBeenCalledWith(42, '请尽快处理报销单')
     expect(ElMessage.success).toHaveBeenCalledWith('已催办')
   })
 

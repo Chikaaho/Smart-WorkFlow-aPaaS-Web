@@ -26,25 +26,32 @@ export function useTaskApproval(handlers: TaskApprovalHandlers) {
   const { t } = useI18n()
   const submitting = ref<'' | 'approve' | 'reject'>('')
 
-  async function submit(action: 'APPROVE' | 'REJECT'): Promise<void> {
+  async function submit(
+    action: 'APPROVE' | 'REJECT',
+    opts?: { skipConfirm?: boolean },
+  ): Promise<void> {
     const taskId = handlers.taskId()
     if (!taskId || submitting.value) return
     if (handlers.preCheck && !handlers.preCheck(action)) return
 
-    const confirmText =
-      action === 'APPROVE' ? t('workflow.confirmApprove') : t('workflow.confirmReject')
-    try {
-      await ElMessageBox.confirm(confirmText, t('workflow.approveConfirmTitle'), {
-        type: 'info',
-        get confirmButtonText() {
-          return t(action === 'APPROVE' ? 'common.approve' : 'common.reject')
-        },
-        get cancelButtonText() {
-          return t('common.cancel')
-        },
-      })
-    } catch {
-      return
+    // 设计 272:1746：驳回改走专用弹窗（驳回原因输入），调用方确认后 skipConfirm 直提；
+    // 同意仍用通用确认。
+    if (!opts?.skipConfirm) {
+      const confirmText =
+        action === 'APPROVE' ? t('workflow.confirmApprove') : t('workflow.confirmReject')
+      try {
+        await ElMessageBox.confirm(confirmText, t('workflow.approveConfirmTitle'), {
+          type: 'info',
+          get confirmButtonText() {
+            return t(action === 'APPROVE' ? 'common.approve' : 'common.reject')
+          },
+          get cancelButtonText() {
+            return t('common.cancel')
+          },
+        })
+      } catch {
+        return
+      }
     }
 
     submitting.value = action === 'APPROVE' ? 'approve' : 'reject'
