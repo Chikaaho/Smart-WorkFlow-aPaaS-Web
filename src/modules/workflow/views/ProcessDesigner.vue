@@ -2128,6 +2128,17 @@ interface SubflowFormDraft {
    */
   aggregate: 'SINGLE' | 'EACH' | 'GROUPED'
   groupBy: string
+  /** 278:1719：编排方式/等待策略/结果回写，写回同一 TriggerAction。 */
+  orchestration: 'CHILD' | 'INDEPENDENT'
+  waitPolicy: 'ALL' | 'ANY' | 'COUNT' | 'NONE'
+  waitCount: number
+  wbEnabled: boolean
+  wbResultNodeKey: string
+  wbTableField: string
+  wbRowKeyField: string
+  wbParentTableField: string
+  wbFields: Array<{ fromField: string; toField: string }>
+  wbMainFields: Array<{ fromField: string; toField: string }>
 }
 
 function emptySubflowForm(): SubflowFormDraft {
@@ -2141,10 +2152,29 @@ function emptySubflowForm(): SubflowFormDraft {
     mappings: [],
     aggregate: 'SINGLE',
     groupBy: '',
+    orchestration: 'CHILD',
+    waitPolicy: 'ALL',
+    waitCount: 1,
+    wbEnabled: false,
+    wbResultNodeKey: '',
+    wbTableField: '',
+    wbRowKeyField: '',
+    wbParentTableField: '',
+    wbFields: [],
+    wbMainFields: [],
   }
 }
 
 const subflowForm = ref<SubflowFormDraft>(emptySubflowForm())
+
+/** 回写映射回显：只接受对象行，空行保留给用户继续填写。 */
+function normalizeSubflowWbRows(value: unknown): Array<{ fromField: string; toField: string }> {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => {
+    const row = (entry ?? {}) as Record<string, unknown>
+    return { fromField: String(row.fromField ?? ''), toField: String(row.toField ?? '') }
+  })
+}
 
 /** 节点配置 → 面板草稿（兼容 BF022⑧ 旧形状：mode/sourceVariable/取变量值/自由填写）。 */
 function buildSubflowFormDraft(raw: Record<string, unknown> | undefined): SubflowFormDraft {
@@ -2164,6 +2194,18 @@ function buildSubflowFormDraft(raw: Record<string, unknown> | undefined): Subflo
         ? 'EACH'
         : 'SINGLE'
   draft.groupBy = String(raw.groupBy ?? '')
+  draft.orchestration = raw.orchestration === 'INDEPENDENT' ? 'INDEPENDENT' : 'CHILD'
+  const waitPolicy = String(raw.waitPolicy ?? 'ALL')
+  draft.waitPolicy =
+    waitPolicy === 'ANY' || waitPolicy === 'COUNT' || waitPolicy === 'NONE' ? waitPolicy : 'ALL'
+  draft.waitCount = Math.max(1, Number(raw.waitCount ?? 1) || 1)
+  draft.wbEnabled = Boolean(raw.wbEnabled)
+  draft.wbResultNodeKey = String(raw.wbResultNodeKey ?? '')
+  draft.wbTableField = String(raw.wbTableField ?? '')
+  draft.wbRowKeyField = String(raw.wbRowKeyField ?? '')
+  draft.wbParentTableField = String(raw.wbParentTableField ?? '')
+  draft.wbFields = normalizeSubflowWbRows(raw.wbFields)
+  draft.wbMainFields = normalizeSubflowWbRows(raw.wbMainFields)
   const mappings = Array.isArray(raw.mappings) ? raw.mappings : []
   draft.mappings = mappings.map((entry) => {
     const mapping = (entry ?? {}) as Record<string, unknown>
@@ -2467,6 +2509,17 @@ function removeSubflowMapping(index: number) {
   subflowForm.value.mappings.splice(index, 1)
 }
 
+/** 278:1719 结果回写映射行（行级/主记录共用）。 */
+function addSubflowWbRow(kind: 'row' | 'main') {
+  const target = kind === 'row' ? subflowForm.value.wbFields : subflowForm.value.wbMainFields
+  target.push({ fromField: '', toField: '' })
+}
+
+function removeSubflowWbRow(kind: 'row' | 'main', index: number) {
+  const target = kind === 'row' ? subflowForm.value.wbFields : subflowForm.value.wbMainFields
+  target.splice(index, 1)
+}
+
 /** 第③步 取值方式切换：清掉其他来源，避免多源并存。 */
 function onSubflowMappingSourceChange(mapping: SubflowMappingDraft) {
   mapping.sourceVarId = ''
@@ -2560,6 +2613,16 @@ function applySubflow() {
       script: form.script,
       aggregate,
       groupBy,
+      orchestration: form.orchestration,
+      waitPolicy: form.waitPolicy,
+      waitCount: form.waitPolicy === 'COUNT' ? Math.max(1, form.waitCount) : 1,
+      wbEnabled: form.orchestration === 'CHILD' && form.wbEnabled,
+      wbResultNodeKey: form.wbResultNodeKey,
+      wbTableField: form.wbTableField,
+      wbRowKeyField: form.wbRowKeyField,
+      wbParentTableField: form.wbParentTableField,
+      wbFields: form.wbFields.map((row) => ({ ...row })),
+      wbMainFields: form.wbMainFields.map((row) => ({ ...row })),
       mappings: form.mappings.map((m) => ({ ...m })),
     },
   })
@@ -2606,16 +2669,16 @@ function applySubflow() {
                   literal: m.source === 'LITERAL' ? m.literal : '',
                   script: m.source === 'SCRIPT' ? m.script : '',
                 })),
-              orchestration: 'CHILD',
-              waitPolicy: 'ALL',
-              waitCount: 1,
-              wbEnabled: false,
-              wbResultNodeKey: '',
-              wbTableField: '',
-              wbRowKeyField: '',
-              wbParentTableField: '',
-              wbFields: [],
-              wbMainFields: [],
+              orchestration: form.orchestration === 'INDEPENDENT' ? '' : 'CHILD',
+              waitPolicy: form.waitPolicy,
+              waitCount: form.waitPolicy === 'COUNT' ? Math.max(1, form.waitCount) : 1,
+              wbEnabled: form.orchestration === 'CHILD' && form.wbEnabled,
+              wbResultNodeKey: form.wbResultNodeKey,
+              wbTableField: form.wbTableField,
+              wbRowKeyField: form.wbRowKeyField,
+              wbParentTableField: form.wbParentTableField,
+              wbFields: form.wbFields.map((row) => ({ ...row })),
+              wbMainFields: form.wbMainFields.map((row) => ({ ...row })),
             },
           ],
         },
@@ -2634,19 +2697,33 @@ function syncSubflowWaitNode(node: { id: string; x: number; y: number }, enabled
   if (!model) return
   const state = model.state()
   const waitId = subflowWaitNodeId(node.id)
-  const existing = state.nodes.find((n) => n.id === waitId)
+  const actionId = subflowActionId(node.id)
+  // 不能只按预期 id 找：insertNodeOnEdge 实际生成 node_N；重复应用会插入多个等待块。
+  const existing = state.nodes.filter((item) => {
+    if (item.id === waitId) return true
+    if (item.type !== 'SUBFLOW_WAIT') return false
+    const config = item.config as Record<string, unknown> | undefined
+    return Array.isArray(config?.waitActionIds) && config.waitActionIds.includes(actionId)
+  })
   if (!enabled) {
-    if (existing) {
-      const nextId = state.edges.find((edge) => edge.sourceId === waitId)?.targetId
-      model.select(waitId)
-      model.removeSelection()
+    if (existing.length > 0) {
+      const first = existing[0]
+      const nextId = state.edges.find((edge) => edge.sourceId === first.id)?.targetId
+      for (const item of existing) {
+        model.select(item.id)
+        model.removeSelection()
+      }
       if (nextId) model.connect(node.id, nextId)
     }
     return
   }
-  const actionId = subflowActionId(node.id)
-  if (existing) {
-    model.updateNodeConfig(waitId, { name: '子流程', waitActionIds: [actionId] })
+  if (existing.length > 0) {
+    const [keep, ...extras] = existing
+    for (const extra of extras) {
+      model.select(extra.id)
+      model.removeSelection()
+    }
+    model.updateNodeConfig(keep.id, { name: '子流程', waitActionIds: [actionId] })
     return
   }
   const edge = state.edges.find((item) => item.sourceId === node.id)
@@ -4485,6 +4562,99 @@ function nodeLabelLines(label: string) {
             <el-radio value="GROUPED">汇总（相同值合并一条）</el-radio>
           </el-radio-group>
         </el-form-item>
+        <el-divider />
+        <div class="p64-grid">
+          <el-form-item label="编排方式">
+            <el-radio-group v-model="subflowForm.orchestration">
+              <el-radio value="CHILD">主子流程</el-radio>
+              <el-radio value="INDEPENDENT">独立关联</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item v-if="subflowForm.orchestration === 'CHILD'" label="等待策略">
+            <el-select v-model="subflowForm.waitPolicy">
+              <el-option label="全部完成" value="ALL" />
+              <el-option label="任一完成" value="ANY" />
+              <el-option label="达到数量" value="COUNT" />
+              <el-option label="不等待" value="NONE" />
+            </el-select>
+          </el-form-item>
+          <el-form-item
+            v-if="subflowForm.orchestration === 'CHILD' && subflowForm.waitPolicy === 'COUNT'"
+            label="等待数量"
+          >
+            <el-input-number v-model="subflowForm.waitCount" :min="1" :max="200" />
+          </el-form-item>
+          <el-form-item v-if="subflowForm.orchestration === 'CHILD'" label="结果回写">
+            <el-switch v-model="subflowForm.wbEnabled" />
+          </el-form-item>
+        </div>
+        <template v-if="subflowForm.orchestration === 'CHILD' && subflowForm.wbEnabled">
+          <div class="p64-grid">
+            <el-form-item label="结果节点">
+              <el-input
+                v-model="subflowForm.wbResultNodeKey"
+                placeholder="子流程中产出结果的节点（如 node_result）"
+              />
+            </el-form-item>
+            <el-form-item label="子表单结果表">
+              <el-input
+                v-model="subflowForm.wbTableField"
+                placeholder="行级回写时填写（子表单里的表格字段）"
+              />
+            </el-form-item>
+            <el-form-item label="来源行标识列">
+              <el-input v-model="subflowForm.wbRowKeyField" placeholder="记录来源行标识的列名" />
+            </el-form-item>
+            <el-form-item label="本表单的来源表">
+              <el-select v-model="subflowForm.wbParentTableField" filterable clearable>
+                <el-option
+                  v-for="table in tableFieldOptions"
+                  :key="table.name"
+                  :label="table.label || table.name"
+                  :value="table.name"
+                />
+              </el-select>
+            </el-form-item>
+          </div>
+          <div class="p64-toolbar">
+            <span class="p64-subtitle">行级回写</span>
+            <el-button size="small" @click="addSubflowWbRow('row')">添加一行</el-button>
+          </div>
+          <div
+            v-for="(row, rowIndex) in subflowForm.wbFields"
+            :key="`wb-row-${rowIndex}`"
+            class="subflow-mapping-row"
+          >
+            <el-form-item label="子流程字段" size="small">
+              <el-input v-model="row.fromField" placeholder="子流程结果字段/列" />
+            </el-form-item>
+            <el-form-item label="本表单字段" size="small">
+              <el-input v-model="row.toField" placeholder="本表单回写字段/列" />
+            </el-form-item>
+            <el-button link type="danger" @click="removeSubflowWbRow('row', rowIndex)"
+              >删除</el-button
+            >
+          </div>
+          <div class="p64-toolbar">
+            <span class="p64-subtitle">主记录回写</span>
+            <el-button size="small" @click="addSubflowWbRow('main')">添加一行</el-button>
+          </div>
+          <div
+            v-for="(row, rowIndex) in subflowForm.wbMainFields"
+            :key="`wb-main-${rowIndex}`"
+            class="subflow-mapping-row"
+          >
+            <el-form-item label="子流程字段" size="small">
+              <el-input v-model="row.fromField" placeholder="子流程结果字段" />
+            </el-form-item>
+            <el-form-item label="本表单字段" size="small">
+              <el-input v-model="row.toField" placeholder="本表单字段" />
+            </el-form-item>
+            <el-button link type="danger" @click="removeSubflowWbRow('main', rowIndex)"
+              >删除</el-button
+            >
+          </div>
+        </template>
       </div>
 
       <template #footer>
