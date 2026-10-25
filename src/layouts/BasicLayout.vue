@@ -56,6 +56,14 @@ const showAside = computed(
         id="app-sidebar"
         class="basic-layout__aside"
         :class="[{ 'basic-layout__aside--collapsed': collapsed }, `basic-layout__aside--${area}`]"
+        :style="
+          collapsed
+            ? {
+                flexBasis: 'var(--sw-layout-aside-width-collapsed)',
+                width: 'var(--sw-layout-aside-width-collapsed)',
+              }
+            : undefined
+        "
       >
         <AppSidebar :collapse="collapsed" class="basic-layout__menu" />
         <!-- 0.2.0（Owner 口径，替代 401:8637 边缘手柄）：折叠入口固定侧栏底部，
@@ -197,12 +205,16 @@ const showAside = computed(
   font-size: 14px;
   white-space: nowrap;
 }
+/* 批次16：收起态底部箭头清晰居中（右向展开箭头独立成列） */
 .basic-layout__sidebar-bottom.is-collapsed {
-  padding: 8px 6px;
+  padding: 8px 0;
 }
 .basic-layout__sidebar-bottom.is-collapsed .basic-layout__sidebar-collapse {
   justify-content: center;
   padding: 0;
+}
+.basic-layout__sidebar-bottom.is-collapsed .basic-layout__sidebar-collapse .el-icon {
+  font-size: 18px;
 }
 /* 设计（节点04）：管理端侧栏加宽至 236px（组盒 212 + 右缘 24 对齐设计帧）；折叠态除外 */
 .basic-layout__aside--admin:not(.basic-layout__aside--collapsed) {

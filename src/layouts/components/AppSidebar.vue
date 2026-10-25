@@ -144,6 +144,7 @@ function resolveAdminActive(path: string): string {
 
 <template>
   <el-menu
+    :key="collapse ? 'collapsed' : 'expanded'"
     class="app-sidebar"
     :class="[
       `app-sidebar--${area}`,
@@ -501,12 +502,22 @@ function resolveAdminActive(path: string): string {
 }
 /* 0.2.0（Owner 口径）：收起态保留图标/首字列——Element Plus 折叠 tooltip trigger
  * 默认 display:none 会吞掉内容，显式恢复为居中 flex（图标、首字回退同列）。 */
+/* 0.2.0 批次16（Planner 读取记录）：收起列统一居中、不裁切——
+ * 归一 item/trigger 内边距与图标外边距，图标/首字固定 20px 盒居中。 */
+.app-sidebar.el-menu--collapse :deep(.el-menu-item),
+.app-sidebar.el-menu--collapse :deep(.el-sub-menu__title) {
+  justify-content: center;
+  padding: 0 !important;
+}
 .app-sidebar.el-menu--collapse :deep(.el-menu-tooltip__trigger) {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   padding: 0;
+}
+.app-sidebar.el-menu--collapse :deep(.app-sidebar__design-icon) {
+  margin-right: 0;
 }
 .app-sidebar.el-menu--collapse :deep(.el-menu-tooltip__trigger .el-icon),
 .app-sidebar.el-menu--collapse :deep(.el-menu-tooltip__trigger img) {
