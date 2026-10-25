@@ -242,7 +242,7 @@ const inboxTabs = computed(() => [
 <template>
   <nav
     class="app-sidebar-tree"
-    :class="[`app-sidebar-tree--${area}`, { 'is-collapsed': collapse }]"
+    :class="[`app-sidebar-tree--${area}`, `app-sidebar--${area}`, { 'is-collapsed': collapse }]"
     :aria-label="t('nav.mainNav')"
   >
     <!-- 纯展示分组标题：展开态弱化小标题；收起态隐去（细分隔保留分组） -->
@@ -378,7 +378,12 @@ const inboxTabs = computed(() => [
   cursor: pointer;
 }
 .sb-row:hover {
+  background: var(--sw-nav-hover-bg, rgba(255, 255, 255, 0.08));
   color: var(--sw-nav-text, #e8ecf6);
+}
+.app-sidebar-tree--admin .sb-row:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--sw-text-primary, #303133);
 }
 .sb-row--leaf.is-active {
   background: var(--sw-nav-sidebar-active-bg);

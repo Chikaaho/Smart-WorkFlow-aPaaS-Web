@@ -196,11 +196,20 @@ const showAside = computed(
   border: 0;
   border-radius: var(--sw-radius-base);
   background: transparent;
-  color: inherit;
+  /* 批次19（Owner）：深浅主题各自的对比色——深色侧栏用浅字、管理端浅色侧栏用深字 */
+  color: var(--sw-nav-text-secondary, #c9d1e8);
   cursor: pointer;
 }
 .basic-layout__sidebar-collapse:hover {
   background: var(--sw-nav-hover-bg, rgba(255, 255, 255, 0.08));
+  color: #fff;
+}
+.basic-layout--admin .basic-layout__sidebar-collapse {
+  color: var(--sw-text-secondary, #606266);
+}
+.basic-layout--admin .basic-layout__sidebar-collapse:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--sw-text-primary, #303133);
 }
 .basic-layout__sidebar-collapse-label {
   font-size: 14px;

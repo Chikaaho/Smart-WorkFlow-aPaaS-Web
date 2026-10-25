@@ -168,7 +168,12 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
   cursor: pointer;
 }
 .sb-node__row:hover {
+  background: var(--sw-nav-hover-bg, rgba(255, 255, 255, 0.08));
   color: var(--sw-nav-text, #e8ecf6);
+}
+:global(.app-sidebar--admin) .sb-node__row:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--sw-text-primary, #303133);
 }
 .sb-node__row--leaf.is-active {
   background: var(--sw-nav-sidebar-active-bg);
@@ -225,7 +230,12 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
   cursor: pointer;
 }
 .sb-node__icon-btn:hover {
+  background: var(--sw-nav-hover-bg, rgba(255, 255, 255, 0.08));
   color: var(--sw-nav-text, #e8ecf6);
+}
+:global(.app-sidebar--admin) .sb-node__icon-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--sw-text-primary, #303133);
 }
 .sb-node__icon-btn.is-active {
   background: var(--sw-nav-sidebar-active-bg);
@@ -247,26 +257,41 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
   background: currentColor;
   opacity: 0.85;
 }
-/* 浅色主题（管理端）前景适配 */
-:global(.app-sidebar--admin) .sb-node__row {
-  color: var(--sw-text-secondary, #606266);
+/* 浅色主题（管理端）前景适配：使用浅色侧栏专用令牌（light-text/hover-bg），
+ * 激活行用品牌色文字+浅品牌底（批次19 Owner 反馈：白字落浅底不可见）。
+ * 注意：Vue scoped 下 :global(X) 后代选择器会被编译丢弃后代，必须整条放进 :global(...)。 */
+:global(.app-sidebar--admin .sb-node__row) {
+  color: var(--sw-nav-sidebar-light-text, #303a55);
 }
-:global(.app-sidebar--admin) .sb-node__row:hover,
-:global(.app-sidebar--admin) .sb-node__row--dir,
-:global(.app-sidebar--admin) .sb-node__row--leaf.is-active {
-  color: var(--sw-text-primary, #303133);
+:global(.app-sidebar--admin .sb-node__row:hover) {
+  background: var(--sw-nav-sidebar-light-hover-bg, #f4f6fb);
+  color: var(--sw-nav-sidebar-light-text, #303a55);
 }
-:global(.app-sidebar--admin) .sb-node__row--dir.is-ancestor:not(.is-open) {
+:global(.app-sidebar--admin .sb-node__row--dir) {
+  color: var(--sw-nav-sidebar-light-text, #303a55);
+}
+:global(.app-sidebar--admin .sb-node__row--dir.is-open) {
+  color: var(--sw-nav-sidebar-light-text, #303a55);
+}
+:global(.app-sidebar--admin .sb-node__row--dir.is-ancestor:not(.is-open)) {
   color: var(--sw-brand-color, #2563eb);
 }
-:global(.app-sidebar--admin) .sb-node__icon-btn {
-  color: var(--sw-text-secondary, #606266);
+:global(.app-sidebar--admin .sb-node__row--leaf.is-active) {
+  color: var(--sw-brand-color, #2563eb);
+  background: color-mix(in srgb, var(--sw-color-primary, #2563eb) 12%, #fff);
 }
-:global(.app-sidebar--admin) .sb-node__icon-btn:hover,
-:global(.app-sidebar--admin) .sb-node__icon-btn.is-active {
-  color: var(--sw-text-primary, #303133);
+:global(.app-sidebar--admin .sb-node__icon-btn) {
+  color: var(--sw-nav-sidebar-light-text, #303a55);
 }
-:global(.app-sidebar--admin) .sb-node__icon-btn.is-ancestor {
+:global(.app-sidebar--admin .sb-node__icon-btn:hover) {
+  background: var(--sw-nav-sidebar-light-hover-bg, #f4f6fb);
+  color: var(--sw-nav-sidebar-light-text, #303a55);
+}
+:global(.app-sidebar--admin .sb-node__icon-btn.is-active) {
+  color: var(--sw-brand-color, #2563eb);
+  background: color-mix(in srgb, var(--sw-color-primary, #2563eb) 12%, #fff);
+}
+:global(.app-sidebar--admin .sb-node__icon-btn.is-ancestor) {
   color: var(--sw-brand-color, #2563eb);
 }
 </style>
