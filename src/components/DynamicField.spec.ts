@@ -165,15 +165,17 @@ describe('DynamicField — 8 类字段渲染', () => {
   it('TEXT → el-input', () => {
     const wrapper = mountField({ name: 'f1', type: 'TEXT' })
     expect(wrapper.findComponent({ name: 'ElInput' }).exists()).toBe(true)
-    // RICH_TEXT 与 REFERENCE 也渲染 el-input，确认不是 textarea
+    // REFERENCE 也渲染 el-input；RICH_TEXT 已改为受控富文本编辑器
     const input = wrapper.findComponent({ name: 'ElInput' })
     expect(input.props('type')).toBe('text')
   })
 
-  it('RICH_TEXT → el-input textarea', () => {
+  it('RICH_TEXT → 受控富文本编辑器（工具栏 + contenteditable）', () => {
     const wrapper = mountField({ name: 'f2', type: 'RICH_TEXT' })
-    expect(wrapper.findComponent({ name: 'ElInput' }).exists()).toBe(true)
-    expect(wrapper.findComponent({ name: 'ElInput' }).props('type')).toBe('textarea')
+    const editor = wrapper.find('[data-test="rich-text-editor"]')
+    expect(editor.exists()).toBe(true)
+    expect(editor.find('.rt-editor').attributes('contenteditable')).toBe('true')
+    expect(editor.find('.rt-toolbar').exists()).toBe(true)
   })
 
   it('NUMBER → el-input-number', () => {
@@ -334,7 +336,7 @@ describe('DynamicField — 8 类字段渲染', () => {
     expect(wrapper.find('[data-testid="switch"]').exists()).toBe(true)
   })
 
-  it('TABLE sub-field RICH_TEXT 渲染 el-input textarea', () => {
+  it('TABLE sub-field RICH_TEXT 渲染子表富文本编辑器', () => {
     const wrapper = mountField(
       {
         name: 't1',
@@ -343,9 +345,9 @@ describe('DynamicField — 8 类字段渲染', () => {
       },
       [{ col: '' }],
     )
-    const input = wrapper.findComponent({ name: 'ElInput' })
-    expect(input.exists()).toBe(true)
-    expect(input.props('type')).toBe('textarea')
+    const editor = wrapper.find('[data-test="rich-text-editor"]')
+    expect(editor.exists()).toBe(true)
+    expect(editor.classes()).toContain('rt-control--sub')
   })
 
   it('TABLE sub-field REFERENCE 渲染 el-input 降级', () => {

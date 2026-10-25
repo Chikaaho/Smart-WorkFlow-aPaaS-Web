@@ -432,6 +432,70 @@ describe('FormRender', () => {
     expect(wrapper.text()).toContain('请完善必填项后再提交')
     expect(submitForm).not.toHaveBeenCalled()
   })
+
+  it('RICH_TEXT 仅格式无正文仍按必填失败', async () => {
+    mockQuery = { recordId: 'rec_rich_empty', mode: 'edit' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '富文本必填',
+      fields: [{ name: 'body', type: 'RICH_TEXT', required: true }],
+    })
+    vi.mocked(getFormData).mockResolvedValueOnce({
+      id: 'rec_rich_empty',
+      version: 1,
+      body: '<!--sw-rt:1--><p><br></p>',
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    await flushPromises()
+    await wrapper.find('[data-testid="form-render-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-validation-error-for="body"]').text()).toBe('此字段为必填项')
+  })
+
+  it('RICH_TEXT 长度按可见文本而非格式标记计数', async () => {
+    mockQuery = { recordId: 'rec_rich_len', mode: 'edit' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '富文本长度',
+      fields: [{ name: 'body', type: 'RICH_TEXT', required: false, length: 3 }],
+    })
+    vi.mocked(getFormData).mockResolvedValueOnce({
+      id: 'rec_rich_len',
+      version: 1,
+      body: '<!--sw-rt:1--><p><span data-rt-font="song" data-rt-size="16" data-rt-color="#6F2DFF">你好</span></p>',
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    await flushPromises()
+    await wrapper.find('[data-testid="form-render-submit"]').trigger('click')
+    await flushPromises()
+
+    // 可见文本 2 字，长标签不计入；不应出现超长错误
+    expect(wrapper.find('[data-validation-error-for="body"]').exists()).toBe(false)
+  })
+
+  it('RICH_TEXT 可见文本超长时拒绝提交', async () => {
+    mockQuery = { recordId: 'rec_rich_over', mode: 'edit' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '富文本超长',
+      fields: [{ name: 'body', type: 'RICH_TEXT', required: false, length: 3 }],
+    })
+    vi.mocked(getFormData).mockResolvedValueOnce({
+      id: 'rec_rich_over',
+      version: 1,
+      body: '<!--sw-rt:1--><p>你好世界</p>',
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    await flushPromises()
+    await wrapper.find('[data-testid="form-render-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-validation-error-for="body"]').text()).toBe('最多填写 3 个字符')
+  })
 })
 
 /* ── draft 模式（我的草稿 → 真实表单控件填报） ── */

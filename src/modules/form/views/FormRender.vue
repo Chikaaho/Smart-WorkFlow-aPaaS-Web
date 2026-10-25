@@ -35,6 +35,7 @@ import { ApiError, getErrorMessage } from '@/foundation/request'
 import DynamicField from '@/components/DynamicField.vue'
 import { normalizeFormDateFields } from '@/contracts/form-date'
 import { normalizeFormFieldValue } from '@/contracts/form-value'
+import { richTextVisibleText } from '@/modules/form/rich-text'
 import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-display'
 import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
 import { createFieldScripts } from '@/modules/form/utils/field-scripts'
@@ -507,9 +508,18 @@ function buildUpdatePayload(): {
   }
 }
 
-function isEmptyRequiredValue(value: unknown): boolean {
+/** RICH_TEXT 按用户可见文本判断；旧纯文本原样返回，不按 HTML 解释。 */
+function fieldVisibleText(field: { type: string }, value: unknown): string {
+  return field.type === 'RICH_TEXT' ? richTextVisibleText(value) : String(value ?? '')
+}
+
+function isEmptyRequiredValue(value: unknown, fieldType?: string): boolean {
   if (value === null || value === undefined) return true
-  if (typeof value === 'string') return value.trim() === ''
+  if (typeof value === 'string') {
+    return fieldType === 'RICH_TEXT'
+      ? richTextVisibleText(value).trim() === ''
+      : value.trim() === ''
+  }
   if (Array.isArray(value)) return value.length === 0
   return false
 }
@@ -526,15 +536,15 @@ function validateRequiredFields(): boolean {
   for (const field of schema.value.fields) {
     // BF021：脚本隐藏字段与声明式隐藏同口径，不参与本次必填校验
     if (hiddenAll.value.has(field.name)) continue
-    if (fieldRequired(field) && isEmptyRequiredValue(formData[field.name])) {
+    if (fieldRequired(field) && isEmptyRequiredValue(formData[field.name], field.type)) {
       validationErrors[field.name] = t('form.fieldRequired')
       continue
     }
     if (
       (field.type === 'TEXT' || field.type === 'RICH_TEXT') &&
-      !isEmptyRequiredValue(formData[field.name])
+      !isEmptyRequiredValue(formData[field.name], field.type)
     ) {
-      const text = String(formData[field.name])
+      const text = fieldVisibleText(field, formData[field.name])
       const codePoints = Array.from(text).length
       if (field.minLength && field.minLength > 0 && codePoints < field.minLength) {
         validationErrors[field.name] = t('form.fieldMinLength', { count: field.minLength })
