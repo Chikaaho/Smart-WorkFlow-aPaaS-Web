@@ -101,4 +101,43 @@ describe('ProcessSettings 结束通知配置', () => {
     expect(warning).toHaveBeenCalled()
     expect(saveProcessDefGraph).not.toHaveBeenCalled()
   })
+
+  it('新增流程级监听并随保存写入 triggers', async () => {
+    getProcessDefDefinition.mockResolvedValue(graph())
+    const wrapper = mount(ProcessSettings, { global })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      openListenerEditor: () => void
+      listenerDraft: {
+        name: string
+        event: 'PROCESS_START' | 'PROCESS_COMPLETED'
+        enabled: boolean
+        script: string
+      }
+      saveListenerDraft: () => void
+      save: () => Promise<void>
+    }
+
+    vm.openListenerEditor()
+    vm.listenerDraft.name = '测试监听'
+    vm.listenerDraft.event = 'PROCESS_COMPLETED'
+    vm.listenerDraft.script = 'return 1;'
+    vm.saveListenerDraft()
+    await vm.save()
+    await flushPromises()
+
+    const payload = saveProcessDefGraph.mock.calls[0][1] as {
+      triggers: Array<Record<string, unknown>>
+    }
+    expect(payload.triggers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: '测试监听',
+          event: 'PROCESS_COMPLETED',
+          script: 'return 1;',
+          enabled: true,
+        }),
+      ]),
+    )
+  })
 })
