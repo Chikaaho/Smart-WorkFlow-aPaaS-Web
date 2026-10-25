@@ -32,6 +32,7 @@ import {
 import { usePermission } from '@/foundation/permission'
 import { deriveColumns } from '@/modules/form/utils/derive-list-config'
 import { getListConfig } from '@/modules/form/api/i2-choices'
+import { richTextVisibleText } from '@/modules/form/rich-text'
 import { ApiError } from '@/foundation/request'
 import { getErrorMessage } from '@/foundation/request/error-code-map'
 import BusinessDetailDialog from '@/components/business-detail/BusinessDetailDialog.vue'
@@ -561,6 +562,9 @@ function formatCellValue(row: Record<string, unknown>, col: ListColumn): string 
       const parts = ids.map((id) => map.get(id) ?? `#${id.replace(/^#/, '')}`)
       return parts.length ? parts.join('、') : '-'
     }
+    case 'RICH_TEXT':
+      // 列表只显示可见文本，不把格式前缀/标签当正文；旧纯文本保持原样。
+      return richTextVisibleText(raw) || '-'
     default:
       return String(raw)
   }
