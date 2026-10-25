@@ -41,6 +41,9 @@ function schemaForField(field: FormSchemaField): FormSchema {
     </div>
     <div class="preview-modal__stage">
       <div v-if="hasFields" class="preview-modal__form">
+        <p v-if="schema.description" class="preview-modal__description">
+          {{ schema.description }}
+        </p>
         <p class="preview-modal__hint">
           {{ t('form.requiredHintPrefix') }} <span class="preview-modal__star">*</span>
           {{ t('form.requiredHintSuffix') }}
@@ -83,6 +86,13 @@ function schemaForField(field: FormSchemaField): FormSchema {
   border-radius: var(--sw-radius-card);
   box-shadow: var(--sw-shadow-card);
   padding: var(--sw-space-24);
+}
+
+.preview-modal__description {
+  margin: 0 0 var(--sw-space-12);
+  color: var(--sw-text-regular);
+  font-size: var(--sw-font-body);
+  line-height: 1.6;
 }
 
 .preview-modal__hint {

@@ -48,11 +48,13 @@ interface TableScope {
   rows: FieldRow[]
 }
 
-/** 主表范围 = 非 TABLE 字段（TABLE 字段自身成为子表范围，不出现在主表行里）。 */
+/** 主表范围 = 全部主字段（含 TABLE 本身；设计 49:2 明确列出“演练资源/子表/JSON”行）。 */
 function mainRows(): FieldRow[] {
-  return props.items
-    .filter((item) => item.field.type !== 'TABLE')
-    .map((item, index) => ({ key: item.id, index: index + 1, field: item.field }))
+  return props.items.map((item, index) => ({
+    key: item.id,
+    index: index + 1,
+    field: item.field,
+  }))
 }
 
 function subRows(item: DesignerItem): FieldRow[] {

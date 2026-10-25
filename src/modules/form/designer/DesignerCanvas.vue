@@ -45,8 +45,10 @@ const props = withDefaults(
      * 松手后经 add 事件交回宿主插入（画布不持有 items，避免双份真源）。
      */
     pendingItem?: DesignerItem | null
+    /** 表单描述：设计稿画布标题下副标题；纯展示，不参与提交。 */
+    description?: string
   }>(),
-  { readonly: false, group: 'designer-fields', pendingItem: null },
+  { readonly: false, group: 'designer-fields', pendingItem: null, description: '' },
 )
 
 const emit = defineEmits<{
@@ -323,6 +325,7 @@ function onShellClick(entry: ShellEntry) {
     @dragleave="onDragLeave"
     @drop="onDrop"
   >
+    <p v-if="description" class="canvas__description">{{ description }}</p>
     <VueDraggable
       v-model="items"
       :group="{ name: group, pull: true, put: true }"
@@ -412,6 +415,14 @@ function onShellClick(entry: ShellEntry) {
   padding: var(--sw-space-20) var(--sw-space-24);
   background: var(--sw-fill-base);
   overflow-y: auto;
+}
+
+.canvas__description {
+  flex: 0 0 auto;
+  margin: 0 0 var(--sw-space-12);
+  color: var(--sw-text-regular);
+  font-size: var(--sw-font-secondary);
+  line-height: 1.6;
 }
 
 .canvas__list {

@@ -190,6 +190,7 @@ watch(
           min-width="220"
           show-overflow-tooltip
         />
+        <el-table-column prop="formVersion" :label="t('common.version')" width="80" />
         <el-table-column :label="t('common.status')" width="90">
           <template #default="{ row }">
             <el-tag :type="getFormDefStatusType(row.status)" size="small">

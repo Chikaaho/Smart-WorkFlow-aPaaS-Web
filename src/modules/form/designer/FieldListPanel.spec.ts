@@ -73,7 +73,7 @@ function labelInputValue(wrapper: Awaited<ReturnType<typeof mountPanel>>, key: s
 }
 
 describe('FieldListPanel（#38/#39 字段清单）', () => {
-  it('主表 + 子表分组：主表列出非 TABLE 字段，子表带自己的表名与子字段', async () => {
+  it('主表 + 子表分组：主表列出全部主字段（含 TABLE 行），子表带自己的表名与子字段', async () => {
     const wrapper = await mountPanel()
 
     const scopes = wrapper.findAll('[role="tab"]')
@@ -82,8 +82,8 @@ describe('FieldListPanel（#38/#39 字段清单）', () => {
     expect(wrapper.find('[data-testid="field-table-name"]').text()).toBe('表名：leave-request')
     expect(labelInputValue(wrapper, 'di_1')).toBe('金额')
     expect(labelInputValue(wrapper, 'di_2')).toBe('申请日期')
-    // TABLE 自身不出现在主表行里（它就是一个子表范围）
-    expect(labelInputValue(wrapper, 'di_3')).toBeNull()
+    // 设计 49:2：TABLE 自身也作为主表一行出现（组件=子表、类型=JSON）
+    expect(labelInputValue(wrapper, 'di_3')).toBe('报销明细')
 
     await wrapper.find('[data-testid="field-scope-di_3"]').trigger('click')
     expect(wrapper.find('[data-testid="field-table-name"]').text()).toBe(

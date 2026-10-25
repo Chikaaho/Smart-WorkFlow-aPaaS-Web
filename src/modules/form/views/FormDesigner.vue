@@ -908,6 +908,7 @@ async function loadBreadcrumbCategory() {
               v-model:selected-id="selectedId"
               class="designer-main-canvas"
               :pending-item="draggingItem"
+              :description="description"
               @add="addDroppedItem"
               @edit-table="openTableEditor"
             />
