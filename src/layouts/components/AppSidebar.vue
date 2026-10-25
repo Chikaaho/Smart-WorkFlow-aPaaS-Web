@@ -314,6 +314,7 @@ const inboxTabs = computed(() => [
       <div
         v-if="flyout"
         class="app-sidebar-flyout"
+        :class="[`app-sidebar-flyout--${area}`, { 'app-sidebar--admin': area === 'admin' }]"
         :style="flyoutStyle"
         role="menu"
         :aria-label="labelOf(flyout.node)"

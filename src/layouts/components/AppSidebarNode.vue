@@ -294,4 +294,16 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
 :global(.app-sidebar--admin .sb-node__icon-btn.is-ancestor) {
   color: var(--sw-brand-color, #2563eb);
 }
+/* 批次22：浮层打开态只是交互状态，不得把管理端浅色侧栏入口改回深色主题的浅字；
+ * 选中/包含当前页仍优先品牌色（后置覆盖）。 */
+:global(.app-sidebar--admin .sb-node__icon-btn.is-open) {
+  color: var(--sw-nav-sidebar-light-text, #303a55);
+}
+:global(.app-sidebar--admin .sb-node__icon-btn.is-open.is-active),
+:global(.app-sidebar--admin .sb-node__icon-btn.is-open.is-ancestor) {
+  color: var(--sw-brand-color, #2563eb);
+}
+:global(.app-sidebar--admin .sb-node__icon-btn.is-open.is-active) {
+  background: color-mix(in srgb, var(--sw-color-primary, #2563eb) 12%, #fff);
+}
 </style>
