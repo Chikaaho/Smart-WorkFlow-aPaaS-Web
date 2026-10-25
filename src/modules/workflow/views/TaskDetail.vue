@@ -176,6 +176,16 @@ const nodeFieldScripts = createFieldScripts({
     nodeForm.value ? ({ title: '', fields: nodeFormFields.value } as unknown as FormSchema) : null,
   model: () => nodeFormModel.value,
   enabled: () => nodeFormEditable.value,
+  processContext: () => ({
+    status: detail.value?.instanceStatus ?? '',
+    taskId: detail.value?.taskId ?? '',
+    ...(detail.value?.processVariables ?? {}),
+  }),
+  formContext: () => ({
+    formKey: detail.value?.formKey ?? '',
+    version: null,
+    submissionId: detail.value?.businessKey ?? '',
+  }),
 })
 onUnmounted(() => nodeFieldScripts.dispose())
 

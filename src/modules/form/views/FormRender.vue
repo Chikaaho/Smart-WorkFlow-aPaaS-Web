@@ -139,6 +139,16 @@ const fieldScripts = createFieldScripts({
   model: formData,
   // 只读查看态不执行脚本（不产生任何写入/状态变化）
   enabled: () => !isViewMode.value && !submissionFinalized.value,
+  processContext: () => ({
+    status: relation.value?.instance?.status ?? '',
+    taskId: relation.value?.pendingTaskId ?? '',
+  }),
+  formContext: () => ({
+    formKey,
+    version: schema.value?.schemaVersion ?? null,
+    submissionId: lastSubmittedId.value,
+  }),
+  allowedIntegrations: () => [],
 })
 onUnmounted(() => fieldScripts.dispose())
 let userStore: ReturnType<typeof useUserStore> | null = null
@@ -159,11 +169,18 @@ const formEvents = createFormEvents({
           userId: userStore.user.id,
           userName: userStore.user.displayName,
           deptId: userStore.user.deptId,
+          tenantId: userStore.user.tenantId,
+          roles: Array.from(userStore.roles ?? []),
         }
       : null,
   processContext: () => ({
     status: relation.value?.instance?.status ?? '',
     taskId: relation.value?.pendingTaskId ?? '',
+  }),
+  formContext: () => ({
+    formKey,
+    version: schema.value?.schemaVersion ?? null,
+    submissionId: lastSubmittedId.value,
   }),
   allowedIntegrations: () => [],
   confirm: async (message) => {

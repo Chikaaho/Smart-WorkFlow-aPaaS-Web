@@ -44,6 +44,8 @@ export interface FormEventIdentity {
   userId: string
   userName: string
   deptId: string | null
+  tenantId?: string | null
+  roles?: string[]
 }
 
 export interface FormEventRuntimeOptions {
@@ -56,6 +58,12 @@ export interface FormEventRuntimeOptions {
   sideEffectsAllowed?: () => boolean
   identity?: () => FormEventIdentity | null
   processContext?: () => Record<string, unknown>
+  /** 当前表单标识、定义版本、最近提交标识等上下文。 */
+  formContext?: () => {
+    formKey?: string
+    version?: number | null
+    submissionId?: string
+  }
   /** 已由服务端授权、且当前宿主允许的稳定集成标识集合。 */
   allowedIntegrations?: () => string[]
   callIntegration?: (key: string, input: Record<string, unknown>) => unknown | Promise<unknown>
@@ -122,7 +130,84 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
     return rows[position] as Record<string, unknown>
   }
   const processContext = () => options.processContext?.() ?? {}
+  const formContext = () => options.formContext?.() ?? {}
   const allowedIntegrations = () => new Set(options.allowedIntegrations?.() ?? [])
+
+  const tableField = (name: unknown, fn: string): FormSchemaField => {
+    const found = field(name)
+    if (found.type !== 'TABLE') throw new Error(`${fn}: 字段「${found.name}」不是子表`)
+    return found
+  }
+  const subFieldOf = (table: FormSchemaField, name: unknown, fn: string): string => {
+    const subName = String(name ?? '')
+    if (!table.subFields?.some((sub) => sub.name === subName)) {
+      throw new Error(`${fn}: 子表「${table.name}」不存在列「${subName}」`)
+    }
+    return subName
+  }
+  const rowsOf = (name: unknown, fn: string): Array<Record<string, unknown>> => {
+    const table = tableField(name, fn)
+    const rows = getModel()[table.name]
+    if (!Array.isArray(rows)) throw new Error(`${fn}: 子表「${table.name}」当前不是数组`)
+    return rows as Array<Record<string, unknown>>
+  }
+  const rowAt = (
+    name: unknown,
+    index: unknown,
+    fn: string,
+  ): {
+    table: FormSchemaField
+    rows: Array<Record<string, unknown>>
+    row: Record<string, unknown>
+    position: number
+  } => {
+    const table = tableField(name, fn)
+    const rows = rowsOf(table.name, fn)
+    const position = Number(index)
+    if (!Number.isInteger(position) || position < 0 || position >= rows.length) {
+      throw new Error(`${fn}: 子表「${table.name}」第 ${String(index)} 行不存在`)
+    }
+    return { table, rows, row: rows[position], position }
+  }
+  const emptyValueFor = (target: FormSchemaField): unknown => {
+    switch (target.type) {
+      case 'TABLE':
+      case 'MULTISELECT':
+      case 'ATTACHMENT':
+      case 'IMAGE':
+        return []
+      case 'BOOL':
+        return false
+      case 'NUMBER':
+        return null
+      default:
+        return ''
+    }
+  }
+  const emptySubRow = (table: FormSchemaField): Record<string, unknown> => {
+    const rowData: Record<string, unknown> = {}
+    for (const sub of table.subFields ?? []) rowData[sub.name] = emptyValueFor(sub)
+    return rowData
+  }
+  const applyFieldPairs = (fn: string, args: unknown[]): void => {
+    if (args.length % 2 !== 0) throw new Error(`${fn}: 参数必须成对（字段名, 值）`)
+    assertWritable()
+    for (let index = 0; index < args.length; index += 2) {
+      getModel()[field(args[index]).name] = args[index + 1]
+    }
+  }
+  const applySubPairs = (
+    table: FormSchemaField,
+    rowData: Record<string, unknown>,
+    fn: string,
+    args: unknown[],
+  ): void => {
+    if (args.length % 2 !== 0) throw new Error(`${fn}: 参数必须成对（列名, 值）`)
+    assertWritable()
+    for (let index = 0; index < args.length; index += 2) {
+      rowData[subFieldOf(table, args[index], fn)] = args[index + 1]
+    }
+  }
 
   const hostFunctions: Record<string, (...args: unknown[]) => unknown> = {
     获取字段值: (name) => getModel()[field(name).name],
@@ -237,6 +322,117 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
           : {}
       return options.callIntegration?.(identity, payload)
     },
+
+    // ── 主表批量/清空与字段元信息 ──
+    批量设置字段值: (...args) => {
+      applyFieldPairs('批量设置字段值', args)
+    },
+    setFieldValues: (...args) => {
+      applyFieldPairs('批量设置字段值', args)
+    },
+    清空字段: (name) => {
+      assertWritable()
+      const found = field(name)
+      getModel()[found.name] = emptyValueFor(found)
+    },
+    clearField: (name) => {
+      assertWritable()
+      const found = field(name)
+      getModel()[found.name] = emptyValueFor(found)
+    },
+    获取字段类型: (name) => field(name).type,
+    getFieldType: (name) => field(name).type,
+    获取字段标题: (name) => field(name).label ?? field(name).name,
+    getFieldLabel: (name) => field(name).label ?? field(name).name,
+    获取字段选项: (name) => (field(name).options ?? []).map((option) => option.value || option.key),
+    getFieldOptions: (name) =>
+      (field(name).options ?? []).map((option) => option.value || option.key),
+    获取字段列表: () => (options.getSchema()?.fields ?? []).map((item) => item.name),
+    getFieldNames: () => (options.getSchema()?.fields ?? []).map((item) => item.name),
+
+    // ── 明细：行级读写、增删、批量、汇总 ──
+    获取子表行数: (name) => rowsOf(name, '获取子表行数').length,
+    getTableRowCount: (name) => rowsOf(name, '获取子表行数').length,
+    获取子表行标识: (name, index) => {
+      const { row: rowData, position } = rowAt(name, index, '获取子表行标识')
+      return rowData.id ?? rowData._rowId ?? position
+    },
+    getTableRowId: (name, index) => {
+      const { row: rowData, position } = rowAt(name, index, '获取子表行标识')
+      return rowData.id ?? rowData._rowId ?? position
+    },
+    新增子表行: (name, ...pairs) => {
+      assertWritable()
+      const table = tableField(name, '新增子表行')
+      const rows = rowsOf(table.name, '新增子表行')
+      const rowData = emptySubRow(table)
+      applySubPairs(table, rowData, '新增子表行', pairs)
+      rows.push(rowData)
+      return rows.length - 1
+    },
+    addTableRow: (name, ...pairs) => {
+      assertWritable()
+      const table = tableField(name, '新增子表行')
+      const rows = rowsOf(table.name, '新增子表行')
+      const rowData = emptySubRow(table)
+      applySubPairs(table, rowData, '新增子表行', pairs)
+      rows.push(rowData)
+      return rows.length - 1
+    },
+    删除子表行: (name, index) => {
+      assertWritable()
+      const { rows, position } = rowAt(name, index, '删除子表行')
+      rows.splice(position, 1)
+    },
+    removeTableRow: (name, index) => {
+      assertWritable()
+      const { rows, position } = rowAt(name, index, '删除子表行')
+      rows.splice(position, 1)
+    },
+    批量设置子表字段值: (name, subName, value) => {
+      assertWritable()
+      const table = tableField(name, '批量设置子表字段值')
+      const column = subFieldOf(table, subName, '批量设置子表字段值')
+      for (const rowData of rowsOf(table.name, '批量设置子表字段值')) rowData[column] = value
+    },
+    setTableColumnValue: (name, subName, value) => {
+      assertWritable()
+      const table = tableField(name, '批量设置子表字段值')
+      const column = subFieldOf(table, subName, '批量设置子表字段值')
+      for (const rowData of rowsOf(table.name, '批量设置子表字段值')) rowData[column] = value
+    },
+    汇总子表列: (name, subName) => {
+      const table = tableField(name, '汇总子表列')
+      const column = subFieldOf(table, subName, '汇总子表列')
+      let total = 0
+      for (const rowData of rowsOf(table.name, '汇总子表列')) {
+        const value = Number(rowData[column])
+        if (Number.isFinite(value)) total += value
+      }
+      return total
+    },
+    sumTableColumn: (name, subName) => {
+      const table = tableField(name, '汇总子表列')
+      const column = subFieldOf(table, subName, '汇总子表列')
+      let total = 0
+      for (const rowData of rowsOf(table.name, '汇总子表列')) {
+        const value = Number(rowData[column])
+        if (Number.isFinite(value)) total += value
+      }
+      return total
+    },
+
+    // ── 表单上下文（无流程时返回有类型的空值） ──
+    获取表单标识: () => String(formContext().formKey ?? ''),
+    getFormKey: () => String(formContext().formKey ?? ''),
+    获取表单版本: () => formContext().version ?? null,
+    getFormVersion: () => formContext().version ?? null,
+    获取当前提交结果: () => String(formContext().submissionId ?? ''),
+    getSubmissionResult: () => String(formContext().submissionId ?? ''),
+    获取当前租户: () => options.identity?.()?.tenantId ?? null,
+    currentTenant: () => options.identity?.()?.tenantId ?? null,
+    获取当前用户角色: () => options.identity?.()?.roles ?? [],
+    currentRoles: () => options.identity?.()?.roles ?? [],
   }
 
   function programFor(action: FormEventAction): ScriptProgram {

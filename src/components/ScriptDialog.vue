@@ -115,10 +115,14 @@ function buildSimulationHost(log: string[]): Record<string, (...args: unknown[])
       name.startsWith('设置') ||
       name.startsWith('提示') ||
       name.startsWith('显示') ||
-      name.startsWith('隐藏')
+      name.startsWith('隐藏') ||
+      name.startsWith('新增') ||
+      name.startsWith('删除') ||
+      name.startsWith('批量') ||
+      name.startsWith('清空')
     ) {
       host[name] = (...args: unknown[]) => {
-        log.push(`${name}(${argsText(args)}) → 已记录`)
+        log.push(`${name}(${argsText(args)}) → 已记录（预览不写真实业务）`)
         return null
       }
       continue
@@ -126,8 +130,13 @@ function buildSimulationHost(log: string[]): Record<string, (...args: unknown[])
     host[name] = (...args: unknown[]) => {
       const key = String(args[0] ?? '')
       let sample: unknown = '示例值'
-      if (/当前用户姓名/.test(name)) sample = '示例用户'
-      else if (/用户|部门负责人|分管领导|上级部门|当前部门/.test(name)) sample = 1001
+      if (/列表|角色|选项/.test(name)) sample = []
+      else if (/行数|汇总/.test(name)) sample = 0
+      else if (/版本/.test(name)) sample = 1
+      else if (/当前用户姓名/.test(name)) sample = '示例用户'
+      else if (/当前用户|当前部门|当前租户|用户|部门负责人|分管领导|上级部门/.test(name))
+        sample = 1001
+      else if (/标识|结果|状态|类型|标题/.test(name)) sample = ''
       else if (/流程变量|字段值/.test(name)) sample = key ? `示例值(${key})` : '示例值'
       log.push(`${name}(${argsText(args)}) → ${formatValue(sample)}`)
       return sample
