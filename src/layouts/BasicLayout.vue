@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Expand, Fold } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { useI18n } from '@/locales'
 import { resolveArea } from '@/foundation/area'
@@ -79,9 +79,10 @@ const showAside = computed(
             :title="collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')"
             @click="appStore.toggleSidebar()"
           >
-            <el-icon :size="16" aria-hidden="true">
-              <Expand v-if="collapsed" />
-              <Fold v-else />
+            <el-icon :size="18" aria-hidden="true">
+              <!-- 批次21（规划审查）：Expand/Fold 小尺寸下呈横线状无法辨向，改为明确单箭头 -->
+              <ArrowRight v-if="collapsed" />
+              <ArrowLeft v-else />
             </el-icon>
             <span v-if="!collapsed" class="basic-layout__sidebar-collapse-label">
               {{ t('nav.collapseSidebar') }}
