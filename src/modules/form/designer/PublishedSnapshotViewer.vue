@@ -100,6 +100,38 @@ const scripts = computed(() =>
 )
 const approvalScripts = computed(() => buildSnapshotApprovalScripts(processSources.value))
 
+type SnapshotConstraintRow = ReturnType<typeof buildSnapshotConstraints>[number]
+const scriptDetailVisible = ref(false)
+const scriptDetailTitle = ref('')
+const scriptDetailCode = ref('')
+const scriptDetailMeta = ref('')
+const validationDetailVisible = ref(false)
+const validationDetailTitle = ref('')
+const validationDetailRow = ref<SnapshotConstraintRow | null>(null)
+
+function openScriptDetail(row: SnapshotScriptView): void {
+  scriptDetailTitle.value = `${row.label} · ${scriptKindLabel(row.kind)}`
+  scriptDetailCode.value = row.code
+  const meta = [
+    scriptSourceLabel(row),
+    row.event ? eventLabel(row.event) : '',
+    row.nodeKey ?? '',
+    row.enabled == null
+      ? ''
+      : row.enabled
+        ? t('form.snapshotViewer.enabled')
+        : t('form.snapshotViewer.disabled'),
+  ].filter(Boolean)
+  scriptDetailMeta.value = meta.join(' · ')
+  scriptDetailVisible.value = true
+}
+
+function openValidationDetail(row: SnapshotConstraintRow): void {
+  validationDetailTitle.value = `${row.label} · ${validationLabel(row.kind)}`
+  validationDetailRow.value = row
+  validationDetailVisible.value = true
+}
+
 const effectiveSnapshot = computed<FormSnapshotDTO | null>(() => {
   if (!props.snapshot) return null
   return { ...props.snapshot, ...(detail.value ?? {}) }
@@ -522,6 +554,9 @@ watch(
                         : t('form.snapshotViewer.disabled')
                     }}
                   </span>
+                  <el-button link type="primary" size="small" @click="openScriptDetail(row)">
+                    {{ t('common.view') }}
+                  </el-button>
                 </header>
                 <pre>{{ row.code }}</pre>
               </article>
@@ -555,6 +590,9 @@ watch(
                   <td>{{ validationLabel(row.kind) }}</td>
                   <td>
                     <code>{{ row.value }}</code>
+                    <el-button link type="primary" size="small" @click="openValidationDetail(row)">
+                      {{ t('common.view') }}
+                    </el-button>
                   </td>
                 </tr>
               </tbody>
@@ -836,6 +874,30 @@ watch(
         </main>
       </div>
     </div>
+
+    <DetailDialog
+      v-model="scriptDetailVisible"
+      :title="scriptDetailTitle"
+      width="640px"
+      :show-footer="false"
+      append-to-body
+    >
+      <p v-if="scriptDetailMeta" class="snapshot-dialog-meta">{{ scriptDetailMeta }}</p>
+      <pre class="snapshot-dialog-code">{{ scriptDetailCode }}</pre>
+    </DetailDialog>
+
+    <DetailDialog
+      v-model="validationDetailVisible"
+      :title="validationDetailTitle"
+      width="520px"
+      :show-footer="false"
+      append-to-body
+    >
+      <p v-if="validationDetailRow" class="snapshot-dialog-meta">
+        <code>{{ validationDetailRow.path }}</code>
+      </p>
+      <pre class="snapshot-dialog-code">{{ validationDetailRow?.value }}</pre>
+    </DetailDialog>
   </DetailDialog>
 </template>
 
@@ -1008,6 +1070,28 @@ watch(
   display: grid;
   grid-template-columns: repeat(24, minmax(0, 1fr));
   gap: var(--sw-form-row-gap);
+}
+
+.snapshot-dialog-meta {
+  margin: 0 0 12px;
+  color: var(--sw-text-secondary);
+  font-size: 13px;
+}
+
+.snapshot-dialog-code {
+  margin: 0;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-fill-base);
+  color: var(--sw-text-primary);
+  font-family: var(--sw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .snapshot-meta {

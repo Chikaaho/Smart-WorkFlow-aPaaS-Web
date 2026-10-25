@@ -227,6 +227,26 @@ describe('PublishedSnapshotViewer', () => {
     ).toBe(true)
   })
 
+  it('脚本与校验行可打开只读详情', async () => {
+    const wrapper = await mountViewer()
+    const vm = wrapper.vm as unknown as {
+      scripts: Array<Record<string, unknown>>
+      constraints: Array<Record<string, unknown>>
+      openScriptDetail: (row: Record<string, unknown>) => void
+      openValidationDetail: (row: Record<string, unknown>) => void
+      scriptDetailVisible: boolean
+      scriptDetailCode: string
+      validationDetailVisible: boolean
+    }
+
+    vm.openScriptDetail(vm.scripts[0])
+    expect(vm.scriptDetailVisible).toBe(true)
+    expect(vm.scriptDetailCode).toContain('获取字段值')
+
+    vm.openValidationDetail(vm.constraints[0])
+    expect(vm.validationDetailVisible).toBe(true)
+  })
+
   it('冻结字段同时展示主表、子表和完整字段配置', async () => {
     const wrapper = await mountViewer()
     await openSection(wrapper, '冻结字段')
