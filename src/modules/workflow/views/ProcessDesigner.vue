@@ -2125,7 +2125,7 @@ interface SubflowFormDraft {
   targetProcessDefKey: string
   targetFormKey: string
   /** 触发方式：写脚本 / 选字段（字段值为真即发起）。 */
-  triggerMode: 'SCRIPT' | 'FIELD'
+  triggerMode: 'SCRIPT' | 'FIELD' | 'ALWAYS'
   triggerField: string
   script: string
   mappings: SubflowMappingDraft[]
@@ -2190,7 +2190,8 @@ function buildSubflowFormDraft(raw: Record<string, unknown> | undefined): Subflo
   draft.enabled = Boolean(raw.enabled)
   draft.targetProcessDefKey = String(raw.targetProcessDefKey ?? '')
   draft.targetFormKey = String(raw.targetFormKey ?? '')
-  draft.triggerMode = raw.triggerMode === 'FIELD' ? 'FIELD' : 'SCRIPT'
+  draft.triggerMode =
+    raw.triggerMode === 'FIELD' ? 'FIELD' : raw.triggerMode === 'ALWAYS' ? 'ALWAYS' : 'SCRIPT'
   draft.triggerField = String(raw.triggerField ?? '')
   draft.script = String(raw.script ?? '')
   const legacyMode = String(raw.mode ?? '')
@@ -2559,10 +2560,11 @@ function onSubflowTargetChange(defKey: string) {
   void loadSubflowTargetFields(defKey)
 }
 
-/** 向导步骤校验：①触发方式（脚本或字段）②子流程 ③初始值可空。 */
+/** 向导步骤校验：①触发方式（始终/脚本/字段）②子流程 ③初始值可空。 */
 const subflowStepReady = computed(() => {
   const form = subflowForm.value
   if (subflowWizardStep.value === 0) {
+    if (form.triggerMode === 'ALWAYS') return true
     return form.triggerMode === 'FIELD' ? Boolean(form.triggerField) : Boolean(form.script.trim())
   }
   if (subflowWizardStep.value === 1) return Boolean(form.targetProcessDefKey)
@@ -2643,7 +2645,7 @@ function applySubflow() {
       enabled: true,
       event: 'TASK_SUBMITTED',
       nodeKey: node.id,
-      script: form.script.trim() || 'return 1;',
+      script: form.triggerMode === 'ALWAYS' ? 'return 1;' : form.script.trim() || 'return 1;',
       // BF20261013-027：触发脚本变量授权=全部已定义变量（与节点触发器同口径，免手工勾选）
       variables: (graph.value.variables ?? []).map((item) => item.varId),
       branches: [
@@ -4428,10 +4430,11 @@ function nodeLabelLines(label: string) {
         <el-step title="初始值" />
       </el-steps>
 
-      <!-- 第①步：触发方式（写脚本 / 选字段） -->
+      <!-- 第①步：触发方式（始终发起 / 写脚本 / 选字段） -->
       <el-form v-show="subflowWizardStep === 0" label-position="top" size="small">
         <el-form-item label="触发方式">
           <el-radio-group v-model="subflowForm.triggerMode">
+            <el-radio value="ALWAYS">始终发起</el-radio>
             <el-radio value="SCRIPT">写脚本</el-radio>
             <el-radio value="FIELD">选字段</el-radio>
           </el-radio-group>
@@ -4448,7 +4451,10 @@ function nodeLabelLines(label: string) {
             <small v-if="subflowForm.script?.trim()" class="participant-hint"> 已配置 </small>
           </div>
         </el-form-item>
-        <el-form-item v-else label="触发字段（字段值为真即发起）">
+        <el-form-item
+          v-else-if="subflowForm.triggerMode === 'FIELD'"
+          label="触发字段（字段值为真即发起）"
+        >
           <el-select
             v-model="subflowForm.triggerField"
             filterable
