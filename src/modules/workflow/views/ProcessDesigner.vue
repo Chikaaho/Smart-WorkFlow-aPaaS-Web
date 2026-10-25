@@ -589,11 +589,26 @@ watch(
 /* ── BF20261013-013：节点「字段属性」页签（必填/编辑/隐藏三态） ── */
 
 /** 节点属性面板页签；切换节点时回到「基础属性」。 */
-const nodePropsTab = ref<'basic' | 'fields'>('basic')
+const nodePropsTab = ref<'basic' | 'fields' | 'advanced'>('basic')
 
 /** 字段属性仅对非结束节点开放（Owner：流程图除结束的所有节点）。 */
 const fieldConfigCapable = computed(
   () => selectedNode.value != null && selectedNode.value.type !== 'END',
+)
+
+/** 高级页签承载节点脚本、子流程、审批意见表单与 allowedActions 操作设置。 */
+const allowedActionsField = computed(
+  () =>
+    selectedCapability.value?.configFields?.find((field) => field.key === 'allowedActions') ?? null,
+)
+const advancedConfigCapable = computed(
+  () =>
+    selectedNode.value != null &&
+    selectedNode.value.type !== 'END' &&
+    (nodeTriggerCapable.value ||
+      nodeFormCapable.value ||
+      selectedNode.value.type === 'APPROVAL' ||
+      !!allowedActionsField.value),
 )
 
 const nodeFieldStates = computed<NodeFieldStates>(() => {
@@ -2747,6 +2762,7 @@ const genericConfigFields = computed(() => {
       field.key !== participantKey &&
       field.key !== 'nodeForm' &&
       field.key !== 'waitActionIds' &&
+      field.key !== 'allowedActions' &&
       // BF20261013-022③④：object 型 JSON 文本配置与「审批人（兼容）」不再渲染
       field.type !== 'object' &&
       !isApproverSelectionField(field),
@@ -3463,7 +3479,104 @@ function nodeLabelLines(label: string) {
               >
                 {{ t('workflow.fieldPropsTab') }}
               </button>
+              <button
+                v-if="advancedConfigCapable"
+                type="button"
+                class="props-tab"
+                :class="{ 'is-active': nodePropsTab === 'advanced' }"
+                @click="nodePropsTab = 'advanced'"
+              >
+                {{ t('workflow.advancedPropsTab') }}
+              </button>
             </div>
+
+            <template v-if="nodePropsTab === 'advanced' && advancedConfigCapable">
+              <el-form label-position="top" :inert="isVersionPreview">
+                <template v-if="nodeTriggerCapable">
+                  <div class="props-section props-section--advanced">
+                    {{ t('workflow.nodeScriptSection') }}
+                  </div>
+                  <el-form-item :label="t('workflow.nodeScriptBefore')">
+                    <div class="participant-picker-row">
+                      <el-button @click="openNodeTriggerScriptDialog('NODE_ENTERING')">
+                        {{
+                          nodeTriggerOf('NODE_ENTERING')?.script?.trim()
+                            ? t('form.scriptEdit')
+                            : t('form.scriptWrite')
+                        }}
+                      </el-button>
+                      <small class="participant-hint">{{
+                        nodeTriggerSummary('NODE_ENTERING')
+                      }}</small>
+                    </div>
+                  </el-form-item>
+                  <el-form-item :label="t('workflow.nodeScriptAfter')">
+                    <div class="participant-picker-row">
+                      <el-button @click="openNodeTriggerScriptDialog('NODE_ROUND_COMPLETED')">
+                        {{
+                          nodeTriggerOf('NODE_ROUND_COMPLETED')?.script?.trim()
+                            ? t('form.scriptEdit')
+                            : t('form.scriptWrite')
+                        }}
+                      </el-button>
+                      <small class="participant-hint">{{
+                        nodeTriggerSummary('NODE_ROUND_COMPLETED')
+                      }}</small>
+                    </div>
+                  </el-form-item>
+                </template>
+
+                <template v-if="selectedNode?.type === 'APPROVAL'">
+                  <div class="props-section props-section--advanced">
+                    {{ t('workflow.subflowSection') }}
+                  </div>
+                  <el-form-item :label="t('workflow.startSubflow')">
+                    <div class="participant-picker-row">
+                      <el-switch v-model="subflowForm.enabled" @change="onSubflowSwitch" />
+                      <el-button v-if="subflowForm.enabled" @click="openSubflowWizard">
+                        {{ subflowForm.targetProcessDefKey ? '修改配置' : '配置子流程' }}
+                      </el-button>
+                      <small v-if="subflowSummary" class="participant-hint">{{
+                        subflowSummary
+                      }}</small>
+                    </div>
+                  </el-form-item>
+                </template>
+
+                <div class="props-section props-section--advanced">
+                  {{ t('workflow.nodeOperationSection') }}
+                </div>
+                <el-form-item v-if="nodeFormCapable" :label="t('workflow.approvalOpinionForm')">
+                  <div class="nodeform-row">
+                    <el-input :model-value="selectedNodeFormName" disabled />
+                    <el-button @click="nodeFormSelectVisible = true">
+                      {{ selectedNodeFormKey ? '更换' : '设置' }}
+                    </el-button>
+                    <el-button v-if="selectedNodeFormKey" @click="clearNodeForm">清除</el-button>
+                  </div>
+                </el-form-item>
+                <el-form-item v-if="allowedActionsField" :label="t('workflow.operationSettings')">
+                  <el-select
+                    :model-value="configArrayValue('allowedActions')"
+                    multiple
+                    filterable
+                    clearable
+                    style="width: 100%"
+                    @update:model-value="
+                      (value: unknown) => onConfigArrayChange('allowedActions', value)
+                    "
+                  >
+                    <el-option
+                      v-for="option in configArrayOptions(allowedActionsField)"
+                      :key="option.value"
+                      :label="option.label"
+                      :value="option.value"
+                    />
+                  </el-select>
+                  <small class="config-array-hint">{{ t('workflow.allowedActionsHint') }}</small>
+                </el-form-item>
+              </el-form>
+            </template>
 
             <template v-if="nodePropsTab === 'basic' || !fieldConfigCapable">
               <div v-if="!fieldConfigCapable" class="props-section">
@@ -3677,61 +3790,6 @@ function nodeLabelLines(label: string) {
                     :closable="false"
                     class="participant-legacy-note"
                   />
-                </template>
-                <!-- ═══ P64 阶段Ⅰ：节点业务表单绑定（APPROVAL/CONSENSUS/DYNAMIC_PARALLEL）；
-                   BF20261013-020：节点绑定的是审批意见表单（独立类型，流程管理单独维护） ═══ -->
-                <el-form-item v-if="nodeFormCapable" label="审批意见表单">
-                  <div class="nodeform-row">
-                    <el-input :model-value="selectedNodeFormName" disabled />
-                    <el-button @click="nodeFormSelectVisible = true">
-                      {{ selectedNodeFormKey ? '更换' : '选择表单' }}
-                    </el-button>
-                    <el-button v-if="selectedNodeFormKey" @click="clearNodeForm">清除</el-button>
-                  </div>
-                </el-form-item>
-                <!-- ═══ BF20261013-022①：节点触发器（开始前 / 结束），脚本经统一弹窗编写 ═══ -->
-                <template v-if="nodeTriggerCapable">
-                  <div class="props-section props-section--advanced">节点触发器</div>
-                  <el-form-item label="节点开始前">
-                    <div class="participant-picker-row">
-                      <el-button @click="openNodeTriggerScriptDialog('NODE_ENTERING')">
-                        {{
-                          nodeTriggerOf('NODE_ENTERING')?.script?.trim() ? '编辑脚本' : '编写脚本'
-                        }}
-                      </el-button>
-                      <small class="participant-hint">{{
-                        nodeTriggerSummary('NODE_ENTERING')
-                      }}</small>
-                    </div>
-                  </el-form-item>
-                  <el-form-item label="节点结束">
-                    <div class="participant-picker-row">
-                      <el-button @click="openNodeTriggerScriptDialog('NODE_ROUND_COMPLETED')">
-                        {{
-                          nodeTriggerOf('NODE_ROUND_COMPLETED')?.script?.trim()
-                            ? '编辑脚本'
-                            : '编写脚本'
-                        }}
-                      </el-button>
-                      <small class="participant-hint">{{
-                        nodeTriggerSummary('NODE_ROUND_COMPLETED')
-                      }}</small>
-                    </div>
-                  </el-form-item>
-                </template>
-                <!-- ═══ BF20261013-019/027：发起子流程（开关 + 向导弹窗；等待块由设计器自动生成） ═══ -->
-                <template v-if="selectedNode.type === 'APPROVAL'">
-                  <el-form-item label="发起子流程">
-                    <div class="participant-picker-row">
-                      <el-switch v-model="subflowForm.enabled" @change="onSubflowSwitch" />
-                      <el-button v-if="subflowForm.enabled" @click="openSubflowWizard">
-                        {{ subflowForm.targetProcessDefKey ? '修改配置' : '配置子流程' }}
-                      </el-button>
-                      <small v-if="subflowSummary" class="participant-hint">{{
-                        subflowSummary
-                      }}</small>
-                    </div>
-                  </el-form-item>
                 </template>
                 <!-- ═══ P63 动态并行专属面板（semanticVersion 开关 = 新语义按对象分支） ═══ -->
                 <template v-if="dynamicParallelActive">
