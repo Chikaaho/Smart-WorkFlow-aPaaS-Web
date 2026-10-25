@@ -48,6 +48,14 @@ function mountCanvas(items: DesignerItem[], selectedId: string | null = null) {
 }
 
 describe('DesignerCanvas (WYSIWYG)', () => {
+  it('renders the form description above the field list', () => {
+    const wrapper = mount(DesignerCanvas, {
+      props: { items: [], selectedId: null, description: '请填写演练信息' },
+      global: { stubs },
+    })
+    expect(wrapper.find('.canvas__description').text()).toBe('请填写演练信息')
+  })
+
   it('renders one shell per item without hover metadata or marker', () => {
     const wrapper = mountCanvas([
       item('di_1', 'username', { type: 'TEXT' }),
