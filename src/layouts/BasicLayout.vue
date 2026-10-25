@@ -178,7 +178,8 @@ const showAside = computed(
  * 展开态「← 收起」、收起态仅「→」图标居中；菜单区独立滚动。 */
 .basic-layout__sidebar-bottom {
   flex: 0 0 auto;
-  padding: 8px 10px;
+  height: 48px;
+  padding: 0 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .basic-layout--admin .basic-layout__sidebar-bottom {
@@ -190,8 +191,8 @@ const showAside = computed(
   gap: 8px;
   box-sizing: border-box;
   width: 100%;
-  height: 36px;
-  padding: 0 10px;
+  height: 46px;
+  padding: 0 13px;
   border: 0;
   border-radius: var(--sw-radius-base);
   background: transparent;
@@ -207,7 +208,7 @@ const showAside = computed(
 }
 /* 批次16：收起态底部箭头清晰居中（右向展开箭头独立成列） */
 .basic-layout__sidebar-bottom.is-collapsed {
-  padding: 8px 0;
+  padding: 0;
 }
 .basic-layout__sidebar-bottom.is-collapsed .basic-layout__sidebar-collapse {
   justify-content: center;
