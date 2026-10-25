@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import DetailDialog from '@/components/DetailDialog.vue'
 import { parseDefinition } from '@/adapters/form-designer'
+import FormPreview from '@/adapters/form-designer/FormPreview.vue'
+import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 import {
   loadSnapshotProcessVersionCandidates,
   loadSnapshotProcessVersionGraph,
@@ -53,6 +55,7 @@ const { t } = useI18n()
 type SectionKey =
   | 'overview'
   | 'fields'
+  | 'design'
   | 'scripts'
   | 'validation'
   | 'visibility'
@@ -118,6 +121,7 @@ const sections = computed(
     [
       ['overview', 'overview', processSources.value.length],
       ['fields', 'fields', fields.value.length],
+      ['design', 'design', fields.value.length],
       ['scripts', 'scripts', scripts.value.length],
       ['validation', 'validation', constraints.value.length],
       ['visibility', 'visibility', visibility.value.length],
@@ -467,6 +471,31 @@ watch(
                 </tr>
               </tbody>
             </table>
+          </section>
+
+          <section v-else-if="activeSection === 'design'" class="snapshot-section">
+            <div class="snapshot-section__head">
+              <div>
+                <h3>{{ sectionLabel('design') }}</h3>
+              </div>
+            </div>
+            <p v-if="!schema || schema.fields.length === 0" class="snapshot-empty">
+              {{ t('form.snapshotViewer.noData') }}
+            </p>
+            <div v-else class="snapshot-design">
+              <p v-if="schema.description" class="snapshot-design__description">
+                {{ schema.description }}
+              </p>
+              <div class="snapshot-design__grid">
+                <div
+                  v-for="field in schema.fields"
+                  :key="field.name"
+                  :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
+                >
+                  <FormPreview :schema="{ title: '', fields: [field] }" mode="design" />
+                </div>
+              </div>
+            </div>
           </section>
 
           <section v-else-if="activeSection === 'scripts'" class="snapshot-section">
@@ -959,6 +988,26 @@ watch(
   margin: 0;
   color: var(--sw-text-primary);
   font-size: 16px;
+}
+
+.snapshot-design {
+  padding: var(--sw-space-20) var(--sw-space-24);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  background: var(--sw-fill-base);
+}
+
+.snapshot-design__description {
+  margin: 0 0 var(--sw-space-12);
+  color: var(--sw-text-regular);
+  font-size: var(--sw-font-secondary);
+  line-height: 1.6;
+}
+
+.snapshot-design__grid {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  gap: var(--sw-form-row-gap);
 }
 
 .snapshot-meta {

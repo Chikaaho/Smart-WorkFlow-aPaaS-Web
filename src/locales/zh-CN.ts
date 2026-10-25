@@ -1200,6 +1200,7 @@ export default {
       rawProcessGraph: '原始冻结流程图',
       rawDefinition: '原始冻结定义',
       fields: '冻结字段',
+      design: '表单设计',
       fieldPath: '字段路径',
       label: '名称',
       type: '类型',

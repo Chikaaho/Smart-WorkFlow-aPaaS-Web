@@ -170,7 +170,13 @@ async function mountViewer(overrides: Record<string, unknown> = {}) {
       ...overrides,
     },
     global: {
-      stubs: { DetailDialog: detailDialogStub },
+      stubs: {
+        DetailDialog: detailDialogStub,
+        FormPreview: {
+          props: ['schema', 'mode'],
+          template: '<div class="fc-stub" :data-mode="mode" />',
+        },
+      },
     },
   })
   await flushPromises()
@@ -208,6 +214,17 @@ describe('PublishedSnapshotViewer', () => {
     expect(wrapper.text()).toContain('资产采购审批')
     expect(wrapper.text()).toContain('asset_purchase · v4')
     expect(wrapper.text()).toContain('原始冻结定义')
+  })
+
+  it('表单设计 section renders frozen description and fields', async () => {
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '表单设计')
+
+    expect(wrapper.find('.snapshot-design__description').text()).toBe('冻结表单')
+    expect(wrapper.findAll('.fc-stub')).toHaveLength(2)
+    expect(
+      wrapper.findAll('.fc-stub').every((node) => node.attributes('data-mode') === 'design'),
+    ).toBe(true)
   })
 
   it('冻结字段同时展示主表、子表和完整字段配置', async () => {

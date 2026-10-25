@@ -1233,6 +1233,7 @@ export default {
       rawProcessGraph: 'Raw frozen workflow graph',
       rawDefinition: 'Raw frozen definition',
       fields: 'Frozen fields',
+      design: 'Form design',
       fieldPath: 'Field path',
       label: 'Name',
       type: 'Type',
