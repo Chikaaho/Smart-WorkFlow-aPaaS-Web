@@ -22,6 +22,11 @@ const props = defineProps<{ node: MenuNode; taskDetail?: boolean }>()
 const nodeTitle = useNodeTitle()
 const designIconName = computed(() => String(props.node.icon ?? '').replace('design:', ''))
 const designIconSrc = computed(() => DESIGN_ICONS[designIconName.value])
+/** 0.2.0（Owner 要求）：无有效图标时以当前语言展示名称的第一个可见字回退，不以空白掩盖。 */
+const firstChar = computed(() => {
+  const text = String(nodeTitle(props.node) ?? '').trim()
+  return text ? Array.from(text)[0] : '·'
+})
 </script>
 
 <template>
@@ -38,6 +43,7 @@ const designIconSrc = computed(() => DESIGN_ICONS[designIconName.value])
         aria-hidden="true"
       />
       <el-icon v-else-if="menuIcon(node.icon)"><component :is="menuIcon(node.icon)" /></el-icon>
+      <el-icon v-else class="app-sidebar__char-fallback">{{ firstChar }}</el-icon>
       <span>{{ nodeTitle(node) }}</span>
     </template>
     <AppSidebarItem
@@ -56,6 +62,7 @@ const designIconSrc = computed(() => DESIGN_ICONS[designIconName.value])
       aria-hidden="true"
     />
     <el-icon v-else-if="menuIcon(node.icon)"><component :is="menuIcon(node.icon)" /></el-icon>
+    <el-icon v-else class="app-sidebar__char-fallback">{{ firstChar }}</el-icon>
     <template #title>
       <span v-if="props.taskDetail" class="app-sidebar__item-label">{{ nodeTitle(node) }}</span>
       <template v-else>{{ nodeTitle(node) }}</template>
@@ -69,6 +76,16 @@ const designIconSrc = computed(() => DESIGN_ICONS[designIconName.value])
   width: 20px;
   height: 20px;
   margin-right: 12px;
+}
+.app-sidebar__char-fallback {
+  /* 首字直接作为 el-icon 文本节点：折叠态 Element Plus 会隐藏 span，文本节点不受影响 */
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  font-style: normal;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
 }
 .app-sidebar__item-label {
   color: #c9d1e8;

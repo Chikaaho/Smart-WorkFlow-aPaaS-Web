@@ -499,6 +499,20 @@ function resolveAdminActive(path: string): string {
 .app-sidebar--workspace :deep(.el-menu-item.is-active) {
   background: var(--sw-nav-sidebar-active-bg);
 }
+/* 0.2.0（Owner 口径）：收起态保留图标/首字列——Element Plus 折叠 tooltip trigger
+ * 默认 display:none 会吞掉内容，显式恢复为居中 flex（图标、首字回退同列）。 */
+.app-sidebar.el-menu--collapse :deep(.el-menu-tooltip__trigger) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0;
+}
+.app-sidebar.el-menu--collapse :deep(.el-menu-tooltip__trigger .el-icon),
+.app-sidebar.el-menu--collapse :deep(.el-menu-tooltip__trigger img) {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
 .app-sidebar--workspace.el-menu--collapse {
   width: var(--sw-layout-aside-width-collapsed);
   padding: var(--sw-space-12) 0;

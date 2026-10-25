@@ -1796,6 +1796,8 @@ export default {
     notifications: 'Notifications',
     mainNav: 'Main navigation',
     toggleSidebar: 'Toggle sidebar',
+    collapseSidebar: 'Collapse',
+    expandSidebar: 'Expand',
     intelligenceSuite: 'Intelligence',
     permissionFootnote: 'Navigation adapts to account roles and tenant',
   },

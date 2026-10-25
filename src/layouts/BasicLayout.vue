@@ -51,23 +51,6 @@ const showAside = computed(
       <AppTopbar class="basic-layout__actions" />
     </header>
     <div class="basic-layout__body">
-      <button
-        v-if="showAside"
-        type="button"
-        class="basic-layout__sidebar-toggle"
-        data-test="sidebar-toggle"
-        :class="{ 'is-collapsed': collapsed }"
-        :aria-label="t('nav.toggleSidebar')"
-        :aria-expanded="!collapsed"
-        aria-controls="app-sidebar"
-        :title="t('nav.toggleSidebar')"
-        @click="appStore.toggleSidebar()"
-      >
-        <el-icon :size="14" aria-hidden="true">
-          <Expand v-if="collapsed" />
-          <Fold v-else />
-        </el-icon>
-      </button>
       <aside
         v-if="showAside"
         id="app-sidebar"
@@ -75,6 +58,28 @@ const showAside = computed(
         :class="[{ 'basic-layout__aside--collapsed': collapsed }, `basic-layout__aside--${area}`]"
       >
         <AppSidebar :collapse="collapsed" class="basic-layout__menu" />
+        <!-- 0.2.0（Owner 口径，替代 401:8637 边缘手柄）：折叠入口固定侧栏底部，
+             展开态「← 收起」、收起态「→」，菜单区独立滚动、底部条不随滚。 -->
+        <div class="basic-layout__sidebar-bottom" :class="{ 'is-collapsed': collapsed }">
+          <button
+            type="button"
+            class="basic-layout__sidebar-collapse"
+            data-test="sidebar-collapse"
+            :aria-label="collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')"
+            :aria-expanded="!collapsed"
+            aria-controls="app-sidebar"
+            :title="collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')"
+            @click="appStore.toggleSidebar()"
+          >
+            <el-icon :size="16" aria-hidden="true">
+              <Expand v-if="collapsed" />
+              <Fold v-else />
+            </el-icon>
+            <span v-if="!collapsed" class="basic-layout__sidebar-collapse-label">
+              {{ t('nav.collapseSidebar') }}
+            </span>
+          </button>
+        </div>
       </aside>
       <main class="basic-layout__content">
         <router-view />
@@ -135,40 +140,9 @@ const showAside = computed(
   max-width: none;
 }
 .basic-layout__body {
-  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
-}
-/* 0.2.0：侧栏收起/展开入口位于侧栏与正文交界（401:8637 SidebarToggle 规范），
- * 不参与顶栏横向布局；收起态贴收起宽度边缘，仍可展开。 */
-.basic-layout__sidebar-toggle {
-  position: absolute;
-  top: 50%;
-  left: calc(var(--sw-layout-aside-width) - 10px);
-  transform: translateY(-50%);
-  z-index: 30;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 40px;
-  padding: 0;
-  border: 1px solid var(--sw-border-color, #dcdfe6);
-  border-radius: var(--sw-radius-base);
-  background: var(--sw-bg-color, #fff);
-  color: var(--sw-text-secondary, #606266);
-  cursor: pointer;
-  transition: left 0.2s ease;
-}
-.basic-layout__sidebar-toggle:hover {
-  color: var(--sw-brand-color, #2563eb);
-}
-.basic-layout__sidebar-toggle.is-collapsed {
-  left: calc(var(--sw-layout-aside-width-collapsed) - 10px);
-}
-.basic-layout--admin .basic-layout__sidebar-toggle:not(.is-collapsed) {
-  left: 226px;
 }
 .basic-layout__aside {
   display: flex;
@@ -191,6 +165,44 @@ const showAside = computed(
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+}
+/* 0.2.0（Owner 口径）：折叠入口固定侧栏底部，不随菜单滚动；
+ * 展开态「← 收起」、收起态仅「→」图标居中；菜单区独立滚动。 */
+.basic-layout__sidebar-bottom {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.basic-layout--admin .basic-layout__sidebar-bottom {
+  border-top-color: var(--sw-border-color, #dcdfe6);
+}
+.basic-layout__sidebar-collapse {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--sw-radius-base);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.basic-layout__sidebar-collapse:hover {
+  background: var(--sw-nav-hover-bg, rgba(255, 255, 255, 0.08));
+}
+.basic-layout__sidebar-collapse-label {
+  font-size: 14px;
+  white-space: nowrap;
+}
+.basic-layout__sidebar-bottom.is-collapsed {
+  padding: 8px 6px;
+}
+.basic-layout__sidebar-bottom.is-collapsed .basic-layout__sidebar-collapse {
+  justify-content: center;
+  padding: 0;
 }
 /* 设计（节点04）：管理端侧栏加宽至 236px（组盒 212 + 右缘 24 对齐设计帧）；折叠态除外 */
 .basic-layout__aside--admin:not(.basic-layout__aside--collapsed) {

@@ -7,8 +7,9 @@ import { mount } from '@vue/test-utils'
  * 应用管理列表页 /form/app-manage 的分区菜单只有「应用管理」自身一个条目
  * （sys_menu 9130，parent_id=0），侧栏是自指的无效导航 → 该路径不渲染深色侧栏，
  * 内容区顶栏全宽；其余后台页面保持原口径（侧栏照常渲染）。
- * 0.2.0（Owner 反馈 + 401:8637 SidebarToggle 规范）：侧栏收起/展开入口在
- * 侧栏与正文交界处（.basic-layout__sidebar-toggle），顶栏主导航不含该入口。
+ * 0.2.0（Owner 最新口径）：侧栏收起/展开入口固定侧栏底部
+ * （.basic-layout__sidebar-collapse，底部条不随菜单滚动），顶栏主导航不含该入口；
+ * 无图标菜单项以展示名称首字回退。
  */
 let mockPath = '/form/app-manage'
 vi.mock('vue-router', () => ({
@@ -57,8 +58,8 @@ describe('BasicLayout 深色侧栏渲染口径', () => {
 
     expect(wrapper.find('.basic-layout__aside').exists()).toBe(false)
     expect(wrapper.find('.sidebar-stub').exists()).toBe(false)
-    // 交界入口随侧栏一起不渲染
-    expect(wrapper.find('.basic-layout__sidebar-toggle').exists()).toBe(false)
+    // 底部条随侧栏一起不渲染
+    expect(wrapper.find('.basic-layout__sidebar-bottom').exists()).toBe(false)
     // 内容区仍在（顶栏全宽）
     expect(wrapper.find('.basic-layout__content').exists()).toBe(true)
   })
@@ -74,30 +75,33 @@ describe('BasicLayout 深色侧栏渲染口径', () => {
 
     expect(wrapper.find('.basic-layout__aside').exists()).toBe(true)
     expect(wrapper.find('.sidebar-stub').exists()).toBe(true)
-    const toggle = wrapper.get('.basic-layout__sidebar-toggle')
-    expect(toggle.attributes('aria-controls')).toBe('app-sidebar')
-    expect(toggle.attributes('aria-expanded')).toBe('true')
+    const collapse = wrapper.get('.basic-layout__sidebar-collapse')
+    expect(collapse.attributes('aria-controls')).toBe('app-sidebar')
+    expect(collapse.attributes('aria-expanded')).toBe('true')
+    expect(collapse.find('.basic-layout__sidebar-collapse-label').text()).toBe(
+      'nav.collapseSidebar',
+    )
   })
 
   it('前台工作台仍不渲染侧栏（既有口径回归保护）', () => {
     mockPath = '/portal'
     const wrapper = mountLayout()
     expect(wrapper.find('.basic-layout__aside').exists()).toBe(false)
-    expect(wrapper.find('.basic-layout__sidebar-toggle').exists()).toBe(false)
+    expect(wrapper.find('.basic-layout__sidebar-bottom').exists()).toBe(false)
   })
 
-  it('转发侧栏收起状态，点击交界入口调用唯一侧栏状态动作', async () => {
+  it('转发侧栏收起状态，点击底部条调用唯一侧栏状态动作', async () => {
     mockPath = '/system/user'
     appStoreMock.sidebarCollapsed = true
     const wrapper = mountLayout()
 
     expect(wrapper.find('.basic-layout__aside--collapsed').exists()).toBe(true)
     expect(wrapper.find('#app-sidebar').exists()).toBe(true)
-    const toggle = wrapper.get('.basic-layout__sidebar-toggle')
-    expect(toggle.classes()).toContain('is-collapsed')
-    expect(toggle.attributes('aria-expanded')).toBe('false')
+    const collapse = wrapper.get('.basic-layout__sidebar-collapse')
+    expect(collapse.find('.basic-layout__sidebar-collapse-label').exists()).toBe(false)
+    expect(collapse.attributes('aria-expanded')).toBe('false')
 
-    await toggle.trigger('click')
+    await collapse.trigger('click')
     expect(appStoreMock.toggleSidebar).toHaveBeenCalledTimes(1)
   })
 })

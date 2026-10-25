@@ -1745,6 +1745,8 @@ export default {
     notifications: '通知',
     mainNav: '主导航',
     toggleSidebar: '收起或展开侧栏',
+    collapseSidebar: '收起',
+    expandSidebar: '展开',
     intelligenceSuite: '智能能力',
     permissionFootnote: '导航权限随角色与租户动态呈现',
   },
