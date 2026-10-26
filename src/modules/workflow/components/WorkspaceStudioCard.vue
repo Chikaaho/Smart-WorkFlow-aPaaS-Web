@@ -113,10 +113,13 @@ function onDrop(event: globalThis.DragEvent): void {
 }
 
 .wscard__head {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 12px 6px;
+  gap: 8px;
+  flex: 0 0 44px;
+  height: 44px;
+  padding: 0 16px;
   cursor: default;
 }
 
@@ -136,15 +139,15 @@ function onDrop(event: globalThis.DragEvent): void {
   margin: 0;
   overflow: hidden;
   color: var(--sw-text-primary, #1f2937);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .wscard__remove {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: 0;
   border-radius: 4px;
   background: transparent;
@@ -161,7 +164,7 @@ function onDrop(event: globalThis.DragEvent): void {
 .wscard__body {
   flex: 1;
   min-height: 0;
-  padding: 0 12px 12px;
+  padding: 0 16px 16px;
 }
 
 .wscard__resize {

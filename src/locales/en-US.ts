@@ -3439,6 +3439,9 @@ export default {
       height: 'Height',
       systemHint:
         'System cards keep the existing to-do, quick launch, activity and efficiency capabilities.',
+      favoriteItems: 'Quick launch processes',
+      favoriteHint:
+        'Only checked items appear in quick launch; leave empty for an explicit empty state, up to 20.',
       form: 'Linked form',
       noForm: 'No form',
       noFields: 'No visible fields are available to this account',

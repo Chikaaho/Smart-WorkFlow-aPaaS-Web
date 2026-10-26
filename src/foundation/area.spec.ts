@@ -25,6 +25,7 @@ function node(partial: Partial<MenuNode> & { id: string; path: string }): MenuNo
 describe('foundation/area 页面归属清单', () => {
   it('portal 清单命中工作台/流程中心/个人办理/收件箱', () => {
     expect(resolveArea('/workspace')).toBe('portal')
+    expect(resolveArea('/workspace/config')).toBe('portal')
     expect(resolveArea('/workflow/catalog')).toBe('portal')
     expect(resolveArea('/workflow/my-cc')).toBe('portal')
     expect(resolveArea('/workflow/todo')).toBe('portal')

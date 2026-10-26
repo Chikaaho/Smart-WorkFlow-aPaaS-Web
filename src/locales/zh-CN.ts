@@ -3335,6 +3335,8 @@ export default {
       width: '宽度',
       height: '高度',
       systemHint: '系统卡片沿用现有待办、快捷发起、动态与效能能力。',
+      favoriteItems: '常用流程',
+      favoriteHint: '仅勾选项会出现在快捷发起；未选择时保持空态，最多 20 项。',
       form: '关联表单',
       noForm: '不关联表单',
       noFields: '当前账号没有可用的可见字段',

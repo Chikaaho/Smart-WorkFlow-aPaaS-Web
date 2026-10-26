@@ -79,8 +79,8 @@ const visibleRows = computed(() => {
 
 const quickItems = computed(() => {
   const keys = new Set(props.favoriteKeys ?? [])
-  const selected = catalog.value.filter((item) => keys.has(item.itemKey))
-  return (selected.length ? selected : catalog.value).slice(0, 6)
+  // 候选目录与已选常用事项必须区分：未选择时保持空态，不能用目录兜底冒充配置。
+  return catalog.value.filter((item) => keys.has(item.itemKey)).slice(0, 6)
 })
 
 const efficiency = computed(() => {

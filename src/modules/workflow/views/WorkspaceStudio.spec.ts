@@ -12,6 +12,7 @@ const push = vi.fn()
 vi.mock('@/modules/workflow/api/oa', () => ({
   getWorkspaceLayout: (...args: unknown[]) => getWorkspaceLayout(...args),
   saveWorkspaceLayout: (...args: unknown[]) => saveWorkspaceLayout(...args),
+  queryCatalogItems: () => Promise.resolve({ list: [], total: 0 }),
 }))
 
 vi.mock('../api/workspace-analytics', () => ({

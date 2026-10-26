@@ -24,7 +24,11 @@ import {
 } from '@element-plus/icons-vue'
 import { useI18n } from '@/locales'
 import { ApiError } from '@/foundation/request'
-import { getWorkspaceLayout, saveWorkspaceLayout } from '@/modules/workflow/api/oa'
+import {
+  getWorkspaceLayout,
+  queryCatalogItems,
+  saveWorkspaceLayout,
+} from '@/modules/workflow/api/oa'
 import {
   getWorkspaceFields,
   listWorkspaceSources,
@@ -32,7 +36,7 @@ import {
   type WorkspaceFormSource,
   type WorkspaceFilter,
 } from '@/modules/workflow/api/workspace-analytics'
-import type { WorkspaceCard } from '@/contracts/catalog'
+import type { CatalogItem, WorkspaceCard } from '@/contracts/catalog'
 import {
   DATA_LIBRARY,
   SYSTEM_LIBRARY,
@@ -67,6 +71,7 @@ const loading = ref(true)
 const cards = ref<StudioCard[]>([])
 const cardTypes = ref<Awaited<ReturnType<typeof getWorkspaceLayout>>['cardTypes']>([])
 const favoriteKeys = ref<string[]>([])
+const catalogItems = ref<CatalogItem[]>([])
 const sources = ref<WorkspaceFormSource[]>([])
 const selectedId = ref<string | null>(null)
 const fields = ref<WorkspaceField[]>([])
@@ -159,7 +164,16 @@ function labelFor(typeCode: string): string {
 }
 
 function snapshot(): string {
-  return JSON.stringify(cards.value)
+  return JSON.stringify({ cards: cards.value, favoriteKeys: favoriteKeys.value })
+}
+
+function restoreSnapshot(raw: string): void {
+  const parsed = JSON.parse(raw) as {
+    cards?: StudioCard[]
+    favoriteKeys?: string[]
+  }
+  cards.value = parsed.cards ?? []
+  favoriteKeys.value = parsed.favoriteKeys ?? []
 }
 
 function pushUndo(coalesce = false): void {
@@ -220,15 +234,17 @@ async function loadFields(formKey: string): Promise<WorkspaceField[]> {
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const [layoutResult, sourceResult] = await Promise.allSettled([
+    const [layoutResult, sourceResult, catalogResult] = await Promise.allSettled([
       getWorkspaceLayout(),
       listWorkspaceSources(),
+      queryCatalogItems({ pageNum: 1, pageSize: 100 }),
     ])
     if (layoutResult.status !== 'fulfilled') throw layoutResult.reason
     const resp = layoutResult.value
     cardTypes.value = resp.cardTypes ?? []
     favoriteKeys.value = resp.layout.favoriteItemKeys ?? []
     sources.value = sourceResult.status === 'fulfilled' ? sourceResult.value : []
+    catalogItems.value = catalogResult.status === 'fulfilled' ? catalogResult.value.list : []
     const raw = (resp.layout.cards ?? resp.layout.components ?? []) as WorkspaceCard[]
     fieldsCache = new Map()
     cards.value = raw
@@ -401,10 +417,21 @@ function stopResize(): void {
 function undo(): void {
   const previous = undoStack.value.pop()
   if (!previous) return
-  cards.value = JSON.parse(previous) as StudioCard[]
+  restoreSnapshot(previous)
   if (!cards.value.some((card) => card.id === selectedId.value)) {
     selectedId.value = cards.value[0]?.id ?? null
   }
+}
+
+function toggleFavorite(itemKey: string): void {
+  const index = favoriteKeys.value.indexOf(itemKey)
+  if (index < 0 && favoriteKeys.value.length >= 20) {
+    ElMessage.warning(t('workflow.favoritesLimit'))
+    return
+  }
+  pushUndo(false)
+  if (index >= 0) favoriteKeys.value.splice(index, 1)
+  else favoriteKeys.value.push(itemKey)
 }
 
 async function resetDraft(): Promise<void> {
@@ -657,9 +684,12 @@ onBeforeUnmount(() => {
         :sources="sources"
         :fields="fields"
         :fields-loading="fieldsLoading"
+        :favorite-keys="favoriteKeys"
+        :catalog-items="catalogItems"
         @update="updateCard"
         @remove="removeCard"
         @form-change="onFormChange"
+        @toggle-favorite="toggleFavorite"
         @open-filters="filterVisible = true"
         @open-columns="columnsVisible = true"
         @open-metrics="metricsVisible = true"
@@ -746,12 +776,13 @@ onBeforeUnmount(() => {
 }
 
 .wstudio__toolbar {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex: 0 0 56px;
   height: 56px;
-  padding: 0 20px;
+  padding: 0 24px;
   border-bottom: 1px solid var(--sw-border-light, #eef0f4);
   background: var(--sw-bg-surface, #fff);
 }
@@ -765,16 +796,23 @@ onBeforeUnmount(() => {
 
 .wstudio__toolbar-left h1 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .wstudio__back {
+  height: 32px;
+  padding: 0 8px;
   border: 0;
+  border-radius: 4px;
   background: transparent;
   color: var(--sw-text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
+}
+
+.wstudio__back:hover {
+  background: var(--sw-bg-muted, #f3f4f6);
 }
 
 .wstudio__dirty {
@@ -786,12 +824,14 @@ onBeforeUnmount(() => {
 }
 
 .wstudio__btn {
-  padding: 5px 14px;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 14px;
   border: 1px solid var(--sw-border, #d9dde6);
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--sw-bg-surface, #fff);
   color: var(--sw-text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -813,9 +853,10 @@ onBeforeUnmount(() => {
 }
 
 .wstudio__library {
+  box-sizing: border-box;
   flex: 0 0 224px;
   width: 224px;
-  padding: 16px 14px;
+  padding: 16px;
   overflow-y: auto;
   background: var(--sw-bg-surface, #fff);
   border-right: 1px solid var(--sw-border-light, #eef0f4);
@@ -823,8 +864,9 @@ onBeforeUnmount(() => {
 
 .wstudio__library h2 {
   margin: 0 0 12px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 24px;
 }
 
 .wstudio__group {
@@ -834,8 +876,9 @@ onBeforeUnmount(() => {
 .wstudio__group h3 {
   margin: 0 0 8px;
   color: var(--sw-text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
+  line-height: 18px;
 }
 
 .wstudio__grid {
@@ -845,16 +888,19 @@ onBeforeUnmount(() => {
 }
 
 .wstudio__item {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 9px 4px;
+  justify-content: center;
+  gap: 3px;
+  height: 48px;
+  padding: 4px;
   border: 1px solid var(--sw-border-light, #eef0f4);
   border-radius: 6px;
   background: var(--sw-bg-surface, #fff);
   color: var(--sw-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -872,33 +918,40 @@ onBeforeUnmount(() => {
 }
 
 .wstudio__canvas-head {
+  box-sizing: border-box;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  flex: 0 0 48px;
-  padding: 0 20px;
+  flex: 0 0 68px;
+  height: 68px;
+  padding: 24px 24px 12px;
 }
 
 .wstudio__canvas-head h2 {
   margin: 0;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
+  line-height: 24px;
 }
 
 .wstudio__canvas-head span {
+  padding-top: 4px;
   color: var(--sw-text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .wstudio__canvas-scroll {
+  box-sizing: border-box;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 20px 20px;
+  padding: 0 24px 24px;
 }
 
 .wstudio__canvas {
   position: relative;
+  width: calc(100% - 16px);
   min-height: 520px;
 }
 
@@ -928,6 +981,7 @@ onBeforeUnmount(() => {
 }
 
 .wstudio__inspector-empty {
+  box-sizing: border-box;
   display: grid;
   place-items: center;
   flex: 0 0 336px;
@@ -953,10 +1007,11 @@ onBeforeUnmount(() => {
 }
 
 .wstudio__preview-scroll {
+  box-sizing: border-box;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px 20px 32px;
+  padding: 16px 24px 32px;
 }
 
 .wstudio__preview-stage {

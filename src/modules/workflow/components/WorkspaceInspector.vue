@@ -7,6 +7,7 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from '@/locales'
+import type { CatalogItem } from '@/contracts/catalog'
 import type { WorkspaceField, WorkspaceFormSource } from '../api/workspace-analytics'
 import {
   PALETTES,
@@ -21,12 +22,15 @@ const props = defineProps<{
   sources: WorkspaceFormSource[]
   fields: WorkspaceField[]
   fieldsLoading: boolean
+  favoriteKeys?: string[]
+  catalogItems?: CatalogItem[]
 }>()
 
 const emit = defineEmits<{
   update: [card: StudioCard]
   remove: [id: string]
   'form-change': [id: string, formKey: string]
+  'toggle-favorite': [itemKey: string]
   'open-metrics': []
   'open-filters': []
   'open-columns': []
@@ -138,29 +142,28 @@ function isStackable() {
   <aside class="winsp">
     <header class="winsp__head">
       <h3>{{ t('workspace.inspector.title') }}</h3>
+      <div v-if="hasStyle" class="winsp__tabs">
+        <button
+          type="button"
+          class="winsp__tab"
+          :class="{ 'is-active': tab === 'data' }"
+          @click="tab = 'data'"
+        >
+          {{ t('workspace.inspector.dataTab') }}
+        </button>
+        <button
+          type="button"
+          class="winsp__tab"
+          :class="{ 'is-active': tab === 'style' }"
+          @click="tab = 'style'"
+        >
+          {{ t('workspace.inspector.styleTab') }}
+        </button>
+      </div>
       <button type="button" class="winsp__delete" @click="emit('remove', card.id)">
         {{ t('workspace.inspector.remove') }}
       </button>
     </header>
-
-    <div v-if="hasStyle" class="winsp__tabs">
-      <button
-        type="button"
-        class="winsp__tab"
-        :class="{ 'is-active': tab === 'data' }"
-        @click="tab = 'data'"
-      >
-        {{ t('workspace.inspector.dataTab') }}
-      </button>
-      <button
-        type="button"
-        class="winsp__tab"
-        :class="{ 'is-active': tab === 'style' }"
-        @click="tab = 'style'"
-      >
-        {{ t('workspace.inspector.styleTab') }}
-      </button>
-    </div>
 
     <div class="winsp__body">
       <section class="winsp__section">
@@ -205,6 +208,20 @@ function isStackable() {
       <template v-if="tab === 'data'">
         <template v-if="kind === 'system'">
           <p class="winsp__hint">{{ t('workspace.inspector.systemHint') }}</p>
+          <section v-if="card.typeCode === 'favoriteItems'" class="winsp__section">
+            <label class="winsp__label">{{ t('workspace.inspector.favoriteItems') }}</label>
+            <ul class="winsp__favorites">
+              <li v-for="item in catalogItems ?? []" :key="item.itemKey">
+                <el-checkbox
+                  :model-value="(favoriteKeys ?? []).includes(item.itemKey)"
+                  @change="emit('toggle-favorite', item.itemKey)"
+                >
+                  {{ item.name }}
+                </el-checkbox>
+              </li>
+            </ul>
+            <p class="winsp__hint">{{ t('workspace.inspector.favoriteHint') }}</p>
+          </section>
         </template>
 
         <template v-else>
@@ -527,6 +544,7 @@ function isStackable() {
 
 <style scoped>
 .winsp {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   width: 336px;
@@ -537,42 +555,47 @@ function isStackable() {
 }
 
 .winsp__head {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 18px 10px;
+  gap: 8px;
+  height: 56px;
+  padding: 24px 24px 8px;
 }
 
 .winsp__head h3 {
+  flex: 1;
   margin: 0;
   color: var(--sw-text-primary);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
+  line-height: 24px;
 }
 
 .winsp__delete {
   border: 0;
   background: transparent;
   color: var(--sw-text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 
 .winsp__tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  margin: 0 18px;
+  width: 96px;
+  height: 24px;
   border: 1px solid var(--sw-border-light, #eef0f4);
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .winsp__tab {
-  padding: 6px 0;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--sw-text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
 }
 
@@ -584,8 +607,18 @@ function isStackable() {
 .winsp__body {
   flex: 1;
   min-height: 0;
-  padding: 14px 18px 24px;
+  padding: 8px 24px 24px;
   overflow-y: auto;
+}
+
+/* 源稿控件高 32：Element Plus small 默认 24 会把属性区分组压得过密。 */
+.winsp :deep(.el-input__wrapper),
+.winsp :deep(.el-select__wrapper) {
+  min-height: 32px;
+}
+
+.winsp :deep(.el-input__inner) {
+  height: 30px;
 }
 
 .winsp__section {
@@ -610,7 +643,8 @@ function isStackable() {
 
 .winsp__label {
   color: var(--sw-text-secondary);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 22px;
 }
 
 .winsp__hint {
@@ -618,6 +652,18 @@ function isStackable() {
   color: var(--sw-text-tertiary);
   font-size: 11px;
   line-height: 1.5;
+}
+
+.winsp__favorites {
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.winsp__favorites li {
+  padding: 2px 0;
 }
 
 .winsp__inline {
