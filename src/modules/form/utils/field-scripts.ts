@@ -158,6 +158,8 @@ export const FIELD_SCRIPT_FUNCTION_NAMES = [
   'getDeptIdList',
   '获取部门名称',
   'getDeptName',
+  '获取部门成员',
+  'getDeptMembers',
   '当前日期',
   'getToday',
   '当前时间',

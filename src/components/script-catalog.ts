@@ -306,6 +306,12 @@ export const FORM_SCRIPT_FUNCTIONS: ScriptFunctionDoc[] = [
     snippet: '#获取部门名称(#获取当前部门())',
   },
   {
+    name: '#获取部门成员',
+    category: '组织架构',
+    desc: '返回主部门为指定部门ID的启用用户ID数组（来自已授权组织目录快照）；无成员返回空数组。',
+    snippet: '#获取部门成员(#获取当前部门())',
+  },
+  {
     name: '#获取部门列表',
     category: '组织架构',
     desc: '返回已授权部门树中的部门ID数组（树序）；无数据返回空数组。',

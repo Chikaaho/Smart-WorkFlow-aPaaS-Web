@@ -33,8 +33,8 @@ const schema: { fields: ScriptSchemaFieldLike[] } = {
 
 const org: ScriptOrgContext = {
   users: [
-    { id: '1001', name: '张三' },
-    { id: '1002', name: '李四' },
+    { id: '1001', name: '张三', deptId: '10' },
+    { id: '1002', name: '李四', deptId: '11' },
   ],
   depts: [
     { id: '10', name: '总部', parentId: null },
@@ -63,6 +63,14 @@ describe('script-hosts 组织关联查询', () => {
     expect(h['查询用户']('1002')).toEqual(['1002'])
     expect(h['查询用户']('王五')).toEqual([])
     expect(h['searchUsers']('')).toEqual(['1001', '1002'])
+  })
+
+  it('部门成员按主部门过滤，无成员返回空数组', () => {
+    const h = hosts()
+    expect(h['获取部门成员']('10')).toEqual(['1001'])
+    expect(h['获取部门成员']('11')).toEqual(['1002'])
+    expect(h['获取部门成员']('99')).toEqual([])
+    expect(() => hosts(null)['获取部门成员']('10')).toThrow('组织目录未装载')
   })
 
   it('部门信息/上级部门/部门列表来自授权部门树快照', () => {

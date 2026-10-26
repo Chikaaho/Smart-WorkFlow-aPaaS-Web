@@ -20,6 +20,7 @@ interface UserOption {
   id: string | number
   username?: string
   realName?: string
+  deptId?: string | number | null
 }
 
 async function userOptions(limit: number): Promise<UserChoice[]> {

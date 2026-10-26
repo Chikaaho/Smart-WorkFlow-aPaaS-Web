@@ -13,6 +13,8 @@
 export interface ScriptOrgUser {
   id: string
   name: string
+  /** 主部门 ID（组织快照装载时填充；缺省表示未返回）。 */
+  deptId?: string | null
 }
 
 export interface ScriptOrgDept {
@@ -159,6 +161,20 @@ export function createSupplementalHostFunctions(
     getDeptName: (id) => {
       const context = requireOrg(orgContext, '获取部门名称')
       return context.depts.find((item) => item.id === String(id ?? '').trim())?.name ?? null
+    },
+    获取部门成员: (id) => {
+      const context = requireOrg(orgContext, '获取部门成员')
+      const deptId = String(id ?? '').trim()
+      return context.users
+        .filter((user) => user.deptId != null && user.deptId === deptId)
+        .map((user) => user.id)
+    },
+    getDeptMembers: (id) => {
+      const context = requireOrg(orgContext, '获取部门成员')
+      const deptId = String(id ?? '').trim()
+      return context.users
+        .filter((user) => user.deptId != null && user.deptId === deptId)
+        .map((user) => user.id)
     },
     获取部门列表: () => {
       const context = requireOrg(orgContext, '获取部门列表')
