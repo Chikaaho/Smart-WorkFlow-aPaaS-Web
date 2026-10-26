@@ -105,6 +105,17 @@ function applyDictItems(list: unknown[]) {
 const rules = computed(() => {
   const result = toFormCreateRule(props.schema)
   applyDictItems(result)
+  if (props.mode === 'design') {
+    // 画布设计态：真表格外观但无行操作/示例空行，编辑交互仍归画布壳层。
+    for (const rule of result) {
+      if ((rule as Record<string, unknown>).type === 'TableControl') {
+        const ruleProps = (rule as Record<string, unknown>).props as
+          | Record<string, unknown>
+          | undefined
+        if (ruleProps) ruleProps.design = true
+      }
+    }
+  }
   return result
 })
 

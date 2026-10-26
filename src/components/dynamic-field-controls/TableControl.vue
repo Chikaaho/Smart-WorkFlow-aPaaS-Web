@@ -27,6 +27,13 @@ const tableRows = computed<Row[]>(() => {
   return Array.isArray(v) ? (v as Row[]) : []
 })
 
+/** 画布设计态：无行操作；空数据渲染 2 行示例空行（仅外观，不进 modelValue）。 */
+const isDesign = computed(() => props.design === true)
+const showActions = computed(() => !props.readonly && !isDesign.value)
+const sampleRows = computed(() =>
+  isDesign.value && tableRows.value.length === 0 && subFields.value.length > 0 ? [0, 1] : [],
+)
+
 /** subFields 仅在 TABLE 判别子下存在（本组件只承载 TABLE 字段）。 */
 const subFields = computed(() =>
   props.field.type === 'TABLE' ? (props.field as TableField).subFields : [],
@@ -65,12 +72,18 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
 </script>
 
 <template>
-  <div class="dynamic-field__table" :class="{ 'dynamic-field__table--readonly': readonly }">
+  <div
+    class="dynamic-field__table"
+    :class="{
+      'dynamic-field__table--readonly': readonly,
+      'dynamic-field__table--design': isDesign,
+    }"
+  >
     <table class="dynamic-field__table-inner">
       <thead>
         <tr>
           <th v-for="sf in subFields" :key="sf.name">{{ sf.label || sf.name }}</th>
-          <th v-if="!readonly">{{ t('common.actions') }}</th>
+          <th v-if="showActions">{{ t('common.actions') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -88,16 +101,21 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
                 @update:model-value="updateCell(rowIdx, sf.name, $event)"
               />
             </td>
-            <td v-if="!readonly">
+            <td v-if="showActions">
               <el-button size="small" type="danger" @click="removeRow(rowIdx)">{{
                 t('common.delete')
               }}</el-button>
             </td>
           </tr>
         </template>
+        <tr v-for="n in sampleRows" :key="`design-sample-${n}`" class="dynamic-field__table-sample">
+          <td v-for="sf in subFields" :key="sf.name">&nbsp;</td>
+        </tr>
       </tbody>
     </table>
-    <el-button v-if="!readonly" size="small" @click="addRow">{{ t('component.addRow') }}</el-button>
+    <el-button v-if="!readonly && !isDesign" size="small" @click="addRow">{{
+      t('component.addRow')
+    }}</el-button>
   </div>
 </template>
 
@@ -159,5 +177,9 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
 .dynamic-field__table--readonly th,
 .dynamic-field__table--readonly tbody tr:not(:last-child) td {
   border-bottom: 1px solid var(--sw-border-light);
+}
+.dynamic-field__table--design .dynamic-field__table-sample td {
+  height: 36px;
+  background: var(--sw-fill-base);
 }
 </style>

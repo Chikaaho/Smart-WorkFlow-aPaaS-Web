@@ -374,7 +374,7 @@ function onShellClick(entry: ShellEntry) {
           @mousedown.stop.prevent
           @click.stop
         />
-        <!-- TABLE：占位块 + 「编辑子表」入口（不真渲染内部表格、不发请求）；其余字段走真控件长相。 -->
+        <!-- TABLE：真实表头/示例行（design 态）+「编辑子表」入口；其余字段走真控件长相。 -->
         <div class="field-shell__control">
           <div v-if="entry.item.field.type === 'TABLE'" class="field-shell__table">
             <div class="field-shell__table-info">
@@ -395,7 +395,7 @@ function onShellClick(entry: ShellEntry) {
             </el-button>
           </div>
           <!-- 真控件长相（design 态 pointer-events:none，整块作为选中热区） -->
-          <FormPreview v-else :schema="schemaFor(entry.item)" mode="design" />
+          <FormPreview :schema="schemaFor(entry.item)" mode="design" />
         </div>
       </div>
     </VueDraggable>

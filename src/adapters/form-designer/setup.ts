@@ -59,6 +59,7 @@ import { i18n } from '@/locales'
 import AttachmentControl from '@/components/dynamic-field-controls/AttachmentControl.vue'
 import LabelControl from '@/components/dynamic-field-controls/LabelControl.vue'
 import RichTextControl from '@/components/dynamic-field-controls/RichTextControl.vue'
+import TableControl from '@/components/dynamic-field-controls/TableControl.vue'
 
 const EP_COMPONENTS = [
   ElForm,
@@ -114,4 +115,8 @@ export function setupFcApp(app: App): void {
   // 富文本控件：设计态显示与填报态同源工具栏/受控格式，不再降级 textarea。
   formCreate.component('RichTextControl', RichTextControl)
   app.component('RichTextControl', RichTextControl)
+
+  // 明细表控件：设计画布/预览渲染真实表头与行，填报态同源增删行。
+  formCreate.component('TableControl', TableControl)
+  app.component('TableControl', TableControl)
 }

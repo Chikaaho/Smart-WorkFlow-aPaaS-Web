@@ -57,6 +57,8 @@ export interface DynamicFieldControlProps {
   /** 已保存记录的附件访问上下文；只作定位，服务端重新检查对象和字段权限。 */
   formKey?: string
   recordId?: string
+  /** 画布设计态预览：真表格外观但无行操作、空数据渲染示例空行（不产生数据）。 */
+  design?: boolean
 }
 
 export interface DynamicFieldDescriptor {

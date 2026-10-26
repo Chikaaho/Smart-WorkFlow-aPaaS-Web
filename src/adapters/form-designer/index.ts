@@ -538,96 +538,12 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     }
 
     case 'TABLE': {
-      rule.type = 'group'
-      rule.value = []
-      rule.children = field.subFields.map(mapSubFieldToCreateRule)
+      // 复用动态控件 TableControl：预览态真实表头/行 + 合法增删行（direction-ui-completion-020）。
+      rule.type = 'TableControl'
+      rule.value = (field as { defaultValue?: unknown }).defaultValue ?? []
+      rule.props = { field, readonly: false }
       break
     }
-  }
-
-  return rule
-}
-
-/**
- * TABLE 子字段 → form-create 子规则。
- *
- * TEXT/RICH_TEXT/NUMBER/DATE/BOOL/DICT 按类型映射；
- * DICT 子字段透传 __dictType__ + renderAs 元数据（P3-1b）。
- * REFERENCE / TABLE 回退为普通文本输入（TABLE 不递归）。
- */
-function mapSubFieldToCreateRule(sf: TableSubField): Record<string, unknown> {
-  const rule: Record<string, unknown> = {
-    type: 'input',
-    title: sf.name,
-    field: sf.name,
-    value: '',
-  }
-
-  switch (sf.type) {
-    case 'TEXT':
-      // 默认 input 即可
-      break
-
-    case 'RICH_TEXT':
-      rule.type = 'RichTextControl'
-      rule.value = ''
-      rule.props = { field: sf, readonly: false, subField: true }
-      break
-
-    case 'NUMBER':
-      rule.type = 'inputNumber'
-      break
-
-    case 'DATE':
-      rule.type = 'datePicker'
-      rule.props = { valueFormat: 'YYYY-MM-DD' }
-      break
-
-    case 'BOOL':
-      rule.type = 'switch'
-      rule.value = false
-      break
-
-    case 'DICT': {
-      // BF20261013-009：子字段同样支持自定义候选（展示 value、提交 key）与 dict 绑定
-      const customSource = sf.source === 'custom'
-      const customOptions = parseFormFieldOptions(sf.options).filter((o) => o.key !== '')
-      const configured = customSource ? customOptions.length > 0 : !!sf.dictType?.trim()
-      if (sf.renderAs === 'radio' && !configured) {
-        // BF20261013-010：未配置数据源的单选框以禁用输入占位提示
-        rule.type = 'input'
-        rule.value = ''
-        rule.props = { disabled: true, placeholder: i18n.global.t('form.configureDataPrompt') }
-        break
-      }
-      if (sf.renderAs === 'radio') {
-        rule.type = 'radio'
-        rule.value = ''
-        rule.options = customSource
-          ? customOptions.map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
-          : []
-        if (!customSource) (rule as Record<string, unknown>).__dictType__ = sf.dictType ?? ''
-        break
-      }
-      rule.type = 'select'
-      rule.value = sf.multiple ? [] : ''
-      rule.options = customSource
-        ? customOptions.map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
-        : []
-      rule.props = {
-        clearable: true,
-        ...(sf.multiple ? { multiple: true } : {}),
-        ...(configured ? {} : { placeholder: i18n.global.t('form.configureDataPrompt') }),
-      }
-      if (!customSource) (rule as Record<string, unknown>).__dictType__ = sf.dictType ?? ''
-      break
-    }
-
-    case 'REFERENCE':
-    case 'TABLE':
-      // REFERENCE: 子字段无关联上下文，回退文本输入
-      // TABLE: 不支持嵌套子表，回退文本输入
-      break
   }
 
   return rule
