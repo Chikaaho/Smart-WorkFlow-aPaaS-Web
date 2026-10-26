@@ -27,18 +27,18 @@ describe('theme dialog', () => {
   })
   it('previews selection locally and applies it only on Done', async () => {
     const wrapper = open()
-    await wrapper.findAll('.theme-dialog__presets button')[0]!.trigger('click')
+    await wrapper.findAll('.theme-dialog__presets button')[1]!.trigger('click')
     expect(readTheme().name).toBe('blue')
     await wrapper
       .findAll('button')
       .find((button) => button.text() === '完成')!
       .trigger('click')
-    expect(readTheme().name).toBe('purple')
+    expect(readTheme().name).toBe('teal')
     expect(wrapper.emitted('update:modelValue')).toEqual([[false]])
   })
   it('rejects invalid custom colors and keeps the dialog open', async () => {
     const wrapper = open()
-    await wrapper.findAll('.theme-dialog__presets button')[3]!.trigger('click')
+    await wrapper.findAll('.theme-dialog__presets button')[2]!.trigger('click')
     await wrapper.find('input').setValue('#bad')
     await wrapper
       .findAll('button')
@@ -50,7 +50,7 @@ describe('theme dialog', () => {
   })
   it('rejects a low-contrast custom color', async () => {
     const wrapper = open()
-    await wrapper.findAll('.theme-dialog__presets button')[3]!.trigger('click')
+    await wrapper.findAll('.theme-dialog__presets button')[2]!.trigger('click')
     await wrapper.find('input').setValue('#ffffff')
     await wrapper
       .findAll('button')
@@ -61,16 +61,16 @@ describe('theme dialog', () => {
     expect(readTheme().name).toBe('blue')
   })
   it('keeps the previous preference when the dialog is cancelled and reloads its draft', async () => {
-    applyTheme({ name: 'purple', customColor: '#b45309' })
+    applyTheme({ name: 'teal', customColor: '#b45309' })
     const wrapper = open()
-    await wrapper.findAll('.theme-dialog__presets button')[1]!.trigger('click')
+    await wrapper.findAll('.theme-dialog__presets button')[0]!.trigger('click')
     await wrapper.find('.cancel').trigger('click')
-    expect(readTheme().name).toBe('purple')
-    expect(document.documentElement.dataset.theme).toBe('purple')
+    expect(readTheme().name).toBe('teal')
+    expect(document.documentElement.dataset.theme).toBe('teal')
 
     await wrapper.setProps({ modelValue: false })
     await wrapper.setProps({ modelValue: true })
-    expect(wrapper.findAll('.theme-dialog__presets button')[1]!.attributes('aria-pressed')).toBe(
+    expect(wrapper.findAll('.theme-dialog__presets button')[0]!.attributes('aria-pressed')).toBe(
       'false',
     )
   })

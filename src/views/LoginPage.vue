@@ -328,13 +328,6 @@ function onSsoProviderSelect(key: SsoProvider): void {
     );
   color: #ffffff;
 }
-/* 保留 P53 紫色设计稿的登录背景；蓝色及后续主题使用品牌令牌派生。 */
-html[data-theme='purple'] .login-page__brand {
-  background:
-    radial-gradient(circle 280px at 84.52% 10.74%, rgba(111, 45, 255, 0.42), transparent 100%),
-    radial-gradient(circle 310px at 10.71% 90.82%, rgba(35, 199, 217, 0.26), transparent 100%),
-    linear-gradient(111.75deg, #0c1533 0%, #25134e 52%, #102b4b 100%);
-}
 .login-page__brand-head {
   display: flex;
   align-items: center;

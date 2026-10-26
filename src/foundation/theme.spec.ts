@@ -28,26 +28,29 @@ describe('theme preference', () => {
     localStorage.setItem(THEME_STORAGE_KEY, '{')
     expect(readTheme()).toEqual(DEFAULT_THEME)
   })
-  it('uses blue on first use while preserving an explicit older purple preference', () => {
+  it('uses blue on first use and migrates legacy purple preference to default blue', () => {
     expect(readTheme()).toEqual({ name: 'blue', customColor: '#b45309' })
     localStorage.setItem(
       THEME_STORAGE_KEY,
       JSON.stringify({ name: 'purple', customColor: '#123456' }),
     )
-    expect(readTheme()).toEqual({ name: 'purple', customColor: '#123456' })
+    expect(readTheme()).toEqual(DEFAULT_THEME)
   })
   it('updates semantic variables and persists only the selected color preference', () => {
     applyTheme({ name: 'blue', customColor: '#b45309' })
     expect(document.documentElement.style.getPropertyValue('--sw-color-primary')).toBe('#2563eb')
+    expect(document.documentElement.style.getPropertyValue('--sw-color-primary-soft')).toBe(
+      '#eff6ff',
+    )
+    expect(document.documentElement.style.getPropertyValue('--sw-nav-topbar-portal-bg')).toBe(
+      '#1d4ed8',
+    )
+    expect(document.documentElement.style.getPropertyValue('--sw-nav-topbar-text')).toBe('#e2e8f0')
     expect(readTheme()).toEqual({ name: 'blue', customColor: '#b45309' })
     expect(themeColor({ name: 'teal', customColor: '#b45309' })).toBe('#087f8c')
     expect([...Array(localStorage.length)].map((_, i) => localStorage.key(i))).toEqual([
       THEME_STORAGE_KEY,
     ])
-    applyTheme({ name: 'purple', customColor: '#b45309' })
-    expect(document.documentElement.style.getPropertyValue('--sw-color-primary-soft')).toBe(
-      '#ece9ff',
-    )
   })
   it('remains usable when storage is unavailable', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {

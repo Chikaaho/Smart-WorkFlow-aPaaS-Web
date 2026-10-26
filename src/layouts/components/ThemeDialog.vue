@@ -11,7 +11,6 @@ import {
   themeCssVariables,
   type ThemeName,
 } from '@/foundation/theme'
-import purpleIcon from '@/assets/theme/purple.svg'
 import blueIcon from '@/assets/theme/blue.svg'
 import tealIcon from '@/assets/theme/teal.svg'
 import customIcon from '@/assets/theme/custom.svg'
@@ -23,8 +22,8 @@ const draft = reactive(readTheme())
 const colorInput = ref(draft.customColor)
 const error = ref('')
 const resetPending = ref(false)
+/** 全局蓝色主色方向：紫色预设退出，面板收敛为 默认蓝/青色/自定义 三项。 */
 const options: { name: ThemeName; icon: string }[] = [
-  { name: 'purple', icon: purpleIcon },
   { name: 'blue', icon: blueIcon },
   { name: 'teal', icon: tealIcon },
   { name: 'custom', icon: customIcon },
@@ -194,7 +193,7 @@ function reset() {
 }
 .theme-dialog__presets {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   height: 48px;
   align-items: center;
