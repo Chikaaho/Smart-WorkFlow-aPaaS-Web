@@ -55,9 +55,10 @@ const favoriteKeys = ref<string[]>([])
 const custom = ref(false)
 const loading = ref(false)
 const dirty = ref(false)
-const props = defineProps<{ editable?: boolean }>()
+const props = defineProps<{ editable?: boolean; embedded?: boolean; configViaDialog?: boolean }>()
+const emit = defineEmits<{ configure: [] }>()
 
-/** 编辑页传 editable；首页只读。 */
+/** 编辑页传 editable；首页只读。embedded=嵌入配置弹窗（工具栏按钮归弹窗页脚）。 */
 const editing = computed(() => props.editable === true)
 const paletteVisible = ref(props.editable === true)
 const canvasRef = ref<globalThis.HTMLElement | null>(null)
@@ -734,10 +735,14 @@ async function loadCatalogChoices() {
   }
 }
 
-/** 小齿轮：首页跳转独立编辑页；编辑页内切换组件库面板。 */
+/** 小齿轮：编辑态切换组件库面板；首页按配置弹窗/旧路由两种入口分流。 */
 function onGearClick() {
   if (editing.value) {
     paletteVisible.value = !paletteVisible.value
+    return
+  }
+  if (props.configViaDialog) {
+    emit('configure')
     return
   }
   void router.push('/workspace/edit')
@@ -932,6 +937,9 @@ async function resetConfig() {
   }
 }
 
+/** 配置弹窗页脚复用同一保存/恢复语义；dirty 只在成功保存后归零。 */
+defineExpose({ saveConfig, resetConfig, dirty })
+
 onMounted(async () => {
   attachCanvasObserver()
   await loadLayout()
@@ -982,7 +990,7 @@ onBeforeUnmount(() => {
 
     <div v-if="editing" class="wsd-toolbar">
       <span v-if="!custom" class="wsd-toolbar__badge">{{ t('workspace.defaultLayout') }}</span>
-      <div class="wsd-toolbar__actions">
+      <div v-if="!embedded" class="wsd-toolbar__actions">
         <button class="wsd-btn" type="button" @click="resetConfig">
           {{ t('common.restoreDefault') }}
         </button>
