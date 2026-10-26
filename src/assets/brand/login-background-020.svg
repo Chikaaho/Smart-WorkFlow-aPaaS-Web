@@ -20,5 +20,6 @@
     </linearGradient>
   </defs>
   <path fill="url(#brand)" d="M0 0h1180v1080H0z" />
+  <circle cx="1189" cy="1476" r="946" fill="rgb(14.5%,38.8%,92.2%)" fill-opacity="0.05" />
   <circle cx="1049" cy="50" r="399" fill="rgb(14.5%,38.8%,92.2%)" />
 </svg>
