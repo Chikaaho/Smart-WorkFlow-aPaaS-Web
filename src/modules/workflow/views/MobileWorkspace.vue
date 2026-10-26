@@ -24,7 +24,7 @@ import {
 import type { PageQuery } from '@/contracts/common'
 import type { TaskDetail } from '@/contracts/bpm'
 import { ApiError } from '@/foundation/request'
-import { getFormData } from '@/adapters/form-runtime'
+import { getFormData, loadOrgUserChoices } from '@/adapters/form-runtime'
 import BusinessFormReadonly from '@/components/business-detail/BusinessFormReadonly.vue'
 
 type MobileTab = 'todo' | 'initiated' | 'drafts'
@@ -97,6 +97,7 @@ async function openTask(row: Row) {
   try {
     detail.value = await queryTaskDetail(taskId)
     initializeOpinionData()
+    void ensureOpinionUsers()
     if (detail.value?.formKey && detail.value?.businessKey) {
       try {
         formRecord.value = await getFormData(detail.value.formKey, detail.value.businessKey)
@@ -146,6 +147,19 @@ function initializeOpinionData() {
     if (value !== undefined) initial[field.key] = value
   }
   opinionData.value = { ...initial }
+}
+
+/** 人员字段候选（已授权同租户启用用户）；加载失败保持空列表，提交后由服务端复核。 */
+const opinionUsers = ref<Array<{ id: string; name: string }>>([])
+
+async function ensureOpinionUsers(): Promise<void> {
+  if (opinionUsers.value.length > 0) return
+  if (!opinionFields.value.some((field) => field.type === 'USER')) return
+  try {
+    opinionUsers.value = await loadOrgUserChoices()
+  } catch {
+    opinionUsers.value = []
+  }
 }
 
 function opinionFieldValue(field: OpinionField): unknown {
@@ -382,6 +396,20 @@ void (async () => {
                     setOpinionFieldValue(field.key, ($event.target as HTMLTextAreaElement).value)
                   "
                 />
+                <select
+                  v-else-if="field.type === 'USER'"
+                  :id="`op-${field.key}`"
+                  class="m-input"
+                  :value="String(opinionFieldValue(field) ?? '')"
+                  @change="
+                    setOpinionFieldValue(field.key, ($event.target as HTMLSelectElement).value)
+                  "
+                >
+                  <option value="">{{ t('common.pleaseSelect') }}</option>
+                  <option v-for="user in opinionUsers" :key="user.id" :value="user.id">
+                    {{ user.name }}
+                  </option>
+                </select>
                 <select
                   v-else-if="field.type === 'SELECT'"
                   :id="`op-${field.key}`"

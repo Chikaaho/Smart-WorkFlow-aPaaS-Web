@@ -1247,6 +1247,12 @@ onMounted(loadDetail)
                   setOpinionFieldValue(field.key, ($event.target as HTMLTextAreaElement).value)
                 "
               />
+              <DynamicField
+                v-else-if="field.type === 'USER'"
+                :field="{ name: field.key, type: 'USER', label: field.label }"
+                :model-value="opinionFieldValue(field)"
+                @update:model-value="setOpinionFieldValue(field.key, $event)"
+              />
               <select
                 v-else-if="field.type === 'SELECT'"
                 :id="`opinion-${field.key}`"

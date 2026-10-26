@@ -1185,3 +1185,43 @@ describe('TaskDetail 单任务 DISAPPROVE 路由（W020）', () => {
     expect(vm.negativeAction).toBe('REJECT')
   })
 })
+
+describe('TaskDetail 意见人员字段（direction-ui-completion-020）', () => {
+  it('USER 必填缺失拦截；填写稳定 ID 后随意见数据提交', async () => {
+    vi.mocked(acceptTaskAction).mockClear()
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      opinionForm: {
+        formId: 'f-opinion',
+        version: '1',
+        fields: [{ key: 'assignee', label: '协办人', type: 'USER', required: true }],
+      },
+    })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      validationDialogVisible: boolean
+      validationItems: string[]
+      opinionData: Record<string, unknown>
+    }
+    await vm.handleApprove()
+    expect(vm.validationDialogVisible).toBe(true)
+    expect(vm.validationItems).toEqual(['请填写协办人'])
+    expect(acceptTaskAction).not.toHaveBeenCalled()
+
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+    vm.opinionData = { assignee: '1001' }
+    await vm.handleApprove()
+    await nextTick()
+
+    const call = vi.mocked(acceptTaskAction).mock.calls.at(-1)
+    expect(call?.[0]).toBe('task-001')
+    const payload = call?.[2] as { opinionData?: { assignee?: string } } | undefined
+    expect(payload?.opinionData?.assignee).toBe('1001')
+  })
+})

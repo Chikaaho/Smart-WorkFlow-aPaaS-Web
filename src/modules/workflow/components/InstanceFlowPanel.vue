@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from '@/locales'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { ApiError } from '@/foundation/request'
-import { getFormDefinition } from '@/adapters/form-runtime'
+import { getFormDefinition, resolveUserDisplayNames } from '@/adapters/form-runtime'
 import type { ApprovalHistoryItem } from '@/contracts/bpm'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import { deriveProcessTrace } from '../utils/process-trace'
@@ -302,24 +302,63 @@ const opinionDetailVisible = ref(false)
 const opinionDetailRow = ref<ApprovalHistoryItem | null>(null)
 /** 意见表单字段名 → 业务标签；未解析到时只显示业务兜底，不暴露内部字段名。 */
 const opinionFieldLabels = ref<Record<string, string>>({})
+/** 人员意见字段的稳定 ID → 显示名；显示名只用于阅读，原始 ID 仍随记录保存。 */
+const opinionUserFieldKeys = ref<string[]>([])
+const opinionUserNames = ref<Record<string, string>>({})
 let opinionSchemaToken = 0
 
 async function loadOpinionFieldLabels(row: ApprovalHistoryItem | null) {
   const token = ++opinionSchemaToken
   opinionFieldLabels.value = {}
+  opinionUserFieldKeys.value = []
+  opinionUserNames.value = {}
   const formKey = row?.opinionFormId
   if (!formKey) return
   try {
     const schema = await getFormDefinition(String(formKey))
     if (token !== opinionSchemaToken) return
     const labels: Record<string, string> = {}
+    const userKeys: string[] = []
     for (const field of schema.fields) {
       if (field.label?.trim()) labels[field.name] = field.label.trim()
+      if (field.type === 'USER') userKeys.push(field.name)
     }
     opinionFieldLabels.value = labels
+    opinionUserFieldKeys.value = userKeys
+    const ids = new Set<string>()
+    for (const key of userKeys) {
+      const value = row?.opinionData?.[key]
+      const list = Array.isArray(value) ? value : value == null ? [] : [value]
+      for (const item of list) {
+        const text = String(item ?? '').trim()
+        if (text) ids.add(text)
+      }
+    }
+    if (ids.size > 0) {
+      const names = await resolveUserDisplayNames([...ids])
+      if (token === opinionSchemaToken) opinionUserNames.value = names
+    }
   } catch {
-    if (token === opinionSchemaToken) opinionFieldLabels.value = {}
+    if (token === opinionSchemaToken) {
+      opinionFieldLabels.value = {}
+      opinionUserFieldKeys.value = []
+      opinionUserNames.value = {}
+    }
   }
+}
+
+/** 人员值展示：显示名（稳定ID）；未解析到显示名时保留 ID，不伪造姓名。 */
+function opinionUserDisplay(key: string, value: unknown): string {
+  const list = Array.isArray(value) ? value : [value]
+  return list
+    .map((item) => {
+      const id = String(item ?? '').trim()
+      if (!id) return ''
+      const name = opinionUserNames.value[id]
+      return name ? `${name}（${id}）` : id
+    })
+    .filter(Boolean)
+    .join('、')
 }
 
 function businessFieldLabel(key: string): string {
@@ -354,7 +393,12 @@ const opinionDetailEntries = computed(() => {
         value != null &&
         value !== '',
     )
-    .map(([key, value]) => ({ key: businessFieldLabel(key), value: String(value) }))
+    .map(([key, value]) => ({
+      key: businessFieldLabel(key),
+      value: opinionUserFieldKeys.value.includes(key)
+        ? opinionUserDisplay(key, value)
+        : String(value),
+    }))
 })
 
 /** 设计（意见详情）的已确认检查项区块：仅当字段值为非空数组时按检查项芯片渲染。 */
@@ -363,7 +407,15 @@ const opinionDetailCheckEntries = computed(() => {
   if (!row?.opinionData) return []
   return Object.entries(row.opinionData)
     .filter(([key, value]) => key !== 'comment' && Array.isArray(value) && value.length > 0)
-    .map(([key, value]) => [businessFieldLabel(key), value] as const)
+    .map(
+      ([key, value]) =>
+        [
+          businessFieldLabel(key),
+          opinionUserFieldKeys.value.includes(key)
+            ? value.map((item) => opinionUserDisplay(key, item))
+            : value,
+        ] as const,
+    )
 })
 
 /** 设计（意见详情）的附件区块：仅当键名命中附件约定且值非空时渲染。 */

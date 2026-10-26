@@ -118,7 +118,16 @@ export interface ApprovalOpinionConfig {
   fields?: Array<{
     key: string
     label: string
-    type: 'TEXT' | 'TEXTAREA' | 'NUMBER' | 'RADIO' | 'CHECKBOX' | 'SELECT' | 'DATETIME' | 'NOTE'
+    type:
+      | 'TEXT'
+      | 'TEXTAREA'
+      | 'NUMBER'
+      | 'RADIO'
+      | 'CHECKBOX'
+      | 'SELECT'
+      | 'DATETIME'
+      | 'NOTE'
+      | 'USER'
     required?: boolean
     options?: string[]
     min?: number

@@ -21,6 +21,24 @@ export async function loadScriptOrgContext() {
   return load()
 }
 
+/** 已授权人员候选（id/显示名；同租户启用用户，上限 200）。 */
+export async function loadOrgUserChoices(): Promise<Array<{ id: string; name: string }>> {
+  const context = await loadScriptOrgContext()
+  return context.users
+}
+
+/** 人员 ID → 显示名映射；快照内不存在的 ID 不返回，调用方保留 ID 展示。 */
+export async function resolveUserDisplayNames(ids: string[]): Promise<Record<string, string>> {
+  const wanted = new Set(ids.map((id) => String(id).trim()).filter(Boolean))
+  if (wanted.size === 0) return {}
+  const users = await loadOrgUserChoices()
+  const result: Record<string, string> = {}
+  for (const user of users) {
+    if (wanted.has(user.id)) result[user.id] = user.name
+  }
+  return result
+}
+
 /** 字段脚本工厂（值变更触发；onLoad 装载后执行；只读回看不执行）。 */
 export { createFieldScripts } from '@/modules/form/utils/field-scripts'
 
