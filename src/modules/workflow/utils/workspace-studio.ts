@@ -33,6 +33,28 @@ export interface StudioCard {
   config: WorkspaceDataConfig
   /** 旧布局的原始 metadata（系统卡片配置等）原样保留。 */
   metadata: Record<string, unknown>
+  /**
+   * 设计 3:2 参考预设几何（canvas 相对：y/h 像素、x/w 分数）。
+   * 重置后的未拖动状态直接采用；拖动/调宽后清除，回退 12 列流式排布。
+   */
+  presetGeometry?: { x: number; y: number; w: number; h: number }
+}
+
+/**
+ * 设计 3:2 默认几何（WorkspaceBoard.DEFAULT_CARD_GEOMETRY 同源数值）：
+ * 统计 96 / 待办(0,120,0.632,486) / 快捷(0.644,120,0.356,208) /
+ * 效能(0.644,344,0.356,262) / 动态(0,621,1,260)。
+ * 右栏「快捷+效能」纵向堆叠无法由 12 列行模型表达，重置态按此绝对几何保存。
+ */
+export const DESIGN_PRESET_GEOMETRY: Record<
+  string,
+  { x: number; y: number; w: number; h: number }
+> = {
+  stats: { x: 0, y: 0, w: 1, h: 96 },
+  todo: { x: 0, y: 120, w: 0.632, h: 486 },
+  favoriteItems: { x: 0.644, y: 120, w: 0.356, h: 208 },
+  efficiency: { x: 0.644, y: 344, w: 0.356, h: 262 },
+  activity: { x: 0, y: 621, w: 1, h: 260 },
 }
 
 export interface PackedRect {
@@ -175,6 +197,24 @@ export function packCards(cards: StudioCard[]): PackResult {
 
 /** 按实测画布宽度把列位置折算为像素；保存时再折算为 x/w 分数。 */
 export function pixelRects(cards: StudioCard[], canvasWidth: number): Record<string, PackedRect> {
+  // 重置后的未拖动卡片直接采用设计 3:2 预设几何（右栏堆叠等行模型外形态）。
+  if (cards.every((card) => card.presetGeometry)) {
+    const positions: Record<string, PackedRect> = {}
+    for (const card of cards) {
+      const preset = card.presetGeometry!
+      positions[card.id] = {
+        x: preset.x * canvasWidth,
+        y: preset.y,
+        w: preset.w * canvasWidth,
+        h: preset.h,
+        col: 0,
+        row: 0,
+      }
+    }
+    const height = Math.max(...cards.map((card) => card.presetGeometry!.y + card.presetGeometry!.h))
+    void height
+    return positions
+  }
   const packed = packCards(cards)
   const usable = Math.max(320, canvasWidth)
   const columnWidth = (usable - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS

@@ -46,6 +46,7 @@ import {
 import {
   GRID_COLUMNS,
   GRID_GAP,
+  DESIGN_PRESET_GEOMETRY,
   applyFieldDefaults,
   defaultCard,
   fromWorkspaceCard,
@@ -266,15 +267,20 @@ async function load(): Promise<void> {
 
 function defaultCards(): StudioCard[] {
   const visible = ['stats', 'todo', 'favoriteItems', 'activity', 'efficiency']
+  // 默认几何对齐设计 3:2（WorkspaceBoard.DEFAULT_CARD_GEOMETRY 同源）：
+  // 统计 96 / 待办 486 / 快捷 208 / 效能 262 / 动态 260。
   return cardTypes.value
     .filter((type) => visible.includes(type.typeCode))
     .map((type) => {
       const card = defaultCard(type.typeCode, type.displayName)
-      if (type.typeCode === 'stats') return { ...card, span: 12, height: 168 }
-      if (type.typeCode === 'todo') return { ...card, span: 6, height: 360 }
-      if (type.typeCode === 'favoriteItems') return { ...card, span: 6, height: 300 }
-      if (type.typeCode === 'activity') return { ...card, span: 12, height: 260 }
-      return { ...card, span: 12, height: 280 }
+      const preset = DESIGN_PRESET_GEOMETRY[type.typeCode]
+      const withPreset = preset ? { ...card, presetGeometry: { ...preset } } : card
+      if (type.typeCode === 'stats') return { ...withPreset, span: 12, height: preset?.h ?? 96 }
+      if (type.typeCode === 'todo') return { ...withPreset, span: 6, height: preset?.h ?? 486 }
+      if (type.typeCode === 'favoriteItems')
+        return { ...withPreset, span: 6, height: preset?.h ?? 208 }
+      if (type.typeCode === 'activity') return { ...withPreset, span: 12, height: preset?.h ?? 260 }
+      return { ...withPreset, span: 6, height: preset?.h ?? 262 }
     })
 }
 
@@ -343,6 +349,10 @@ function onCardDrop(targetId: string): void {
   pushUndo(false)
   const [moved] = cards.value.splice(from, 1)
   cards.value.splice(to, 0, moved)
+  // 手动调整后退出设计预设几何，回退 12 列流式排布。
+  cards.value.forEach((card) => {
+    delete card.presetGeometry
+  })
   dragCardId.value = ''
 }
 
@@ -405,7 +415,9 @@ function onResizeMove(event: globalThis.PointerEvent): void {
   const height = Math.max(120, Math.min(1600, Math.round((resizeState.height + deltaY) / 10) * 10))
   const index = cards.value.findIndex((card) => card.id === resizeState?.card.id)
   if (index < 0) return
-  cards.value.splice(index, 1, { ...cards.value[index], span, height })
+  const next = { ...cards.value[index], span, height }
+  delete next.presetGeometry
+  cards.value.splice(index, 1, next)
 }
 
 function stopResize(): void {
