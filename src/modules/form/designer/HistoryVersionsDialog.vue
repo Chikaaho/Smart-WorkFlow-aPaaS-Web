@@ -23,6 +23,8 @@ import {
   type FormSnapshotDTO,
 } from '../api/form-def'
 import { saveDraftDefinition } from './draft-actions'
+import { getFormDefinition } from '../api/form'
+import { buildSnapshotScripts, type SnapshotScriptView } from './published-snapshot'
 import { parseDefinition } from '@/adapters/form-designer'
 import type { FormSchema } from '@/contracts/form-schema'
 import PreviewModal from './PreviewModal.vue'
@@ -84,6 +86,11 @@ function formatTime(value: string): string {
   return normalized.length >= 16 ? normalized.slice(0, 16) : normalized
 }
 
+function eventLabel(event: string | undefined): string {
+  if (!event) return '—'
+  return t(`form.snapshotViewer.event.${event}`, event)
+}
+
 const currentVersionText = computed(() => props.formVersionLabel ?? props.formVersion ?? 1)
 const currentFormStatus = computed<FormDefStatus>(() => props.formStatus ?? 'DRAFT')
 const currentVersionHeader = computed(() =>
@@ -124,6 +131,32 @@ async function openCompare() {
     previewVisible.value = true
   } catch {
     ElMessage.error(t('form.historyReadFailed'))
+  }
+}
+
+/** 新旧脚本并列（A12）：历史快照与当前已保存定义各自解析，分别列出自身脚本。 */
+const scriptCompareVisible = ref(false)
+const scriptCompareLoading = ref(false)
+const oldScripts = ref<SnapshotScriptView[]>([])
+const newScripts = ref<SnapshotScriptView[]>([])
+const scriptCompareVersion = ref<number | null>(null)
+
+async function openScriptCompare() {
+  if (selectedVersion.value == null) return
+  scriptCompareLoading.value = true
+  try {
+    const [detail, current] = await Promise.all([
+      getFormSnapshotDefinition(props.formId, selectedVersion.value),
+      getFormDefinition(props.formKey),
+    ])
+    oldScripts.value = buildSnapshotScripts(parseDefinition(detail.definition), [])
+    newScripts.value = buildSnapshotScripts(current, [])
+    scriptCompareVersion.value = selectedVersion.value
+    scriptCompareVisible.value = true
+  } catch {
+    ElMessage.error(t('form.historyReadFailed'))
+  } finally {
+    scriptCompareLoading.value = false
   }
 }
 
@@ -206,6 +239,12 @@ async function restoreSelected() {
           t('form.compareCurrent')
         }}</el-button>
         <el-button
+          :disabled="selectedVersion == null"
+          :loading="scriptCompareLoading"
+          @click="openScriptCompare"
+          >{{ t('form.compareScripts') }}</el-button
+        >
+        <el-button
           type="primary"
           :disabled="selectedVersion == null"
           class="history-dialog__restore"
@@ -229,10 +268,92 @@ async function restoreSelected() {
       :form-key="formKey"
       :snapshot="fullSnapshotRow"
     />
+
+    <!-- 新旧脚本并列：左右各自读取快照/当前定义的脚本对象，不做合并或补全 -->
+    <el-dialog
+      v-model="scriptCompareVisible"
+      :title="t('form.scriptCompareTitle', { version: scriptCompareVersion ?? '' })"
+      width="880px"
+      append-to-body
+      class="script-compare-dialog"
+    >
+      <div class="script-compare">
+        <section class="script-compare__column">
+          <h4>{{ t('form.scriptCompareOld', { version: scriptCompareVersion ?? '' }) }}</h4>
+          <p v-if="oldScripts.length === 0" class="script-compare__empty">
+            {{ t('form.scriptCompareEmpty') }}
+          </p>
+          <article v-for="row in oldScripts" :key="row.key" class="script-compare__item">
+            <header>
+              <strong>{{ row.label }}</strong>
+              <span>{{ row.event ? eventLabel(row.event) : row.source }}</span>
+            </header>
+            <pre>{{ row.code }}</pre>
+          </article>
+        </section>
+        <section class="script-compare__column">
+          <h4>{{ t('form.scriptCompareNew') }}</h4>
+          <p v-if="newScripts.length === 0" class="script-compare__empty">
+            {{ t('form.scriptCompareEmpty') }}
+          </p>
+          <article v-for="row in newScripts" :key="row.key" class="script-compare__item">
+            <header>
+              <strong>{{ row.label }}</strong>
+              <span>{{ row.event ? eventLabel(row.event) : row.source }}</span>
+            </header>
+            <pre>{{ row.code }}</pre>
+          </article>
+        </section>
+      </div>
+    </el-dialog>
   </el-dialog>
 </template>
 
 <style scoped>
+.script-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sw-space-16);
+}
+
+.script-compare__column h4 {
+  margin: 0 0 var(--sw-space-8);
+  font-size: var(--sw-font-secondary);
+  font-weight: 600;
+}
+
+.script-compare__empty {
+  margin: 0 0 var(--sw-space-8);
+  color: var(--sw-text-secondary);
+  font-size: 13px;
+}
+
+.script-compare__item {
+  margin-bottom: var(--sw-space-12);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
+  overflow: hidden;
+}
+
+.script-compare__item header {
+  display: flex;
+  gap: var(--sw-space-8);
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--sw-fill-base);
+  font-size: 13px;
+}
+
+.script-compare__item pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .history-dialog__loading,
 .history-dialog__empty {
   padding: var(--sw-space-24) 0;

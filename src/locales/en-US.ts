@@ -1216,6 +1216,11 @@ export default {
     snapshotAuthorScope: '{author} · Form + Process',
     selectedSnapshotPrefix: 'Selected: {time}',
     restoreDraftNote: 'Restores as a new draft; published versions are not overwritten.',
+    compareScripts: 'Compare scripts',
+    scriptCompareTitle: 'Script comparison · historical v{version} / current',
+    scriptCompareOld: 'Historical v{version} scripts',
+    scriptCompareNew: 'Current saved definition scripts',
+    scriptCompareEmpty: 'No scripts in this version.',
     compareCurrent: 'Compare current',
     snapshotViewer: {
       open: 'View full snapshot',

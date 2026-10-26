@@ -1184,6 +1184,11 @@ export default {
     snapshotAuthorScope: '{author} · 表单 + 流程',
     selectedSnapshotPrefix: '已选：{time}',
     restoreDraftNote: '恢复为新的草稿，不覆盖已发布版本。',
+    compareScripts: '对比脚本',
+    scriptCompareTitle: '脚本对比 · 历史 v{version} / 当前',
+    scriptCompareOld: '历史版本 v{version} 脚本',
+    scriptCompareNew: '当前已保存定义脚本',
+    scriptCompareEmpty: '该版本没有脚本。',
     compareCurrent: '对比当前',
     snapshotViewer: {
       open: '查看完整快照',

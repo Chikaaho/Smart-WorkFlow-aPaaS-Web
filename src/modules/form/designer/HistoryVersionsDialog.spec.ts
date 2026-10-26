@@ -12,6 +12,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 
 const mockListFormSnapshots = vi.fn()
 const mockGetFormSnapshotDefinition = vi.fn()
+const mockGetFormDefinition = vi.fn()
 
 vi.mock('../api/form-def', () => ({
   listFormSnapshots: (...args: unknown[]) => mockListFormSnapshots(...args),
@@ -21,6 +22,10 @@ vi.mock('../api/form-def', () => ({
 
 vi.mock('@/adapters/form-designer', () => ({
   parseDefinition: vi.fn((raw: string) => JSON.parse(raw)),
+}))
+
+vi.mock('../api/form', () => ({
+  getFormDefinition: (...args: unknown[]) => mockGetFormDefinition(...args),
 }))
 
 import HistoryVersionsDialog from './HistoryVersionsDialog.vue'
@@ -165,5 +170,55 @@ describe('HistoryVersionsDialog', () => {
   it('组件零回写路径：不引入 save/publish（结构断言）', async () => {
     const source = await import('./HistoryVersionsDialog.vue?raw')
     expect(source.default).not.toMatch(/saveFormConfig|publishFormDef|saveConfig/)
+  })
+
+  it('新旧脚本并列：历史快照与当前定义各自读取自身脚本，不合并', async () => {
+    mockGetFormSnapshotDefinition.mockResolvedValue({
+      formVersion: 2,
+      createTime: '2026-06-02 11:30:00',
+      definition: JSON.stringify({
+        title: '合同审批 V2',
+        fields: [
+          { name: 'amount', label: '金额', type: 'NUMBER', script: { code: 'return old_amount;' } },
+        ],
+        events: {
+          beforeSubmitHandler: [
+            { id: 'old-check', name: '旧提交检查', script: 'return old_check;', enabled: true },
+          ],
+        },
+      }),
+    })
+    mockGetFormDefinition.mockResolvedValue({
+      title: '合同审批 V3',
+      fields: [
+        { name: 'amount', label: '金额', type: 'NUMBER', script: { code: 'return new_amount;' } },
+      ],
+      events: {
+        beforeSubmitHandler: [
+          { id: 'new-check', name: '新提交检查', script: 'return new_check;', enabled: true },
+        ],
+      },
+    })
+
+    const wrapper = await mountOpen()
+    const compareButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('对比脚本'))
+    expect(compareButton).toBeTruthy()
+    await compareButton!.trigger('click')
+    await flushPromises()
+
+    expect(mockGetFormSnapshotDefinition).toHaveBeenCalledWith('uuid-1', 2)
+    expect(mockGetFormDefinition).toHaveBeenCalledWith('contract-approval')
+
+    const columns = wrapper.findAll('.script-compare__column')
+    expect(columns).toHaveLength(2)
+    // 左右列各自只含本版本脚本，不混入另一版本
+    expect(columns[0].text()).toContain('return old_amount;')
+    expect(columns[0].text()).toContain('return old_check;')
+    expect(columns[0].text()).not.toContain('return new_amount;')
+    expect(columns[1].text()).toContain('return new_amount;')
+    expect(columns[1].text()).toContain('return new_check;')
+    expect(columns[1].text()).not.toContain('return old_amount;')
   })
 })
