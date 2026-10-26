@@ -39,17 +39,55 @@ export async function loadUserChoices(): Promise<UserChoice[]> {
   return userOptions(100)
 }
 
-/** 表单脚本组织目录快照：复用选择器的同一授权查询（上限 200，服务端租户过滤）。 */
+/** 服务端组织目录快照原始形状（只含启用目录与有效关联，不含凭据/权限码）。 */
+interface ScriptOrgContextResponse {
+  users?: Array<{
+    id: string | number
+    name: string
+    deptId?: string | number | null
+    roleIds?: Array<string | number>
+    postIds?: Array<string | number>
+  }>
+  depts?: Array<{ id: string | number; name: string; parentId?: string | number | null }>
+  roles?: Array<{ id: string | number; code: string; name: string }>
+  posts?: Array<{ id: string | number; code: string; name: string }>
+}
+
+/**
+ * 表单脚本组织目录快照：服务端按当前租户返回启用用户/部门/角色/岗位与有效成员关系。
+ * 不按管理端权限扩大读取范围；未装载时脚本组织函数明确报错。
+ */
 export async function loadScriptOrgContext(): Promise<
   import('../utils/script-hosts').ScriptOrgContext
 > {
-  const [users, depts] = await Promise.all([userOptions(200), loadDeptChoices()])
+  const raw = await request<ScriptOrgContextResponse>({
+    method: 'GET',
+    url: '/system/org/script-context',
+  })
+  const idText = (value: string | number | null | undefined): string | null =>
+    value === null || value === undefined || value === '' ? null : String(value)
   return {
-    users: users.map((user) => ({ id: user.id, name: user.label })),
-    depts: depts.map((dept) => ({
-      id: dept.id,
-      name: dept.name ?? dept.label.trim(),
-      parentId: dept.parentId ?? null,
+    users: (raw.users ?? []).map((user) => ({
+      id: String(user.id),
+      name: user.name,
+      deptId: idText(user.deptId),
+      roleIds: (user.roleIds ?? []).map(String),
+      postIds: (user.postIds ?? []).map(String),
+    })),
+    depts: (raw.depts ?? []).map((dept) => ({
+      id: String(dept.id),
+      name: dept.name,
+      parentId: idText(dept.parentId),
+    })),
+    roles: (raw.roles ?? []).map((role) => ({
+      id: String(role.id),
+      code: role.code,
+      name: role.name,
+    })),
+    posts: (raw.posts ?? []).map((post) => ({
+      id: String(post.id),
+      code: post.code,
+      name: post.name,
     })),
   }
 }

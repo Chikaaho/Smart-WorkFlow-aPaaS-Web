@@ -287,6 +287,19 @@ export function parseDefinition(rawJson: string): FormSchema {
         }
       : {}),
     ...(() => {
+      const rawAllowed = (raw as unknown as { allowedIntegrations?: unknown }).allowedIntegrations
+      if (!Array.isArray(rawAllowed)) return {}
+      const allowed = Array.from(
+        new Set(
+          rawAllowed
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean),
+        ),
+      ).slice(0, 50)
+      return allowed.length ? { allowedIntegrations: allowed } : {}
+    })(),
+    ...(() => {
       const events = normalizeFormEvents((raw as unknown as { events?: unknown }).events)
       return events ? { events } : {}
     })(),

@@ -101,6 +101,14 @@ export function validateFormEvents(events: FormEvents | undefined): string[] {
   return errors
 }
 
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof (value as { then?: unknown }).then === 'function'
+  )
+}
+
 export function createFormEvents(options: FormEventRuntimeOptions) {
   const getModel = () => (typeof options.model === 'function' ? options.model() : options.model)
   const writable = () => options.writable?.() ?? true
@@ -112,6 +120,23 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
   }
   const compiled = new Map<string, ScriptProgram>()
   const completedAfterSubmit = new Map<string, Set<string>>()
+  /**
+   * 受控集成由服务端异步代理；脚本语言是同步解释器，因此把 Promise 记为待结算项，
+   * 由事件 runner 在执行结束后统一等待。字段赋值遇到 Promise 时延迟到结果返回再写入。
+   */
+  const pendingIntegrations: Promise<unknown>[] = []
+  const trackIntegration = (value: unknown): unknown => {
+    if (!isThenable(value)) return value
+    const tracked = Promise.resolve(value)
+    pendingIntegrations.push(tracked)
+    return tracked
+  }
+  const settleIntegrations = async (): Promise<void> => {
+    while (pendingIntegrations.length) {
+      const batch = pendingIntegrations.splice(0)
+      await Promise.all(batch)
+    }
+  }
 
   const field = (name: unknown): FormSchemaField => {
     const key = typeof name === 'string' ? name : String(name ?? '')
@@ -121,6 +146,19 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
   }
   const assertWritable = () => {
     if (!writable()) throw new Error('只读查看状态不允许修改字段或控件')
+  }
+  /** 字段赋值：Promise（受控集成结果）在解析后再写入，避免把 Promise 对象落进表单值。 */
+  const assignFieldValue = (name: string, value: unknown): void => {
+    const target = field(name).name
+    if (isThenable(value)) {
+      pendingIntegrations.push(
+        Promise.resolve(value).then((resolved) => {
+          getModel()[target] = resolved
+        }),
+      )
+      return
+    }
+    getModel()[target] = value
   }
   const row = (table: unknown, index: unknown): Record<string, unknown> => {
     const tableField = field(table)
@@ -201,7 +239,7 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
     if (args.length % 2 !== 0) throw new Error(`${fn}: 参数必须成对（字段名, 值）`)
     assertWritable()
     for (let index = 0; index < args.length; index += 2) {
-      getModel()[field(args[index]).name] = args[index + 1]
+      assignFieldValue(String(args[index] ?? ''), args[index + 1])
     }
   }
   const applySubPairs = (
@@ -229,11 +267,11 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
     getFieldValue: (name) => getModel()[field(name).name],
     设置字段值: (name, value) => {
       assertWritable()
-      getModel()[field(name).name] = value
+      assignFieldValue(String(name ?? ''), value)
     },
     setFieldValue: (name, value) => {
       assertWritable()
-      getModel()[field(name).name] = value
+      assignFieldValue(String(name ?? ''), value)
     },
     获取子表字段值: (table, index, name) => {
       const tableField = field(table)
@@ -325,7 +363,7 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
         input && typeof input === 'object' && !Array.isArray(input)
           ? (input as Record<string, unknown>)
           : {}
-      return options.callIntegration?.(identity, payload)
+      return trackIntegration(options.callIntegration?.(identity, payload))
     },
     callIntegration: (key, input) => {
       if (!sideEffectsAllowed()) throw new Error('只读查看状态不允许执行表单事件副作用')
@@ -335,7 +373,7 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
         input && typeof input === 'object' && !Array.isArray(input)
           ? (input as Record<string, unknown>)
           : {}
-      return options.callIntegration?.(identity, payload)
+      return trackIntegration(options.callIntegration?.(identity, payload))
     },
 
     // ── 主表批量/清空与字段元信息 ──
@@ -555,6 +593,14 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
             '异步宿主调用超过 5 秒',
           )
         }
+        await awaitBounded(
+          settleIntegrations(),
+          Math.min(
+            FORM_EVENT_ACTION_TIMEOUT_MS,
+            FORM_EVENT_TOTAL_TIMEOUT_MS - (Date.now() - started),
+          ),
+          '异步宿主调用超过 5 秒',
+        )
         if (eventName === 'beforeSubmitHandler' && result === false) {
           return {
             ok: false,

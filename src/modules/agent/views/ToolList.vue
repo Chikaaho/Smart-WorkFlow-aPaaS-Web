@@ -413,6 +413,24 @@ onMounted(() => {
           {{ (row as AgentToolExternalConfig).timeoutSeconds }}
         </template>
       </el-table-column>
+      <el-table-column :label="t('agent.effectScopeColumn')" width="110" align="center">
+        <template #default="{ row }">
+          <el-tag
+            v-if="(row as AgentToolExternalConfig).effectScope"
+            size="small"
+            :type="(row as AgentToolExternalConfig).effectScope === 'WRITE' ? 'warning' : 'success'"
+          >
+            {{
+              (row as AgentToolExternalConfig).effectScope === 'WRITE'
+                ? t('agent.effectScopeWrite')
+                : t('agent.effectScopeQuery')
+            }}
+          </el-tag>
+          <el-tag v-else size="small" type="danger">{{
+            t('agent.effectScopeUnclassified')
+          }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column :label="t('agent.inputSchemaColumn')" width="100" align="center">
         <template #default="{ row }">
           <el-tag v-if="(row as AgentToolExternalConfig).inputSchema" size="small" type="success">{{

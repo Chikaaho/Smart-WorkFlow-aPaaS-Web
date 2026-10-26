@@ -205,6 +205,14 @@ export default {
     hasSchema: 'Yes',
     methodColumn: 'Method',
     timeoutSecondsColumn: 'Timeout (s)',
+    effectScope: 'Effect scope',
+    effectScopeHint:
+      'Query means no external write side effect; write is allowed only after form submission. Unclassified capabilities cannot be used by forms.',
+    effectScopeRequired: 'Select an effect scope',
+    effectScopeColumn: 'Effect',
+    effectScopeQuery: 'Query',
+    effectScopeWrite: 'Write',
+    effectScopeUnclassified: 'Unclassified',
     maxIterations: 'Max iterations',
     maxIterationsPlaceholder: 'Leave blank for 10; minimum 1',
     loopPanelHint:
@@ -914,6 +922,22 @@ export default {
     noLimit: 'No limit',
     resetPermissions: 'Clear permissions',
     manageDatasources: 'Managed datasources',
+    integrationTitle: 'Controlled integrations',
+    integrationHint:
+      'Choose registered capabilities this form version may call. Query capabilities may run before submit; write capabilities run only after submit and are idempotent by submission key.',
+    integrationNoToolPermission:
+      'Your identity cannot view external tools, so no capability can be selected. Configuring a form never grants that permission.',
+    integrationPlaceholder: 'Select allowed capabilities',
+    integrationRefresh: 'Refresh capabilities',
+    integrationCandidatesEmpty:
+      'No registered, enabled and classified capability is available in this tenant.',
+    integrationCandidatesFailed: 'Could not load integration candidates',
+    integrationScopeQuery: 'Query',
+    integrationScopeWrite: 'Write',
+    integrationScopeNote:
+      'Unclassified capabilities cannot be called. Cross-tenant, disabled or revoked capabilities are rejected by the server even if present in an old snapshot.',
+    integrationUnavailable:
+      'These configured capabilities are currently unavailable; remove them before saving: {ids}',
     actionView: 'View data',
     actionCreate: 'Create data',
     actionEdit: 'Edit data',

@@ -37,6 +37,34 @@ describe('createFieldScripts', () => {
     vi.restoreAllMocks()
   })
 
+  it('onLoad 等待异步受控集成结果后写入字段，不落 Promise 对象', async () => {
+    const schema: FormSchema = {
+      title: 'async integration',
+      fields: [
+        {
+          type: 'TEXT',
+          name: 'src',
+          label: 'S',
+          script: {
+            code: '#设置字段值("out", #调用集成("cap_q"));',
+            onLoad: true,
+          },
+        },
+        { type: 'TEXT', name: 'out', label: 'O' },
+      ],
+    }
+    const model = reactive<Record<string, unknown>>({ src: '', out: '' })
+    const runtime = createFieldScripts({
+      getSchema: () => schema,
+      model,
+      allowedIntegrations: () => ['cap_q'],
+      callIntegration: async () => 'async-result',
+    })
+    await runtime.runOnLoad()
+    expect(model.out).toBe('async-result')
+    expect(runtime.lastError()).toBe('')
+  })
+
   it('字段值变化触发该字段脚本：# 糖读写字段值', async () => {
     const schema = schemaWithScripts()
     const model = reactive<Record<string, unknown>>({ field_a: 'x', field_b: '', field_c: '' })

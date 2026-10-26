@@ -359,6 +359,11 @@ export interface FormSchema {
   /** 表单动作权限：动作名 → role:/user:/dept: 主体；空数组表示不设限。 */
   actionPermissions?: Record<string, string[]>
   /**
+   * 表单允许调用的受控集成能力稳定标识（随发布快照冻结）。
+   * 缺省/空数组=不允许调用；旧定义没有该字段时按空处理。
+   */
+  allowedIntegrations?: string[]
+  /**
    * 表单生命周期事件。动作按 order 升序执行，id 在事件内稳定；
    * 缺省不产生任何隐式动作，兼容历史定义。
    */

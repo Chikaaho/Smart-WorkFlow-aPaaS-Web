@@ -22,6 +22,14 @@ import {
 import { useUserStore } from '@/stores/user'
 import type { FormSchema, FormSchemaField, TableField } from '@/contracts/form-schema'
 
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof (value as { then?: unknown }).then === 'function'
+  )
+}
+
 /** 脚本引发的字段状态覆盖（与声明式规则/静态属性并存，由渲染侧合并）。 */
 export interface FieldScriptOverrides {
   required: Record<string, boolean>
@@ -60,8 +68,8 @@ export interface FieldScriptsOptions {
 
 export interface FieldScriptsRuntime {
   overrides: FieldScriptOverrides
-  /** 表单加载/回显完成后调用：执行 onLoad = true 的字段脚本。 */
-  runOnLoad: () => void
+  /** 表单加载/回显完成后调用：执行 onLoad = true 的字段脚本，并等待受控集成结果回填。 */
+  runOnLoad: () => Promise<void>
   /** 模型整体替换（装载/回显）后调用：把当前值记为基线，避免装载本身被当作“值变更”触发脚本。 */
   resetBaseline: () => void
   /** 停止侦听。 */
@@ -186,6 +194,11 @@ export function validateFieldScript(code: string): string | null {
 export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRuntime {
   const overrides = reactive<FieldScriptOverrides>({ required: {}, hidden: {}, readonly: {} })
   let lastErrorText = ''
+  /**
+   * 受控集成返回 Promise；脚本解释器是同步的，因此把 Promise 记为待结算项，
+   * onLoad 统一等待；值变更脚本异步回填结果，错误记录到 lastError。
+   */
+  const pendingIntegrations: Promise<unknown>[] = []
   let cascadeCount = 0
   let cascadeResetTimer: ReturnType<typeof setTimeout> | null = null
   let warnedCascade = false
@@ -310,13 +323,49 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     return row
   }
 
+  /** 字段赋值：Promise（受控集成结果）在解析后再写入，避免把 Promise 对象落进表单值。 */
+  function assignFieldValue(fieldName: unknown, value: unknown, fn: string): void {
+    const name = requireField(fieldName, fn)
+    if (isThenable(value)) {
+      pendingIntegrations.push(
+        Promise.resolve(value).then((resolved) => {
+          getModel()[name] = resolved
+        }),
+      )
+      return
+    }
+    getModel()[name] = value
+  }
+
   function applyFieldPairs(fn: string, args: unknown[]): void {
     if (args.length % 2 !== 0) {
       throw new Error(`${fn}: 参数必须成对（字段名, 值）`)
     }
     assertWritable()
     for (let index = 0; index < args.length; index += 2) {
-      getModel()[requireField(args[index], fn)] = args[index + 1]
+      assignFieldValue(args[index], args[index + 1], fn)
+    }
+  }
+
+  const trackIntegration = (value: unknown): unknown => {
+    if (!isThenable(value)) return value
+    const tracked = Promise.resolve(value).catch((error: unknown) => {
+      lastErrorText = error instanceof Error ? error.message : String(error)
+      ElMessage.error(`字段脚本集成调用失败：${lastErrorText}`)
+      throw error
+    })
+    pendingIntegrations.push(tracked)
+    // 值变更脚本没有等待者；挂一个空 catch 防止未处理拒绝，同时保留原 Promise 供 onLoad 结算。
+    void tracked.catch(() => undefined)
+    return tracked
+  }
+
+  async function settlePendingIntegrations(): Promise<void> {
+    while (pendingIntegrations.length) {
+      const batch = pendingIntegrations.splice(0)
+      const results = await Promise.allSettled(batch)
+      const rejected = results.find((item) => item.status === 'rejected')
+      if (rejected && rejected.status === 'rejected') throw rejected.reason
     }
   }
 
@@ -346,11 +395,11 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     获取字段值: (fieldName) => getModel()[requireField(fieldName, '获取字段值')],
     getFieldValue: (fieldName) => getModel()[requireField(fieldName, '获取字段值')],
     设置字段值: (fieldName, value) => {
-      getModel()[requireField(fieldName, '设置字段值')] = value
+      assignFieldValue(fieldName, value, '设置字段值')
       return undefined
     },
     setFieldValue: (fieldName, value) => {
-      getModel()[requireField(fieldName, '设置字段值')] = value
+      assignFieldValue(fieldName, value, '设置字段值')
       return undefined
     },
     设置必填: (fieldName, flag) => {
@@ -573,7 +622,7 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
       if (!options.callIntegration) {
         throw new Error('集成执行器不可用')
       }
-      return options.callIntegration(identity)
+      return trackIntegration(options.callIntegration(identity))
     },
     callIntegration: (key) => {
       const identity = String(key ?? '')
@@ -583,7 +632,7 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
       if (!options.callIntegration) {
         throw new Error('集成执行器不可用')
       }
-      return options.callIntegration(identity)
+      return trackIntegration(options.callIntegration(identity))
     },
   }
 
@@ -688,7 +737,7 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     { deep: true },
   )
 
-  function runOnLoad(): void {
+  async function runOnLoad(): Promise<void> {
     if (options.enabled && !options.enabled()) {
       return
     }
@@ -699,6 +748,11 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
           runScriptFor(field)
         }
       }
+      await settlePendingIntegrations()
+    } catch (e) {
+      lastErrorText = e instanceof Error ? e.message : String(e)
+      console.warn(`[表单脚本] onLoad 集成调用出错: ${lastErrorText}`)
+      ElMessage.error(`字段脚本出错：${lastErrorText}`)
     } finally {
       running = false
       prev = snapshot()

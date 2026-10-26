@@ -13,6 +13,13 @@ describe('definition-convert / itemsToDefinition', () => {
     expect(schema.actionPermissions).toEqual({ view: ['role:hr'] })
   })
 
+  it('freezes the allowed integration identifiers into the definition', () => {
+    const schema = itemsToDefinition([], 'Integrated', undefined, undefined, {
+      allowedIntegrations: ['cap_query', 'cap_write'],
+    })
+    expect(schema.allowedIntegrations).toEqual(['cap_query', 'cap_write'])
+  })
+
   it('exports empty fields for empty items', () => {
     const schema = itemsToDefinition([], 'Empty')
     expect(schema.title).toBe('Empty')

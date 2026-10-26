@@ -23,14 +23,17 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import type { SubTableRowAction, SubTableRowActionType } from '@/modules/form/api/form'
 import {
   getFormDefinition,
   getFormDefinitionVersion,
+  invokeFormIntegration,
   submitForm,
   getFormData,
   updateFormData,
   normalizeSubmitData,
+  type FormIntegrationPhase,
+  type SubTableRowAction,
+  type SubTableRowActionType,
 } from '@/modules/form/api/form'
 import { loadScriptOrgContext } from '@/modules/form/api/i2-choices'
 import { ApiError, getErrorMessage } from '@/foundation/request'
@@ -119,6 +122,32 @@ const isDraftMode = ref(route.query.mode === 'draft')
 const draftId = route.query.draftId ? String(route.query.draftId) : ''
 /** 草稿元数据预取：先按草稿创建时的 formVersion 装载冻结定义，再回填 payload。 */
 const prefetchedDraft = ref<BpmDraft | null>(null)
+/** 运行期绑定的表单发布版本；缺省由服务端按当前发布版本解析。 */
+const formVersion = ref<number | null>(null)
+/** 表单事件调用阶段；字段脚本固定按提交前阶段处理。 */
+const integrationPhase = ref<FormIntegrationPhase>('BEFORE_SUBMIT')
+
+/**
+ * 受控集成调用：客户端只传稳定标识、绑定版本/记录与结构化输入。
+ * 服务端按版本快照允许清单、能力登记状态与当前身份/记录权限取交集。
+ */
+async function callFormIntegration(
+  capabilityId: string,
+  input: Record<string, unknown>,
+  phase: FormIntegrationPhase,
+): Promise<unknown> {
+  const boundRecordId = phase === 'AFTER_SUBMIT' ? lastSubmittedId.value || recordId : recordId
+  const response = await invokeFormIntegration({
+    formKey,
+    ...(formVersion.value ? { formVersion: formVersion.value } : {}),
+    ...(boundRecordId ? { recordId: boundRecordId } : {}),
+    phase,
+    capabilityId,
+    ...(phase === 'AFTER_SUBMIT' && boundRecordId ? { requestKey: boundRecordId } : {}),
+    input,
+  })
+  return response.result
+}
 
 /* ── 状态 ── */
 
@@ -154,10 +183,12 @@ const fieldScripts = createFieldScripts({
   }),
   formContext: () => ({
     formKey,
-    version: schema.value?.schemaVersion ?? null,
+    version: formVersion.value,
     submissionId: lastSubmittedId.value,
   }),
-  allowedIntegrations: () => [],
+  allowedIntegrations: () => schema.value?.allowedIntegrations ?? [],
+  // 字段脚本在加载/编辑期运行，只允许查询类能力，不传递提交后幂等标识。
+  callIntegration: (key: string) => callFormIntegration(key, {}, 'BEFORE_SUBMIT'),
   orgContext: () => scriptOrgContext.value,
 })
 onUnmounted(() => fieldScripts.dispose())
@@ -189,10 +220,11 @@ const formEvents = createFormEvents({
   }),
   formContext: () => ({
     formKey,
-    version: schema.value?.schemaVersion ?? null,
+    version: formVersion.value,
     submissionId: lastSubmittedId.value,
   }),
-  allowedIntegrations: () => [],
+  allowedIntegrations: () => schema.value?.allowedIntegrations ?? [],
+  callIntegration: (key, input) => callFormIntegration(key, input, integrationPhase.value),
   orgContext: () => scriptOrgContext.value,
   confirm: async (message) => {
     try {
@@ -383,6 +415,7 @@ async function ensureScriptOrgContext(): Promise<void> {
 async function loadSchema() {
   loading.value = true
   errorMsg.value = ''
+  formVersion.value = null
   try {
     // A12：旧草稿按创建时的 formVersion 回放冻结定义，新填报才取最新发布版本。
     let draftVersion: number | null = null
@@ -401,9 +434,11 @@ async function loadSchema() {
         ? await getFormDefinitionVersion(formKey, draftVersion)
         : await getFormDefinition(formKey)
       schema.value = draftVersion && loaded ? { ...loaded, schemaVersion: draftVersion } : loaded
+      formVersion.value = draftVersion
     } catch (err) {
       // 仅旧版本快照缺失时回退最新定义；普通最新定义加载失败保持原错误提示。
       if (!draftVersion) throw err
+      formVersion.value = null
       schema.value = await getFormDefinition(formKey)
     }
     if (!schema.value) return
@@ -426,7 +461,7 @@ async function loadSchema() {
     // 组织目录快照先于 onLoad 脚本装载：组织查询函数同步读取已授权快照
     await ensureScriptOrgContext()
     // BF20261013-021：数据装载完成后执行 onLoad 字段脚本（新建/草稿/回显三态同口径）
-    fieldScripts.runOnLoad()
+    await fieldScripts.runOnLoad()
     fieldScripts.resetBaseline()
     const eventResult = await formEvents.runOnLoad()
     if (!eventResult.ok) {
@@ -654,6 +689,7 @@ function validateRequiredFields(): boolean {
 async function settleBeforeSubmitEvents(): Promise<boolean> {
   try {
     await nextTick()
+    integrationPhase.value = 'BEFORE_SUBMIT'
     fieldScripts.resetBaseline()
     const before = await formEvents.runBeforeSubmit()
     if (!before.ok) {
@@ -668,6 +704,19 @@ async function settleBeforeSubmitEvents(): Promise<boolean> {
   } catch (err) {
     errorMsg.value = `提交前处理失败：${err instanceof Error ? err.message : String(err)}`
     return false
+  }
+}
+
+/**
+ * 提交后事件统一以 AFTER_SUBMIT 阶段执行受控集成；结束后恢复提交前阶段，
+ * 避免后续普通交互误用写副作用能力。
+ */
+async function runAfterSubmitEvents(submissionId: string, retryFailedOnly = false) {
+  integrationPhase.value = 'AFTER_SUBMIT'
+  try {
+    return await formEvents.runAfterSubmit(submissionId, retryFailedOnly)
+  } finally {
+    integrationPhase.value = 'BEFORE_SUBMIT'
   }
 }
 
@@ -720,7 +769,7 @@ async function handleSubmit() {
       await updateFormData(formKey, recordId, payload)
       postSubmitEventError.value = ''
       lastSubmittedId.value = recordId
-      const after = await formEvents.runAfterSubmit(recordId)
+      const after = await runAfterSubmitEvents(recordId)
       submissionFinalized.value = true
       if (!after.ok) {
         postSubmitEventError.value = after.error ?? '提交后动作失败'
@@ -770,7 +819,7 @@ async function handleSubmit() {
 
     postSubmitEventError.value = ''
     lastSubmittedId.value = id
-    const after = await formEvents.runAfterSubmit(id)
+    const after = await runAfterSubmitEvents(id)
     submissionFinalized.value = true
     if (!after.ok) {
       postSubmitEventError.value = after.error ?? '提交后动作失败'
@@ -806,7 +855,7 @@ async function retryPostSubmitEvents() {
       postSubmitEventError.value = '尚未取得稳定记录标识，后续处理未执行'
       return
     }
-    const result = await formEvents.runAfterSubmit(lastSubmittedId.value, true)
+    const result = await runAfterSubmitEvents(lastSubmittedId.value, true)
     if (result.ok) {
       postSubmitEventError.value = ''
       ElMessage.success('后续处理已完成')
@@ -961,7 +1010,7 @@ async function handleSubmitDraft() {
           postSubmitEventError.value = '尚未取得稳定记录标识，后续处理未执行'
         } else {
           lastSubmittedId.value = submissionId
-          const after = await formEvents.runAfterSubmit(submissionId)
+          const after = await runAfterSubmitEvents(submissionId)
           afterOk = after.ok
           if (!after.ok) {
             postSubmitEventError.value = after.error ?? '提交后动作失败'

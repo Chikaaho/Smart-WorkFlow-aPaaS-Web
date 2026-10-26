@@ -103,6 +103,54 @@ describe('form events', () => {
     expect(model.count).toBe(0)
   })
 
+  it('awaits async integration result before writing the resolved field value', async () => {
+    const model: Record<string, unknown> = { count: 0, result: '' }
+    const runtime = createFormEvents({
+      getSchema: () => ({
+        title: 'async integration',
+        fields: [
+          { name: 'count', type: 'NUMBER' },
+          { name: 'result', type: 'TEXT' },
+        ],
+        events: {
+          afterSubmitHandler: [action('async', 0, '#设置字段值(result, #调用集成(sync_audit));')],
+        },
+      }),
+      model,
+      allowedIntegrations: () => ['sync_audit'],
+      callIntegration: async () => 'resolved-by-server',
+    })
+    expect(await runtime.runAfterSubmit('record-async')).toMatchObject({ ok: true })
+    expect(model.result).toBe('resolved-by-server')
+  })
+
+  it('fails the action when an async integration rejects instead of storing a Promise', async () => {
+    const model: Record<string, unknown> = { count: 0, result: '' }
+    const runtime = createFormEvents({
+      getSchema: () => ({
+        title: 'async integration failure',
+        fields: [
+          { name: 'count', type: 'NUMBER' },
+          { name: 'result', type: 'TEXT' },
+        ],
+        events: {
+          afterSubmitHandler: [
+            action('async-fail', 0, '#设置字段值(result, #调用集成(sync_audit));'),
+          ],
+        },
+      }),
+      model,
+      allowedIntegrations: () => ['sync_audit'],
+      callIntegration: async () => {
+        throw new Error('server denied')
+      },
+    })
+    const result = await runtime.runAfterSubmit('record-async-fail')
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('server denied')
+    expect(model.result).toBe('')
+  })
+
   it('allows authorized integration after submit while field writes stay locked', async () => {
     const integration = vi.fn(() => 'ok')
     const runtime = createFormEvents({

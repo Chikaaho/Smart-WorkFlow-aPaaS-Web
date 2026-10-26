@@ -15,6 +15,10 @@ export interface ScriptOrgUser {
   name: string
   /** 主部门 ID（组织快照装载时填充；缺省表示未返回）。 */
   deptId?: string | null
+  /** 有效角色 ID（停用角色与无效关联不进入快照）。 */
+  roleIds?: string[]
+  /** 有效岗位 ID（停用岗位与无效关联不进入快照）。 */
+  postIds?: string[]
 }
 
 export interface ScriptOrgDept {
@@ -23,9 +27,25 @@ export interface ScriptOrgDept {
   parentId: string | null
 }
 
+export interface ScriptOrgRole {
+  id: string
+  code: string
+  name: string
+}
+
+export interface ScriptOrgPost {
+  id: string
+  code: string
+  name: string
+}
+
 export interface ScriptOrgContext {
   users: ScriptOrgUser[]
   depts: ScriptOrgDept[]
+  /** 当前租户启用角色（有权限的目录快照；缺省表示服务端未返回）。 */
+  roles?: ScriptOrgRole[]
+  /** 当前租户启用岗位（有权限的目录快照；缺省表示服务端未返回）。 */
+  posts?: ScriptOrgPost[]
 }
 
 export interface ScriptSchemaFieldLike {
@@ -96,6 +116,33 @@ export function createSupplementalHostFunctions(
   }
   const optionValues = (tableName: unknown, column: unknown): string[] =>
     fieldOptions(findSubField(tableName, column))
+
+  const roleDirectory = (fn: string): ScriptOrgRole[] => {
+    const context = requireOrg(orgContext, fn)
+    if (!context.roles) throw new Error(`${fn}: 角色目录未装载，暂不能查询`)
+    return context.roles
+  }
+  const postDirectory = (fn: string): ScriptOrgPost[] => {
+    const context = requireOrg(orgContext, fn)
+    if (!context.posts) throw new Error(`${fn}: 岗位目录未装载，暂不能查询`)
+    return context.posts
+  }
+  const findUser = (id: unknown) => {
+    const context = requireOrg(orgContext, '获取用户信息')
+    return context.users.find((item) => item.id === String(id ?? '').trim()) ?? null
+  }
+  const findRole = (ref: unknown): ScriptOrgRole | null => {
+    const roles = roleDirectory('获取角色信息')
+    const text = String(ref ?? '').trim()
+    return roles.find((role) => role.id === text || role.code === text) ?? null
+  }
+  const findPost = (ref: unknown): ScriptOrgPost | null => {
+    const posts = postDirectory('获取岗位信息')
+    const text = String(ref ?? '').trim()
+    return posts.find((post) => post.id === text || post.code === text) ?? null
+  }
+  const userRoleIds = (id: unknown): string[] => findUser(id)?.roleIds ?? []
+  const userPostIds = (id: unknown): string[] => findUser(id)?.postIds ?? []
 
   const dateNow = (): string => formatDate(new Date())
 
@@ -183,6 +230,128 @@ export function createSupplementalHostFunctions(
     getDeptIdList: () => {
       const context = requireOrg(orgContext, '获取部门列表')
       return context.depts.map((item) => item.id)
+    },
+    获取用户部门: (id) => findUser(id)?.deptId ?? null,
+    getUserDept: (id) => findUser(id)?.deptId ?? null,
+    获取用户部门名称: (id) => {
+      const context = requireOrg(orgContext, '获取用户部门名称')
+      const deptId = findUser(id)?.deptId
+      return deptId == null
+        ? null
+        : (context.depts.find((dept) => dept.id === deptId)?.name ?? null)
+    },
+    getUserDeptName: (id) => {
+      const context = requireOrg(orgContext, '获取用户部门名称')
+      const deptId = findUser(id)?.deptId
+      return deptId == null
+        ? null
+        : (context.depts.find((dept) => dept.id === deptId)?.name ?? null)
+    },
+
+    获取角色信息: (ref) => findRole(ref),
+    getRoleInfo: (ref) => findRole(ref),
+    获取角色名称: (ref) => findRole(ref)?.name ?? null,
+    getRoleName: (ref) => findRole(ref)?.name ?? null,
+    查询角色: (keyword) => {
+      const roles = roleDirectory('查询角色')
+      const text = String(keyword ?? '').trim()
+      return roles
+        .filter(
+          (role) =>
+            !text || role.id === text || role.code.includes(text) || role.name.includes(text),
+        )
+        .map((role) => role.id)
+    },
+    searchRoles: (keyword) => {
+      const roles = roleDirectory('查询角色')
+      const text = String(keyword ?? '').trim()
+      return roles
+        .filter(
+          (role) =>
+            !text || role.id === text || role.code.includes(text) || role.name.includes(text),
+        )
+        .map((role) => role.id)
+    },
+    获取角色列表: () => roleDirectory('获取角色列表').map((role) => role.id),
+    getRoleIdList: () => roleDirectory('获取角色列表').map((role) => role.id),
+    获取角色成员: (ref) => {
+      const role = findRole(ref)
+      if (!role) return []
+      return requireOrg(orgContext, '获取角色成员')
+        .users.filter((user) => (user.roleIds ?? []).includes(role.id))
+        .map((user) => user.id)
+    },
+    getRoleMembers: (ref) => {
+      const role = findRole(ref)
+      if (!role) return []
+      return requireOrg(orgContext, '获取角色成员')
+        .users.filter((user) => (user.roleIds ?? []).includes(role.id))
+        .map((user) => user.id)
+    },
+    获取用户角色: (id) => userRoleIds(id),
+    getUserRoleIds: (id) => userRoleIds(id),
+    获取用户角色编码: (id) => {
+      const roles = roleDirectory('获取用户角色编码')
+      const roleIds = new Set(userRoleIds(id))
+      return roles.filter((role) => roleIds.has(role.id)).map((role) => role.code)
+    },
+    getUserRoleCodes: (id) => {
+      const roles = roleDirectory('获取用户角色编码')
+      const roleIds = new Set(userRoleIds(id))
+      return roles.filter((role) => roleIds.has(role.id)).map((role) => role.code)
+    },
+
+    获取岗位信息: (ref) => findPost(ref),
+    getPostInfo: (ref) => findPost(ref),
+    获取岗位名称: (ref) => findPost(ref)?.name ?? null,
+    getPostName: (ref) => findPost(ref)?.name ?? null,
+    查询岗位: (keyword) => {
+      const posts = postDirectory('查询岗位')
+      const text = String(keyword ?? '').trim()
+      return posts
+        .filter(
+          (post) =>
+            !text || post.id === text || post.code.includes(text) || post.name.includes(text),
+        )
+        .map((post) => post.id)
+    },
+    searchPosts: (keyword) => {
+      const posts = postDirectory('查询岗位')
+      const text = String(keyword ?? '').trim()
+      return posts
+        .filter(
+          (post) =>
+            !text || post.id === text || post.code.includes(text) || post.name.includes(text),
+        )
+        .map((post) => post.id)
+    },
+    获取岗位列表: () => postDirectory('获取岗位列表').map((post) => post.id),
+    getPostIdList: () => postDirectory('获取岗位列表').map((post) => post.id),
+    获取岗位成员: (ref) => {
+      const post = findPost(ref)
+      if (!post) return []
+      return requireOrg(orgContext, '获取岗位成员')
+        .users.filter((user) => (user.postIds ?? []).includes(post.id))
+        .map((user) => user.id)
+    },
+    getPostMembers: (ref) => {
+      const post = findPost(ref)
+      if (!post) return []
+      return requireOrg(orgContext, '获取岗位成员')
+        .users.filter((user) => (user.postIds ?? []).includes(post.id))
+        .map((user) => user.id)
+    },
+    获取用户岗位: (id) => userPostIds(id),
+    getUserPostIds: (id) => userPostIds(id),
+    获取用户岗位编码: (id) => {
+      const posts = postDirectory('获取用户岗位编码')
+      const postIds = new Set(userPostIds(id))
+      return posts.filter((post) => postIds.has(post.id)).map((post) => post.code)
+    },
+    getUserPostCodes: (id) => {
+      const posts = postDirectory('获取用户岗位编码')
+      const postIds = new Set(userPostIds(id))
+      return posts.filter((post) => postIds.has(post.id)).map((post) => post.code)
     },
 
     当前日期: dateNow,

@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from '@/locales'
 import HintTip from '@/components/HintTip.vue'
 import { usePermission } from '@/foundation/permission'
 import type { FormSchema, FormSchemaField, FieldPermissionRule } from '@/contracts/form-schema'
+import { ApiError } from '@/foundation/request'
+import { listFormIntegrationCandidates, type FormIntegrationCandidate } from '../api/form'
 import FormListConfigEditor from './FormListConfigEditor.vue'
 import DatasourceManagerDialog from './DatasourceManagerDialog.vue'
 
@@ -11,18 +13,60 @@ const { t } = useI18n()
 const { hasPerm } = usePermission()
 const datasourceDialogVisible = ref(false)
 const canManageDatasources = hasPerm('workflow:datasource:manage')
+/** 候选读取沿用既有外部工具查看权限；配置表单不自动授予该权限。 */
+const canViewIntegrationCandidates = hasPerm('agent:tool:view')
 
 const props = defineProps<{
   formId: string | null
   fields: FormSchemaField[]
   fieldPermissions: NonNullable<FormSchema['fieldPermissions']>
   actionPermissions: NonNullable<FormSchema['actionPermissions']>
+  allowedIntegrations?: string[]
 }>()
 
 const emit = defineEmits<{
   'update:fieldPermissions': [value: NonNullable<FormSchema['fieldPermissions']>]
   'update:actionPermissions': [value: NonNullable<FormSchema['actionPermissions']>]
+  'update:allowedIntegrations': [value: string[]]
 }>()
+
+const integrationCandidates = ref<FormIntegrationCandidate[]>([])
+const integrationLoading = ref(false)
+const integrationError = ref('')
+const selectedIntegrations = computed(() => props.allowedIntegrations ?? [])
+const unavailableIntegrations = computed(() => {
+  if (integrationError.value || !integrationCandidates.value.length) return []
+  const known = new Set(integrationCandidates.value.map((candidate) => candidate.name))
+  return selectedIntegrations.value.filter((id) => !known.has(id))
+})
+
+function integrationScopeLabel(scope: string): string {
+  return scope === 'WRITE' ? t('form.integrationScopeWrite') : t('form.integrationScopeQuery')
+}
+
+async function loadIntegrationCandidates() {
+  if (!canViewIntegrationCandidates) return
+  integrationLoading.value = true
+  integrationError.value = ''
+  try {
+    integrationCandidates.value = await listFormIntegrationCandidates()
+  } catch (err) {
+    integrationCandidates.value = []
+    integrationError.value =
+      err instanceof ApiError && err.msg ? err.msg : t('form.integrationCandidatesFailed')
+  } finally {
+    integrationLoading.value = false
+  }
+}
+
+function patchIntegrations(values: string[]) {
+  const normalized = values.map((item) => item.trim()).filter(Boolean)
+  emit('update:allowedIntegrations', [...new Set(normalized)])
+}
+
+onMounted(() => {
+  void loadIntegrationCandidates()
+})
 
 interface PermissionRow {
   key: string
@@ -93,6 +137,7 @@ function patchAction(action: string, values: string[]) {
 function resetPermissions() {
   emit('update:fieldPermissions', {})
   emit('update:actionPermissions', {})
+  emit('update:allowedIntegrations', [])
 }
 </script>
 
@@ -165,6 +210,66 @@ function resetPermissions() {
       </div>
     </article>
 
+    <article class="access-card" data-testid="form-integration-access">
+      <h3>
+        {{ t('form.integrationTitle') }}
+        <HintTip :content="t('form.integrationHint')" />
+      </h3>
+      <el-alert
+        v-if="!canViewIntegrationCandidates"
+        :title="t('form.integrationNoToolPermission')"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <el-alert
+        v-else-if="integrationError"
+        :title="integrationError"
+        type="warning"
+        :closable="false"
+        show-icon
+      />
+      <template v-else>
+        <div class="integration-row">
+          <el-select
+            :model-value="selectedIntegrations"
+            multiple
+            filterable
+            clearable
+            :loading="integrationLoading"
+            :placeholder="t('form.integrationPlaceholder')"
+            @update:model-value="(value: string[]) => patchIntegrations(value)"
+          >
+            <el-option
+              v-for="candidate in integrationCandidates"
+              :key="candidate.name"
+              :label="`${candidate.name} · ${integrationScopeLabel(candidate.effectScope)}`"
+              :value="candidate.name"
+            >
+              <span>{{ candidate.name }} · {{ integrationScopeLabel(candidate.effectScope) }}</span>
+              <span class="integration-option__hint">{{ candidate.description }}</span>
+            </el-option>
+          </el-select>
+          <el-button :disabled="integrationLoading" @click="loadIntegrationCandidates">
+            {{ t('form.integrationRefresh') }}
+          </el-button>
+        </div>
+        <p v-if="!integrationLoading && !integrationCandidates.length" class="integration-note">
+          {{ t('form.integrationCandidatesEmpty') }}
+        </p>
+        <p class="integration-note">{{ t('form.integrationScopeNote') }}</p>
+        <p v-if="unavailableIntegrations.length" class="integration-warning">
+          {{ t('form.integrationUnavailable', { ids: unavailableIntegrations.join('、') }) }}
+        </p>
+      </template>
+      <div
+        v-if="!canViewIntegrationCandidates && selectedIntegrations.length"
+        class="integration-selected"
+      >
+        <el-tag v-for="id in selectedIntegrations" :key="id" size="small">{{ id }}</el-tag>
+      </div>
+    </article>
+
     <FormListConfigEditor :form-id="formId" :fields="fields" />
     <DatasourceManagerDialog v-if="canManageDatasources" v-model="datasourceDialogVisible" />
   </section>
@@ -223,6 +328,34 @@ function resetPermissions() {
   gap: var(--sw-space-12);
   color: var(--sw-text-regular);
   font-size: var(--sw-font-body);
+}
+.integration-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sw-space-12);
+}
+.integration-row :deep(.el-select) {
+  flex: 1;
+}
+.integration-option__hint {
+  margin-left: var(--sw-space-12);
+  color: var(--sw-text-secondary);
+  font-size: var(--sw-font-caption);
+}
+.integration-note,
+.integration-warning,
+.integration-selected {
+  margin: var(--sw-space-8) 0 0;
+  font-size: var(--sw-font-caption);
+  color: var(--sw-text-secondary);
+}
+.integration-warning {
+  color: var(--sw-danger);
+}
+.integration-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sw-space-8);
 }
 @media (max-width: 900px) {
   .action-grid {

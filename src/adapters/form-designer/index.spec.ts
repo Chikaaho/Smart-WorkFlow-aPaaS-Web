@@ -24,6 +24,21 @@ describe('adapters/form-designer/parseDefinition', () => {
     })
   })
 
+  it('normalizes allowed integration identifiers from the definition snapshot', () => {
+    const raw = JSON.stringify({
+      title: 'Integrated',
+      fields: [],
+      allowedIntegrations: [' cap_query ', 'cap_write', 'cap_query', 42, ''],
+    })
+    const schema = parseDefinition(raw)
+    expect(schema.allowedIntegrations).toEqual(['cap_query', 'cap_write'])
+  })
+
+  it('treats a definition without allowed integrations as no integration permission', () => {
+    const schema = parseDefinition(JSON.stringify({ title: 'Legacy', fields: [] }))
+    expect(schema.allowedIntegrations).toBeUndefined()
+  })
+
   it('maps all 8 known field types', () => {
     const raw = JSON.stringify({
       title: 'All Types',

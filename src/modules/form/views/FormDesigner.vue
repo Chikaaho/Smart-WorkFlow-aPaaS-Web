@@ -86,6 +86,7 @@ const selectedId = ref<string | null>(null)
 const visibilityRules = ref<VisibilityRule[]>([])
 const fieldPermissions = ref<FormSchema['fieldPermissions']>({})
 const actionPermissions = ref<FormSchema['actionPermissions']>({})
+const allowedIntegrations = ref<string[]>([])
 const formEvents = ref<FormEvents>({})
 const previewVisible = ref(false)
 const loading = ref(false)
@@ -256,6 +257,7 @@ function buildDefinition(): FormSchema {
     {
       fieldPermissions: fieldPermissions.value,
       actionPermissions: actionPermissions.value,
+      allowedIntegrations: allowedIntegrations.value,
     },
     formEvents.value,
   )
@@ -283,6 +285,7 @@ async function loadForm(id: string) {
     visibilityRules.value = schema.rules?.visibility ? [...schema.rules.visibility] : []
     fieldPermissions.value = schema.fieldPermissions ? clonePlain(schema.fieldPermissions) : {}
     actionPermissions.value = schema.actionPermissions ? clonePlain(schema.actionPermissions) : {}
+    allowedIntegrations.value = schema.allowedIntegrations ? [...schema.allowedIntegrations] : []
     formEvents.value = schema.events ? clonePlain(schema.events) : {}
     rejected.value = false
     void loadBreadcrumbCategory()
@@ -326,6 +329,7 @@ function resetWorkbench() {
   items.value = []
   fieldPermissions.value = {}
   actionPermissions.value = {}
+  allowedIntegrations.value = []
   formEvents.value = {}
   selectedId.value = null
   editingTableId.value = null
@@ -933,8 +937,10 @@ async function loadBreadcrumbCategory() {
         :fields="items.map((item) => item.field)"
         :field-permissions="fieldPermissions ?? {}"
         :action-permissions="actionPermissions ?? {}"
+        :allowed-integrations="allowedIntegrations"
         @update:field-permissions="fieldPermissions = $event"
         @update:action-permissions="actionPermissions = $event"
+        @update:allowed-integrations="allowedIntegrations = $event"
       />
 
       <FormEventsPanel v-else-if="activeTab === 'events'" v-model="formEvents" />

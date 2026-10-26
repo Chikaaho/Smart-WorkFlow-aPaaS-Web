@@ -9,6 +9,8 @@ export interface FormDefDTO {
   formName: string
   /** 表单 ID（I2：列表配置/生命周期端点按 id 寻址）。 */
   id?: string
+  /** 当前发布版本号（运行期绑定/日志定位用）。 */
+  formVersion?: number
 }
 
 /** 后端分页响应原始形状:字段名为 records(区别于前端契约的 list)。 */
@@ -49,6 +51,55 @@ export async function getFormDefinitionVersion(
     url: `/form/def/by-key/${formKey}/versions/${formVersion}/definition`,
   })
   return parseDefinition(rawJson)
+}
+
+/** 表单设计器可选择的受控集成能力（服务端已按租户/启用/分类过滤，不含 URL）。 */
+export interface FormIntegrationCandidate {
+  name: string
+  description: string
+  effectScope: 'QUERY' | 'WRITE'
+  timeoutSeconds: number
+}
+
+/** GET /api/form/integration/candidates（要求 form:design + agent:tool:view）。 */
+export async function listFormIntegrationCandidates(): Promise<FormIntegrationCandidate[]> {
+  return request<FormIntegrationCandidate[]>({
+    method: 'GET',
+    url: '/form/integration/candidates',
+  })
+}
+
+export type FormIntegrationPhase = 'BEFORE_SUBMIT' | 'AFTER_SUBMIT'
+
+export interface FormIntegrationInvokeReq {
+  formKey: string
+  /** 绑定发布版本；缺省由服务端按当前发布版本解析。 */
+  formVersion?: number
+  /** 已存在记录；提交后写副作用必填。 */
+  recordId?: string
+  phase: FormIntegrationPhase
+  capabilityId: string
+  /** 写副作用幂等标识；提交后阶段通常为提交后的记录 ID。 */
+  requestKey?: string
+  input?: Record<string, unknown>
+}
+
+export interface FormIntegrationInvokeResult {
+  capabilityId: string
+  effectScope: 'QUERY' | 'WRITE'
+  replayed: boolean
+  result: unknown
+}
+
+/** POST /api/form/integration/invoke（要求 form:integration:invoke）。 */
+export async function invokeFormIntegration(
+  req: FormIntegrationInvokeReq,
+): Promise<FormIntegrationInvokeResult> {
+  return request<FormIntegrationInvokeResult>({
+    method: 'POST',
+    url: '/form/integration/invoke',
+    data: req,
+  })
 }
 
 /**

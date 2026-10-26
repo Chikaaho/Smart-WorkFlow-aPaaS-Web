@@ -21,7 +21,7 @@ export function itemsToDefinition(
   title: string,
   rules?: VisibilityRule[],
   description?: string,
-  permissions?: Pick<FormSchema, 'fieldPermissions' | 'actionPermissions'>,
+  permissions?: Pick<FormSchema, 'fieldPermissions' | 'actionPermissions' | 'allowedIntegrations'>,
   events?: FormEvents,
 ): FormSchema {
   return {
@@ -37,6 +37,9 @@ export function itemsToDefinition(
       : {}),
     ...(permissions?.actionPermissions && Object.keys(permissions.actionPermissions).length
       ? { actionPermissions: permissions.actionPermissions }
+      : {}),
+    ...(permissions?.allowedIntegrations?.length
+      ? { allowedIntegrations: permissions.allowedIntegrations }
       : {}),
     ...(events && Object.values(events).some((actions) => actions?.length) ? { events } : {}),
   }
