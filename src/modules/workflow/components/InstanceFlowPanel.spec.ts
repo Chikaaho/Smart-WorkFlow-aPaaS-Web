@@ -4,8 +4,10 @@ import { i18n } from '@/locales'
 import type { ApprovalHistoryItem } from '@/contracts/bpm'
 
 const mockGetProcessDefDefinitionByKey = vi.fn()
+const mockDownloadOpinionAttachment = vi.fn()
 vi.mock('@/modules/workflow/api', () => ({
   getProcessDefDefinitionByKey: (...args: unknown[]) => mockGetProcessDefDefinitionByKey(...args),
+  downloadOpinionAttachment: (...args: unknown[]) => mockDownloadOpinionAttachment(...args),
 }))
 
 import InstanceFlowPanel from './InstanceFlowPanel.vue'
@@ -237,5 +239,48 @@ describe('InstanceFlowPanel 会签聚合（设计 60:190）', () => {
     vm.signFilter = 'rejected'
     await flushPromises()
     expect(vm.signDialogRows).toHaveLength(0)
+  })
+})
+
+describe('InstanceFlowPanel 意见附件受控查看（direction-ui-completion-020）', () => {
+  it('结构化引用渲染下载入口；旧纯文本标记不可查看，不拼下载地址', async () => {
+    const wrapper = mount(InstanceFlowPanel, {
+      props: { approvalHistory: [], processDefinitionKey: 'leave' },
+      global: { plugins: [i18n], stubs },
+    })
+    const vm = wrapper.vm as unknown as {
+      opinionDetailRow: ApprovalHistoryItem | null
+      opinionDetailVisible: boolean
+    }
+    vm.opinionDetailRow = {
+      taskId: 's1',
+      taskName: '部门审批',
+      assignee: '3',
+      createTime: '2026-10-17T10:00:00',
+      endTime: '2026-10-17T10:10:00',
+      approvalResult: 'APPROVED',
+      action: 'APPROVE',
+      actionRecordId: 77,
+      opinionData: {
+        comment: '同意',
+        attachments: [{ storageKey: 'store/key-1', name: '方案.pdf' }],
+        files: ['旧文件名.pdf'],
+      },
+    }
+    vm.opinionDetailVisible = true
+    await flushPromises()
+
+    const downloadButtons = wrapper.findAll('.p53-opinion-attachment button')
+    expect(downloadButtons).toHaveLength(1)
+    expect(downloadButtons[0].text()).toContain('方案.pdf')
+
+    const unavailable = wrapper.findAll('.p53-opinion-attachment__unavailable')
+    expect(unavailable).toHaveLength(1)
+    expect(unavailable[0].text()).toContain('旧文件名.pdf')
+    expect(unavailable[0].text()).toContain('不可查看')
+
+    await downloadButtons[0].trigger('click')
+    await flushPromises()
+    expect(mockDownloadOpinionAttachment).toHaveBeenCalledWith(77, 'store/key-1', '方案.pdf')
   })
 })

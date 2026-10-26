@@ -34,6 +34,8 @@ export interface TaskDetail {
   allowedActions?: string[]
   nodeKey?: string | null
   processInstanceId: string
+  /** 流程实例记录标识（催办等实例级操作定位键；旧响应缺省）。 */
+  instanceId?: number | string | null
   processDefinitionKey: string
   processName: string | null // 流程定义被删除时为 null
   formKey: string
@@ -62,6 +64,8 @@ export interface ApprovalHistoryItem {
   endTime: string | null // 可能为 null
   action?: 'APPROVE' | 'RETURN' | 'REJECT' | null
   opinionData?: Record<string, unknown> | null
+  /** 审批动作记录标识：意见附件受控下载定位键（旧响应缺省）。 */
+  actionRecordId?: string | number | null
   opinionFormId?: string | null
   opinionFormVersion?: string | null
   approvalResult: 'APPROVED' | 'REJECTED' | null // 审批结果：APPROVED=通过, REJECTED=驳回, null=进行中

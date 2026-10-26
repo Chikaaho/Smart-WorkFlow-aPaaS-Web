@@ -1,9 +1,11 @@
 <script setup lang="ts">
 /* global window */
 import { computed, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useI18n } from '@/locales'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { ApiError } from '@/foundation/request'
+import { downloadOpinionAttachment } from '@/modules/workflow/api'
 import { getFormDefinition, resolveUserDisplayNames } from '@/adapters/form-runtime'
 import type { ApprovalHistoryItem } from '@/contracts/bpm'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
@@ -418,18 +420,68 @@ const opinionDetailCheckEntries = computed(() => {
     )
 })
 
-/** 设计（意见详情）的附件区块：仅当键名命中附件约定且值非空时渲染。 */
+/** 意见附件项的解析结果：仅结构化 { storageKey } 引用可受控下载；纯文本旧值标记不可查看。 */
+interface OpinionAttachmentItem {
+  storageKey: string | null
+  name: string
+}
+
+function attachmentsOf(value: unknown): OpinionAttachmentItem[] {
+  const list = Array.isArray(value) ? value : [value]
+  return list.flatMap((item): OpinionAttachmentItem[] => {
+    if (item == null || item === '') return []
+    if (typeof item === 'object') {
+      const record = item as Record<string, unknown>
+      const storageKey = typeof record.storageKey === 'string' ? record.storageKey : null
+      const name = typeof record.name === 'string' && record.name ? record.name : (storageKey ?? '')
+      return name ? [{ storageKey, name }] : []
+    }
+    // 纯文本/旧文件名没有可解析引用：只展示，不拼下载地址
+    return [{ storageKey: null, name: String(item) }]
+  })
+}
+
 const opinionDetailAttachmentEntries = computed(() => {
   const row = opinionDetailRow.value
   if (!row?.opinionData) return []
   return Object.entries(row.opinionData)
     .filter(([key]) => key !== 'comment' && OPINION_ATTACHMENT_KEY.test(key))
-    .map(([key, value]) => ({
-      key: businessFieldLabel(key),
-      value: Array.isArray(value) ? value.map((item) => String(item)).join('、') : String(value),
-    }))
-    .filter((entry) => entry.value !== '')
+    .map(([key, value]) => ({ key: businessFieldLabel(key), items: attachmentsOf(value) }))
+    .filter((entry) => entry.items.length > 0)
 })
+
+const opinionAttachmentDownloading = ref<string | null>(null)
+
+async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promise<void> {
+  const row = opinionDetailRow.value
+  if (!row?.actionRecordId || !item.storageKey || opinionAttachmentDownloading.value) return
+  opinionAttachmentDownloading.value = item.storageKey
+  try {
+    const blob = await downloadOpinionAttachment(row.actionRecordId, item.storageKey, item.name)
+    const url = globalThis.URL.createObjectURL(blob)
+    try {
+      const link = globalThis.document.createElement('a')
+      link.href = url
+      link.download = item.name
+      globalThis.document.body.appendChild(link)
+      try {
+        link.click()
+      } finally {
+        link.remove()
+      }
+    } finally {
+      globalThis.URL.revokeObjectURL(url)
+    }
+  } catch (error) {
+    ElMessage.error(
+      error && typeof error === 'object' && 'msg' in error
+        ? String((error as { msg?: unknown }).msg)
+        : t('taskDetailUi.opinionAttachmentDownloadFailed'),
+    )
+  } finally {
+    opinionAttachmentDownloading.value = null
+  }
+}
 </script>
 
 <template>
@@ -637,7 +689,23 @@ const opinionDetailAttachmentEntries = computed(() => {
         <template v-for="entry in opinionDetailAttachmentEntries" :key="entry.key">
           <div class="p53-opinion-attachment-row">
             <label>{{ entry.key }}</label>
-            <div class="p53-opinion-attachment">{{ entry.value }}</div>
+            <div class="p53-opinion-attachment">
+              <template v-for="(item, index) in entry.items" :key="`${item.name}-${index}`">
+                <el-button
+                  v-if="item.storageKey && opinionDetailRow?.actionRecordId"
+                  link
+                  type="primary"
+                  size="small"
+                  :loading="opinionAttachmentDownloading === item.storageKey"
+                  @click="downloadOpinionAttachmentItem(item)"
+                >
+                  {{ item.name }}（{{ t('taskDetailUi.opinionAttachmentDownload') }}）
+                </el-button>
+                <span v-else class="p53-opinion-attachment__unavailable">
+                  {{ item.name }} · {{ t('taskDetailUi.opinionAttachmentUnavailable') }}
+                </span>
+              </template>
+            </div>
           </div>
         </template>
       </div>

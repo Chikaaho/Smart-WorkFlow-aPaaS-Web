@@ -844,3 +844,17 @@ export async function updateProcessDefThemeRule(
     data: { themeRule },
   })
 }
+
+/** 意见附件受控下载：服务端核验记录/字段/文件引用后才返回文件流。 */
+export async function downloadOpinionAttachment(
+  actionRecordId: string | number,
+  storageKey: string,
+  name?: string,
+): Promise<Blob> {
+  return request<Blob>({
+    method: 'GET',
+    url: `/workflow/attachments/opinion/${encodeURIComponent(String(actionRecordId))}/download`,
+    params: { storageKey, ...(name ? { name } : {}) },
+    responseType: 'blob',
+  })
+}

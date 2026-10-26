@@ -918,7 +918,7 @@ const negativeAction = computed<'REJECT' | 'DISAPPROVE' | null>(() => {
   return null
 })
 
-/** 催办仅对流程发起人呈现（真实契约：POST /workflow/my/instances/{id}/urge）。 */
+/** 催办对发起人与当前待办参与人呈现；服务端按实例参与人再核验。 */
 const isInitiator = computed(() => {
   const d = detail.value
   const uid = userStore.user?.id
@@ -933,7 +933,9 @@ const flowActive = computed(() => {
   return d.taskStatus === 'RUNNING'
 })
 
-const canUrge = computed(() => isInitiator.value && flowActive.value && hasPerm('workflow:urge'))
+const canUrge = computed(
+  () => (isInitiator.value || canAct.value) && flowActive.value && hasPerm('workflow:urge'),
+)
 
 type ApprovalMoreCommand = LifecycleKind | 'URGE'
 interface ApprovalMoreAction {
@@ -997,36 +999,65 @@ function handleApprovalMore(command: string): void {
 const urgeDialogVisible = ref(false)
 const urgeMessage = ref('')
 
+/** 可选催办接收人：当前待办人 + 活动参与人（排除自己）；服务端再校验合法子集。 */
+const urgeRecipientOptions = computed<Array<{ id: string; name: string }>>(() => {
+  const d = detail.value
+  if (!d) return []
+  const self = userStore.user?.id != null ? String(userStore.user.id) : ''
+  const map = new Map<string, string>()
+  const add = (id?: string | null, name?: string | null) => {
+    if (!id || !/^\d+$/.test(id) || id === self) return
+    map.set(id, name?.trim() || id)
+  }
+  add(d.assignee, d.assigneeName)
+  for (const row of d.approvalHistory ?? []) {
+    if (row.endTime == null) add(row.assignee, row.assigneeName)
+  }
+  return [...map.entries()].map(([id, name]) => ({ id, name }))
+})
+/** 已选接收人；空 = 沿用实例级旧语义（催办全部当前待办人）。 */
+const urgeRecipientIds = ref<string[]>([])
+
 function openUrgeDialog(): void {
   if (acting.value || !canUrge.value) return
   urgeMessage.value = ''
+  urgeRecipientIds.value = []
   urgeDialogVisible.value = true
 }
 
 async function confirmUrge(): Promise<void> {
-  await onUrge(urgeMessage.value.trim())
+  await onUrge(urgeMessage.value.trim(), urgeRecipientIds.value)
   urgeDialogVisible.value = false
 }
 
-async function onUrge(message?: string): Promise<void> {
+async function onUrge(message?: string, recipientIds?: string[]): Promise<void> {
   const d = detail.value
   if (!d?.processInstanceId || !canUrge.value) return
   try {
-    const page = await myInstances(
-      { pageNum: 1, pageSize: 100 },
-      d.businessKey ? { keyword: d.businessKey } : undefined,
-    )
-    const instance = page.list.find(
-      (item) =>
-        item.processInstanceId === d.processInstanceId &&
-        String(item.initiatorId) === String(d.initiatorId),
-    )
-    if (!instance) {
-      ElMessage.info(t('workflow.urgeNotAvailable'))
-      return
+    // 实例记录标识优先取任务详情（参与人可用）；旧响应缺省时回退发起人实例列表
+    let instanceRecordId: number | string | null = d.instanceId ?? null
+    if (instanceRecordId == null) {
+      const page = await myInstances(
+        { pageNum: 1, pageSize: 100 },
+        d.businessKey ? { keyword: d.businessKey } : undefined,
+      )
+      const instance = page.list.find(
+        (item) =>
+          item.processInstanceId === d.processInstanceId &&
+          String(item.initiatorId) === String(d.initiatorId),
+      )
+      if (!instance) {
+        ElMessage.info(t('workflow.urgeNotAvailable'))
+        return
+      }
+      instanceRecordId = instance.id
     }
     const { urgeMyInstance } = await import('@/modules/workflow/api/oa')
-    const resp = await urgeMyInstance(instance.id, message)
+    const resp = await urgeMyInstance(
+      instanceRecordId,
+      message,
+      recipientIds && recipientIds.length > 0 ? recipientIds : undefined,
+    )
     if (resp.result === 'ACCEPTED') {
       ElMessage.success(resp.detail || t('workflow.urgeSent'))
     } else if (resp.result === 'COOLDOWN') {
@@ -1592,6 +1623,17 @@ onMounted(loadDetail)
     >
       <p class="urge-dialog__hint">{{ t('workflow.urgeDialogHint') }}</p>
       <el-form label-position="top" size="small" @submit.prevent>
+        <el-form-item
+          v-if="urgeRecipientOptions.length > 0"
+          :label="t('workflow.urgeRecipientsLabel')"
+        >
+          <el-checkbox-group v-model="urgeRecipientIds" data-testid="urge-recipients">
+            <el-checkbox v-for="user in urgeRecipientOptions" :key="user.id" :value="user.id">
+              {{ user.name }}
+            </el-checkbox>
+          </el-checkbox-group>
+          <small class="urge-dialog__hint">{{ t('workflow.urgeRecipientsHint') }}</small>
+        </el-form-item>
         <el-form-item :label="t('workflow.urgeMessageLabel')">
           <el-input
             v-model="urgeMessage"

@@ -665,7 +665,7 @@ describe('TaskDetail.vue', () => {
     await vm.confirmUrge()
 
     expect(myInstances).toHaveBeenCalledWith({ pageNum: 1, pageSize: 100 }, { keyword: 'fd_001' })
-    expect(urgeMyInstance).toHaveBeenCalledWith(42, '请尽快处理报销单')
+    expect(urgeMyInstance).toHaveBeenCalledWith(42, '请尽快处理报销单', undefined)
     expect(ElMessage.success).toHaveBeenCalledWith('已催办')
   })
 
@@ -1223,5 +1223,67 @@ describe('TaskDetail 意见人员字段（direction-ui-completion-020）', () =>
     expect(call?.[0]).toBe('task-001')
     const payload = call?.[2] as { opinionData?: { assignee?: string } } | undefined
     expect(payload?.opinionData?.assignee).toBe('1001')
+  })
+})
+
+describe('TaskDetail 催办参与人与接收人（direction-ui-completion-020）', () => {
+  it('当前待办参与人可见催办，可限定合法接收人并携带实例标识提交', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '2',
+        username: 'approver',
+        displayName: '审批人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set(['workflow:urge']),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      instanceId: 55,
+      assignee: '2',
+      canHandle: true,
+      taskStatus: 'RUNNING',
+      instanceStatus: 'RUNNING',
+      approvalHistory: [
+        ...(mockDetail.approvalHistory ?? []),
+        {
+          taskId: 'active-002',
+          taskName: '会签',
+          assignee: '3',
+          assigneeName: '李四',
+          createTime: '2026-07-17T10:10:00',
+          endTime: null,
+          approvalResult: null,
+        },
+      ],
+    })
+    vi.mocked(urgeMyInstance).mockResolvedValueOnce({ result: 'ACCEPTED', detail: '' } as never)
+
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, pinia], stubs } })
+    await nextTick()
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as {
+      canUrge: boolean
+      urgeRecipientOptions: Array<{ id: string; name: string }>
+      urgeRecipientIds: string[]
+      openUrgeDialog: () => void
+      confirmUrge: () => Promise<void>
+    }
+    expect(vm.canUrge).toBe(true)
+    vm.openUrgeDialog()
+    await nextTick()
+    // 自己不作为可选接收人；活动参与人可选
+    expect(vm.urgeRecipientOptions).toEqual([{ id: '3', name: '李四' }])
+    vm.urgeRecipientIds = ['3']
+    await vm.confirmUrge()
+    await flushPromises()
+
+    expect(urgeMyInstance).toHaveBeenCalledWith(55, '', ['3'])
   })
 })

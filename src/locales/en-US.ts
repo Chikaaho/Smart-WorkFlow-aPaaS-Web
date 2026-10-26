@@ -2389,6 +2389,9 @@ export default {
     recordNode: 'Transition node',
     recordEvent: 'Event / result',
     opinionFormTitle: 'Approval opinion form {formId}',
+    opinionAttachmentDownload: 'Download',
+    opinionAttachmentUnavailable: 'Not viewable (no resolvable reference)',
+    opinionAttachmentDownloadFailed: 'Failed to download opinion attachment',
     opinionCommentLabel: 'Approval comment',
     signRejected: 'rejected',
     signGroupNote:
@@ -2544,6 +2547,9 @@ export default {
     returnRoundHint: 'Returns to the latest completed round of the selected manual node',
     urgeDialogTitle: 'Urge',
     urgeDialogHint: 'An urge reminder will be sent to the current assignees',
+    urgeRecipientsLabel: 'Urge recipients',
+    urgeRecipientsHint:
+      'Leave empty to urge all current assignees; only assignees of this instance are selectable.',
     urgeMessageLabel: 'Urge message',
     urgeMessagePlaceholder: 'Enter an urge message (optional)',
     confirmReturn: 'Return the flow to the selected node?',

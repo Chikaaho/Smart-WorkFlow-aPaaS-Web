@@ -193,12 +193,18 @@ export interface UrgeResp {
 export async function urgeMyInstance(
   instanceId: number | string,
   message?: string,
+  recipientIds?: Array<number | string>,
 ): Promise<UrgeResp> {
   const trimmed = message?.trim()
+  const data: Record<string, unknown> = {}
+  if (trimmed) data.message = trimmed
+  if (recipientIds && recipientIds.length > 0) {
+    data.recipientIds = recipientIds.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+  }
   return request<UrgeResp>({
     method: 'POST',
     url: `/workflow/my/instances/${instanceId}/urge`,
-    data: trimmed ? { message: trimmed } : undefined,
+    data: Object.keys(data).length > 0 ? data : undefined,
   })
 }
 
