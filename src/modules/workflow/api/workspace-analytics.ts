@@ -10,6 +10,11 @@ export interface WorkspaceFormSource {
   formKey: string
   name: string
   formVersion: number
+  /** 所属可见应用（服务端仅对当前账号可见应用下发名称） */
+  appId?: string
+  appName?: string
+  /** 当前账号可见口径的记录数（选择器展示） */
+  recordCount?: number
 }
 
 export interface WorkspaceFieldOption {

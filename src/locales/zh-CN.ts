@@ -3382,5 +3382,16 @@ export default {
       bottom: '下方',
       gradient: '颜色梯度',
     },
+    formPicker: {
+      title: '选择表单',
+      categories: '应用分类',
+      allApps: '全部应用',
+      searchPlaceholder: '搜索表单名称或标识',
+      recordCount: '{count} 条记录',
+      empty: '没有可关联的表单',
+      hint: '仅展示有权查看的表单',
+      change: '更换',
+      clear: '清除',
+    },
   },
 }

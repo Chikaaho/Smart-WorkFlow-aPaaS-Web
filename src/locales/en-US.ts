@@ -3487,5 +3487,16 @@ export default {
       bottom: 'Bottom',
       gradient: 'Color gradient',
     },
+    formPicker: {
+      title: 'Select form',
+      categories: 'Application categories',
+      allApps: 'All applications',
+      searchPlaceholder: 'Search form name or key',
+      recordCount: '{count} records',
+      empty: 'No linkable forms',
+      hint: 'Only forms you can view are listed',
+      change: 'Change',
+      clear: 'Clear',
+    },
   },
 }

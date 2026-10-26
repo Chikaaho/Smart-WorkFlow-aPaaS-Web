@@ -9,6 +9,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from '@/locales'
 import type { CatalogItem } from '@/contracts/catalog'
 import type { WorkspaceField, WorkspaceFormSource } from '../api/workspace-analytics'
+import WorkspaceFormPickerDialog from './WorkspaceFormPickerDialog.vue'
 import {
   PALETTES,
   defaultChartStyle,
@@ -39,6 +40,13 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const tab = ref<'data' | 'style'>('data')
+const pickerVisible = ref(false)
+
+const boundFormName = computed(
+  () =>
+    props.sources.find((source) => source.formKey === props.card.config.formKey)?.name ??
+    t('workspace.inspector.noForm'),
+)
 
 const kind = computed(() => kindOf(props.card.typeCode))
 const chartType = computed(() => chartTypeOf(props.card))
@@ -227,20 +235,25 @@ function isStackable() {
         <template v-else>
           <section class="winsp__section">
             <label class="winsp__label">{{ t('workspace.inspector.form') }}</label>
-            <el-select
-              :model-value="card.config.formKey ?? ''"
-              size="small"
-              filterable
-              @update:model-value="onFormChange"
-            >
-              <el-option :label="t('workspace.inspector.noForm')" value="" />
-              <el-option
-                v-for="source in sources"
-                :key="source.formKey"
-                :label="source.name"
-                :value="source.formKey"
-              />
-            </el-select>
+            <div class="winsp__form-row">
+              <button type="button" class="winsp__form-trigger" @click="pickerVisible = true">
+                <span class="winsp__form-trigger-name">{{ boundFormName }}</span>
+                <span class="winsp__form-trigger-action">{{
+                  card.config.formKey
+                    ? t('workspace.formPicker.change')
+                    : t('workspace.formPicker.title')
+                }}</span>
+              </button>
+              <el-button v-if="card.config.formKey" text size="small" @click="onFormChange('')">
+                {{ t('workspace.formPicker.clear') }}
+              </el-button>
+            </div>
+            <WorkspaceFormPickerDialog
+              v-model="pickerVisible"
+              :sources="sources"
+              :current-form-key="card.config.formKey ?? null"
+              @select="onFormChange"
+            />
             <p v-if="fieldsLoading" class="winsp__hint">{{ t('common.loading') }}</p>
             <p v-else-if="card.config.formKey && !fields.length" class="winsp__hint">
               {{ t('workspace.inspector.noFields') }}
@@ -760,5 +773,46 @@ function isStackable() {
   justify-content: space-between;
   color: var(--sw-text-secondary);
   font-size: 12px;
+}
+
+.winsp__form-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.winsp__form-trigger {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--sw-border-base);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-surface-card);
+  cursor: pointer;
+}
+
+.winsp__form-trigger:hover {
+  border-color: var(--sw-color-primary);
+}
+
+.winsp__form-trigger-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--sw-text-primary);
+  text-align: left;
+}
+
+.winsp__form-trigger-action {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--sw-color-primary);
 }
 </style>
