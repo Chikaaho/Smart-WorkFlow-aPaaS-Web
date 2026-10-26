@@ -117,6 +117,8 @@ describe('FormPreview 填写值回传', () => {
     const table = wrapper.element.querySelector('table')
     expect(table).not.toBeNull()
     expect(table!.querySelectorAll('tbody tr')).toHaveLength(2)
+    // 设计态容器整体禁用指针交互：只读快照不会因复用控件而写入数据
+    expect(wrapper.find('.fc-host--design').exists()).toBe(true)
     const buttons = Array.from(wrapper.element.querySelectorAll('button')).map((b) =>
       b.textContent?.trim(),
     )

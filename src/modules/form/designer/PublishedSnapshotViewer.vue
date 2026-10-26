@@ -74,6 +74,53 @@ const schema = ref<FormSchema | null>(null)
 const rawDefinition = ref<Record<string, unknown> | null>(null)
 const processSources = ref<SnapshotProcessSource[]>([])
 const activeSection = ref<SectionKey>('overview')
+
+/* ── 表单设计 · 冻结字段属性（右属性外壳，方向 direction-ui-completion-020）──
+ * 点击设计网格中的字段，右栏只读展示该字段的冻结配置；不写入任何数据。 */
+const selectedFieldName = ref<string | null>(null)
+const selectedField = computed<FormSchema['fields'][number] | null>(() => {
+  if (!schema.value || schema.value.fields.length === 0) return null
+  return (
+    schema.value.fields.find((f) => f.name === selectedFieldName.value) ?? schema.value.fields[0]
+  )
+})
+type FieldPropRow = { label: string; value: string }
+const selectedFieldProps = computed<FieldPropRow[]>(() => {
+  const field = selectedField.value
+  if (!field) return []
+  const rows: FieldPropRow[] = [
+    { label: t('form.snapshotViewer.propName'), value: field.name },
+    { label: t('form.snapshotViewer.propLabel'), value: field.label || '—' },
+    { label: t('form.snapshotViewer.propType'), value: field.type },
+    {
+      label: t('form.snapshotViewer.propRequired'),
+      value: field.required ? t('common.yes') : t('common.no'),
+    },
+  ]
+  if ('length' in field && field.length) {
+    rows.push({ label: t('form.snapshotViewer.propLength'), value: String(field.length) })
+  }
+  if ('defaultValue' in field && field.defaultValue !== undefined && field.defaultValue !== '') {
+    rows.push({
+      label: t('form.snapshotViewer.propDefault'),
+      value: String(field.defaultValue),
+    })
+  }
+  if ('dictType' in field && field.dictType) {
+    rows.push({ label: t('form.snapshotViewer.propDict'), value: field.dictType })
+  }
+  if (field.type === 'TABLE') {
+    const table = field as { subFields?: { name: string }[]; rowKey?: string }
+    rows.push({
+      label: t('form.snapshotViewer.propSubFields'),
+      value: String(table.subFields?.length ?? 0),
+    })
+    if (table.rowKey) {
+      rows.push({ label: t('form.snapshotViewer.propRowKey'), value: table.rowKey })
+    }
+  }
+  return rows
+})
 let requestGeneration = 0
 
 const fields = computed(() => (schema.value ? flattenSnapshotFields(schema.value) : []))
@@ -518,14 +565,38 @@ watch(
               <p v-if="schema.description" class="snapshot-design__description">
                 {{ schema.description }}
               </p>
-              <div class="snapshot-design__grid">
-                <div
-                  v-for="field in schema.fields"
-                  :key="field.name"
-                  :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
-                >
-                  <FormPreview :schema="{ title: '', fields: [field] }" mode="design" />
+              <div class="snapshot-design__layout">
+                <div class="snapshot-design__grid">
+                  <div
+                    v-for="field in schema.fields"
+                    :key="field.name"
+                    :class="{
+                      'snapshot-design__cell': true,
+                      'is-selected': field.name === selectedField?.name,
+                    }"
+                    :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
+                    @click="selectedFieldName = field.name"
+                  >
+                    <FormPreview :schema="{ title: '', fields: [field] }" mode="design" />
+                  </div>
                 </div>
+                <aside class="snapshot-design__props">
+                  <h4>{{ t('form.snapshotViewer.propsTitle') }}</h4>
+                  <template v-if="selectedField">
+                    <p class="snapshot-design__props-target">
+                      {{ selectedField.label || selectedField.name }}
+                    </p>
+                    <dl>
+                      <template v-for="row in selectedFieldProps" :key="row.label">
+                        <dt>{{ row.label }}</dt>
+                        <dd>{{ row.value }}</dd>
+                      </template>
+                    </dl>
+                  </template>
+                  <p v-else class="snapshot-empty">
+                    {{ t('form.snapshotViewer.noData') }}
+                  </p>
+                </aside>
               </div>
             </div>
           </section>
@@ -1070,6 +1141,63 @@ watch(
   display: grid;
   grid-template-columns: repeat(24, minmax(0, 1fr));
   gap: var(--sw-form-row-gap);
+}
+
+.snapshot-design__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 264px;
+  gap: var(--sw-space-16);
+  align-items: start;
+}
+
+.snapshot-design__cell {
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: var(--sw-radius-base);
+  cursor: pointer;
+}
+
+.snapshot-design__cell.is-selected {
+  border-color: var(--sw-color-primary);
+}
+
+.snapshot-design__props {
+  box-sizing: border-box;
+  padding: var(--sw-space-16);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-surface-card);
+}
+
+.snapshot-design__props h4 {
+  margin: 0 0 var(--sw-space-8);
+  font-size: var(--sw-font-secondary);
+  font-weight: 600;
+}
+
+.snapshot-design__props-target {
+  margin: 0 0 var(--sw-space-8);
+  color: var(--sw-color-primary);
+  font-size: var(--sw-font-caption);
+}
+
+.snapshot-design__props dl {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 6px var(--sw-space-8);
+  margin: 0;
+}
+
+.snapshot-design__props dt {
+  color: var(--sw-text-secondary);
+  font-size: var(--sw-font-caption);
+}
+
+.snapshot-design__props dd {
+  margin: 0;
+  color: var(--sw-text-regular);
+  font-size: var(--sw-font-caption);
+  overflow-wrap: anywhere;
 }
 
 .snapshot-dialog-meta {

@@ -227,6 +227,30 @@ describe('PublishedSnapshotViewer', () => {
     ).toBe(true)
   })
 
+  it('表单设计右属性外壳展示冻结字段属性并随点选切换', async () => {
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '表单设计')
+
+    const props = wrapper.find('.snapshot-design__props')
+    expect(props.exists()).toBe(true)
+    // 默认选中第一个字段：TEXT 的冻结配置可见
+    expect(props.find('.snapshot-design__props-target').text()).toBe('采购名称')
+    const text = props.text()
+    expect(text).toContain('title')
+    expect(text).toContain('TEXT')
+    expect(text).toContain('80')
+
+    // 点选 TABLE 字段：子字段数/行配置切换显示
+    const cells = wrapper.findAll('.snapshot-design__cell')
+    expect(cells).toHaveLength(2)
+    await cells[1].trigger('click')
+    expect(wrapper.find('.snapshot-design__props-target').text()).toBe('采购明细')
+    expect(wrapper.find('.snapshot-design__props').text()).toContain('1')
+    // 冻结字段属性面板不提供任何保存/编辑入口
+    const buttons = wrapper.find('.snapshot-design__props').findAll('button')
+    expect(buttons).toHaveLength(0)
+  })
+
   it('脚本与校验行可打开只读详情', async () => {
     const wrapper = await mountViewer()
     const vm = wrapper.vm as unknown as {
