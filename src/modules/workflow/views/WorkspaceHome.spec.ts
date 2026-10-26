@@ -142,18 +142,16 @@ describe('WorkspaceHome 布局与查询收敛（R4）', () => {
     expect(mockPush).toHaveBeenCalledWith('/form/form-render/f1')
   })
 
-  it('齿轮按273:1600打开居中配置弹窗而非跳转', async () => {
+  it('齿轮进入全屏三栏配置而不是旧弹窗', async () => {
     const wrapper = mount(WorkspaceHome, { global })
     await flushPromises()
     mockPush.mockClear()
     const gear = wrapper.find('.wsd-hero__config')
     expect(gear.attributes('aria-label')).toBe('配置工作台')
     await gear.trigger('click')
-    // 配置入口改为居中弹窗（direction-ui-completion-020）；旧全屏路由仍可达但不再由首页齿轮进入。
-    expect(mockPush).not.toHaveBeenCalledWith('/workspace/edit')
-    const dialog = wrapper.findComponent({ name: 'WorkspaceConfigDialog' })
-    expect(dialog.exists()).toBe(true)
-    expect(dialog.props('visible')).toBe(true)
+    // 0.2.0 r2：首页入口改为全屏 /workspace/config；旧 /workspace/edit 路由仍可达。
+    expect(mockPush).toHaveBeenCalledWith('/workspace/config')
+    expect(wrapper.findComponent({ name: 'WorkspaceConfigDialog' }).exists()).toBe(false)
   })
 
   it('V011-BUG-003：保存的分数几何按当前画布宽度展开为像素渲染', async () => {

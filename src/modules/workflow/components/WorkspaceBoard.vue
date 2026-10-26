@@ -44,6 +44,9 @@ import {
   type CardRect,
 } from '@/modules/workflow/utils/workspace-canvas'
 import { ApiError } from '@/foundation/request'
+import { rendererKeyFor } from '@/modules/workflow/utils/workspace-components'
+import type { WorkspaceDataConfig } from '@/modules/workflow/utils/workspace-data'
+import WorkspaceDataCard from './WorkspaceDataCard.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -382,14 +385,32 @@ const COMPONENT_TITLE_KEYS: Record<string, string> = {
   messages: 'common.message',
 }
 
-/** 卡片标题显示名：渲染期按当前语言解析。 */
+/** 卡片标题显示名：新版数据组件优先使用保存的标题，其余按卡片类型/文案键解析。 */
 function componentTitle(key: string): string {
-  const configured = cardTypes.value.find((type) => type.typeCode === key)
-  return configured?.displayName ?? (COMPONENT_TITLE_KEYS[key] ? t(COMPONENT_TITLE_KEYS[key]) : key)
+  const component = components.value.find((item) => item.key === key)
+  const savedTitle = component?.metadata?.title
+  if (typeof savedTitle === 'string' && savedTitle.trim()) return savedTitle
+  const typeCode = component?.typeCode ?? key
+  const configured = cardTypes.value.find((type) => type.typeCode === typeCode)
+  return (
+    configured?.displayName ??
+    (COMPONENT_TITLE_KEYS[typeCode] ? t(COMPONENT_TITLE_KEYS[typeCode]) : typeCode)
+  )
 }
 
 function rendererKeyOf(key: string): string {
-  return cardTypes.value.find((type) => type.typeCode === key)?.rendererKey ?? key
+  const component = components.value.find((item) => item.key === key)
+  return rendererKeyFor(component?.typeCode ?? key, cardTypes.value)
+}
+
+function dataConfigOf(component: WorkspaceComponent): WorkspaceDataConfig {
+  const config = component.metadata?.dataConfig
+  return config && typeof config === 'object' ? (config as WorkspaceDataConfig) : {}
+}
+
+function dataKindOf(component: WorkspaceComponent): 'metric' | 'chart' | 'list' | null {
+  const renderer = rendererKeyOf(component.key)
+  return renderer === 'metric' || renderer === 'chart' || renderer === 'list' ? renderer : null
 }
 
 const showTodoPanel = computed(() =>
@@ -416,13 +437,23 @@ async function loadLayout() {
       WorkspaceCard | WorkspaceComponent
     >
     components.value = withNewComponents(
-      rawCards.map((card) => {
-        const key = 'typeCode' in card ? card.typeCode : card.key
+      rawCards.map((card): WorkspaceComponent => {
+        const typeCode: string =
+          'key' in card
+            ? typeof card.typeCode === 'string' && card.typeCode
+              ? card.typeCode
+              : card.key
+            : (card.typeCode ?? '')
+        const instanceId = 'instanceId' in card ? card.instanceId : undefined
+        const key = instanceId || typeCode
         return {
           key,
+          typeCode,
+          instanceId,
+          height: card.height,
           // 设计01 默认布局只呈现统计/待办/快捷/效能/动态；草稿与消息保留为
           // 组件库能力，默认隐藏，明确自定义布局按用户保存值原样承接。
-          visible: custom.value ? card.visible : DESIGN_DEFAULT_TYPES.has(key) && card.visible,
+          visible: custom.value ? card.visible : DESIGN_DEFAULT_TYPES.has(typeCode) && card.visible,
           order: card.order,
           span: card.span,
           metadata: card.metadata,
@@ -495,6 +526,9 @@ const DEFAULT_CARD_HEIGHTS: Record<string, number> = {
   efficiency: 340,
   drafts: 220,
   messages: 220,
+  metric: 150,
+  chart: 320,
+  list: 280,
 }
 /**
  * 默认画布按设计稿 3:2 分层（内容宽 1656 @1920）：
@@ -735,7 +769,7 @@ async function loadCatalogChoices() {
   }
 }
 
-/** 小齿轮：编辑态切换组件库面板；首页按配置弹窗/旧路由两种入口分流。 */
+/** 小齿轮：编辑态切换组件库面板；首页进入全屏配置（旧弹窗入口保留兼容）。 */
 function onGearClick() {
   if (editing.value) {
     paletteVisible.value = !paletteVisible.value
@@ -745,7 +779,7 @@ function onGearClick() {
     emit('configure')
     return
   }
-  void router.push('/workspace/edit')
+  void router.push('/workspace/config')
 }
 
 function setVisible(component: WorkspaceComponent, value: boolean) {
@@ -984,7 +1018,7 @@ onBeforeUnmount(() => {
         :aria-label="t('workspace.configureWorkspace')"
         @click="onGearClick"
       >
-        <span>{{ t('workspace.layoutEntry') }}</span>
+        <span>{{ t('workspace.configureWorkspace') }}</span>
       </button>
     </header>
 
@@ -1290,6 +1324,16 @@ onBeforeUnmount(() => {
               </button>
             </section>
 
+            <section v-else-if="dataKindOf(component)" class="wsd-panel wsd-panel--data">
+              <div class="wsd-panel__head">
+                <h3 class="wsd-panel__title">{{ componentTitle(component.key) }}</h3>
+              </div>
+              <WorkspaceDataCard
+                :kind="dataKindOf(component) ?? 'metric'"
+                :config="dataConfigOf(component)"
+              />
+            </section>
+
             <section v-else class="wsd-panel">
               <div class="wsd-panel__head">
                 <h3 class="wsd-panel__title">{{ componentTitle(component.key) }}</h3>
@@ -1365,7 +1409,7 @@ onBeforeUnmount(() => {
   line-height: 20px;
   color: var(--sw-text-secondary);
 }
-/* 设计01 右上「布局」文字入口（原齿轮图标） */
+/* 273:1600 / 3:2：右上「配置工作台」入口（原齿轮图标） */
 .wsd-hero__config {
   position: absolute;
   right: 0;
@@ -1375,12 +1419,12 @@ onBeforeUnmount(() => {
   justify-content: center;
   box-sizing: border-box;
   height: 32px;
-  padding: 0 8px;
-  border: 0;
+  padding: 0 14px;
+  border: 1px solid var(--sw-border, #d9dde6);
   border-radius: 6px;
-  background: transparent;
-  color: var(--sw-color-primary);
-  font-size: 14px;
+  background: var(--sw-bg-surface, #fff);
+  color: var(--sw-text-primary);
+  font-size: 13px;
   cursor: pointer;
 }
 .wsd-hero__config:hover,

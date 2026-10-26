@@ -45,6 +45,9 @@ export type WorkspaceRendererKey =
   | 'efficiency'
   | 'drafts'
   | 'messages'
+  | 'metric'
+  | 'list'
+  | 'chart'
 
 /** 工作台卡片类型（租户级后台配置）。 */
 export interface WorkspaceCardType {
@@ -61,18 +64,26 @@ export interface WorkspaceCardType {
 /** 工作台卡片实例（用户级 JSON 元数据）。 */
 export interface WorkspaceCard {
   typeCode: string
+  /** 新版数据组件实例标识；同类型多实例靠它区分。 */
+  instanceId?: string
   visible: boolean
   order: number
-  span?: 1 | 2
+  /** 旧卡片 1/2；新版 12 列画布使用 1-12。 */
+  span?: number
+  /** 新版卡片高度（px），旧配置缺省。 */
+  height?: number
   metadata?: Record<string, unknown>
 }
 
 /** 旧版组件配置兼容形状；读取时由后端归一为 cards。 */
 export interface WorkspaceComponent {
   key: string
+  typeCode?: string
+  instanceId?: string
   visible: boolean
   order: number
-  span?: 1 | 2
+  span?: number
+  height?: number
   metadata?: Record<string, unknown>
 }
 

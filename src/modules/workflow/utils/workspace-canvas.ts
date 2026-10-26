@@ -27,7 +27,7 @@ export interface SnapResult {
 /** 对齐吸附阈值（px）：ProcessOn 风格的近距吸附。 */
 export const WORKSPACE_SNAP = 6
 export const WORKSPACE_MIN_W = 240
-export const WORKSPACE_MIN_H = 150
+export const WORKSPACE_MIN_H = 100
 /** 无布局环境（单测/jsdom）取不到画布宽度时的名义参考宽度。 */
 export const WORKSPACE_NOMINAL_W = 1200
 

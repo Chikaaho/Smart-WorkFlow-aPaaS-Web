@@ -37,6 +37,17 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // 0.2.0 r2：全屏三栏工作台配置（273:1600）。旧 /workspace/edit 保持兼容。
+        path: 'workspace/config',
+        name: 'workspace-config',
+        component: () => import('@/modules/workflow/views/WorkspaceStudio.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workspace.studio.title')
+          },
+        },
+      },
+      {
         // V012-BUG-023：工作台本地列表页（暂与流程中心同组件，后续做展示内容区分）。
         path: 'workspace/todo',
         name: 'workspace-todo',
