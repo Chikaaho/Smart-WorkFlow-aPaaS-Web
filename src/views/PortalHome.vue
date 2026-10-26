@@ -557,7 +557,7 @@ function searchPortal(): void {
   width: min(34px, 100%);
   min-height: 18px;
   border-radius: 5px 5px 0 0;
-  background: #e3def8;
+  background: var(--el-color-primary-light-8);
 }
 .portal__analytics-bar:last-child span {
   background: var(--sw-color-primary);
