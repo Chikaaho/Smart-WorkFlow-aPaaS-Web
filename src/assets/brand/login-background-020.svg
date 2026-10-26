@@ -14,15 +14,11 @@
       y2="0"
       gradientTransform="matrix(0.985103315714 0.480538202787 -0.480538202787 0.985103315714 0.218644882268 -0.198222008650)"
     >
-      <stop offset="0" stop-color="rgb(5.5%,8%,18%)" />
-      <stop offset="0.58" stop-color="rgb(16%,7.5%,34%)" />
-      <stop offset="1" stop-color="rgb(20%,12%,48%)" />
+      <stop offset="0" stop-color="rgb(5.5%,7.8%,18%)" />
+      <stop offset="0.58" stop-color="rgb(7.1%,14.1%,29.8%)" />
+      <stop offset="1" stop-color="rgb(10.2%,23.1%,48.2%)" />
     </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.714285714286">
-      <stop offset="0" stop-color="rgb(44%,15%,100%)" stop-opacity="0.55" />
-      <stop offset="1" stop-color="rgb(44%,15%,100%)" stop-opacity="0" />
-    </radialGradient>
   </defs>
   <path fill="url(#brand)" d="M0 0h1180v1080H0z" />
-  <ellipse cx="1050" cy="50" rx="400" ry="400" fill="url(#glow)" />
+  <circle cx="1049" cy="50" r="399" fill="rgb(14.5%,38.8%,92.2%)" />
 </svg>
