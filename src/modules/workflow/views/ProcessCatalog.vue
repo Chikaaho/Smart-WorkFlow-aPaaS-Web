@@ -45,6 +45,45 @@ const activeCategory = ref<number | ''>('')
 const categories = ref<CatalogCategory[]>([])
 const counts = ref<Record<string, number>>({})
 
+// ─── 0.2.0 分类侧栏（direction-sidebar-navigation categories 增量）：236/64、40 行、底部 48 开关 ───
+const treeCollapsed = ref(false)
+
+interface CategoryRow {
+  key: string
+  id: number | ''
+  name: string
+  count: number
+}
+
+const treeRows = computed<CategoryRow[]>(() => {
+  const rows: CategoryRow[] = [
+    { key: 'all', id: '', name: t('workflow.catalogAll'), count: itemCountOf('') },
+  ]
+  for (const category of categories.value) {
+    rows.push({
+      key: `c-${category.id}`,
+      id: category.id,
+      name: category.name,
+      count: itemCountOf(category.id),
+    })
+  }
+  if (itemCountOf(0) > 0) {
+    rows.push({
+      key: 'uncategorized',
+      id: 0,
+      name: t('workflow.uncategorized'),
+      count: itemCountOf(0),
+    })
+  }
+  return rows
+})
+
+/** 收起态首字兜底（与多级侧栏口径一致：当前语言展示名首字）。 */
+function glyphOf(name: string): string {
+  const trimmed = name.trim()
+  return trimmed ? trimmed.charAt(0) : ''
+}
+
 // ─── 收藏 / 常用 / 最近使用（V012-BUG-009） ───
 const favorites = ref<FavoriteItem[]>([])
 const frequentItems = ref<FavoriteItem[]>([])
@@ -219,42 +258,50 @@ onMounted(() => {
   <div class="catalog-page">
     <!-- 0.1.7 #25：左上角标题/描述为噪音，已去除——分类树与流程列表即页首 -->
 
-    <!-- V012-BUG-009：左分类树 + 右列表 -->
-    <div class="catalog-layout">
+    <!-- 0.2.0 分类侧栏：展开 236 / 收起 64；名称左对齐、数量靠右；底部 48px 开关 -->
+    <div class="catalog-layout" :class="{ 'catalog-layout--collapsed': treeCollapsed }">
       <CategorySidebar
         class="catalog-tree"
+        :class="{ 'catalog-tree--collapsed': treeCollapsed }"
         sticky
         role="tree"
         :aria-label="t('workflow.processCenter')"
       >
+        <p class="catalog-tree__title">{{ t('workflow.processCategories') }}</p>
+        <div class="catalog-tree__rows">
+          <el-tooltip
+            v-for="row in treeRows"
+            :key="row.key"
+            :content="`${row.name} ${row.count}`"
+            :disabled="!treeCollapsed"
+            placement="right"
+            :show-after="150"
+          >
+            <button
+              type="button"
+              class="catalog-tree__item"
+              :class="{ 'is-active': activeCategory === row.id }"
+              :aria-current="activeCategory === row.id ? 'true' : undefined"
+              @click="selectCategory(row.id)"
+            >
+              <span v-if="treeCollapsed" class="catalog-tree__glyph" aria-hidden="true">{{
+                glyphOf(row.name)
+              }}</span>
+              <template v-else>
+                <span class="catalog-tree__name">{{ row.name }}</span>
+                <span class="catalog-tree__count">{{ row.count }}</span>
+              </template>
+            </button>
+          </el-tooltip>
+        </div>
         <button
           type="button"
-          class="catalog-tree__item"
-          :class="{ 'is-active': activeCategory === '' }"
-          @click="selectCategory('')"
+          class="catalog-tree__toggle"
+          :aria-expanded="treeCollapsed ? 'false' : 'true'"
+          @click="treeCollapsed = !treeCollapsed"
         >
-          <span>{{ t('workflow.catalogAllWithCount', { count: itemCountOf('') }) }}</span>
-        </button>
-        <button
-          v-for="category in categories"
-          :key="category.id"
-          type="button"
-          class="catalog-tree__item"
-          :class="{ 'is-active': activeCategory === category.id }"
-          @click="selectCategory(category.id)"
-        >
-          <span>{{ category.name }}</span>
-          <span class="catalog-tree__count">{{ itemCountOf(category.id) }}</span>
-        </button>
-        <button
-          v-if="itemCountOf(0) > 0"
-          type="button"
-          class="catalog-tree__item"
-          :class="{ 'is-active': activeCategory === 0 }"
-          @click="selectCategory(0)"
-        >
-          <span>{{ t('workflow.uncategorized') }}</span>
-          <span class="catalog-tree__count">{{ itemCountOf(0) }}</span>
+          <span aria-hidden="true">{{ treeCollapsed ? '→' : '←' }}</span>
+          <span v-if="!treeCollapsed">{{ t('workflow.treeCollapse') }}</span>
         </button>
       </CategorySidebar>
 
@@ -404,16 +451,46 @@ onMounted(() => {
 }
 .catalog-layout {
   display: grid;
-  grid-template-columns: 225px minmax(0, 1fr);
+  grid-template-columns: 236px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
+.catalog-layout--collapsed {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+.catalog-tree {
+  padding: 0;
+  gap: 0;
+}
+.catalog-tree__title {
+  margin: 0;
+  padding: 14px 16px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sw-text-secondary);
+}
+.catalog-tree--collapsed .catalog-tree__title {
+  padding: 14px 0 10px;
+  text-align: center;
+}
+.catalog-tree__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px 8px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.catalog-tree--collapsed .catalog-tree__rows {
+  padding: 0 4px 8px;
+}
 .catalog-tree__item {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 36px;
+  min-height: 40px;
   padding: 0 12px;
   border: none;
   border-radius: var(--sw-radius-base);
@@ -423,17 +500,79 @@ onMounted(() => {
   text-align: left;
   cursor: pointer;
 }
+.catalog-tree--collapsed .catalog-tree__item {
+  justify-content: center;
+  padding: 0;
+}
 .catalog-tree__item:hover {
   background: var(--sw-color-primary-soft);
 }
 .catalog-tree__item.is-active {
-  background: var(--sw-color-primary);
-  color: #ffffff;
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
   font-weight: 500;
 }
+.catalog-tree__item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--sw-color-primary);
+}
+.catalog-tree__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .catalog-tree__count {
+  flex: 0 0 auto;
+  min-width: 20px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--sw-fill-light, #f0f2f5);
   font-size: 12px;
-  opacity: 0.75;
+  color: var(--sw-text-secondary);
+  text-align: center;
+}
+.catalog-tree__item.is-active .catalog-tree__count {
+  background: #ffffff;
+  color: var(--sw-color-primary);
+}
+.catalog-tree__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--sw-radius-base);
+  font-size: 13px;
+  color: var(--sw-text-regular);
+}
+.catalog-tree__item.is-active .catalog-tree__glyph {
+  color: var(--sw-color-primary);
+}
+.catalog-tree__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  margin-top: auto;
+  padding: 0 12px;
+  border: none;
+  border-top: 1px solid var(--sw-border-light);
+  background: transparent;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+  cursor: pointer;
+}
+.catalog-tree__toggle:hover {
+  color: var(--sw-color-primary);
 }
 .catalog-tree__manage {
   margin-top: 10px;

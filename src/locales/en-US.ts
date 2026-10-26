@@ -3255,6 +3255,9 @@ export default {
     draftVersionLabel: 'Draft version v{version}',
     catalogAllWithCount: 'All {count}',
     catalogUncategorizedWithCount: 'Uncategorized {count}',
+    catalogAll: 'All',
+    processCategories: 'Process categories',
+    treeCollapse: 'Collapse',
     validationLocateLabel: 'Locate {target}',
     validationSummary: 'Validation result: {count} actionable errors',
     handoverSummary:
