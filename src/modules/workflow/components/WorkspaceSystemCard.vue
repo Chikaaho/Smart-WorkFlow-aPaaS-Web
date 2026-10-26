@@ -8,7 +8,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/locales'
-import { queryTodoTasks, myProcessed, myInstances } from '../api'
+import { queryTodoTasks, myProcessed, myInstances, myDrafts } from '../api'
 import { queryMyCopies, queryCatalogItems } from '../api/oa'
 import { queryAnalyticsSummary, type AnalyticsSummary } from '../api/i4'
 
@@ -32,6 +32,8 @@ const catalog = ref<Array<{ itemKey: string; name: string; formKey: string }>>([
 const initiatedRows = ref<Array<Record<string, unknown>>>([])
 const analytics = ref<AnalyticsSummary | null>(null)
 const loading = ref(true)
+/** 旧版「统计概览」卡沿用真实四类计数，避免旧布局在新配置页显示空卡。 */
+const legacyTotals = ref({ todo: 0, initiated: 0, processed: 0, drafts: 0 })
 
 function rowTitle(row: Record<string, unknown>): string {
   for (const key of [
@@ -132,6 +134,28 @@ async function loadQuick(): Promise<void> {
   }
 }
 
+const legacyStats = computed(() => [
+  { key: 'todo', label: t('workspace.statMyTodo'), value: legacyTotals.value.todo },
+  { key: 'initiated', label: t('workspace.statInitiated'), value: legacyTotals.value.initiated },
+  { key: 'processed', label: t('workspace.statProcessed'), value: legacyTotals.value.processed },
+  { key: 'drafts', label: t('workspace.statDrafts'), value: legacyTotals.value.drafts },
+])
+
+async function loadLegacyStats(): Promise<void> {
+  const [todo, initiated, processed, drafts] = await Promise.allSettled([
+    queryTodoTasks({ pageNum: 1, pageSize: 1 }),
+    myInstances({ pageNum: 1, pageSize: 1 }),
+    myProcessed({ pageNum: 1, pageSize: 1 }),
+    myDrafts({ pageNum: 1, pageSize: 1 }),
+  ])
+  legacyTotals.value = {
+    todo: todo.status === 'fulfilled' ? todo.value.total : 0,
+    initiated: initiated.status === 'fulfilled' ? initiated.value.total : 0,
+    processed: processed.status === 'fulfilled' ? processed.value.total : 0,
+    drafts: drafts.status === 'fulfilled' ? drafts.value.total : 0,
+  }
+}
+
 async function loadActivity(): Promise<void> {
   try {
     const page = await myInstances({ pageNum: 1, pageSize: 6 })
@@ -152,6 +176,7 @@ async function loadEfficiency(): Promise<void> {
 onMounted(async () => {
   try {
     if (props.typeCode === 'todo') await loadTodo()
+    else if (props.typeCode === 'stats') await loadLegacyStats()
     else if (props.typeCode === 'favoriteItems') await loadQuick()
     else if (props.typeCode === 'activity') await loadActivity()
     else if (props.typeCode === 'efficiency') await loadEfficiency()
@@ -164,6 +189,15 @@ onMounted(async () => {
 <template>
   <div class="wsys" :class="`wsys--${typeCode}`">
     <div v-if="loading" class="wsys__empty">{{ t('common.loading') }}</div>
+
+    <template v-else-if="typeCode === 'stats'">
+      <div class="wsys__stats">
+        <div v-for="item in legacyStats" :key="item.key" class="wsys__stat">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </div>
+      </div>
+    </template>
 
     <template v-else-if="typeCode === 'todo'">
       <div class="wsys__tabs">
@@ -261,6 +295,8 @@ onMounted(async () => {
         </div>
       </template>
     </template>
+
+    <div v-else class="wsys__empty">{{ t('workspace.legacyCardHint') }}</div>
   </div>
 </template>
 
@@ -426,6 +462,31 @@ onMounted(async () => {
   margin: 0;
   color: var(--sw-text-tertiary);
   font-size: 11px;
+}
+
+.wsys__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  align-content: center;
+  height: 100%;
+}
+
+.wsys__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wsys__stat span {
+  color: var(--sw-text-tertiary);
+  font-size: 12px;
+}
+
+.wsys__stat strong {
+  color: var(--sw-color-primary, #2563eb);
+  font-size: 28px;
+  font-weight: 700;
 }
 
 .wsys__metrics {

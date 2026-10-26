@@ -12,9 +12,10 @@ const catalogItems = [
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 
 vi.mock('../api', () => ({
-  queryTodoTasks: () => Promise.resolve({ list: [], total: 0 }),
-  myProcessed: () => Promise.resolve({ list: [], total: 0 }),
-  myInstances: () => Promise.resolve({ list: [], total: 0 }),
+  queryTodoTasks: () => Promise.resolve({ list: [], total: 17 }),
+  myProcessed: () => Promise.resolve({ list: [], total: 7 }),
+  myInstances: () => Promise.resolve({ list: [], total: 22 }),
+  myDrafts: () => Promise.resolve({ list: [], total: 2 }),
 }))
 
 vi.mock('../api/oa', () => ({
@@ -29,6 +30,22 @@ vi.mock('../api/i4', () => ({
 const stubs = {
   'el-icon': { template: '<i><slot /></i>' },
 }
+
+describe('WorkspaceSystemCard 旧版统计概览兼容', () => {
+  it('旧 stats 卡读取四类真实计数而不是空卡', async () => {
+    const wrapper = mount(WorkspaceSystemCard, {
+      props: { typeCode: 'stats' },
+      global: { stubs },
+    })
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('17')
+    expect(text).toContain('22')
+    expect(text).toContain('7')
+    expect(text).toContain('2')
+    expect(wrapper.findAll('.wsys__stat')).toHaveLength(4)
+  })
+})
 
 describe('WorkspaceSystemCard 快捷发起候选/已选一致性', () => {
   beforeEach(() => {

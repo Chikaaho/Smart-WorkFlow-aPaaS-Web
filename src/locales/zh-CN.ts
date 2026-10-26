@@ -3229,6 +3229,7 @@ export default {
     completed: '已完成',
     running: '进行中',
     noEfficiency: '暂无效能数据',
+    legacyCardHint: '旧版卡片，可在首页查看；重新添加可升级为新版组件',
     library: {
       todo: '我的待办',
       quickLaunch: '快捷发起',

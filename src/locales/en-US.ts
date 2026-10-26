@@ -3331,6 +3331,7 @@ export default {
     completed: 'Completed',
     running: 'Running',
     noEfficiency: 'No efficiency data',
+    legacyCardHint: 'Legacy card, view it on the home page; re-add it to upgrade',
     library: {
       todo: 'My to-dos',
       quickLaunch: 'Quick launch',
