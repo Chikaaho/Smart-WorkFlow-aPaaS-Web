@@ -40,9 +40,13 @@ const props = withDefaults(
     schema: FormSchema
     /** design=画布只读热区；fill=全屏可填写。默认 fill。 */
     mode?: 'design' | 'fill'
+    /** 填写值（v-model）：控件编辑后经 form-create 原样回传（RichText 等自定义控件同链）。 */
+    modelValue?: Record<string, unknown>
   }>(),
-  { mode: 'fill' },
+  { mode: 'fill', modelValue: undefined },
 )
+
+const emit = defineEmits<{ 'update:modelValue': [value: Record<string, unknown>] }>()
 
 /* ── 字典项异步装载（BF20261013-009）──
  * 规则带 __dictType__ 的 select/radio/checkbox 由运行时字典填充选项；
@@ -123,6 +127,11 @@ onMounted(() => {
       return () =>
         h(formCreate, {
           rule: rules.value,
+          // 预览填写值双向回传：form-create 组件级 v-model（formData 同源，不另设副本）。
+          modelValue: props.modelValue ?? {},
+          'onUpdate:modelValue': (value: Record<string, unknown>) => {
+            emit('update:modelValue', value)
+          },
           // P53 节点07：标签在控件上方（设计稿画布行式布局），宽度交由外层栅格控制
           option: {
             submitBtn: false,

@@ -77,4 +77,44 @@ describe('rich-text 编码与安全边界', () => {
       '&lt;script&gt;x&lt;/script&gt;<br>第二行',
     )
   })
+
+  it('删除线用受控 s 标签，粘贴里的 del/strike 归一为 s', () => {
+    expect(serializeRichText('<p>价格<s>99</s>1</p>')).toBe(
+      `${RICH_TEXT_PREFIX}<p>价格<s>99</s>1</p>`,
+    )
+    expect(sanitizeRichTextBody('<p><del>删除</del>与<strike>划掉</strike></p>')).toBe(
+      '<p><s>删除</s>与<s>划掉</s></p>',
+    )
+  })
+
+  it('对齐/缩进令牌只保留在 p/div 上且默认值不落库', () => {
+    const clean = sanitizeRichTextBody(
+      '<p data-rt-align="center" data-rt-indent="1">居中缩进</p>' +
+        '<div data-rt-align="right">右对齐</div>' +
+        '<p data-rt-align="left" data-rt-indent="0">默认</p>' +
+        '<p data-rt-align="justify" data-rt-indent="9">非法</p>' +
+        '<li data-rt-align="center">列表项</li>',
+    )
+    expect(clean).toContain('<p data-rt-align="center" data-rt-indent="1">居中缩进</p>')
+    expect(clean).toContain('<div data-rt-align="right">右对齐</div>')
+    expect(clean).toContain('<p>默认</p>')
+    expect(clean).toContain('<p>非法</p>')
+    expect(clean).toContain('<li>列表项</li>')
+  })
+
+  it('只读渲染把对齐/缩进令牌转固定内联样式', () => {
+    const html = renderRichTextHtml(
+      `${RICH_TEXT_PREFIX}<p data-rt-align="center" data-rt-indent="2">居中</p>`,
+    )
+    expect(html).toContain('text-align: center')
+    expect(html).toContain('margin-left: 64px')
+    expect(html).not.toContain('data-rt-align')
+    expect(html).not.toContain('data-rt-indent')
+  })
+
+  it('列表内容可见文本按行计数', () => {
+    expect(richTextVisibleText(`${RICH_TEXT_PREFIX}<ol><li>第一项</li><li>第二项</li></ol>`)).toBe(
+      '第一项\n第二项',
+    )
+  })
 })

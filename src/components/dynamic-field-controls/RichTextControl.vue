@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /* global document, window, HTMLElement, Node, Range, ClipboardEvent, Event, MouseEvent, HTMLSelectElement */
 /**
- * 富文本（RICH_TEXT）控件（direction-ui-semantics-020 / A09—A12）。
- * - 编辑：受控字体/字号/颜色与基础加粗/斜体/下划线；粘贴与直写经同一清洗；
+ * 富文本（RICH_TEXT）控件（direction-ui-semantics-020 / direction-ui-completion-020 / A09—A12）。
+ * - 编辑：受控字体/字号/颜色与基础排版（加粗/斜体/下划线/删除线、对齐/缩进、有序/无序列表）；
+ *   对齐与缩进不用 execCommand 行内样式，直接写 p/div 受控令牌；粘贴与直写经同一清洗；
  * - 只读/历史：带前缀的新值按受控 HTML 渲染，旧无前缀值按纯文本换行展示；
  * - 长度/必填按用户可见文本计数（父级 FormRender 与服务端同口径）。
  */
@@ -38,6 +39,10 @@ const activeColor = ref('#6F2DFF')
 const boldActive = ref(false)
 const italicActive = ref(false)
 const underlineActive = ref(false)
+const strikeActive = ref(false)
+const ulActive = ref(false)
+const olActive = ref(false)
+const activeAlign = ref<'left' | 'center' | 'right'>('left')
 let savedRange: Range | null = null
 let pendingSize: number | null = null
 
@@ -207,10 +212,61 @@ function applyColor(value: string): void {
   colorOpen.value = false
 }
 
-function toggle(command: 'bold' | 'italic' | 'underline'): void {
+function toggle(command: 'bold' | 'italic' | 'underline' | 'strikeThrough'): void {
   restoreSelection()
   document.execCommand('styleWithCSS', false, false)
   document.execCommand(command)
+  afterCommand()
+}
+
+/** 对齐/缩进令牌只挂在 p/div 上；列表项由列表自身样式承载。 */
+function alignTargetBlock(): HTMLElement | null {
+  const editor = editorRef.value
+  const selection = window.getSelection()
+  if (!editor || !selection || selection.rangeCount === 0) return null
+  let node: Node | null = selection.anchorNode
+  while (node && node !== editor) {
+    if (node.nodeType === 1) {
+      const tag = (node as HTMLElement).tagName.toLowerCase()
+      if (tag === 'p' || tag === 'div') return node as HTMLElement
+    }
+    node = node.parentNode
+  }
+  return null
+}
+
+function ensureAlignBlock(): HTMLElement | null {
+  const existing = alignTargetBlock()
+  if (existing) return existing
+  // 裸文本行先格式化成块，才能承载 data-rt-align / data-rt-indent 令牌。
+  document.execCommand('formatBlock', false, 'div')
+  return alignTargetBlock()
+}
+
+function applyAlign(mode: 'left' | 'center' | 'right'): void {
+  restoreSelection()
+  const block = ensureAlignBlock()
+  if (!block) return
+  if (mode === 'left') block.removeAttribute('data-rt-align')
+  else block.setAttribute('data-rt-align', mode)
+  afterCommand()
+}
+
+function applyIndent(delta: 1 | -1): void {
+  restoreSelection()
+  const block = ensureAlignBlock()
+  if (!block) return
+  const current = Number(block.getAttribute('data-rt-indent') ?? '0')
+  const next = Math.min(2, Math.max(0, current + delta))
+  if (next <= 0) block.removeAttribute('data-rt-indent')
+  else block.setAttribute('data-rt-indent', String(next))
+  afterCommand()
+}
+
+function toggleList(kind: 'ul' | 'ol'): void {
+  restoreSelection()
+  document.execCommand('styleWithCSS', false, false)
+  document.execCommand(kind === 'ul' ? 'insertUnorderedList' : 'insertOrderedList')
   afterCommand()
 }
 
@@ -248,9 +304,15 @@ function updateActiveState(): void {
     boldActive.value = document.queryCommandState('bold')
     italicActive.value = document.queryCommandState('italic')
     underlineActive.value = document.queryCommandState('underline')
+    strikeActive.value = document.queryCommandState('strikeThrough')
+    ulActive.value = document.queryCommandState('insertUnorderedList')
+    olActive.value = document.queryCommandState('insertOrderedList')
   } catch {
     // 部分环境不支持 queryCommandState：保持按钮原状态，不影响编辑。
   }
+  const alignBlock = alignTargetBlock()
+  activeAlign.value =
+    (alignBlock?.getAttribute('data-rt-align') as 'left' | 'center' | 'right' | null) ?? 'left'
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0) return
   let node: Node | null = selection.anchorNode
@@ -422,6 +484,75 @@ watch(
       >
         <u>U</u>
       </button>
+      <button
+        class="rt-tool"
+        :class="{ 'is-active': strikeActive }"
+        type="button"
+        :aria-label="t('form.richTextStrike')"
+        :aria-pressed="strikeActive"
+        @mousedown.prevent
+        @click="toggle('strikeThrough')"
+      >
+        <s>S</s>
+      </button>
+      <span class="rt-sep" aria-hidden="true" />
+      <button
+        v-for="mode in ['left', 'center', 'right'] as const"
+        :key="mode"
+        class="rt-tool"
+        :class="{ 'is-active': activeAlign === mode }"
+        type="button"
+        :aria-label="
+          t(
+            `form.richTextAlign${mode === 'left' ? 'Left' : mode === 'center' ? 'Center' : 'Right'}`,
+          )
+        "
+        :aria-pressed="activeAlign === mode"
+        @mousedown.prevent
+        @click="applyAlign(mode)"
+      >
+        <span class="rt-icon" :class="`rt-icon--align-${mode}`"><i /><i /><i /></span>
+      </button>
+      <button
+        class="rt-tool"
+        type="button"
+        :aria-label="t('form.richTextOutdent')"
+        @mousedown.prevent
+        @click="applyIndent(-1)"
+      >
+        <span class="rt-icon rt-icon--outdent"><i /><i /><i /></span>
+      </button>
+      <button
+        class="rt-tool"
+        type="button"
+        :aria-label="t('form.richTextIndent')"
+        @mousedown.prevent
+        @click="applyIndent(1)"
+      >
+        <span class="rt-icon rt-icon--indent"><i /><i /><i /></span>
+      </button>
+      <button
+        class="rt-tool"
+        :class="{ 'is-active': ulActive }"
+        type="button"
+        :aria-label="t('form.richTextUnorderedList')"
+        :aria-pressed="ulActive"
+        @mousedown.prevent
+        @click="toggleList('ul')"
+      >
+        <span class="rt-icon rt-icon--ul"><i /><i /><i /></span>
+      </button>
+      <button
+        class="rt-tool"
+        :class="{ 'is-active': olActive }"
+        type="button"
+        :aria-label="t('form.richTextOrderedList')"
+        :aria-pressed="olActive"
+        @mousedown.prevent
+        @click="toggleList('ol')"
+      >
+        <span class="rt-icon rt-icon--ol"><i /><i /><i /></span>
+      </button>
       <span v-if="showCount" class="rt-count" :class="{ 'is-over': overLimit }">
         {{ visibleCount }}/{{ maxLength }}
       </span>
@@ -501,6 +632,81 @@ watch(
 .rt-color-wrap {
   position: relative;
   display: inline-flex;
+}
+.rt-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--sw-border-light);
+}
+.rt-icon {
+  display: inline-flex;
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: 2px;
+  width: 13px;
+  padding-top: 1px;
+}
+.rt-icon i {
+  position: relative;
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+.rt-icon--align-left i:nth-child(2),
+.rt-icon--align-right i:nth-child(2) {
+  width: 70%;
+}
+.rt-icon--align-center i {
+  margin: 0 auto;
+}
+.rt-icon--align-center i:nth-child(2) {
+  width: 70%;
+}
+.rt-icon--align-right i {
+  margin-left: auto;
+}
+.rt-icon--indent i:nth-child(n + 2),
+.rt-icon--outdent i:nth-child(n + 2) {
+  width: 72%;
+}
+.rt-icon--indent i {
+  margin-left: 6px;
+}
+.rt-icon--indent i:first-child {
+  margin-left: 0;
+}
+.rt-icon--outdent i:nth-child(n + 2) {
+  margin-left: 6px;
+}
+.rt-icon--ul i,
+.rt-icon--ol i {
+  padding-left: 7px;
+}
+.rt-icon--ul i::before {
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+}
+.rt-icon--ol i::before {
+  position: absolute;
+  top: -5px;
+  left: 0;
+  font-size: 8px;
+  line-height: 8px;
+  content: '1';
+}
+.rt-icon--ol i:nth-child(2)::before {
+  content: '2';
+}
+.rt-icon--ol i:nth-child(3)::before {
+  content: '3';
 }
 .rt-tool--color {
   border-bottom: 3px solid currentColor;
@@ -670,5 +876,17 @@ watch(
 }
 .rt-editor [data-rt-color='#64748B'] {
   color: #64748b;
+}
+.rt-editor [data-rt-align='center'] {
+  text-align: center;
+}
+.rt-editor [data-rt-align='right'] {
+  text-align: right;
+}
+.rt-editor [data-rt-indent='1'] {
+  padding-left: 32px;
+}
+.rt-editor [data-rt-indent='2'] {
+  padding-left: 64px;
 }
 </style>
