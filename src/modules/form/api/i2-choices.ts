@@ -22,11 +22,11 @@ interface UserOption {
   realName?: string
 }
 
-export async function loadUserChoices(): Promise<UserChoice[]> {
+async function userOptions(limit: number): Promise<UserChoice[]> {
   const list = await request<UserOption[]>({
     method: 'GET',
     url: '/system/user/options',
-    params: { limit: 100 },
+    params: { limit },
   })
   return (list ?? []).map((u) => ({
     id: String(u.id),
@@ -34,9 +34,31 @@ export async function loadUserChoices(): Promise<UserChoice[]> {
   }))
 }
 
+export async function loadUserChoices(): Promise<UserChoice[]> {
+  return userOptions(100)
+}
+
+/** 表单脚本组织目录快照：复用选择器的同一授权查询（上限 200，服务端租户过滤）。 */
+export async function loadScriptOrgContext(): Promise<
+  import('../utils/script-hosts').ScriptOrgContext
+> {
+  const [users, depts] = await Promise.all([userOptions(200), loadDeptChoices()])
+  return {
+    users: users.map((user) => ({ id: user.id, name: user.label })),
+    depts: depts.map((dept) => ({
+      id: dept.id,
+      name: dept.name ?? dept.label.trim(),
+      parentId: dept.parentId ?? null,
+    })),
+  }
+}
+
 export interface DeptChoice {
   id: string
   label: string
+  /** 部门名（无缩进）；旧调用方只用 label，新增字段为附加信息。 */
+  name?: string
+  parentId?: string | null
 }
 
 /** 部门树拍平为候选（保留树序；仅正常状态由服务端保证）。 */
@@ -45,7 +67,12 @@ export async function loadDeptChoices(): Promise<DeptChoice[]> {
   const out: DeptChoice[] = []
   const walk = (nodes: SysDept[], depth: number) => {
     for (const n of nodes) {
-      out.push({ id: String(n.id), label: `${'　'.repeat(depth)}${n.name}` })
+      out.push({
+        id: String(n.id),
+        label: `${'　'.repeat(depth)}${n.name}`,
+        name: n.name,
+        parentId: n.parentId != null ? String(n.parentId) : null,
+      })
       if (Array.isArray(n.children)) walk(n.children, depth + 1)
     }
   }

@@ -14,6 +14,11 @@ import { reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { transpileScriptSugar } from './script-sugar'
 import { checkScriptSyntax, parseScript, runScript, type ScriptProgram } from './script-interpreter'
+import {
+  createSupplementalHostFunctions,
+  type ScriptOrgContext,
+  type ScriptSchemaFieldLike,
+} from './script-hosts'
 import { useUserStore } from '@/stores/user'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
 
@@ -46,6 +51,11 @@ export interface FieldScriptsOptions {
   allowedIntegrations?: () => string[]
   /** 受控集成执行器；未提供时调用会明确报“执行器不可用”。 */
   callIntegration?: (key: string) => unknown
+  /**
+   * 已授权组织目录快照（当前租户启用用户 + 部门树）。
+   * 页面在脚本执行前装载；未装载时组织查询函数明确报错，不越权直查。
+   */
+  orgContext?: () => ScriptOrgContext | null
 }
 
 export interface FieldScriptsRuntime {
@@ -134,6 +144,30 @@ export const FIELD_SCRIPT_FUNCTION_NAMES = [
   'toNumber',
   '调用集成',
   'callIntegration',
+  '获取用户信息',
+  'getUserInfo',
+  '获取用户姓名',
+  'getUserName',
+  '查询用户',
+  'searchUsers',
+  '获取部门信息',
+  'getDeptInfo',
+  '获取上级部门',
+  'getParentDept',
+  '获取部门列表',
+  'getDeptIdList',
+  '获取部门名称',
+  'getDeptName',
+  '当前日期',
+  'getToday',
+  '当前时间',
+  'getNow',
+  '日期加减',
+  'addDays',
+  '日期差',
+  'dateDiff',
+  '获取子表字段选项',
+  'getTableColumnOptions',
 ] as const
 
 /** 语法校验：编译（不执行）。返回 null = 通过；否则为可读错误。 */
@@ -303,6 +337,10 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
   const formContext = () => options.formContext?.() ?? {}
 
   const hostFunctions: Record<string, (...args: unknown[]) => unknown> = {
+    ...createSupplementalHostFunctions(
+      () => (options.getSchema() ?? null) as { fields: ScriptSchemaFieldLike[] } | null,
+      options.orgContext,
+    ),
     获取字段值: (fieldName) => getModel()[requireField(fieldName, '获取字段值')],
     getFieldValue: (fieldName) => getModel()[requireField(fieldName, '获取字段值')],
     设置字段值: (fieldName, value) => {

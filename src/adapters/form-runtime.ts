@@ -13,6 +13,13 @@ export type {
   FieldScriptsOptions,
   FieldScriptsRuntime,
 } from '@/modules/form/utils/field-scripts'
+export type { ScriptOrgContext } from '@/modules/form/utils/script-hosts'
+
+/** 表单脚本组织目录快照（复用选择器的同一授权查询；上限 200）。 */
+export async function loadScriptOrgContext() {
+  const { loadScriptOrgContext: load } = await import('@/modules/form/api/i2-choices')
+  return load()
+}
 
 /** 字段脚本工厂（值变更触发；onLoad 装载后执行；只读回看不执行）。 */
 export { createFieldScripts } from '@/modules/form/utils/field-scripts'

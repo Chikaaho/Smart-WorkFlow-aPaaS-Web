@@ -47,6 +47,46 @@ describe('createFieldScripts', () => {
     runtime.dispose()
   })
 
+  it('组织快照与日期函数可在 # 糖中同步调用', async () => {
+    const schema: FormSchema = {
+      title: 't',
+      fields: [
+        {
+          type: 'TEXT',
+          name: 'owner',
+          label: '负责人',
+          script: { code: '#设置字段值(owner_name, #获取用户姓名("1001"));' },
+        },
+        { type: 'TEXT', name: 'owner_name', label: '负责人姓名' },
+        {
+          type: 'TEXT',
+          name: 'today',
+          label: '日期',
+          script: { code: '#设置字段值(next_week, #日期加减(#当前日期(), 7));' },
+        },
+        { type: 'TEXT', name: 'next_week', label: '下周' },
+      ],
+    }
+    const model = reactive<Record<string, unknown>>({
+      owner: '',
+      owner_name: '',
+      today: '',
+      next_week: '',
+    })
+    const runtime = createFieldScripts({
+      getSchema: () => schema,
+      model,
+      orgContext: () => ({ users: [{ id: '1001', name: '张三' }], depts: [] }),
+    })
+    model.owner = '1001'
+    model.today = 'changed'
+    await nextTick()
+    expect(runtime.lastError()).toBe('')
+    expect(model.owner_name).toBe('张三')
+    expect(String(model.next_week)).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    runtime.dispose()
+  })
+
   it('设置必填/隐藏/只读写入覆盖层', async () => {
     const schema: FormSchema = {
       title: 't',

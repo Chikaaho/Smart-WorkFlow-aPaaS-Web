@@ -7,6 +7,11 @@ import type {
 } from '@/contracts/form-schema'
 import { parseScript, runScript, type ScriptProgram } from './script-interpreter'
 import { transpileScriptSugar } from './script-sugar'
+import {
+  createSupplementalHostFunctions,
+  type ScriptOrgContext,
+  type ScriptSchemaFieldLike,
+} from './script-hosts'
 
 export const FORM_EVENT_NAMES: readonly FormEventName[] = [
   'onLoad',
@@ -64,6 +69,8 @@ export interface FormEventRuntimeOptions {
     version?: number | null
     submissionId?: string
   }
+  /** 已授权组织目录快照（当前租户启用用户 + 部门树）；未装载时组织查询明确报错。 */
+  orgContext?: () => ScriptOrgContext | null
   /** 已由服务端授权、且当前宿主允许的稳定集成标识集合。 */
   allowedIntegrations?: () => string[]
   callIntegration?: (key: string, input: Record<string, unknown>) => unknown | Promise<unknown>
@@ -210,6 +217,13 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
   }
 
   const hostFunctions: Record<string, (...args: unknown[]) => unknown> = {
+    ...createSupplementalHostFunctions(
+      () =>
+        (options.getSchema() ?? null) as {
+          fields: ScriptSchemaFieldLike[]
+        } | null,
+      options.orgContext,
+    ),
     获取字段值: (name) => getModel()[field(name).name],
     getFieldValue: (name) => getModel()[field(name).name],
     设置字段值: (name, value) => {

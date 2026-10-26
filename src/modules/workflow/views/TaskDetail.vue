@@ -39,7 +39,8 @@ import type { TaskNodeFormView } from '@/contracts/p64'
 import { getTaskNodeForm, saveTaskNodeFormDraft } from '@/modules/workflow/api/p64'
 import DynamicField from '@/components/DynamicField.vue'
 import HintTip from '@/components/HintTip.vue'
-import { createFieldScripts } from '@/adapters/form-runtime'
+import { createFieldScripts, loadScriptOrgContext } from '@/adapters/form-runtime'
+import type { ScriptOrgContext } from '@/adapters/form-runtime'
 import InstanceFlowPanel from '../components/InstanceFlowPanel.vue'
 import BusinessFormReadonly from '@/components/business-detail/BusinessFormReadonly.vue'
 
@@ -170,6 +171,9 @@ const nodeFormSubmitted = computed(() => nodeForm.value?.status === 'SUBMITTED')
 /** 待办且未最终提交时可编辑；已提交或历史任务只读回看。 */
 const nodeFormEditable = computed(() => nodeFormBound.value && !nodeFormSubmitted.value)
 
+/** 组织目录快照：复用选择器的同一授权查询，供节点表单脚本组织函数同步读取。 */
+const scriptOrgContext = ref<ScriptOrgContext | null>(null)
+
 // BF20261013-021：节点表单字段脚本（值变更触发；onLoad 在装载后执行；只读回看不执行）
 const nodeFieldScripts = createFieldScripts({
   getSchema: () =>
@@ -186,6 +190,7 @@ const nodeFieldScripts = createFieldScripts({
     version: null,
     submissionId: detail.value?.businessKey ?? '',
   }),
+  orgContext: () => scriptOrgContext.value,
 })
 onUnmounted(() => nodeFieldScripts.dispose())
 
@@ -225,6 +230,13 @@ async function loadNodeForm() {
     nodeFormModel.value = { ...(view.data ?? {}) }
     // 装载整体替换模型：重置基线避免装载被当作“值变更”，随后执行 onLoad 脚本
     nodeFieldScripts.resetBaseline()
+    if (nodeFormFields.value.some((f) => !!f.script?.code)) {
+      try {
+        scriptOrgContext.value = await loadScriptOrgContext()
+      } catch {
+        scriptOrgContext.value = null
+      }
+    }
     nodeFieldScripts.runOnLoad()
   } catch {
     nodeForm.value = null

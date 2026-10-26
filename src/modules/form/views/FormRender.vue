@@ -31,6 +31,7 @@ import {
   updateFormData,
   normalizeSubmitData,
 } from '@/modules/form/api/form'
+import { loadScriptOrgContext } from '@/modules/form/api/i2-choices'
 import { ApiError, getErrorMessage } from '@/foundation/request'
 import DynamicField from '@/components/DynamicField.vue'
 import { normalizeFormDateFields } from '@/contracts/form-date'
@@ -40,6 +41,7 @@ import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-
 import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
 import { createFieldScripts } from '@/modules/form/utils/field-scripts'
 import { createFormEvents } from '@/modules/form/utils/form-events'
+import type { ScriptOrgContext } from '@/modules/form/utils/script-hosts'
 import { useUserStore } from '@/stores/user'
 import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 import { InstanceFlowPanel } from '@/adapters/instance-flow'
@@ -133,6 +135,9 @@ const referenceLabels = reactive<Record<string, string>>({})
 const hiddenFields = computed(() =>
   schema.value ? hiddenFieldNames(parseVisibilityRules(schema.value), formData) : new Set<string>(),
 )
+/** 组织目录快照：只读查询复用选择器的同一授权接口，供脚本组织函数同步使用。 */
+const scriptOrgContext = ref<ScriptOrgContext | null>(null)
+
 /** BF20261013-021：字段脚本运行时（值变更触发字段脚本；onLoad 脚本在数据装载后执行）。 */
 const fieldScripts = createFieldScripts({
   getSchema: () => schema.value,
@@ -149,6 +154,7 @@ const fieldScripts = createFieldScripts({
     submissionId: lastSubmittedId.value,
   }),
   allowedIntegrations: () => [],
+  orgContext: () => scriptOrgContext.value,
 })
 onUnmounted(() => fieldScripts.dispose())
 let userStore: ReturnType<typeof useUserStore> | null = null
@@ -183,6 +189,7 @@ const formEvents = createFormEvents({
     submissionId: lastSubmittedId.value,
   }),
   allowedIntegrations: () => [],
+  orgContext: () => scriptOrgContext.value,
   confirm: async (message) => {
     try {
       await ElMessageBox.confirm(message, t('form.fillDraftTitle'), {
@@ -347,6 +354,28 @@ function tryParseJSON(str: string, fallback: unknown): unknown {
 
 /* ── schema 加载 + 记录加载 ── */
 
+/**
+ * 仅当表单含字段/事件脚本时装载组织目录快照；
+ * 装载失败不阻断表单：脚本里的组织函数会明确报「未装载」，不静默返回错误数据。
+ */
+async function ensureScriptOrgContext(): Promise<void> {
+  const hasFieldScript = (schema.value?.fields ?? []).some((f) => !!f.script?.code)
+  const events = schema.value?.events
+  const hasEventScript =
+    !!events &&
+    Object.values(events).some(
+      (list) =>
+        Array.isArray(list) &&
+        list.some((item) => !!item && typeof item === 'object' && 'script' in item),
+    )
+  if (!hasFieldScript && !hasEventScript) return
+  try {
+    scriptOrgContext.value = await loadScriptOrgContext()
+  } catch {
+    scriptOrgContext.value = null
+  }
+}
+
 async function loadSchema() {
   loading.value = true
   errorMsg.value = ''
@@ -369,6 +398,8 @@ async function loadSchema() {
     } else {
       for (const field of schema.value.fields) initField(field)
     }
+    // 组织目录快照先于 onLoad 脚本装载：组织查询函数同步读取已授权快照
+    await ensureScriptOrgContext()
     // BF20261013-021：数据装载完成后执行 onLoad 字段脚本（新建/草稿/回显三态同口径）
     fieldScripts.runOnLoad()
     fieldScripts.resetBaseline()
