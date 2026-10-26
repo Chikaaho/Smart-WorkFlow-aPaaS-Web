@@ -249,6 +249,7 @@ describe('createFieldScripts', () => {
           type: 'DICT',
           name: 'choice',
           label: 'choice',
+          dictType: 'test_dict',
           options: [
             { key: 'a', value: 'A' },
             { key: 'b', value: 'B' },

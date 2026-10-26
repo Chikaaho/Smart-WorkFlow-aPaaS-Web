@@ -26,6 +26,7 @@ import { ArrowLeft } from '@element-plus/icons-vue'
 import type { SubTableRowAction, SubTableRowActionType } from '@/modules/form/api/form'
 import {
   getFormDefinition,
+  getFormDefinitionVersion,
   submitForm,
   getFormData,
   updateFormData,
@@ -51,6 +52,7 @@ import {
   type InstanceRelation,
 } from '@/adapters/instance-relation'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
+import type { BpmDraft } from '@/adapters/process-draft'
 
 /* ── 路由参数 ── */
 
@@ -115,6 +117,8 @@ const mode = route.query.mode === 'edit' ? 'edit' : 'view'
 /** 草稿填报模式：route.query.mode === 'draft'（可选 draftId 打开已有草稿） */
 const isDraftMode = ref(route.query.mode === 'draft')
 const draftId = route.query.draftId ? String(route.query.draftId) : ''
+/** 草稿元数据预取：先按草稿创建时的 formVersion 装载冻结定义，再回填 payload。 */
+const prefetchedDraft = ref<BpmDraft | null>(null)
 
 /* ── 状态 ── */
 
@@ -380,7 +384,28 @@ async function loadSchema() {
   loading.value = true
   errorMsg.value = ''
   try {
-    schema.value = await getFormDefinition(formKey)
+    // A12：旧草稿按创建时的 formVersion 回放冻结定义，新填报才取最新发布版本。
+    let draftVersion: number | null = null
+    if (isDraftMode.value && draftId) {
+      try {
+        const { getDraft } = await getProcessDraftApi()
+        prefetchedDraft.value = await getDraft(draftId)
+        const parsed = Number(prefetchedDraft.value.formVersion)
+        if (Number.isFinite(parsed) && parsed > 0) draftVersion = parsed
+      } catch {
+        prefetchedDraft.value = null
+      }
+    }
+    try {
+      const loaded = draftVersion
+        ? await getFormDefinitionVersion(formKey, draftVersion)
+        : await getFormDefinition(formKey)
+      schema.value = draftVersion && loaded ? { ...loaded, schemaVersion: draftVersion } : loaded
+    } catch (err) {
+      // 仅旧版本快照缺失时回退最新定义；普通最新定义加载失败保持原错误提示。
+      if (!draftVersion) throw err
+      schema.value = await getFormDefinition(formKey)
+    }
     if (!schema.value) return
 
     if (isDraftMode.value) {
@@ -820,7 +845,7 @@ async function waitForInstanceByBusinessKey(formKey: string, recordId: string): 
 async function loadDraftPayload(schema: FormSchema) {
   const { getDraft } = await getProcessDraftApi()
   try {
-    const draft = await getDraft(draftId)
+    const draft = prefetchedDraft.value ?? (await getDraft(draftId))
     draftTitle.value = draft.title ?? ''
     let values: Record<string, unknown> = {}
     try {

@@ -21,17 +21,17 @@ describe('FormPreview 填写值回传', () => {
     })
     await flushPromises()
 
-    const editor = wrapper.element.querySelector<HTMLElement>(
+    const editor = wrapper.element.querySelector(
       '[data-test="rich-text-editor"] .rt-editor',
-    )
+    ) as HTMLElement | null
     expect(editor).not.toBeNull()
     editor!.innerHTML = '<p>预览填写<s>草稿</s></p>'
     editor!.dispatchEvent(new Event('input', { bubbles: true }))
     await flushPromises()
 
-    const emitted = wrapper.emitted<{ [field: string]: unknown }[]>('update:modelValue')
+    const emitted = wrapper.emitted('update:modelValue') as unknown[][] | undefined
     expect(emitted).toBeTruthy()
-    const last = emitted![emitted!.length - 1][0]
+    const last = emitted![emitted!.length - 1][0] as { [field: string]: unknown }
     expect(last.bio).toBe(`${RICH_TEXT_PREFIX}<p>预览填写<s>草稿</s></p>`)
     warn.mockRestore()
     wrapper.unmount()
@@ -63,33 +63,35 @@ describe('FormPreview 填写值回传', () => {
     // 真实表头按子表字段渲染
     const table = wrapper.element.querySelector('table')
     expect(table).not.toBeNull()
-    const headers = Array.from(table!.querySelectorAll('th')).map((th) => th.textContent?.trim())
+    const headers = Array.from(table!.querySelectorAll('th')).map((th) =>
+      (th as HTMLTableCellElement).textContent?.trim(),
+    )
     expect(headers).toContain('名称')
     expect(headers).toContain('金额')
 
     // 添加行 → 行进入回传值
     const addBtn = Array.from(wrapper.element.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === '添加行',
-    )
+      (b) => (b as HTMLButtonElement).textContent?.trim() === '添加行',
+    ) as HTMLButtonElement | undefined
     expect(addBtn).toBeTruthy()
     addBtn!.click()
     await flushPromises()
-    let emitted = wrapper.emitted<{ [field: string]: unknown }[]>('update:modelValue')
-    let last = emitted![emitted!.length - 1][0] as { items: unknown[] }
+    let emitted = wrapper.emitted('update:modelValue') as unknown[][] | undefined
+    const last = emitted![emitted!.length - 1][0] as { items: unknown[] }
     expect(Array.isArray(last.items)).toBe(true)
     expect(last.items).toHaveLength(1)
 
     // 单元格编辑 → 单元格值回传（行结构保留）
-    const cellInput = wrapper.element.querySelector<HTMLInputElement>(
+    const cellInput = wrapper.element.querySelector(
       'table tbody input[type="text"]',
-    )
+    ) as HTMLInputElement | null
     expect(cellInput).not.toBeNull()
     cellInput!.value = '报销A'
     cellInput!.dispatchEvent(new Event('input', { bubbles: true }))
     await flushPromises()
-    emitted = wrapper.emitted<{ [field: string]: unknown }[]>('update:modelValue')
-    last = emitted![emitted!.length - 1][0] as { items: { col1: string }[] }
-    expect(last.items[0].col1).toBe('报销A')
+    emitted = wrapper.emitted('update:modelValue') as unknown[][] | undefined
+    const finalLast = emitted![emitted!.length - 1][0] as { items: { col1: string }[] }
+    expect(finalLast.items[0].col1).toBe('报销A')
     warn.mockRestore()
     wrapper.unmount()
   })
@@ -120,7 +122,7 @@ describe('FormPreview 填写值回传', () => {
     // 设计态容器整体禁用指针交互：只读快照不会因复用控件而写入数据
     expect(wrapper.find('.fc-host--design').exists()).toBe(true)
     const buttons = Array.from(wrapper.element.querySelectorAll('button')).map((b) =>
-      b.textContent?.trim(),
+      (b as HTMLButtonElement).textContent?.trim(),
     )
     expect(buttons).not.toContain('添加行')
     expect(buttons).not.toContain('删除')

@@ -28,7 +28,6 @@ const emit = defineEmits<{ 'update:modelValue': [value: unknown] }>()
 
 const { t } = useI18n()
 const editorRef = ref<HTMLElement | null>(null)
-const toolbarRef = ref<HTMLElement | null>(null)
 const colorWrapRef = ref<HTMLElement | null>(null)
 const focused = ref(false)
 const colorOpen = ref(false)
@@ -184,7 +183,7 @@ function applyFont(token: string): void {
   const option = RICH_TEXT_FONTS.find((font) => font.token === token)
   if (!option) return
   restoreSelection()
-  document.execCommand('styleWithCSS', false, false)
+  document.execCommand('styleWithCSS', false, 'false')
   // execCommand 需要具体字体族；default 用产品基础字体，归一化时再转回 default 令牌。
   document.execCommand('fontName', false, option.family || 'Noto Sans SC')
   afterCommand()
@@ -194,7 +193,7 @@ function applySize(size: number): void {
   if (!(RICH_TEXT_SIZES as readonly number[]).includes(size)) return
   restoreSelection()
   pendingSize = size
-  document.execCommand('styleWithCSS', false, false)
+  document.execCommand('styleWithCSS', false, 'false')
   document.execCommand('fontSize', false, '7')
   normalizeEditorDom(size)
   pendingSize = null
@@ -206,7 +205,7 @@ function applyColor(value: string): void {
   const color = normalizeColor(value)
   if (!color) return
   restoreSelection()
-  document.execCommand('styleWithCSS', false, false)
+  document.execCommand('styleWithCSS', false, 'false')
   document.execCommand('foreColor', false, color)
   afterCommand()
   colorOpen.value = false
@@ -214,7 +213,7 @@ function applyColor(value: string): void {
 
 function toggle(command: 'bold' | 'italic' | 'underline' | 'strikeThrough'): void {
   restoreSelection()
-  document.execCommand('styleWithCSS', false, false)
+  document.execCommand('styleWithCSS', false, 'false')
   document.execCommand(command)
   afterCommand()
 }
@@ -265,7 +264,7 @@ function applyIndent(delta: 1 | -1): void {
 
 function toggleList(kind: 'ul' | 'ol'): void {
   restoreSelection()
-  document.execCommand('styleWithCSS', false, false)
+  document.execCommand('styleWithCSS', false, 'false')
   document.execCommand(kind === 'ul' ? 'insertUnorderedList' : 'insertOrderedList')
   afterCommand()
 }
@@ -392,7 +391,6 @@ watch(
     data-test="rich-text-editor"
   >
     <div
-      ref="toolbarRef"
       class="rt-toolbar"
       role="toolbar"
       :aria-label="t('form.richTextToolbar')"

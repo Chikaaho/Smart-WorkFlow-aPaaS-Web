@@ -46,8 +46,8 @@ watch(visible, (open) => {
   <el-dialog
     v-model="visible"
     :title="t('workspace.configureWorkspace')"
-    width="960px"
-    top="6vh"
+    width="1120px"
+    align-center
     destroy-on-close
     append-to-body
     class="workspace-config-dialog"
@@ -75,6 +75,17 @@ watch(visible, (open) => {
 </template>
 
 <style scoped>
+/* 273:1600 配置工作台为 1120×704 居中浮层：内容超高时只滚动画布区，页脚始终可达。 */
+:global(.workspace-config-dialog) {
+  display: flex;
+  flex-direction: column;
+  max-height: min(704px, 90vh);
+}
+
+:global(.workspace-config-dialog .el-dialog__body) {
+  overflow-y: auto;
+}
+
 .workspace-config-dialog__footer {
   display: flex;
   justify-content: flex-end;

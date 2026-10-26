@@ -131,7 +131,7 @@ function saveListenerDraft(): void {
       script: listenerDraft.script,
       variables: [],
       branches: [],
-      unmatchedDisposition: 'KEEP',
+      unmatchedDisposition: 'IGNORE',
       errorDisposition: 'IGNORE',
     })
   }
@@ -360,7 +360,10 @@ onMounted(load)
             <template #default="{ row }">
               <el-switch
                 :model-value="row.enabled !== false"
-                @update:model-value="(value: boolean) => setListenerEnabled(row, value)"
+                @update:model-value="
+                  (value: string | number | boolean) =>
+                    setListenerEnabled(row as TriggerConfig, Boolean(value))
+                "
               />
             </template>
           </el-table-column>
@@ -370,20 +373,30 @@ onMounted(load)
                 link
                 size="small"
                 :disabled="$index === 0"
-                @click="moveListener(row, -1)"
+                @click="moveListener(row as TriggerConfig, -1)"
                 >{{ t('common.moveUp') }}</el-button
               >
               <el-button
                 link
                 size="small"
                 :disabled="$index === processListeners.length - 1"
-                @click="moveListener(row, 1)"
+                @click="moveListener(row as TriggerConfig, 1)"
                 >{{ t('common.moveDown') }}</el-button
               >
-              <el-button link size="small" type="primary" @click="openListenerEditor(row)">
+              <el-button
+                link
+                size="small"
+                type="primary"
+                @click="openListenerEditor(row as TriggerConfig)"
+              >
                 {{ t('common.edit') }}
               </el-button>
-              <el-button link size="small" type="danger" @click="removeListener(row)">
+              <el-button
+                link
+                size="small"
+                type="danger"
+                @click="removeListener(row as TriggerConfig)"
+              >
                 {{ t('common.delete') }}
               </el-button>
             </template>

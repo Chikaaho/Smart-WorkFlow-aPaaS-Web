@@ -20,7 +20,7 @@ import {
   type ScriptSchemaFieldLike,
 } from './script-hosts'
 import { useUserStore } from '@/stores/user'
-import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
+import type { FormSchema, FormSchemaField, TableField } from '@/contracts/form-schema'
 
 /** 脚本引发的字段状态覆盖（与声明式规则/静态属性并存，由渲染侧合并）。 */
 export interface FieldScriptOverrides {
@@ -241,7 +241,7 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     }
   }
 
-  function requireTable(fieldName: unknown, fn: string): FormSchemaField {
+  function requireTable(fieldName: unknown, fn: string): TableField {
     const name = requireField(fieldName, fn)
     const table = fieldByName(name)
     if (!table || table.type !== 'TABLE') {
@@ -250,7 +250,7 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     return table
   }
 
-  function requireSubField(table: FormSchemaField, subName: unknown, fn: string): string {
+  function requireSubField(table: TableField, subName: unknown, fn: string): string {
     const name = String(subName ?? '')
     if (!table.subFields?.some((sub) => sub.name === name)) {
       throw new Error(`${fn}: 子表「${table.name}」不存在列「${name}」`)
@@ -272,7 +272,7 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     index: unknown,
     fn: string,
   ): {
-    table: FormSchemaField
+    table: TableField
     rows: Array<Record<string, unknown>>
     row: Record<string, unknown>
     position: number
@@ -286,7 +286,7 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     return { table, rows, row: rows[position], position }
   }
 
-  function emptyValueFor(field: FormSchemaField): unknown {
+  function emptyValueFor(field: { type: string }): unknown {
     switch (field.type) {
       case 'TABLE':
       case 'MULTISELECT':
@@ -302,7 +302,7 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     }
   }
 
-  function emptySubRow(table: FormSchemaField): Record<string, unknown> {
+  function emptySubRow(table: TableField): Record<string, unknown> {
     const row: Record<string, unknown> = {}
     for (const sub of table.subFields ?? []) {
       row[sub.name] = emptyValueFor(sub)
@@ -321,7 +321,7 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
   }
 
   function applySubFieldPairs(
-    table: FormSchemaField,
+    table: TableField,
     row: Record<string, unknown>,
     fn: string,
     args: unknown[],
@@ -431,11 +431,13 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     },
     获取字段选项: (fieldName) => {
       const field = fieldByName(requireField(fieldName, '获取字段选项'))
-      return (field?.options ?? []).map((option) => option.value || option.key)
+      const options = field && 'options' in field ? field.options : undefined
+      return (options ?? []).map((option) => option.value || option.key)
     },
     getFieldOptions: (fieldName) => {
       const field = fieldByName(requireField(fieldName, '获取字段选项'))
-      return (field?.options ?? []).map((option) => option.value || option.key)
+      const options = field && 'options' in field ? field.options : undefined
+      return (options ?? []).map((option) => option.value || option.key)
     },
     获取字段列表: () => (options.getSchema()?.fields ?? []).map((field) => field.name),
     getFieldNames: () => (options.getSchema()?.fields ?? []).map((field) => field.name),

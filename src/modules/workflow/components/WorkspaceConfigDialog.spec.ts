@@ -34,7 +34,14 @@ function mountDialog() {
       stubs: {
         'el-dialog': {
           name: 'ElDialog',
-          props: ['modelValue', 'title', 'width', 'destroyOnClose', 'appendTobody'],
+          props: {
+            modelValue: Boolean,
+            title: String,
+            width: String,
+            alignCenter: Boolean,
+            destroyOnClose: Boolean,
+            appendTobody: Boolean,
+          },
           template:
             '<div class="dialog-stub" :data-title="title"><slot /><div class="dialog-stub__footer"><slot name="footer" /></div></div>',
         },
@@ -55,6 +62,10 @@ describe('WorkspaceConfigDialog', () => {
   it('居中弹窗承载编辑画布，页脚提供恢复默认/取消/确定', () => {
     const wrapper = mountDialog()
     expect(wrapper.find('.dialog-stub').attributes('data-title')).toBe('配置工作台')
+    const dialog = wrapper.findComponent({ name: 'ElDialog' })
+    // 273:1600：1120 宽居中浮层；内容超高由画布区滚动，页脚保持可达。
+    expect(dialog.props('width')).toBe('1120px')
+    expect(dialog.props('alignCenter')).toBe(true)
     expect(wrapper.findComponent({ name: 'WorkspaceBoard' }).props('editable')).toBe(true)
     expect(wrapper.findComponent({ name: 'WorkspaceBoard' }).props('embedded')).toBe(true)
     expect(footerButton(wrapper, '恢复默认')).toBeTruthy()

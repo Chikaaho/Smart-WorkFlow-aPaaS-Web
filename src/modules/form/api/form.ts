@@ -37,6 +37,21 @@ export async function getFormDefinition(formKey: string): Promise<FormSchema> {
 }
 
 /**
+ * 运行期旧版本回放：按 formKey + 发布版本读取冻结快照 definition。
+ * 旧草稿使用创建时的 formVersion 运行自身脚本，不追溯最新版本。
+ */
+export async function getFormDefinitionVersion(
+  formKey: string,
+  formVersion: number,
+): Promise<FormSchema> {
+  const rawJson = await request<string>({
+    method: 'GET',
+    url: `/form/def/by-key/${formKey}/versions/${formVersion}/definition`,
+  })
+  return parseDefinition(rawJson)
+}
+
+/**
  * seam: 后端端点未就绪,形状已锁,上线即通。
  * POST /api/form/data/{formKey}
  * 请求体: Map<字段名,值>  返回: R<recordId>(经 request() 解包)

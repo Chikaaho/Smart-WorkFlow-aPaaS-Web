@@ -350,7 +350,7 @@ async function loadOpinionFieldLabels(row: ApprovalHistoryItem | null) {
 }
 
 /** 人员值展示：显示名（稳定ID）；未解析到显示名时保留 ID，不伪造姓名。 */
-function opinionUserDisplay(key: string, value: unknown): string {
+function opinionUserDisplay(_key: string, value: unknown): string {
   const list = Array.isArray(value) ? value : [value]
   return list
     .map((item) => {
@@ -414,8 +414,8 @@ const opinionDetailCheckEntries = computed(() => {
         [
           businessFieldLabel(key),
           opinionUserFieldKeys.value.includes(key)
-            ? value.map((item) => opinionUserDisplay(key, item))
-            : value,
+            ? (value as unknown[]).map((item) => opinionUserDisplay(key, item))
+            : (value as unknown[]),
         ] as const,
     )
 })

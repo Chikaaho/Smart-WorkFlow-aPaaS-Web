@@ -202,7 +202,7 @@ export function renderRichTextHtml(value: unknown): string {
     span.removeAttribute('data-rt-size')
     span.removeAttribute('data-rt-color')
   }
-  for (const block of Array.from(doc.body.querySelectorAll('p, div'))) {
+  for (const block of Array.from(doc.body.querySelectorAll<HTMLElement>('p, div'))) {
     const align = block.getAttribute('data-rt-align')
     if (align && ALIGN_TOKENS.has(align)) block.style.textAlign = align
     const indent = block.getAttribute('data-rt-indent')

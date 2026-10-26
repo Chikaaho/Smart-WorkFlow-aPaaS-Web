@@ -10,6 +10,7 @@ import { parseDefinition } from '@/adapters/form-designer'
 import {
   getFormDef,
   getFormDefinition,
+  getFormDefinitionVersion,
   submitForm,
   listSubmissions,
   getFormData,
@@ -47,6 +48,22 @@ describe('modules/form/api/form', () => {
     )
     expect(parseDefinition).toHaveBeenCalledWith(rawJson)
     expect(schema).toEqual(expectedSchema)
+  })
+
+  it('getFormDefinitionVersion reads frozen snapshot by form version', async () => {
+    const rawJson = '{"title":"V1","fields":[]}'
+    vi.mocked(request).mockResolvedValueOnce(rawJson)
+    vi.mocked(parseDefinition).mockReturnValueOnce({ title: 'V1', fields: [] })
+
+    await getFormDefinitionVersion('test-key', 1)
+
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        url: '/form/def/by-key/test-key/versions/1/definition',
+      }),
+    )
+    expect(parseDefinition).toHaveBeenCalledWith(rawJson)
   })
 
   it('submitForm (seam) posts to correct URL and propagates rejection', async () => {

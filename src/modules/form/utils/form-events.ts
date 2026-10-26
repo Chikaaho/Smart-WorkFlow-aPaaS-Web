@@ -4,6 +4,7 @@ import type {
   FormEvents,
   FormSchema,
   FormSchemaField,
+  TableField,
 } from '@/contracts/form-schema'
 import { parseScript, runScript, type ScriptProgram } from './script-interpreter'
 import { transpileScriptSugar } from './script-sugar'
@@ -140,12 +141,12 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
   const formContext = () => options.formContext?.() ?? {}
   const allowedIntegrations = () => new Set(options.allowedIntegrations?.() ?? [])
 
-  const tableField = (name: unknown, fn: string): FormSchemaField => {
+  const tableField = (name: unknown, fn: string): TableField => {
     const found = field(name)
     if (found.type !== 'TABLE') throw new Error(`${fn}: 字段「${found.name}」不是子表`)
     return found
   }
-  const subFieldOf = (table: FormSchemaField, name: unknown, fn: string): string => {
+  const subFieldOf = (table: TableField, name: unknown, fn: string): string => {
     const subName = String(name ?? '')
     if (!table.subFields?.some((sub) => sub.name === subName)) {
       throw new Error(`${fn}: 子表「${table.name}」不存在列「${subName}」`)
@@ -163,7 +164,7 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
     index: unknown,
     fn: string,
   ): {
-    table: FormSchemaField
+    table: TableField
     rows: Array<Record<string, unknown>>
     row: Record<string, unknown>
     position: number
@@ -176,7 +177,7 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
     }
     return { table, rows, row: rows[position], position }
   }
-  const emptyValueFor = (target: FormSchemaField): unknown => {
+  const emptyValueFor = (target: { type: string }): unknown => {
     switch (target.type) {
       case 'TABLE':
       case 'MULTISELECT':
@@ -191,7 +192,7 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
         return ''
     }
   }
-  const emptySubRow = (table: FormSchemaField): Record<string, unknown> => {
+  const emptySubRow = (table: TableField): Record<string, unknown> => {
     const rowData: Record<string, unknown> = {}
     for (const sub of table.subFields ?? []) rowData[sub.name] = emptyValueFor(sub)
     return rowData
@@ -204,7 +205,7 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
     }
   }
   const applySubPairs = (
-    table: FormSchemaField,
+    table: TableField,
     rowData: Record<string, unknown>,
     fn: string,
     args: unknown[],
@@ -358,9 +359,16 @@ export function createFormEvents(options: FormEventRuntimeOptions) {
     getFieldType: (name) => field(name).type,
     获取字段标题: (name) => field(name).label ?? field(name).name,
     getFieldLabel: (name) => field(name).label ?? field(name).name,
-    获取字段选项: (name) => (field(name).options ?? []).map((option) => option.value || option.key),
-    getFieldOptions: (name) =>
-      (field(name).options ?? []).map((option) => option.value || option.key),
+    获取字段选项: (name) => {
+      const found = field(name)
+      const candidates = 'options' in found ? found.options : undefined
+      return (candidates ?? []).map((option) => option.value || option.key)
+    },
+    getFieldOptions: (name) => {
+      const found = field(name)
+      const candidates = 'options' in found ? found.options : undefined
+      return (candidates ?? []).map((option) => option.value || option.key)
+    },
     获取字段列表: () => (options.getSchema()?.fields ?? []).map((item) => item.name),
     getFieldNames: () => (options.getSchema()?.fields ?? []).map((item) => item.name),
 
