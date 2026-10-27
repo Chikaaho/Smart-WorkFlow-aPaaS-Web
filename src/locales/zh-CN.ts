@@ -2752,7 +2752,7 @@ export default {
     themeRuleTokenSeq: '自增序号',
     themeRuleSeqNoPad: '不补零',
     themeRuleSeqDigits: '{n} 位',
-    themeRulePreview: '模拟编号',
+    themeRulePreview: '预览',
     themeRuleRequiredHint: '该规则为必填配置：未设置时流程不能发布',
     // 0.1.7 #37：要素编排器（要素按钮 / 要素条 / 逐要素配置）
     themeRuleElements: '编号要素',

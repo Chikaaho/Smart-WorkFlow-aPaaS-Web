@@ -2833,7 +2833,7 @@ export default {
     themeRuleTokenSeq: 'Serial no.',
     themeRuleSeqNoPad: 'No padding',
     themeRuleSeqDigits: '{n} digits',
-    themeRulePreview: 'Sample number',
+    themeRulePreview: 'Preview',
     themeRuleRequiredHint: 'Required: the process cannot be published without this rule',
     // 0.1.7 #37 element composer
     themeRuleElements: 'Number elements',
