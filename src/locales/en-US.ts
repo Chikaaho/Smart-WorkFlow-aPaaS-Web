@@ -1027,6 +1027,7 @@ export default {
     richTextOutdent: 'Decrease indent',
     richTextUnorderedList: 'Bullet list',
     richTextOrderedList: 'Numbered list',
+    richTextClear: 'Clear formatting',
     richTextCustomColor: 'Custom color (#RRGGBB)',
     fieldTypeNumber: 'Number',
     fieldTypeDate: 'Date',

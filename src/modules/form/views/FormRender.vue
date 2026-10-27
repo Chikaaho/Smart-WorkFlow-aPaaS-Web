@@ -1633,4 +1633,14 @@ onMounted(() => {
   color: #909399;
   cursor: not-allowed;
 }
+/* 参考 101:2：填写页输入框/选择器统一 32 高（默认渲染为 34：wrapper content-box + 上下 1px） */
+.form-render-page :deep(.el-input__wrapper),
+.form-render-page :deep(.el-select__wrapper) {
+  box-sizing: border-box;
+  min-height: 32px;
+  height: 32px;
+}
+.form-render-page :deep(.el-input__inner) {
+  height: 30px;
+}
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/* global document, window, HTMLElement, Node, Range, ClipboardEvent, Event, MouseEvent, HTMLSelectElement */
+/* global document, window, HTMLElement, Node, Range, ClipboardEvent, MouseEvent */
 /**
  * 富文本（RICH_TEXT）控件（direction-ui-semantics-020 / direction-ui-completion-020 / A09—A12）。
  * - 编辑：受控字体/字号/颜色与基础排版（加粗/斜体/下划线/删除线、对齐/缩进、有序/无序列表）；
@@ -269,18 +269,30 @@ function toggleList(kind: 'ul' | 'ol'): void {
   afterCommand()
 }
 
-function onFontChange(event: Event): void {
-  const target = event.target as HTMLSelectElement
-  applyFont(target.value)
+function onFontSelect(value: unknown): void {
+  applyFont(String(value ?? 'default'))
 }
 
-function onSizeChange(event: Event): void {
-  const target = event.target as HTMLSelectElement
-  applySize(Number(target.value))
+function onSizeSelect(value: unknown): void {
+  applySize(Number(value ?? 14))
 }
 
 function applyCustomColor(): void {
   applyColor(customColor.value)
+}
+
+/** 清除格式（参考 101:2 工具条 Tx）：仅移除字符格式与块令牌，保留文本。 */
+function clearFormat(): void {
+  restoreSelection()
+  document.execCommand('removeFormat')
+  const editor = editorRef.value
+  if (editor) {
+    for (const block of Array.from(editor.querySelectorAll('[data-rt-align], [data-rt-indent]'))) {
+      block.removeAttribute('data-rt-align')
+      block.removeAttribute('data-rt-indent')
+    }
+  }
+  afterCommand()
 }
 
 function onPaste(event: ClipboardEvent): void {
@@ -396,24 +408,29 @@ watch(
       :aria-label="t('form.richTextToolbar')"
       @mousedown="saveSelection"
     >
-      <select
+      <el-select
         class="rt-select"
+        size="small"
         :aria-label="t('form.richTextFont')"
-        :value="activeFont"
-        @change="onFontChange"
+        :model-value="activeFont"
+        @update:model-value="onFontSelect"
       >
-        <option v-for="font in fontOptions" :key="font.token" :value="font.token">
-          {{ font.label }}
-        </option>
-      </select>
-      <select
+        <el-option
+          v-for="font in fontOptions"
+          :key="font.token"
+          :label="font.label"
+          :value="font.token"
+        />
+      </el-select>
+      <el-select
         class="rt-select rt-select--size"
+        size="small"
         :aria-label="t('form.richTextSize')"
-        :value="activeSize"
-        @change="onSizeChange"
+        :model-value="activeSize"
+        @update:model-value="onSizeSelect"
       >
-        <option v-for="size in sizeOptions" :key="size" :value="size">{{ size }} px</option>
-      </select>
+        <el-option v-for="size in sizeOptions" :key="size" :label="`${size} px`" :value="size" />
+      </el-select>
       <div ref="colorWrapRef" class="rt-color-wrap">
         <button
           class="rt-tool rt-tool--color"
@@ -551,6 +568,15 @@ watch(
       >
         <span class="rt-icon rt-icon--ol"><i /><i /><i /></span>
       </button>
+      <button
+        class="rt-tool"
+        type="button"
+        :aria-label="t('form.richTextClear')"
+        @mousedown.prevent
+        @click="clearFormat"
+      >
+        <span class="rt-icon rt-icon--clear">Tx</span>
+      </button>
       <span v-if="showCount" class="rt-count" :class="{ 'is-over': overLimit }">
         {{ visibleCount }}/{{ maxLength }}
       </span>
@@ -590,30 +616,32 @@ watch(
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
+  /* 参考 101:2：工具条行高 40，控件 28 */
+  padding: 6px 8px;
   border-bottom: 1px solid var(--sw-border-light);
   background: var(--sw-surface-card);
 }
 .rt-select {
-  height: 24px;
-  max-width: 104px;
-  padding: 0 4px;
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-sm);
-  background: var(--sw-surface-card);
-  color: var(--sw-text-regular);
-  font-size: 12px;
+  width: 104px;
+  height: 28px;
 }
 .rt-select--size {
-  max-width: 70px;
+  width: 78px;
+}
+.rt-toolbar .rt-select :deep(.el-select__wrapper) {
+  box-sizing: border-box;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
 }
 .rt-tool {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
   border-radius: var(--sw-radius-sm);

@@ -124,7 +124,7 @@ describe('DynamicField — readonly', () => {
     const delBtns = wrapper.findAll('button').filter((b) => b.text() === '删除')
     expect(delBtns.length).toBe(0)
     // 添加行按钮不应出现
-    const addBtns = wrapper.findAll('button').filter((b) => b.text().includes('添加行'))
+    const addBtns = wrapper.findAll('button').filter((b) => b.text().includes('加一行'))
     expect(addBtns.length).toBe(0)
   })
 })
@@ -252,7 +252,7 @@ describe('DynamicField — 8 类字段渲染', () => {
     // 添加行按钮（最后一个 button）
     const buttons = wrapper.findAll('button')
     const addBtn = buttons[buttons.length - 1]
-    expect(addBtn.text()).toContain('添加行')
+    expect(addBtn.text()).toContain('加一行')
   })
 
   it('TABLE addRow emits updated rows', async () => {
@@ -260,7 +260,7 @@ describe('DynamicField — 8 类字段渲染', () => {
       { name: 't1', type: 'TABLE', subFields: [{ name: 'c1', type: 'TEXT' }] },
       [],
     )
-    // 点击「添加行」按钮
+    // 点击「加一行」按钮
     const buttons = wrapper.findAll('button')
     const addBtn = buttons[buttons.length - 1]
     await addBtn.trigger('click')

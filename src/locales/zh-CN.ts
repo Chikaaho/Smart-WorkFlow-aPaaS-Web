@@ -704,7 +704,7 @@ export default {
     serverCalculated: '服务端计算',
     referenceTextPlaceholder: '引用类型（文本占位）',
     selectReferencePlaceholder: '请选择关联记录',
-    addRow: '添加行',
+    addRow: '加一行',
   },
   errors: {
     network: '服务暂时不可用，请稍后重试',
@@ -1001,6 +1001,7 @@ export default {
     richTextOutdent: '减少缩进',
     richTextUnorderedList: '无序列表',
     richTextOrderedList: '有序列表',
+    richTextClear: '清除格式',
     richTextCustomColor: '自定义颜色（#RRGGBB）',
     fieldTypeNumber: '数字',
     fieldTypeDate: '日期',

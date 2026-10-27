@@ -71,7 +71,7 @@ describe('FormPreview 填写值回传', () => {
 
     // 添加行 → 行进入回传值
     const addBtn = Array.from(wrapper.element.querySelectorAll('button')).find(
-      (b) => (b as HTMLButtonElement).textContent?.trim() === '添加行',
+      (b) => (b as HTMLButtonElement).textContent?.trim() === '加一行',
     ) as HTMLButtonElement | undefined
     expect(addBtn).toBeTruthy()
     addBtn!.click()
@@ -124,7 +124,7 @@ describe('FormPreview 填写值回传', () => {
     const buttons = Array.from(wrapper.element.querySelectorAll('button')).map((b) =>
       (b as HTMLButtonElement).textContent?.trim(),
     )
-    expect(buttons).not.toContain('添加行')
+    expect(buttons).not.toContain('加一行')
     expect(buttons).not.toContain('删除')
     warn.mockRestore()
     wrapper.unmount()

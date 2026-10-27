@@ -113,9 +113,14 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
         </tr>
       </tbody>
     </table>
-    <el-button v-if="!readonly && !isDesign" size="small" @click="addRow">{{
-      t('component.addRow')
-    }}</el-button>
+    <el-button
+      v-if="!readonly && !isDesign"
+      link
+      type="primary"
+      class="dynamic-field__table-add"
+      @click="addRow"
+      >{{ t('component.addRow') }}</el-button
+    >
   </div>
 </template>
 
@@ -143,6 +148,35 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
   font-size: var(--sw-font-caption);
   font-weight: var(--sw-font-weight-caption);
   background: var(--sw-fill-base);
+}
+/* 参考 101:2：编辑态子表列头/单元格左对齐，列头 12px 次要色、行高 42/44 */
+.dynamic-field__table:not(.dynamic-field__table--readonly):not(.dynamic-field__table--design)
+  .dynamic-field__table-inner
+  th,
+.dynamic-field__table:not(.dynamic-field__table--readonly):not(.dynamic-field__table--design)
+  .dynamic-field__table-inner
+  td {
+  text-align: left;
+}
+.dynamic-field__table:not(.dynamic-field__table--readonly):not(.dynamic-field__table--design)
+  .dynamic-field__table-inner
+  th {
+  height: 41px;
+  padding: 0 12px;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+.dynamic-field__table:not(.dynamic-field__table--readonly):not(.dynamic-field__table--design)
+  .dynamic-field__table-inner
+  td {
+  height: 43px;
+  padding: 0 12px;
+}
+.dynamic-field__table-add {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding-left: 8px;
 }
 .dynamic-field__table--readonly .dynamic-field__table-inner {
   table-layout: fixed;
