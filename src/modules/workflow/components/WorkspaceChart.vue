@@ -32,6 +32,8 @@ const props = withDefaults(
     points?: Point[]
     target?: number
     axisScale?: WorkspaceAxisScale
+    xLabel?: string
+    yLabel?: string
     loading?: boolean
   }>(),
   {
@@ -41,6 +43,8 @@ const props = withDefaults(
     points: () => [],
     target: 100,
     axisScale: () => ({}),
+    xLabel: '',
+    yLabel: '',
     loading: false,
   },
 )
@@ -68,13 +72,22 @@ const showRightAxis = computed(
     series.value.some((item) => item.axis === 'right'),
 )
 
+/** 散点当前是单组 X/Y 点位，统一用一种系列色而不是按点轮换。 */
+const scatterColor = computed(() => series.value[0]?.color || colors.value[0])
+
 /** 画布单位与容器像素 1:1（测量后收敛），避免缩放导致刻度/分类文字变小。 */
 const W = ref(640)
 const H = ref(250)
 const PAD = { left: 46, right: 18, top: 14, bottom: 34 }
+/** 热力图 Y 维度名较长时为其留出完整文字宽度。 */
+const plotPadLeft = computed(() => {
+  if (props.chartType !== 'heatmap') return PAD.left
+  const longest = Math.max(0, ...props.groups.map((group) => String(group.key2 ?? '未分类').length))
+  return Math.min(140, Math.max(PAD.left, longest * 12 + 14))
+})
 /** 右轴存在时为其刻度留出空间。 */
 const plotPadRight = computed(() => (showRightAxis.value ? 44 : PAD.right))
-const PLOT_W = computed(() => W.value - PAD.left - plotPadRight.value)
+const PLOT_W = computed(() => W.value - plotPadLeft.value - plotPadRight.value)
 const PLOT_H = computed(() => H.value - PAD.top - PAD.bottom)
 const plotRef = ref<globalThis.HTMLElement | null>(null)
 let resizeObserver: globalThis.ResizeObserver | null = null
@@ -424,7 +437,12 @@ function shortLabel(value: string, max = 8): string {
 <template>
   <div class="wchart" :class="`wchart--${chartType}`">
     <div v-if="loading" class="wchart__mask">加载中…</div>
-    <div v-if="style?.legend && metrics.length" class="wchart__legend">
+    <div v-if="style?.legend && chartType === 'scatter' && yLabel" class="wchart__legend">
+      <span class="wchart__legend-item">
+        <i :style="{ background: scatterColor }" />{{ yLabel }}
+      </span>
+    </div>
+    <div v-else-if="style?.legend && metrics.length" class="wchart__legend">
       <span v-for="item in series" :key="item.name" class="wchart__legend-item">
         <i :style="{ background: item.color }" />{{ item.legendName }}
       </span>
@@ -633,9 +651,28 @@ function shortLabel(value: string, max = 8): string {
             :cx="scatterX(point.x)"
             :cy="scatterY(point.y)"
             r="4.5"
-            :fill="colors[index % colors.length]"
-            opacity="0.75"
+            :fill="scatterColor"
+            opacity="0.78"
           />
+          <text
+            v-if="xLabel"
+            :x="(PAD.left + (W - PAD.right)) / 2"
+            :y="H - 6"
+            class="wchart__axis"
+            text-anchor="middle"
+          >
+            {{ xLabel }}
+          </text>
+          <text
+            v-if="yLabel"
+            :x="12"
+            :y="PAD.top + PLOT_H / 2"
+            class="wchart__axis"
+            text-anchor="middle"
+            :transform="`rotate(-90 12 ${PAD.top + PLOT_H / 2})`"
+          >
+            {{ yLabel }}
+          </text>
         </template>
 
         <!-- 雷达图 -->
@@ -743,7 +780,7 @@ function shortLabel(value: string, max = 8): string {
           <g v-for="(row, rowIndex) in heatmapModel.ys" :key="`hr${rowIndex}`">
             <g v-for="(column, colIndex) in heatmapModel.xs" :key="`hc${rowIndex}-${colIndex}`">
               <rect
-                :x="PAD.left + colIndex * heatCellW"
+                :x="plotPadLeft + colIndex * heatCellW"
                 :y="PAD.top + rowIndex * heatCellH"
                 :width="Math.max(2, heatCellW - 3)"
                 :height="Math.max(2, heatCellH - 3)"
@@ -752,7 +789,7 @@ function shortLabel(value: string, max = 8): string {
               />
               <text
                 v-if="style?.labels !== false"
-                :x="PAD.left + colIndex * heatCellW + heatCellW / 2"
+                :x="plotPadLeft + colIndex * heatCellW + heatCellW / 2"
                 :y="PAD.top + rowIndex * heatCellH + heatCellH / 2 + 4"
                 class="wchart__heat-label"
                 text-anchor="middle"
@@ -761,7 +798,7 @@ function shortLabel(value: string, max = 8): string {
               </text>
             </g>
             <text
-              :x="PAD.left - 8"
+              :x="plotPadLeft - 8"
               :y="PAD.top + rowIndex * heatCellH + heatCellH / 2 + 4"
               class="wchart__axis"
               text-anchor="end"
@@ -772,7 +809,7 @@ function shortLabel(value: string, max = 8): string {
           <text
             v-for="(column, colIndex) in heatmapModel.xs"
             :key="`hx${colIndex}`"
-            :x="PAD.left + colIndex * heatCellW + heatCellW / 2"
+            :x="plotPadLeft + colIndex * heatCellW + heatCellW / 2"
             :y="PAD.top + PLOT_H + 16"
             class="wchart__axis"
             text-anchor="middle"

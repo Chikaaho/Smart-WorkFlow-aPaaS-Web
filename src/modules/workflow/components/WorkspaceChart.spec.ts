@@ -103,4 +103,21 @@ describe('WorkspaceChart 12 图型', () => {
     expect(labels).toContain('30')
     expect(labels).toContain('75')
   })
+
+  it('散点使用真实 X/Y 轴名、单一系列色与一个图例项', () => {
+    const wrapper = mountChart('scatter', { xLabel: '计划数量', yLabel: '完成数量' })
+    expect(wrapper.text()).toContain('计划数量')
+    expect(wrapper.text()).toContain('完成数量')
+    const fills = wrapper.findAll('circle').map((item) => item.attributes('fill'))
+    expect(new Set(fills).size).toBe(1)
+    expect(wrapper.findAll('.wchart__legend-item').length).toBe(1)
+  })
+
+  it('热力图为完整 Y 维度名留出左侧空间', () => {
+    const heatGroups = [{ key: '演练A', key2: '机房断电', values: [12] }]
+    const wrapper = mountChart('heatmap', { groups: heatGroups })
+    expect(wrapper.text()).toContain('机房断电')
+    const firstRect = wrapper.findAll('rect')[0]
+    expect(Number(firstRect.attributes('x'))).toBeGreaterThan(55)
+  })
 })

@@ -44,6 +44,14 @@ let requestSeq = 0
 
 const formKey = computed(() => props.config.formKey ?? '')
 const chartType = computed(() => props.config.chartType ?? 'bar')
+const xLabel = computed(() => {
+  const field = fields.value.find((item) => item.name === props.config.xField)
+  return field?.label ?? props.config.xField ?? ''
+})
+const yLabel = computed(() => {
+  const field = fields.value.find((item) => item.name === props.config.yField)
+  return field?.label ?? props.config.yField ?? ''
+})
 
 const queryKey = computed(() =>
   JSON.stringify({
@@ -324,6 +332,8 @@ function chartStyle() {
         :points="scatterPoints"
         :target="config.target ?? 100"
         :axis-scale="config.axisScale"
+        :x-label="xLabel"
+        :y-label="yLabel"
         :loading="loading"
       />
     </template>
