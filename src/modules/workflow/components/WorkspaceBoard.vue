@@ -176,9 +176,9 @@ const panelRows = computed(() => {
   }
 })
 
-/** 面板行标题（V012-BUG-021）：优先流程主题，缺省回退流程名称/任务名/标题，末位回退表单标识。 */
+/** 面板行标题（6:2 同源参考）：优先流程名称，缺省回退主题/任务名/标题，末位回退表单标识。 */
 function rowTitle(row: Record<string, unknown>): string {
-  for (const key of ['theme', 'processName', 'taskName', 'title', 'name']) {
+  for (const key of ['processName', 'theme', 'taskName', 'title', 'name']) {
     const value = row[key]
     if (typeof value === 'string' && value.trim()) return value.trim()
   }
@@ -206,10 +206,9 @@ function actionText(value: unknown): string {
   return map[key]?.() ?? key
 }
 
-/** 面板行两行式元信息（V012-BUG-021）：流程名称 · 发起人 · 发起时间；真实字段缺失时回退既有节点/动作/到期口径。 */
+/** 面板行两行式元信息：发起人 · 发起时间（当前节点/办理人字段在待办响应中不存在时留空，不虚构）。 */
 function rowMeta(row: Record<string, unknown>): string {
   const parts = [
-    typeof row.processName === 'string' ? row.processName.trim() : '',
     typeof row.initiatorName === 'string' ? row.initiatorName.trim() : '',
     row.createTime ? activityTime(row.createTime) : '',
   ].filter(Boolean)

@@ -14,7 +14,6 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { themeRuleDisplay } from '@/modules/workflow/utils/theme-rule'
 import { ListActionsColumn, ListEmpty, ListPagination } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { pageProcessDefs, getProcessDefDefinition, publishProcessDef } from '@/modules/workflow/api'
@@ -202,11 +201,6 @@ function rowActions(row: unknown): ListAction[] {
 const themeDialogVisible = ref(false)
 const themeDef = ref<ProcessDef | null>(null)
 
-/** 规则展示文字：变量显示成 [发起时间] 这类标识，不暴露占位记法 */
-function themeRuleText(rule: string): string {
-  return themeRuleDisplay(rule, (key, params) => (params ? t(key, params) : t(key)))
-}
-
 function openThemeRule(item: ProcessDef) {
   themeDef.value = item
   themeDialogVisible.value = true
@@ -297,10 +291,11 @@ onMounted(loadList)
     <div class="p53-admin-defs__filters">
       <span class="defs-filter__label">{{ t('common.processName') }}</span>
       <el-input v-model="keyword" class="defs-filter__keyword" placeholder="请输入" clearable />
+      <span class="defs-filter__label defs-filter__label--inline">{{ t('common.category') }}</span>
       <el-select
         v-model="categoryFilter"
         class="defs-filter__category"
-        placeholder="全部分类"
+        :placeholder="t('common.all')"
         clearable
       >
         <el-option
@@ -310,10 +305,11 @@ onMounted(loadList)
           :value="category"
         />
       </el-select>
+      <span class="defs-filter__label defs-filter__label--inline">{{ t('common.status') }}</span>
       <el-select
         v-model="statusFilter"
         class="defs-filter__status"
-        placeholder="全部状态"
+        :placeholder="t('common.all')"
         clearable
       >
         <el-option label="已发布" value="PUBLISHED" />
@@ -348,7 +344,7 @@ onMounted(loadList)
         </template>
       </ListEmpty>
       <template v-else>
-        <el-table v-loading="loading" :data="visibleList" stripe class="defs-table">
+        <el-table v-loading="loading" :data="visibleList" class="defs-table">
           <el-table-column
             prop="name"
             :label="t('common.processName')"
@@ -377,21 +373,10 @@ onMounted(loadList)
               }}</span>
             </template>
           </el-table-column>
+          <!-- 6:2：流程编号列显示定义自身标识；实例编号模板（主题规则）经「编号设置」动作维护 -->
           <el-table-column :label="t('workflow.themeRuleColumn')" width="212">
             <template #default="{ row }">
-              <span
-                v-if="statusRow(row).themeRule"
-                class="defs-table__theme"
-                :title="themeRuleText(statusRow(row).themeRule ?? '')"
-                @click="openThemeRule(statusRow(row))"
-                >{{ themeRuleText(statusRow(row).themeRule ?? '') }}</span
-              >
-              <span
-                v-else
-                class="defs-table__theme defs-table__theme--unset"
-                @click="openThemeRule(statusRow(row))"
-                >{{ t('workflow.themeRuleUnset') }}</span
-              >
+              <span class="defs-table__code">{{ statusRow(row).processKey || '—' }}</span>
             </template>
           </el-table-column>
           <el-table-column :label="t('workflow.instanceCount')" width="84" align="center">
@@ -539,11 +524,11 @@ onMounted(loadList)
 .p53-admin-defs__filters {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 0;
   box-sizing: border-box;
   height: 64px;
   margin-top: 0;
-  padding: 0 19px;
+  padding: 0 16px 0 20px;
   border: 1px solid #dde3ef;
   border-radius: 8px;
   background: var(--sw-surface-card);
@@ -551,25 +536,33 @@ onMounted(loadList)
 .p53-admin-defs__filters :deep(.el-input__wrapper),
 .p53-admin-defs__filters :deep(.el-select__wrapper) {
   height: 32px;
+  box-sizing: border-box;
   box-shadow: 0 0 0 1px #dde3ef inset;
   border-radius: 4px;
   background: #ffffff;
 }
 .defs-filter__label {
   flex: none;
+  width: 48px;
+  margin-right: 13px;
   font-size: 12px;
   color: #5c6370;
 }
+.defs-filter__label--inline {
+  width: 24px;
+  margin-left: 13px;
+  margin-right: 7px;
+}
 .defs-filter__keyword {
-  width: 286px;
+  width: 296px;
 }
 .defs-filter__keyword :deep(.el-input__wrapper) {
   padding-left: 11px;
 }
 .defs-filter__category,
 .defs-filter__status {
-  width: 134px;
-  margin-left: 35px;
+  width: 144px;
+  margin-left: 0;
 }
 .defs-filter__category :deep(.el-select__wrapper),
 .defs-filter__status :deep(.el-select__wrapper) {
@@ -582,17 +575,17 @@ onMounted(loadList)
   flex: 1;
 }
 .defs-filter__link {
-  margin: 0;
+  margin: 0 8px 0 12px;
   font-size: 13px;
 }
 .defs-filter__query {
-  width: 62px;
+  width: 72px;
   height: 32px;
-  margin: 0;
+  margin: 0 0 0 8px;
   border-radius: 4px;
 }
 .defs-filter__reset {
-  width: 62px;
+  width: 72px;
   height: 32px;
   margin: 0;
   border-color: #dde3ef;
@@ -600,9 +593,9 @@ onMounted(loadList)
   color: #17213a;
 }
 .defs-filter__create {
-  width: 70px;
+  width: 80px;
   height: 32px;
-  margin: 0;
+  margin: 0 0 0 8px;
   padding: 0;
   border-radius: 4px;
   font-size: 13px;
@@ -630,12 +623,15 @@ onMounted(loadList)
 /* 表格几何对齐参考 6:2：表头 42 / 行 44 / 12px 字号 */
 .defs-table {
   --el-table-border-color: #e9edf5; /* 参考行分隔线 */
+  --el-table-header-bg-color: #f4f6fb;
+  --el-table-header-text-color: #6b7280;
 }
 .defs-table :deep(th.el-table__cell) {
   height: 42px;
   font-size: 12px;
   font-weight: 400;
-  background: #f4f6fb;
+  background: #f4f6fb !important;
+  border-bottom-color: #f4f6fb !important;
 }
 .defs-table :deep(th.el-table__cell .cell),
 .defs-table :deep(.el-table__row td.el-table__cell .cell) {
@@ -643,21 +639,31 @@ onMounted(loadList)
   text-align: left;
 }
 .defs-table :deep(th.defs-table__col-name .cell),
-.defs-table :deep(td.defs-table__col-name .cell) {
-  padding-left: 18px;
+.defs-table :deep(.el-table__body tr td:first-child .cell) {
+  padding-left: 16px;
 }
 .defs-table :deep(.el-table__row td.el-table__cell) {
   height: 44px;
   font-size: 12px;
-  color: #6b7280;
+  color: #303a55;
+}
+.defs-table :deep(.el-table__body tr td:nth-child(4) .cell) {
+  padding-left: 0;
+  overflow: visible;
+}
+.defs-table :deep(.el-table__body tr td:nth-child(4) .status) {
+  margin-left: -5px;
 }
 .defs-table :deep(td.defs-table__col-name .cell) {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: #17213a;
 }
 .defs-table :deep(.defs-table__version) {
-  color: #17213a;
+  color: #303a55;
+}
+.defs-table :deep(.defs-table__code) {
+  color: #172033;
 }
 /* 主题规则列内联入口：已设置展示规则（超长省略+悬浮全称），未设置警示色引导点击 */
 .defs-table :deep(.defs-table__theme) {
@@ -680,20 +686,22 @@ onMounted(loadList)
    底色不再被 .cell 裁切） */
 .status {
   display: inline-block;
-  min-width: 46px;
-  padding: 7px 12px;
-  border-radius: 999px;
+  box-sizing: border-box;
+  width: 54px;
+  height: 24px;
+  padding: 0;
+  border-radius: 5px;
   text-align: center;
   font-size: 12px;
-  line-height: 14px;
+  line-height: 24px;
 }
 .status.is-published {
   background: #eafbf7;
-  color: #18a67a;
+  color: #12805c;
 }
 .status.is-draft {
-  background: #fff7e8;
-  color: #f59e0b;
+  background: #f4f6fb;
+  color: #6b7280;
 }
 /* 设计中的「停用」徽标：ProcessDef 目前仅 DRAFT/PUBLISHED 两态，暂无数据路径；样式随设计保留 */
 .status.is-disabled {

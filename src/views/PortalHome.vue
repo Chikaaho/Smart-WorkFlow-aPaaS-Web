@@ -298,7 +298,7 @@ function searchPortal(): void {
   box-sizing: border-box;
   border-radius: var(--sw-radius-lg);
   background: var(--sw-surface-card);
-  border: 1px solid var(--sw-border-light);
+  border: 0;
   box-shadow: none;
   color: var(--sw-text-primary);
   position: relative;
@@ -327,22 +327,27 @@ function searchPortal(): void {
 .portal__hero-search-label {
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  justify-content: flex-start;
+  width: 35px;
+  padding-left: 4px;
+  box-sizing: border-box;
   color: var(--sw-text-secondary);
   font-size: 12px;
   white-space: nowrap;
 }
 .portal__hero-search {
   display: flex;
-  width: 1032px;
+  width: 1033px;
   max-width: 100%;
-  height: 36px;
+  height: 32px;
+  margin-top: 2px;
 }
 .portal__hero-search :deep(.el-input) {
   flex: 1;
 }
 .portal__hero-search :deep(.el-input__wrapper) {
-  height: 36px;
+  height: 32px;
+  box-sizing: border-box;
   padding-left: 9px;
   border-radius: 6px 0 0 6px;
   background: #ffffff;
@@ -350,9 +355,9 @@ function searchPortal(): void {
 }
 .portal__hero-search :deep(.el-button) {
   width: 88px;
-  height: 36px;
+  height: 32px;
   min-width: 88px;
-  margin-left: 15px;
+  margin-left: 12px;
   padding: 0;
   border-radius: 0 6px 6px 0;
 }
@@ -414,7 +419,7 @@ function searchPortal(): void {
 }
 .portal > .portal__section {
   margin: 0;
-  padding: 20px 21px;
+  padding: 20px 21px 22px;
   background: var(--sw-surface-card);
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
@@ -469,22 +474,26 @@ function searchPortal(): void {
   display: grid;
   grid-template-columns: 1fr;
   gap: 0;
-  margin-top: 10px;
+  margin-top: 0;
+}
+.portal__focus-section .portal__section-title {
+  margin-bottom: 2px;
+  line-height: 22px;
 }
 .portal__lower {
   display: grid;
   grid-template-columns: minmax(0, 3.227fr) minmax(300px, 1fr);
   gap: 20px;
-  margin: 6px 0 0;
+  margin: 0;
 }
 .portal__analytics,
 .portal__focus-section {
   position: relative;
   min-width: 0;
   box-sizing: border-box;
-  height: 440px;
-  min-height: 440px;
-  padding: 20px 21px;
+  height: 439.5px;
+  min-height: 439.5px;
+  padding: 20px;
   background: var(--sw-surface-card);
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
@@ -502,7 +511,7 @@ function searchPortal(): void {
 .portal__analytics-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
+  gap: 0 19px;
   margin: 4px 0 0;
 }
 .portal__analytics-summary div {
@@ -578,8 +587,8 @@ function searchPortal(): void {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  min-height: 90px;
-  height: 90px;
+  min-height: 126.5px;
+  height: 126.5px;
   padding: 0;
   background: transparent;
   border: 0;
@@ -588,9 +597,6 @@ function searchPortal(): void {
   font-size: 13px;
   color: var(--sw-text-regular);
   cursor: pointer;
-}
-.portal-focus:last-child {
-  border-bottom: 0;
 }
 .portal-focus:disabled {
   cursor: default;

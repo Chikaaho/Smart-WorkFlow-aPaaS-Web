@@ -3228,7 +3228,7 @@ export default {
     noActivity: '暂无动态',
     efficiencyTitle: '流程效能',
     avgDuration: '平均处理时长',
-    completionRate: '按时完成率',
+    completionRate: '完成率',
     hoursUnit: '小时',
     statCompleted: '已完成',
     avgWait: '平均等待',
