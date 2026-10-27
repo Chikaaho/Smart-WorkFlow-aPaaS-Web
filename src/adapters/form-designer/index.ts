@@ -98,6 +98,8 @@ interface RawSubFieldDef {
 
 interface RawFieldDef extends RawSubFieldDef {
   subFields?: RawSubFieldDef[]
+  /** 多行纯文本（TextField.multiline 契约键透传；缺省单行语义不变）。 */
+  multiline?: boolean
   colSpan?: unknown
   /** 字段标题位置（主字段专属；子表列头不适用）。 */
   labelPosition?: string
@@ -243,7 +245,15 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     return { ...base, type, subFields }
   }
 
-  // 运行时 KNOWN_FIELD_TYPES gate 保证此处 type ∈ {TEXT,RICH_TEXT,NUMBER,DATE,BOOL}
+  if (type === 'TEXT') {
+    return {
+      ...base,
+      type,
+      ...(raw.multiline !== undefined ? { multiline: raw.multiline } : {}),
+    } as FormSchemaField
+  }
+
+  // 运行时 KNOWN_FIELD_TYPES gate 保证此处 type ∈ {RICH_TEXT,NUMBER,BOOL}
   return { ...base, type } as FormSchemaField
 }
 
@@ -369,7 +379,12 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
   switch (field.type) {
     case 'TEXT': {
       rule.type = 'input'
-      if (field.placeholder) rule.props = { placeholder: field.placeholder }
+      // 多行纯文本（契约 TextField.multiline）：设计态/预览态与填写态同显 textarea。
+      const multiline = (field as { multiline?: boolean }).multiline === true
+      rule.props = {
+        ...(multiline ? { type: 'textarea', rows: 3 } : {}),
+        ...(field.placeholder ? { placeholder: field.placeholder } : {}),
+      }
       break
     }
 

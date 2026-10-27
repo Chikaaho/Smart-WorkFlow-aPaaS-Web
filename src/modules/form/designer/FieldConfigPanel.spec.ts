@@ -130,11 +130,12 @@ describe('FieldConfigPanel 字段标题位置', () => {
       .findAllComponents({ name: 'ElSelect' })
       .find((s) => s.props('modelValue') === 'top-left')
     expect(select).toBeTruthy()
-    // 标题位置选项（字符串值；数字 1-12 为宽度选择器选项）
+    // 标题位置选项：面板内另有字符串值的输入方式选择器，这里只取标题位置域
+    const LABEL_POSITIONS = ['left', 'right', 'top-left', 'top-right', 'top-center']
     const optionValues = wrapper
       .findAllComponents({ name: 'ElOption' })
       .map((o) => o.props('value'))
-      .filter((v) => typeof v === 'string')
+      .filter((v) => typeof v === 'string' && LABEL_POSITIONS.includes(v))
     expect(optionValues).toEqual(['left', 'right', 'top-left'])
   })
 

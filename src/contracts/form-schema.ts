@@ -157,6 +157,8 @@ interface BaseField {
 
 export interface TextField extends BaseField {
   type: 'TEXT'
+  /** 多行纯文本：以 textarea 填写，换行原样保存/回读；存储族仍为 VARCHAR/TEXT，不改变 API 值。 */
+  multiline?: boolean
 }
 
 export interface RichTextField extends BaseField {

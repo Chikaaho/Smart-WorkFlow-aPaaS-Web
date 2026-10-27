@@ -59,23 +59,22 @@ type PaletteEntry = {
   /** 唯一键（同类型多变体时 `type#variant`）。 */
   key: string
   type: string
-  /** BF20261013-009：DICT 双入口变体（下拉选择 / 单选框），其余类型无变体。 */
-  variant?: 'dropdown' | 'radio'
+  /** 入口变体：DICT 下拉/单选，TEXT 多行纯文本；其余类型无变体。 */
+  variant?: 'dropdown' | 'radio' | 'multiline'
   label: string
   icon: string
   descriptor?: FieldTypeDescriptor
   disabled?: boolean
 }
 
-/** 控件库条目引用：字符串=注册表原样；对象=DICT 的显示变体（同类型双入口）。 */
-type PaletteTypeRef = string | { type: string; variant: 'dropdown' | 'radio' }
+/** 控件库条目引用：字符串=注册表原样；对象=同类型显示变体（DICT 双入口 / TEXT 多行）。 */
+type PaletteTypeRef = string | { type: string; variant: 'dropdown' | 'radio' | 'multiline' }
 
 /**
  * BF20261013-010：库内名称一律取注册表 descriptor.label（单一名称源）——
  * 拖出后的默认字段名与库内显示名天然一致，杜绝两套名称漂移。
  * 未进入字段注册表的展示入口单独声明，不生成字段。
  */
-const PLACEHOLDER_LABELS: Record<string, string> = { RICH_EDITOR: 'form.paletteRichText' }
 
 const PALETTE_ICONS: Record<string, string> = {
   TEXT: editIcon,
@@ -94,7 +93,6 @@ const PALETTE_ICONS: Record<string, string> = {
   DEPT: folderIcon,
   REFERENCE: connectionIcon,
   TABLE: gridIcon,
-  RICH_EDITOR: documentIcon,
   FORMULA: gridIcon,
   DATASOURCE: connectionIcon,
 }
@@ -109,7 +107,7 @@ const PALETTE_GROUPS: Array<{ key: string; types: PaletteTypeRef[] }> = [
     key: 'form.paletteGroupBasic',
     types: [
       'TEXT',
-      'RICH_TEXT',
+      { type: 'TEXT', variant: 'multiline' },
       'NUMBER',
       { type: 'DICT', variant: 'dropdown' },
       { type: 'DICT', variant: 'radio' },
@@ -123,26 +121,28 @@ const PALETTE_GROUPS: Array<{ key: string; types: PaletteTypeRef[] }> = [
     ],
   },
   { key: 'form.paletteGroupBusiness', types: ['USER', 'DEPT', 'REFERENCE', 'TABLE'] },
-  { key: 'form.paletteGroupAdvanced', types: ['RICH_EDITOR', 'FORMULA', 'DATASOURCE'] },
+  { key: 'form.paletteGroupAdvanced', types: ['RICH_TEXT', 'FORMULA', 'DATASOURCE'] },
 ]
 
 const descriptorByType = computed(() => new Map(palette.value.map((d) => [d.type, d])))
 
 const paletteGrouped = computed(() => {
   const keyword = paletteSearch.value.trim().toLowerCase()
-  // RICH_EDITOR是设计展示入口，未注册描述符，不生成字段。
-  const unavailable = new Set(['RICH_EDITOR'])
   const entries = (ref: PaletteTypeRef, _groupKey: string): PaletteEntry | null => {
     const type = typeof ref === 'string' ? ref : ref.type
     const variant = typeof ref === 'string' ? undefined : ref.variant
+    // 变体入口只属于主画布：子表白名单（allowedTypes）不提供多行/单选变体
+    if (variant && props.allowedTypes) return null
     const descriptor = descriptorByType.value.get(type as FieldType)
     if (props.allowedTypes && (!descriptor || !props.allowedTypes.includes(descriptor.type)))
       return null
-    // BF20261013-010：注册表内类型一律 descriptor.label；单选框变体用入口名；占位条目查映射
+    // BF20261013-010：注册表内类型一律 descriptor.label；变体用入口名
     const label =
       variant === 'radio'
         ? t('form.paletteRadio')
-        : (descriptor?.label ?? t(PLACEHOLDER_LABELS[type] ?? type))
+        : variant === 'multiline'
+          ? t('form.paletteMultiline')
+          : (descriptor?.label ?? type)
     const entryKey = variant ? `${type}#${variant}` : type
     if (
       keyword &&
@@ -157,7 +157,7 @@ const paletteGrouped = computed(() => {
       label,
       icon: PALETTE_ICONS[entryKey] ?? PALETTE_ICONS[type] ?? '',
       descriptor,
-      disabled: unavailable.has(type),
+      disabled: !palette.value.some((d) => d.type === type),
     }
   }
   return PALETTE_GROUPS.map((group) => ({
@@ -184,6 +184,10 @@ function createItem(entry: PaletteEntry): DesignerItem {
   // BF20261013-009：DICT 单选框变体——数据来源/显示方式在配置面板继续可调
   if (entry.variant === 'radio' && field.type === 'DICT') {
     field.renderAs = 'radio'
+    field.label = entry.label
+  }
+  if (entry.variant === 'multiline' && field.type === 'TEXT') {
+    field.multiline = true
     field.label = entry.label
   }
   return { id: nextDesignerItemId(), field }

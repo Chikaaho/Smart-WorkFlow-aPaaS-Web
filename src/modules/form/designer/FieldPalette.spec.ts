@@ -18,16 +18,19 @@ function itemEl(wrapper: ReturnType<typeof mountPalette>, type: string) {
 }
 
 describe('FieldPalette 原生拖拽', () => {
-  it('可用条目可拖拽；未启用条目禁用且不可拖拽', () => {
+  it('可用条目可拖拽；基础组含单行/多行文本，高级组富文本为真实入口', () => {
     const wrapper = mountPalette()
     expect(itemEl(wrapper, 'TEXT').attributes('draggable')).toBe('true')
+    expect(itemEl(wrapper, 'TEXT').exists()).toBe(true)
+    // 基础组多行文本变体：独立入口、同 TEXT 类型
+    const multiline = wrapper.find('.palette__item[data-field-variant="multiline"]')
+    expect(multiline.exists()).toBe(true)
+    expect(multiline.attributes('draggable')).toBe('true')
     // 文字组件经本刀进入组件库
     expect(itemEl(wrapper, 'LABEL').exists()).toBe(true)
     expect(itemEl(wrapper, 'LABEL').attributes('draggable')).toBe('true')
-    const richEditor = itemEl(wrapper, 'RICH_EDITOR')
-    expect(richEditor.attributes('disabled')).toBeDefined()
-    expect(richEditor.attributes('draggable')).toBe('false')
-    expect(richEditor.attributes('title')).toBe('该组件暂不可用')
+    // 高级组富文本为真实 RICH_TEXT 入口（不再用禁用占位）
+    expect(itemEl(wrapper, 'RICH_TEXT').attributes('draggable')).toBe('true')
   })
 
   it('dragstart 产出与点击添加同一形态的画布项并交给宿主', async () => {
@@ -45,16 +48,21 @@ describe('FieldPalette 原生拖拽', () => {
     expect(item.field.colSpan).toBe(24)
   })
 
+  it('多行文本变体产出带 multiline 的 TEXT 字段', async () => {
+    const wrapper = mountPalette()
+    const multiline = wrapper.find('.palette__item[data-field-variant="multiline"]')
+    await multiline.trigger('dragstart')
+    const emitted = wrapper.emitted('drag-start')
+    expect(emitted).toHaveLength(1)
+    const item = emitted![0][0] as { field: Record<string, unknown> }
+    expect(item.field).toMatchObject({ type: 'TEXT', multiline: true })
+    expect(item.field.label).toBe('多行文本')
+  })
+
   it('dragend 通知宿主清预览', async () => {
     const wrapper = mountPalette()
     await itemEl(wrapper, 'TEXT').trigger('dragend')
     expect(wrapper.emitted('drag-end')).toHaveLength(1)
-  })
-
-  it('未启用条目即便触发 dragstart 也不产出候选', async () => {
-    const wrapper = mountPalette()
-    await itemEl(wrapper, 'RICH_EDITOR').trigger('dragstart')
-    expect(wrapper.emitted('drag-start')).toBeUndefined()
   })
 
   it('整体禁用（已发布表单）时不产出候选', async () => {
@@ -118,12 +126,11 @@ describe('FieldPalette 选择类入口（BF20261013-009）', () => {
 describe('FieldPalette 名称一致性（BF20261013-010）', () => {
   const REGISTRY_TYPES = FIELD_TYPE_REGISTRY.map((descriptor) => descriptor.type)
 
-  it('全部已注册类型都有唯一主入口，字典保留下拉和单选两个变体', () => {
+  it('全部已注册类型都有主入口；字典保留下拉/单选，文本保留单行/多行', () => {
     const wrapper = mountPalette()
     for (const type of REGISTRY_TYPES) {
-      expect(wrapper.findAll(`.palette__item[data-field-type="${type}"]`)).toHaveLength(
-        type === 'DICT' ? 2 : 1,
-      )
+      const variants = type === 'DICT' || type === 'TEXT' ? 2 : 1
+      expect(wrapper.findAll(`.palette__item[data-field-type="${type}"]`)).toHaveLength(variants)
     }
   })
 

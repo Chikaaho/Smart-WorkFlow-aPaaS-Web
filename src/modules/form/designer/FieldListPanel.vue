@@ -211,7 +211,7 @@ function patchDescription(row: FieldRow, description: string) {
       <el-table-column :label="t('fieldList.colComponent')" width="116">
         <template #default="{ row }">{{ componentLabel(row.field.type) }}</template>
       </el-table-column>
-      <el-table-column :label="t('fieldList.colType')" width="110">
+      <el-table-column :label="t('fieldList.storageType')" width="110">
         <template #default="{ row }">{{ storageTypeOf(row.field.type) }}</template>
       </el-table-column>
       <el-table-column :label="t('fieldList.colLength')" width="132">

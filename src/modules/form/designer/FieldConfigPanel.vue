@@ -14,7 +14,7 @@ const { t } = useI18n()
  */
 import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getFieldTypeDescriptor, getFieldTypeStorage } from './field-types'
+import { getFieldTypeDescriptor } from './field-types'
 import { isColumnNameUnique } from './column-name'
 import type { DesignerItem } from './types'
 import type { FieldPatch } from './field-config'
@@ -105,11 +105,26 @@ function onWidthChange(cols: number | undefined) {
   emit('update', { colSpan: normalizeFormFieldColSpan(cols, props.field.field.type) })
 }
 
-/** 数据类型族展示（BF20261013-009：下拉多选提交为 key 数组，存储族显示 JSON）。 */
-const storageLabel = computed(() => {
+/**
+ * 数据类型展示（2026-10-27 方向）：面向配置者显示逻辑类型名，复用控件元信息；
+ * 单行文本显示「文本」。VARCHAR/JSON 等存储族只属实现细节，不在该行暴露。
+ */
+const logicalTypeLabel = computed(() => {
   if (!props.field) return ''
-  if (props.field.field.type === 'DICT' && props.field.field.multiple) return 'JSON'
-  return getFieldTypeStorage(props.field.field.type)
+  if (props.field.field.type === 'TEXT') return t('form.fieldDataTypeText')
+  return descriptor.value?.label ?? props.field.field.type
+})
+
+/** 右上控件名：多行 TEXT 显示「多行文本」，避免仍标成单行文本。 */
+const controlLabel = computed(() => {
+  if (!props.field) return ''
+  if (
+    props.field.field.type === 'TEXT' &&
+    (props.field.field as { multiline?: boolean }).multiline
+  ) {
+    return t('form.paletteMultiline')
+  }
+  return descriptor.value?.label ?? props.field.field.type
 })
 
 /** 字段标识后缀展示：field_ 前缀被系统吃掉，用户只见后缀（V011-BUG-016）。 */
@@ -140,7 +155,7 @@ function onFieldKeySuffix(raw: string) {
   <aside class="config">
     <div class="config__head">
       <h2 class="config__title">{{ t('form.fieldSettingsTitle') }}</h2>
-      <span v-if="field" class="config__type">{{ descriptor?.label ?? field.field.type }}</span>
+      <span v-if="field" class="config__type">{{ controlLabel }}</span>
     </div>
 
     <div v-if="!field" class="config__empty" />
@@ -225,7 +240,7 @@ function onFieldKeySuffix(raw: string) {
       </div>
       <div class="config__row">
         <label class="config__label">{{ t('fieldList.colType') }}</label>
-        <el-input :model-value="storageLabel" disabled />
+        <el-input :model-value="logicalTypeLabel" disabled />
       </div>
       <!-- 0.1.7 #36（Owner）：数据类型/最大长度各自整行满宽（原两列半宽格里数字框过窄） -->
       <div v-if="field.field.type === 'TEXT'" class="config__row">
