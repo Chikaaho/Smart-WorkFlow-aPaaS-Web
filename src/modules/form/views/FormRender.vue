@@ -1115,17 +1115,20 @@ onMounted(() => {
 
       <template v-else-if="schema">
         <!-- 0.1.7 #13：整个 top 导航栏——左上圆角返回，右上圆角保存草稿/提交；无表单名/流程名噪音 -->
-        <header class="form-render-page__top">
+        <header
+          class="form-render-page__top"
+          :class="{ 'form-render-page__top--fill': isStartFillMode }"
+        >
           <div class="form-render-page__heading">
             <button
+              v-if="!isStartFillMode"
               class="form-render-page__back"
               type="button"
               data-testid="form-render-back"
               :title="t('common.backShort')"
               @click="goBack"
             >
-              <el-icon v-if="isStartFillMode"><Close /></el-icon>
-              <el-icon v-else><ArrowLeft /></el-icon>
+              <el-icon><ArrowLeft /></el-icon>
             </button>
             <span class="form-render-page__title">{{ pageTitle }}</span>
           </div>
@@ -1175,6 +1178,17 @@ onMounted(() => {
               </el-button>
             </template>
           </div>
+          <!-- 0.2.0 参考节点 101:2：发起填写态关闭入口固定在标题栏右侧 -->
+          <button
+            v-else-if="isStartFillMode"
+            class="form-render-page__close"
+            type="button"
+            data-testid="form-render-close"
+            :title="t('common.close')"
+            @click="goBack"
+          >
+            <el-icon><Close /></el-icon>
+          </button>
         </header>
 
         <!-- 0.1.7 #13/#18：画布——设计器里有什么就展示什么（24 栅格直出），无其它信息 -->
@@ -1267,25 +1281,25 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- 0.2.0 参考节点 101:2：发起填写态底部固定操作栏（暂存/提交右下） -->
+        <!-- 0.2.0 参考节点 101:2：发起填写态底部固定操作栏，按钮对齐 1440 白卡右缘 -->
         <footer v-if="isStartFillMode" class="form-render-page__fill-footer">
-          <el-button
-            round
-            :loading="draftSaving"
-            data-testid="form-render-save-draft"
-            @click="handleSaveDraft"
-          >
-            {{ t('common.saveDraft') }}
-          </el-button>
-          <el-button
-            round
-            type="primary"
-            :loading="submitting"
-            data-testid="form-render-submit"
-            @click="handleSubmit"
-          >
-            {{ t('common.submit') }}
-          </el-button>
+          <div class="form-render-page__fill-footer-inner">
+            <el-button
+              :loading="draftSaving"
+              data-testid="form-render-save-draft"
+              @click="handleSaveDraft"
+            >
+              {{ t('form.fillSaveTemporary') }}
+            </el-button>
+            <el-button
+              type="primary"
+              :loading="submitting"
+              data-testid="form-render-submit"
+              @click="handleSubmit"
+            >
+              {{ t('common.submit') }}
+            </el-button>
+          </div>
         </footer>
       </template>
     </template>
@@ -1345,6 +1359,36 @@ onMounted(() => {
   padding: 8px 16px;
   background: #fff;
   border-bottom: 1px solid var(--sw-border-light, #ebeef5);
+}
+/* 0.2.0 参考节点 101:2：填写态标题栏高 48、标题左 24、关闭居右。 */
+.form-render-page__top--fill {
+  min-height: 48px;
+  padding: 0 28px 0 24px;
+}
+.form-render-page__top--fill .form-render-page__title {
+  font-size: 15px;
+}
+.form-render-page__top--fill .form-render-page__heading {
+  gap: 0;
+}
+.form-render-page__close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 16px;
+  color: #5c6370;
+  cursor: pointer;
+}
+.form-render-page__close:hover {
+  background: #f4f6fb;
+  color: var(--sw-text-primary);
 }
 
 .form-render-page__heading {
@@ -1424,23 +1468,33 @@ onMounted(() => {
 
 /* ── 0.2.0 参考节点 101:2：发起填写态（顶部填写+关闭、底部固定操作栏、白卡 1440 居中） ── */
 .form-render-page__canvas--fill {
-  padding: 16px 0 88px;
+  padding: 12px 0 88px;
 }
 .form-render-page__main--fill {
   width: min(1440px, calc(100vw - 240px));
   margin: 0 auto;
   max-width: none;
+  box-sizing: border-box;
+  padding: 18px 16px 24px;
+  background: var(--sw-surface-card, #ffffff);
+  border: 1px solid #dde3ef;
+  border-radius: 0;
+  gap: 0;
 }
 .form-render-page__form-title {
-  margin: 24px 0 20px;
+  margin: 0 0 20px;
   font-size: 20px;
   font-weight: 600;
+  line-height: 28px;
   color: var(--sw-text-primary);
   text-align: center;
 }
 .form-render-page__main--fill .form-render-page__sheet {
-  min-height: 560px;
-  padding: 28px 40px;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 .form-render-page__fill-footer {
   position: fixed;
@@ -1449,11 +1503,30 @@ onMounted(() => {
   left: 0;
   z-index: 6;
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 14px 40px;
+  align-items: center;
+  height: 65px;
+  box-sizing: border-box;
+  padding: 0 24px;
   background: var(--sw-surface-card, #ffffff);
-  border-top: 1px solid var(--sw-border-light);
+  border-top: 1px solid #dde3ef;
+}
+.form-render-page__fill-footer-inner {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  width: min(1440px, calc(100vw - 240px));
+  margin: 0 auto;
+}
+.form-render-page__fill-footer :deep(.el-button) {
+  width: 70px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.form-render-page__fill-footer :deep(.el-button--primary) {
+  width: 72px;
 }
 
 .form-render-page__section:first-child {

@@ -130,11 +130,11 @@ describe('ProcessCatalog.vue 分类侧栏', () => {
     await wrapper.find('.catalog-tree__toggle').trigger('click')
     await nextTick()
     expect(wrapper.find('.catalog-layout').classes()).not.toContain('catalog-layout--collapsed')
-    // 0.2.0 参考节点 97:2：展开态分类行带 24px 首字方块（glyph--chip），收起态回退 36px 大字兜底。
+    // 0.2.0 参考节点 97:2：展开态首字为纯文字（无灰底方块），收起态同一首字兜底。
     const expandedGlyphs = wrapper.findAll('.catalog-tree__glyph')
     expect(expandedGlyphs.length).toBe(3)
-    expect(expandedGlyphs[1].classes()).toContain('catalog-tree__glyph--chip')
     expect(expandedGlyphs[1].text()).toBe('行')
+    expect(expandedGlyphs[1].classes()).not.toContain('catalog-tree__glyph--chip')
     expect(wrapper.findAll('.catalog-tree__count').length).toBe(3)
   })
 })

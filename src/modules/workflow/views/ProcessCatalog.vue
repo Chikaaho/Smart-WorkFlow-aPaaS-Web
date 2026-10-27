@@ -1,15 +1,5 @@
 <script setup lang="ts">
 import { useI18n } from '@/locales'
-
-const { t } = useI18n()
-/**
- * ProcessCatalog — 流程中心（v0.0.2 P4；V012-BUG-009 改版）。
- *
- * 左侧分类树（全部/分类/未分类，带可见计数）+ 右侧流程列表；
- * 收藏星标（最近收藏置顶）；常用流程 Top5（租户内发起总量）；最近使用 Top5
- * （本人最近发起去重）；分类维护入口按 workflow:catalog:manage 权限呈现。
- * 分类聚合数量仅来自服务端可见集，不泄漏不可见事项。
- */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -30,6 +20,15 @@ import {
 import { ApiError } from '@/foundation/request'
 import { CategorySidebar, ListPagination } from '@/components/page-layout'
 
+const { t } = useI18n()
+/**
+ * ProcessCatalog — 流程中心（v0.0.2 P4；V012-BUG-009 改版）。
+ *
+ * 左侧分类树（全部/分类/未分类，带可见计数）+ 右侧流程列表；
+ * 收藏星标（最近收藏置顶）；常用流程 Top5（租户内发起总量）；最近使用 Top5
+ * （本人最近发起去重）；分类维护入口按 workflow:catalog:manage 权限呈现。
+ * 分类聚合数量仅来自服务端可见集，不泄漏不可见事项。
+ */
 const router = useRouter()
 
 const items = ref<CatalogItem[]>([])
@@ -45,7 +44,7 @@ const activeCategory = ref<number | ''>('')
 const categories = ref<CatalogCategory[]>([])
 const counts = ref<Record<string, number>>({})
 
-// ─── 0.2.0 分类侧栏（direction-sidebar-navigation categories 增量）：236/64、40 行、底部 48 开关 ───
+// ─── 0.2.0 分类侧栏（direction-sidebar-navigation categories 增量）：236/64、底部 48 开关 ───
 const treeCollapsed = ref(false)
 
 interface CategoryRow {
@@ -67,14 +66,13 @@ const treeRows = computed<CategoryRow[]>(() => {
       count: itemCountOf(category.id),
     })
   }
-  if (itemCountOf(0) > 0) {
-    rows.push({
-      key: 'uncategorized',
-      id: 0,
-      name: t('workflow.uncategorized'),
-      count: itemCountOf(0),
-    })
-  }
+  // 0.2.0 参考节点 97:2：未分类为固定过滤入口（计数 0 也保留行）。
+  rows.push({
+    key: 'uncategorized',
+    id: 0,
+    name: t('workflow.uncategorized'),
+    count: itemCountOf(0),
+  })
   return rows
 })
 
@@ -127,15 +125,6 @@ function resetFilter(): void {
   activeCategory.value = ''
   pageNum.value = 1
   void loadCatalog()
-}
-
-/** 图标交替色：按 formKey 稳定交替，避免数据刷新后跳变。 */
-function catalogIconTone(item: CatalogItem): 'primary' | 'info' | 'success' | 'purple' {
-  const categoryId = Number(item.categoryId)
-  if (categoryId === 101 || categoryId === 102) return 'info'
-  if (categoryId === 104) return 'success'
-  if (categoryId === 105) return 'purple'
-  return 'primary'
 }
 
 async function loadCatalog() {
@@ -249,9 +238,7 @@ onMounted(() => {
 
 <template>
   <div class="catalog-page">
-    <!-- 0.1.7 #25：左上角标题/描述为噪音，已去除——分类树与流程列表即页首 -->
-
-    <!-- 0.2.0 分类侧栏：展开 236 / 收起 64；名称左对齐、数量靠右；底部 48px 开关 -->
+    <!-- 0.2.0 参考节点 97:2：分类侧栏贴左全高（236/64），主体从 256 起；底部 48px 开关贴屏底 -->
     <div class="catalog-layout" :class="{ 'catalog-layout--collapsed': treeCollapsed }">
       <CategorySidebar
         class="catalog-tree"
@@ -277,13 +264,8 @@ onMounted(() => {
               :aria-current="activeCategory === row.id ? 'true' : undefined"
               @click="selectCategory(row.id)"
             >
-              <span v-if="treeCollapsed" class="catalog-tree__glyph" aria-hidden="true">{{
-                glyphOf(row.name)
-              }}</span>
-              <template v-else>
-                <span class="catalog-tree__glyph catalog-tree__glyph--chip" aria-hidden="true">{{
-                  glyphOf(row.name)
-                }}</span>
+              <span class="catalog-tree__glyph" aria-hidden="true">{{ glyphOf(row.name) }}</span>
+              <template v-if="!treeCollapsed">
                 <span class="catalog-tree__name">{{ row.name }}</span>
                 <span class="catalog-tree__count">{{ row.count }}</span>
               </template>
@@ -296,8 +278,26 @@ onMounted(() => {
           :aria-expanded="treeCollapsed ? 'false' : 'true'"
           @click="treeCollapsed = !treeCollapsed"
         >
-          <span aria-hidden="true">{{ treeCollapsed ? '→' : '←' }}</span>
+          <svg
+            v-if="!treeCollapsed"
+            class="catalog-tree__toggle-icon"
+            viewBox="0 0 18 18"
+            width="18"
+            height="18"
+            aria-hidden="true"
+          >
+            <path d="M2.5 4.5v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <path
+              d="M15 9H6.5M9.8 5.7 6.5 9l3.3 3.3"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
           <span v-if="!treeCollapsed">{{ t('workflow.treeCollapse') }}</span>
+          <span v-else aria-hidden="true">→</span>
         </button>
       </CategorySidebar>
 
@@ -343,9 +343,47 @@ onMounted(() => {
               <li v-for="entry in frequentItems" :key="entry.processKey" class="catalog-rows__item">
                 <button type="button" class="catalog-rows__main" @click="openByKey(entry)">
                   <span class="catalog-mini__icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                      <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
-                      <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
+                    <svg viewBox="0 0 16 16" fill="none">
+                      <path
+                        d="M3.5 1.5h5L12 5v9.5H3.5z"
+                        fill="#ffffff"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linejoin="round"
+                      />
+                      <path
+                        d="M8.5 1.5V5H12"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linejoin="round"
+                      />
+                      <rect
+                        x="5.4"
+                        y="6.7"
+                        width="4.6"
+                        height="1.1"
+                        rx=".4"
+                        fill="currentColor"
+                        opacity=".45"
+                      />
+                      <rect
+                        x="5.4"
+                        y="9"
+                        width="4.6"
+                        height="1.1"
+                        rx=".4"
+                        fill="currentColor"
+                        opacity=".45"
+                      />
+                      <rect
+                        x="5.4"
+                        y="11.3"
+                        width="4.6"
+                        height="1.1"
+                        rx=".4"
+                        fill="currentColor"
+                        opacity=".45"
+                      />
                     </svg>
                   </span>
                   <span class="catalog-rows__name">{{ entry.name }}</span>
@@ -366,9 +404,47 @@ onMounted(() => {
               <li v-for="entry in recentItems" :key="entry.processKey" class="catalog-rows__item">
                 <button type="button" class="catalog-rows__main" @click="openByKey(entry)">
                   <span class="catalog-mini__icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                      <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
-                      <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
+                    <svg viewBox="0 0 16 16" fill="none">
+                      <path
+                        d="M3.5 1.5h5L12 5v9.5H3.5z"
+                        fill="#ffffff"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linejoin="round"
+                      />
+                      <path
+                        d="M8.5 1.5V5H12"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linejoin="round"
+                      />
+                      <rect
+                        x="5.4"
+                        y="6.7"
+                        width="4.6"
+                        height="1.1"
+                        rx=".4"
+                        fill="currentColor"
+                        opacity=".45"
+                      />
+                      <rect
+                        x="5.4"
+                        y="9"
+                        width="4.6"
+                        height="1.1"
+                        rx=".4"
+                        fill="currentColor"
+                        opacity=".45"
+                      />
+                      <rect
+                        x="5.4"
+                        y="11.3"
+                        width="4.6"
+                        height="1.1"
+                        rx=".4"
+                        fill="currentColor"
+                        opacity=".45"
+                      />
                     </svg>
                   </span>
                   <span class="catalog-rows__name">{{ entry.name }}</span>
@@ -384,7 +460,7 @@ onMounted(() => {
         </div>
 
         <!-- 0.2.0 参考节点 97:2：主列表单表格（列头 流程名称/分类/操作；行 星标+名称 | 分类 | 发起） -->
-        <div v-loading="loading" class="catalog-tablewrap">
+        <div v-loading="loading" class="catalog-tablecard">
           <el-empty v-if="isEmpty" :description="t('workflow.noCatalogItems')" />
           <table v-else class="catalog-table">
             <thead>
@@ -397,33 +473,25 @@ onMounted(() => {
             <tbody>
               <tr v-for="item in orderedItems" :key="item.itemKey">
                 <td class="catalog-table__name">
-                  <button
-                    type="button"
-                    class="catalog-item__star"
-                    :class="{ 'is-active': favoriteKeys.has(item.itemKey) }"
-                    :aria-label="
-                      favoriteKeys.has(item.itemKey)
-                        ? t('catalog.unfavorite')
-                        : t('catalog.favorite')
-                    "
-                    :disabled="toggling === item.itemKey"
-                    @click="toggleFavorite(item)"
-                  >
-                    ★
-                  </button>
-                  <span
-                    class="catalog-item__icon"
-                    :class="`catalog-item__icon--tone-${catalogIconTone(item)}`"
-                    aria-hidden="true"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                      <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
-                      <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
-                    </svg>
-                  </span>
-                  <button type="button" class="catalog-table__link" @click="openItem(item)">
-                    {{ item.name }}
-                  </button>
+                  <div class="catalog-table__namecell">
+                    <button
+                      type="button"
+                      class="catalog-item__star"
+                      :class="{ 'is-active': favoriteKeys.has(item.itemKey) }"
+                      :aria-label="
+                        favoriteKeys.has(item.itemKey)
+                          ? t('catalog.unfavorite')
+                          : t('catalog.favorite')
+                      "
+                      :disabled="toggling === item.itemKey"
+                      @click="toggleFavorite(item)"
+                    >
+                      {{ favoriteKeys.has(item.itemKey) ? '★' : '☆' }}
+                    </button>
+                    <button type="button" class="catalog-table__link" @click="openItem(item)">
+                      {{ item.name }}
+                    </button>
+                  </div>
                 </td>
                 <td class="catalog-table__category">{{ categoryNameOf(item) }}</td>
                 <td class="catalog-table__action">
@@ -434,61 +502,75 @@ onMounted(() => {
               </tr>
             </tbody>
           </table>
+          <div v-if="!isEmpty" class="catalog-table__footer">
+            <ListPagination
+              :total="total"
+              :page-num="pageNum"
+              :page-size="pageSize"
+              :page-sizes="[20, 40, 60, 100]"
+              appearance="design"
+              align="space-between"
+              layout="prev, pager, next, sizes, jumper"
+              total-text
+              :inset="false"
+              @update:page-num="handlePageNumChange"
+              @update:page-size="handlePageSizeChange"
+            />
+          </div>
         </div>
-        <ListPagination
-          :total="total"
-          :page-num="pageNum"
-          :page-size="pageSize"
-          :page-sizes="[20, 40, 60, 100]"
-          appearance="design"
-          align="space-between"
-          layout="prev, pager, next, sizes, jumper"
-          total-text
-          @update:page-num="handlePageNumChange"
-          @update:page-size="handlePageSizeChange"
-        />
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* P53 设计节点21/22-26 基础上 V012-BUG-009 改双栏：左分类树 240 + 右内容。 */
+/* 0.2.0 参考节点 97:2：页面不设外边距；侧栏为贴左全高白色栏，主体从 256 起。 */
 .catalog-page {
-  /* V012-BUG-009 复开：内容铺满内容区，消除宽屏左右大留白 */
-  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  box-sizing: border-box;
 }
 .catalog-layout {
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
+  align-items: stretch;
+  min-height: 0;
 }
 .catalog-layout--collapsed {
   grid-template-columns: 64px minmax(0, 1fr);
 }
 .catalog-tree {
   padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--sw-surface-card);
+  overflow: visible;
   gap: 0;
+  top: 0;
 }
 .catalog-tree__title {
   margin: 0;
-  padding: 14px 16px 10px;
+  padding: 18px 16px 10px;
   font-size: 12px;
   font-weight: 500;
+  line-height: 16px;
   color: var(--sw-text-secondary);
 }
 .catalog-tree--collapsed .catalog-tree__title {
-  padding: 14px 0 10px;
+  padding: 18px 0 10px;
   text-align: center;
 }
 .catalog-tree__rows {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0 8px 8px;
-  overflow-y: auto;
+  gap: 4px;
+  flex: 1 1 auto;
   min-height: 0;
+  padding: 0 12px 8px;
+  overflow-y: auto;
 }
 .catalog-tree--collapsed .catalog-tree__rows {
   padding: 0 4px 8px;
@@ -497,27 +579,27 @@ onMounted(() => {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 15px;
   min-height: 40px;
-  padding: 0 12px;
+  padding: 0 12px 0 17px;
   border: none;
-  border-radius: var(--sw-radius-base);
+  border-radius: 6px;
   background: transparent;
-  font-size: 13px;
-  color: var(--sw-text-regular);
+  font-size: 14px;
+  color: #303133;
   text-align: left;
   cursor: pointer;
 }
 .catalog-tree--collapsed .catalog-tree__item {
   justify-content: center;
+  gap: 0;
   padding: 0;
 }
 .catalog-tree__item:hover {
-  background: var(--sw-color-primary-soft);
+  background: #f4f6fb;
 }
 .catalog-tree__item.is-active {
-  background: var(--sw-color-primary-soft);
+  background: var(--sw-color-primary-soft, #eff6ff);
   color: var(--sw-color-primary);
   font-weight: 500;
 }
@@ -525,11 +607,19 @@ onMounted(() => {
   content: '';
   position: absolute;
   left: 0;
-  top: 9px;
-  bottom: 9px;
+  top: 12px;
+  bottom: 12px;
   width: 3px;
   border-radius: 2px;
   background: var(--sw-color-primary);
+}
+.catalog-tree__glyph {
+  flex: none;
+  width: 14px;
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
+  color: #303133;
 }
 .catalog-tree__name {
   flex: 1 1 auto;
@@ -539,117 +629,84 @@ onMounted(() => {
   white-space: nowrap;
 }
 .catalog-tree__count {
-  flex: 0 0 auto;
-  min-width: 20px;
-  padding: 1px 8px;
-  border-radius: 10px;
-  background: var(--sw-fill-light, #f0f2f5);
-  font-size: 12px;
-  color: var(--sw-text-secondary);
-  text-align: center;
-}
-.catalog-tree__item.is-active .catalog-tree__count {
-  background: #ffffff;
-  color: var(--sw-color-primary);
-}
-.catalog-tree__glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--sw-radius-base);
   font-size: 13px;
-  color: var(--sw-text-regular);
-}
-/* 0.2.0 参考节点 97:2：展开态分类行带 24px 首字方块（激活主色底/非激活浅灰底）。 */
-.catalog-tree__glyph--chip {
-  width: 24px;
-  height: 24px;
-  margin-right: 10px;
-  border-radius: 6px;
-  background: #eef2f8;
   color: var(--sw-text-secondary);
-  font-size: 12px;
 }
-.catalog-tree__item.is-active .catalog-tree__glyph--chip {
-  background: var(--sw-color-primary);
-  color: #ffffff;
+.catalog-tree__item.is-active .catalog-tree__glyph,
+.catalog-tree__item.is-active .catalog-tree__count {
+  color: var(--sw-color-primary);
 }
 .catalog-tree__toggle {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  justify-content: flex-start;
+  gap: 10px;
   min-height: 48px;
   margin-top: auto;
-  padding: 0 12px;
+  padding: 0 16px;
   border: none;
   border-top: 1px solid var(--sw-border-light);
   background: transparent;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--sw-text-secondary);
   cursor: pointer;
+}
+.catalog-tree--collapsed .catalog-tree__toggle {
+  justify-content: center;
+  padding: 0;
 }
 .catalog-tree__toggle:hover {
   color: var(--sw-color-primary);
 }
-.catalog-tree__manage {
-  margin-top: 10px;
-  min-height: 34px;
-  border: 1px dashed var(--sw-border-base);
-  border-radius: var(--sw-radius-base);
-  background: transparent;
-  font-size: 13px;
-  color: var(--sw-text-secondary);
-  cursor: pointer;
-}
-.catalog-tree__manage:hover {
-  border-color: var(--sw-color-primary);
-  color: var(--sw-color-primary);
+.catalog-main {
+  min-width: 0;
+  padding: 20px;
 }
 .catalog-page__toolbar {
   margin-bottom: 16px;
-  padding: 20px 21px;
+  padding: 15px 17px 15px 19px;
   background: var(--sw-surface-card);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-  box-shadow: var(--sw-shadow-card);
+  border: 1px solid #dde3ef;
+  border-radius: 8px;
+  box-shadow: none;
 }
 .catalog-page__toolbar-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
-/* 0.2.0 参考节点 97:2：标签+输入框居左、查询/重置靠右。 */
+/* 0.2.0 参考节点 97:2：标签+输入框居左、查询/重置靠右；输入 395×32，按钮 72/70×32。 */
 .catalog-page__label {
   flex: none;
   font-size: 13px;
-  color: var(--sw-text-secondary);
+  color: #5c6370;
 }
 .catalog-page__spacer {
   flex: 1;
 }
 .catalog-page__search {
-  flex: 0 0 420px;
+  flex: 0 0 395px;
   max-width: 100%;
 }
 .catalog-page__search :deep(.el-input__wrapper) {
-  background: #f8fafe;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px #dde3ef inset;
 }
 .catalog-page__search :deep(input::placeholder) {
   color: #a1aabe;
 }
 .catalog-page__query {
   margin-left: 0;
-  width: 96px;
-  height: 34px;
+  width: 72px;
+  height: 32px;
+  padding: 0;
 }
 .catalog-page__reset {
-  width: 80px;
-  height: 34px;
-  margin-left: 1px;
+  width: 70px;
+  height: 32px;
+  margin-left: 0;
+  padding: 0;
   color: #17213a;
 }
 .catalog-page__alert {
@@ -657,16 +714,15 @@ onMounted(() => {
 }
 .catalog-sections {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
 }
 .catalog-section {
-  margin-bottom: 14px;
-  padding: 14px 18px;
+  padding: 17px 18px 16px;
   background: var(--sw-surface-card);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-  box-shadow: var(--sw-shadow-card);
+  border: 1px solid #dde3ef;
+  border-radius: 8px;
+  box-shadow: none;
 }
 .catalog-section__empty {
   min-height: 120px;
@@ -678,187 +734,17 @@ onMounted(() => {
   font-size: 13px;
 }
 .catalog-section__title {
-  margin: 0 0 10px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--sw-text-primary);
-}
-.catalog-section__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.catalog-mini {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--sw-border-base);
-  border-radius: var(--sw-radius-base);
-  background: var(--sw-surface-card);
-  font-size: 13px;
-  color: var(--sw-text-regular);
-  cursor: pointer;
-}
-.catalog-mini:hover {
-  border-color: var(--sw-color-primary);
-  color: var(--sw-color-primary);
-}
-.catalog-mini__rank {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--sw-color-primary-soft);
-  color: var(--sw-color-primary);
-  font-size: 12px;
-  font-weight: 600;
-}
-/* V012-BUG-009 复开：列表化（不用卡片）——分类分组带 + 多列条目，参考蓝凌流程发起 */
-.catalog-list {
-  min-height: 260px;
-  padding: 12px;
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-  box-shadow: var(--sw-shadow-card);
-  background: #fff;
-}
-.catalog-group {
-  margin-bottom: 14px;
-}
-.catalog-group__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
-  border-left: 3px solid var(--sw-color-primary);
-  border-radius: 4px;
-  background: #eef2fb;
-}
-.catalog-group__name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--sw-text-primary);
-}
-.catalog-group__count {
-  font-size: 12px;
-  color: var(--sw-text-secondary);
-}
-.catalog-group__grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px 24px;
-  padding: 10px 6px 2px;
-}
-.catalog-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  min-height: 40px;
-  padding: 4px 8px;
-  border-radius: var(--sw-radius-base);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.catalog-item:hover {
-  background: var(--sw-color-primary-soft);
-}
-.catalog-item__icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  background: var(--sw-color-primary-soft);
-  color: var(--sw-color-primary);
-}
-.catalog-item__icon svg {
-  width: 15px;
-  height: 15px;
-}
-.catalog-item__icon--tone-info {
-  background: var(--sw-info-bg);
-  color: #20b8cd;
-}
-.catalog-item__icon--tone-success {
-  background: var(--sw-info-bg);
-  color: #18a67a;
-}
-.catalog-item__icon--tone-purple {
-  background: var(--sw-color-primary-soft);
-  color: #8b5cf6;
-}
-.catalog-item__name {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 14px;
-  color: var(--sw-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.catalog-item:hover .catalog-item__name {
-  color: var(--sw-color-primary);
-}
-.catalog-item__star {
-  flex: 0 0 auto;
-  border: none;
-  background: transparent;
+  margin: 0 0 11px;
   font-size: 15px;
-  line-height: 1;
-  color: var(--sw-border-base);
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    transform 0.15s ease;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--sw-text-primary);
 }
-.catalog-item__star:hover {
-  transform: scale(1.15);
-}
-.catalog-item__star.is-active {
-  color: #f7ba2a;
-}
-@media (max-width: 1439px) {
-  .catalog-group__grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-@media (max-width: 1199px) {
-  .catalog-group__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-.catalog-mini__icon {
-  display: inline-flex;
-  width: 18px;
-  height: 18px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  background: var(--sw-color-primary-soft);
-  color: var(--sw-color-primary);
-}
-.catalog-mini__icon svg {
-  width: 12px;
-  height: 12px;
-}
-.catalog-page__note {
-  margin: 16px 0 0;
-  font-size: 12px;
-  color: var(--sw-text-secondary);
-}
-
-/* ── 0.2.0 参考节点 97:2：常用/最近竖排灰底行 + 主列表单表格 ── */
+/* 参考 97:2：竖排灰底行 38 高、8 间距；14px 文档图标 + 名称 + 右侧「发起 ›」。 */
 .catalog-rows {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -867,24 +753,40 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 44px;
-  padding: 0 12px;
-  background: #f7f9fc;
-  border: 1px solid var(--sw-border-light);
-  border-radius: 8px;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 14px 0 12px;
+  background: #f4f6fb;
+  border: 1px solid #e3e8f2;
+  border-radius: 6px;
 }
 .catalog-rows__main {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
+  min-width: 0;
   padding: 0;
   border: none;
   background: transparent;
   font: inherit;
+  font-size: 14px;
   color: var(--sw-text-primary);
   cursor: pointer;
   text-align: left;
+}
+.catalog-mini__icon {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  color: var(--sw-color-primary);
+}
+.catalog-mini__icon svg {
+  width: 16px;
+  height: 16px;
 }
 .catalog-rows__name {
   overflow: hidden;
@@ -893,6 +795,7 @@ onMounted(() => {
 }
 .catalog-rows__launch {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 4px;
   padding: 0;
@@ -902,60 +805,108 @@ onMounted(() => {
   color: var(--sw-color-primary);
   cursor: pointer;
 }
-.catalog-tablewrap {
-  padding: 0 0 8px;
+/* 参考 97:2：主表格 40px 表头 + 60px 行 + 50px 卡内分页；列头 64/1646/1811。 */
+.catalog-tablecard {
+  margin-top: 16px;
+  background: var(--sw-surface-card);
+  border: 1px solid #dde3ef;
+  border-radius: 8px;
+  overflow: hidden;
 }
 .catalog-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   background: var(--sw-surface-card);
 }
 .catalog-table th {
-  padding: 14px 24px;
-  background: #f7f9fc;
+  height: 40px;
+  padding: 0;
+  background: #f4f6fb;
   font-size: 13px;
   font-weight: 500;
   color: var(--sw-text-secondary);
   text-align: left;
 }
-.catalog-table td {
-  padding: 0 24px;
-  border-top: 1px solid var(--sw-border-light);
+.catalog-table th.catalog-table__name {
+  padding-left: 64px;
 }
-.catalog-table tbody tr {
-  height: 62px;
+.catalog-table th.catalog-table__category {
+  width: 165px;
+}
+.catalog-table th.catalog-table__action {
+  width: 72px;
+  padding-right: 16px;
+}
+.catalog-table td {
+  height: 60px;
+  padding: 0;
+  border-top: 1px solid #e9edf5;
+  font-size: 14px;
+  color: var(--sw-text-regular);
+  vertical-align: middle;
+}
+.catalog-table tbody tr:first-child td {
+  border-top: none;
+}
+.catalog-table td.catalog-table__name {
+  padding: 0;
+}
+.catalog-table td.catalog-table__category {
+  width: 165px;
+}
+.catalog-table td.catalog-table__action {
+  width: 72px;
+  padding-right: 16px;
+  text-align: left;
 }
 .catalog-table tbody tr:hover {
   background: #fafcff;
 }
-.catalog-table__name {
+.catalog-table__namecell {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 24px;
+  height: 60px;
+  padding-left: 24px;
+  box-sizing: border-box;
 }
-.catalog-table__category {
-  width: 220px;
-  color: var(--sw-text-regular);
+.catalog-item__star {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  line-height: 16px;
+  color: #a8b0c2;
+  cursor: pointer;
 }
-.catalog-table__action {
-  width: 120px;
-  text-align: right;
+.catalog-item__star.is-active {
+  color: #f7ba2a;
 }
 .catalog-table__link {
+  min-width: 0;
+  overflow: hidden;
   padding: 0;
   border: none;
   background: transparent;
   font: inherit;
+  font-size: 14px;
   color: var(--sw-text-primary);
   cursor: pointer;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .catalog-table__link:hover {
   color: var(--sw-color-primary);
 }
 .catalog-table__launch {
-  min-width: 64px;
+  width: 72px;
   height: 32px;
-  padding: 0 18px;
+  padding: 0;
   border: none;
   border-radius: 4px;
   background: var(--sw-color-primary);
@@ -965,5 +916,46 @@ onMounted(() => {
 }
 .catalog-table__launch:hover {
   background: color-mix(in srgb, var(--sw-color-primary) 88%, black);
+}
+.catalog-table__footer {
+  padding: 0 24px 0 16px;
+  border-top: 1px solid #e9edf5;
+}
+.catalog-table__footer :deep(.list-pagination) {
+  width: 100%;
+  min-height: 50px;
+}
+/* 参考 97:2 分页：上/下一页 80 无描边、页码 32、每页条数 112、跳页块 116。 */
+.catalog-table__footer :deep(.btn-prev),
+.catalog-table__footer :deep(.btn-next) {
+  width: 80px;
+  border: none;
+}
+.catalog-table__footer :deep(.el-pagination__sizes .el-select) {
+  width: 112px;
+}
+.catalog-table__footer :deep(.el-pagination__jump) {
+  width: 116px;
+}
+@media (max-width: 1023px) {
+  .catalog-layout,
+  .catalog-layout--collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .catalog-tree {
+    border: 1px solid var(--sw-border-light);
+    border-radius: var(--sw-radius-card);
+    margin: 16px 16px 0;
+  }
+  .catalog-tree__toggle {
+    justify-content: center;
+    padding: 0;
+  }
+  .catalog-main {
+    padding: 16px;
+  }
+  .catalog-sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

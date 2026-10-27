@@ -892,6 +892,7 @@ export default {
     editDataTitle: 'Edit record',
     fillDraftTitle: 'Fill draft',
     fillTitle: 'Fill',
+    fillSaveTemporary: 'Save',
     draftTitleOptional: 'Draft title (optional)',
     rebindLatest: 'Rebind to the latest version',
     backToMyDrafts: 'Back',

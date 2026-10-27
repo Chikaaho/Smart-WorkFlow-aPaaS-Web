@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, CaretBottom, SwitchButton, User } from '@element-plus/icons-vue'
+import { Back, CaretBottom, Switch, SwitchButton, User } from '@element-plus/icons-vue'
 import { useI18n } from '@/locales'
 import { SUPPORTED_LOCALES, setLocale, type AppLocale } from '@/locales'
 import { useMenuStore } from '@/stores/menu'
@@ -317,6 +317,7 @@ function onCommand(command: string): void {
             t('auth.changePassword')
           }}</el-dropdown-item>
           <el-dropdown-item v-if="showEnterAdmin" command="enter-admin">
+            <el-icon :size="14"><Switch /></el-icon>
             {{ t('auth.enterBackend') }}
           </el-dropdown-item>
           <el-dropdown-item v-if="currentArea === 'admin'" command="back-portal">
