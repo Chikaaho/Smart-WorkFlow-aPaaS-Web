@@ -856,6 +856,7 @@ export default {
     startProcessTitle: '发起流程',
     editDataTitle: '编辑数据',
     fillDraftTitle: '填写草稿',
+    fillTitle: '填写',
     draftTitleOptional: '草稿标题（可选）',
     rebindLatest: '重绑最新版本',
     backToMyDrafts: '返回',

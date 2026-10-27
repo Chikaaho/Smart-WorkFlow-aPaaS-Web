@@ -22,7 +22,7 @@ const { t } = useI18n()
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ArrowLeft, Close } from '@element-plus/icons-vue'
 import {
   getFormDefinition,
   getFormDefinitionVersion,
@@ -313,9 +313,18 @@ const pageTitle = computed(() => {
   if (isDraftMode.value) return t('form.fillDraftTitle')
   if (isViewMode.value) return t('common.detail')
   if (recordId) return t('form.editDataTitle')
-  if (route.query.process) return t('form.startProcessTitle')
+  if (route.query.process) return t('form.fillTitle')
   return t('form.createDataTitle')
 })
+
+/**
+ * 0.2.0 参考节点 101:2（流程发起填写态）：顶部「填写」+关闭入口，暂存/提交在
+ * 底部固定操作栏，白卡 1440 居中、表单名居中标题。仅影响经流程中心发起的场景；
+ * 应用内新增/编辑/查看/草稿保持既有版式与语义。
+ */
+const isStartFillMode = computed(
+  () => !!route.query.process && !recordId && !isDraftMode.value && !isViewMode.value,
+)
 
 // ── 0.1.7 #16：提交成功 → 居中确认弹窗（用户点击确认后再离开） ──
 const submitDialogVisible = ref(false)
@@ -1115,11 +1124,12 @@ onMounted(() => {
               :title="t('common.backShort')"
               @click="goBack"
             >
-              <el-icon><ArrowLeft /></el-icon>
+              <el-icon v-if="isStartFillMode"><Close /></el-icon>
+              <el-icon v-else><ArrowLeft /></el-icon>
             </button>
             <span class="form-render-page__title">{{ pageTitle }}</span>
           </div>
-          <div v-if="!isViewMode" class="form-render-page__top-actions">
+          <div v-if="!isViewMode && !isStartFillMode" class="form-render-page__top-actions">
             <template v-if="isDraftMode">
               <el-input
                 v-model="draftTitle"
@@ -1168,9 +1178,18 @@ onMounted(() => {
         </header>
 
         <!-- 0.1.7 #13/#18：画布——设计器里有什么就展示什么（24 栅格直出），无其它信息 -->
-        <div class="form-render-page__canvas">
-          <div class="form-render-page__main">
-            <h4 class="form-render-page__section">
+        <div
+          class="form-render-page__canvas"
+          :class="{ 'form-render-page__canvas--fill': isStartFillMode }"
+        >
+          <div
+            class="form-render-page__main"
+            :class="{ 'form-render-page__main--fill': isStartFillMode }"
+          >
+            <h4 v-if="isStartFillMode" class="form-render-page__form-title">
+              {{ schema.title }}
+            </h4>
+            <h4 v-else class="form-render-page__section">
               {{ t('workflow.formDataReadonlySnapshot') }}
             </h4>
             <div class="form-render-page__sheet">
@@ -1247,6 +1266,27 @@ onMounted(() => {
             </template>
           </div>
         </div>
+
+        <!-- 0.2.0 参考节点 101:2：发起填写态底部固定操作栏（暂存/提交右下） -->
+        <footer v-if="isStartFillMode" class="form-render-page__fill-footer">
+          <el-button
+            round
+            :loading="draftSaving"
+            data-testid="form-render-save-draft"
+            @click="handleSaveDraft"
+          >
+            {{ t('common.saveDraft') }}
+          </el-button>
+          <el-button
+            round
+            type="primary"
+            :loading="submitting"
+            data-testid="form-render-submit"
+            @click="handleSubmit"
+          >
+            {{ t('common.submit') }}
+          </el-button>
+        </footer>
       </template>
     </template>
 
@@ -1380,6 +1420,40 @@ onMounted(() => {
   color: var(--sw-color-primary);
   font-size: 13px;
   font-weight: 600;
+}
+
+/* ── 0.2.0 参考节点 101:2：发起填写态（顶部填写+关闭、底部固定操作栏、白卡 1440 居中） ── */
+.form-render-page__canvas--fill {
+  padding: 16px 0 88px;
+}
+.form-render-page__main--fill {
+  width: min(1440px, calc(100vw - 240px));
+  margin: 0 auto;
+  max-width: none;
+}
+.form-render-page__form-title {
+  margin: 24px 0 20px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+  text-align: center;
+}
+.form-render-page__main--fill .form-render-page__sheet {
+  min-height: 560px;
+  padding: 28px 40px;
+}
+.form-render-page__fill-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 40px;
+  background: var(--sw-surface-card, #ffffff);
+  border-top: 1px solid var(--sw-border-light);
 }
 
 .form-render-page__section:first-child {

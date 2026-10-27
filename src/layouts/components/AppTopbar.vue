@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { CaretBottom } from '@element-plus/icons-vue'
+import { Back, CaretBottom, SwitchButton, User } from '@element-plus/icons-vue'
 import { useI18n } from '@/locales'
 import { SUPPORTED_LOCALES, setLocale, type AppLocale } from '@/locales'
 import { useMenuStore } from '@/stores/menu'
@@ -309,9 +309,10 @@ function onCommand(command: string): void {
         <!-- V011-BUG-004：仅三个小菜单项，无摘要头 -->
         <el-dropdown-menu class="app-topbar__dropdown">
           <el-dropdown-item command="manual">{{ t('nav.operationManual') }}</el-dropdown-item>
-          <el-dropdown-item command="account-bindings">{{
-            t('auth.accountBindings')
-          }}</el-dropdown-item>
+          <el-dropdown-item command="account-bindings">
+            <el-icon :size="14"><User /></el-icon>
+            {{ t('auth.accountBindings') }}
+          </el-dropdown-item>
           <el-dropdown-item command="change-password">{{
             t('auth.changePassword')
           }}</el-dropdown-item>
@@ -319,9 +320,11 @@ function onCommand(command: string): void {
             {{ t('auth.enterBackend') }}
           </el-dropdown-item>
           <el-dropdown-item v-if="currentArea === 'admin'" command="back-portal">
+            <el-icon :size="14"><Back /></el-icon>
             {{ t('auth.backToPortal') }}
           </el-dropdown-item>
           <el-dropdown-item command="logout" divided class="app-topbar__logout">
+            <el-icon :size="14" class="app-topbar__logout-icon"><SwitchButton /></el-icon>
             {{ t('auth.signOut') }}
           </el-dropdown-item>
         </el-dropdown-menu>

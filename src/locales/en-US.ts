@@ -891,6 +891,7 @@ export default {
     startProcessTitle: 'Start process',
     editDataTitle: 'Edit record',
     fillDraftTitle: 'Fill draft',
+    fillTitle: 'Fill',
     draftTitleOptional: 'Draft title (optional)',
     rebindLatest: 'Rebind to the latest version',
     backToMyDrafts: 'Back',
