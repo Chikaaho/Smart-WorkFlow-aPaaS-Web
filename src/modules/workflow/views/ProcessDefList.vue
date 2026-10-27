@@ -23,14 +23,7 @@ import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { ElMessage } from 'element-plus'
-import {
-  CircleCheck,
-  Connection,
-  EditPen,
-  Plus,
-  Tickets,
-  VideoPause,
-} from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 import { hasPerm } from '@/foundation/permission'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import CreateProcessDefDialog from './CreateProcessDefDialog.vue'
@@ -66,21 +59,6 @@ const statusFilter = ref('')
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
 
-// ─── 统计条（数值=真实接口派生，不写死、不伪造） ───
-// GET /workflow/defs 无 status 过滤参数，已发布/草稿计数只能从真实分页响应派生：
-// 首页响应已覆盖全量（total === list.length）时直接就地计数；否则追加一次
-// 「pageSize=total」的真实全量查询后计数。统计查询失败时计数显示「—」，不伪装成功。
-const publishedCount = ref<number | null>(null)
-const draftCount = ref<number | null>(null)
-
-/** 已停用 = 总数 − 已发布 − 草稿（派生值；status 枚举目前封闭于两态，正常恒为 0） */
-const disabledCount = computed<number | null>(() => {
-  if (publishedCount.value === null || draftCount.value === null) return null
-  return Math.max(0, statsTotal.value - publishedCount.value - draftCount.value)
-})
-
-const statsTotal = computed(() => list.value[0]?.p53Stats?.total ?? total.value)
-
 const visibleList = computed(() => {
   const normalized = keyword.value.trim().toLocaleLowerCase()
   return list.value.filter((row) => {
@@ -100,41 +78,6 @@ const categories = computed(() =>
   ),
 )
 
-function statText(value: number | null): string {
-  return value === null ? '—' : String(value)
-}
-
-const metrics = computed(() => [
-  {
-    key: 'total',
-    label: t('workflow.metricTotalDefs'),
-    value: statText(statsTotal.value),
-    tone: 'purple',
-    icon: '⌁',
-  },
-  {
-    key: 'published',
-    label: t('common.statusPublished'),
-    value: statText(publishedCount.value),
-    tone: 'green',
-    icon: '✓',
-  },
-  {
-    key: 'draft',
-    label: t('common.statusDraft'),
-    value: statText(draftCount.value),
-    tone: 'orange',
-    icon: '⌕',
-  },
-  {
-    key: 'disabled',
-    label: t('common.statusDisabled'),
-    value: statText(disabledCount.value),
-    tone: 'gray',
-    icon: '—',
-  },
-])
-
 /** 展示层时间格式：真实时间戳 → MM-DD HH:mm（设计04，仅显示不改数据） */
 function formatDefTime(value: string | null): string {
   if (!value) return '-'
@@ -145,47 +88,6 @@ function formatDefTime(value: string | null): string {
   const hh = String(d.getHours()).padStart(2, '0')
   const mi = String(d.getMinutes()).padStart(2, '0')
   return `${mm}-${dd} ${hh}:${mi}`
-}
-
-function countByStatus(defs: ProcessDef[]): { published: number; draft: number } {
-  let published = 0
-  let draft = 0
-  for (const def of defs) {
-    if (def.status === 'PUBLISHED') published += 1
-    else if (def.status === 'DRAFT') draft += 1
-  }
-  return { published, draft }
-}
-
-async function loadStats() {
-  try {
-    const summary = list.value[0]?.p53Stats
-    if (summary) {
-      publishedCount.value = summary.published
-      draftCount.value = summary.draft
-      return
-    }
-    if (total.value === 0) {
-      publishedCount.value = 0
-      draftCount.value = 0
-      return
-    }
-    if (total.value === list.value.length) {
-      // 首页响应即全量：直接从本次真实响应计数，不发额外请求
-      const counts = countByStatus(list.value)
-      publishedCount.value = counts.published
-      draftCount.value = counts.draft
-      return
-    }
-    const full = await pageProcessDefs({ pageNum: 1, pageSize: total.value })
-    const counts = countByStatus(full.list)
-    publishedCount.value = counts.published
-    draftCount.value = counts.draft
-  } catch {
-    // 统计查询失败不阻塞列表：计数保持 null，界面显示「—」
-    publishedCount.value = null
-    draftCount.value = null
-  }
 }
 
 // ─── 查看流程图对话框 ───
@@ -236,7 +138,6 @@ async function loadList() {
     const result = await pageProcessDefs(pageQuery)
     list.value = result.list
     total.value = result.total
-    void loadStats()
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
@@ -382,43 +283,6 @@ onMounted(loadList)
 
 <template>
   <section class="p53-admin-defs">
-    <!-- 标题区：标题 + 副标题 + 右侧主操作（设计节点04 · 6:25 / 6:26 / 6:28） -->
-    <header class="p53-admin-defs__heading">
-      <!-- 0.1.7 #25：左上角标题/副标题为噪音，全部去除；动作按钮行右对齐保留 -->
-      <div class="p53-admin-defs__heading-actions">
-        <el-button v-if="returnFormId" @click="backToWorkbench">{{
-          t('workflow.backToFormWorkbench')
-        }}</el-button>
-        <el-button
-          v-if="canAuthorize"
-          :icon="Connection"
-          @click="router.push('/workflow/authorize-rules')"
-        >
-          {{ t('workflow.authorizeRulesEntry') }}
-        </el-button>
-        <el-button type="primary" class="heading-primary" @click="createDialogVisible = true">
-          <el-icon><Plus /></el-icon>
-          {{ t('workflow.createProcessDefAction') }}
-        </el-button>
-      </div>
-    </header>
-
-    <!-- 统计条：四张统计卡，数值全部来自真实接口派生（设计节点04 · 6:30-6:43） -->
-    <div class="p53-admin-defs__metrics">
-      <article v-for="metric in metrics" :key="metric.key" class="metric-card">
-        <div>
-          <span class="metric-card__label">{{ metric.label }}</span>
-          <strong>{{ metric.value }}</strong>
-        </div>
-        <el-icon class="metric-card__icon" :class="`is-${metric.tone}`" aria-hidden="true">
-          <Tickets v-if="metric.key === 'total'" />
-          <CircleCheck v-else-if="metric.key === 'published'" />
-          <EditPen v-else-if="metric.key === 'draft'" />
-          <VideoPause v-else />
-        </el-icon>
-      </article>
-    </div>
-
     <!-- 错误提示 -->
     <el-alert
       v-if="errorMsg"
@@ -429,14 +293,10 @@ onMounted(loadList)
       class="p53-admin-defs__error"
     />
 
-    <!-- 筛选区与表格区（设计节点04） -->
+    <!-- 筛选区与表格区（设计节点04：单行工具栏，统计卡收至监控入口） -->
     <div class="p53-admin-defs__filters">
-      <el-input
-        v-model="keyword"
-        class="defs-filter__keyword"
-        placeholder="搜索流程名称 / 编码"
-        clearable
-      />
+      <span class="defs-filter__label">{{ t('common.processName') }}</span>
+      <el-input v-model="keyword" class="defs-filter__keyword" placeholder="请输入" clearable />
       <el-select
         v-model="categoryFilter"
         class="defs-filter__category"
@@ -460,8 +320,22 @@ onMounted(loadList)
         <el-option label="草稿" value="DRAFT" />
         <el-option label="停用" value="DISABLED" />
       </el-select>
-      <el-button type="primary" class="defs-filter__query">查询</el-button>
+      <span class="defs-filter__spacer" aria-hidden="true" />
+      <el-button v-if="returnFormId" link class="defs-filter__link" @click="backToWorkbench">{{
+        t('workflow.backToFormWorkbench')
+      }}</el-button>
+      <el-button
+        v-if="canAuthorize"
+        link
+        class="defs-filter__link"
+        @click="router.push('/workflow/authorize-rules')"
+        >{{ t('workflow.authorizeRulesEntry') }}</el-button
+      >
       <el-button class="defs-filter__reset" @click="resetFilters"> 重置 </el-button>
+      <el-button type="primary" class="defs-filter__query">查询</el-button>
+      <el-button type="primary" class="defs-filter__create" @click="createDialogVisible = true">
+        {{ t('workflow.createProcessDefAction') }}
+      </el-button>
     </div>
 
     <div class="p53-admin-defs__table-card">
@@ -478,16 +352,16 @@ onMounted(loadList)
           <el-table-column
             prop="name"
             :label="t('common.processName')"
-            min-width="268"
+            min-width="367"
             class-name="defs-table__col-name"
           />
-          <el-table-column :label="t('workflow.categoryName')" width="130">
+          <el-table-column :label="t('workflow.categoryName')" width="235">
             <template #default="{ row }">{{ statusRow(row).categoryName || '—' }}</template>
           </el-table-column>
           <el-table-column
             prop="defVersion"
             :label="t('common.version')"
-            width="100"
+            width="131"
             align="center"
           >
             <template #default="{ row }">
@@ -496,16 +370,14 @@ onMounted(loadList)
               >
             </template>
           </el-table-column>
-          <!-- BF20261013-037：状态值水平+垂直居中（与版本/实例数列一致，徽标不再被单元格裁切） -->
-          <el-table-column prop="status" :label="t('common.status')" width="120" align="center">
+          <el-table-column prop="status" :label="t('common.status')" width="78" align="center">
             <template #default="{ row }">
               <span class="status" :class="getStatusClass(statusRow(row).status)">{{
                 getStatusLabel(statusRow(row).status)
               }}</span>
             </template>
           </el-table-column>
-          <!-- V012-BUG-010 / BF20261013-042：流程编号列内联入口（点击即设置；展示不暴露占位记法） -->
-          <el-table-column :label="t('workflow.themeRuleColumn')" width="180">
+          <el-table-column :label="t('workflow.themeRuleColumn')" width="212">
             <template #default="{ row }">
               <span
                 v-if="statusRow(row).themeRule"
@@ -522,27 +394,29 @@ onMounted(loadList)
               >
             </template>
           </el-table-column>
-          <el-table-column :label="t('workflow.instanceCount')" width="114" align="center">
+          <el-table-column :label="t('workflow.instanceCount')" width="84" align="center">
             <template #default="{ row }">{{ statusRow(row).instanceCount ?? '—' }}</template>
           </el-table-column>
-          <!-- BF20261013-037：更新人与更新时间是两个字段，分列展示（不再合并成「更新人 / 时间」） -->
-          <el-table-column prop="updatedBy" :label="t('workflow.updatedBy')" width="130">
-            <template #default="{ row }">{{ statusRow(row).updatedBy || '—' }}</template>
+          <!-- 设计节点 6:2：更新人与时间为单列「更新人/时间」 -->
+          <el-table-column :label="t('workflow.updatedByTime')" width="366">
+            <template #default="{ row }">
+              {{ statusRow(row).updatedBy || '—' }} · {{ formatDefTime(row.updateTime) }}
+            </template>
           </el-table-column>
-          <el-table-column prop="updateTime" :label="t('common.updateTime')" width="170">
-            <template #default="{ row }">{{ formatDefTime(row.updateTime) }}</template>
-          </el-table-column>
-          <!-- 240：四格末位「更多」标准（V012-BUG-015）——设计/查看流程图/发布/更多 四格完整可见
-               （实测所需宽度：中文 195 / 英文 237，170 会裁掉末位更多） -->
-          <ListActionsColumn :actions="rowActions" :width="240" />
+          <ListActionsColumn :actions="rowActions" :width="170" />
         </el-table>
-        <ListPagination
-          :total="total"
-          :page-num="pageNum"
-          :page-size="pageSize"
-          @update:page-num="handlePageNumChange"
-          @update:page-size="handlePageSizeChange"
-        />
+        <div class="p53-admin-defs__table-footer">
+          <ListPagination
+            :total="total"
+            :page-num="pageNum"
+            :page-size="pageSize"
+            total-text
+            align="space-between"
+            :inset="false"
+            @update:page-num="handlePageNumChange"
+            @update:page-size="handlePageSizeChange"
+          />
+        </div>
       </template>
     </div>
   </section>
@@ -581,7 +455,7 @@ onMounted(loadList)
 .p53-admin-defs {
   box-sizing: border-box;
   min-height: 100%;
-  padding: 12px 16px 8px;
+  padding: 20px;
   background: var(--sw-surface-page);
   color: #17213a;
 }
@@ -661,98 +535,119 @@ onMounted(loadList)
   margin-top: 24px;
 }
 
-/* ── 筛选卡：保留列表页真实筛选能力，按节点04的 90px 网格排列 ── */
+/* ── 筛选卡：参考 6:2 单行 64 高工具栏（统计卡已收至监控入口） ── */
 .p53-admin-defs__filters {
   display: flex;
   align-items: center;
   gap: 20px;
   box-sizing: border-box;
-  height: 90px;
-  margin-top: 24px;
-  padding: 0 24px;
-  border-radius: 14px;
+  height: 64px;
+  margin-top: 0;
+  padding: 0 19px;
+  border: 1px solid #dde3ef;
+  border-radius: 8px;
   background: var(--sw-surface-card);
 }
 .p53-admin-defs__filters :deep(.el-input__wrapper),
 .p53-admin-defs__filters :deep(.el-select__wrapper) {
-  height: 42px;
-  box-shadow: 0 0 0 1px #cbd4e8 inset;
-  border-radius: 7px;
-  background: #fbfcff;
+  height: 32px;
+  box-shadow: 0 0 0 1px #dde3ef inset;
+  border-radius: 4px;
+  background: #ffffff;
+}
+.defs-filter__label {
+  flex: none;
+  font-size: 12px;
+  color: #5c6370;
 }
 .defs-filter__keyword {
-  width: 340px;
+  width: 286px;
 }
 .defs-filter__keyword :deep(.el-input__wrapper) {
-  padding-left: 4px;
+  padding-left: 11px;
 }
 .defs-filter__category,
 .defs-filter__status {
-  width: 180px;
+  width: 134px;
+  margin-left: 35px;
 }
 .defs-filter__category :deep(.el-select__wrapper),
 .defs-filter__status :deep(.el-select__wrapper) {
-  padding-left: 16px;
+  padding-left: 11px;
 }
 .defs-filter__category :deep(.el-select__placeholder) {
   color: #172033 !important;
 }
+.defs-filter__spacer {
+  flex: 1;
+}
+.defs-filter__link {
+  margin: 0;
+  font-size: 13px;
+}
 .defs-filter__query {
-  width: 84px;
-  height: 42px;
-  margin-left: 2px;
-  border-radius: 8px;
+  width: 62px;
+  height: 32px;
+  margin: 0;
+  border-radius: 4px;
 }
 .defs-filter__reset {
-  width: 64px;
+  width: 62px;
   height: 32px;
-  margin-left: -6px;
-  border-color: #cbd4e8;
-  border-radius: 7px;
-  color: #344164;
+  margin: 0;
+  border-color: #dde3ef;
+  border-radius: 4px;
+  color: #17213a;
+}
+.defs-filter__create {
+  width: 70px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  font-size: 13px;
 }
 
-/* ── 表格区：卡片白底 ──
-   BF20261013-037：表格与卡片同宽（表头灰底 + 行分隔线一直铺到卡片圆角边，左右不留白），
-   单元格左右内距统一取标准 16px。
-   BF20261013-038：去掉卡片上下内距——表头即卡片首行，不再在表头上方留一条空白行；
-   分页行自带 16px 纵向内距 + 24px 左右内距。 */
+/* ── 表格区：卡片白底，表头 42、行 44、页脚在卡内 ── */
 .p53-admin-defs__table-card {
   box-sizing: border-box;
-  margin-top: 24px;
-  min-height: 524px;
+  margin-top: 16px;
   padding: 0;
-  border-radius: 14px; /* 设计精确值 */
+  border: 1px solid #dde3ef;
+  border-radius: 8px;
   background: var(--sw-surface-card);
   overflow: hidden;
 }
-.p53-admin-defs__table-card :deep(.list-pagination) {
-  padding-left: 24px;
-  padding-right: 24px;
+.p53-admin-defs__table-footer {
+  padding: 0 19px;
+  border-top: 1px solid #e9edf5;
+}
+.p53-admin-defs__table-footer :deep(.list-pagination) {
+  width: 100%;
+  min-height: 50px;
 }
 
-/* 表格几何对齐 fixture：表头 42px / 行高 76px / 12px 字号 */
+/* 表格几何对齐参考 6:2：表头 42 / 行 44 / 12px 字号 */
 .defs-table {
-  /* BF20261013-039：表头底色/字色/悬浮底色不再页面级覆盖——沿用全局标准
-     （tokens.css：表头 #fafbfe、字色 --sw-text-secondary、悬浮 #f7f9fd），与「审批意见表单」等
-     标准列表页一致；此前 fixture 的 #f6f7fb 与页面底色 #f4f6fb 几乎同色，表头看着像"背景色"。
-     仅保留本页行分隔线色。 */
-  --el-table-border-color: #f0f2f7; /* 设计精确值（行分隔线色） */
+  --el-table-border-color: #e9edf5; /* 参考行分隔线 */
 }
 .defs-table :deep(th.el-table__cell) {
   height: 42px;
   font-size: 12px;
   font-weight: 400;
-  /* 表头底色不在此声明：BF20261013-040 起由 tokens.css 全局统一 #fafbfe（#app .el-table th） */
+  background: #f4f6fb;
 }
-/* BF20261013-037：去掉 fixture 迁移期的 translate 位移（曾把单元格内容上移 8px、把末列表头右移
-   33px，导致状态徽标顶部被 .cell 的 overflow:hidden 裁掉、表头与内容错位），改为标准内距。 */
 .defs-table :deep(th.el-table__cell .cell),
 .defs-table :deep(.el-table__row td.el-table__cell .cell) {
-  padding: 0 var(--sw-cell-padding-x);
+  padding: 0 12px;
+  text-align: left;
+}
+.defs-table :deep(th.defs-table__col-name .cell),
+.defs-table :deep(td.defs-table__col-name .cell) {
+  padding-left: 18px;
 }
 .defs-table :deep(.el-table__row td.el-table__cell) {
-  height: 76px;
+  height: 44px;
   font-size: 12px;
   color: #6b7280;
 }

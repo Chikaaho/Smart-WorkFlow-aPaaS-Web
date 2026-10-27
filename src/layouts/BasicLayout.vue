@@ -24,6 +24,8 @@ const route = useRoute()
 const { t } = useI18n()
 const collapsed = computed(() => appStore.sidebarCollapsed)
 const area = computed(() => resolveArea(route.path))
+/** 参考 6:2：流程定义管理页使用深色管理侧栏（内容/权限仍按 admin 语义）。 */
+const darkNav = computed(() => route.path === '/workflow/defs')
 /** 企业门户（节点05）为顶栏全宽；表单/流程设计器（节点07-14）为全宽三栏画布；
  *  应用中心（列表/应用内页/表单数据列表，Owner 2026-10-16 裁决）同样顶栏全宽——
  *  这三类页面均不渲染深色侧栏。0.1.7 #4：应用详情（管理工作台/表单上下文）改用
@@ -46,7 +48,10 @@ const showAside = computed(
 </script>
 
 <template>
-  <div class="basic-layout" :class="`basic-layout--${area}`">
+  <div
+    class="basic-layout"
+    :class="[`basic-layout--${area}`, { 'basic-layout--dark-nav': darkNav }]"
+  >
     <header class="basic-layout__topbar" :class="`basic-layout__topbar--${area}`">
       <AppLogo :collapse="false" :area="area" />
       <AppMainNav class="basic-layout__nav" />
@@ -67,7 +72,7 @@ const showAside = computed(
             : undefined
         "
       >
-        <AppSidebar :collapse="collapsed" class="basic-layout__menu" />
+        <AppSidebar :collapse="collapsed" :dark="darkNav" class="basic-layout__menu" />
         <!-- 0.2.0（Owner 口径，替代 401:8637 边缘手柄）：折叠入口固定侧栏底部，
              展开态「← 收起」、收起态「→」，菜单区独立滚动、底部条不随滚。 -->
         <div class="basic-layout__sidebar-bottom" :class="{ 'is-collapsed': collapsed }">
@@ -281,6 +286,30 @@ const showAside = computed(
 .basic-layout__aside--admin {
   box-sizing: border-box;
   background: var(--sw-nav-sidebar-light-bg);
+}
+/* 参考 6:2：流程定义管理页按深色管理上下文呈现 */
+.basic-layout--dark-nav .basic-layout__aside--admin {
+  background: var(--sw-nav-sidebar-bg);
+}
+.basic-layout--dark-nav .basic-layout__sidebar-bottom {
+  border-top-color: #e9edf5;
+}
+.basic-layout--dark-nav .basic-layout__sidebar-collapse {
+  color: var(--sw-nav-text-secondary, #c9d1e8);
+}
+.basic-layout--dark-nav .basic-layout__sidebar-collapse:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+/* 参考 6:2：深色管理导航的当前项仅以白字标识，无蓝色选中块 */
+.basic-layout--dark-nav :deep(.sb-node__row--leaf.is-active),
+.basic-layout--dark-nav :deep(.sb-row--leaf.is-active) {
+  width: 100%;
+  margin: 0 0 4px;
+  border-radius: 0;
+  background: transparent;
+  color: #ffffff;
+  box-shadow: none;
 }
 .basic-layout__content {
   flex: 1;

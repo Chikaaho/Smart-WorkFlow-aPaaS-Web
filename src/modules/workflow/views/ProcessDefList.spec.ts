@@ -153,8 +153,8 @@ describe('ProcessDefList.vue', () => {
     )
   })
 
-  // BF20261013-037：列口径回归——状态居中、更新人与更新时间分列、操作列四格宽度
-  it('renders 状态 centered / 更新人+更新时间 split / 操作列 240', async () => {
+  // 6:2 参考列口径：状态居中、更新人与时间合并为单列、操作列 170
+  it('renders 状态居中 / 更新人+时间合并列 / 操作列 170', async () => {
     vi.mocked(pageProcessDefs).mockResolvedValueOnce({
       list: mockDefs,
       total: 2,
@@ -168,10 +168,10 @@ describe('ProcessDefList.vue', () => {
       cols.find((col) => col.attributes('data-label') === label) ?? null
 
     expect(labelOf('状态')?.attributes('data-align')).toBe('center')
-    expect(labelOf('更新人')).not.toBeNull()
-    expect(labelOf('更新时间')).not.toBeNull()
-    expect(cols.map((col) => col.attributes('data-label'))).not.toContain('更新人 / 时间')
-    expect(labelOf('操作')?.attributes('data-width')).toBe('240')
+    expect(labelOf('更新人/时间')).not.toBeNull()
+    expect(labelOf('更新人')).toBeNull()
+    expect(labelOf('更新时间')).toBeNull()
+    expect(labelOf('操作')?.attributes('data-width')).toBe('170')
   })
 
   // BF20261013-041/042：流程编号编辑器（ThemeRuleDialog）——变量在输入框内以灰底标识展示，

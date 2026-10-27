@@ -2773,6 +2773,7 @@ export default {
     categoryName: 'Category',
     instanceCount: 'Instances',
     updatedBy: 'Updated by',
+    updatedByTime: 'Updated by / time',
     processDefCapabilityNote:
       'Process node capabilities: approval / countersign / condition branch / parallel / notification / IoT command / Agent invocation',
     selectForm: 'Select a form',

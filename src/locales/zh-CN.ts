@@ -2695,6 +2695,7 @@ export default {
     categoryName: '分类',
     instanceCount: '实例数',
     updatedBy: '更新人',
+    updatedByTime: '更新人/时间',
     processDefCapabilityNote:
       '流程节点能力：审批 / 会签 / 条件分支 / 并行 / 通知 / IoT 指令 / Agent 调用',
     selectForm: '选择表单',

@@ -20,7 +20,7 @@ import { useI18n } from '@/locales'
 // 0.2.0 多级侧栏（direction-sidebar-navigation-020）：
 // 展开态=左对齐菜单树（叶子/目录/弱分组标题）；收起态=最外层入口图标列＋目录右侧子树浮层。
 // 只读 menu store（单一数据源）；导航、顺序、权限沿服务端过滤后的树，不摊平不臆造父级。
-const props = defineProps<{ collapse: boolean }>()
+const props = defineProps<{ collapse: boolean; dark?: boolean }>()
 
 const route = useRoute()
 const router = useRouter()
@@ -31,6 +31,8 @@ const nodeTitle = useNodeTitle()
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 
 const area = computed(() => resolveArea(route.path))
+/** 视觉主题：部分管理节点（6:2）按深色导航呈现，内容/权限仍按真实 area。 */
+const tone = computed(() => (props.dark ? 'portal' : area.value))
 
 /** 工作台页轻量导航（V012-BUG-004）：/workspace 下五个直达项。 */
 const workspaceSlim = computed(() => area.value === 'portal' && route.path.startsWith('/workspace'))
@@ -242,7 +244,7 @@ const inboxTabs = computed(() => [
 <template>
   <nav
     class="app-sidebar-tree"
-    :class="[`app-sidebar-tree--${area}`, `app-sidebar--${area}`, { 'is-collapsed': collapse }]"
+    :class="[`app-sidebar-tree--${tone}`, `app-sidebar--${tone}`, { 'is-collapsed': collapse }]"
     :aria-label="t('nav.mainNav')"
   >
     <!-- 纯展示分组标题：展开态弱化小标题；收起态隐去（细分隔保留分组） -->
@@ -314,7 +316,7 @@ const inboxTabs = computed(() => [
       <div
         v-if="flyout"
         class="app-sidebar-flyout"
-        :class="[`app-sidebar-flyout--${area}`, { 'app-sidebar--admin': area === 'admin' }]"
+        :class="[`app-sidebar-flyout--${tone}`, { 'app-sidebar--admin': tone === 'admin' }]"
         :style="flyoutStyle"
         role="menu"
         :aria-label="labelOf(flyout.node)"
