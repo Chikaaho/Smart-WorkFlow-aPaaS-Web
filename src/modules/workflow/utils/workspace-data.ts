@@ -49,6 +49,12 @@ export interface WorkspaceChartStyle {
   gradient: [string, string]
 }
 
+export interface WorkspaceAxisScale {
+  /** 固定上限；null/缺省表示自动取当前数据最大值。 */
+  left?: number | null
+  right?: number | null
+}
+
 export interface WorkspaceDataConfig {
   title?: string
   formKey?: string
@@ -72,6 +78,8 @@ export interface WorkspaceDataConfig {
   yField?: string
   /** 仪表盘目标值。 */
   target?: number
+  /** 直角坐标系的左右轴上限；null/缺省为自动。 */
+  axisScale?: WorkspaceAxisScale
   style?: WorkspaceChartStyle
 }
 
@@ -102,6 +110,40 @@ export function paletteColors(style?: WorkspaceChartStyle): string[] {
 export function seriesColor(style: WorkspaceChartStyle | undefined, index: number, key?: string) {
   if (key && style?.seriesColors?.[key]) return style.seriesColors[key]
   return paletteColors(style)[index % paletteColors(style).length]
+}
+
+const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+
+export interface ParsedHexColor {
+  hex: string
+  opacity: number
+}
+
+/** 解析 #RGB/#RRGGBB/#RRGGBBAA；非法值回退，透明度按 0—100 返回。 */
+export function parseHexColor(value: string | undefined, fallback = '#7c3aed'): ParsedHexColor {
+  const raw = (value ?? '').trim()
+  if (!HEX_COLOR.test(raw)) return { hex: fallback, opacity: 100 }
+  let digits = raw.slice(1)
+  if (digits.length === 3) {
+    digits = digits
+      .split('')
+      .map((char) => char + char)
+      .join('')
+  }
+  const opacity =
+    digits.length === 8 ? Math.round((Number.parseInt(digits.slice(6, 8), 16) / 255) * 100) : 100
+  return { hex: `#${digits.slice(0, 6).toLowerCase()}`, opacity }
+}
+
+/** 6 位 HEX + 0—100 不透明度 → 8 位 HEX（100% 时省略 alpha）。 */
+export function composeHexColor(hex: string, opacity: number): string {
+  const base = parseHexColor(hex).hex
+  const alpha = Math.max(0, Math.min(100, Math.round(opacity)))
+  if (alpha >= 100) return base
+  const byte = Math.round((alpha / 100) * 255)
+    .toString(16)
+    .padStart(2, '0')
+  return `${base}${byte}`
 }
 
 export function defaultMetrics(style?: WorkspaceChartStyle): WorkspaceMetricConfig[] {

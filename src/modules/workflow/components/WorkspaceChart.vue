@@ -12,6 +12,7 @@ import {
   formatChartValue,
   paletteColors,
   seriesColor,
+  type WorkspaceAxisScale,
   type WorkspaceChartStyle,
   type WorkspaceChartType,
   type WorkspaceMetricConfig,
@@ -30,6 +31,7 @@ const props = withDefaults(
     style?: WorkspaceChartStyle
     points?: Point[]
     target?: number
+    axisScale?: WorkspaceAxisScale
     loading?: boolean
   }>(),
   {
@@ -38,15 +40,41 @@ const props = withDefaults(
     style: () => defaultChartStyle(),
     points: () => [],
     target: 100,
+    axisScale: () => ({}),
     loading: false,
   },
+)
+
+const series = computed(() =>
+  props.metrics.map((metric, index) => {
+    const name = metric.label || metric.field || '记录数'
+    const key = metric.field || `metric-${index}`
+    return {
+      metric,
+      name,
+      legendName: metric.unit ? `${name} (${metric.unit})` : name,
+      unit: metric.unit,
+      axis: metric.axis,
+      presentation: metric.presentation,
+      color:
+        props.style?.seriesColors?.[key] || metric.color || seriesColor(props.style, index, key),
+    }
+  }),
+)
+
+const showRightAxis = computed(
+  () =>
+    ['bar', 'hbar', 'line', 'area', 'combo'].includes(props.chartType) &&
+    series.value.some((item) => item.axis === 'right'),
 )
 
 /** 画布单位与容器像素 1:1（测量后收敛），避免缩放导致刻度/分类文字变小。 */
 const W = ref(640)
 const H = ref(250)
 const PAD = { left: 46, right: 18, top: 14, bottom: 34 }
-const PLOT_W = computed(() => W.value - PAD.left - PAD.right)
+/** 右轴存在时为其刻度留出空间。 */
+const plotPadRight = computed(() => (showRightAxis.value ? 44 : PAD.right))
+const PLOT_W = computed(() => W.value - PAD.left - plotPadRight.value)
 const PLOT_H = computed(() => H.value - PAD.top - PAD.bottom)
 const plotRef = ref<globalThis.HTMLElement | null>(null)
 let resizeObserver: globalThis.ResizeObserver | null = null
@@ -75,17 +103,6 @@ onBeforeUnmount(() => {
 
 const colors = computed(() => paletteColors(props.style))
 
-const series = computed(() =>
-  props.metrics.map((metric, index) => ({
-    metric,
-    name: metric.label || metric.field || '记录数',
-    unit: metric.unit,
-    axis: metric.axis,
-    presentation: metric.presentation,
-    color: seriesColor(props.style, index, metric.field || `metric-${index}`),
-  })),
-)
-
 const categories = computed(() =>
   props.groups.map((group) =>
     group.key == null || group.key === '' ? '未分类' : String(group.key),
@@ -111,8 +128,17 @@ function maxOf(axis: 'left' | 'right'): number {
   return max * 1.15
 }
 
-const maxLeft = computed(() => maxOf('left'))
-const maxRight = computed(() => maxOf('right'))
+function configuredMax(axis: 'left' | 'right'): number | null {
+  const value = props.axisScale?.[axis]
+  return typeof value === 'number' && value > 0 ? value : null
+}
+
+const maxLeft = computed(() => configuredMax('left') ?? maxOf('left'))
+const maxRight = computed(() => configuredMax('right') ?? maxOf('right'))
+
+function maxFor(axis: 'left' | 'right'): number {
+  return axis === 'right' ? maxRight.value : maxLeft.value
+}
 
 function plotX(index: number): number {
   const count = Math.max(1, categories.value.length)
@@ -126,7 +152,9 @@ function plotYCategory(index: number): number {
 
 function plotY(value: number, axis: 'left' | 'right'): number {
   const max = axis === 'right' ? maxRight.value : maxLeft.value
-  return PAD.top + PLOT_H.value - (Math.max(0, value) / max) * PLOT_H.value
+  const top = PAD.top + PLOT_H.value - (Math.max(0, value) / max) * PLOT_H.value
+  // 固定轴上限小于真实值时不让几何溢出绘图区。
+  return Math.max(PAD.top, Math.min(PAD.top + PLOT_H.value, top))
 }
 
 const groupWidth = computed(() => PLOT_W.value / Math.max(1, categories.value.length))
@@ -138,6 +166,13 @@ const gridLines = computed(() =>
   [0, 0.25, 0.5, 0.75, 1].map((ratio) => ({
     y: PAD.top + PLOT_H.value * ratio,
     value: Math.round(maxLeft.value * (1 - ratio)),
+  })),
+)
+
+const rightGridLines = computed(() =>
+  [0, 0.25, 0.5, 0.75, 1].map((ratio) => ({
+    y: PAD.top + PLOT_H.value * ratio,
+    value: Math.round(maxRight.value * (1 - ratio)),
   })),
 )
 
@@ -391,7 +426,7 @@ function shortLabel(value: string, max = 8): string {
     <div v-if="loading" class="wchart__mask">加载中…</div>
     <div v-if="style?.legend && metrics.length" class="wchart__legend">
       <span v-for="item in series" :key="item.name" class="wchart__legend-item">
-        <i :style="{ background: item.color }" />{{ item.name }}
+        <i :style="{ background: item.color }" />{{ item.legendName }}
       </span>
     </div>
 
@@ -404,7 +439,7 @@ function shortLabel(value: string, max = 8): string {
               v-for="line in gridLines"
               :key="`g${line.y}`"
               :x1="PAD.left"
-              :x2="W - PAD.right"
+              :x2="W - plotPadRight"
               :y1="line.y"
               :y2="line.y"
               class="wchart__grid"
@@ -419,6 +454,25 @@ function shortLabel(value: string, max = 8): string {
             >
               {{ line.value }}
             </text>
+            <template v-if="showRightAxis">
+              <line
+                :x1="W - plotPadRight"
+                :x2="W - plotPadRight"
+                :y1="PAD.top"
+                :y2="PAD.top + PLOT_H"
+                class="wchart__axis-line"
+              />
+              <text
+                v-for="line in rightGridLines"
+                :key="`rt${line.y}`"
+                :x="W - plotPadRight + 8"
+                :y="line.y + 4"
+                class="wchart__axis"
+                text-anchor="start"
+              >
+                {{ line.value }}
+              </text>
+            </template>
           </g>
           <template v-if="chartType === 'hbar'">
             <g v-for="(category, index) in categories" :key="`h${index}`">
@@ -436,7 +490,10 @@ function shortLabel(value: string, max = 8): string {
                 :x="PAD.left"
                 :y="plotYCategory(index) - (barWidth * series.length) / 2 + seriesIndex * barWidth"
                 :width="
-                  Math.max(1, ((valuesBySeries[seriesIndex]?.[index] ?? 0) / maxLeft) * PLOT_W)
+                  Math.max(
+                    1,
+                    ((valuesBySeries[seriesIndex]?.[index] ?? 0) / maxFor(item.axis)) * PLOT_W,
+                  )
                 "
                 :height="Math.max(2, barWidth - 2)"
                 :fill="item.color"

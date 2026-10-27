@@ -265,6 +265,18 @@ watch(
 )
 
 watch(
+  () => props.config.presentation,
+  (presentation) => {
+    if (autoTimer) {
+      globalThis.clearInterval(autoTimer)
+      autoTimer = null
+    }
+    // 切换到自动滚动时当前页数据已加载，不会再次触发 loadData。
+    if (presentation === 'auto') scheduleAutoScroll()
+  },
+)
+
+watch(
   queryKey,
   () => {
     void loadData()
@@ -311,6 +323,7 @@ function chartStyle() {
         :style="chartStyle()"
         :points="scatterPoints"
         :target="config.target ?? 100"
+        :axis-scale="config.axisScale"
         :loading="loading"
       />
     </template>

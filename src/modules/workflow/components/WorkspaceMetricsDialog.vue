@@ -13,6 +13,7 @@ import {
   type WorkspaceDataConfig,
   type WorkspaceMetricConfig,
 } from '../utils/workspace-data'
+import WorkspaceColorDialog from './WorkspaceColorDialog.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -34,6 +35,10 @@ const metrics = ref<WorkspaceMetricConfig[]>([])
 const xField = ref('')
 const yField = ref('')
 const target = ref(100)
+const axisLeftMax = ref(0)
+const axisRightMax = ref(0)
+const colorIndex = ref<number | null>(null)
+const colorVisible = ref(false)
 
 const isCartesian = computed(() =>
   ['bar', 'hbar', 'line', 'area', 'combo'].includes(props.chartType),
@@ -57,8 +62,33 @@ watch(
     xField.value = cfg.xField ?? pickDefaultNumericField(props.fields)
     yField.value = cfg.yField ?? pickDefaultNumericField(props.fields)
     target.value = cfg.target ?? 100
+    axisLeftMax.value = cfg.axisScale?.left ?? 0
+    axisRightMax.value = cfg.axisScale?.right ?? 0
   },
 )
+
+/** 轴单位取该轴第一个指标的配置，与参考弹窗“0 至自动 · 次”一致。 */
+function axisUnit(axis: 'left' | 'right'): string {
+  return metrics.value.find((metric) => metric.axis === axis && metric.unit)?.unit ?? ''
+}
+
+function axisLabel(axis: 'left' | 'right', max: number): string {
+  const unit = axisUnit(axis)
+  const text =
+    max === 0 ? t('workspace.metrics.axisAuto') : t('workspace.metrics.axisFixed', { max })
+  return unit ? `${text} · ${unit}` : text
+}
+
+function openColor(index: number): void {
+  colorIndex.value = index
+  colorVisible.value = true
+}
+
+function applyColor(color: string): void {
+  const index = colorIndex.value
+  if (index == null || !metrics.value[index]) return
+  metrics.value[index].color = color
+}
 
 function addMetric(): void {
   const numeric = numericFields.value[0]?.name ?? ''
@@ -96,6 +126,12 @@ function confirm(): void {
     groupBy2: groupBy2.value || undefined,
     metrics: metrics.value.filter((metric) => metric.agg === 'COUNT' || Boolean(metric.field)),
   }
+  if (isCartesian.value) {
+    patch.axisScale = {
+      left: axisLeftMax.value || null,
+      right: axisRightMax.value || null,
+    }
+  }
   if (props.chartType === 'scatter') {
     patch.xField = xField.value || undefined
     patch.yField = yField.value || undefined
@@ -106,6 +142,22 @@ function confirm(): void {
   emit('apply', patch)
   emit('update:modelValue', false)
 }
+
+const colorName = computed(() => {
+  const index = colorIndex.value
+  if (index == null) return ''
+  const metric = metrics.value[index]
+  return (
+    props.fields.find((field) => field.name === metric?.field)?.label ||
+    metric?.field ||
+    t('workspace.inspector.recordCount')
+  )
+})
+
+const colorValue = computed(() => {
+  const index = colorIndex.value
+  return index == null ? undefined : metrics.value[index]?.color
+})
 </script>
 
 <template>
@@ -210,12 +262,35 @@ function confirm(): void {
               <el-option :label="t('workspace.metrics.area')" value="area" />
             </el-select>
             <el-input v-model="metric.unit" size="small" />
-            <input v-model="metric.color" class="wmetrics__color" type="color" />
+            <button
+              type="button"
+              class="wmetrics__color"
+              :style="{ background: metric.color }"
+              :aria-label="t('workspace.metrics.color')"
+              @click="openColor(index)"
+            />
             <button type="button" class="wmetrics__remove" @click="removeMetric(index)">×</button>
           </div>
           <el-button size="small" plain @click="addMetric">{{
             t('workspace.metrics.add')
           }}</el-button>
+        </div>
+
+        <div v-if="isCartesian" class="wmetrics__bounds">
+          <label>
+            <span>{{ t('workspace.metrics.leftAxis') }}</span>
+            <el-select v-model="axisLeftMax" size="small">
+              <el-option :label="axisLabel('left', 0)" :value="0" />
+              <el-option :label="axisLabel('left', 100)" :value="100" />
+            </el-select>
+          </label>
+          <label>
+            <span>{{ t('workspace.metrics.rightAxis') }}</span>
+            <el-select v-model="axisRightMax" size="small">
+              <el-option :label="axisLabel('right', 0)" :value="0" />
+              <el-option :label="axisLabel('right', 100)" :value="100" />
+            </el-select>
+          </label>
         </div>
       </template>
     </div>
@@ -224,6 +299,13 @@ function confirm(): void {
       <el-button type="primary" @click="confirm">{{ t('common.confirm') }}</el-button>
     </template>
   </el-dialog>
+
+  <WorkspaceColorDialog
+    v-model="colorVisible"
+    :name="colorName"
+    :color="colorValue"
+    @apply="applyColor"
+  />
 </template>
 
 <style scoped>
@@ -273,6 +355,21 @@ function confirm(): void {
   border: 1px solid var(--sw-border-light);
   border-radius: 4px;
   background: #fff;
+  cursor: pointer;
+}
+
+.wmetrics__bounds {
+  display: flex;
+  gap: 16px;
+}
+
+.wmetrics__bounds label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
 }
 
 .wmetrics__remove {

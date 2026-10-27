@@ -34,7 +34,7 @@ const types: WorkspaceChartType[] = [
   'heatmap',
 ]
 
-function mountChart(type: WorkspaceChartType) {
+function mountChart(type: WorkspaceChartType, overrides: Record<string, unknown> = {}) {
   return mount(WorkspaceChart, {
     props: {
       chartType: type,
@@ -47,6 +47,7 @@ function mountChart(type: WorkspaceChartType) {
         { x: 4, y: 3 },
       ],
       target: 20,
+      ...overrides,
     },
   })
 }
@@ -81,5 +82,25 @@ describe('WorkspaceChart 12 图型', () => {
     expect(mountChart('gauge').text()).toContain('目标')
     expect(mountChart('heatmap').findAll('rect').length).toBeGreaterThanOrEqual(6)
     expect(mountChart('scatter').findAll('circle').length).toBe(3)
+  })
+
+  it('图例显示单位，指标自定义颜色覆盖默认调色板', () => {
+    const wrapper = mountChart('combo', {
+      metrics: [{ ...metrics[0], color: '#123456' }, metrics[1]],
+    })
+    expect(wrapper.find('.wchart__legend').text()).toContain('次')
+    expect(wrapper.find('.wchart__legend').text()).toContain('%')
+    expect(wrapper.html()).toContain('#123456')
+  })
+
+  it('右轴存在时渲染独立右轴刻度，固定轴上限反映到刻度', () => {
+    const wrapper = mountChart('combo', { axisScale: { left: 100, right: 40 } })
+    const labels = wrapper.findAll('.wchart__axis').map((item) => item.text())
+    expect(labels).toContain('100')
+    expect(labels).toContain('0')
+    expect(wrapper.findAll('.wchart__axis-line').length).toBeGreaterThan(0)
+    // 右轴 40 的 3/4 刻度是 30，与左轴 100 的 75 区分，证明两条轴各自取上限。
+    expect(labels).toContain('30')
+    expect(labels).toContain('75')
   })
 })

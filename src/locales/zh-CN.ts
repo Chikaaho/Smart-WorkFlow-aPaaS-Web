@@ -3309,6 +3309,8 @@ export default {
       add: '添加指标',
       leftAxis: '左轴',
       rightAxis: '右轴',
+      axisAuto: '0 至自动',
+      axisFixed: '0 至 {max}',
       bar: '柱状',
       line: '折线',
       area: '面积',
@@ -3392,6 +3394,13 @@ export default {
       top: '上方',
       bottom: '下方',
       gradient: '颜色梯度',
+    },
+    color: {
+      title: '自定义颜色',
+      hex: 'HEX',
+      opacity: '不透明度',
+      common: '常用颜色',
+      invalid: '请输入 6 位 HEX 颜色',
     },
     formPicker: {
       title: '选择表单',

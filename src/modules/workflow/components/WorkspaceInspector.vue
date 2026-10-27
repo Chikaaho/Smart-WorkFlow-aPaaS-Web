@@ -10,6 +10,7 @@ import { useI18n } from '@/locales'
 import type { CatalogItem } from '@/contracts/catalog'
 import type { WorkspaceField, WorkspaceFormSource } from '../api/workspace-analytics'
 import WorkspaceFormPickerDialog from './WorkspaceFormPickerDialog.vue'
+import WorkspaceColorDialog from './WorkspaceColorDialog.vue'
 import {
   PALETTES,
   defaultChartStyle,
@@ -41,6 +42,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const tab = ref<'data' | 'style'>('data')
 const pickerVisible = ref(false)
+const colorVisible = ref(false)
+const colorIndex = ref(0)
+const colorField = ref('')
 
 const boundFormName = computed(
   () =>
@@ -119,9 +123,13 @@ function onChartType(value: WorkspaceChartType): void {
 
 function seriesColorValue(index: number, fieldName: string): string {
   const key = fieldName || `metric-${index}`
+  const fallback = paletteColors(props.card.config.style)[
+    index % paletteColors(props.card.config.style).length
+  ]
   return (
     props.card.config.style?.seriesColors?.[key] ??
-    paletteColors(props.card.config.style)[index % paletteColors(props.card.config.style).length]
+    props.card.config.metrics?.[index]?.color ??
+    fallback
   )
 }
 
@@ -129,6 +137,27 @@ function setSeriesColor(index: number, fieldName: string, color: string): void {
   const key = fieldName || `metric-${index}`
   patchStyle({ seriesColors: { ...(props.card.config.style?.seriesColors ?? {}), [key]: color } })
 }
+
+function openSeriesColor(index: number, fieldName: string): void {
+  colorIndex.value = index
+  colorField.value = fieldName
+  colorVisible.value = true
+}
+
+function applySeriesColor(color: string): void {
+  setSeriesColor(colorIndex.value, colorField.value, color)
+}
+
+const colorDialogName = computed(() => {
+  const metric = props.card.config.metrics?.[colorIndex.value]
+  return (
+    props.fields.find((field) => field.name === metric?.field)?.label ||
+    metric?.field ||
+    t('workspace.inspector.recordCount')
+  )
+})
+
+const colorDialogValue = computed(() => seriesColorValue(colorIndex.value, colorField.value))
 
 function palette() {
   return paletteColors(props.card.config.style)
@@ -469,13 +498,15 @@ function isStackable() {
             class="winsp__color-row"
           >
             <span>{{ metric.field || t('workspace.inspector.recordCount') }}</span>
-            <input
-              type="color"
-              :value="seriesColorValue(index, metric.field)"
-              @input="
-                setSeriesColor(index, metric.field, ($event.target as HTMLInputElement).value)
-              "
-            />
+            <button
+              type="button"
+              class="winsp__color-btn"
+              :aria-label="t('workspace.color.title')"
+              @click="openSeriesColor(index, metric.field)"
+            >
+              <i :style="{ background: seriesColorValue(index, metric.field) }" />
+              <span>{{ seriesColorValue(index, metric.field) }}</span>
+            </button>
           </div>
         </section>
 
@@ -553,6 +584,14 @@ function isStackable() {
       </template>
     </div>
   </aside>
+
+  <WorkspaceColorDialog
+    v-if="hasStyle"
+    v-model="colorVisible"
+    :name="colorDialogName"
+    :color="colorDialogValue"
+    @apply="applySeriesColor"
+  />
 </template>
 
 <style scoped>
@@ -756,6 +795,28 @@ function isStackable() {
   border: 1px solid var(--sw-border-light);
   border-radius: 4px;
   background: #fff;
+}
+
+.winsp__color-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 118px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--sw-text-tertiary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.winsp__color-btn i {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 8%);
 }
 
 .winsp__gradient {

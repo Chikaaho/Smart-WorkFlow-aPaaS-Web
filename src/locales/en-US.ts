@@ -3411,6 +3411,8 @@ export default {
       add: 'Add metric',
       leftAxis: 'Left',
       rightAxis: 'Right',
+      axisAuto: '0 to auto',
+      axisFixed: '0 to {max}',
       bar: 'Bar',
       line: 'Line',
       area: 'Area',
@@ -3497,6 +3499,13 @@ export default {
       top: 'Top',
       bottom: 'Bottom',
       gradient: 'Color gradient',
+    },
+    color: {
+      title: 'Custom color',
+      hex: 'HEX',
+      opacity: 'Opacity',
+      common: 'Common colors',
+      invalid: 'Enter a 6-digit HEX color',
     },
     formPicker: {
       title: 'Select form',
