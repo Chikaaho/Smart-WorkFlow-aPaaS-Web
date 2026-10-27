@@ -958,4 +958,31 @@ onMounted(() => {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+@media (max-width: 767px) {
+  .catalog-page__toolbar-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .catalog-page__label {
+    width: 100%;
+  }
+  .catalog-page__search {
+    flex: 1 1 100%;
+  }
+  .catalog-page__spacer {
+    display: none;
+  }
+  .catalog-page__query,
+  .catalog-page__reset {
+    flex: 1 1 0;
+    width: auto;
+    margin: 0;
+  }
+  .catalog-tablecard {
+    overflow-x: auto;
+  }
+  .catalog-table {
+    min-width: 720px;
+  }
+}
 </style>

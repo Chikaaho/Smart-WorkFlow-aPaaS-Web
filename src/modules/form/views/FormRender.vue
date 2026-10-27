@@ -1594,6 +1594,19 @@ onMounted(() => {
   .form-render-page__canvas {
     padding: 12px;
   }
+  /* 填写态白卡在窄屏改为满宽（原 100vw-240px 会把卡片压到 135px） */
+  .form-render-page__canvas--fill {
+    padding: 12px 12px 88px;
+  }
+  .form-render-page__main--fill {
+    width: 100%;
+  }
+  .form-render-page__fill-footer {
+    padding: 0 12px;
+  }
+  .form-render-page__fill-footer-inner {
+    width: 100%;
+  }
   .form-render-page__sheet {
     padding: 16px 12px;
   }
