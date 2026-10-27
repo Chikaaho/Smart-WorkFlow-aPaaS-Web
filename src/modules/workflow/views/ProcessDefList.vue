@@ -348,16 +348,16 @@ onMounted(loadList)
           <el-table-column
             prop="name"
             :label="t('common.processName')"
-            min-width="367"
+            min-width="366"
             class-name="defs-table__col-name"
           />
-          <el-table-column :label="t('workflow.categoryName')" width="235">
+          <el-table-column :label="t('workflow.categoryName')" width="234">
             <template #default="{ row }">{{ statusRow(row).categoryName || '—' }}</template>
           </el-table-column>
           <el-table-column
             prop="defVersion"
             :label="t('common.version')"
-            width="131"
+            width="132"
             align="center"
           >
             <template #default="{ row }">
@@ -643,7 +643,7 @@ onMounted(loadList)
   padding-left: 16px;
 }
 .defs-table :deep(.el-table__row td.el-table__cell) {
-  height: 44px;
+  height: 45px;
   font-size: 12px;
   color: #303a55;
 }

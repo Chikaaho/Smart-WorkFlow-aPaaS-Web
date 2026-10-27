@@ -14,7 +14,7 @@ const { t } = useI18n()
  */
 import { computed, onMounted, ref } from 'vue'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
-import { normalizeIdList } from '../dynamic-field-registry'
+import { normalizeIdList } from '../dynamic-field-utils'
 import { loadUserChoices } from '@/modules/form/api/i2-choices'
 
 const props = defineProps<DynamicFieldControlProps>()

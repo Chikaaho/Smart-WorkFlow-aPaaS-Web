@@ -16,7 +16,7 @@ const { t } = useI18n()
 import { computed, onMounted, ref } from 'vue'
 import { Search, CircleClose } from '@element-plus/icons-vue'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
-import { normalizeIdList } from '../dynamic-field-registry'
+import { normalizeIdList } from '../dynamic-field-utils'
 import { loadDeptChoices } from '@/modules/form/api/i2-choices'
 import ReadonlyValue from './ReadonlyValue.vue'
 import folderIcon from '@/assets/form-palette/folder.svg'

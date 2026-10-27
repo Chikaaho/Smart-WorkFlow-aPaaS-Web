@@ -11,7 +11,7 @@ const { t } = useI18n()
  */
 import { computed } from 'vue'
 import type { TableField } from '@/contracts/form-schema'
-import { getSubFieldComponent } from '../dynamic-field-registry'
+import { getSubFieldComponent } from '../dynamic-field-subfield'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
 
 const props = defineProps<DynamicFieldControlProps>()
