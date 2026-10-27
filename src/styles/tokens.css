@@ -134,6 +134,8 @@
   /* ── 布局（P53 设计：顶栏 64px；0.2.0 参考 3:2/4:2 用户端深色侧栏 236px） ── */
   --sw-layout-aside-width: 236px;
   --sw-layout-aside-width-collapsed: 64px;
+  /* 0.2.0 参考顶栏：品牌列宽与侧栏解耦（97/3/4 同节点导航起点 x263 需品牌列 224） */
+  --sw-layout-logo-width: 224px;
   --sw-layout-header-height: 64px;
   --sw-layout-header-padding-x: 16px;
 }

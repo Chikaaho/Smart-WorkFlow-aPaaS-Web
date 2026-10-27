@@ -81,11 +81,38 @@ const showAside = computed(
             :title="collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')"
             @click="appStore.toggleSidebar()"
           >
-            <el-icon :size="18" aria-hidden="true">
+            <el-icon v-if="area === 'admin'" :size="18" aria-hidden="true">
               <!-- 批次21（规划审查）：Expand/Fold 小尺寸下呈横线状无法辨向，改为明确单箭头 -->
               <ArrowRight v-if="collapsed" />
               <ArrowLeft v-else />
             </el-icon>
+            <template v-else>
+              <!-- 0.2.0 参考 3:2/4:2：用户端底部为「|← 收起」 -->
+              <svg
+                v-if="!collapsed"
+                class="basic-layout__collapse-icon"
+                viewBox="0 0 18 18"
+                width="18"
+                height="18"
+                aria-hidden="true"
+              >
+                <path
+                  d="M2.5 4.5v9"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M15 9H6.5M9.8 5.7 6.5 9l3.3 3.3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <span v-else aria-hidden="true">→</span>
+            </template>
             <span v-if="!collapsed" class="basic-layout__sidebar-collapse-label">
               {{ t('nav.collapseSidebar') }}
             </span>
@@ -184,6 +211,22 @@ const showAside = computed(
   height: 48px;
   padding: 0 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* 0.2.0 参考 3:2/4:2：用户端底部收起条贴左，上边框取参考浅色 #E9EDF5 */
+.basic-layout--portal .basic-layout__sidebar-bottom {
+  padding: 0;
+  border-top-color: #e9edf5;
+}
+.basic-layout--portal .basic-layout__sidebar-collapse {
+  height: 48px;
+  gap: 10px;
+  padding: 0 16px;
+}
+.basic-layout--portal .basic-layout__sidebar-collapse-label {
+  font-size: 14px;
+}
+.basic-layout__collapse-icon {
+  flex: none;
 }
 .basic-layout--admin .basic-layout__sidebar-bottom {
   border-top-color: var(--sw-border-color, #dcdfe6);

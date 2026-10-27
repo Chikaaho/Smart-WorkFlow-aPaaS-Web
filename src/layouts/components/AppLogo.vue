@@ -38,12 +38,11 @@ const brandLabel = computed(() => t(props.area === 'admin' ? 'nav.brandAdmin' : 
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  /* 0.1.7 #5：品牌列宽度与深色侧栏同源对齐（portal=--sw-layout-aside-width 224px），
-     多分辨率下跟随同一 token，不再用独立 240px 定宽错位 */
-  flex: 0 0 var(--sw-layout-aside-width);
+  /* 0.2.0 参考：品牌列独立 224（顶栏导航起点 x263），侧栏 236 由 aside token 管理 */
+  flex: 0 0 var(--sw-layout-logo-width, 224px);
   gap: 13px;
   height: 64px;
-  width: var(--sw-layout-aside-width);
+  width: var(--sw-layout-logo-width, 224px);
   padding: 0 0 0 24px;
   overflow: hidden;
 }

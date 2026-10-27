@@ -311,7 +311,7 @@ onMounted(() => {
               id="catalog-keyword"
               v-model="keyword"
               class="catalog-page__search"
-              :placeholder="t('workflow.searchCatalogPlaceholder')"
+              :placeholder="t('catalog.searchPlaceholder')"
               clearable
               @keyup.enter="searchCatalog"
               @clear="searchCatalog"
@@ -715,7 +715,7 @@ onMounted(() => {
 .catalog-sections {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 16px;
 }
 .catalog-section {
   padding: 17px 18px 16px;

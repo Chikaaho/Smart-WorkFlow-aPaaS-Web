@@ -468,7 +468,7 @@ onMounted(loadList)
 
     <!-- 表格 -->
     <el-table v-loading="loading" :data="list" style="width: 100%" class="my-instances-table">
-      <el-table-column :label="t('workflow.itemName')" min-width="228">
+      <el-table-column :label="t('workflow.itemName')" width="365">
         <template #default="{ row }">
           {{ row.processName ?? '-' }}
         </template>
@@ -477,32 +477,32 @@ onMounted(loadList)
            不再错绑业务标识（businessKey 仍在详情弹窗以「业务单号」展示） -->
       <el-table-column
         :label="t('workflow.instanceApplicationNo')"
-        min-width="170"
+        width="282"
         show-overflow-tooltip
       >
         <template #default="{ row }">{{ row.theme || '—' }}</template>
       </el-table-column>
-      <el-table-column :label="t('common.currentNode')" min-width="190">
+      <el-table-column :label="t('common.currentNode')" width="376">
         <template #default="{ row }">
           {{ row.currentNode ?? t('common.dash') }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.status')" min-width="90" class-name="instance-status">
+      <el-table-column :label="t('common.status')" width="87" class-name="instance-status">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">
             {{ statusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.initiator')" min-width="80">
+      <el-table-column :label="t('common.initiator')" width="132">
         <template #default="{ row }">{{ row.initiatorName || t('common.dash') }}</template>
       </el-table-column>
-      <el-table-column prop="createTime" :label="t('common.createTime')" min-width="160">
+      <el-table-column prop="createTime" :label="t('common.createTime')" width="312">
         <template #default="{ row }">
           {{ formatTime(row.createTime) }}
         </template>
       </el-table-column>
-      <ListActionsColumn :actions="rowActions" :width="133" :inline-limit="1" />
+      <ListActionsColumn :actions="rowActions" :width="87" :inline-limit="1" />
     </el-table>
 
     <!-- 详情弹窗 -->
@@ -630,6 +630,14 @@ onMounted(loadList)
 .my-instances :deep(.el-date-editor) {
   box-sizing: border-box;
 }
+/* 参考 4:2：日期范围控件不带前置日历图标 */
+.my-instances :deep(.el-range__icon) {
+  display: none;
+}
+/* 参考 4:2：未选中页码为无底色表面 */
+.my-instances :deep(.el-pager li:not(.is-active)) {
+  background: transparent;
+}
 .my-instances :deep(.list-filter-bar__actions > .el-button) {
   min-width: 80px;
 }
@@ -642,11 +650,8 @@ onMounted(loadList)
   margin-left: auto;
 }
 .my-instances-table :deep(.el-table .cell) {
-  padding-inline: 0;
-}
-.my-instances-table :deep(.el-table td:first-child .cell),
-.my-instances-table :deep(.el-table th:first-child .cell) {
   padding-left: var(--sw-space-16);
+  padding-right: 0;
 }
 .my-instances-table :deep(td.el-table__cell) {
   height: 45px;
@@ -657,16 +662,20 @@ onMounted(loadList)
   padding-block: 0;
 }
 .my-instances-table :deep(.el-tag) {
-  height: 22px;
-  padding: 0 var(--sw-space-8);
+  height: 24px;
+  padding: 0 10px;
   border: 0;
   border-radius: 6px;
+  font-size: 13px;
 }
-.my-instances-table :deep(.el-table__header th:last-child .cell) {
-  text-align: center;
+/* 参考 4:2：状态/操作列头文字与列起点对齐，行内控件从列起点起排 */
+.my-instances-table :deep(th.instance-status .cell),
+.my-instances-table :deep(th:last-child .cell) {
+  padding-left: var(--sw-space-16);
 }
-.my-instances-table :deep(.instance-status .cell) {
-  text-align: center;
+.my-instances-table :deep(td.instance-status .cell),
+.my-instances-table :deep(td:last-child .cell) {
+  padding-left: 1px;
 }
 @media (max-width: 767px) {
   .my-instances :deep(.list-filter-item),

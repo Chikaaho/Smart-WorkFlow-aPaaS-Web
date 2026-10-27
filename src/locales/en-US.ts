@@ -429,6 +429,7 @@ export default {
   catalog: {
     launch: 'Start process',
     launchShort: 'Start',
+    searchPlaceholder: 'Please enter',
     processNameLabel: 'Process name',
     categoryCol: 'Category',
     actionCol: 'Actions',

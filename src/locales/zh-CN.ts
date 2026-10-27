@@ -414,6 +414,7 @@ export default {
   catalog: {
     launch: '发起流程',
     launchShort: '发起',
+    searchPlaceholder: '请输入',
     processNameLabel: '流程名称',
     categoryCol: '分类',
     actionCol: '操作',

@@ -389,8 +389,8 @@ const inboxTabs = computed(() => [
 }
 .sb-row--leaf.is-active {
   box-sizing: border-box;
-  width: calc(100% - 16px);
-  margin: 0 8px 4px;
+  width: calc(100% - 24px);
+  margin: 0 12px 4px;
   border-radius: 8px;
   background: var(--sw-color-primary);
   color: #ffffff;
