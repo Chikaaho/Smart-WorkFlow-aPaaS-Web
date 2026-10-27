@@ -100,7 +100,7 @@ const visible = computed(
     ]"
   >
     <span v-if="totalText" class="list-pagination__total">{{
-      t(appearance === 'design' ? 'common.totalItems' : 'common.totalRecords', { total: pageTotal })
+      t('common.totalRecords', { total: pageTotal })
     }}</span>
     <el-pagination
       v-if="effectiveLayout"

@@ -396,7 +396,7 @@ describe('StandardListTemplate', () => {
     const pager = wrapper.findComponent(ListPagination)
     expect(wrapper.findAllComponents(ListPagination)).toHaveLength(1)
     expect(wrapper.find('.list-table .list-pagination').exists()).toBe(true)
-    expect(pager.text()).toContain('共 100 条')
+    expect(pager.text()).toContain('共 100 条记录')
     await pager.vm.$emit('update:pageNum', 3)
     await pager.vm.$emit('update:pageSize', 20)
     expect(wrapper.emitted('update:pageNum')).toEqual([[3]])

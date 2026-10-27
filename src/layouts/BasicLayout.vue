@@ -301,11 +301,12 @@ const showAside = computed(
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
 }
-/* 参考 6:2：深色管理导航的当前项仅以白字标识，无蓝色选中块 */
+/* 参考 6:2：深色管理导航的当前项仅以白字标识，无蓝色选中块；无胶囊时不内缩，保持与其余行同一左线 */
 .basic-layout--dark-nav :deep(.sb-node__row--leaf.is-active),
 .basic-layout--dark-nav :deep(.sb-row--leaf.is-active) {
   width: 100%;
   margin: 0 0 4px;
+  padding-left: calc(24px + var(--sb-depth, 0) * 20px);
   border-radius: 0;
   background: transparent;
   color: #ffffff;

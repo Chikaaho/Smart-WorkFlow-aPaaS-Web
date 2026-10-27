@@ -269,16 +269,17 @@ const activityRowsAll = computed(() => {
   )
   if (activityVisible) {
     for (const item of processedList.value) {
+      const defName = String(item.processName ?? '').trim()
+      const taskName = String(item.taskName ?? '').trim()
+      const action = String(item.action ?? '')
       rows.push({
-        title: String(
-          (typeof item.theme === 'string' && item.theme.trim()) ||
-            item.taskName ||
-            item.processName ||
-            '-',
-        ),
+        // 参考 3:2：行为「事项 + 事件描述」，不是实例编号
+        title: [defName || String(item.theme ?? '-'), taskName, actionText(action)]
+          .filter(Boolean)
+          .join(' '),
         meta:
-          [actionText(item.action ?? ''), statusText(item.instanceStatus)]
-            .filter((part) => part && part !== 'null')
+          [t('workspace.activityApproval'), String(item.initiatorName ?? '').trim()]
+            .filter(Boolean)
             .join(' · ') || String(item.action ?? t('workflow.myProcessed')),
         time: activityTime(item.endTime ?? item.createTime),
         at: timeOf(item.endTime ?? item.createTime),
@@ -288,14 +289,16 @@ const activityRowsAll = computed(() => {
   }
   if (activityVisible) {
     for (const item of initiatedList.value) {
+      const defName = String(item.processName ?? '').trim()
+      const currentNode = String(item.currentNode ?? '').trim()
       rows.push({
-        title: String(
-          (typeof item.theme === 'string' && item.theme.trim()) ||
-            item.processName ||
-            item.processDefKey ||
-            '-',
-        ),
-        meta: [String(item.currentNode ?? ''), statusText(item.status)].filter(Boolean).join(' · '),
+        title: defName
+          ? `${defName}${currentNode ? `进入${currentNode}` : statusText(item.status)}`
+          : String(item.theme ?? '-'),
+        meta:
+          [statusText(item.status), String(item.initiatorName ?? '').trim()]
+            .filter(Boolean)
+            .join(' · ') || statusText(item.status),
         time: activityTime(item.createTime),
         at: timeOf(item.createTime),
         src: 'initiated',
@@ -305,7 +308,9 @@ const activityRowsAll = computed(() => {
   if (activityVisible) {
     for (const item of ccList.value) {
       rows.push({
-        title: String(item.taskName ?? item.nodeKey ?? item.formKey ?? '-'),
+        title: [String(item.processName ?? item.taskName ?? item.formKey ?? '-'), t('workflow.cc')]
+          .filter(Boolean)
+          .join(' '),
         meta: [t('workflow.cc'), statusText(item.instanceStatus)].filter(Boolean).join(' · '),
         time: activityTime(item.createTime),
         at: timeOf(item.createTime),
@@ -1168,7 +1173,7 @@ onBeforeUnmount(() => {
               <div class="wsd-panel__head">
                 <h3 class="wsd-panel__title">{{ t('workflow.myTodoTitle') }}</h3>
                 <button class="wsd-btn" type="button" @click="router.push('/workspace/todo')">
-                  {{ t('workspace.allTodos') }} →
+                  {{ t('workspace.allTodos') }}
                 </button>
               </div>
               <div class="wsd-tabrow" role="tablist">
@@ -1197,7 +1202,9 @@ onBeforeUnmount(() => {
                     </button>
                     <span class="wsd-task__meta">{{ rowMeta(row) }}</span>
                   </span>
-                  <span v-if="dueChip(row)" class="wsd-task__due">{{ dueChip(row) }}</span>
+                  <span class="wsd-task__due" :class="{ 'is-empty': !dueChip(row) }">{{
+                    dueChip(row)
+                  }}</span>
                   <button class="wsd-task__action" type="button" @click="openPanelTask(row)">
                     {{ t('workspace.handleTask') }}
                   </button>
@@ -1893,8 +1900,10 @@ onBeforeUnmount(() => {
 .wsd-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 64px;
   height: 32px;
-  padding: 0 16px;
+  padding: 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -1934,7 +1943,8 @@ onBeforeUnmount(() => {
 }
 .wsd-taskrows {
   list-style: none;
-  margin: 8px 0 0;
+  /* 参考 3:2：页签底 349、首行顶 353（间距 4） */
+  margin: 4px 0 0;
   padding: 0;
 }
 .wsd-task {
@@ -1942,7 +1952,8 @@ onBeforeUnmount(() => {
   grid-template-columns: 24px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
-  padding: 10px 8px;
+  /* 参考 3:2：待办行距 63（标题 20 + 2 + 副注 18 + 上下 11 + 1 分隔线） */
+  padding: 11px 8px;
   border-bottom: 1px solid var(--sw-border-light);
 }
 .wsd-task:last-child {
@@ -1990,8 +2001,14 @@ onBeforeUnmount(() => {
   font-size: 12px;
   white-space: nowrap;
 }
+/* 无期限数据时保留占位列（避免「办理」因空列前移 12px 脱离参考右缘） */
+.wsd-task__due.is-empty {
+  padding: 0;
+  background: transparent;
+}
 .wsd-task__action {
-  padding: 0 4px;
+  /* 参考 3:2：「办理」文字右缘 x≈1258（行内容右缘 1266 − 8） */
+  padding: 0 8px;
   border: 0;
   background: none;
   color: var(--sw-color-primary);
@@ -2034,17 +2051,24 @@ onBeforeUnmount(() => {
 .wsd-chiprow--activity {
   margin-left: 0;
   margin-top: 0;
-  gap: 4px;
+  /* 参考 3:2：活跃区胶囊 64 宽、节距 76（间距 12） */
+  gap: 12px;
+}
+/* 参考 3:2：业务动态右缘内容到 x≈1881（面板右内距 18） */
+.wsd-panel--activity {
+  padding-right: 18px;
 }
 .wsd-actrows {
-  margin-top: 8px;
+  /* 参考 3:2：动态首行顶距 1（标题底 807 → 行顶 812） */
+  margin-top: 1px;
 }
 .wsd-act {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  height: 51px;
+  /* 参考 3:2：业务动态行距 59 */
+  height: 58px;
   padding: 0 8px;
   border-bottom: 1px solid var(--sw-border-light);
 }

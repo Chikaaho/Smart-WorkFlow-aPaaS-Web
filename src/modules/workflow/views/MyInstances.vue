@@ -630,6 +630,21 @@ onMounted(loadList)
 .my-instances :deep(.el-date-editor) {
   box-sizing: border-box;
 }
+/* 参考 4:2：时间范围为单框紧凑「开始 — 结束」，两段输入按内容收缩而非均分整框 */
+.my-instances :deep(.el-date-editor) {
+  justify-content: flex-start;
+}
+.my-instances :deep(.el-date-editor .el-range-input) {
+  flex: 0 0 auto;
+  width: auto;
+  field-sizing: content;
+  text-align: left;
+}
+.my-instances :deep(.el-date-editor .el-range-separator) {
+  flex: 0 0 auto;
+  /* 参考 4:2：占位态「开始 — 结束」整串同为 #9AA1B2，分隔符不另用深色 */
+  color: #9aa1b2;
+}
 /* 参考 4:2：日期范围控件不带前置日历图标 */
 .my-instances :deep(.el-range__icon) {
   display: none;

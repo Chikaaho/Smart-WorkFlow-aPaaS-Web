@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, CaretBottom, Switch, SwitchButton, User } from '@element-plus/icons-vue'
+import { Back, Switch, SwitchButton, User } from '@element-plus/icons-vue'
 import { useI18n } from '@/locales'
 import { SUPPORTED_LOCALES, setLocale, type AppLocale } from '@/locales'
 import { useMenuStore } from '@/stores/menu'
@@ -189,11 +189,10 @@ function onCommand(command: string): void {
     <button class="app-topbar__theme" type="button" @click="themeVisible = true">
       {{ t('common.theme') }}
     </button>
-    <!-- V011-BUG-005：多语言切换（主导航与搜索之间，Owner 2026-09-22 指定位置） -->
+    <!-- 参考 4:2/6:2/97:2：“中文”后无下拉指示（下拉仍由点击触发） -->
     <el-dropdown trigger="click" @command="onLocale">
       <button class="app-topbar__locale" type="button" :aria-label="t('locale.switch')">
         <span class="app-topbar__locale-current">{{ currentLocaleLabel }}</span>
-        <el-icon class="app-topbar__locale-caret"><CaretBottom /></el-icon>
       </button>
       <template #dropdown>
         <el-dropdown-menu class="app-topbar__locale-menu">
@@ -302,8 +301,7 @@ function onCommand(command: string): void {
       <span class="app-topbar__user" :aria-label="displayName">
         <span class="app-topbar__avatar" aria-hidden="true">{{ avatarText }}</span>
         <span class="app-topbar__user-name">{{ displayName }}</span>
-        <img v-if="currentArea === 'admin'" :src="arrowIcon" alt="" width="12" height="12" />
-        <el-icon v-else class="app-topbar__caret"><CaretBottom /></el-icon>
+        <img class="app-topbar__caret" :src="arrowIcon" alt="" width="12" height="12" />
       </span>
       <template #dropdown>
         <!-- V011-BUG-004：仅三个小菜单项，无摘要头 -->
@@ -385,10 +383,7 @@ function onCommand(command: string): void {
 }
 .app-topbar--admin .app-topbar__locale {
   padding: 0;
-  font-size: var(--sw-font-caption);
-}
-.app-topbar--admin .app-topbar__locale-caret {
-  display: none;
+  font-size: 12px;
 }
 .app-topbar--admin .app-topbar__search,
 .app-topbar--admin .app-topbar__bell {
@@ -397,7 +392,7 @@ function onCommand(command: string): void {
 }
 .app-topbar--admin .app-topbar__user {
   gap: 8px;
-  min-width: 110px;
+  width: 110px;
 }
 .app-topbar--admin .app-topbar__avatar {
   border-radius: var(--sw-radius-base);
@@ -405,9 +400,6 @@ function onCommand(command: string): void {
   color: var(--sw-color-primary);
   font-weight: 500;
   transform: none;
-}
-.app-topbar--admin .app-topbar__user-name {
-  max-width: 96px;
 }
 .app-topbar__manual {
   color: var(--sw-text-primary);
@@ -529,8 +521,9 @@ function onCommand(command: string): void {
 .app-topbar__user {
   display: flex;
   align-items: center;
-  /* 设计（节点02）：头像 32 + 10px 文距（用户区总宽 116） */
-  gap: 10px;
+  /* 参考 4:2/6:2/97:2 账户入口：110×40 容器，头像 32 + 8 间距 + 名称槽 28 + 8 间距 + chevron 12 */
+  width: 110px;
+  gap: 8px;
   cursor: pointer;
   outline: none;
 }
@@ -538,6 +531,7 @@ function onCommand(command: string): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 32px;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -548,18 +542,17 @@ function onCommand(command: string): void {
   transform: translateY(1px);
 }
 .app-topbar__user-name {
+  flex: 0 0 28px;
+  width: 28px;
   font-size: 14px;
   color: #ffffff;
-  max-width: 120px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .app-topbar__caret {
-  /* 设计（节点02）：用户名后紧随 12px 下拉箭头 */
-  font-size: 12px;
-  margin-left: -6px;
-  color: rgba(255, 255, 255, 0.9);
+  /* 参考：用户名后细线 chevron（12px 盒，可见笔画约 10px） */
+  flex: 0 0 12px;
 }
 .app-topbar__logout {
   color: var(--sw-danger);
@@ -567,18 +560,18 @@ function onCommand(command: string): void {
 .app-topbar__logout :deep(.el-icon) {
   color: var(--sw-danger);
 }
-/* V011-BUG-005：顶栏语言切换（主导航与搜索之间，深色顶栏上的白色文字控件） */
+/* V011-BUG-005：顶栏语言切换（主导航与搜索之间，深色顶栏上的白色文字控件）
+ * 参考 4:2/6:2/97:2：中文 12px，文本后无指示图标，控件无横向内距（与搜索图标间距 8） */
 .app-topbar__locale {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   height: 28px;
-  padding: 0 8px;
+  padding: 0;
   border: none;
   border-radius: var(--sw-radius-base);
   background: transparent;
   color: rgba(255, 255, 255, 0.92);
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
   flex-shrink: 0;
   white-space: nowrap;
@@ -586,9 +579,6 @@ function onCommand(command: string): void {
 .app-topbar__locale:hover {
   background: var(--sw-nav-hover-bg);
   color: #ffffff;
-}
-.app-topbar__locale-caret {
-  font-size: 12px;
 }
 </style>
 
@@ -681,11 +671,12 @@ function onCommand(command: string): void {
   transform: none;
 }
 .app-topbar--portal .app-topbar__user {
-  min-width: 0;
-  gap: var(--sw-space-8);
+  width: 110px;
+  gap: 8px;
 }
 .app-topbar--portal .app-topbar__user-name {
-  min-width: 0;
+  flex: 0 0 28px;
+  width: 28px;
   font-weight: var(--sw-font-weight-body);
 }
 .app-topbar--portal .app-topbar__search,

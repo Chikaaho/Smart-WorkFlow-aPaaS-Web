@@ -117,6 +117,36 @@ const focus = computed(() => [
 
 const analyticsTrend = computed(() => analytics.value?.dailyTrend ?? [])
 
+/**
+ * 参考 7:2 趋势为 14 根等宽柱（13 浅色 + 末根深色），而接口给的是 30 个逐日值；
+ * 按索引把真实日值合并为 14 段（每段连续 2~3 天，合计 30 天），不新增后端口径。
+ */
+const TREND_BAR_COUNT = 14
+const analyticsTrendBuckets = computed(() => {
+  const points = analyticsTrend.value
+  if (!points.length) return []
+  const bucketCount = Math.min(TREND_BAR_COUNT, points.length)
+  const buckets: { count: number; start: string; end: string }[] = []
+  for (let index = 0; index < bucketCount; index++) {
+    const start = Math.floor((index * points.length) / bucketCount)
+    const end = Math.max(start + 1, Math.floor(((index + 1) * points.length) / bucketCount))
+    const slice = points.slice(start, end)
+    buckets.push({
+      count: slice.reduce((sum, point) => sum + point.count, 0),
+      start: slice[0]?.date ?? '',
+      end: slice[slice.length - 1]?.date ?? '',
+    })
+  }
+  return buckets
+})
+const trendMax = computed(() =>
+  Math.max(1, ...analyticsTrendBuckets.value.map((bucket) => bucket.count)),
+)
+const trendStartLabel = computed(() => analyticsTrendBuckets.value[0]?.start ?? '')
+const trendEndLabel = computed(
+  () => analyticsTrendBuckets.value[analyticsTrendBuckets.value.length - 1]?.end ?? '',
+)
+
 function formatDuration(value: number): string {
   return value >= 60 * 60 * 1000
     ? `${(value / (60 * 60 * 1000)).toFixed(1)}h`
@@ -237,21 +267,23 @@ function searchPortal(): void {
           </div>
         </div>
         <div class="portal__analytics-chart-label">{{ t('portal.trendTitle') }}</div>
-        <div v-if="analyticsTrend.length" class="portal__analytics-bars">
-          <div v-for="point in analyticsTrend" :key="point.date" class="portal__analytics-bar">
+        <div v-if="analyticsTrendBuckets.length" class="portal__analytics-bars">
+          <div
+            v-for="(bucket, index) in analyticsTrendBuckets"
+            :key="index"
+            class="portal__analytics-bar"
+          >
             <span
               :style="{
-                height: `${Math.min(100, Math.max(18, (point.count / Math.max(1, Math.max(...analyticsTrend.map((item) => item.count)))) * 100))}%`,
+                height: `${Math.min(100, Math.max(18, (bucket.count / trendMax) * 100))}%`,
               }"
             />
-            <small
-              v-if="
-                point === analyticsTrend[0] || point === analyticsTrend[analyticsTrend.length - 1]
-              "
-            >
-              {{ point.date }}
-            </small>
           </div>
+        </div>
+        <!-- 参考 7:2：日期只在柱形区首末各一个，左端贴齐图表左缘、右端贴齐右缘 -->
+        <div v-if="analyticsTrendBuckets.length" class="portal__analytics-dates">
+          <small>{{ trendStartLabel }}</small>
+          <small>{{ trendEndLabel }}</small>
         </div>
       </section>
       <section class="portal__section portal__focus-section">
@@ -541,45 +573,55 @@ function searchPortal(): void {
 }
 .portal__analytics-chart-label {
   position: absolute;
-  top: 160px;
+  top: 164px;
   left: 21px;
-  color: var(--sw-text-secondary);
-  font-size: 12px;
+  /* 参考 7:2：图表标题为 14px 深色正文（非 12px 浅灰副注） */
+  color: #172033;
+  font-size: 14px;
+  line-height: 22px;
 }
 .portal__analytics-bars {
   position: absolute;
-  right: 40px;
-  bottom: 40px;
+  top: 203px;
+  right: 19px;
   left: 21px;
   display: flex;
   align-items: flex-end;
-  gap: 28px;
-  height: 215px;
-  padding: 8px 4px 0;
+  gap: 16px;
+  height: 170px;
   border-bottom: 1px solid var(--sw-border-light);
 }
 .portal__analytics-bar {
   display: flex;
   flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
+  align-items: flex-end;
   height: 100%;
-  gap: 4px;
 }
 .portal__analytics-bar span {
   display: block;
-  width: min(34px, 100%);
+  width: 100%;
   min-height: 18px;
   border-radius: 5px 5px 0 0;
-  background: var(--el-color-primary-light-8);
+  background: #eff6ff;
 }
 .portal__analytics-bar:last-child span {
-  background: var(--sw-color-primary);
+  background: var(--el-color-primary);
 }
-.portal__analytics-bar small {
+/* 参考 7:2 趋势日期行：首末标签，12px，与图表同宽 */
+.portal__analytics-dates {
+  position: absolute;
+  top: 389px;
+  right: 19px;
+  left: 21px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 20px;
+}
+.portal__analytics-dates small {
   color: var(--sw-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 20px;
   white-space: nowrap;
 }
 .portal-focus {
@@ -633,6 +675,13 @@ function searchPortal(): void {
   font-size: 12px;
 }
 .portal-focus__view {
+  /* 参考 7:2：「查看」是 64×32 幽灵按钮（文字居中，右缘 x≈1824），不是贴右缘的裸文本 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 32px;
+  margin-right: 55px;
   color: var(--sw-color-primary);
   font-size: 14px;
   white-space: nowrap;

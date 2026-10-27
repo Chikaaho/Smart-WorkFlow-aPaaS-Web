@@ -2699,7 +2699,7 @@ export default {
     categoryName: '分类',
     instanceCount: '实例数',
     updatedBy: '更新人',
-    updatedByTime: '更新人/时间',
+    updatedByTime: '更新人 / 时间',
     processDefCapabilityNote:
       '流程节点能力：审批 / 会签 / 条件分支 / 并行 / 通知 / IoT 指令 / Agent 调用',
     selectForm: '选择表单',
@@ -3232,7 +3232,7 @@ export default {
     noActivity: '暂无动态',
     efficiencyTitle: '流程效能',
     avgDuration: '平均处理时长',
-    completionRate: '完成率',
+    completionRate: '按时完成率',
     hoursUnit: '小时',
     statCompleted: '已完成',
     avgWait: '平均等待',

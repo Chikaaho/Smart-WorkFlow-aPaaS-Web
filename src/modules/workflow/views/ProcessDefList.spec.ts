@@ -168,7 +168,7 @@ describe('ProcessDefList.vue', () => {
       cols.find((col) => col.attributes('data-label') === label) ?? null
 
     expect(labelOf('状态')?.attributes('data-align')).toBe('center')
-    expect(labelOf('更新人/时间')).not.toBeNull()
+    expect(labelOf('更新人 / 时间')).not.toBeNull()
     expect(labelOf('更新人')).toBeNull()
     expect(labelOf('更新时间')).toBeNull()
     expect(labelOf('操作')?.attributes('data-width')).toBe('170')

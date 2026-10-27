@@ -11,6 +11,7 @@ import { useNodeTitle } from '../menu-title'
 // 0.2.0 多级侧栏节点（direction-sidebar-navigation-020）：
 // 叶子=页面入口；目录=可展开子树（展开态切换子树、收起态交给浮层）。
 // 图标 18px 固定 24px 槽、与名称间距 10px、每层缩进 20px、行高 40px。
+// 选中/非选中行共用同一左对齐线（图标槽 x24、名称 x58）；选中行经 12px 内缩 + 12px 内距落在同一线。
 const props = defineProps<{
   node: MenuNode
   depth: number
@@ -101,7 +102,7 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
         'is-open': expanded,
         'is-ancestor': containsActive && !isActive,
       }"
-      :style="{ paddingLeft: 13 + depth * 20 + 'px' }"
+      :style="{ '--sb-depth': depth }"
       :aria-expanded="expanded"
       @click="onRowClick"
       @keydown="onKeydown"
@@ -122,7 +123,7 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
       type="button"
       class="sb-node__row sb-node__row--leaf"
       :class="{ 'is-active': isActive }"
-      :style="{ paddingLeft: 13 + depth * 20 + 'px' }"
+      :style="{ '--sb-depth': depth }"
       :aria-current="isActive ? 'page' : undefined"
       @click="onRowClick"
       @keydown="onKeydown"
@@ -161,6 +162,7 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
   height: 40px;
   margin-bottom: 4px;
   padding-right: 12px;
+  padding-left: calc(24px + var(--sb-depth, 0) * 20px);
   border: 0;
   background: transparent;
   color: var(--sw-nav-text-secondary, #c9d1e8);
@@ -180,6 +182,7 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
   box-sizing: border-box;
   width: calc(100% - 24px);
   margin: 0 12px 4px;
+  padding-left: calc(12px + var(--sb-depth, 0) * 20px);
   border-radius: 8px;
   background: var(--sw-color-primary);
   color: #ffffff;
@@ -187,13 +190,13 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
 }
 .sb-node__row--dir {
   font-weight: 500;
-  color: var(--sw-nav-text, #e8ecf6);
+  color: var(--sw-nav-text-secondary, #c9d1e8);
 }
 .sb-node__row--dir.is-ancestor:not(.is-open) {
   color: var(--sw-brand-color, #2563eb);
 }
 .sb-node__row--dir.is-open {
-  color: var(--sw-nav-text, #e8ecf6);
+  color: var(--sw-nav-text-secondary, #c9d1e8);
 }
 .sb-node__slot {
   position: relative;

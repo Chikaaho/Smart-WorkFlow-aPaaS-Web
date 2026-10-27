@@ -328,7 +328,7 @@ onMounted(loadList)
         >{{ t('workflow.authorizeRulesEntry') }}</el-button
       >
       <el-button class="defs-filter__reset" @click="resetFilters"> 重置 </el-button>
-      <el-button type="primary" class="defs-filter__query">查询</el-button>
+      <el-button class="defs-filter__query" @click="loadList">查询</el-button>
       <el-button type="primary" class="defs-filter__create" @click="createDialogVisible = true">
         {{ t('workflow.createProcessDefAction') }}
       </el-button>
@@ -348,18 +348,13 @@ onMounted(loadList)
           <el-table-column
             prop="name"
             :label="t('common.processName')"
-            min-width="366"
+            width="362"
             class-name="defs-table__col-name"
           />
           <el-table-column :label="t('workflow.categoryName')" width="234">
             <template #default="{ row }">{{ statusRow(row).categoryName || '—' }}</template>
           </el-table-column>
-          <el-table-column
-            prop="defVersion"
-            :label="t('common.version')"
-            width="132"
-            align="center"
-          >
+          <el-table-column prop="defVersion" :label="t('common.version')" width="132">
             <template #default="{ row }">
               <span class="defs-table__version"
                 >v{{ statusRow(row).versionLabel || statusRow(row).defVersion }}</span
@@ -379,11 +374,11 @@ onMounted(loadList)
               <span class="defs-table__code">{{ statusRow(row).processKey || '—' }}</span>
             </template>
           </el-table-column>
-          <el-table-column :label="t('workflow.instanceCount')" width="84" align="center">
+          <el-table-column :label="t('workflow.instanceCount')" width="83">
             <template #default="{ row }">{{ statusRow(row).instanceCount ?? '—' }}</template>
           </el-table-column>
-          <!-- 设计节点 6:2：更新人与时间为单列「更新人/时间」 -->
-          <el-table-column :label="t('workflow.updatedByTime')" width="366">
+          <!-- 设计节点 6:2：更新人与时间为单列「更新人 / 时间」 -->
+          <el-table-column :label="t('workflow.updatedByTime')" width="371">
             <template #default="{ row }">
               {{ statusRow(row).updatedBy || '—' }} · {{ formatDefTime(row.updateTime) }}
             </template>
@@ -391,10 +386,13 @@ onMounted(loadList)
           <ListActionsColumn :actions="rowActions" :width="170" />
         </el-table>
         <div class="p53-admin-defs__table-footer">
+          <!-- 6:2 分页器与 4:2 同一设计形态：文字「上一页/下一页」+ 页码 + 页大小 + 跳页 -->
           <ListPagination
             :total="total"
             :page-num="pageNum"
             :page-size="pageSize"
+            layout="prev, pager, next, sizes, jumper"
+            appearance="design"
             total-text
             align="space-between"
             :inset="false"
@@ -543,15 +541,16 @@ onMounted(loadList)
 }
 .defs-filter__label {
   flex: none;
-  width: 48px;
-  margin-right: 13px;
-  font-size: 12px;
-  color: #5c6370;
+  width: 56px;
+  /* 参考 6:2 ListFilterItem：标签 56×22 #303A55，与控件间距 8 */
+  margin-right: 8px;
+  font-size: 14px;
+  color: #303a55;
 }
 .defs-filter__label--inline {
-  width: 24px;
-  margin-left: 13px;
-  margin-right: 7px;
+  width: 28px;
+  margin-left: 8px;
+  margin-right: 8px;
 }
 .defs-filter__keyword {
   width: 296px;
@@ -568,7 +567,9 @@ onMounted(loadList)
 .defs-filter__status :deep(.el-select__wrapper) {
   padding-left: 11px;
 }
-.defs-filter__category :deep(.el-select__placeholder) {
+.defs-filter__category :deep(.el-select__placeholder),
+.defs-filter__status :deep(.el-select__placeholder) {
+  /* 参考 6:2：「全部」等已选/占位值均为深色正文，不是浅灰提示态 */
   color: #172033 !important;
 }
 .defs-filter__spacer {
@@ -582,7 +583,9 @@ onMounted(loadList)
   width: 72px;
   height: 32px;
   margin: 0 0 0 8px;
+  border-color: #dde3ef;
   border-radius: 4px;
+  color: #303a55;
 }
 .defs-filter__reset {
   width: 72px;
@@ -590,7 +593,7 @@ onMounted(loadList)
   margin: 0;
   border-color: #dde3ef;
   border-radius: 4px;
-  color: #17213a;
+  color: #303a55;
 }
 .defs-filter__create {
   width: 80px;
@@ -612,7 +615,8 @@ onMounted(loadList)
   overflow: hidden;
 }
 .p53-admin-defs__table-footer {
-  padding: 0 19px;
+  /* 参考 6:2 分页区：卡片内左右留白 16，总条数起点与分页器右缘同轴 */
+  padding: 0 16px;
   border-top: 1px solid #e9edf5;
 }
 .p53-admin-defs__table-footer :deep(.list-pagination) {
@@ -635,24 +639,20 @@ onMounted(loadList)
 }
 .defs-table :deep(th.el-table__cell .cell),
 .defs-table :deep(.el-table__row td.el-table__cell .cell) {
-  padding: 0 12px;
+  /* 参考 6:2 各列文本起点 = 列起点 + 16；正文右侧留 12 */
+  padding: 0 12px 0 16px;
   text-align: left;
-}
-.defs-table :deep(th.defs-table__col-name .cell),
-.defs-table :deep(.el-table__body tr td:first-child .cell) {
-  padding-left: 16px;
 }
 .defs-table :deep(.el-table__row td.el-table__cell) {
   height: 45px;
   font-size: 12px;
   color: #303a55;
 }
+/* 状态列整列居中（参考胶囊 54×24 居中于 78 宽列） */
 .defs-table :deep(.el-table__body tr td:nth-child(4) .cell) {
-  padding-left: 0;
+  padding: 0;
   overflow: visible;
-}
-.defs-table :deep(.el-table__body tr td:nth-child(4) .status) {
-  margin-left: -5px;
+  text-align: center;
 }
 .defs-table :deep(td.defs-table__col-name .cell) {
   font-size: 14px;

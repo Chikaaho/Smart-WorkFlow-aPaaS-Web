@@ -35,7 +35,7 @@
   --sw-border-lighter: #e9edf5;
   --sw-fill-base: #f4f6fb;
 
-  /* ── 深色导航阶（侧栏/管理端顶栏；#7E89A1 on #17213A 对比度 4.55:1 ≥ AA 4.5:1） ── */
+  /* ── 深色导航阶（侧栏/管理端顶栏；0.2.0 参考非选中导航文字 #E2E8F0，on #17213A 对比度远超 AA 4.5:1） ── */
   --sw-nav-sidebar-bg: #111b3b;
   --sw-nav-item-active-bg: var(--sw-color-primary);
   --sw-nav-subitem-active-bg: color-mix(in srgb, var(--sw-color-primary) 20%, #111b3b);
@@ -48,7 +48,7 @@
   --sw-nav-topbar-active-indicator: color-mix(in srgb, var(--sw-color-primary) 30%, white);
   --sw-nav-bg-raised: #19233b;
   --sw-nav-text: #ffffff;
-  --sw-nav-text-secondary: #7e89a1;
+  --sw-nav-text-secondary: #e2e8f0;
   --sw-nav-border: rgba(201, 209, 232, 0.16);
   --sw-nav-hover-bg: color-mix(in srgb, var(--sw-color-primary) 28%, transparent);
   /* P53 设计（节点15-18）：弹窗蒙层为轻压暗（非 EP 默认 50% 黑） */

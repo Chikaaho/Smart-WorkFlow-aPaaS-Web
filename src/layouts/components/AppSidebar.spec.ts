@@ -129,10 +129,10 @@ describe('layouts/AppSidebar 多级侧栏', () => {
     expect(active!.attributes('aria-current')).toBe('page')
     const dir = wrapper.findAll('.sb-node__row--dir').find((d) => d.text().includes('字典管理'))
     await dir!.trigger('click')
-    // 深一层缩进 = 13 + 20（行内首字槽 + 名称，文本含首字前缀，按缩进样式定位）
+    // 层级缩进改为 CSS 变量（行内只声明 --sb-depth；基础槽 24 + 每层 20 由样式计算）
     const child = wrapper
       .findAll('.sb-node__row--leaf')
-      .find((l) => (l.attributes('style') ?? '').includes('padding-left: 33px'))
+      .find((l) => (l.attributes('style') ?? '').includes('--sb-depth: 1'))
     expect(child).toBeTruthy()
     expect(child!.text()).toContain('字典类型')
   })

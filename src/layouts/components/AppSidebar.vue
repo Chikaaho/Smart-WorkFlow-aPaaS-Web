@@ -287,7 +287,7 @@ const inboxTabs = computed(() => [
         v-for="tabItem in inboxTabs"
         :key="tabItem.path"
         type="button"
-        class="sb-row sb-row--leaf"
+        class="sb-row sb-row--leaf sb-row--plain"
         :class="{ 'is-active': activePath === tabItem.path }"
         :aria-current="activePath === tabItem.path ? 'page' : undefined"
         @click="navigate(tabItem.path)"
@@ -351,7 +351,6 @@ const inboxTabs = computed(() => [
   padding: 17px 13px 10px;
   font-size: 12px;
   color: var(--sw-nav-text-secondary, #c9d1e8);
-  opacity: 0.72;
   user-select: none;
 }
 .app-sidebar--admin .app-sidebar-tree__group-title,
@@ -364,7 +363,7 @@ const inboxTabs = computed(() => [
   background: currentColor;
   opacity: 0.12;
 }
-/* 工作台/收件箱固定行（与树行同几何） */
+/* 工作台/收件箱固定行（与树行同几何；图标行与树同一左对齐线 x24→名称 x58） */
 .sb-row {
   display: flex;
   align-items: center;
@@ -373,13 +372,17 @@ const inboxTabs = computed(() => [
   width: 100%;
   height: 40px;
   margin-bottom: 4px;
-  padding: 0 13px;
+  padding: 0 24px;
   border: 0;
   background: transparent;
   color: inherit;
   font-size: 14px;
   text-align: left;
   cursor: pointer;
+}
+/* 纯文字直达行（收件箱分类）无图标槽，保持原文字起点，不并入图标对齐线 */
+.sb-row--plain {
+  padding: 0 13px;
 }
 .sb-row:hover {
   background: var(--sw-nav-hover-bg, rgba(255, 255, 255, 0.08));
@@ -393,6 +396,7 @@ const inboxTabs = computed(() => [
   box-sizing: border-box;
   width: calc(100% - 24px);
   margin: 0 12px 4px;
+  padding-left: 12px;
   border-radius: 8px;
   background: var(--sw-color-primary);
   color: #ffffff;
