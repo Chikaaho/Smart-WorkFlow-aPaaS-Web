@@ -16,7 +16,7 @@ const { t } = useI18n()
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Clock, Promotion, CircleCheck, EditPen, Document } from '@element-plus/icons-vue'
+import { Document } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import {
   getWorkspaceLayout,
@@ -119,10 +119,11 @@ const greeting = computed(() => {
 
 /** 统计卡图标（设计01：右上简洁小图标，无彩色底块；数值仍全部为真实 total） */
 const STAT_ICONS: Record<string, { icon: unknown; bg: string; color: string }> = {
-  todo: { icon: Clock, bg: 'transparent', color: 'var(--sw-color-primary)' },
-  initiated: { icon: Promotion, bg: 'transparent', color: 'var(--sw-color-primary)' },
-  processed: { icon: CircleCheck, bg: 'transparent', color: 'var(--sw-color-primary)' },
-  drafts: { icon: EditPen, bg: 'transparent', color: 'var(--sw-color-primary)' },
+  // 0.2.0 参考 3:2：四张统计卡右上角为同一文档图标
+  todo: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
+  initiated: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
+  processed: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
+  drafts: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
 }
 
 const stats = computed(() => [
@@ -532,14 +533,14 @@ const DEFAULT_CARD_HEIGHTS: Record<string, number> = {
 }
 /**
  * 默认画布按设计稿 3:2 分层（内容宽 1656 @1920）：
- * 统计卡 96、主区 112—598（左 1047 / 右 589）、动态通栏 618—878。
+ * 统计卡 96、主区 112—598（左 1047 / 右 589）、动态通栏 614—874。
  */
 const DEFAULT_CARD_GEOMETRY: Record<string, { x: number; y: number; w: number; h: number }> = {
   stats: { x: 0, y: 0, w: 1, h: 96 },
-  todo: { x: 0, y: 120, w: 0.632, h: 486 },
-  favorites: { x: 0.644, y: 120, w: 0.356, h: 208 },
-  efficiency: { x: 0.644, y: 344, w: 0.356, h: 262 },
-  activity: { x: 0, y: 621, w: 1, h: 260 },
+  todo: { x: 0, y: 112, w: 0.632, h: 486 },
+  favorites: { x: 0.644, y: 112, w: 0.356, h: 208 },
+  efficiency: { x: 0.644, y: 336, w: 0.356, h: 262 },
+  activity: { x: 0, y: 614, w: 1, h: 260 },
   drafts: { x: 0, y: 901, w: 0.48, h: 220 },
   messages: { x: 0.52, y: 901, w: 0.48, h: 220 },
 }
@@ -1394,11 +1395,11 @@ onBeforeUnmount(() => {
 }
 .wsd-hero {
   position: relative;
-  height: 60px;
+  height: 64px;
 }
 .wsd-hero__greeting {
   margin: 0;
-  font-size: 26px;
+  font-size: 24px;
   line-height: 28px;
   font-weight: 600;
   color: var(--sw-text-primary);
@@ -1808,7 +1809,7 @@ onBeforeUnmount(() => {
 }
 .wsd-panel {
   box-sizing: border-box;
-  padding: 20px 24px;
+  padding: 16px 20px 20px;
   background: #ffffff;
   border: 1px solid var(--sw-border);
   border-radius: 10px;
@@ -1838,8 +1839,8 @@ onBeforeUnmount(() => {
 }
 .wsd-panel__title {
   margin: 0;
-  font-size: 20px;
-  line-height: 28px;
+  font-size: 16px;
+  line-height: 24px;
   font-weight: 600;
   color: var(--sw-text-primary);
 }
@@ -1908,21 +1909,23 @@ onBeforeUnmount(() => {
 }
 .wsd-tabrow {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 16px;
+  margin-top: 16px;
 }
 .wsd-tab {
   display: inline-flex;
+  flex: 0 0 100px;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   position: relative;
   height: 32px;
-  padding: 0 14px;
+  padding: 0;
   border: none;
   border-radius: 6px;
   background: none;
   font-size: 14px;
-  color: var(--sw-text-secondary);
+  color: var(--sw-color-primary);
   cursor: pointer;
 }
 .wsd-tab.is-active {
@@ -2079,7 +2082,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
-  margin-top: 12px;
+  margin-top: 22px;
 }
 .wsd-eff-metric {
   display: flex;
@@ -2100,7 +2103,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 18px;
+  margin-top: 23px;
   padding-top: 16px;
   border-top: 1px solid var(--sw-border-light);
 }

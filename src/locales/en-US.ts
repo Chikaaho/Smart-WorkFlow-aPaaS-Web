@@ -3329,7 +3329,7 @@ export default {
     noActivity: 'No recent activity',
     efficiencyTitle: 'Process efficiency',
     avgDuration: 'Avg. handling time',
-    completionRate: 'Completion rate',
+    completionRate: 'On-time completion',
     hoursUnit: 'h',
     statCompleted: 'Completed',
     avgWait: 'Avg. wait',
