@@ -346,7 +346,7 @@ const inboxTabs = computed(() => [
 }
 .app-sidebar-tree__group-title {
   box-sizing: border-box;
-  padding: 14px 13px 6px;
+  padding: 17px 13px 10px;
   font-size: 12px;
   color: var(--sw-nav-text-secondary, #c9d1e8);
   opacity: 0.72;
@@ -370,6 +370,7 @@ const inboxTabs = computed(() => [
   box-sizing: border-box;
   width: 100%;
   height: 40px;
+  margin-bottom: 4px;
   padding: 0 13px;
   border: 0;
   background: transparent;
@@ -387,9 +388,13 @@ const inboxTabs = computed(() => [
   color: var(--sw-text-primary, #303133);
 }
 .sb-row--leaf.is-active {
-  background: var(--sw-nav-sidebar-active-bg);
-  color: var(--sw-nav-text, #e8ecf6);
-  box-shadow: inset 3px 0 0 var(--sw-brand-color, #2563eb);
+  box-sizing: border-box;
+  width: calc(100% - 16px);
+  margin: 0 8px 4px;
+  border-radius: 8px;
+  background: var(--sw-color-primary);
+  color: #ffffff;
+  box-shadow: none;
 }
 .app-sidebar-tree--admin .sb-row--leaf.is-active {
   color: var(--sw-text-primary, #303133);

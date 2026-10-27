@@ -159,6 +159,7 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
   box-sizing: border-box;
   width: 100%;
   height: 40px;
+  margin-bottom: 4px;
   padding-right: 12px;
   border: 0;
   background: transparent;
@@ -176,9 +177,13 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
   color: var(--sw-text-primary, #303133);
 }
 .sb-node__row--leaf.is-active {
-  background: var(--sw-nav-sidebar-active-bg);
-  color: var(--sw-nav-text, #e8ecf6);
-  box-shadow: inset 3px 0 0 var(--sw-brand-color, #2563eb);
+  box-sizing: border-box;
+  width: calc(100% - 16px);
+  margin: 0 8px 4px;
+  border-radius: 8px;
+  background: var(--sw-color-primary);
+  color: #ffffff;
+  box-shadow: none;
 }
 .sb-node__row--dir {
   font-weight: 500;

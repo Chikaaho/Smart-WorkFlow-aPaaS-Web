@@ -131,8 +131,8 @@
   --sw-card-padding: 12px 16px;
   --sw-section-gap: 10px;
 
-  /* ── 布局（P53 设计：顶栏 64px 主导航 + 深色侧栏 220px） ── */
-  --sw-layout-aside-width: 224px;
+  /* ── 布局（P53 设计：顶栏 64px；0.2.0 参考 3:2/4:2 用户端深色侧栏 236px） ── */
+  --sw-layout-aside-width: 236px;
   --sw-layout-aside-width-collapsed: 64px;
   --sw-layout-header-height: 64px;
   --sw-layout-header-padding-x: 16px;
