@@ -301,12 +301,20 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/*
+ * 数值对齐 Figma「01 工作台 · 页面主体」(265:230)：
+ * 字号 14/12、行高 62、按钮 32px、圆角取 --sw-radius-base；颜色与分隔线只引用 --sw-* 全局 token。
+ */
 .wsys {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  gap: 8px;
+  gap: var(--sw-space-8);
+}
+
+.wsys--efficiency {
+  gap: var(--sw-space-16);
 }
 
 .wsys__empty {
@@ -314,47 +322,61 @@ onMounted(async () => {
   place-items: center;
   flex: 1;
   min-height: 80px;
-  color: var(--sw-text-tertiary, #98a2b3);
+  color: var(--sw-text-secondary);
   font-size: 12px;
 }
 
 .wsys__tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sw-space-16);
 }
 
 .wsys__tab {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
+  justify-content: center;
+  gap: var(--sw-space-4);
+  height: 32px;
+  padding: 0 var(--sw-space-16);
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--sw-radius-base);
   background: transparent;
-  color: var(--sw-text-secondary);
-  font-size: 12px;
+  color: var(--sw-color-primary);
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
 }
 
+.wsys__tab:hover:not(.is-active) {
+  background: var(--sw-color-primary-soft);
+}
+
 .wsys__tab.is-active {
-  color: var(--sw-color-primary, #2563eb);
-  background: color-mix(in srgb, var(--sw-color-primary, #2563eb) 10%, transparent);
-  font-weight: 600;
+  background: var(--sw-color-primary);
+  color: var(--sw-surface-card);
 }
 
 .wsys__tab span {
   color: inherit;
-  font-size: 11px;
+  font-size: inherit;
 }
 
 .wsys__more {
+  height: 32px;
   margin-left: auto;
+  padding: 0 var(--sw-space-12);
   border: 0;
+  border-radius: var(--sw-radius-base);
   background: transparent;
-  color: var(--sw-text-tertiary);
-  font-size: 11px;
+  color: var(--sw-color-primary);
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+}
+
+.wsys__more:hover {
+  background: var(--sw-color-primary-soft);
 }
 
 .wsys__rows {
@@ -369,14 +391,10 @@ onMounted(async () => {
 .wsys__row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 2px;
-  border-bottom: 1px solid var(--sw-border-light, #f1f3f7);
-  font-size: 12px;
-}
-
-.wsys__row:last-child {
-  border-bottom: 0;
+  gap: var(--sw-space-12);
+  min-height: 62px;
+  padding: var(--sw-space-8) 0;
+  border-bottom: 1px solid var(--sw-border-lighter);
 }
 
 .wsys__row-main {
@@ -395,8 +413,9 @@ onMounted(async () => {
 .wsys__act strong {
   overflow: hidden;
   color: var(--sw-text-primary);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
+  line-height: 22px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -404,70 +423,95 @@ onMounted(async () => {
 .wsys__row-main span,
 .wsys__act span {
   overflow: hidden;
-  color: var(--sw-text-tertiary);
-  font-size: 11px;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .wsys__row-action {
+  height: 32px;
   margin-left: auto;
-  padding: 2px 8px;
+  padding: 0 var(--sw-space-12);
   border: 0;
+  border-radius: var(--sw-radius-base);
   background: transparent;
-  color: var(--sw-color-primary, #2563eb);
-  font-size: 11px;
+  color: var(--sw-color-primary);
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+}
+
+.wsys__row-action:hover {
+  background: var(--sw-color-primary-soft);
+}
+
+/* 业务动态：标题在左、来源与时间在右，单行 42px */
+.wsys--activity .wsys__row {
+  min-height: 42px;
+  padding: 0;
 }
 
 .wsys__act {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sw-space-16);
   min-width: 0;
+}
+
+.wsys--activity .wsys__act strong {
+  font-weight: 400;
 }
 
 .wsys__badge {
   margin-left: auto;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--sw-bg-muted, #f3f4f6);
+  padding: 0 var(--sw-space-8);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-surface-page);
   color: var(--sw-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 24px;
 }
 
+/* 快捷发起：Secondary 32px 按钮，三列；设计稿行距 32px */
 .wsys__quick {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--sw-space-32) 10px;
 }
 
 .wsys__quick-item {
-  padding: 9px 10px;
-  border: 1px solid var(--sw-border-light, #eef0f4);
-  border-radius: 6px;
-  background: var(--sw-bg-surface, #fff);
-  color: var(--sw-text-primary);
-  font-size: 12px;
+  height: 32px;
+  padding: 0 var(--sw-space-12);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-surface-card);
+  color: var(--sw-text-regular);
+  font-size: 14px;
+  font-weight: 500;
   text-align: center;
   cursor: pointer;
 }
 
 .wsys__quick-item:hover {
-  border-color: var(--sw-color-primary, #2563eb);
-  color: var(--sw-color-primary, #2563eb);
+  border-color: var(--sw-color-primary);
+  color: var(--sw-color-primary);
 }
 
 .wsys__hint {
   margin: 0;
-  color: var(--sw-text-tertiary);
-  font-size: 11px;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
 }
 
 .wsys__stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: var(--sw-space-16);
   align-content: center;
   height: 100%;
 }
@@ -479,50 +523,58 @@ onMounted(async () => {
 }
 
 .wsys__stat span {
-  color: var(--sw-text-tertiary);
-  font-size: 12px;
+  color: var(--sw-text-secondary);
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .wsys__stat strong {
-  color: var(--sw-color-primary, #2563eb);
+  color: var(--sw-text-primary);
   font-size: 28px;
   font-weight: 700;
+  line-height: 36px;
 }
 
 .wsys__metrics {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: var(--sw-space-20);
 }
 
 .wsys__metrics div,
 .wsys__boxes div {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sw-space-4);
 }
 
 .wsys__metrics span,
 .wsys__boxes span {
-  color: var(--sw-text-tertiary);
-  font-size: 11px;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .wsys__metrics strong {
-  color: var(--sw-color-primary, #2563eb);
-  font-size: 22px;
+  color: var(--sw-text-primary);
+  font-size: 28px;
   font-weight: 700;
+  line-height: 36px;
 }
 
 .wsys__boxes {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: var(--sw-space-20);
   margin-top: auto;
+  padding-top: var(--sw-space-16);
+  border-top: 1px solid var(--sw-border-lighter);
 }
 
 .wsys__boxes strong {
   color: var(--sw-text-primary);
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
 }
 </style>
