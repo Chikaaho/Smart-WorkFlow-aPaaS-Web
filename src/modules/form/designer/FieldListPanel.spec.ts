@@ -119,6 +119,36 @@ describe('FieldListPanel（#38/#39 字段清单）', () => {
     ])
   })
 
+  it('控件类型反映输入方式：多行文本/单行文本/富文本分别准确，存储列不变', async () => {
+    const wrapper = await mountPanel({
+      items: [
+        {
+          id: 'ml_1',
+          field: {
+            name: 'multi',
+            type: 'TEXT',
+            label: '多行说明',
+            multiline: true,
+          } as FormSchemaField,
+        },
+        {
+          id: 'ml_2',
+          field: { name: 'single', type: 'TEXT', label: '单行说明' } as FormSchemaField,
+        },
+        {
+          id: 'ml_3',
+          field: { name: 'rich', type: 'RICH_TEXT', label: '富说明' } as FormSchemaField,
+        },
+      ],
+    })
+    const html = wrapper.find('.el-table').html()
+    expect(html).toContain('多行文本')
+    expect(html).toContain('单行文本')
+    expect(html).toContain('富文本')
+    expect(html).toContain('VARCHAR')
+    expect(html).toContain('存储类型')
+  })
+
   it('只读事实：字段编码/控件类型/数据类型/必填；非字符串族长度显示「—」', async () => {
     const wrapper = await mountPanel()
     const html = wrapper.find('.el-table').html()

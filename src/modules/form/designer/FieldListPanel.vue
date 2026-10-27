@@ -113,9 +113,12 @@ const rows = computed<FieldRow[]>(() => {
   )
 })
 
-/** 控件类型（注册表中文名；未知类型回落字段编码）。 */
-function componentLabel(type: string): string {
-  return getFieldTypeDescriptor(type as FormSchemaField['type'])?.label ?? type
+/** 控件类型（注册表中文名；TEXT 按 multiline 区分单行/多行；未知类型回落字段编码）。 */
+function componentLabel(field: FormSchemaField): string {
+  if (field.type === 'TEXT' && (field as { multiline?: boolean }).multiline === true) {
+    return t('form.paletteMultiline')
+  }
+  return getFieldTypeDescriptor(field.type)?.label ?? field.type
 }
 
 /** 字段类型 → 存储列类型族（展示语义，映射见 field-types 共享表）。 */
@@ -209,7 +212,7 @@ function patchDescription(row: FieldRow, description: string) {
         >
       </el-table-column>
       <el-table-column :label="t('fieldList.colComponent')" width="116">
-        <template #default="{ row }">{{ componentLabel(row.field.type) }}</template>
+        <template #default="{ row }">{{ componentLabel(row.field) }}</template>
       </el-table-column>
       <el-table-column :label="t('fieldList.storageType')" width="110">
         <template #default="{ row }">{{ storageTypeOf(row.field.type) }}</template>
