@@ -2035,7 +2035,7 @@ export default {
     focusNoUnread: '暂无未读',
     focusDeviceCount: '{count} 个设备告警',
     focusNoDevice: '暂无设备告警',
-    searchPlaceholder: '搜索应用、事项、知识或流程',
+    searchPlaceholder: '搜索服务',
     search: '搜索',
     quickServices: '快捷服务',
     svcProcess: '流程中心',

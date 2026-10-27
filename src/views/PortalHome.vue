@@ -215,22 +215,22 @@ function searchPortal(): void {
         </div>
         <div v-if="analytics" class="portal__analytics-summary">
           <div>
-            <strong>{{ analytics.launched }}</strong>
             <span>{{ t('portal.flowInstances') }}</span>
+            <strong>{{ analytics.launched }}</strong>
             <em v-if="analytics.launchTrendPercent != null">
               {{ analytics.launchTrendPercent > 0 ? '+' : '' }}{{ analytics.launchTrendPercent }}%
             </em>
           </div>
           <div>
-            <strong>{{ formatDuration(analytics.avgDurationMs) }}</strong>
             <span>{{ t('portal.avgHandling') }}</span>
+            <strong>{{ formatDuration(analytics.avgDurationMs) }}</strong>
             <em v-if="analytics.durationTrendPercent != null"
               >{{ analytics.durationTrendPercent }}%</em
             >
           </div>
           <div>
-            <strong>{{ analytics.overdue ?? analytics.rejected }}</strong>
             <span>{{ t('portal.overdueTasks') }}</span>
+            <strong>{{ analytics.overdue ?? analytics.rejected }}</strong>
             <em v-if="analytics.overdueTrendPercent != null"
               >{{ analytics.overdueTrendPercent }}%</em
             >
@@ -308,7 +308,7 @@ function searchPortal(): void {
   flex-direction: column;
   gap: 12px;
   flex: 0 1 1034px;
-  width: min(1034px, 56%);
+  width: min(1034px, 58%);
   min-width: 0;
 }
 .portal__hero-text h2 {
@@ -327,14 +327,15 @@ function searchPortal(): void {
 .portal__hero-search-label {
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  padding: 0 8px;
   color: var(--sw-text-secondary);
   font-size: 12px;
   white-space: nowrap;
 }
 .portal__hero-search {
   display: flex;
-  width: min(1034px, 100%);
+  width: 1032px;
+  max-width: 100%;
   height: 36px;
 }
 .portal__hero-search :deep(.el-input) {
@@ -344,12 +345,15 @@ function searchPortal(): void {
   height: 36px;
   padding-left: 9px;
   border-radius: 6px 0 0 6px;
-  box-shadow: none;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px var(--sw-border-light) inset;
 }
 .portal__hero-search :deep(.el-button) {
+  width: 88px;
   height: 36px;
   min-width: 88px;
-  margin-left: 0;
+  margin-left: 15px;
+  padding: 0;
   border-radius: 0 6px 6px 0;
 }
 .portal__hero-stats {
@@ -496,9 +500,10 @@ function searchPortal(): void {
   font-size: 12px;
 }
 .portal__analytics-summary {
-  display: flex;
-  gap: 60px;
-  margin: 12px 0 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 4px 0 0;
 }
 .portal__analytics-summary div {
   display: flex;
@@ -523,10 +528,11 @@ function searchPortal(): void {
 .portal__analytics-summary span {
   color: var(--sw-text-secondary);
   font-size: 12px;
+  line-height: 20px;
 }
 .portal__analytics-chart-label {
   position: absolute;
-  top: 165px;
+  top: 160px;
   left: 21px;
   color: var(--sw-text-secondary);
   font-size: 12px;
@@ -565,6 +571,7 @@ function searchPortal(): void {
 .portal__analytics-bar small {
   color: var(--sw-text-secondary);
   font-size: 11px;
+  white-space: nowrap;
 }
 .portal-focus {
   display: grid;

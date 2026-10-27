@@ -2096,7 +2096,7 @@ export default {
     focusNoUnread: 'No unread messages',
     focusDeviceCount: '{count} device alerts',
     focusNoDevice: 'No device alerts',
-    searchPlaceholder: 'Search apps, tasks, knowledge or flows',
+    searchPlaceholder: 'Search services',
     search: 'Search',
     quickServices: 'Quick services',
     svcProcess: 'Process center',
