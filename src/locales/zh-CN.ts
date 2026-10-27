@@ -413,6 +413,10 @@ export default {
   },
   catalog: {
     launch: '发起流程',
+    launchShort: '发起',
+    processNameLabel: '流程名称',
+    categoryCol: '分类',
+    actionCol: '操作',
     frequentlyStarted: '常用流程',
     recentlyUsed: '最近使用',
     favorite: '收藏',

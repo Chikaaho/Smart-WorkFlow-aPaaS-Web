@@ -104,29 +104,22 @@ const orderedItems = computed(() => {
   return [...pinned, ...rest]
 })
 
-/** V012-BUG-009 列表化：按分类分组（树序在前、未分类殿后），组内保持收藏置顶序。 */
-const groupedItems = computed(() => {
-  const byId = new Map<number | null, CatalogItem[]>()
-  for (const item of orderedItems.value) {
-    const key = item.categoryId
-    if (!byId.has(key)) byId.set(key, [])
-    byId.get(key)!.push(item)
-  }
-  const groups: Array<{ id: number | null; name: string; items: CatalogItem[] }> = []
-  for (const category of categories.value) {
-    const list = byId.get(category.id)
-    if (list) groups.push({ id: category.id, name: category.name, items: list })
-  }
-  const uncategorized = byId.get(null)
-  if (uncategorized)
-    groups.push({ id: null, name: t('workflow.uncategorized'), items: uncategorized })
-  return groups
-})
-
 function itemCountOf(categoryId: number | ''): number {
   if (categoryId === '') return total.value
   const key = String(categoryId)
   return counts.value[key] ?? 0
+}
+
+/** 0.2.0 参考节点 97:2：主列表为单表格，分类列由分类树映射（服务端不下发分类名）。 */
+const categoryNameById = computed(() => {
+  const map = new Map<number | null, string>()
+  for (const category of categories.value) map.set(category.id, category.name)
+  return map
+})
+
+function categoryNameOf(item: CatalogItem): string {
+  if (item.categoryId === null || item.categoryId === undefined) return t('workflow.uncategorized')
+  return categoryNameById.value.get(item.categoryId) ?? t('workflow.uncategorized')
 }
 
 function resetFilter(): void {
@@ -288,6 +281,9 @@ onMounted(() => {
                 glyphOf(row.name)
               }}</span>
               <template v-else>
+                <span class="catalog-tree__glyph catalog-tree__glyph--chip" aria-hidden="true">{{
+                  glyphOf(row.name)
+                }}</span>
                 <span class="catalog-tree__name">{{ row.name }}</span>
                 <span class="catalog-tree__count">{{ row.count }}</span>
               </template>
@@ -308,7 +304,11 @@ onMounted(() => {
       <div class="catalog-main">
         <div class="catalog-page__toolbar">
           <div class="catalog-page__toolbar-row">
+            <label class="catalog-page__label" for="catalog-keyword">{{
+              t('catalog.processNameLabel')
+            }}</label>
             <el-input
+              id="catalog-keyword"
               v-model="keyword"
               class="catalog-page__search"
               :placeholder="t('workflow.searchCatalogPlaceholder')"
@@ -316,6 +316,7 @@ onMounted(() => {
               @keyup.enter="searchCatalog"
               @clear="searchCatalog"
             />
+            <span class="catalog-page__spacer" aria-hidden="true"></span>
             <el-button type="primary" class="catalog-page__query" @click="searchCatalog">{{
               t('common.query')
             }}</el-button>
@@ -335,96 +336,104 @@ onMounted(() => {
         />
 
         <div class="catalog-sections">
-          <!-- 常用流程 Top5（租户内发起总量） -->
+          <!-- 常用流程 Top5（租户内发起总量）；参考 97:2 为竖排灰底行 + 右侧「发起 >」 -->
           <section class="catalog-section">
             <h3 class="catalog-section__title">{{ t('catalog.frequentlyStarted') }}</h3>
-            <div v-if="frequentItems.length" class="catalog-section__chips">
-              <button
-                v-for="(entry, index) in frequentItems"
-                :key="entry.processKey"
-                type="button"
-                class="catalog-mini"
-                @click="openByKey(entry)"
-              >
-                <span class="catalog-mini__rank">{{ index + 1 }}</span>
-                <span class="catalog-mini__icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
-                    <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
-                  </svg>
-                </span>
-                <span class="catalog-mini__name">{{ entry.name }}</span>
-              </button>
-            </div>
+            <ul v-if="frequentItems.length" class="catalog-rows">
+              <li v-for="entry in frequentItems" :key="entry.processKey" class="catalog-rows__item">
+                <button type="button" class="catalog-rows__main" @click="openByKey(entry)">
+                  <span class="catalog-mini__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
+                      <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
+                    </svg>
+                  </span>
+                  <span class="catalog-rows__name">{{ entry.name }}</span>
+                </button>
+                <button type="button" class="catalog-rows__launch" @click="openByKey(entry)">
+                  {{ t('catalog.launchShort') }}
+                  <span aria-hidden="true">›</span>
+                </button>
+              </li>
+            </ul>
             <p v-else class="catalog-section__empty">{{ t('workflow.noCatalogItems') }}</p>
           </section>
 
           <!-- 最近使用 Top5（本人最近发起） -->
           <section class="catalog-section">
             <h3 class="catalog-section__title">{{ t('catalog.recentlyUsed') }}</h3>
-            <div v-if="recentItems.length" class="catalog-section__chips">
-              <button
-                v-for="entry in recentItems"
-                :key="entry.processKey"
-                type="button"
-                class="catalog-mini"
-                @click="openByKey(entry)"
-              >
-                <span class="catalog-mini__icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
-                    <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
-                  </svg>
-                </span>
-                <span class="catalog-mini__name">{{ entry.name }}</span>
-              </button>
-            </div>
+            <ul v-if="recentItems.length" class="catalog-rows">
+              <li v-for="entry in recentItems" :key="entry.processKey" class="catalog-rows__item">
+                <button type="button" class="catalog-rows__main" @click="openByKey(entry)">
+                  <span class="catalog-mini__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
+                      <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
+                    </svg>
+                  </span>
+                  <span class="catalog-rows__name">{{ entry.name }}</span>
+                </button>
+                <button type="button" class="catalog-rows__launch" @click="openByKey(entry)">
+                  {{ t('catalog.launchShort') }}
+                  <span aria-hidden="true">›</span>
+                </button>
+              </li>
+            </ul>
             <p v-else class="catalog-section__empty">{{ t('workflow.noCatalogItems') }}</p>
           </section>
         </div>
 
-        <!-- V012-BUG-009 复开：流程用列表不用卡片——分类分组带 + 多列「图标+名称」条目（参考蓝凌） -->
-        <div v-loading="loading" class="catalog-list">
+        <!-- 0.2.0 参考节点 97:2：主列表单表格（列头 流程名称/分类/操作；行 星标+名称 | 分类 | 发起） -->
+        <div v-loading="loading" class="catalog-tablewrap">
           <el-empty v-if="isEmpty" :description="t('workflow.noCatalogItems')" />
-          <section v-for="group in groupedItems" :key="String(group.id)" class="catalog-group">
-            <div class="catalog-group__head">
-              <span class="catalog-group__name">{{ group.name }}</span>
-              <span class="catalog-group__count">{{ group.items.length }}</span>
-            </div>
-            <div class="catalog-group__grid">
-              <div
-                v-for="item in group.items"
-                :key="item.itemKey"
-                class="catalog-item"
-                :title="item.description ?? ''"
-                @click="openItem(item)"
-              >
-                <span
-                  class="catalog-item__icon"
-                  :class="`catalog-item__icon--tone-${catalogIconTone(item)}`"
-                  aria-hidden="true"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
-                    <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
-                  </svg>
-                </span>
-                <span class="catalog-item__name">{{ item.name }}</span>
-                <button
-                  type="button"
-                  class="catalog-item__star"
-                  :class="{ 'is-active': favoriteKeys.has(item.itemKey) }"
-                  :aria-label="
-                    favoriteKeys.has(item.itemKey) ? t('catalog.unfavorite') : t('catalog.favorite')
-                  "
-                  :disabled="toggling === item.itemKey"
-                  @click.stop="toggleFavorite(item)"
-                >
-                  ★
-                </button>
-              </div>
-            </div>
-          </section>
+          <table v-else class="catalog-table">
+            <thead>
+              <tr>
+                <th class="catalog-table__name">{{ t('catalog.processNameLabel') }}</th>
+                <th class="catalog-table__category">{{ t('catalog.categoryCol') }}</th>
+                <th class="catalog-table__action">{{ t('catalog.actionCol') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in orderedItems" :key="item.itemKey">
+                <td class="catalog-table__name">
+                  <button
+                    type="button"
+                    class="catalog-item__star"
+                    :class="{ 'is-active': favoriteKeys.has(item.itemKey) }"
+                    :aria-label="
+                      favoriteKeys.has(item.itemKey)
+                        ? t('catalog.unfavorite')
+                        : t('catalog.favorite')
+                    "
+                    :disabled="toggling === item.itemKey"
+                    @click="toggleFavorite(item)"
+                  >
+                    ★
+                  </button>
+                  <span
+                    class="catalog-item__icon"
+                    :class="`catalog-item__icon--tone-${catalogIconTone(item)}`"
+                    aria-hidden="true"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <path d="M7 3h8l4 4v14H7z" stroke-linejoin="round" />
+                      <path d="M15 3v4h4M10 12h6M10 16h6" stroke-linecap="round" />
+                    </svg>
+                  </span>
+                  <button type="button" class="catalog-table__link" @click="openItem(item)">
+                    {{ item.name }}
+                  </button>
+                </td>
+                <td class="catalog-table__category">{{ categoryNameOf(item) }}</td>
+                <td class="catalog-table__action">
+                  <button type="button" class="catalog-table__launch" @click="openItem(item)">
+                    {{ t('catalog.launchShort') }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
         <ListPagination
           :total="total"
@@ -547,14 +556,26 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
   width: 36px;
   height: 36px;
   border-radius: var(--sw-radius-base);
   font-size: 13px;
   color: var(--sw-text-regular);
 }
-.catalog-tree__item.is-active .catalog-tree__glyph {
-  color: var(--sw-color-primary);
+/* 0.2.0 参考节点 97:2：展开态分类行带 24px 首字方块（激活主色底/非激活浅灰底）。 */
+.catalog-tree__glyph--chip {
+  width: 24px;
+  height: 24px;
+  margin-right: 10px;
+  border-radius: 6px;
+  background: #eef2f8;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+}
+.catalog-tree__item.is-active .catalog-tree__glyph--chip {
+  background: var(--sw-color-primary);
+  color: #ffffff;
 }
 .catalog-tree__toggle {
   display: flex;
@@ -601,6 +622,15 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
 }
+/* 0.2.0 参考节点 97:2：标签+输入框居左、查询/重置靠右。 */
+.catalog-page__label {
+  flex: none;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+.catalog-page__spacer {
+  flex: 1;
+}
 .catalog-page__search {
   flex: 0 0 420px;
   max-width: 100%;
@@ -612,7 +642,7 @@ onMounted(() => {
   color: #a1aabe;
 }
 .catalog-page__query {
-  margin-left: 120px;
+  margin-left: 0;
   width: 96px;
   height: 34px;
 }
@@ -822,5 +852,118 @@ onMounted(() => {
   margin: 16px 0 0;
   font-size: 12px;
   color: var(--sw-text-secondary);
+}
+
+/* ── 0.2.0 参考节点 97:2：常用/最近竖排灰底行 + 主列表单表格 ── */
+.catalog-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.catalog-rows__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px;
+  background: #f7f9fc;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 8px;
+}
+.catalog-rows__main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: var(--sw-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.catalog-rows__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.catalog-rows__launch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--sw-color-primary);
+  cursor: pointer;
+}
+.catalog-tablewrap {
+  padding: 0 0 8px;
+}
+.catalog-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--sw-surface-card);
+}
+.catalog-table th {
+  padding: 14px 24px;
+  background: #f7f9fc;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sw-text-secondary);
+  text-align: left;
+}
+.catalog-table td {
+  padding: 0 24px;
+  border-top: 1px solid var(--sw-border-light);
+}
+.catalog-table tbody tr {
+  height: 62px;
+}
+.catalog-table tbody tr:hover {
+  background: #fafcff;
+}
+.catalog-table__name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.catalog-table__category {
+  width: 220px;
+  color: var(--sw-text-regular);
+}
+.catalog-table__action {
+  width: 120px;
+  text-align: right;
+}
+.catalog-table__link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: var(--sw-text-primary);
+  cursor: pointer;
+}
+.catalog-table__link:hover {
+  color: var(--sw-color-primary);
+}
+.catalog-table__launch {
+  min-width: 64px;
+  height: 32px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 4px;
+  background: var(--sw-color-primary);
+  font-size: 13px;
+  color: #ffffff;
+  cursor: pointer;
+}
+.catalog-table__launch:hover {
+  background: color-mix(in srgb, var(--sw-color-primary) 88%, black);
 }
 </style>

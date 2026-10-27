@@ -428,6 +428,10 @@ export default {
   },
   catalog: {
     launch: 'Start process',
+    launchShort: 'Start',
+    processNameLabel: 'Process name',
+    categoryCol: 'Category',
+    actionCol: 'Actions',
     frequentlyStarted: 'Frequently started',
     recentlyUsed: 'Recently used',
     favorite: 'Favorite',
