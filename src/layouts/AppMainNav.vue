@@ -288,6 +288,10 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.08);
 }
+/* 参考 97:2：四导航行盒 14px/22px（与设计同源，垂直居中于 64px 顶栏） */
+.app-main-nav__label {
+  line-height: 22px;
+}
 .app-main-nav__item.is-active {
   color: #ffffff;
   font-weight: 600;

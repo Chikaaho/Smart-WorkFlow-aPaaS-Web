@@ -37,7 +37,7 @@ const loading = ref(false)
 const errorMsg = ref('')
 const keyword = ref('')
 const pageNum = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 // '' = 全部；0 = 未分类；其余为分类 id
 const activeCategory = ref<number | ''>('')
 
@@ -507,7 +507,7 @@ onMounted(() => {
               :total="total"
               :page-num="pageNum"
               :page-size="pageSize"
-              :page-sizes="[20, 40, 60, 100]"
+              :page-sizes="[10, 20, 40, 60, 100]"
               appearance="design"
               align="space-between"
               layout="prev, pager, next, sizes, jumper"

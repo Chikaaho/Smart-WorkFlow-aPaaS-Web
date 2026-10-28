@@ -545,31 +545,32 @@ function searchPortal(): void {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0 19px;
-  margin: 4px 0 0;
+  /* 参考 7:2：概览标题底边 469 + 16 = 指标区 485；副注行盒随之落在 547 */
+  margin: 8px 0 0;
 }
 .portal__analytics-summary div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 .portal__analytics-summary strong {
   color: var(--sw-text-primary);
   font-size: 26px;
-  line-height: 32px;
+  line-height: 36px;
   font-weight: 600;
 }
 .portal__analytics-summary em {
-  /* 参考 7:2：三张指标卡副注同为 12px/18px 绿色（#12805C） */
+  /* 参考 7:2：三张指标卡副注同为 12px/18px 绿色（#12805C），行盒 y=547/h=18 */
   color: var(--sw-success-text);
   font-size: 12px;
   line-height: 18px;
   font-style: normal;
-  margin-top: 2px;
+  margin-top: 0;
 }
 .portal__analytics-summary span {
   color: var(--sw-text-secondary);
   font-size: 12px;
-  line-height: 20px;
+  line-height: 18px;
 }
 .portal__analytics-chart-label {
   position: absolute;

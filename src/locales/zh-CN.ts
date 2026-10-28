@@ -557,6 +557,7 @@ export default {
     draftSaved: '草稿已保存',
     saveDraft: '保存草稿',
     saveDraftFailed: '保存草稿失败',
+    submitResultUnknown: '提交结果未知：请稍后在「我的草稿」确认，请勿重复提交',
     publishConfirmTitle: '发布确认',
     processingCheckLater: '处理中，可稍后在结果中查看',
     noAccessToObject: '无权访问该业务对象',
@@ -1797,7 +1798,7 @@ export default {
     lowcode: '表单管理',
     NotifyBatchSend: '批量发送',
     WorkflowDefCreate: '流程创建',
-    WorkflowDesigner: '流程设计器页',
+    WorkflowDesigner: '流程设计器',
     system: '系统管理',
   },
   nav: {
@@ -2105,7 +2106,7 @@ export default {
   },
   system: {
     newDept: '新建部门',
-    newSubDept: '新建',
+    newSubDept: '新建子部门',
     deptName: '部门名称',
     deptCode: '部门编码',
     deptLeader: '部门负责人',

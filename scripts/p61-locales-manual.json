@@ -10,6 +10,9 @@
       "en-US": "English",
       "switch": "切换语言"
     },
+    "form": {
+      "fillSaveTemporary": "暂存"
+    },
     "auth": {
       "signIn": "登录",
       "signingIn": "登录中...",
@@ -292,6 +295,9 @@
       "en-US": "English",
       "switch": "Switch language"
     },
+    "form": {
+      "fillSaveTemporary": "Save draft"
+    },
     "auth": {
       "signIn": "Sign in",
       "signingIn": "Signing in...",
@@ -410,7 +416,7 @@
       "opinionEmpty": "No structured opinion recorded for this entry",
       "formVersionLabel": "Form version",
       "signGroupTitle": "Countersign records",
-      "signParticipants": "participants,",
+      "signParticipants": "participants",
       "signAgreed": "agreed,",
       "signPending": "pending",
       "prevDone": "Completed",

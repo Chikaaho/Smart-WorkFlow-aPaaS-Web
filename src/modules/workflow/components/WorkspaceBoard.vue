@@ -238,6 +238,14 @@ function dueChip(row: Record<string, unknown>): string {
   return `${due.getMonth() + 1}月${due.getDate()}日 ${hhmm}`
 }
 
+/** 已过期仍待办：仅按接口真实 dueAt 判断；文字仍为真实期限，颜色如实标示过期。 */
+function isOverdue(row: Record<string, unknown>): boolean {
+  const raw = row.dueAt
+  if (typeof raw !== 'string' || !raw.trim()) return false
+  const due = new Date(raw)
+  return !Number.isNaN(due.getTime()) && due.getTime() < Date.now()
+}
+
 /** 待办面板深链：已办页签携带 source=processed，详情页按已办只读渲染并回跳（V012-BUG-001）。 */
 function openPanelTask(row: Record<string, unknown>) {
   const taskId = String(row.taskId ?? '')
@@ -1211,9 +1219,11 @@ onBeforeUnmount(() => {
                     </button>
                     <span class="wsd-task__meta">{{ rowMeta(row) }}</span>
                   </span>
-                  <span class="wsd-task__due" :class="{ 'is-empty': !dueChip(row) }">{{
-                    dueChip(row)
-                  }}</span>
+                  <span
+                    class="wsd-task__due"
+                    :class="{ 'is-empty': !dueChip(row), 'is-overdue': isOverdue(row) }"
+                    >{{ dueChip(row) }}</span
+                  >
                   <button class="wsd-task__action" type="button" @click="openPanelTask(row)">
                     {{ t('workspace.handleTask') }}
                   </button>
@@ -2014,6 +2024,11 @@ onBeforeUnmount(() => {
 .wsd-task__due.is-empty {
   padding: 0;
   background: transparent;
+}
+/* 已过期仍待办：文字保持真实期限，仅用语义色如实标示（不伪造期限/文案） */
+.wsd-task__due.is-overdue {
+  background: var(--sw-danger-bg);
+  color: var(--sw-danger);
 }
 .wsd-task__action {
   /* 参考 3:2：「办理」文字右缘 x≈1258（行内容右缘 1266 − 8） */

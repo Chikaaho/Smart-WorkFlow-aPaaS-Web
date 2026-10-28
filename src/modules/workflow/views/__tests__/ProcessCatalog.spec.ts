@@ -118,7 +118,7 @@ describe('ProcessCatalog 前台流程中心（BF20261013-051：分类维护移�
     expect(wrapper.find('.catalog-page__search').exists()).toBe(true)
   })
 
-  it('分页可请求第二页且首次查询使用 20 条分页', async () => {
+  it('分页可请求第二页且首次查询使用 10 条分页', async () => {
     vi.mocked(oa.queryCatalogItems).mockResolvedValue({
       list: [
         {
@@ -133,20 +133,20 @@ describe('ProcessCatalog 前台流程中心（BF20261013-051：分类维护移�
       ],
       total: 21,
       pageNum: 1,
-      pageSize: 20,
+      pageSize: 10,
     })
     const wrapper = mountCatalog()
     await flushPromises()
     expect(vi.mocked(oa.queryCatalogItems).mock.calls.at(-1)?.[0]).toMatchObject({
       pageNum: 1,
-      pageSize: 20,
+      pageSize: 10,
     })
 
     await wrapper.find('.pagination-stub').trigger('click')
     await flushPromises()
     expect(vi.mocked(oa.queryCatalogItems).mock.calls.at(-1)?.[0]).toMatchObject({
       pageNum: 2,
-      pageSize: 20,
+      pageSize: 10,
     })
   })
 

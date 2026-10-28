@@ -571,7 +571,9 @@ function onCommand(command: string): void {
   border-radius: var(--sw-radius-base);
   background: transparent;
   color: rgba(255, 255, 255, 0.92);
+  font-family: var(--sw-font-family);
   font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
   flex-shrink: 0;
   white-space: nowrap;
