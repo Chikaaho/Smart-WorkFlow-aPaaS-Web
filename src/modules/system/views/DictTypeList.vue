@@ -481,7 +481,7 @@ onMounted(loadList)
 .dict-edit {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 29px;
+  gap: 12px 20px;
 }
 .dict-edit .form-field {
   gap: 6px;
@@ -507,6 +507,9 @@ onMounted(loadList)
   padding: 0;
   border: 1px solid var(--sw-border-light);
   border-radius: 8px;
+  /* 本弹窗作用域默认细边框，不覆盖焦点/危险/禁用 */
+  --el-border-color: #dde3ef;
+  --el-input-border-color: #dde3ef;
 }
 .dict-type-dialog--edit .el-dialog__header {
   box-sizing: border-box;
@@ -528,13 +531,13 @@ onMounted(loadList)
 .dict-type-dialog--edit .el-dialog__body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 0 28px;
+  padding: 0 24px;
 }
 .dict-type-dialog--edit .el-dialog__footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 7px;
   margin: 0;
   padding: 18px 25px 26px;
 }

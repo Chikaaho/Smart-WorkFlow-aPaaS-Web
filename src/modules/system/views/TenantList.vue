@@ -679,6 +679,9 @@ onMounted(loadList)
   display: flex;
   height: 282px;
   flex-direction: column;
+  /* 本编辑弹窗作用域默认细边框，不覆盖焦点/危险/禁用 */
+  --el-border-color: #dde3ef;
+  --el-input-border-color: #dde3ef;
 }
 .tenant-edit-dialog .el-dialog__header {
   flex: 0 0 auto;

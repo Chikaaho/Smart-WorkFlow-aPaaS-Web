@@ -322,7 +322,7 @@ function runCommand(command: string): void {
             class="app-topbar__menu-item"
             @click="runCommand('account-bindings')"
           >
-            <el-icon :size="14"><User /></el-icon>
+            <el-icon :size="16"><User /></el-icon>
             <span>{{ t('auth.accountBindings') }}</span>
           </button>
           <button
@@ -332,7 +332,7 @@ function runCommand(command: string): void {
             class="app-topbar__menu-item"
             @click="runCommand('enter-admin')"
           >
-            <el-icon :size="14"><Switch /></el-icon>
+            <el-icon :size="16"><Switch /></el-icon>
             <span>{{ t('auth.enterBackend') }}</span>
           </button>
           <button
@@ -342,7 +342,7 @@ function runCommand(command: string): void {
             class="app-topbar__menu-item"
             @click="runCommand('back-portal')"
           >
-            <el-icon :size="14"><Back /></el-icon>
+            <el-icon :size="16"><Back /></el-icon>
             <span>{{ t('auth.backToPortal') }}</span>
           </button>
           <button
@@ -351,7 +351,7 @@ function runCommand(command: string): void {
             class="app-topbar__menu-item app-topbar__menu-item--danger"
             @click="runCommand('logout')"
           >
-            <el-icon :size="14"><SwitchButton /></el-icon>
+            <el-icon :size="16"><SwitchButton /></el-icon>
             <span>{{ t('auth.signOut') }}</span>
           </button>
           <div class="app-topbar__menu-sep" role="separator"></div>
@@ -361,7 +361,7 @@ function runCommand(command: string): void {
             :aria-expanded="moreOpen ? 'true' : 'false'"
             @click="moreOpen = !moreOpen"
           >
-            <el-icon :size="14"><Setting /></el-icon>
+            <el-icon :size="16"><Setting /></el-icon>
             <span>{{ t('common.settings') }}</span>
             <el-icon class="app-topbar__menu-caret" :class="{ 'is-open': moreOpen }">
               <ArrowRight />
@@ -670,7 +670,7 @@ function runCommand(command: string): void {
 }
 .el-popper:has(.app-topbar__dropdown) {
   position: fixed !important;
-  top: 74px !important;
+  top: 60px !important;
   right: 24px !important;
   left: auto !important;
   transform: none !important;
@@ -680,9 +680,9 @@ function runCommand(command: string): void {
 }
 /* 个人菜单：主层与参考 103:2/103:398 同构三项，操作手册/修改密码收进「设置」次级层。 */
 .app-topbar__dropdown {
-  width: 200px;
+  width: 192px;
   box-sizing: border-box;
-  padding: 8px;
+  padding: 4px;
   border-radius: 10px;
   background: #ffffff;
   border: 1px solid #dfe6f2;
@@ -691,14 +691,14 @@ function runCommand(command: string): void {
 .app-topbar__menu-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
-  height: 32px;
-  padding: 0 10px;
+  height: 36px;
+  padding: 0 12px;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--sw-text-primary, #303133);
   text-align: left;
   cursor: pointer;

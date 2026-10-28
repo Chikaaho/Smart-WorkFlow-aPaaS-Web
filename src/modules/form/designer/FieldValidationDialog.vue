@@ -170,6 +170,9 @@ function confirm() {
   padding: 0;
   border: 1px solid var(--sw-border-light);
   border-radius: 8px;
+  /* 本弹窗作用域默认细边框，不覆盖焦点/危险/禁用 */
+  --el-border-color: #dde3ef;
+  --el-input-border-color: #dde3ef;
 }
 .field-validation-dialog .el-dialog__header {
   box-sizing: border-box;
@@ -183,10 +186,10 @@ function confirm() {
   line-height: 24px;
 }
 .field-validation-dialog .el-dialog__headerbtn {
-  top: 28px;
+  top: 24px;
   right: 24px;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
 }
 .field-validation-dialog .el-dialog__body {
   flex: 1 1 auto;
@@ -197,7 +200,7 @@ function confirm() {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 7px;
   margin: 0;
   padding: 18px 25px 26px;
 }

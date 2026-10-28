@@ -400,7 +400,7 @@ function portPoint(
     if (side === 'top') return { x: node.x, y: node.y - r }
     return { x: node.x, y: node.y + r }
   }
-  if (node.type === 'GATEWAY') {
+  if (node.type === 'GATEWAY' || node.type === 'CONDITION' || node.type === 'PARALLEL_GATEWAY') {
     const r = gatewayRadius
     if (side === 'left') return { x: node.x - r, y: node.y }
     if (side === 'right') return { x: node.x + r, y: node.y }

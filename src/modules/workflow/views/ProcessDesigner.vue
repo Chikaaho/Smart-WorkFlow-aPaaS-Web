@@ -254,7 +254,10 @@ function nodeTypeHint(type: string): string {
     ? t('workflow.nodeTypeGeneric', { name: capability.displayName })
     : t('workflow.nodeTypeUnknown')
 }
-const P53_GATEWAY_RADIUS = 18
+const P53_GATEWAY_RADIUS = 14
+/** 09/42:5 事件节点：128×44 胶囊，图标与标签内联。 */
+const P53_EVENT_WIDTH = 128
+const P53_EVENT_HEIGHT = 44
 
 /**
  * 网关类节点（菱形渲染）：GATEWAY 为既有口径；P63 将 CONDITION 与
@@ -1301,17 +1304,25 @@ function onNodePointerUp(event: PointerEvent, node: PositionedNode) {
   void event
 }
 
+/** 节点四向端口半距：事件胶囊/网关菱形与卡片盒不同。 */
+function nodePortHalf(node: PositionedNode) {
+  if (isEventShape(node.type)) return { w: P53_EVENT_WIDTH / 2, h: P53_EVENT_HEIGHT / 2 }
+  if (isGatewayShape(node.type)) return { w: P53_GATEWAY_RADIUS, h: P53_GATEWAY_RADIUS }
+  return { w: P53_NODE_WIDTH / 2, h: P53_NODE_HEIGHT / 2 }
+}
+
 /** 节点四向锚点坐标（V011-BUG-023）：上下左右缘中点。 */
 function sidePoint(node: PositionedNode, side: 'left' | 'right' | 'top' | 'bottom') {
+  const half = nodePortHalf(node)
   switch (side) {
     case 'left':
-      return { x: node.x - P53_NODE_WIDTH / 2, y: node.y }
+      return { x: node.x - half.w, y: node.y }
     case 'right':
-      return { x: node.x + P53_NODE_WIDTH / 2, y: node.y }
+      return { x: node.x + half.w, y: node.y }
     case 'top':
-      return { x: node.x, y: node.y - P53_NODE_HEIGHT / 2 }
+      return { x: node.x, y: node.y - half.h }
     default:
-      return { x: node.x, y: node.y + P53_NODE_HEIGHT / 2 }
+      return { x: node.x, y: node.y + half.h }
   }
 }
 
@@ -1538,13 +1549,12 @@ function nearestPortSide(
   point: PathPoint,
   node: PositionedNode,
 ): 'left' | 'right' | 'top' | 'bottom' {
-  const halfWidth = P53_NODE_WIDTH / 2
-  const halfHeight = P53_NODE_HEIGHT / 2
+  const half = nodePortHalf(node)
   const distances = {
-    left: Math.abs(point.x - (node.x - halfWidth)),
-    right: Math.abs(point.x - (node.x + halfWidth)),
-    top: Math.abs(point.y - (node.y - halfHeight)),
-    bottom: Math.abs(point.y - (node.y + halfHeight)),
+    left: Math.abs(point.x - (node.x - half.w)),
+    right: Math.abs(point.x - (node.x + half.w)),
+    top: Math.abs(point.y - (node.y - half.h)),
+    bottom: Math.abs(point.y - (node.y + half.h)),
   }
   let best: 'left' | 'right' | 'top' | 'bottom' = 'left'
   for (const side of ['right', 'top', 'bottom'] as const) {
@@ -3454,26 +3464,29 @@ function nodeLabelLines(label: string) {
                 rx="8"
                 class="designer-node-rect"
               />
-              <!-- 0.1.7：开始/结束为小圆形图标节点，名称置于图标下方 -->
-              <circle
+              <!-- 42:5：开始/结束为 128×44 胶囊，图标与标签内联 -->
+              <rect
                 v-else-if="isEventShape(node.type)"
-                :cx="P53_NODE_WIDTH / 2"
-                :cy="P53_NODE_HEIGHT / 2"
-                r="18"
+                :x="(P53_NODE_WIDTH - P53_EVENT_WIDTH) / 2"
+                :y="(P53_NODE_HEIGHT - P53_EVENT_HEIGHT) / 2"
+                :width="P53_EVENT_WIDTH"
+                :height="P53_EVENT_HEIGHT"
+                rx="22"
                 class="designer-node-rect designer-node-event"
               />
-              <!-- 网关为小菱形（+号），名称置于菱形下方 -->
+              <!-- 网关为 28×28 外框内的 26×26 菱形（+号），名称置于菱形下方 -->
               <template v-else>
+                <rect x="0" y="0" width="28" height="28" class="designer-node-gateway-frame" />
                 <polygon
-                  points="18,0 36,18 18,36 0,18"
+                  points="14,1 27,14 14,27 1,14"
                   class="designer-node-rect designer-node-gateway"
                 />
-                <path d="M18 9 V27 M9 18 H27" class="designer-node-gateway-plus" />
+                <path d="M14 7 V21 M7 14 H21" class="designer-node-gateway-plus" />
               </template>
               <!-- V011-BUG-023：四向锚点（上下左右缘中点）均可拖拽/点选拉线（ProcessOn 口径） -->
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
-                :cx="isEventShape(node.type) ? P53_NODE_WIDTH / 2 - 18 : 0"
+                :cx="isEventShape(node.type) ? (P53_NODE_WIDTH - P53_EVENT_WIDTH) / 2 : 0"
                 :cy="P53_NODE_HEIGHT / 2"
                 r="3"
                 class="designer-node-port"
@@ -3481,7 +3494,11 @@ function nodeLabelLines(label: string) {
               />
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
-                :cx="isEventShape(node.type) ? P53_NODE_WIDTH / 2 + 18 : P53_NODE_WIDTH"
+                :cx="
+                  isEventShape(node.type)
+                    ? P53_NODE_WIDTH - (P53_NODE_WIDTH - P53_EVENT_WIDTH) / 2
+                    : P53_NODE_WIDTH
+                "
                 :cy="P53_NODE_HEIGHT / 2"
                 r="3"
                 class="designer-node-port"
@@ -3490,7 +3507,7 @@ function nodeLabelLines(label: string) {
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="P53_NODE_WIDTH / 2"
-                :cy="isEventShape(node.type) ? P53_NODE_HEIGHT / 2 - 18 : 0"
+                :cy="isEventShape(node.type) ? (P53_NODE_HEIGHT - P53_EVENT_HEIGHT) / 2 : 0"
                 r="3"
                 class="designer-node-port"
                 @pointerdown.stop="startConnect($event, node, 'top')"
@@ -3498,7 +3515,11 @@ function nodeLabelLines(label: string) {
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="P53_NODE_WIDTH / 2"
-                :cy="isEventShape(node.type) ? P53_NODE_HEIGHT / 2 + 18 : P53_NODE_HEIGHT"
+                :cy="
+                  isEventShape(node.type)
+                    ? P53_NODE_HEIGHT - (P53_NODE_HEIGHT - P53_EVENT_HEIGHT) / 2
+                    : P53_NODE_HEIGHT
+                "
                 r="3"
                 class="designer-node-port"
                 @pointerdown.stop="startConnect($event, node, 'bottom')"
@@ -3508,9 +3529,7 @@ function nodeLabelLines(label: string) {
                 v-if="!isGatewayShape(node.type)"
                 class="designer-node-icon"
                 :transform="
-                  isEventShape(node.type)
-                    ? `translate(${P53_NODE_WIDTH / 2 - 11} ${P53_NODE_HEIGHT / 2 - 11})`
-                    : 'translate(12 14)'
+                  isEventShape(node.type) ? 'translate(24 17) scale(0.7273)' : 'translate(12 14)'
                 "
               >
                 <template v-if="node.type === 'START'">
@@ -3533,10 +3552,10 @@ function nodeLabelLines(label: string) {
               </g>
               <text
                 v-if="isEventShape(node.type)"
-                :x="P53_NODE_WIDTH / 2"
-                :y="P53_NODE_HEIGHT / 2 + 40"
-                text-anchor="middle"
-                class="designer-node-label"
+                x="71"
+                y="30"
+                text-anchor="start"
+                class="designer-node-label designer-node-label--event"
               >
                 {{ node.label }}
               </text>
@@ -3558,7 +3577,7 @@ function nodeLabelLines(label: string) {
               </text>
               <text
                 v-else
-                x="18"
+                x="14"
                 y="52"
                 text-anchor="middle"
                 class="designer-node-label designer-node-label--gateway"
@@ -5605,6 +5624,17 @@ function nodeLabelLines(label: string) {
 .designer-node-event {
   stroke-width: 1.6;
 }
+/* 42:5：事件节点 128×44 胶囊（x/y/宽高覆盖卡片通用几何） */
+.designer-node-event.designer-node-rect {
+  x: 16px;
+  y: 3px;
+  width: 128px;
+  height: 44px;
+  rx: 22px;
+}
+.designer-node-label--event {
+  font-size: 14px;
+}
 
 /* ── 画布（24px 网格 + 缩放控件 + 底部提示条） ── */
 .designer-canvas-wrap {
@@ -5751,6 +5781,12 @@ function nodeLabelLines(label: string) {
   stroke: #e79a1f;
   stroke-width: 1.4;
 }
+/* 28×28 节点外框（矢量菱形 26×26，不含描边外缘） */
+.designer-node-gateway-frame {
+  fill: none;
+  stroke: none;
+  pointer-events: none;
+}
 .designer-node-gateway-plus {
   fill: none;
   stroke: #fff;
@@ -5805,8 +5841,8 @@ function nodeLabelLines(label: string) {
   stroke: transparent;
 }
 .designer-edge-visual {
-  stroke: #c3ccdb;
-  stroke-width: 1.4;
+  stroke: #8996ab;
+  stroke-width: 2;
   marker-end: url(#designer-edge-arrow);
   pointer-events: none;
 }
@@ -5816,7 +5852,7 @@ function nodeLabelLines(label: string) {
   marker-end: url(#designer-edge-arrow-selected);
 }
 .designer-edge-arrow {
-  fill: #c3ccdb;
+  fill: #8996ab;
   stroke: none;
 }
 .designer-edge-arrow-selected {
