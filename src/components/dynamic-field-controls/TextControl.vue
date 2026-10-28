@@ -11,9 +11,13 @@ defineEmits<{ 'update:modelValue': [value: unknown] }>()
 </script>
 
 <template>
-  <ReadonlyValue v-if="readonly" :plain="subField">{{
-    String(modelValue ?? '') || '—'
-  }}</ReadonlyValue>
+  <ReadonlyValue
+    v-if="readonly"
+    :plain="subField"
+    :multiline="!subField && Boolean((field as { multiline?: boolean }).multiline)"
+  >
+    {{ String(modelValue ?? '') || '—' }}
+  </ReadonlyValue>
   <el-input
     v-else
     :type="(field as { multiline?: boolean }).multiline ? 'textarea' : 'text'"

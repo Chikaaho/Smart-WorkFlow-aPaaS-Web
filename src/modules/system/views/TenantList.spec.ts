@@ -22,6 +22,7 @@ vi.mock('vue-router', () => ({
 import {
   pageTenants,
   createTenant,
+  renameTenant,
   updateTenantStatus,
   queryTenantAdministrators,
   assignTenantAdministrator,
@@ -236,5 +237,25 @@ describe('TenantList', () => {
     }
     await vm.toggleStatus({ id: '2', name: '深圳中心', status: 0 })
     expect(updateTenantStatus).toHaveBeenCalledWith('2', 1, '季度暂停')
+  })
+
+  it('编辑租户承接名称与状态，状态变化走既有启停链', async () => {
+    vi.spyOn(ElMessageBox, 'prompt').mockResolvedValue({ value: '维护窗口' } as never)
+    vi.mocked(updateTenantStatus).mockResolvedValue(undefined)
+    vi.mocked(renameTenant).mockResolvedValue(undefined)
+    const wrapper = mountPage()
+    const vm = wrapper.vm as unknown as {
+      openEdit: (row: SysTenant) => void
+      form: { name: string; status: number }
+      handleSubmit: () => Promise<void>
+    }
+    vm.openEdit({ id: '2', name: '深圳中心', status: 0 })
+    expect(vm.form.status).toBe(0)
+    vm.form.name = '深圳中心（改）'
+    vm.form.status = 1
+    await vm.handleSubmit()
+    expect(updateTenantStatus).toHaveBeenCalledWith('2', 1, '维护窗口')
+    expect(renameTenant).toHaveBeenCalledWith('2', '深圳中心（改）')
+    wrapper.unmount()
   })
 })

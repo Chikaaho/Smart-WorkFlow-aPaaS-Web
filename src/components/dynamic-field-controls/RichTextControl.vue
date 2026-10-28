@@ -804,7 +804,7 @@ watch(
 .rt-readonly {
   box-sizing: border-box;
   width: 100%;
-  min-height: 80px;
+  min-height: 70px;
   padding: 10px 12px;
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-base);

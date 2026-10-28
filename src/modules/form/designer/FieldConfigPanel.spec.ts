@@ -166,16 +166,15 @@ describe('FieldConfigPanel 控件尺寸口径（0.1.7 #36）', () => {
     })
   }
 
-  it('数据类型与最大长度各自整行（不再两列半宽格）', () => {
+  it('最大长度等校验项收进独立弹窗入口，不再内联半宽格', () => {
     const wrapper = mountText()
 
     expect(wrapper.find('.config__type-pair').exists()).toBe(false)
     const rows = wrapper.findAll('.config__row')
     const typeInput = rows.find((row) => row.text().startsWith('数据类型'))
-    const lengthRow = rows.find((row) => row.text().startsWith('最大长度'))
     expect(typeInput).toBeTruthy()
-    expect(lengthRow).toBeTruthy()
-    expect(typeInput!.element).not.toBe(lengthRow!.element)
+    expect(rows.find((row) => row.text().startsWith('最大长度'))).toBeUndefined()
+    expect(wrapper.find('[data-testid="open-field-validation"]').exists()).toBe(true)
   })
 
   it('扩展属性区为紧凑占位并带空态说明', () => {

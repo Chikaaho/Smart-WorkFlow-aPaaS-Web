@@ -114,12 +114,18 @@ const form = reactive({
   name: '',
   adminUsername: '',
   adminPassword: '',
+  status: 0,
 })
+
+/** 编辑子态的原状态：仅当用户在弹窗内改状态时才走既有启停链。 */
+const originalStatus = ref(0)
 
 function resetForm() {
   form.name = ''
   form.adminUsername = ''
   form.adminPassword = ''
+  form.status = 0
+  originalStatus.value = 0
   editingId.value = null
   formError.value = ''
 }
@@ -134,6 +140,8 @@ function openEdit(row: SysTenant) {
   resetForm()
   editingId.value = row.id ?? null
   form.name = row.name
+  form.status = row.status ?? 0
+  originalStatus.value = row.status ?? 0
   dialogVisible.value = true
 }
 
@@ -153,7 +161,9 @@ function closeDialog() {
 async function handleSubmit() {
   if (submitting.value) return
   if (!form.name.trim()) {
-    formError.value = t('system.tenantNameRequired')
+    const message = t('system.tenantNameRequired')
+    if (editingId.value) ElMessage.warning(message)
+    else formError.value = message
     return
   }
   if (!editingId.value) {
@@ -167,11 +177,43 @@ async function handleSubmit() {
     }
   }
 
+  // 编辑租户的状态承接既有启停语义：变化时先取原因，取消原因则整单不应用。
+  let statusReason = ''
+  if (editingId.value && form.status !== originalStatus.value) {
+    const action = form.status === 0 ? t('system.enableTenant') : t('system.disableTenant')
+    try {
+      const result = await ElMessageBox.prompt(
+        t('system.tenantStatusChangeConfirm', { action, name: form.name.trim() }),
+        t('common.confirm'),
+        {
+          get confirmButtonText() {
+            return t('common.confirm')
+          },
+          get cancelButtonText() {
+            return t('common.cancel')
+          },
+          type: 'warning',
+          inputPlaceholder: t('system.tenantStatusReasonPlaceholder'),
+          inputValidator: (value: string) =>
+            Boolean(value?.trim()) || t('system.tenantStatusReasonRequired'),
+        },
+      )
+      statusReason = result.value.trim()
+    } catch {
+      return
+    }
+  }
+
   submitting.value = true
   formError.value = ''
   try {
     if (editingId.value) {
-      await renameTenant(editingId.value, form.name.trim())
+      const tenantId = editingId.value
+      if (form.status !== originalStatus.value) {
+        await updateTenantStatus(tenantId, form.status, statusReason)
+        originalStatus.value = form.status
+      }
+      await renameTenant(tenantId, form.name.trim())
       ElMessage.success(t('common.updateSuccess'))
     } else {
       await createTenant({
@@ -185,7 +227,9 @@ async function handleSubmit() {
     dialogVisible.value = false
     void loadList()
   } catch (err) {
-    formError.value = err instanceof ApiError ? err.msg : t('common.saveFailed')
+    const message = err instanceof ApiError ? err.msg : t('common.saveFailed')
+    if (editingId.value) ElMessage.error(message)
+    else formError.value = message
   } finally {
     submitting.value = false
   }
@@ -421,11 +465,11 @@ onMounted(loadList)
 
   <DetailDialog
     v-model="dialogVisible"
-    class="tenant-dialog"
+    :class="['tenant-dialog', { 'tenant-edit-dialog': Boolean(editingId) }]"
     appearance="design"
     :title="dialogTitle"
-    width="760px"
-    :error="formError"
+    :width="editingId ? '600px' : '760px'"
+    :error="editingId ? '' : formError"
     :show-close="!submitting"
     :close-on-press-escape="!submitting"
     :close-on-click-modal="false"
@@ -434,6 +478,12 @@ onMounted(loadList)
     <el-form label-position="top">
       <el-form-item :label="t('system.tenantName')" required>
         <el-input v-model="form.name" :placeholder="t('common.pleaseInput')" maxlength="64" />
+      </el-form-item>
+      <el-form-item v-if="editingId" :label="t('common.status')">
+        <el-select v-model="form.status" style="width: 100%">
+          <el-option :label="t('common.statusNormal')" :value="0" />
+          <el-option :label="t('system.tenantStatusDisabled')" :value="1" />
+        </el-select>
       </el-form-item>
       <el-row v-if="!editingId" :gutter="20">
         <el-col :span="12">
@@ -623,6 +673,19 @@ onMounted(loadList)
   max-width: calc(100vw - var(--sw-space-32));
   padding: var(--sw-space-24);
   border: 1px solid var(--sw-border-light);
+}
+/* 设计节点 458:12943：编辑租户固定 600×282，名称/状态两行，右下按钮。 */
+.tenant-edit-dialog.el-dialog {
+  display: flex;
+  height: 282px;
+  flex-direction: column;
+}
+.tenant-edit-dialog .el-dialog__header {
+  flex: 0 0 auto;
+}
+.tenant-edit-dialog .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .tenant-dialog .el-dialog__header {
   box-sizing: border-box;

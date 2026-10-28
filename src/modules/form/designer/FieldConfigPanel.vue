@@ -12,7 +12,7 @@ const { t } = useI18n()
  *
  * 配置面板改动经 @update 抛 FieldPatch，本宿主原样上交给设计器写回选中字段（单一数据源）。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getFieldTypeDescriptor } from './field-types'
 import { isColumnNameUnique } from './column-name'
@@ -20,6 +20,7 @@ import type { DesignerItem } from './types'
 import type { FieldPatch } from './field-config'
 import RulesEditor from './config/RulesEditor.vue'
 import ScriptConfig from './ScriptConfig.vue'
+import FieldValidationDialog from './FieldValidationDialog.vue'
 import { WIDTH_COL_STEPS, widthStepPercent } from './width-steps'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 import {
@@ -54,6 +55,13 @@ const emit = defineEmits<{
   update: [patch: FieldPatch]
   'update-rule': [rule: VisibilityRule | null]
 }>()
+
+/** 字段校验规则独立弹窗（273:1845）：入口在高级信息，确认才回写。 */
+const validationVisible = ref(false)
+
+function applyValidation(patch: FieldPatch) {
+  emit('update', patch)
+}
 
 const descriptor = computed(() =>
   props.field ? getFieldTypeDescriptor(props.field.field.type) : undefined,
@@ -242,47 +250,21 @@ function onFieldKeySuffix(raw: string) {
         <label class="config__label">{{ t('fieldList.colType') }}</label>
         <el-input :model-value="logicalTypeLabel" disabled />
       </div>
-      <!-- 0.1.7 #36（Owner）：数据类型/最大长度各自整行满宽（原两列半宽格里数字框过窄） -->
-      <div v-if="field.field.type === 'TEXT'" class="config__row">
-        <label class="config__label">{{ t('form.maxLength') }}</label>
-        <el-input-number
-          :model-value="field.field.length"
-          :min="1"
-          :controls="true"
-          :placeholder="t('form.unlimited')"
-          @update:model-value="(v: number | undefined) => emit('update', { length: v })"
-        />
+      <!-- 字段校验规则收进独立弹窗（273:1845）：面板只保留入口，确认才回写 -->
+      <div
+        v-if="field.field.type === 'TEXT' || field.field.type === 'RICH_TEXT'"
+        class="config__row config__row--inline"
+      >
+        <label class="config__label">{{ t('form.fieldValidation') }}</label>
+        <el-button
+          size="small"
+          data-testid="open-field-validation"
+          :disabled="readonly"
+          @click="validationVisible = true"
+        >
+          {{ t('common.configure') }}
+        </el-button>
       </div>
-      <template v-if="field.field.type === 'TEXT' || field.field.type === 'RICH_TEXT'">
-        <div class="config__row">
-          <label class="config__label">{{ t('form.minLength') }}</label>
-          <el-input-number
-            :model-value="field.field.minLength"
-            :min="0"
-            :controls="true"
-            :placeholder="t('form.unlimited')"
-            @update:model-value="(v: number | undefined) => emit('update', { minLength: v })"
-          />
-        </div>
-        <div class="config__row">
-          <label class="config__label">{{ t('form.pattern') }}</label>
-          <el-input
-            :model-value="field.field.pattern ?? ''"
-            maxlength="512"
-            :placeholder="t('form.patternPlaceholder')"
-            @update:model-value="(v: string) => emit('update', { pattern: v || undefined })"
-          />
-        </div>
-        <div class="config__row">
-          <label class="config__label">{{ t('form.patternMessage') }}</label>
-          <el-input
-            :model-value="field.field.patternMessage ?? ''"
-            maxlength="200"
-            :placeholder="t('form.patternMessagePlaceholder')"
-            @update:model-value="(v: string) => emit('update', { patternMessage: v || undefined })"
-          />
-        </div>
-      </template>
 
       <!-- 类型专属配置（注册表动态挂载；已发布只读时不出可编辑面板） -->
       <component
@@ -320,6 +302,14 @@ function onFieldKeySuffix(raw: string) {
         @update-rule="(r) => emit('update-rule', r)"
       />
     </template>
+
+    <FieldValidationDialog
+      v-if="field"
+      v-model="validationVisible"
+      :field="field"
+      :readonly="readonly"
+      @confirm="applyValidation"
+    />
   </aside>
 </template>
 
