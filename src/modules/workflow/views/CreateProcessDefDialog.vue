@@ -175,6 +175,8 @@ async function handleSubmit() {
     <FormSelectDialog
       v-model:visible="formSelectVisible"
       :current-form-key="form.formKey"
+      form-type="BUSINESS"
+      :title="t('workflow.selectForm')"
       @select="handleFormSelect"
     />
   </el-dialog>

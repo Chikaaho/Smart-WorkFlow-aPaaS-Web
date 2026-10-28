@@ -23,6 +23,10 @@ const props = defineProps<{
   visible: boolean
   /** 当前已选的 formKey，用于回显高亮。 */
   currentFormKey?: string
+  /** 表单类型：流程定义绑定业务表单传 BUSINESS；节点审批意见表单保持默认。 */
+  formType?: 'BUSINESS' | 'APPROVAL_COMMENT'
+  /** 弹窗标题；默认审批意见表单，流程绑定场景传「选择表单」。 */
+  title?: string
 }>()
 
 const emit = defineEmits<{
@@ -49,11 +53,12 @@ const selectedFormKey = ref<string | null>(null)
 async function loadList() {
   loading.value = true
   try {
-    // BF20261013-020：节点绑定的是「审批意见表单」——服务端按类型过滤，业务表单不进入候选
+    // 流程定义绑定业务表单（BUSINESS）；节点审批意见表单（APPROVAL_COMMENT）。
+    // 服务端按类型过滤，避免流程绑定误选审批意见表单。
     const result = await pageFormDefs(
       { pageNum: pageNum.value, pageSize: pageSize.value },
       currentKeyword.value || undefined,
-      'APPROVAL_COMMENT',
+      props.formType ?? 'APPROVAL_COMMENT',
     )
     // 客户端过滤：只展示已发布（PUBLISHED）表单（引用草稿表单无意义）
     const published = result.list.filter((item) => item.status === 'PUBLISHED')
@@ -147,16 +152,18 @@ watch(
 <template>
   <el-dialog
     :model-value="visible"
-    title="选择审批意见表单"
+    :title="title ?? '选择审批意见表单'"
     :close-on-click-modal="false"
     destroy-on-close
     width="720px"
     @update:model-value="emit('update:visible', $event)"
   >
     <div class="form-select">
-      <!-- 提示条：只展示已发布的审批意见表单 -->
+      <!-- 提示条：只展示与当前场景匹配的已发布表单 -->
       <el-alert type="info" :closable="false" show-icon style="margin-bottom: var(--sw-space-16)">
-        <template #title>仅展示已发布的审批意见表单</template>
+        <template #title>{{
+          formType === 'BUSINESS' ? '仅展示已发布的业务表单' : '仅展示已发布的审批意见表单'
+        }}</template>
       </el-alert>
 
       <!-- 搜索栏 -->
