@@ -9,7 +9,8 @@ export interface CatalogItem {
   itemKey: string
   name: string
   formKey: string
-  categoryId: number | null
+  /** 雪花 ID 以字符串下发（超出 JS 安全整数）；mock 数据仍为 number */
+  categoryId: string | number | null
   status: 'PUBLISHED' | 'DRAFT'
   formPublished: boolean
   bindingActive: boolean
@@ -21,7 +22,8 @@ export interface CatalogItem {
 
 /** 流程分类（单层）。 */
 export interface CatalogCategory {
-  id: number
+  /** 雪花 ID 以字符串下发（超出 JS 安全整数）；mock 数据仍为 number */
+  id: string | number
   name: string
   sortNo: number
   itemCount?: number

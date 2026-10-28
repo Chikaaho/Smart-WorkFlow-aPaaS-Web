@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, Switch, SwitchButton, User } from '@element-plus/icons-vue'
+import { ArrowRight, Back, Setting, Switch, SwitchButton, User } from '@element-plus/icons-vue'
 import { useI18n } from '@/locales'
 import { SUPPORTED_LOCALES, setLocale, type AppLocale } from '@/locales'
 import { useMenuStore } from '@/stores/menu'
@@ -47,6 +47,9 @@ const themeVisible = ref(false)
 const manualVisible = ref(false)
 const passwordVisible = ref(false)
 const manualLines = operationManual.split('\n')
+/** 个人菜单次级入口展开态（操作手册/修改密码，归入「设置」次级层）。 */
+const moreOpen = ref(false)
+const userMenuRef = ref<{ handleClose: () => void } | null>(null)
 
 // 通知铃铛：仅在服务端菜单树含收件箱入口时显示；未读数失败静默为 0（顶栏韧性）。
 const bellVisible = computed(() => {
@@ -171,6 +174,13 @@ function onCommand(command: string): void {
   if (command === 'back-portal') {
     onBackPortal()
   }
+}
+
+/** 个人菜单项统一收口：先关闭下拉再执行，避免弹层残留。 */
+function runCommand(command: string): void {
+  userMenuRef.value?.handleClose()
+  moreOpen.value = false
+  onCommand(command)
 }
 </script>
 
@@ -297,36 +307,85 @@ function onCommand(command: string): void {
       </div>
     </el-popover>
 
-    <el-dropdown trigger="click" @command="onCommand">
+    <el-dropdown ref="userMenuRef" trigger="click" popper-class="app-topbar-user-popper">
       <span class="app-topbar__user" :aria-label="displayName">
         <span class="app-topbar__avatar" aria-hidden="true">{{ avatarText }}</span>
         <span class="app-topbar__user-name">{{ displayName }}</span>
         <img class="app-topbar__caret" :src="arrowIcon" alt="" width="12" height="12" />
       </span>
       <template #dropdown>
-        <!-- V011-BUG-004：仅三个小菜单项，无摘要头 -->
-        <el-dropdown-menu class="app-topbar__dropdown">
-          <el-dropdown-item command="manual">{{ t('nav.operationManual') }}</el-dropdown-item>
-          <el-dropdown-item command="account-bindings">
+        <!-- 主层与参考 103:2/103:398 同构三项；操作手册/修改密码归入「设置」次级层 -->
+        <div class="app-topbar__dropdown" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            class="app-topbar__menu-item"
+            @click="runCommand('account-bindings')"
+          >
             <el-icon :size="14"><User /></el-icon>
-            {{ t('auth.accountBindings') }}
-          </el-dropdown-item>
-          <el-dropdown-item command="change-password">{{
-            t('auth.changePassword')
-          }}</el-dropdown-item>
-          <el-dropdown-item v-if="showEnterAdmin" command="enter-admin">
+            <span>{{ t('auth.accountBindings') }}</span>
+          </button>
+          <button
+            v-if="showEnterAdmin"
+            type="button"
+            role="menuitem"
+            class="app-topbar__menu-item"
+            @click="runCommand('enter-admin')"
+          >
             <el-icon :size="14"><Switch /></el-icon>
-            {{ t('auth.enterBackend') }}
-          </el-dropdown-item>
-          <el-dropdown-item v-if="currentArea === 'admin'" command="back-portal">
+            <span>{{ t('auth.enterBackend') }}</span>
+          </button>
+          <button
+            v-if="currentArea === 'admin'"
+            type="button"
+            role="menuitem"
+            class="app-topbar__menu-item"
+            @click="runCommand('back-portal')"
+          >
             <el-icon :size="14"><Back /></el-icon>
-            {{ t('auth.backToPortal') }}
-          </el-dropdown-item>
-          <el-dropdown-item command="logout" divided class="app-topbar__logout">
-            <el-icon :size="14" class="app-topbar__logout-icon"><SwitchButton /></el-icon>
-            {{ t('auth.signOut') }}
-          </el-dropdown-item>
-        </el-dropdown-menu>
+            <span>{{ t('auth.backToPortal') }}</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            class="app-topbar__menu-item app-topbar__menu-item--danger"
+            @click="runCommand('logout')"
+          >
+            <el-icon :size="14"><SwitchButton /></el-icon>
+            <span>{{ t('auth.signOut') }}</span>
+          </button>
+          <div class="app-topbar__menu-sep" role="separator"></div>
+          <button
+            type="button"
+            class="app-topbar__menu-item app-topbar__menu-item--secondary"
+            :aria-expanded="moreOpen ? 'true' : 'false'"
+            @click="moreOpen = !moreOpen"
+          >
+            <el-icon :size="14"><Setting /></el-icon>
+            <span>{{ t('common.settings') }}</span>
+            <el-icon class="app-topbar__menu-caret" :class="{ 'is-open': moreOpen }">
+              <ArrowRight />
+            </el-icon>
+          </button>
+          <div v-if="moreOpen" class="app-topbar__submenu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              class="app-topbar__submenu-item"
+              @click="runCommand('manual')"
+            >
+              {{ t('nav.operationManual') }}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="app-topbar__submenu-item"
+              @click="runCommand('change-password')"
+            >
+              {{ t('auth.changePassword') }}
+            </button>
+          </div>
+        </div>
       </template>
     </el-dropdown>
     <ThemeDialog v-model="themeVisible" />
@@ -619,8 +678,8 @@ function onCommand(command: string): void {
   border: 0 !important;
   box-shadow: none !important;
 }
-/* V011-BUG-004：个人菜单收敛为白卡内三个小菜单项（无摘要头、无描边按钮盒）。 */
-.app-topbar__dropdown.el-dropdown-menu {
+/* 个人菜单：主层与参考 103:2/103:398 同构三项，操作手册/修改密码收进「设置」次级层。 */
+.app-topbar__dropdown {
   width: 200px;
   box-sizing: border-box;
   padding: 8px;
@@ -629,21 +688,62 @@ function onCommand(command: string): void {
   border: 1px solid #dfe6f2;
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.08);
 }
-.app-topbar__dropdown .el-dropdown-menu__item {
+.app-topbar__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
   height: 32px;
-  line-height: 32px;
-  margin: 2px 0 0;
   padding: 0 10px;
   border: 0;
   border-radius: 6px;
+  background: transparent;
   font-size: 13px;
-  justify-content: flex-start;
+  color: var(--sw-text-primary, #303133);
+  text-align: left;
+  cursor: pointer;
 }
-.app-topbar__dropdown .el-dropdown-menu__item:not(.is-disabled):hover {
+.app-topbar__menu-item:hover {
   background: var(--sw-color-primary-soft);
 }
-.app-topbar__dropdown .app-topbar__logout {
+.app-topbar__menu-item--danger {
   color: #e04b55;
+}
+.app-topbar__menu-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: #ebeef5;
+}
+.app-topbar__menu-item--secondary {
+  color: var(--sw-text-secondary, #6b7280);
+}
+.app-topbar__menu-caret {
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+.app-topbar__menu-caret.is-open {
+  transform: rotate(90deg);
+}
+.app-topbar__submenu {
+  padding-left: 20px;
+}
+.app-topbar__submenu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--sw-text-secondary, #6b7280);
+  text-align: left;
+  cursor: pointer;
+}
+.app-topbar__submenu-item:hover {
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-text-primary, #303133);
 }
 @media (max-width: 767px) {
   .app-topbar {

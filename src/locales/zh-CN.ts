@@ -434,6 +434,7 @@ export default {
     cancel: '取消',
     confirm: '确定',
     close: '关闭',
+    settings: '设置',
     actions: '操作',
     moreActions: '更多',
     status: '状态',

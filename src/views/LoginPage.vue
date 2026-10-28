@@ -830,7 +830,7 @@ img.login-page__captcha {
     color: var(--sw-nav-topbar-text);
   }
   .login-page__headline {
-    max-width: 700px;
+    max-width: 960px;
     margin: 28px 0 0;
     font-size: 42px;
     line-height: 60px;

@@ -108,7 +108,8 @@ describe('ProcessCatalog 前台流程中心（BF20261013-051：分类维护移�
     await items[1]!.trigger('click')
     await flushPromises()
     const lastCall = vi.mocked(oa.queryCatalogItems).mock.calls.at(-1)!
-    expect(lastCall[1]).toMatchObject({ categoryId: 9 })
+    // 雪花分类 ID 按字符串透传（避免 JS 安全整数精度丢失），断言原值不丢
+    expect(lastCall[1]).toMatchObject({ categoryId: '9' })
   })
 
   it('流程中心的搜索框保留（Owner：流程中心保留搜索）', async () => {

@@ -449,6 +449,7 @@ export default {
     cancel: 'Cancel',
     confirm: 'OK',
     close: 'Close',
+    settings: 'Settings',
     actions: 'Actions',
     moreActions: 'More',
     status: 'Status',

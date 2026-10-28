@@ -108,7 +108,8 @@ describe('ProcessCatalog.vue 分类侧栏', () => {
     await flushPromises()
     expect(queryCatalogItems).toHaveBeenCalledTimes(2)
     const secondCall = vi.mocked(queryCatalogItems).mock.calls[1]
-    expect(secondCall?.[1]?.categoryId).toBe(1)
+    // 雪花分类 ID 按字符串透传（避免 JS 安全整数精度丢失），断言原值不丢
+    expect(secondCall?.[1]?.categoryId).toBe('1')
     expect(wrapper.findAll('.catalog-tree__item')[1].classes()).toContain('is-active')
   })
 

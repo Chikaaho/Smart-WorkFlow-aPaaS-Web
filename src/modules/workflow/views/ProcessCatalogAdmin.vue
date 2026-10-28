@@ -152,7 +152,7 @@ function handlePageSizeChange(s: number) {
 // ─── 归属调整 ───
 const assignVisible = ref(false)
 const assignItem = ref<CatalogItem | null>(null)
-const assignCategoryId = ref<number | null>(null)
+const assignCategoryId = ref<string | number | null>(null)
 
 function openAssign(row: CatalogItem) {
   assignItem.value = row
@@ -172,7 +172,7 @@ async function submitAssign() {
   }
 }
 
-function categoryNameOf(id: number | null): string {
+function categoryNameOf(id: string | number | null): string {
   if (id === null) return t('workflow.uncategorized')
   return categories.value.find((c) => c.id === id)?.name ?? t('workflow.categoryFallback', { id })
 }

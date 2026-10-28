@@ -38,8 +38,8 @@ const errorMsg = ref('')
 const keyword = ref('')
 const pageNum = ref(1)
 const pageSize = ref(10)
-// '' = 全部；0 = 未分类；其余为分类 id
-const activeCategory = ref<number | ''>('')
+// '' = 全部；'0' = 未分类；其余为分类 id 原值（雪花 ID 按字符串透传，避免 JS 精度丢失）
+const activeCategory = ref<string>('')
 
 const categories = ref<CatalogCategory[]>([])
 const counts = ref<Record<string, number>>({})
@@ -49,7 +49,8 @@ const treeCollapsed = ref(false)
 
 interface CategoryRow {
   key: string
-  id: number | ''
+  /** 分类 id 字符串原值（'' = 全部，'0' = 未分类） */
+  id: string
   name: string
   count: number
 }
@@ -61,17 +62,17 @@ const treeRows = computed<CategoryRow[]>(() => {
   for (const category of categories.value) {
     rows.push({
       key: `c-${category.id}`,
-      id: category.id,
+      id: String(category.id),
       name: category.name,
-      count: itemCountOf(category.id),
+      count: itemCountOf(String(category.id)),
     })
   }
   // 0.2.0 参考节点 97:2：未分类为固定过滤入口（计数 0 也保留行）。
   rows.push({
     key: 'uncategorized',
-    id: 0,
+    id: '0',
     name: t('workflow.uncategorized'),
-    count: itemCountOf(0),
+    count: itemCountOf('0'),
   })
   return rows
 })
@@ -102,22 +103,21 @@ const orderedItems = computed(() => {
   return [...pinned, ...rest]
 })
 
-function itemCountOf(categoryId: number | ''): number {
+function itemCountOf(categoryId: string): number {
   if (categoryId === '') return total.value
-  const key = String(categoryId)
-  return counts.value[key] ?? 0
+  return counts.value[categoryId] ?? 0
 }
 
 /** 0.2.0 参考节点 97:2：主列表为单表格，分类列由分类树映射（服务端不下发分类名）。 */
 const categoryNameById = computed(() => {
-  const map = new Map<number | null, string>()
-  for (const category of categories.value) map.set(category.id, category.name)
+  const map = new Map<string, string>()
+  for (const category of categories.value) map.set(String(category.id), category.name)
   return map
 })
 
 function categoryNameOf(item: CatalogItem): string {
   if (item.categoryId === null || item.categoryId === undefined) return t('workflow.uncategorized')
-  return categoryNameById.value.get(item.categoryId) ?? t('workflow.uncategorized')
+  return categoryNameById.value.get(String(item.categoryId)) ?? t('workflow.uncategorized')
 }
 
 function resetFilter(): void {
@@ -136,7 +136,7 @@ async function loadCatalog() {
         { pageNum: pageNum.value, pageSize: pageSize.value },
         {
           keyword: keyword.value.trim() || undefined,
-          categoryId: activeCategory.value === '' ? undefined : Number(activeCategory.value),
+          categoryId: activeCategory.value === '' ? undefined : activeCategory.value,
         },
       ),
       listPortalCategories(),
@@ -167,7 +167,7 @@ async function loadUsageSections() {
   }
 }
 
-function selectCategory(id: number | '') {
+function selectCategory(id: string) {
   activeCategory.value = id
   pageNum.value = 1
   void loadCatalog()
@@ -627,6 +627,10 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--sw-font-family);
+  font-weight: 500;
+  line-height: 22px;
+  color: #172033;
 }
 .catalog-tree__count {
   flex: none;
@@ -641,6 +645,7 @@ onMounted(() => {
 .catalog-tree__item.is-active .catalog-tree__name {
   font-family: var(--sw-font-family);
   line-height: 22px;
+  color: var(--sw-color-primary);
 }
 .catalog-tree__toggle {
   display: flex;
