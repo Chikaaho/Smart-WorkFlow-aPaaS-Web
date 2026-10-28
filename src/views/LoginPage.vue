@@ -617,6 +617,8 @@ img.login-page__captcha {
   gap: 10px;
   margin: 0;
   font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
   color: var(--sw-text-secondary);
 }
 .login-page__sso-rule {
@@ -632,8 +634,9 @@ img.login-page__captcha {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
+  line-height: 22px;
   color: var(--sw-text-regular);
 }
 .login-page__sso-provider {
@@ -646,9 +649,11 @@ img.login-page__captcha {
   padding: 0 8px;
   border: 1px solid var(--sw-border-base);
   border-radius: var(--sw-radius-base);
-  color: var(--sw-text-primary);
+  color: var(--sw-text-regular);
   background: var(--sw-surface-card);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
   cursor: pointer;
 }
 .login-page__sso-provider-mark {
@@ -968,7 +973,9 @@ img.login-page__captcha {
     gap: 0;
   }
   .login-page__sso-title {
-    line-height: 24px;
+    /* 文字行盒 18px；上下各补 3px 保持表单总高与其余文字位置不变 */
+    line-height: 18px;
+    padding: 3px 0;
     text-align: center;
     gap: 12px;
     max-width: 324px;
@@ -987,6 +994,12 @@ img.login-page__captcha {
     line-height: 22px;
     font-size: 14px;
   }
+  .login-page__form label.login-page__sso-tenant {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 22px;
+    color: var(--sw-text-regular);
+  }
   .login-page__sso-row {
     margin-top: 18px;
     gap: 8px;
@@ -996,10 +1009,15 @@ img.login-page__captcha {
     height: 44px;
     font-size: 14px;
     font-weight: 500;
+    line-height: 22px;
     border: 1px solid var(--sw-border-light);
     border-radius: 6px;
     background: #fff;
-    color: #344164;
+    color: var(--sw-text-regular);
+  }
+  /* 参考 32:2：第三个 SSO 文字中心比等分按钮中心左移 2px（仅文字对齐，不改外框） */
+  .login-page__sso-row .login-page__sso-provider.is-provider-3 {
+    padding-right: 16px;
   }
   .login-page__sso-provider-mark {
     display: none;

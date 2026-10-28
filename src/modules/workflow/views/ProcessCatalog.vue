@@ -637,6 +637,11 @@ onMounted(() => {
 .catalog-tree__item.is-active .catalog-tree__count {
   color: var(--sw-color-primary);
 }
+/* 参考 97:2：激活分类「全部」文字与设计同源 Noto Medium 14/22，蓝色保持 */
+.catalog-tree__item.is-active .catalog-tree__name {
+  font-family: var(--sw-font-family);
+  line-height: 22px;
+}
 .catalog-tree__toggle {
   display: flex;
   align-items: center;
@@ -679,8 +684,13 @@ onMounted(() => {
 /* 0.2.0 参考节点 97:2：标签+输入框居左、查询/重置靠右；输入 395×32，按钮 72/70×32。 */
 .catalog-page__label {
   flex: none;
-  font-size: 13px;
-  color: #5c6370;
+  /* 参考 97:2：筛选「流程名称」Noto Regular 14/22、#303A55，左缘对齐设计 274 */
+  font-family: var(--sw-font-family);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: #303a55;
+  margin-left: -4px;
 }
 .catalog-page__spacer {
   flex: 1;
