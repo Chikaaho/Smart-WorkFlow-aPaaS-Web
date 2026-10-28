@@ -18,6 +18,8 @@ export interface TodoTask {
   processDefKey?: string | null
   /** 候选任务标记（P64 阶段Ⅱ：须先领取再查看/办理；后端 assignee 为空即 true） */
   candidate?: boolean
+  /** 办理期限（3:2 截止标签只读展示来源；无期限为 null，不伪造） */
+  dueAt?: string | null
 }
 
 // ─── 任务详情 DTO（对齐后端 TaskDetailRespDTO） ───

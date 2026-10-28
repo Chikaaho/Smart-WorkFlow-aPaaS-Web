@@ -56,6 +56,7 @@ import {
 } from '@/adapters/instance-relation'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
 import type { BpmDraft } from '@/adapters/process-draft'
+import type { CommandAcceptResp } from '@/contracts/bpm'
 
 /* ── 路由参数 ── */
 
@@ -1002,13 +1003,52 @@ async function handleSubmitDraft() {
       errorMsg.value = t('form.completeRequired')
       return
     }
-    const { updateDraft, submitDraft, pollCommandStatus } = await getProcessDraftApi()
+    const { updateDraft, submitDraft, pollCommandStatus, getDraft } = await getProcessDraftApi()
     await updateDraft(draftId, {
       title: draftTitle.value.trim() || null,
       payload: JSON.stringify(buildDraftPayloadObject()),
       refreshFormVersion: draftRefreshVersion.value || undefined,
     })
-    const accept = await submitDraft(draftId)
+    // A11-Q3：受理请求以草稿原号（draftId → 服务端稳定提交键 DRAFT_SUBMIT:<id>:<seq>）
+    // 提交；响应未知（网络中断/超时）时不重发业务提交，按原号查询草稿状态消解。
+    const acceptSubmit = async (): Promise<CommandAcceptResp> => {
+      try {
+        return await submitDraft(draftId)
+      } catch (acceptErr) {
+        let draftAfterError: BpmDraft | null = null
+        try {
+          draftAfterError = await getDraft(draftId)
+        } catch {
+          // 状态查询也失败：保持未知
+        }
+        if (
+          draftAfterError &&
+          (draftAfterError.status === 'SUBMITTING' || draftAfterError.status === 'SUBMITTED') &&
+          draftAfterError.commandId
+        ) {
+          // 已有受理：沿原命令句柄轮询终态，不重复受理业务提交
+          ElMessage.warning(t('common.submitResultUnknown'))
+          return {
+            commandId: draftAfterError.commandId,
+            commandKey: '',
+            commandType: 'DRAFT_SUBMIT',
+            channel: 'NORMAL',
+            status: 'ACCEPTED',
+            duplicated: true,
+          }
+        }
+        if (
+          draftAfterError &&
+          (draftAfterError.status === 'EDITING' || draftAfterError.status === 'FAILED')
+        ) {
+          // 确认未受理成功：按普通失败提示，可安全重试
+          throw acceptErr
+        }
+        // 未查清：明确保持未知，不伪装成功、不再提交业务
+        throw new ApiError(0, t('common.submitResultUnknown'))
+      }
+    }
+    const accept = await acceptSubmit()
     const finalStatus = await pollCommandStatus(accept.commandId)
     if (finalStatus?.status === 'COMPLETED') {
       postSubmitEventError.value = ''
@@ -1362,8 +1402,9 @@ onMounted(() => {
 }
 /* 0.2.0 参考节点 101:2：填写态标题栏高 48、标题左 24、关闭居右。 */
 .form-render-page__top--fill {
+  /* 参考 101:2：关闭填写 32×32 @(1864,8) → 右缘 24px、上缘 8px */
   min-height: 48px;
-  padding: 0 28px 0 24px;
+  padding: 8px 24px 8px 24px;
 }
 .form-render-page__top--fill .form-render-page__title {
   font-size: 15px;
@@ -1376,8 +1417,9 @@ onMounted(() => {
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  /* 参考 101:2 关闭填写入口 32×32 */
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: none;
   border-radius: 4px;
@@ -1484,8 +1526,9 @@ onMounted(() => {
 .form-render-page__form-title {
   margin: 0 0 20px;
   font-size: 20px;
-  font-weight: 600;
-  line-height: 28px;
+  /* 参考 101:2 标题 Bold / 行高 32 */
+  font-weight: 700;
+  line-height: 32px;
   color: var(--sw-text-primary);
   text-align: center;
 }
@@ -1504,7 +1547,8 @@ onMounted(() => {
   z-index: 6;
   display: flex;
   align-items: center;
-  height: 65px;
+  /* 参考 101:2 底部操作栏 h64 @y1016 */
+  height: 64px;
   box-sizing: border-box;
   padding: 0 24px;
   background: var(--sw-surface-card, #ffffff);
@@ -1513,12 +1557,14 @@ onMounted(() => {
 .form-render-page__fill-footer-inner {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  /* 参考 101:2 暂存→提交间距 8 */
+  gap: 8px;
   width: min(1440px, calc(100vw - 240px));
   margin: 0 auto;
 }
 .form-render-page__fill-footer :deep(.el-button) {
-  width: 70px;
+  /* 参考 101:2 暂存/提交按钮宽 72 */
+  width: 72px;
   height: 32px;
   margin: 0;
   padding: 0;

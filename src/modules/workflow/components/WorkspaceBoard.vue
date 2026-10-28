@@ -218,15 +218,24 @@ function rowMeta(row: Record<string, unknown>): string {
     : [String(row.nodeName ?? row.currentNode ?? ''), String(row.assigneeName ?? '')].filter(
         Boolean,
       )
-  const due = String(row.dueText ?? '')
+  const due = dueChip(row)
   const meta = (base.length ? base.join(' · ') : '') + (due ? (base.length ? ' · ' : '') + due : '')
   return meta
 }
 
-/** 设计01 待办行期限标签：仅使用接口真实 `dueText`，无值不渲染（不编造期限）。 */
+/** 设计01 待办行期限标签：仅使用接口真实 `dueAt` 派生（参考 3:2「明天 10:00」格式）；无期限不渲染（不编造期限）。 */
 function dueChip(row: Record<string, unknown>): string {
-  const due = row.dueText
-  return typeof due === 'string' && due.trim() ? due.trim() : ''
+  const raw = row.dueAt
+  if (typeof raw !== 'string' || !raw.trim()) return ''
+  const due = new Date(raw)
+  if (Number.isNaN(due.getTime())) return ''
+  const hhmm = `${String(due.getHours()).padStart(2, '0')}:${String(due.getMinutes()).padStart(2, '0')}`
+  const now = new Date()
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const dayDiff = Math.round((startOfDay(due) - startOfDay(now)) / 86_400_000)
+  if (dayDiff === 0) return `今天 ${hhmm}`
+  if (dayDiff === 1) return `明天 ${hhmm}`
+  return `${due.getMonth() + 1}月${due.getDate()}日 ${hhmm}`
 }
 
 /** 待办面板深链：已办页签携带 source=processed，详情页按已办只读渲染并回跳（V012-BUG-001）。 */

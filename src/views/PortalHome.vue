@@ -153,6 +153,13 @@ function formatDuration(value: number): string {
     : `${Math.round(value / 60000)}min`
 }
 
+/** 参考 7:2 副注：正数前缀 +、负数用 U+2212；null=无可比基期，明确显示「—」。 */
+function trendText(value: number | null | undefined, unit = ''): string {
+  if (value == null) return '—'
+  const sign = value > 0 ? '+' : value < 0 ? '−' : ''
+  return `${sign}${Math.abs(value)}${unit}`
+}
+
 onMounted(async () => {
   try {
     const [catalog, initiated, todo, unreadCount, summary] = await Promise.allSettled([
@@ -247,23 +254,17 @@ function searchPortal(): void {
           <div>
             <span>{{ t('portal.flowInstances') }}</span>
             <strong>{{ analytics.launched }}</strong>
-            <em v-if="analytics.launchTrendPercent != null">
-              {{ analytics.launchTrendPercent > 0 ? '+' : '' }}{{ analytics.launchTrendPercent }}%
-            </em>
+            <em>{{ trendText(analytics.launchTrendPercent, '%') }}</em>
           </div>
           <div>
             <span>{{ t('portal.avgHandling') }}</span>
             <strong>{{ formatDuration(analytics.avgDurationMs) }}</strong>
-            <em v-if="analytics.durationTrendPercent != null"
-              >{{ analytics.durationTrendPercent }}%</em
-            >
+            <em>{{ trendText(analytics.durationTrendPercent, '%') }}</em>
           </div>
           <div>
             <span>{{ t('portal.overdueTasks') }}</span>
             <strong>{{ analytics.overdue ?? analytics.rejected }}</strong>
-            <em v-if="analytics.overdueTrendPercent != null"
-              >{{ analytics.overdueTrendPercent }}%</em
-            >
+            <em>{{ trendText(analytics.overdueTrendDelta) }}</em>
           </div>
         </div>
         <div class="portal__analytics-chart-label">{{ t('portal.trendTitle') }}</div>
@@ -558,13 +559,12 @@ function searchPortal(): void {
   font-weight: 600;
 }
 .portal__analytics-summary em {
-  color: var(--sw-success);
-  font-size: 11px;
+  /* 参考 7:2：三张指标卡副注同为 12px/18px 绿色（#12805C） */
+  color: var(--sw-success-text);
+  font-size: 12px;
+  line-height: 18px;
   font-style: normal;
   margin-top: 2px;
-}
-.portal__analytics-summary div:nth-child(3) em {
-  color: var(--sw-danger);
 }
 .portal__analytics-summary span {
   color: var(--sw-text-secondary);
