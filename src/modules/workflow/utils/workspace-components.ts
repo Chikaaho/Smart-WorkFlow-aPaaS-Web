@@ -56,13 +56,6 @@ export const DATA_LIBRARY: BuiltinWorkspaceComponent[] = [
     defaultHeight: 112,
   },
   {
-    typeCode: 'dataList',
-    rendererKey: 'list',
-    labelKey: 'workspace.library.dataList',
-    defaultSpan: 12,
-    defaultHeight: 280,
-  },
-  {
     typeCode: 'chart_bar',
     rendererKey: 'chart',
     labelKey: 'workspace.chartType.bar',
@@ -157,6 +150,13 @@ export const DATA_LIBRARY: BuiltinWorkspaceComponent[] = [
     chartType: 'heatmap',
     defaultSpan: 6,
     defaultHeight: 340,
+  },
+  {
+    typeCode: 'dataList',
+    rendererKey: 'list',
+    labelKey: 'workspace.library.dataList',
+    defaultSpan: 12,
+    defaultHeight: 280,
   },
 ]
 

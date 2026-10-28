@@ -895,8 +895,9 @@ onBeforeUnmount(() => {
 
 .wstudio__grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(2, 92px);
+  /* 273:1600：92×48 按钮、水平 8 / 垂直 12 间距。 */
+  gap: 12px 8px;
 }
 
 .wstudio__item {
@@ -906,6 +907,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 3px;
+  width: 92px;
   height: 48px;
   padding: 4px;
   border: 1px solid var(--sw-border-light, #eef0f4);

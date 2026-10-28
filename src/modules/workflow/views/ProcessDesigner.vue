@@ -190,9 +190,9 @@ const themeRuleDef = computed<ProcessDef | null>(() => {
 const SNAP_X = 20
 const SNAP_Y = 20
 
-/** P53 设计稿专用节点几何；其它流程图继续使用适配器默认尺寸。 */
-const P53_NODE_WIDTH = 160
-const P53_NODE_HEIGHT = 50
+/** P53 设计稿专用节点几何；其它流程图继续使用适配器默认尺寸。0.2.0 G08：普通节点 230×44。 */
+const P53_NODE_WIDTH = 230
+const P53_NODE_HEIGHT = 44
 
 /**
  * 节点图标字形（20×20 坐标系，与左侧选择器同源）：画布与选择器共用同一份路径，
@@ -3529,7 +3529,7 @@ function nodeLabelLines(label: string) {
                 v-if="!isGatewayShape(node.type)"
                 class="designer-node-icon"
                 :transform="
-                  isEventShape(node.type) ? 'translate(24 17) scale(0.7273)' : 'translate(12 14)'
+                  isEventShape(node.type) ? 'translate(24 17) scale(0.7273)' : 'translate(12 11)'
                 "
               >
                 <template v-if="node.type === 'START'">
@@ -5515,7 +5515,7 @@ function nodeLabelLines(label: string) {
   margin-left: 0;
 }
 
-/* ── 设计 42:4：220px 节点库，分组内单列 188×34 节点入口 ── */
+/* ── 设计 42:4：224px 节点库（画布内框从 x236 起），分组内单列 188×34 节点入口 ── */
 .designer-main {
   display: flex;
   flex: 1;
@@ -5523,8 +5523,8 @@ function nodeLabelLines(label: string) {
 }
 .designer-palette {
   box-sizing: border-box;
-  flex: 0 0 220px;
-  width: 220px;
+  flex: 0 0 224px;
+  width: 224px;
   padding: 16px;
   overflow-y: auto;
   background: #fff;
@@ -5636,13 +5636,16 @@ function nodeLabelLines(label: string) {
   font-size: 14px;
 }
 
-/* ── 画布（24px 网格 + 缩放控件 + 底部提示条） ── */
+/* ── 画布（24px 网格 + 缩放控件 + 底部提示条）
+   G08（42:4）：圆角内框 x236→x1568（左距 224+12、右距 1584-16），网格自内框 16px 内距起铺 */
 .designer-canvas-wrap {
   position: relative;
   flex: 1;
   min-width: 0;
-  margin: 16px;
+  margin: 16px 16px 16px 12px;
+  padding: 16px;
   overflow: hidden;
+  border-radius: 12px;
   /* P53 节点09：画布底 #F8FAFE + 24px 网格线 #E8EDF6 */
   background: #f8fafe;
 }
@@ -5713,11 +5716,12 @@ function nodeLabelLines(label: string) {
 .designer-node {
   cursor: move;
 }
+/* G08（42:4）：普通节点 230×44（0.6px 内缩保持描边落在盒内） */
 .designer-node-rect {
   x: 0.6px;
   y: 0.6px;
-  width: 158.8px;
-  height: 48.8px;
+  width: 228.8px;
+  height: 42.8px;
   rx: 8px;
   fill: #fff;
   stroke: #d7dfec;

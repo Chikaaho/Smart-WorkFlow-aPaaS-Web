@@ -186,7 +186,7 @@ async function mountViewer(overrides: Record<string, unknown> = {}) {
 
 async function openSection(wrapper: Awaited<ReturnType<typeof mountViewer>>, label: string) {
   const button = wrapper
-    .findAll('.snapshot-nav__item')
+    .findAll('.snapshot-tabs__item')
     .find((candidate) => candidate.text().includes(label))
   expect(button).toBeTruthy()
   await button!.trigger('click')
@@ -203,16 +203,22 @@ describe('PublishedSnapshotViewer', () => {
     mockLoadGraph.mockResolvedValue(processGraph)
   })
 
-  it('按表单版本读取表单与关系冻结流程，并在概览中给出完整身份', async () => {
+  it('按表单版本读取表单与关系冻结流程，并在全屏外壳页签中给出完整身份', async () => {
     const wrapper = await mountViewer()
 
     expect(mockGetFormSnapshotDefinition).toHaveBeenCalledWith('form-1', 5)
     expect(mockLoadCandidates).toHaveBeenCalledWith('asset-purchase')
     expect(mockLoadGraph).toHaveBeenCalledWith(17, 4)
+    // 顶条：发布快照 + 表单名 + 版本
+    expect(wrapper.text()).toContain('发布快照')
     expect(wrapper.text()).toContain('资产采购申请')
     expect(wrapper.text()).toContain('v3.2')
+    // 流程设计页签：左列冻结流程版本 + 中列选中流程元信息
+    await openSection(wrapper, '流程设计')
     expect(wrapper.text()).toContain('资产采购审批')
     expect(wrapper.text()).toContain('asset_purchase · v4')
+    // 流程设置页签：原始冻结定义
+    await openSection(wrapper, '流程设置')
     expect(wrapper.text()).toContain('原始冻结定义')
   })
 
@@ -231,10 +237,12 @@ describe('PublishedSnapshotViewer', () => {
     const wrapper = await mountViewer()
     await openSection(wrapper, '表单设计')
 
-    const props = wrapper.find('.snapshot-design__props')
+    const props = wrapper.find('.snapshot-side--props')
     expect(props.exists()).toBe(true)
     // 默认选中第一个字段：TEXT 的冻结配置可见
-    expect(props.find('.snapshot-design__props-target').text()).toBe('采购名称')
+    expect(props.find('.snapshot-side--props .snapshot-design__props-target').text()).toBe(
+      '采购名称',
+    )
     const text = props.text()
     expect(text).toContain('title')
     expect(text).toContain('TEXT')
@@ -244,10 +252,12 @@ describe('PublishedSnapshotViewer', () => {
     const cells = wrapper.findAll('.snapshot-design__cell')
     expect(cells).toHaveLength(2)
     await cells[1].trigger('click')
-    expect(wrapper.find('.snapshot-design__props-target').text()).toBe('采购明细')
-    expect(wrapper.find('.snapshot-design__props').text()).toContain('1')
+    expect(wrapper.find('.snapshot-side--props .snapshot-design__props-target').text()).toBe(
+      '采购明细',
+    )
+    expect(wrapper.find('.snapshot-side--props').text()).toContain('1')
     // 冻结字段属性面板不提供任何保存/编辑入口
-    const buttons = wrapper.find('.snapshot-design__props').findAll('button')
+    const buttons = wrapper.find('.snapshot-side--props').findAll('button')
     expect(buttons).toHaveLength(0)
   })
 
@@ -273,7 +283,7 @@ describe('PublishedSnapshotViewer', () => {
 
   it('冻结字段同时展示主表、子表和完整字段配置', async () => {
     const wrapper = await mountViewer()
-    await openSection(wrapper, '冻结字段')
+    await openSection(wrapper, '字段清单')
 
     expect(wrapper.text()).toContain('title')
     expect(wrapper.text()).toContain('items.amount')
@@ -283,16 +293,15 @@ describe('PublishedSnapshotViewer', () => {
 
   it('校验、显隐和字段/动作权限来自快照 definition', async () => {
     const wrapper = await mountViewer()
-    await openSection(wrapper, '校验')
+    // 校验/显隐归入字段清单页签
+    await openSection(wrapper, '字段清单')
     expect(wrapper.text()).toContain('最小长度')
     expect(wrapper.text()).toContain('正则约束')
     expect(wrapper.text()).toContain('需以 A 开头')
-
-    await openSection(wrapper, '显隐')
     expect(wrapper.text()).toContain('items.amount')
     expect(wrapper.text()).toContain('NOT_EMPTY')
 
-    await openSection(wrapper, '字段权限')
+    await openSection(wrapper, '流程设置')
     expect(wrapper.text()).toContain('role:buyer')
     expect(wrapper.text()).toContain('role:purchaser')
     expect(wrapper.text()).toContain('submit')
@@ -300,7 +309,7 @@ describe('PublishedSnapshotViewer', () => {
 
   it('版本化列配置只读取 definition 中的冻结值', async () => {
     const wrapper = await mountViewer()
-    await openSection(wrapper, '列表列配置')
+    await openSection(wrapper, '编号设置')
 
     expect(wrapper.text()).toContain('采购名称')
     expect(wrapper.text()).toContain('LIKE')
@@ -316,21 +325,21 @@ describe('PublishedSnapshotViewer', () => {
       definition: JSON.stringify(noListConfig),
     })
     const wrapper = await mountViewer()
-    await openSection(wrapper, '列表列配置')
+    await openSection(wrapper, '编号设置')
 
     expect(wrapper.text()).toContain('该历史版本未保存列表配置，无法展示。')
   })
 
   it('脚本区展示字段脚本、表单事件、监听脚本和审批人表达式', async () => {
     const wrapper = await mountViewer()
-    await openSection(wrapper, '脚本')
+    await openSection(wrapper, '字段清单')
 
     expect(wrapper.text()).toContain('return #获取字段值("title");')
     expect(wrapper.text()).toContain('提交前检查')
     expect(wrapper.text()).toContain('return #获取流程变量("var_ok");')
     expect(wrapper.text()).toContain('return ["2"];')
 
-    await openSection(wrapper, '审批人脚本')
+    await openSection(wrapper, '流程设置')
     expect(wrapper.text()).toContain('return ["2"];')
     expect(wrapper.text()).toContain('return 1;')
   })
@@ -338,16 +347,16 @@ describe('PublishedSnapshotViewer', () => {
   it('节点、高级配置、变量和触发器均来自冻结流程版本', async () => {
     const wrapper = await mountViewer()
 
-    await openSection(wrapper, '节点配置')
+    await openSection(wrapper, '流程设计')
     expect(wrapper.text()).toContain('部门审批')
     expect(wrapper.text()).toContain('approvalMode')
     expect(wrapper.text()).toContain('assetStartListener')
 
-    await openSection(wrapper, '变量')
+    await openSection(wrapper, '流程设置')
     expect(wrapper.text()).toContain('var_ok')
     expect(wrapper.text()).toContain('是否通过')
 
-    await openSection(wrapper, '触发器')
+    await openSection(wrapper, '流程设置')
     expect(wrapper.text()).toContain('节点开始前检查')
     expect(wrapper.text()).toContain('节点开始前')
   })
@@ -373,6 +382,8 @@ describe('PublishedSnapshotViewer', () => {
     const wrapper = await mountViewer()
 
     expect(mockLoadGraph).not.toHaveBeenCalled()
+    // 流程空态在流程设计页签左列承接（同布局空态，不回退当前数据）
+    await openSection(wrapper, '流程设计')
     expect(wrapper.text()).toContain('没有找到与该表单版本匹配的冻结流程版本')
   })
 

@@ -5,15 +5,17 @@ const { t } = useI18n()
 /**
  * 配置面板（设计器右栏）—— 宿主只按注册表动态挂载，禁写死类型 switch。
  *
- * P53 节点07 三段结构：
- *  - 基础信息：组件名称 / 宽度（6 档百分比）/ 占位提示 / 必填（全部走 FieldPatch 通用键）；
- *  - 高级信息：字段标识 / 数据类型族 / 类型专属配置（configComponent 动态挂载）；
- *  - 其他信息：扩展属性预留区。
+ * 0.2.0 执行提示12（G07/G36）按当前蓝色原稿分区：
+ *  - 文字（LABEL）选中态：专用排列先行——文字内容/对齐三段/字号+字重同排/颜色/宽度；
+ *    通用元数据收进可展开的高级入口（内距 20，右栏 336 从 x1584）；
+ *  - 其余组件：基础信息 / 高级信息两段，值变更（JS）与显示条件（设置）并入高级信息末尾；
+ *    原第三段「其他信息」扩展占位随原稿移除（0.1.7 #36 的紧凑占位结构一并退场）。
  *
  * 配置面板改动经 @update 抛 FieldPatch，本宿主原样上交给设计器写回选中字段（单一数据源）。
  */
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { getFieldTypeDescriptor } from './field-types'
 import { isColumnNameUnique } from './column-name'
 import type { DesignerItem } from './types'
@@ -25,7 +27,10 @@ import { WIDTH_COL_STEPS, widthStepPercent } from './width-steps'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 import {
   DEFAULT_FIELD_LABEL_POSITION,
+  DEFAULT_FIELD_TEXT_ALIGN,
   type FieldLabelPosition,
+  type FieldTextAlign,
+  type LabelField,
   type VisibilityRule,
 } from '@/contracts/form-schema'
 
@@ -66,6 +71,11 @@ function applyValidation(patch: FieldPatch) {
 const descriptor = computed(() =>
   props.field ? getFieldTypeDescriptor(props.field.field.type) : undefined,
 )
+
+const isLabel = computed(() => props.field?.field.type === 'LABEL')
+
+/** 文字专用面板的高级入口（490:16184）：默认收起，展开后为通用元数据。 */
+const labelAdvancedOpen = ref(false)
 
 const colSpan = computed(() =>
   props.field ? normalizeFormFieldColSpan(props.field.field.colSpan, props.field.field.type) : 12,
@@ -111,6 +121,65 @@ function onLabelPosition(value: FieldLabelPosition) {
 function onWidthChange(cols: number | undefined) {
   if (!props.field || !cols) return
   emit('update', { colSpan: normalizeFormFieldColSpan(cols, props.field.field.type) })
+}
+
+/* ── 文字（LABEL）专用排列（490:16184） ── */
+
+const DEFAULT_LABEL_FONT_SIZE = 14
+/** 字号选项：常用档位 + 当前值兜底（历史自定义字号不丢显）。 */
+const LABEL_FONT_SIZE_STEPS = [12, 14, 16, 18, 20, 24, 28, 32, 36, 48]
+
+function labelText(): string {
+  return ((props.field?.field as LabelField | undefined)?.text ?? '') as string
+}
+
+function onLabelText(value: string) {
+  emit('update', { text: value })
+}
+
+function labelColor(): string {
+  return ((props.field?.field as LabelField | undefined)?.color ?? '') as string
+}
+
+function onLabelColor(value: string | null) {
+  emit('update', { color: value ?? '' })
+}
+
+function labelFontSize(): number {
+  const size = (props.field?.field as LabelField | undefined)?.fontSize
+  return typeof size === 'number' && size > 0 ? size : DEFAULT_LABEL_FONT_SIZE
+}
+
+const labelFontSizeOptions = computed(() => {
+  const current = labelFontSize()
+  return LABEL_FONT_SIZE_STEPS.includes(current)
+    ? LABEL_FONT_SIZE_STEPS
+    : [...LABEL_FONT_SIZE_STEPS, current].sort((a, b) => a - b)
+})
+
+function onLabelFontSize(value: number | undefined) {
+  emit('update', { fontSize: value ?? undefined })
+}
+
+function labelFontWeight(): 'normal' | 'bold' {
+  return ((props.field?.field as LabelField | undefined)?.fontWeight ?? 'normal') as
+    | 'normal'
+    | 'bold'
+}
+
+function onLabelFontWeight() {
+  emit('update', { fontWeight: labelFontWeight() === 'bold' ? 'normal' : 'bold' })
+}
+
+function labelTextAlign(): FieldTextAlign {
+  return ((props.field?.field as LabelField | undefined)?.textAlign ??
+    DEFAULT_FIELD_TEXT_ALIGN) as FieldTextAlign
+}
+
+function onLabelTextAlign(value: string | number | boolean | undefined) {
+  const align: FieldTextAlign =
+    value === 'center' || value === 'right' ? value : DEFAULT_FIELD_TEXT_ALIGN
+  emit('update', { textAlign: align })
 }
 
 /**
@@ -160,7 +229,7 @@ function onFieldKeySuffix(raw: string) {
 </script>
 
 <template>
-  <aside class="config">
+  <aside class="config" :class="{ 'config--label': field !== null && isLabel }">
     <div class="config__head">
       <h2 class="config__title">{{ t('form.fieldSettingsTitle') }}</h2>
       <span v-if="field" class="config__type">{{ controlLabel }}</span>
@@ -168,8 +237,153 @@ function onFieldKeySuffix(raw: string) {
 
     <div v-if="!field" class="config__empty" />
 
+    <!-- ═══ 文字（LABEL）专用排列（490:16184）：内容→对齐→字号/字重→颜色→宽度 ═══ -->
+    <template v-else-if="isLabel">
+      <div class="config__row">
+        <label class="config__label">{{ t('form.labelBody') }}</label>
+        <el-input
+          :model-value="labelText()"
+          type="textarea"
+          :rows="3"
+          :placeholder="t('form.labelBodyPlaceholder')"
+          :disabled="readonly"
+          @update:model-value="onLabelText"
+        />
+      </div>
+
+      <div class="config__row">
+        <label class="config__label">{{ t('form.labelAlignLabel') }}</label>
+        <el-radio-group
+          :model-value="labelTextAlign()"
+          class="config__align"
+          :disabled="readonly"
+          @update:model-value="onLabelTextAlign"
+        >
+          <el-radio-button value="left">{{ t('form.textAlignLeft') }}</el-radio-button>
+          <el-radio-button value="center">{{ t('form.textAlignCenter') }}</el-radio-button>
+          <el-radio-button value="right">{{ t('form.textAlignRight') }}</el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <div class="config__cols">
+        <div class="config__row">
+          <label class="config__label">{{ t('form.labelFontSize') }}</label>
+          <el-select
+            :model-value="labelFontSize()"
+            :disabled="readonly"
+            @update:model-value="onLabelFontSize"
+          >
+            <el-option v-for="size in labelFontSizeOptions" :key="size" :value="size">
+              {{ size }} px
+            </el-option>
+          </el-select>
+        </div>
+        <div class="config__row">
+          <label class="config__label">{{ t('form.labelWeightLabel') }}</label>
+          <el-button
+            class="config__weight"
+            :class="{ 'is-on': labelFontWeight() === 'bold' }"
+            :disabled="readonly"
+            @click="onLabelFontWeight"
+          >
+            {{
+              labelFontWeight() === 'bold' ? t('form.fontWeightBold') : t('form.fontWeightNormal')
+            }}
+          </el-button>
+        </div>
+      </div>
+
+      <div class="config__row">
+        <label class="config__label">{{ t('form.labelColorLabel') }}</label>
+        <div class="config__color">
+          <span
+            class="config__color-swatch"
+            :style="{ background: labelColor() || 'transparent' }"
+          />
+          <span class="config__color-hex">{{ labelColor() || '—' }}</span>
+          <el-icon class="config__color-arrow"><ArrowDown /></el-icon>
+          <el-color-picker
+            class="config__color-picker"
+            :model-value="labelColor()"
+            :predefine="[
+              '#172033',
+              '#303a55',
+              '#6b7280',
+              '#6f2dff',
+              '#d93026',
+              '#1f9d55',
+              '#2563eb',
+              '#d97706',
+            ]"
+            :disabled="readonly"
+            @update:model-value="onLabelColor"
+          />
+        </div>
+      </div>
+
+      <div class="config__row">
+        <label class="config__label">{{ t('form.widthLabel') }}</label>
+        <el-select :model-value="colSpan" :disabled="readonly" @update:model-value="onWidthChange">
+          <el-option
+            v-for="option in widthOptions"
+            :key="option.cols"
+            :value="option.cols"
+            :label="`${option.pct}%`"
+          >
+            <span class="width-option">
+              <span class="width-option__gauge"><i :style="{ width: `${option.pct}%` }" /></span>
+              <span class="width-option__pct">{{ option.pct }}%</span>
+            </span>
+          </el-option>
+        </el-select>
+      </div>
+
+      <!-- 通用元数据高级入口：默认收起，展开为组件名称/字段标识/数据类型/显示条件 -->
+      <h3
+        class="config__section config__section--toggle"
+        data-testid="label-advanced-toggle"
+        @click="labelAdvancedOpen = !labelAdvancedOpen"
+      >
+        {{ t('form.sectionAdvancedInfo') }}
+        <el-icon class="config__section-caret" :class="{ 'is-open': labelAdvancedOpen }">
+          <ArrowDown />
+        </el-icon>
+      </h3>
+      <template v-if="labelAdvancedOpen">
+        <div class="config__row">
+          <label class="config__label">{{ t('fieldList.colName') }}</label>
+          <el-input
+            :model-value="field.field.label ?? ''"
+            :disabled="readonly"
+            @update:model-value="(v: string) => emit('update', { label: v })"
+          />
+        </div>
+        <div class="config__row">
+          <label class="config__label">{{ t('form.fieldKeyLabel') }}</label>
+          <el-input
+            :model-value="fieldKeySuffix"
+            :disabled="keyLocked"
+            :maxlength="58"
+            @update:model-value="onFieldKeySuffix"
+          >
+            <template #prepend>field_</template>
+          </el-input>
+        </div>
+        <div class="config__row">
+          <label class="config__label">{{ t('fieldList.colType') }}</label>
+          <el-input :model-value="logicalTypeLabel" disabled />
+        </div>
+        <RulesEditor
+          :target="field.field.name"
+          :field-names="ruleFieldNames"
+          :rule="rule"
+          @update-rule="(r) => emit('update-rule', r)"
+        />
+      </template>
+    </template>
+
+    <!-- ═══ 其余组件：基础信息 / 高级信息（值变更、显示条件并入高级信息） ═══ -->
     <template v-else>
-      <!-- ═══ 基础信息 ═══ -->
       <h3 class="config__section">{{ t('form.sectionBasicInfo') }}</h3>
       <div class="config__row">
         <label class="config__label">{{ t('fieldList.colName') }}</label>
@@ -231,7 +445,6 @@ function onFieldKeySuffix(raw: string) {
         />
       </div>
 
-      <!-- ═══ 高级信息 ═══ -->
       <h3 class="config__section">{{ t('form.sectionAdvancedInfo') }}</h3>
       <div class="config__row">
         <label class="config__label">{{ t('form.fieldKeyLabel') }}</label>
@@ -280,21 +493,14 @@ function onFieldKeySuffix(raw: string) {
         {{ t('form.unsupportedConfig') }}
       </p>
 
-      <!-- BF20261013-021：高级编辑（脚本）——值变更时执行的字段脚本（已发布只读不回显可编辑面板） -->
+      <!-- BF20261013-021：值变更（JS）——字段脚本，与显示条件同为高级信息行（490 原稿排列） -->
       <ScriptConfig
         v-if="field.field.type !== 'LABEL'"
         :field="field.field"
         @update="(p: FieldPatch) => emit('update', p)"
       />
 
-      <!-- ═══ 其他信息 ═══ -->
-      <h3 class="config__section">{{ t('form.sectionOtherInfo') }}</h3>
-      <div class="config__extension">
-        <p class="config__extension-title">{{ t('form.extensionAreaTitle') }}</p>
-        <p class="config__extension-hint">{{ t('form.extensionAreaEmptyHint') }}</p>
-      </div>
-
-      <!-- v0.0.2 P2：显隐联动规则（LABEL 非输入字段也可控显隐）；置于其他信息之后 -->
+      <!-- 显隐联动规则：显示条件行 + 展开编辑 -->
       <RulesEditor
         :target="field.field.name"
         :field-names="ruleFieldNames"
@@ -326,6 +532,11 @@ function onFieldKeySuffix(raw: string) {
   --el-component-size-small: 32px;
 }
 
+/* G36（490:16184）：文字专用面板内距 20（右栏 336 从 x1584 由宿主承担） */
+aside.config.config--label {
+  padding: 20px;
+}
+
 /* V011-BUG-013：恢复输入框常规内边距——文本不再贴边/被裁切（此前 padding 被清零） */
 .config :deep(.el-input__inner) {
   line-height: 17px;
@@ -355,7 +566,7 @@ function onFieldKeySuffix(raw: string) {
   font-size: var(--sw-font-body);
 }
 
-/* 三段结构小节标题（设计07：基础信息 194 / 高级信息 522） */
+/* 三段结构小节标题 */
 .config__section {
   margin: 25px 0 16px;
   padding-bottom: 8px;
@@ -368,6 +579,25 @@ function onFieldKeySuffix(raw: string) {
 /* 设计07：首段（基础信息）紧随面板头部 */
 .config__section:first-of-type {
   margin-top: 19px;
+}
+
+/* 高级入口（文字专用面板）：可点击展开 */
+.config__section--toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.config__section-caret {
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+  transition: transform 0.15s;
+}
+
+.config__section-caret.is-open {
+  transform: rotate(180deg);
 }
 
 .config__row {
@@ -407,6 +637,86 @@ function onFieldKeySuffix(raw: string) {
 .config__row :deep(.el-select),
 .config__row :deep(.el-input-number) {
   width: 100%;
+}
+
+/* G36：字号/字重同排两列 */
+.config__cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 20px;
+}
+
+/* G36：三段对齐按钮铺满 */
+.config__align {
+  display: flex;
+  width: 100%;
+}
+
+.config__align :deep(.el-radio-button) {
+  flex: 1 1 0;
+}
+
+.config__align :deep(.el-radio-button__inner) {
+  width: 100%;
+}
+
+/* G36：字重按钮（常规/加粗切换；选中蓝描边） */
+.config__weight.is-on {
+  color: var(--sw-color-primary);
+  border-color: var(--sw-color-primary);
+}
+
+/* G36：颜色行 = 白底选择框（色块+HEX+箭头），点击任意处由透明取色器承接面板 */
+.config__color {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--el-border-color, #dcdfe6);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.config__color-swatch {
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border: 1px solid rgb(0 0 0 / 10%);
+  border-radius: 2px;
+}
+
+.config__color-hex {
+  flex: 1 1 auto;
+  font-size: 13px;
+  line-height: 17px;
+  color: var(--sw-text-regular);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.config__color-arrow {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: #a8abb2;
+}
+
+/* 透明取色器铺满整行：点按任意处即弹出原取色面板 */
+.config__color-picker {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+
+.config__color-picker :deep(.el-color-picker__trigger) {
+  width: 100%;
+  height: 100%;
 }
 
 /* BF20261013-016：宽度选项 = 宽度示意图（左）+ 百分比（右） */
@@ -476,26 +786,5 @@ function onFieldKeySuffix(raw: string) {
   color: var(--sw-text-placeholder);
   font-size: var(--sw-font-secondary);
   text-align: center;
-}
-
-/* 其他信息：扩展属性预留区 */
-.config__extension {
-  /* 0.1.7 #36（Owner）：扩展属性区域收敛为紧凑占位（原为大块空白框，内容仅一行标题） */
-  padding: 12px 14px;
-  border: 1px solid #e3e8f4;
-  border-radius: 8px;
-  background: #f7f9fe;
-}
-
-.config__extension-title {
-  margin: 0 0 4px;
-  font-size: var(--sw-font-emphasis);
-  color: var(--sw-text-regular);
-}
-
-.config__extension-hint {
-  margin: 0;
-  font-size: var(--sw-font-caption);
-  color: var(--sw-text-secondary);
 }
 </style>

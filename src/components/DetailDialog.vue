@@ -22,6 +22,8 @@ withDefaults(
     /** 嵌在滚动/裁剪容器内时挂到 body，避免被父级 overflow 裁切 */
     appendToBody?: boolean
     appearance?: 'default' | 'design'
+    /** 全屏外壳（0.2.0 G14 发布快照查看器）：el-dialog fullscreen，正文接管整屏 */
+    fullscreen?: boolean
   }>(),
   {
     title: '',
@@ -32,6 +34,7 @@ withDefaults(
     showFooter: true,
     appendToBody: false,
     appearance: 'default',
+    fullscreen: false,
   },
 )
 
@@ -52,6 +55,7 @@ const emit = defineEmits<{
     :class="{ 'sw-detail-dialog--design': appearance === 'design' }"
     :destroy-on-close="destroyOnClose"
     :append-to-body="appendToBody"
+    :fullscreen="fullscreen"
     @update:model-value="emit('update:modelValue', $event)"
     @closed="emit('closed')"
   >

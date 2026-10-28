@@ -42,14 +42,7 @@ import {
   userStatusTagType,
   userStatusLabel,
 } from '@/modules/system/constants'
-import {
-  ListFilterItem,
-  StandardListTemplate,
-  StandardFormTemplate,
-  FormSection,
-  FormGrid,
-  ListActionsColumn,
-} from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { useUserStore } from '@/stores/user'
 import { InfoFilled, Plus, Search } from '@element-plus/icons-vue'
@@ -582,89 +575,104 @@ onMounted(loadList)
   <!-- 新建/编辑弹窗 -->
   <el-dialog
     v-model="dialogVisible"
-    class="system-user-editor"
+    class="system-user-editor sw-edit-dialog"
     align-center
     :title="dialogTitle"
     :close-on-click-modal="false"
     :close-on-press-escape="!submitting"
     :show-close="!submitting"
     destroy-on-close
-    width="680px"
+    width="760px"
     @closed="resetForm"
   >
-    <StandardFormTemplate embedded>
-      <template v-if="formError" #alert>
-        <el-alert :title="formError" type="error" :closable="false" show-icon />
-      </template>
-
-      <FormSection :title="t('common.basicInfo')">
-        <FormGrid :columns="2">
-          <div class="form-field tenant-owner-field">
-            <label class="form-field__label">{{ t('tenantContext.label') }}</label>
-            <el-input
-              :model-value="targetTenant?.name ?? ''"
-              :aria-label="t('tenantContext.label')"
-              readonly
-            />
-          </div>
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('common.username') }}</label>
-            <el-input
-              v-model="form.username"
-              :placeholder="t('system.usernamePlaceholder')"
-              maxlength="64"
-              show-word-limit
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.fullName') }}</label>
-            <el-input
-              v-model="form.realName"
-              :placeholder="t('system.fullNamePlaceholder')"
-              maxlength="32"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.email') }}</label>
-            <el-input
-              v-model="form.email"
-              :placeholder="t('system.emailPlaceholder')"
-              maxlength="128"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.phone') }}</label>
-            <el-input
-              v-model="form.phone"
-              :placeholder="t('system.phonePlaceholder')"
-              maxlength="20"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.gender') }}</label>
-            <el-select v-model="form.sex" style="width: 100%">
-              <el-option :label="t('common.unknown')" :value="0" />
-              <el-option :label="t('common.male')" :value="1" />
-              <el-option :label="t('common.female')" :value="2" />
-            </el-select>
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.status') }}</label>
-            <el-select v-model="form.status" style="width: 100%">
-              <el-option
-                v-for="opt in userStatusOptions"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
-            </el-select>
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.department') }}</label>
+    <el-alert
+      v-if="formError"
+      :title="formError"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    />
+    <div class="sw-edit-grid">
+      <div class="form-field tenant-owner-field">
+        <label class="form-field__label">{{ t('tenantContext.label') }}</label>
+        <el-input
+          :model-value="targetTenant?.name ?? ''"
+          :aria-label="t('tenantContext.label')"
+          readonly
+        />
+      </div>
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('common.username') }}</label>
+        <el-input
+          v-model="form.username"
+          :placeholder="t('system.usernamePlaceholder')"
+          maxlength="64"
+          show-word-limit
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.fullName') }}</label>
+        <el-input
+          v-model="form.realName"
+          :placeholder="t('system.fullNamePlaceholder')"
+          maxlength="32"
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.email') }}</label>
+        <el-input
+          v-model="form.email"
+          :placeholder="t('system.emailPlaceholder')"
+          maxlength="128"
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.phone') }}</label>
+        <el-input v-model="form.phone" :placeholder="t('system.phonePlaceholder')" maxlength="20" />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.gender') }}</label>
+        <el-select v-model="form.sex" style="width: 100%">
+          <el-option :label="t('common.unknown')" :value="0" />
+          <el-option :label="t('common.male')" :value="1" />
+          <el-option :label="t('common.female')" :value="2" />
+        </el-select>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('common.status') }}</label>
+        <el-select v-model="form.status" style="width: 100%">
+          <el-option
+            v-for="opt in userStatusOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.department') }}</label>
+        <el-select v-model="form.deptId" :placeholder="t('system.selectDept')" style="width: 100%">
+          <el-option
+            v-for="dept in deptOptions"
+            :key="dept.id"
+            :label="dept.name"
+            :value="dept.id ?? ''"
+          />
+        </el-select>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.postDeptShort') }}</label>
+        <el-checkbox-group v-model="postIds">
+          <div v-for="post in postOptions" :key="post.id" class="post-row">
+            <el-checkbox :value="post.id">{{ post.name }}</el-checkbox>
             <el-select
-              v-model="form.deptId"
-              :placeholder="t('system.selectDept')"
-              style="width: 100%"
+              v-if="postIds.includes(post.id!)"
+              v-model="postDeptMap[post.id!]"
+              :placeholder="t('system.postDept')"
+              clearable
+              size="small"
+              style="width: 200px"
             >
               <el-option
                 v-for="dept in deptOptions"
@@ -674,72 +682,49 @@ onMounted(loadList)
               />
             </el-select>
           </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.postDeptShort') }}</label>
-            <el-checkbox-group v-model="postIds">
-              <div v-for="post in postOptions" :key="post.id" class="post-row">
-                <el-checkbox :value="post.id">{{ post.name }}</el-checkbox>
-                <el-select
-                  v-if="postIds.includes(post.id!)"
-                  v-model="postDeptMap[post.id!]"
-                  :placeholder="t('system.postDept')"
-                  clearable
-                  size="small"
-                  style="width: 200px"
-                >
-                  <el-option
-                    v-for="dept in deptOptions"
-                    :key="dept.id"
-                    :label="dept.name"
-                    :value="dept.id ?? ''"
-                  />
-                </el-select>
-              </div>
-            </el-checkbox-group>
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.role') }}</label>
-            <button
-              v-if="roleIds.length === 0"
-              type="button"
-              class="role-picker role-picker--empty"
-              @click="openRoleDialog"
-            >
-              <el-icon><Plus /></el-icon>
-              <span>{{ t('system.configureRoles') }}</span>
-            </button>
-            <div v-else class="role-picker">
-              <el-tag
-                v-for="role in selectedRoles"
-                :key="role.id"
-                size="small"
-                closable
-                @close="removeRole(role.id!)"
-              >
-                {{ role.name }}
-              </el-tag>
-              <span v-if="selectedRoles.length < roleIds.length" class="role-picker__more">
-                +{{ roleIds.length - selectedRoles.length }}
-              </span>
-              <button type="button" class="role-picker__add" @click="openRoleDialog">
-                <el-icon><Plus /></el-icon>
-                <span>{{ t('system.configureRoles') }}</span>
-              </button>
-            </div>
-          </div>
-          <div v-if="!editingId" class="form-field">
-            <label class="form-field__label">{{ t('common.password') }}</label>
-            <el-input
-              v-model="form.plainPassword"
-              type="password"
-              :placeholder="t('system.passwordPlaceholder')"
-              maxlength="64"
-              show-password
-            />
-          </div>
-        </FormGrid>
-      </FormSection>
-    </StandardFormTemplate>
+        </el-checkbox-group>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('common.role') }}</label>
+        <button
+          v-if="roleIds.length === 0"
+          type="button"
+          class="role-picker role-picker--empty"
+          @click="openRoleDialog"
+        >
+          <el-icon><Plus /></el-icon>
+          <span>{{ t('system.configureRoles') }}</span>
+        </button>
+        <div v-else class="role-picker">
+          <el-tag
+            v-for="role in selectedRoles"
+            :key="role.id"
+            size="small"
+            closable
+            @close="removeRole(role.id!)"
+          >
+            {{ role.name }}
+          </el-tag>
+          <span v-if="selectedRoles.length < roleIds.length" class="role-picker__more">
+            +{{ roleIds.length - selectedRoles.length }}
+          </span>
+          <button type="button" class="role-picker__add" @click="openRoleDialog">
+            <el-icon><Plus /></el-icon>
+            <span>{{ t('system.configureRoles') }}</span>
+          </button>
+        </div>
+      </div>
+      <div v-if="!editingId" class="form-field">
+        <label class="form-field__label">{{ t('common.password') }}</label>
+        <el-input
+          v-model="form.plainPassword"
+          type="password"
+          :placeholder="t('system.passwordPlaceholder')"
+          maxlength="64"
+          show-password
+        />
+      </div>
+    </div>
     <template #footer>
       <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
@@ -877,13 +862,14 @@ onMounted(loadList)
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: var(--sw-space-8);
+  gap: 6px;
 }
 
 .form-field__label {
-  font-size: var(--sw-font-body);
+  font-size: 14px;
   font-weight: var(--sw-font-weight-emphasis);
-  color: var(--sw-text-primary);
+  line-height: 22px;
+  color: var(--sw-text-regular);
 }
 
 .form-field--required .form-field__label::before {

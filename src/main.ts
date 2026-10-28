@@ -5,6 +5,8 @@ import 'element-plus/dist/index.css'
 import './styles/tokens.css'
 // 表格表头与行数据统一居中，须在 Element Plus 样式之后导入。
 import './styles/tables.css'
+// 管理端编辑弹窗（446 系列）共享几何：760/1000 两列、右下 80×32 页脚。
+import './styles/edit-dialogs.css'
 
 import App from './App.vue'
 import { pinia } from './stores'

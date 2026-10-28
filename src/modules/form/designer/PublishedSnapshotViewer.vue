@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { Close } from '@element-plus/icons-vue'
 import DetailDialog from '@/components/DetailDialog.vue'
 import { parseDefinition } from '@/adapters/form-designer'
 import FormPreview from '@/adapters/form-designer/FormPreview.vue'
@@ -52,19 +53,8 @@ const props = defineProps<{
 const visible = defineModel<boolean>('visible', { required: true })
 const { t } = useI18n()
 
-type SectionKey =
-  | 'overview'
-  | 'fields'
-  | 'design'
-  | 'scripts'
-  | 'validation'
-  | 'visibility'
-  | 'columns'
-  | 'permissions'
-  | 'nodes'
-  | 'variables'
-  | 'triggers'
-  | 'approvalScripts'
+/** 0.2.0 G14（272:1518）：全屏外壳五页签——原 12 分区按实际内容归入对应页签。 */
+type SnapshotTab = 'fields' | 'design' | 'process' | 'numbering' | 'settings'
 
 const loading = ref(false)
 const loadError = ref('')
@@ -73,7 +63,7 @@ const detail = ref<FormSnapshotDetailDTO | null>(null)
 const schema = ref<FormSchema | null>(null)
 const rawDefinition = ref<Record<string, unknown> | null>(null)
 const processSources = ref<SnapshotProcessSource[]>([])
-const activeSection = ref<SectionKey>('overview')
+const activeTab = ref<SnapshotTab>('fields')
 
 /* ── 表单设计 · 冻结字段属性（右属性外壳，方向 direction-ui-completion-020）──
  * 点击设计网格中的字段，右栏只读展示该字段的冻结配置；不写入任何数据。 */
@@ -195,34 +185,51 @@ const rawDefinitionText = computed(() =>
   rawDefinition.value ? prettyJson(rawDefinition.value) : '',
 )
 
-const sections = computed(
-  () =>
+const viewerTabs = computed(() =>
+  (
     [
-      ['overview', 'overview', processSources.value.length],
-      ['fields', 'fields', fields.value.length],
-      ['design', 'design', fields.value.length],
-      ['scripts', 'scripts', scripts.value.length],
-      ['validation', 'validation', constraints.value.length],
-      ['visibility', 'visibility', visibility.value.length],
-      ['columns', 'columns', listConfig.value?.columns.length ?? 0],
-      ['permissions', 'permissions', permissions.value.length + actionPermissions.value.length],
-      ['nodes', 'nodes', nodes.value.length],
-      ['variables', 'variables', variables.value.length],
-      ['triggers', 'triggers', triggers.value.length],
-      ['approvalScripts', 'approvalScripts', approvalScripts.value.length],
-    ].map(([key, label, count]) => ({ key, label, count })) as Array<{
-      key: SectionKey
-      label: string
-      count: number
-    }>,
+      ['fields', 'tabFields'],
+      ['design', 'tabDesign'],
+      ['process', 'tabProcess'],
+      ['numbering', 'tabNumbering'],
+      ['settings', 'tabSettings'],
+    ] as const
+  ).map(([key, labelKey]) => ({ key, label: t(`form.snapshotViewer.${labelKey}`) })),
 )
+
+/* ── 流程设计页签：左列流程版本、中列节点配置、右列选中节点只读属性 ── */
+const selectedProcessKey = ref<string | null>(null)
+const selectedNodeId = ref<string | null>(null)
+
+const selectedProcess = computed<SnapshotProcessSource | null>(() => {
+  const list = processSources.value
+  if (list.length === 0) return null
+  return list.find((p) => `${p.defId}:${p.graphVersion}` === selectedProcessKey.value) ?? list[0]
+})
+
+const processNodes = computed(() =>
+  selectedProcess.value
+    ? nodes.value.filter(
+        (node) =>
+          node.processKey === selectedProcess.value!.processKey &&
+          node.graphVersion === selectedProcess.value!.graphVersion,
+      )
+    : [],
+)
+
+const selectedNode = computed(() => {
+  if (processNodes.value.length === 0) return null
+  return (
+    processNodes.value.find((node) => node.id === selectedNodeId.value) ?? processNodes.value[0]
+  )
+})
 
 function sectionLabel(label: string): string {
   return t(`form.snapshotViewer.${label}`)
 }
 
-function selectSection(key: SectionKey): void {
-  activeSection.value = key
+function selectTab(key: SnapshotTab): void {
+  activeTab.value = key
 }
 
 function prettyJson(value: unknown): string {
@@ -328,7 +335,10 @@ async function loadSnapshot(): Promise<void> {
   schema.value = null
   rawDefinition.value = null
   processSources.value = []
-  activeSection.value = 'overview'
+  activeTab.value = 'fields'
+  selectedFieldName.value = null
+  selectedProcessKey.value = null
+  selectedNodeId.value = null
   try {
     const loaded = await getFormSnapshotDefinition(props.formId, snapshot.formVersion)
     if (generation !== requestGeneration) return
@@ -393,7 +403,7 @@ watch(
     :title="t('form.snapshotViewer.title')"
     :loading="loading"
     :error="loadError"
-    width="min(1440px, calc(100vw - 32px))"
+    fullscreen
     appearance="design"
     :show-footer="false"
     append-to-body
@@ -404,111 +414,45 @@ watch(
       class="snapshot-viewer"
       data-testid="published-snapshot-viewer"
     >
-      <header class="snapshot-heading">
-        <div class="snapshot-heading__identity">
-          <span class="snapshot-heading__eyebrow">{{ t('form.snapshotViewer.frozenBadge') }}</span>
-          <h2>{{ snapshotTitle }}</h2>
-          <p>{{ t('form.snapshotViewer.subtitle') }}</p>
+      <header class="snapshot-topbar">
+        <div class="snapshot-topbar__identity">
+          <strong class="snapshot-topbar__title">{{ t('form.snapshotViewer.title') }}</strong>
+          <span class="snapshot-topbar__name">{{ snapshotTitle }}</span>
+          <span class="snapshot-topbar__version">v{{ snapshotVersionText }}</span>
+          <span class="snapshot-topbar__badge">{{ t('form.snapshotViewer.frozenBadge') }}</span>
         </div>
-        <div class="snapshot-heading__version">
-          <span>{{ t('form.snapshotViewer.version') }}</span>
-          <strong>v{{ snapshotVersionText }}</strong>
-        </div>
+        <button
+          type="button"
+          class="snapshot-topbar__close"
+          :aria-label="t('common.close')"
+          @click="visible = false"
+        >
+          <el-icon :size="16"><Close /></el-icon>
+        </button>
       </header>
+
+      <nav class="snapshot-tabs" :aria-label="t('form.snapshotViewer.sections')">
+        <button
+          v-for="tab in viewerTabs"
+          :key="tab.key"
+          type="button"
+          class="snapshot-tabs__item"
+          :class="{ 'is-active': activeTab === tab.key }"
+          :aria-current="activeTab === tab.key ? 'page' : undefined"
+          @click="selectTab(tab.key)"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
 
       <div v-if="warnings.length" class="snapshot-warning" role="status">
         <p v-for="warning in warnings" :key="warning">{{ warning }}</p>
       </div>
 
-      <div class="snapshot-layout">
-        <nav class="snapshot-nav" :aria-label="t('form.snapshotViewer.sections')">
-          <button
-            v-for="section in sections"
-            :key="section.key"
-            type="button"
-            class="snapshot-nav__item"
-            :class="{ 'is-active': activeSection === section.key }"
-            :aria-current="activeSection === section.key ? 'page' : undefined"
-            @click="selectSection(section.key)"
-          >
-            <span>{{ sectionLabel(section.label) }}</span>
-            <b>{{ section.count }}</b>
-          </button>
-        </nav>
-
-        <main class="snapshot-main">
-          <section v-if="activeSection === 'overview'" class="snapshot-section">
-            <div class="snapshot-section__head">
-              <div>
-                <h3>{{ sectionLabel('overview') }}</h3>
-              </div>
-            </div>
-            <dl class="snapshot-meta">
-              <div>
-                <dt>{{ t('form.snapshotViewer.formIdentity') }}</dt>
-                <dd>
-                  <code>{{ formKey }}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>{{ t('form.snapshotViewer.version') }}</dt>
-                <dd>v{{ snapshotVersionText }}</dd>
-              </div>
-              <div>
-                <dt>{{ t('form.snapshotViewer.publishedAt') }}</dt>
-                <dd>{{ effectiveSnapshot.createTime || '—' }}</dd>
-              </div>
-              <div>
-                <dt>{{ t('form.snapshotViewer.status') }}</dt>
-                <dd>{{ effectiveSnapshot.status || '—' }}</dd>
-              </div>
-              <div>
-                <dt>{{ t('form.snapshotViewer.author') }}</dt>
-                <dd>{{ effectiveSnapshot.author || '—' }}</dd>
-              </div>
-              <div>
-                <dt>{{ t('form.snapshotViewer.schemaVersion') }}</dt>
-                <dd>{{ schema.schemaVersion ?? '—' }}</dd>
-              </div>
-              <div class="snapshot-meta__wide">
-                <dt>{{ t('form.snapshotViewer.note') }}</dt>
-                <dd>{{ effectiveSnapshot.note || '—' }}</dd>
-              </div>
-            </dl>
-
-            <h4>{{ t('form.snapshotViewer.processSnapshots') }}</h4>
-            <p v-if="processSources.length === 0" class="snapshot-empty">
-              {{ t('form.snapshotViewer.noMatchingProcess') }}
-            </p>
-            <div v-else class="snapshot-process-list">
-              <article
-                v-for="process in processSources"
-                :key="`${process.defId}:${process.graphVersion}`"
-                class="snapshot-process"
-              >
-                <div>
-                  <strong>{{ process.defName }}</strong>
-                  <span>{{ process.processKey }} · v{{ process.graphVersion }}</span>
-                </div>
-                <div class="snapshot-process__meta">
-                  <span>{{ process.status }}</span>
-                  <span>{{ process.publishedAt || '—' }}</span>
-                  <span>{{ process.publisherName || '—' }}</span>
-                </div>
-                <details class="snapshot-raw snapshot-raw--card">
-                  <summary>{{ t('form.snapshotViewer.rawProcessGraph') }}</summary>
-                  <pre>{{ prettyJson(process.graph) }}</pre>
-                </details>
-              </article>
-            </div>
-
-            <details class="snapshot-raw">
-              <summary>{{ t('form.snapshotViewer.rawDefinition') }}</summary>
-              <pre>{{ rawDefinitionText }}</pre>
-            </details>
-          </section>
-
-          <section v-else-if="activeSection === 'fields'" class="snapshot-section">
+      <div class="snapshot-body">
+        <!-- ═══ 字段清单：冻结字段表 + 校验 + 显隐 + 脚本（原只读表面保持） ═══ -->
+        <div v-if="activeTab === 'fields'" class="snapshot-tabbody snapshot-tabbody--full">
+          <section class="snapshot-section">
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('fields') }}</h3>
@@ -552,89 +496,7 @@ watch(
             </table>
           </section>
 
-          <section v-else-if="activeSection === 'design'" class="snapshot-section">
-            <div class="snapshot-section__head">
-              <div>
-                <h3>{{ sectionLabel('design') }}</h3>
-              </div>
-            </div>
-            <p v-if="!schema || schema.fields.length === 0" class="snapshot-empty">
-              {{ t('form.snapshotViewer.noData') }}
-            </p>
-            <div v-else class="snapshot-design">
-              <p v-if="schema.description" class="snapshot-design__description">
-                {{ schema.description }}
-              </p>
-              <div class="snapshot-design__layout">
-                <div class="snapshot-design__grid">
-                  <div
-                    v-for="field in schema.fields"
-                    :key="field.name"
-                    :class="{
-                      'snapshot-design__cell': true,
-                      'is-selected': field.name === selectedField?.name,
-                    }"
-                    :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
-                    @click="selectedFieldName = field.name"
-                  >
-                    <FormPreview :schema="{ title: '', fields: [field] }" mode="design" />
-                  </div>
-                </div>
-                <aside class="snapshot-design__props">
-                  <h4>{{ t('form.snapshotViewer.propsTitle') }}</h4>
-                  <template v-if="selectedField">
-                    <p class="snapshot-design__props-target">
-                      {{ selectedField.label || selectedField.name }}
-                    </p>
-                    <dl>
-                      <template v-for="row in selectedFieldProps" :key="row.label">
-                        <dt>{{ row.label }}</dt>
-                        <dd>{{ row.value }}</dd>
-                      </template>
-                    </dl>
-                  </template>
-                  <p v-else class="snapshot-empty">
-                    {{ t('form.snapshotViewer.noData') }}
-                  </p>
-                </aside>
-              </div>
-            </div>
-          </section>
-
-          <section v-else-if="activeSection === 'scripts'" class="snapshot-section">
-            <div class="snapshot-section__head">
-              <div>
-                <h3>{{ sectionLabel('scripts') }}</h3>
-              </div>
-            </div>
-            <p v-if="scripts.length === 0" class="snapshot-empty">
-              {{ t('form.snapshotViewer.noData') }}
-            </p>
-            <template v-else>
-              <article v-for="row in scripts" :key="row.key" class="snapshot-code-card">
-                <header>
-                  <strong>{{ row.label }}</strong>
-                  <span>{{ scriptKindLabel(row.kind) }}</span>
-                  <span>{{ scriptSourceLabel(row) }}</span>
-                  <span v-if="row.event">{{ eventLabel(row.event) }}</span>
-                  <span v-if="row.nodeKey">{{ row.nodeKey }}</span>
-                  <span v-if="row.enabled != null">
-                    {{
-                      row.enabled
-                        ? t('form.snapshotViewer.enabled')
-                        : t('form.snapshotViewer.disabled')
-                    }}
-                  </span>
-                  <el-button link type="primary" size="small" @click="openScriptDetail(row)">
-                    {{ t('common.view') }}
-                  </el-button>
-                </header>
-                <pre>{{ row.code }}</pre>
-              </article>
-            </template>
-          </section>
-
-          <section v-else-if="activeSection === 'validation'" class="snapshot-section">
+          <section class="snapshot-section">
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('validation') }}</h3>
@@ -670,7 +532,7 @@ watch(
             </table>
           </section>
 
-          <section v-else-if="activeSection === 'visibility'" class="snapshot-section">
+          <section class="snapshot-section">
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('visibility') }}</h3>
@@ -700,7 +562,224 @@ watch(
             </template>
           </section>
 
-          <section v-else-if="activeSection === 'columns'" class="snapshot-section">
+          <section class="snapshot-section">
+            <div class="snapshot-section__head">
+              <div>
+                <h3>{{ sectionLabel('scripts') }}</h3>
+              </div>
+            </div>
+            <p v-if="scripts.length === 0" class="snapshot-empty">
+              {{ t('form.snapshotViewer.noData') }}
+            </p>
+            <template v-else>
+              <article v-for="row in scripts" :key="row.key" class="snapshot-code-card">
+                <header>
+                  <strong>{{ row.label }}</strong>
+                  <span>{{ scriptKindLabel(row.kind) }}</span>
+                  <span>{{ scriptSourceLabel(row) }}</span>
+                  <span v-if="row.event">{{ eventLabel(row.event) }}</span>
+                  <span v-if="row.nodeKey">{{ row.nodeKey }}</span>
+                  <span v-if="row.enabled != null">
+                    {{
+                      row.enabled
+                        ? t('form.snapshotViewer.enabled')
+                        : t('form.snapshotViewer.disabled')
+                    }}
+                  </span>
+                  <el-button link type="primary" size="small" @click="openScriptDetail(row)">
+                    {{ t('common.view') }}
+                  </el-button>
+                </header>
+                <pre>{{ row.code }}</pre>
+              </article>
+            </template>
+          </section>
+        </div>
+
+        <!-- ═══ 表单设计：左组件列 252 / 冻结表单画布 / 右冻结属性 336 ═══ -->
+        <div v-else-if="activeTab === 'design'" class="snapshot-tabbody snapshot-tabbody--design">
+          <aside class="snapshot-side snapshot-side--fields">
+            <h4>{{ t('form.snapshotViewer.componentList') }}</h4>
+            <ul class="snapshot-component-list">
+              <li v-for="field in schema?.fields ?? []" :key="field.name">
+                <button
+                  type="button"
+                  :class="{ 'is-active': field.name === selectedField?.name }"
+                  @click="selectedFieldName = field.name"
+                >
+                  {{ field.label || field.name }}
+                </button>
+              </li>
+            </ul>
+          </aside>
+          <div class="snapshot-tabbody__main">
+            <section class="snapshot-section">
+              <div class="snapshot-section__head">
+                <div>
+                  <h3>{{ sectionLabel('design') }}</h3>
+                </div>
+              </div>
+              <p v-if="!schema || schema.fields.length === 0" class="snapshot-empty">
+                {{ t('form.snapshotViewer.noData') }}
+              </p>
+              <div v-else class="snapshot-design">
+                <p v-if="schema.description" class="snapshot-design__description">
+                  {{ schema.description }}
+                </p>
+                <div class="snapshot-design__grid">
+                  <div
+                    v-for="field in schema.fields"
+                    :key="field.name"
+                    :class="{
+                      'snapshot-design__cell': true,
+                      'is-selected': field.name === selectedField?.name,
+                    }"
+                    :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
+                    @click="selectedFieldName = field.name"
+                  >
+                    <FormPreview :schema="{ title: '', fields: [field] }" mode="design" />
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <aside class="snapshot-side snapshot-side--props">
+            <h4>{{ t('form.snapshotViewer.propsTitle') }}</h4>
+            <template v-if="selectedField">
+              <p class="snapshot-design__props-target">
+                {{ selectedField.label || selectedField.name }}
+              </p>
+              <dl>
+                <template v-for="row in selectedFieldProps" :key="row.label">
+                  <dt>{{ row.label }}</dt>
+                  <dd>{{ row.value }}</dd>
+                </template>
+              </dl>
+            </template>
+            <p v-else class="snapshot-empty">
+              {{ t('form.snapshotViewer.noData') }}
+            </p>
+          </aside>
+        </div>
+
+        <!-- ═══ 流程设计：左流程版本 220 / 节点配置 / 右选中节点属性 336 ═══ -->
+        <div v-else-if="activeTab === 'process'" class="snapshot-tabbody snapshot-tabbody--process">
+          <aside class="snapshot-side snapshot-side--procs">
+            <h4>{{ t('form.snapshotViewer.processSnapshots') }}</h4>
+            <p v-if="processSources.length === 0" class="snapshot-empty">
+              {{ t('form.snapshotViewer.noMatchingProcess') }}
+            </p>
+            <ul v-else class="snapshot-component-list">
+              <li
+                v-for="process in processSources"
+                :key="`${process.defId}:${process.graphVersion}`"
+              >
+                <button
+                  type="button"
+                  :class="{
+                    'is-active':
+                      `${process.defId}:${process.graphVersion}` ===
+                      `${selectedProcess?.defId}:${selectedProcess?.graphVersion}`,
+                  }"
+                  @click="selectedProcessKey = `${process.defId}:${process.graphVersion}`"
+                >
+                  <span>{{ process.defName }}</span>
+                  <small>v{{ process.graphVersion }}</small>
+                </button>
+              </li>
+            </ul>
+          </aside>
+          <div class="snapshot-tabbody__main">
+            <section class="snapshot-section">
+              <div v-if="selectedProcess" class="snapshot-process">
+                <div>
+                  <strong>{{ selectedProcess.defName }}</strong>
+                  <span
+                    >{{ selectedProcess.processKey }} · v{{ selectedProcess.graphVersion }}</span
+                  >
+                </div>
+                <div class="snapshot-process__meta">
+                  <span>{{ selectedProcess.status }}</span>
+                  <span>{{ selectedProcess.publishedAt || '—' }}</span>
+                  <span>{{ selectedProcess.publisherName || '—' }}</span>
+                </div>
+                <details class="snapshot-raw snapshot-raw--card">
+                  <summary>{{ t('form.snapshotViewer.rawProcessGraph') }}</summary>
+                  <pre>{{ prettyJson(selectedProcess.graph) }}</pre>
+                </details>
+              </div>
+              <div class="snapshot-section__head">
+                <div>
+                  <h3>{{ sectionLabel('nodes') }}</h3>
+                </div>
+              </div>
+              <p v-if="processNodes.length === 0" class="snapshot-empty">
+                {{ t('form.snapshotViewer.noData') }}
+              </p>
+              <div v-else class="snapshot-node-list">
+                <article
+                  v-for="node in processNodes"
+                  :key="`${node.processKey}:${node.graphVersion}:${node.id}`"
+                  class="snapshot-node"
+                  :class="{ 'is-selected': selectedNode?.id === node.id }"
+                  @click="selectedNodeId = node.id"
+                >
+                  <header>
+                    <strong>{{ node.name }}</strong
+                    ><code>{{ node.id }}</code
+                    ><span>{{ node.type }}</span>
+                  </header>
+                  <p>{{ node.processName }} · v{{ node.graphVersion }}</p>
+                  <details class="snapshot-raw">
+                    <summary>{{ t('form.snapshotViewer.rawConfig') }}</summary>
+                    <pre>{{ prettyJson(node.config) }}</pre>
+                  </details>
+                </article>
+              </div>
+              <h4>{{ t('form.snapshotViewer.advancedConfig') }}</h4>
+              <p v-if="advancedConfigs.length === 0" class="snapshot-empty">
+                {{ t('form.snapshotViewer.noData') }}
+              </p>
+              <template v-else>
+                <details
+                  v-for="row in advancedConfigs"
+                  :key="`${row.processKey}:${row.graphVersion}`"
+                  class="snapshot-raw snapshot-raw--card"
+                >
+                  <summary>{{ row.processName }} · v{{ row.graphVersion }}</summary>
+                  <pre>{{ prettyJson(row.config) }}</pre>
+                </details>
+              </template>
+            </section>
+          </div>
+          <aside class="snapshot-side snapshot-side--props">
+            <h4>{{ t('form.snapshotViewer.propsTitle') }}</h4>
+            <template v-if="selectedNode">
+              <p class="snapshot-design__props-target">{{ selectedNode.name }}</p>
+              <dl>
+                <dt>{{ t('form.snapshotViewer.nodeId') }}</dt>
+                <dd>
+                  <code>{{ selectedNode.id }}</code>
+                </dd>
+                <dt>{{ t('form.snapshotViewer.propType') }}</dt>
+                <dd>{{ selectedNode.type }}</dd>
+                <dt>{{ t('form.snapshotViewer.nodeProcess') }}</dt>
+                <dd>{{ selectedNode.processName }} · v{{ selectedNode.graphVersion }}</dd>
+              </dl>
+              <details class="snapshot-raw snapshot-raw--card">
+                <summary>{{ t('form.snapshotViewer.rawConfig') }}</summary>
+                <pre>{{ prettyJson(selectedNode.config) }}</pre>
+              </details>
+            </template>
+            <p v-else class="snapshot-empty">
+              {{ t('form.snapshotViewer.noData') }}
+            </p>
+          </aside>
+        </div>
+
+        <!-- ═══ 编号设置：冻结列表列配置 ═══ -->
+        <div v-else-if="activeTab === 'numbering'" class="snapshot-tabbody snapshot-tabbody--full">
+          <section class="snapshot-section">
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('columns') }}</h3>
@@ -761,8 +840,55 @@ watch(
               </details>
             </template>
           </section>
+        </div>
 
-          <section v-else-if="activeSection === 'permissions'" class="snapshot-section">
+        <!-- ═══ 流程设置：冻结元信息 + 权限 + 变量 + 触发器 + 审批人脚本 ═══ -->
+        <div v-else class="snapshot-tabbody snapshot-tabbody--full">
+          <section class="snapshot-section">
+            <div class="snapshot-section__head">
+              <div>
+                <h3>{{ sectionLabel('overview') }}</h3>
+              </div>
+            </div>
+            <dl class="snapshot-meta">
+              <div>
+                <dt>{{ t('form.snapshotViewer.formIdentity') }}</dt>
+                <dd>
+                  <code>{{ formKey }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t('form.snapshotViewer.version') }}</dt>
+                <dd>v{{ snapshotVersionText }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('form.snapshotViewer.publishedAt') }}</dt>
+                <dd>{{ effectiveSnapshot.createTime || '—' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('form.snapshotViewer.status') }}</dt>
+                <dd>{{ effectiveSnapshot.status || '—' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('form.snapshotViewer.author') }}</dt>
+                <dd>{{ effectiveSnapshot.author || '—' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('form.snapshotViewer.schemaVersion') }}</dt>
+                <dd>{{ schema.schemaVersion ?? '—' }}</dd>
+              </div>
+              <div class="snapshot-meta__wide">
+                <dt>{{ t('form.snapshotViewer.note') }}</dt>
+                <dd>{{ effectiveSnapshot.note || '—' }}</dd>
+              </div>
+            </dl>
+            <details class="snapshot-raw">
+              <summary>{{ t('form.snapshotViewer.rawDefinition') }}</summary>
+              <pre>{{ rawDefinitionText }}</pre>
+            </details>
+          </section>
+
+          <section class="snapshot-section">
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('permissions') }}</h3>
@@ -803,50 +929,7 @@ watch(
             </ul>
           </section>
 
-          <section v-else-if="activeSection === 'nodes'" class="snapshot-section">
-            <div class="snapshot-section__head">
-              <div>
-                <h3>{{ sectionLabel('nodes') }}</h3>
-              </div>
-            </div>
-            <p v-if="nodes.length === 0" class="snapshot-empty">
-              {{ t('form.snapshotViewer.noData') }}
-            </p>
-            <div v-else class="snapshot-node-list">
-              <article
-                v-for="node in nodes"
-                :key="`${node.processKey}:${node.graphVersion}:${node.id}`"
-                class="snapshot-node"
-              >
-                <header>
-                  <strong>{{ node.name }}</strong
-                  ><code>{{ node.id }}</code
-                  ><span>{{ node.type }}</span>
-                </header>
-                <p>{{ node.processName }} · v{{ node.graphVersion }}</p>
-                <details class="snapshot-raw">
-                  <summary>{{ t('form.snapshotViewer.rawConfig') }}</summary>
-                  <pre>{{ prettyJson(node.config) }}</pre>
-                </details>
-              </article>
-            </div>
-            <h4>{{ t('form.snapshotViewer.advancedConfig') }}</h4>
-            <p v-if="advancedConfigs.length === 0" class="snapshot-empty">
-              {{ t('form.snapshotViewer.noData') }}
-            </p>
-            <template v-else>
-              <details
-                v-for="row in advancedConfigs"
-                :key="`${row.processKey}:${row.graphVersion}`"
-                class="snapshot-raw snapshot-raw--card"
-              >
-                <summary>{{ row.processName }} · v{{ row.graphVersion }}</summary>
-                <pre>{{ prettyJson(row.config) }}</pre>
-              </details>
-            </template>
-          </section>
-
-          <section v-else-if="activeSection === 'variables'" class="snapshot-section">
+          <section class="snapshot-section">
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('variables') }}</h3>
@@ -882,7 +965,7 @@ watch(
             </table>
           </section>
 
-          <section v-else-if="activeSection === 'triggers'" class="snapshot-section">
+          <section class="snapshot-section">
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('triggers') }}</h3>
@@ -916,7 +999,7 @@ watch(
             </template>
           </section>
 
-          <section v-else class="snapshot-section">
+          <section class="snapshot-section">
             <div class="snapshot-section__head">
               <div>
                 <h3>{{ sectionLabel('approvalScripts') }}</h3>
@@ -942,7 +1025,7 @@ watch(
               </article>
             </template>
           </section>
-        </main>
+        </div>
       </div>
     </div>
 
@@ -981,57 +1064,125 @@ watch(
   font-size: 14px;
 }
 
+/* 0.2.0 G14（272:1518）：全屏外壳——顶条 56 / 页签 40 / 页签体分栏承接原分区内容 */
 .snapshot-viewer {
   display: flex;
   flex-direction: column;
-  gap: var(--sw-space-16);
-  height: clamp(520px, 68vh, 760px);
+  height: 100%;
   min-height: 0;
 }
 
-.snapshot-heading {
+.snapshot-topbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--sw-space-24);
-  padding: var(--sw-space-20) var(--sw-space-24);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
+  gap: var(--sw-space-16);
+  flex: 0 0 56px;
+  box-sizing: border-box;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--sw-border-light);
   background: var(--sw-surface-card);
 }
 
-.snapshot-heading h2 {
-  margin: 4px 0 6px;
+.snapshot-topbar__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.snapshot-topbar__title {
   color: var(--sw-text-primary);
-  font-size: 22px;
-  line-height: 30px;
-}
-
-.snapshot-heading p {
-  margin: 0;
-  color: var(--sw-text-secondary);
-  font-size: 13px;
-}
-
-.snapshot-heading__eyebrow {
-  color: var(--sw-color-primary);
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
 }
 
-.snapshot-heading__version {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+.snapshot-topbar__name {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--sw-fill-base, #f4f6fb);
+  color: var(--sw-text-regular);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.snapshot-topbar__version {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #eef2fb;
   color: var(--sw-text-secondary);
   font-size: 12px;
 }
 
-.snapshot-heading__version strong {
+.snapshot-topbar__badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #fdf6ec;
+  color: #b88230;
+  font-size: 12px;
+}
+
+.snapshot-topbar__close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sw-text-secondary);
+  cursor: pointer;
+}
+
+.snapshot-topbar__close:hover {
+  background: var(--sw-fill-base, #f4f6fb);
+  color: var(--sw-text-primary);
+}
+
+.snapshot-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 32px;
+  flex: 0 0 40px;
+  box-sizing: border-box;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--sw-border-light);
+  background: var(--sw-surface-card);
+}
+
+.snapshot-tabs__item {
+  position: relative;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--sw-text-regular);
+  font-size: 14px;
+  line-height: 40px;
+  cursor: pointer;
+}
+
+.snapshot-tabs__item:hover {
   color: var(--sw-color-primary);
-  font-size: 22px;
-  line-height: 28px;
+}
+
+.snapshot-tabs__item.is-active {
+  color: var(--sw-color-primary);
+  font-weight: 600;
+}
+
+.snapshot-tabs__item.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--sw-color-primary);
+  content: '';
 }
 
 .snapshot-warning {
@@ -1051,70 +1202,127 @@ watch(
   margin-top: 4px;
 }
 
-.snapshot-layout {
-  display: grid;
-  flex: 1;
-  grid-template-columns: 190px minmax(0, 1fr);
+.snapshot-body {
+  display: block;
+  flex: 1 1 auto;
   min-height: 0;
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-  background: var(--sw-surface-card);
-  overflow: hidden;
 }
 
-.snapshot-nav {
+.snapshot-tabbody {
+  height: 100%;
+  min-height: 0;
+}
+
+.snapshot-tabbody--full {
+  box-sizing: border-box;
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+}
+
+.snapshot-tabbody--design,
+.snapshot-tabbody--process {
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+}
+
+/* 表单设计：左 252 / 右 336；流程设计：左 220 / 右 336（272:1518） */
+.snapshot-tabbody--design .snapshot-side--fields {
+  flex: 0 0 252px;
+}
+
+.snapshot-tabbody--process .snapshot-side--procs {
+  flex: 0 0 220px;
+}
+
+.snapshot-tabbody--design .snapshot-side--props,
+.snapshot-tabbody--process .snapshot-side--props {
+  flex: 0 0 336px;
+  border-left: 1px solid var(--sw-border-light);
+}
+
+.snapshot-tabbody__main {
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+}
+
+.snapshot-side {
+  box-sizing: border-box;
+  padding: 20px 16px 24px;
+  overflow-y: auto;
+  background: var(--sw-surface-card);
+}
+
+.snapshot-side--fields,
+.snapshot-side--procs {
+  border-right: 1px solid var(--sw-border-light);
+}
+
+.snapshot-side h4 {
+  margin: 0 0 12px;
+  color: var(--sw-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.snapshot-component-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: var(--sw-space-12);
-  border-right: 1px solid var(--sw-border-light);
-  background: var(--sw-fill-base);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.snapshot-nav__item {
+.snapshot-component-list button {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  width: 100%;
   min-height: 36px;
   padding: 0 10px;
   border: none;
   border-radius: var(--sw-radius-base);
   background: transparent;
   color: var(--sw-text-regular);
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
 }
 
-.snapshot-nav__item:hover {
+.snapshot-component-list button small {
+  color: var(--sw-text-secondary);
+  font-size: 11px;
+}
+
+.snapshot-component-list button:hover {
   background: var(--sw-color-primary-soft);
 }
 
-.snapshot-nav__item.is-active {
-  background: var(--sw-color-primary);
-  color: var(--sw-surface-card);
+.snapshot-component-list button.is-active {
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
+  font-weight: 600;
 }
 
-.snapshot-nav__item b {
-  min-width: 24px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, currentColor 10%, transparent);
-  font-size: 11px;
-  font-weight: 500;
-  text-align: center;
-}
-
-.snapshot-main {
-  min-width: 0;
-  overflow-y: auto;
-  padding: var(--sw-space-20);
+.snapshot-node.is-selected {
+  border-color: var(--sw-color-primary);
+  box-shadow: 0 0 0 1px var(--sw-color-primary-soft);
+  cursor: pointer;
 }
 
 .snapshot-section {
   display: flex;
   flex-direction: column;
   gap: var(--sw-space-16);
+}
+
+.snapshot-section + .snapshot-section {
+  margin-top: var(--sw-space-24);
 }
 
 .snapshot-section__head h3 {
@@ -1458,8 +1666,27 @@ watch(
   font-size: 12px;
 }
 
+/* G14 全屏外壳：接管 el-dialog fullscreen 正文（去 max-height/内距/页头，页签体内部滚动） */
+:global(.published-snapshot-dialog.el-dialog) {
+  max-width: none;
+  padding: 0;
+  overflow: hidden;
+}
+
+:global(.published-snapshot-dialog .el-dialog__header) {
+  display: none;
+}
+
+:global(.published-snapshot-dialog .el-dialog__body) {
+  max-height: none;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+
 :global(.published-snapshot-dialog .sw-detail-dialog__body) {
   min-height: 0;
+  height: 100%;
 }
 
 @media (max-width: 900px) {
@@ -1468,32 +1695,19 @@ watch(
     max-height: 76vh;
   }
 
-  .snapshot-heading,
+  .snapshot-topbar,
   .snapshot-process {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .snapshot-heading__version,
-  .snapshot-process__meta {
-    align-items: flex-start;
-    text-align: left;
-  }
-
-  .snapshot-layout {
-    display: flex;
+  .snapshot-tabbody--design,
+  .snapshot-tabbody--process {
     flex-direction: column;
-    min-height: 0;
   }
 
-  .snapshot-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    border-right: none;
-    border-bottom: 1px solid var(--sw-border-light);
-  }
-
-  .snapshot-main {
+  .snapshot-tabbody__main,
+  .snapshot-tabbody--full {
     max-height: 58vh;
   }
 

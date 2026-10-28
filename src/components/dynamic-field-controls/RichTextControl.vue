@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/* global document, window, HTMLElement, Node, Range, ClipboardEvent, MouseEvent */
+/* global document, window, HTMLElement, Node, Range, ClipboardEvent, MouseEvent, PointerEvent */
 /**
  * 富文本（RICH_TEXT）控件（direction-ui-semantics-020 / direction-ui-completion-020 / A09—A12）。
  * - 编辑：受控字体/字号/颜色与基础排版（加粗/斜体/下划线/删除线、对齐/缩进、有序/无序列表）；
@@ -281,6 +281,109 @@ function applyCustomColor(): void {
   applyColor(customColor.value)
 }
 
+/* ── 495:18680 颜色面板：430×286，饱和度/色相/色板/HEX ── */
+
+const satRef = ref<HTMLElement | null>(null)
+const hueRef = ref<HTMLElement | null>(null)
+const panelHsv = ref({ h: 263, s: 76, v: 100 })
+
+function hexToHsv(hex: string): { h: number; s: number; v: number } | null {
+  const normalized = normalizeColor(hex)
+  if (!normalized) return null
+  const r = Number.parseInt(normalized.slice(1, 3), 16) / 255
+  const g = Number.parseInt(normalized.slice(3, 5), 16) / 255
+  const b = Number.parseInt(normalized.slice(5, 7), 16) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const delta = max - min
+  let h = 0
+  if (delta > 0) {
+    if (max === r) h = ((g - b) / delta) % 6
+    else if (max === g) h = (b - r) / delta + 2
+    else h = (r - g) / delta + 4
+    h = Math.round(h * 60)
+    if (h < 0) h += 360
+  }
+  return { h, s: max === 0 ? 0 : Math.round((delta / max) * 100), v: Math.round(max * 100) }
+}
+
+function hsvToHex(h: number, s: number, v: number): string {
+  const sat = s / 100
+  const val = v / 100
+  const f = (n: number): number => {
+    const k = (n + h / 60) % 6
+    return val - val * sat * Math.max(0, Math.min(k, 4 - k, 1))
+  }
+  return `#${[f(5), f(3), f(1)]
+    .map((part) =>
+      Math.round(part * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')
+    .toUpperCase()}`
+}
+
+const hueColor = computed(() => hsvToHex(panelHsv.value.h, 100, 100))
+const satBackground = computed(
+  () =>
+    `linear-gradient(to top, #000, rgba(0, 0, 0, 0)), linear-gradient(to right, #fff, ${hueColor.value})`,
+)
+const satPointerStyle = computed(() => ({
+  left: `${panelHsv.value.s}%`,
+  top: `${100 - panelHsv.value.v}%`,
+}))
+
+function syncCustomFromHsv(): void {
+  customColor.value = hsvToHex(panelHsv.value.h, panelHsv.value.s, panelHsv.value.v)
+}
+
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, value))
+}
+
+function startAreaDrag(
+  event: PointerEvent,
+  area: HTMLElement | null,
+  apply: (xPercent: number, yPercent: number) => void,
+): void {
+  if (!area) return
+  event.preventDefault()
+  const rect = area.getBoundingClientRect()
+  const move = (pointer: PointerEvent): void => {
+    const x = clampPercent(((pointer.clientX - rect.left) / rect.width) * 100)
+    const y = clampPercent(((pointer.clientY - rect.top) / rect.height) * 100)
+    apply(x, y)
+  }
+  move(event)
+  const stop = (): void => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', stop)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', stop)
+}
+
+function onSatPointerDown(event: PointerEvent): void {
+  startAreaDrag(event, satRef.value, (x, y) => {
+    panelHsv.value = { ...panelHsv.value, s: Math.round(x), v: Math.round(100 - y) }
+    syncCustomFromHsv()
+  })
+}
+
+function onHuePointerDown(event: PointerEvent): void {
+  startAreaDrag(event, hueRef.value, (x) => {
+    panelHsv.value = { ...panelHsv.value, h: Math.round(clampPercent(x) * 3.599) }
+    syncCustomFromHsv()
+  })
+}
+
+watch(colorOpen, (open) => {
+  if (!open) return
+  const hsv = hexToHsv(activeColor.value || customColor.value)
+  if (hsv) panelHsv.value = hsv
+})
+
 /** 清除格式（参考 101:2 工具条 Tx）：仅移除字符格式与块令牌，保留文本。 */
 function clearFormat(): void {
   restoreSelection()
@@ -411,6 +514,7 @@ watch(
       <el-select
         class="rt-select"
         size="small"
+        popper-class="rt-font-popper"
         :aria-label="t('form.richTextFont')"
         :model-value="activeFont"
         @update:model-value="onFontSelect"
@@ -425,6 +529,7 @@ watch(
       <el-select
         class="rt-select rt-select--size"
         size="small"
+        popper-class="rt-size-popper"
         :aria-label="t('form.richTextSize')"
         :model-value="activeSize"
         @update:model-value="onSizeSelect"
@@ -444,26 +549,46 @@ watch(
           A
         </button>
         <div v-if="colorOpen" class="rt-colors" @mousedown.prevent>
-          <button
-            v-for="color in colorOptions"
-            :key="color.value"
-            class="rt-swatch"
-            type="button"
-            :title="color.name"
-            :aria-label="color.name"
-            :style="{ background: color.value }"
-            @mousedown.prevent
-            @click="applyColor(color.value)"
-          />
-          <input
-            v-model="customColor"
-            class="rt-color-input"
-            type="text"
-            maxlength="7"
-            :aria-label="t('form.richTextCustomColor')"
-            :placeholder="t('form.richTextCustomColor')"
-            @keydown.enter.prevent="applyCustomColor"
-          />
+          <p class="rt-colors__label">{{ t('appearance.presetColors') }}</p>
+          <div class="rt-colors__swatches">
+            <button
+              v-for="color in colorOptions"
+              :key="color.value"
+              class="rt-swatch"
+              type="button"
+              :title="color.name"
+              :aria-label="color.name"
+              :style="{ background: color.value }"
+              @mousedown.prevent
+              @click="applyColor(color.value)"
+            />
+          </div>
+          <div
+            class="rt-colors__sat"
+            :style="{ background: satBackground }"
+            @pointerdown="onSatPointerDown"
+          >
+            <span class="rt-colors__pointer" :style="satPointerStyle" />
+          </div>
+          <div class="rt-colors__hue" @pointerdown="onHuePointerDown">
+            <span
+              class="rt-colors__pointer rt-colors__pointer--hue"
+              :style="{ left: `${(panelHsv.h / 359.9) * 100}%` }"
+            />
+          </div>
+          <div class="rt-colors__hex">
+            <span class="rt-colors__hex-label">HEX</span>
+            <input
+              v-model="customColor"
+              class="rt-colors__hex-input"
+              type="text"
+              maxlength="7"
+              :aria-label="t('form.richTextCustomColor')"
+              :placeholder="t('form.richTextCustomColor')"
+              @keydown.enter.prevent="applyCustomColor"
+            />
+            <span class="rt-colors__preview" :style="{ background: customColor }" />
+          </div>
         </div>
       </div>
       <button
@@ -738,39 +863,106 @@ watch(
   border-bottom: 3px solid currentColor;
   font-weight: 600;
 }
+/* 495:18680：430×286 完整颜色面板（预设色板/饱和度/色相/HEX）。 */
 .rt-colors {
   position: absolute;
   z-index: 30;
   top: 28px;
   left: 0;
-  display: grid;
-  grid-template-columns: repeat(8, 18px);
-  gap: 6px;
   box-sizing: border-box;
-  width: 198px;
-  padding: 8px;
+  width: 430px;
+  height: 286px;
+  padding: 16px;
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-base);
   background: var(--sw-surface-card);
   box-shadow: var(--sw-shadow-card);
 }
+.rt-colors__label {
+  margin: 0;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.rt-colors__swatches {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+}
 .rt-swatch {
-  width: 18px;
-  height: 18px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border: 1px solid rgb(0 0 0 / 8%);
   border-radius: 4px;
   cursor: pointer;
 }
-.rt-color-input {
-  grid-column: 1 / -1;
+.rt-colors__sat {
+  position: relative;
+  width: 396px;
+  height: 118px;
+  margin-top: 18px;
+  border-radius: 2px;
+  cursor: crosshair;
+}
+.rt-colors__hue {
+  position: relative;
+  width: 396px;
+  height: 8px;
+  margin-top: 16px;
+  border-radius: 4px;
+  background: linear-gradient(
+    to right,
+    #f00 0%,
+    #ff0 17%,
+    #0f0 33%,
+    #0ff 50%,
+    #00f 67%,
+    #f0f 83%,
+    #f00 100%
+  );
+  cursor: pointer;
+}
+.rt-colors__pointer {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 2px rgb(0 0 0 / 45%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.rt-colors__pointer--hue {
+  top: 50%;
+}
+.rt-colors__hex {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+.rt-colors__hex-label {
+  color: var(--sw-text-secondary);
+  font-size: 14px;
+  line-height: 22px;
+}
+.rt-colors__hex-input {
   box-sizing: border-box;
-  width: 100%;
-  height: 26px;
-  padding: 0 6px;
+  width: 180px;
+  height: 28px;
+  padding: 0 8px;
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-sm);
-  font-size: 12px;
+  font-size: 13px;
+}
+.rt-colors__preview {
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: 4px;
 }
 .rt-count {
   margin-left: auto;
@@ -839,6 +1031,37 @@ watch(
 </style>
 
 <style>
+/* 495:18648/18663：字体 208×224（6 行 36）、字号 120×260（7 行 36）浮层。 */
+.rt-font-popper {
+  width: 208px;
+}
+.rt-font-popper .el-select-dropdown {
+  box-sizing: border-box;
+  padding: 4px 0;
+}
+.rt-font-popper .el-select-dropdown__list {
+  max-height: 216px;
+  overflow-y: auto;
+}
+.rt-font-popper .el-select-dropdown__item {
+  height: 36px;
+  line-height: 36px;
+}
+.rt-size-popper {
+  width: 120px;
+}
+.rt-size-popper .el-select-dropdown {
+  box-sizing: border-box;
+  padding: 4px 0;
+}
+.rt-size-popper .el-select-dropdown__list {
+  max-height: 252px;
+  overflow-y: auto;
+}
+.rt-size-popper .el-select-dropdown__item {
+  height: 36px;
+  line-height: 36px;
+}
 /* 受控令牌的固定样式（内容由 innerHTML 写入，scoped 选择器无法命中）。 */
 .rt-editor [data-rt-font='default'] {
   font-family: var(--sw-font-family);

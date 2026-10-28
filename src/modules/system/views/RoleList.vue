@@ -36,9 +36,6 @@ import type { SysUser } from '@/modules/system/types/user'
 import {
   ListFilterItem,
   StandardListTemplate,
-  StandardFormTemplate,
-  FormSection,
-  FormGrid,
   ListActionsColumn,
   ListPagination,
 } from '@/components/page-layout'
@@ -629,124 +626,123 @@ onMounted(loadList)
   <!-- 新建/编辑弹窗 -->
   <el-dialog
     v-model="dialogVisible"
+    class="sw-edit-dialog role-editor"
+    align-center
     :title="dialogTitle"
     :close-on-click-modal="false"
     destroy-on-close
-    width="680px"
+    width="1000px"
     @closed="resetForm"
   >
-    <StandardFormTemplate embedded>
-      <template v-if="formError" #alert>
-        <el-alert :title="formError" type="error" :closable="false" show-icon />
-      </template>
-
-      <FormSection :title="t('common.basicInfo')">
-        <FormGrid :columns="2">
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('system.roleName') }}</label>
-            <el-input
-              v-model="form.name"
-              :placeholder="t('system.roleNamePlaceholder')"
-              maxlength="64"
-              show-word-limit
+    <el-alert
+      v-if="formError"
+      :title="formError"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    />
+    <div class="role-edit">
+      <div class="role-edit__fields">
+        <div class="form-field form-field--required">
+          <label class="form-field__label">{{ t('system.roleName') }}</label>
+          <el-input
+            v-model="form.name"
+            :placeholder="t('system.roleNamePlaceholder')"
+            maxlength="64"
+            show-word-limit
+          />
+        </div>
+        <div class="form-field form-field--required">
+          <label class="form-field__label">{{ t('system.roleCode') }}</label>
+          <el-input
+            v-model="form.code"
+            :placeholder="t('system.roleCodePlaceholder')"
+            :disabled="!!editingId || isProtectedRole"
+            maxlength="64"
+            show-word-limit
+          />
+        </div>
+        <div class="form-field">
+          <label class="form-field__label">{{ t('common.sort') }}</label>
+          <el-input-number v-model="form.sort" :min="0" :max="9999" style="width: 100%" />
+        </div>
+        <div class="form-field">
+          <label class="form-field__label">{{ t('common.status') }}</label>
+          <el-select v-model="form.status" style="width: 100%" :disabled="isProtectedRole">
+            <el-option :label="t('common.statusNormal')" :value="1" />
+            <el-option :label="t('common.disable')" :value="0" />
+          </el-select>
+        </div>
+        <div class="form-field">
+          <label class="form-field__label">{{ t('common.remark') }}</label>
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="2"
+            :placeholder="t('common.remarkPlaceholder')"
+            maxlength="256"
+            show-word-limit
+          />
+        </div>
+        <div class="form-field">
+          <label class="form-field__label">{{ t('system.dataScopeField') }}</label>
+          <el-select v-model="form.dataScope" style="width: 100%" :disabled="isProtectedRole">
+            <el-option
+              v-for="opt in DATA_SCOPE_OPTIONS"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </div>
+        <div v-if="form.dataScope === DATA_SCOPE_CUSTOM" class="form-field">
+          <label class="form-field__label">{{ t('system.dataScopeCustom') }}</label>
+          <div v-if="deptTreeError" class="dept-tree-box dept-tree-box--tip">
+            {{ deptTreeError }}
+          </div>
+          <div v-else-if="deptTree.length" class="dept-tree-box">
+            <el-tree
+              ref="deptTreeRef"
+              :data="deptTree"
+              node-key="id"
+              show-checkbox
+              check-strictly
+              default-expand-all
+              :props="{ label: 'name', children: 'children' }"
+              @check="handleDeptTreeCheck"
             />
           </div>
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('system.roleCode') }}</label>
-            <el-input
-              v-model="form.code"
-              :placeholder="t('system.roleCodePlaceholder')"
-              :disabled="!!editingId || isProtectedRole"
-              maxlength="64"
-              show-word-limit
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.sort') }}</label>
-            <el-input-number v-model="form.sort" :min="0" :max="9999" style="width: 100%" />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.status') }}</label>
-            <el-select v-model="form.status" style="width: 100%" :disabled="isProtectedRole">
-              <el-option :label="t('common.statusNormal')" :value="1" />
-              <el-option :label="t('common.disable')" :value="0" />
-            </el-select>
-          </div>
-        </FormGrid>
-        <FormGrid :columns="1" style="margin-top: 0">
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.remark') }}</label>
-            <el-input
-              v-model="form.description"
-              type="textarea"
-              :rows="3"
-              :placeholder="t('common.remarkPlaceholder')"
-              maxlength="256"
-              show-word-limit
-            />
-          </div>
-        </FormGrid>
-      </FormSection>
+          <div v-else class="dept-tree-box dept-tree-box--tip">{{ t('system.noDeptData') }}</div>
+        </div>
+      </div>
+      <div class="role-edit__tree">
+        <div class="role-edit__tree-title">{{ t('system.menuPermissions') }}</div>
+        <div class="role-edit__tree-body">
+          <el-tree
+            ref="permissionTreeRef"
+            :data="permissionTree"
+            node-key="id"
+            show-checkbox
+            default-expand-all
+            :props="{ label: 'title', children: 'children' }"
+            :disabled="isProtectedRole"
+            @check="handlePermissionCheck"
+          />
+        </div>
+      </div>
+    </div>
 
-      <FormSection :title="t('system.dataScope')">
-        <FormGrid :columns="1">
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.dataScopeField') }}</label>
-            <el-select v-model="form.dataScope" style="width: 100%" :disabled="isProtectedRole">
-              <el-option
-                v-for="opt in DATA_SCOPE_OPTIONS"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
-            </el-select>
-          </div>
-          <div v-if="form.dataScope === DATA_SCOPE_CUSTOM" class="form-field">
-            <label class="form-field__label">{{ t('system.dataScopeCustom') }}</label>
-            <div v-if="deptTreeError" class="dept-tree-box dept-tree-box--tip">
-              {{ deptTreeError }}
-            </div>
-            <div v-else-if="deptTree.length" class="dept-tree-box">
-              <el-tree
-                ref="deptTreeRef"
-                :data="deptTree"
-                node-key="id"
-                show-checkbox
-                check-strictly
-                default-expand-all
-                :props="{ label: 'name', children: 'children' }"
-                @check="handleDeptTreeCheck"
-              />
-            </div>
-            <div v-else class="dept-tree-box dept-tree-box--tip">{{ t('system.noDeptData') }}</div>
-          </div>
-        </FormGrid>
-      </FormSection>
-
-      <FormSection :title="t('system.menuPermissions')">
-        <el-tree
-          ref="permissionTreeRef"
-          :data="permissionTree"
-          node-key="id"
-          show-checkbox
-          default-expand-all
-          :props="{ label: 'title', children: 'children' }"
-          :disabled="isProtectedRole"
-          @check="handlePermissionCheck"
-        />
-      </FormSection>
-
-      <template #actions>
-        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
-        <el-button
-          v-if="!isProtectedRole"
-          type="primary"
-          :loading="submitting"
-          @click="handleSubmit"
-          >{{ t('common.save') }}</el-button
-        >
-      </template>
-    </StandardFormTemplate>
+    <template #footer>
+      <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+      <el-button
+        v-if="!isProtectedRole"
+        type="primary"
+        :loading="submitting"
+        @click="handleSubmit"
+        >{{ t('common.save') }}</el-button
+      >
+    </template>
   </el-dialog>
   <!-- 成员维护弹窗（I1） -->
   <el-dialog
@@ -813,27 +809,11 @@ onMounted(loadList)
 </template>
 
 <style scoped>
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sw-space-8);
-}
-
-.form-field__label {
-  font-size: var(--sw-font-body);
-  font-weight: var(--sw-font-weight-emphasis);
-  color: var(--sw-text-primary);
-}
-
-.form-field--required .form-field__label::before {
-  content: '* ';
-  color: var(--sw-danger);
-}
-
+/* 弹窗几何规则集中在下方非 scoped 块：el-dialog 走 Teleport，弹窗内容元素不带本组件作用域属性。 */
 .dept-tree-box {
-  max-height: 240px;
+  max-height: 200px;
   overflow-y: auto;
-  border: 1px solid var(--sw-border-base);
+  border: 1px solid #dde3ef;
   border-radius: var(--sw-radius-card);
   padding: var(--sw-space-8);
 }
@@ -841,5 +821,75 @@ onMounted(loadList)
 .dept-tree-box--tip {
   font-size: var(--sw-font-body);
   color: var(--sw-text-secondary);
+}
+</style>
+
+<style>
+/* 446:14465（G26）：1000×596，左字段区/右权限树并排，树独立滚动、18px 勾选；
+   Teleport 弹窗内容不带组件作用域属性，本块使用全局类名（role-editor/role-edit 系列为本页专用）。 */
+.role-edit {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  min-height: 0;
+}
+.role-edit__fields {
+  display: flex;
+  flex: 0 0 390px;
+  width: 390px;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.role-edit__tree {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+}
+.role-edit__tree-title {
+  margin-bottom: 6px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--sw-text-regular);
+}
+.role-edit__tree-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid #dde3ef;
+  border-radius: 6px;
+}
+.role-edit__tree-body .el-checkbox__inner {
+  /* G26：权限树 18px 勾选，覆盖 tokens.css 全局 28px（!important 同强按后序/特异性取胜） */
+  width: 18px !important;
+  height: 18px !important;
+}
+.role-edit__tree-body .el-checkbox__inner::after {
+  height: 9px !important;
+  left: 6px !important;
+  top: 2px !important;
+  width: 4px !important;
+  border-right-width: 2px !important;
+  border-bottom-width: 2px !important;
+}
+.role-editor.el-dialog {
+  height: 596px;
+  display: flex;
+  flex-direction: column;
+}
+.role-editor .el-dialog__header {
+  flex: 0 0 auto;
+}
+.role-editor .el-dialog__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.role-editor .el-dialog__footer {
+  flex: 0 0 auto;
 }
 </style>

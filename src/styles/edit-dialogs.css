@@ -1,0 +1,56 @@
+/* 446 系列编辑弹窗（0.2.0 执行提示12）：默认细边框 #DDE3EF、正文内滚动、右下 80×32 页脚。
+   760 宽 @x580：根内距清零后正文 25px 内距 → 字段 x605/970、列宽 345、页脚按钮右下。 */
+.sw-edit-dialog.el-dialog {
+  --el-border-color: #dde3ef;
+  --el-input-border-color: #dde3ef;
+  --el-dialog-padding-primary: 0px;
+  max-width: calc(100vw - 32px);
+  padding: 0;
+}
+.sw-edit-dialog .el-dialog__body {
+  box-sizing: border-box;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding: 4px 25px 0;
+}
+.sw-edit-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  padding: 16px 25px 20px;
+}
+.sw-edit-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+
+/* 两列字段网格：760 宽 → x605/970、列宽 345；控件 32 高。 */
+.sw-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 345px));
+  gap: 16px 20px;
+}
+.sw-edit-grid .form-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+.sw-edit-grid .form-field__label {
+  color: var(--sw-text-regular);
+  font-size: 14px;
+  line-height: 22px;
+}
+.sw-edit-grid .form-field--required .form-field__label::before {
+  content: '* ';
+  color: var(--sw-danger);
+}
+.sw-edit-grid .el-input__wrapper,
+.sw-edit-grid .el-select__wrapper {
+  min-height: 32px;
+}
+.sw-edit-grid__full {
+  grid-column: 1 / -1;
+}

@@ -30,13 +30,7 @@ import {
   deptStatusTagType,
   deptStatusLabel,
 } from '@/modules/system/constants'
-import {
-  ListToolbar,
-  StandardFormTemplate,
-  FormSection,
-  FormGrid,
-  ListActionsColumn,
-} from '@/components/page-layout'
+import { ListToolbar, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
 import { useUserStore } from '@/stores/user'
@@ -557,101 +551,101 @@ onMounted(() => {
   <!-- 新建/编辑弹窗 -->
   <el-dialog
     v-model="dialogVisible"
-    class="system-dept-editor"
+    class="system-dept-editor sw-edit-dialog"
     align-center
     :title="dialogTitle"
     :close-on-click-modal="false"
     :close-on-press-escape="!submitting"
     :show-close="!submitting"
     destroy-on-close
-    width="680px"
+    width="760px"
     @closed="resetForm"
   >
-    <StandardFormTemplate embedded>
-      <template v-if="formError" #alert>
-        <el-alert :title="formError" type="error" :closable="false" show-icon />
-      </template>
-
-      <FormSection :title="t('common.basicInfo')">
-        <FormGrid :columns="2">
-          <div class="form-field tenant-owner-field">
-            <label class="form-field__label">{{ t('tenantContext.label') }}</label>
-            <el-input
-              :model-value="targetTenant?.name ?? ''"
-              :aria-label="t('tenantContext.label')"
-              readonly
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.parentDept') }}</label>
-            <el-tree-select
-              v-model="form.parentId"
-              :data="parentDeptOptions"
-              node-key="id"
-              :props="{ label: 'name', children: 'children' }"
-              :placeholder="t('system.parentDeptPlaceholder')"
-              clearable
-              style="width: 100%"
-              check-strictly
-            />
-          </div>
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('system.deptName') }}</label>
-            <el-input
-              v-model="form.name"
-              :placeholder="t('system.deptNamePlaceholder')"
-              maxlength="64"
-              show-word-limit
-            />
-          </div>
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('system.deptCode') }}</label>
-            <el-input
-              v-model="form.code"
-              :placeholder="t('system.deptCodePlaceholder')"
-              maxlength="64"
-              show-word-limit
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.sort') }}</label>
-            <el-input-number v-model="form.sort" :min="0" :max="9999" style="width: 100%" />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.status') }}</label>
-            <el-select v-model="form.status" style="width: 100%">
-              <el-option
-                v-for="opt in deptStatusOptions"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
-            </el-select>
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.deptLeader') }}</label>
-            <el-select
-              v-model="form.leaderId"
-              :placeholder="t('system.leaderPlaceholder')"
-              clearable
-              filterable
-              style="width: 100%"
-            >
-              <el-option
-                v-for="user in formLeaderOptions"
-                :key="user.id"
-                :label="
-                  user.realName && user.realName !== user.username
-                    ? t('common.nameWithCode', { name: user.realName, code: user.username })
-                    : user.username
-                "
-                :value="user.id ?? ''"
-              />
-            </el-select>
-          </div>
-        </FormGrid>
-      </FormSection>
-    </StandardFormTemplate>
+    <el-alert
+      v-if="formError"
+      :title="formError"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    />
+    <div class="sw-edit-grid">
+      <div class="form-field tenant-owner-field">
+        <label class="form-field__label">{{ t('tenantContext.label') }}</label>
+        <el-input
+          :model-value="targetTenant?.name ?? ''"
+          :aria-label="t('tenantContext.label')"
+          readonly
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.parentDept') }}</label>
+        <el-tree-select
+          v-model="form.parentId"
+          :data="parentDeptOptions"
+          node-key="id"
+          :props="{ label: 'name', children: 'children' }"
+          :placeholder="t('system.parentDeptPlaceholder')"
+          clearable
+          style="width: 100%"
+          check-strictly
+        />
+      </div>
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('system.deptName') }}</label>
+        <el-input
+          v-model="form.name"
+          :placeholder="t('system.deptNamePlaceholder')"
+          maxlength="64"
+          show-word-limit
+        />
+      </div>
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('system.deptCode') }}</label>
+        <el-input
+          v-model="form.code"
+          :placeholder="t('system.deptCodePlaceholder')"
+          maxlength="64"
+          show-word-limit
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('common.sort') }}</label>
+        <el-input-number v-model="form.sort" :min="0" :max="9999" style="width: 100%" />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('common.status') }}</label>
+        <el-select v-model="form.status" style="width: 100%">
+          <el-option
+            v-for="opt in deptStatusOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.deptLeader') }}</label>
+        <el-select
+          v-model="form.leaderId"
+          :placeholder="t('system.leaderPlaceholder')"
+          clearable
+          filterable
+          style="width: 100%"
+        >
+          <el-option
+            v-for="user in formLeaderOptions"
+            :key="user.id"
+            :label="
+              user.realName && user.realName !== user.username
+                ? t('common.nameWithCode', { name: user.realName, code: user.username })
+                : user.username
+            "
+            :value="user.id ?? ''"
+          />
+        </el-select>
+      </div>
+    </div>
     <template #footer>
       <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
@@ -710,13 +704,14 @@ onMounted(() => {
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: var(--sw-space-8);
+  gap: 6px;
 }
 
 .form-field__label {
-  font-size: var(--sw-font-body);
+  font-size: 14px;
   font-weight: var(--sw-font-weight-emphasis);
-  color: var(--sw-text-primary);
+  line-height: 22px;
+  color: var(--sw-text-regular);
 }
 
 .form-field--required .form-field__label::before {

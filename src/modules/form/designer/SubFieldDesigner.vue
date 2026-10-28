@@ -168,22 +168,31 @@ function cancel(): void {
     :model-value="true"
     append-to-body
     class="subfield-dialog"
+    align-center
     width="1120px"
     :close-on-click-modal="false"
     :show-close="true"
     @update:model-value="(value: boolean) => !value && cancel()"
   >
     <template #header>
-      <div class="subfield-dialog__head">
-        <div>
-          <h2>{{ t('form.subFieldEditorTitle', { tableLabel }) }}</h2>
-          <p>{{ t('form.subFieldCountLabel', { count: working.length }) }}</p>
-        </div>
-        <el-button type="primary" :icon="Plus" :disabled="readonly" @click="openAdd">
-          {{ t('form.subFieldAdd') }}
-        </el-button>
-      </div>
+      <h2 class="subfield-dialog__title">{{ t('form.subFieldEditorTitle', { tableLabel }) }}</h2>
     </template>
+
+    <div class="subfield-dialog__toolbar">
+      <span class="subfield-dialog__table-label">{{ tableLabel }}</span>
+      <span class="subfield-dialog__count">{{
+        t('form.subFieldCountLabel', { count: working.length })
+      }}</span>
+      <el-button
+        class="subfield-dialog__add"
+        type="primary"
+        :icon="Plus"
+        :disabled="readonly"
+        @click="openAdd"
+      >
+        {{ t('form.subFieldAdd') }}
+      </el-button>
+    </div>
 
     <el-table :data="working" max-height="560">
       <el-table-column :label="t('form.subFieldName')" min-width="240">
@@ -197,12 +206,12 @@ function cancel(): void {
       <el-table-column :label="t('form.subFieldComponent')" min-width="150">
         <template #default="{ row }">{{ typeLabelRow(row) }}</template>
       </el-table-column>
-      <el-table-column :label="t('form.subFieldRequired')" width="110" align="center">
+      <el-table-column :label="t('form.subFieldRequired')" min-width="110">
         <template #default="{ row }">{{
           row.required ? t('common.yes') : t('common.no')
         }}</template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="260" align="right">
+      <el-table-column :label="t('common.actions')" min-width="260">
         <template #default="{ $index }">
           <el-button
             link
@@ -262,22 +271,31 @@ function cancel(): void {
 </template>
 
 <style scoped>
-.subfield-dialog__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sw-space-16);
-}
-.subfield-dialog__head h2 {
+.subfield-dialog__title {
   margin: 0;
   color: var(--sw-text-primary);
   font-size: 16px;
   font-weight: 600;
 }
-.subfield-dialog__head p {
-  margin: var(--sw-space-4) 0 0;
+.subfield-dialog__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.subfield-dialog__table-label {
+  color: var(--sw-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+}
+.subfield-dialog__count {
   color: var(--sw-text-secondary);
-  font-size: var(--sw-font-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+.subfield-dialog__add {
+  margin-left: auto;
 }
 .subfield-dialog__name {
   display: flex;
@@ -298,8 +316,31 @@ function cancel(): void {
 .subfield-config-dialog.el-dialog {
   border-radius: var(--sw-radius-card);
 }
+/* 273:1396：标题独立、工具行、表头42/行45、左右内距24、右下 80×32。 */
 .subfield-dialog .el-dialog__body {
-  padding-top: var(--sw-space-8);
+  padding: 0 24px 4px;
+}
+.subfield-dialog .el-table th.el-table__cell {
+  height: 42px;
+  background: #f5f7fb;
+}
+.subfield-dialog .el-table th.el-table__cell > .cell {
+  text-align: left;
+}
+.subfield-dialog .el-table td.el-table__cell {
+  height: 45px;
+}
+.subfield-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px 20px;
+}
+.subfield-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  height: 32px;
+  margin: 0;
 }
 .subfield-config-dialog .el-dialog__body {
   max-height: min(660px, calc(100vh - 180px));

@@ -54,18 +54,22 @@ function updateScript(nextCode: string, nextOnLoad: boolean) {
 </script>
 
 <template>
-  <h3 class="config__section">{{ t('form.scriptTitle') }}</h3>
+  <!-- 0.2.0 G07（42:2）：值变更行并入高级信息——标签左、JS 按钮右；脚本存在时保留预览与 onLoad -->
   <div class="script">
-    <div class="script__preview" data-testid="script-preview">
-      <span v-if="previewText(code)" class="script__preview-code">{{ previewText(code) }}</span>
-      <span v-else class="script__preview-empty">{{ t('form.scriptEmpty') }}</span>
+    <div class="script__row">
+      <span class="script__label">{{ t('form.valueChangeLabel') }}</span>
+      <el-button class="script__edit" data-testid="script-edit" @click="dialogVisible = true">
+        JS
+      </el-button>
     </div>
-    <el-button class="script__edit" @click="dialogVisible = true">
-      {{ code.trim() ? t('form.scriptEdit') : t('form.scriptWrite') }}
-    </el-button>
-    <el-checkbox :model-value="onLoad" @update:model-value="onOnLoad">
-      {{ t('form.scriptOnLoad') }}
-    </el-checkbox>
+    <template v-if="code.trim()">
+      <div class="script__preview" data-testid="script-preview">
+        <span class="script__preview-code">{{ previewText(code) }}</span>
+      </div>
+      <el-checkbox :model-value="onLoad" @update:model-value="onOnLoad">
+        {{ t('form.scriptOnLoad') }}
+      </el-checkbox>
+    </template>
     <p v-if="syntaxError" class="script__error" role="alert">
       {{ t('form.scriptInvalid', { msg: syntaxError }) }}
     </p>
@@ -85,6 +89,24 @@ function updateScript(nextCode: string, nextOnLoad: boolean) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-bottom: 25px;
+}
+
+.script__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.script__label {
+  font-size: var(--sw-font-emphasis, 14px);
+  color: var(--sw-text-regular);
+}
+
+.script__edit {
+  height: 32px;
+  min-width: 64px;
 }
 
 .script__preview {

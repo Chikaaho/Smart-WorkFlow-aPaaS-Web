@@ -240,12 +240,20 @@ onMounted(loadList)
       <ListActionsColumn :actions="rowActions" :width="100" />
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="t('system.menuEditTitle')" width="560px">
-      <el-form label-width="100px">
-        <el-form-item :label="t('system.menuTitle')">
+    <el-dialog
+      v-model="dialogVisible"
+      class="sw-edit-dialog"
+      align-center
+      :title="t('system.menuEditTitle')"
+      width="760px"
+    >
+      <div class="sw-edit-grid">
+        <div class="form-field">
+          <label class="form-field__label">{{ t('system.menuTitle') }}</label>
           <el-input v-model="editTitle" maxlength="32" />
-        </el-form-item>
-        <el-form-item :label="t('system.menuIcon')">
+        </div>
+        <div class="form-field">
+          <label class="form-field__label">{{ t('system.menuIcon') }}</label>
           <!-- 通用图标库白名单选择器（非必填） -->
           <div class="icon-picker">
             <button
@@ -268,14 +276,21 @@ onMounted(loadList)
               t('common.reset')
             }}</el-button>
           </div>
-        </el-form-item>
-        <el-form-item :label="t('system.menuSort')">
-          <el-input-number v-model="editSort" :min="0" :max="999" />
-        </el-form-item>
-        <el-form-item :label="t('system.menuHidden')">
-          <el-switch v-model="editHidden" />
-        </el-form-item>
-      </el-form>
+        </div>
+        <div class="form-field">
+          <label class="form-field__label">{{ t('system.menuSort') }}</label>
+          <el-input-number v-model="editSort" :min="0" :max="999" style="width: 100%" />
+        </div>
+        <div class="form-field">
+          <label class="form-field__label">{{ t('system.menuHidden') }}</label>
+          <div class="hidden-row">
+            <el-switch v-model="editHidden" />
+            <span class="hidden-row__text">{{
+              editHidden ? t('common.yes') : t('common.no')
+            }}</span>
+          </div>
+        </div>
+      </div>
       <template #footer>
         <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</el-button>
@@ -289,18 +304,45 @@ onMounted(loadList)
   display: flex;
   gap: var(--sw-space-8);
 }
+</style>
+
+<style>
+/* 弹窗经 Teleport 渲染，内容元素不带组件作用域属性：编辑弹窗内部规则使用全局类名（本页专用）。 */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-field__label {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--sw-text-regular);
+}
+
+.hidden-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.hidden-row__text {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--sw-text-regular);
+}
 
 .icon-picker {
   display: grid;
-  grid-template-columns: repeat(8, 34px);
-  gap: 4px;
+  grid-template-columns: repeat(auto-fill, 36px);
+  gap: 8px;
   width: 100%;
 }
 .icon-picker__cell {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-sm);

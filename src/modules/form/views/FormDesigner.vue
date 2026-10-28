@@ -1209,18 +1209,26 @@ async function loadBreadcrumbCategory() {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  /* G07（42:2）：白板与左右分栏各留 12px 页底色，白板自身 x264→x1572 */
+  padding: 0 12px 12px;
   background: #f4f6fc;
 }
 
-/* V011-BUG-009 / BF20261013-015：白板随中栏满幅（去外边距与卡片边框，边缘与两栏分隔线齐平） */
+/* V011-BUG-009 / BF20261013-015：白板随中栏满幅（去外边距与卡片边框，边缘与两栏分隔线齐平）
+   G07：字段网格有效内距 16px = 白板内距 10 + 字段壳水平内距 6（控件 x280/928、宽 628/1276） */
 .designer__sheet {
   flex: 1 1 auto;
   min-height: 520px;
   overflow-y: auto;
   box-sizing: border-box;
-  padding: 21px 23px 20px;
+  padding: 21px 10px 16px;
   background: #fff;
+  /* G07：字段网格按设计满幅 1288（滚动条不挤占栅格） */
+  scrollbar-width: none;
+}
+.designer__sheet::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 /* 画布内嵌：去掉独立底色/内边距，滚动交给白底表单卡 */
@@ -1235,16 +1243,25 @@ async function loadBreadcrumbCategory() {
 
 .designer-main-canvas :deep(.canvas__list) {
   max-width: none;
-  padding-top: 22px;
-  row-gap: 21px;
-  column-gap: 12px;
+  /* G07（42:2）：栅格 24 列、列距 8（半栏输入 628@x280/928）、行距 4（行节距 76） */
+  padding-top: 36px;
+  row-gap: 4px;
+  column-gap: 8px;
 }
 
 .designer-main-canvas :deep(.field-shell) {
-  /* BF20261013-011：最外圈默认不显示边框（透明占位保持盒尺寸），选中态由 --active 主色环承担 */
+  /* BF20261013-011：最外圈默认不显示边框（透明占位保持盒尺寸），选中态由 --active 主色环承担
+     G07：壳边框 1 + 水平内距 5 = 与白板内距 10 合成有效 16px（控件 x280/928、宽 628/1276） */
   border-color: transparent;
   border-radius: 8px;
   box-shadow: none;
+  padding: 11px 5px 6px;
+  min-height: 72px;
+}
+
+.designer-main-canvas :deep(.field-shell__bar) {
+  left: 5px;
+  right: 5px;
 }
 
 .designer-main-canvas :deep(.field-shell--active) {
@@ -1263,23 +1280,37 @@ async function loadBreadcrumbCategory() {
 
 .designer-main-canvas :deep(.el-form-item__label) {
   height: auto;
-  line-height: 20px;
-  margin-bottom: 7px;
+  line-height: 22px;
+  margin-bottom: 1px;
   padding-bottom: 0;
   font-size: 13px;
   color: #303a55;
 }
 .designer-main-canvas :deep(.el-input__wrapper),
-.designer-main-canvas :deep(.el-select__wrapper),
-.designer-main-canvas :deep(.el-textarea__inner) {
-  min-height: 34px;
-  height: 34px;
+.designer-main-canvas :deep(.el-select__wrapper) {
+  min-height: 32px;
+  height: 32px;
   box-sizing: border-box;
 }
 
+/* G07：编辑态多行说明 80 高（设计 42:2 演练说明 436→516） */
+.designer-main-canvas :deep(.el-textarea__inner) {
+  min-height: 80px;
+  height: 80px;
+  box-sizing: border-box;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+/* G07：日期控件填满所属半栏（原固定约 220 宽） */
+.designer-main-canvas :deep(.el-date-editor) {
+  --el-date-editor-width: 100%;
+  width: 100% !important;
+}
+
 .designer-main-canvas :deep(.canvas__list) {
-  row-gap: 21px;
-  column-gap: 12px;
+  row-gap: 4px;
+  column-gap: 8px;
 }
 
 /* ── 右栏：组件属性（336 白底，标题 + 类型徽标） ── */
@@ -1299,18 +1330,6 @@ async function loadBreadcrumbCategory() {
 
 .designer-main-config :deep(.config__section:first-of-type) {
   margin-top: 20px;
-}
-
-.designer-main-config :deep(.config__extension) {
-  box-sizing: border-box;
-  width: 288px;
-  height: 72px;
-  padding: 16px 29px 15px 17px;
-  transform: translateY(3px);
-}
-
-.designer-main-config :deep(.rules-editor) {
-  margin-top: 64px;
 }
 
 .designer-main-config :deep(.config__meta) {

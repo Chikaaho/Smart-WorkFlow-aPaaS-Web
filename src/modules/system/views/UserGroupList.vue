@@ -35,14 +35,7 @@ import type {
 } from '@/modules/system/types/userGroup'
 import type { SysUser } from '@/modules/system/types/user'
 import type { PageQuery } from '@/contracts/common'
-import {
-  ListFilterItem,
-  StandardListTemplate,
-  StandardFormTemplate,
-  FormSection,
-  FormGrid,
-  ListActionsColumn,
-} from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
 // ─── 权限 ──────────────────────────────────────────────
@@ -433,95 +426,85 @@ onMounted(loadList)
   <!-- 新建/编辑弹窗 -->
   <el-dialog
     v-model="dialogVisible"
+    class="sw-edit-dialog group-editor"
+    align-center
     :title="dialogTitle"
     :close-on-click-modal="false"
     destroy-on-close
-    width="680px"
+    width="760px"
     @closed="resetForm"
   >
-    <StandardFormTemplate embedded>
-      <template v-if="formError" #alert>
-        <el-alert :title="formError" type="error" :closable="false" show-icon />
-      </template>
-
-      <FormSection :title="t('common.basicInfo')">
-        <FormGrid :columns="2">
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('common.businessKey') }}</label>
-            <el-input
-              v-model="form.groupCode"
-              :placeholder="t('system.businessKeyPlaceholder')"
-              :disabled="!!editingId"
-              maxlength="64"
-            />
-          </div>
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('system.groupName') }}</label>
-            <el-input
-              v-model="form.groupName"
-              :placeholder="t('system.groupNamePlaceholder')"
-              maxlength="64"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.status') }}</label>
-            <el-select v-model="form.status" style="width: 100%">
-              <el-option :label="t('common.enable')" :value="0" />
-              <el-option :label="t('common.disable')" :value="1" />
-            </el-select>
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.description') }}</label>
-            <el-input
-              v-model="form.remark"
-              :placeholder="t('system.descriptionPlaceholder')"
-              maxlength="255"
-            />
-          </div>
-        </FormGrid>
-      </FormSection>
-
-      <FormSection :title="t('system.members')">
-        <el-checkbox-group v-model="memberIds">
-          <el-checkbox v-for="user in candidateOptions" :key="user.id" :value="user.id">
-            {{ user.realName || user.username }}（{{ user.username }}）
-          </el-checkbox>
-        </el-checkbox-group>
+    <el-alert
+      v-if="formError"
+      :title="formError"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    />
+    <div class="sw-edit-grid">
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('system.groupName') }}</label>
+        <el-input
+          v-model="form.groupName"
+          :placeholder="t('system.groupNamePlaceholder')"
+          maxlength="64"
+        />
+      </div>
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('common.businessKey') }}</label>
+        <el-input
+          v-model="form.groupCode"
+          :placeholder="t('system.businessKeyPlaceholder')"
+          :disabled="!!editingId"
+          maxlength="64"
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('common.status') }}</label>
+        <el-select v-model="form.status" style="width: 100%">
+          <el-option :label="t('common.enable')" :value="0" />
+          <el-option :label="t('common.disable')" :value="1" />
+        </el-select>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.members') }}</label>
+        <div class="member-picker">
+          <el-checkbox-group v-model="memberIds">
+            <el-checkbox v-for="user in candidateOptions" :key="user.id" :value="user.id">
+              {{ user.realName || user.username }}（{{ user.username }}）
+            </el-checkbox>
+          </el-checkbox-group>
+        </div>
         <div v-if="staleMembers.length" class="stale-members">
           <el-tag v-for="u in staleMembers" :key="u.id" type="info" size="small" class="stale-tag">
             {{ t('system.memberDisabledSuffix', { name: u.realName || u.username }) }}
           </el-tag>
         </div>
-      </FormSection>
+      </div>
+      <div class="form-field sw-edit-grid__full">
+        <label class="form-field__label">{{ t('common.remark') }}</label>
+        <el-input
+          v-model="form.remark"
+          type="textarea"
+          :rows="3"
+          :placeholder="t('system.descriptionPlaceholder')"
+          maxlength="255"
+          class="group-remark"
+        />
+      </div>
+    </div>
 
-      <template #actions>
-        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
-          t('common.save')
-        }}</el-button>
-      </template>
-    </StandardFormTemplate>
+    <template #footer>
+      <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+        t('common.save')
+      }}</el-button>
+    </template>
   </el-dialog>
 </template>
 
 <style scoped>
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sw-space-8);
-}
-
-.form-field__label {
-  font-size: var(--sw-font-body);
-  font-weight: var(--sw-font-weight-emphasis);
-  color: var(--sw-text-primary);
-}
-
-.form-field--required .form-field__label::before {
-  content: '* ';
-  color: var(--sw-danger);
-}
-
 .member-hint {
   font-size: var(--sw-font-body);
   color: var(--sw-text-secondary);
@@ -535,5 +518,60 @@ onMounted(loadList)
 .stale-tag {
   margin-right: var(--sw-space-8);
   margin-bottom: var(--sw-space-4);
+}
+</style>
+
+<style>
+/* 弹窗经 Teleport 渲染：编辑弹窗内部规则使用全局类名（本页专用）。 */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field__label {
+  font-size: 14px;
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: 22px;
+  color: var(--sw-text-regular);
+}
+
+.form-field--required .form-field__label::before {
+  content: '* ';
+  color: var(--sw-danger);
+}
+
+/* 成员候选内部滚动并保留已选；18px 复选框。 */
+.member-picker {
+  box-sizing: border-box;
+  max-height: 88px;
+  overflow-y: auto;
+  padding: 2px 0;
+}
+.member-picker .el-checkbox {
+  height: 22px;
+  margin-right: 12px;
+}
+.member-picker .el-checkbox__inner {
+  /* G30：成员勾选 18px，覆盖 tokens.css 全局 28px */
+  width: 18px !important;
+  height: 18px !important;
+}
+.member-picker .el-checkbox__inner::after {
+  height: 9px;
+  left: 6px;
+  top: 2px;
+  width: 4px;
+}
+.member-picker .el-checkbox__label {
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* 全宽备注固定 80px 表面。 */
+.group-remark .el-textarea__inner {
+  box-sizing: border-box;
+  height: 80px;
+  min-height: 80px;
 }
 </style>

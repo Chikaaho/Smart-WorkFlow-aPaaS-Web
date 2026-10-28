@@ -177,12 +177,23 @@ describe('FieldConfigPanel 控件尺寸口径（0.1.7 #36）', () => {
     expect(wrapper.find('[data-testid="open-field-validation"]').exists()).toBe(true)
   })
 
-  it('扩展属性区为紧凑占位并带空态说明', () => {
-    const wrapper = mountText()
+  // 0.2.0 G07（42:2）：高级信息末尾为值变更（JS）/显示条件（设置）行，原「其他信息」扩展占位随原稿移除
+  it('值变更与显示条件并入高级信息，不再渲染其他信息扩展占位', () => {
+    // 不 stub RulesEditor：显示条件行由 RulesEditor 本体渲染
+    const wrapper = mount(FieldConfigPanel, {
+      props: {
+        field: {
+          id: 'f1',
+          field: { name: 'field_name', type: 'TEXT', label: '姓名', colSpan: 24 },
+        },
+        otherNames: [],
+      },
+    })
 
-    const box = wrapper.find('.config__extension')
-    expect(box.exists()).toBe(true)
-    expect(box.find('.config__extension-title').exists()).toBe(true)
-    expect(box.text()).toContain('当前版本暂无可配置的扩展属性')
+    expect(wrapper.text()).toContain('值变更')
+    expect(wrapper.text()).toContain('显示条件')
+    expect(wrapper.find('[data-testid="script-edit"]').exists()).toBe(true)
+    expect(wrapper.find('.config__extension').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('其他信息')
   })
 })

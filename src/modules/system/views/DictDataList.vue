@@ -23,14 +23,7 @@ import {
 } from '@/modules/system/api/dict'
 import type { SysDictData, DictDataFilter } from '@/modules/system/types/dict'
 import type { PageQuery } from '@/contracts/common'
-import {
-  ListFilterItem,
-  StandardListTemplate,
-  StandardFormTemplate,
-  FormSection,
-  FormGrid,
-  ListActionsColumn,
-} from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
 const route = useRoute()
@@ -477,101 +470,101 @@ onMounted(() => void initialize())
   <!-- 新建/编辑弹窗 -->
   <el-dialog
     v-model="dialogVisible"
+    class="sw-edit-dialog"
+    align-center
     :title="dialogTitle"
     :close-on-click-modal="false"
     destroy-on-close
-    width="680px"
+    width="760px"
     @closed="resetForm"
   >
-    <StandardFormTemplate embedded>
-      <template v-if="formError" #alert>
-        <el-alert :title="formError" type="error" :closable="false" show-icon />
-      </template>
+    <el-alert
+      v-if="formError"
+      :title="formError"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    />
+    <div class="sw-edit-grid">
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.dictType') }}</label>
+        <el-input :model-value="dictName || dictCode" readonly />
+      </div>
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('system.dictLabel') }}</label>
+        <el-input
+          v-model="form.label"
+          :placeholder="t('system.dictLabelPlaceholder')"
+          maxlength="128"
+          show-word-limit
+        />
+      </div>
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('system.dictValue') }}</label>
+        <el-input
+          v-model="form.dictValue"
+          :placeholder="t('system.dictValuePlaceholder')"
+          maxlength="128"
+          show-word-limit
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('common.sort') }}</label>
+        <el-input-number
+          v-model="form.sort"
+          :min="0"
+          :max="9999"
+          :placeholder="t('system.sortNoPlaceholder')"
+          style="width: 100%"
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('common.status') }}</label>
+        <el-select v-model="form.status" style="width: 100%">
+          <el-option :label="t('common.statusNormal')" :value="0" />
+          <el-option :label="t('common.disable')" :value="1" />
+        </el-select>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.isDefaultLabel') }}</label>
+        <el-switch
+          v-model="switchDefault"
+          :active-text="t('common.yes')"
+          :inactive-text="t('common.no')"
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.cssClassName') }}</label>
+        <el-input v-model="form.cssClass" :placeholder="t('system.dictTagStyle')" maxlength="64" />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.listStyle') }}</label>
+        <el-input
+          v-model="form.listClass"
+          :placeholder="t('system.dictSelectStyle')"
+          maxlength="64"
+        />
+      </div>
+      <div class="form-field sw-edit-grid__full">
+        <label class="form-field__label">{{ t('common.remark') }}</label>
+        <el-input
+          v-model="form.description"
+          type="textarea"
+          :rows="3"
+          :placeholder="t('common.remarkPlaceholder')"
+          maxlength="256"
+          show-word-limit
+        />
+      </div>
+    </div>
 
-      <FormSection :title="t('common.basicInfo')">
-        <FormGrid :columns="2">
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('system.dictLabel') }}</label>
-            <el-input
-              v-model="form.label"
-              :placeholder="t('system.dictLabelPlaceholder')"
-              maxlength="128"
-              show-word-limit
-            />
-          </div>
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('system.dictValue') }}</label>
-            <el-input
-              v-model="form.dictValue"
-              :placeholder="t('system.dictValuePlaceholder')"
-              maxlength="128"
-              show-word-limit
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.sort') }}</label>
-            <el-input-number
-              v-model="form.sort"
-              :min="0"
-              :max="9999"
-              :placeholder="t('system.sortNoPlaceholder')"
-              style="width: 100%"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.status') }}</label>
-            <el-select v-model="form.status" style="width: 100%">
-              <el-option :label="t('common.statusNormal')" :value="0" />
-              <el-option :label="t('common.disable')" :value="1" />
-            </el-select>
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.isDefaultLabel') }}</label>
-            <el-switch
-              v-model="switchDefault"
-              :active-text="t('common.yes')"
-              :inactive-text="t('common.no')"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.cssClassName') }}</label>
-            <el-input
-              v-model="form.cssClass"
-              :placeholder="t('system.dictTagStyle')"
-              maxlength="64"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.listStyle') }}</label>
-            <el-input
-              v-model="form.listClass"
-              :placeholder="t('system.dictSelectStyle')"
-              maxlength="64"
-            />
-          </div>
-        </FormGrid>
-        <FormGrid :columns="1" style="margin-top: 0">
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.remark') }}</label>
-            <el-input
-              v-model="form.description"
-              type="textarea"
-              :rows="3"
-              :placeholder="t('common.remarkPlaceholder')"
-              maxlength="256"
-              show-word-limit
-            />
-          </div>
-        </FormGrid>
-      </FormSection>
-
-      <template #actions>
-        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
-          t('common.save')
-        }}</el-button>
-      </template>
-    </StandardFormTemplate>
+    <template #footer>
+      <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+        t('common.save')
+      }}</el-button>
+    </template>
   </el-dialog>
 </template>
 
@@ -592,13 +585,14 @@ onMounted(() => void initialize())
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: var(--sw-space-8);
+  gap: 6px;
 }
 
 .form-field__label {
-  font-size: var(--sw-font-body);
+  font-size: 14px;
   font-weight: var(--sw-font-weight-emphasis);
-  color: var(--sw-text-primary);
+  line-height: 22px;
+  color: var(--sw-text-regular);
 }
 
 .form-field--required .form-field__label::before {
