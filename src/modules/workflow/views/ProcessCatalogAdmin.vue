@@ -374,7 +374,11 @@ onMounted(() => {
       class="category-manage-table"
       data-testid="category-manage-table"
     >
-      <el-table-column prop="name" :label="t('common.categoryName')" />
+      <el-table-column
+        prop="name"
+        :label="t('common.categoryName')"
+        class-name="category-manage-name"
+      />
       <el-table-column :label="t('common.actions')" width="124">
         <template #default="{ row }">
           <div class="category-manage-actions">
@@ -450,8 +454,9 @@ onMounted(() => {
 .category-manage-table :deep(.el-table__row) {
   height: 45px;
 }
-.category-manage-table :deep(.el-table .cell) {
-  padding: 0 17px;
+/* 278:1591（执行提示21）：仅名称表头与5条真实名称左对齐，左缘=表格内沿+16（约x602） */
+.category-manage-table :deep(.category-manage-name) .cell {
+  padding-left: 16px;
   line-height: 22px;
   text-align: left;
 }
