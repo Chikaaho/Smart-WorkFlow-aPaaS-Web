@@ -241,12 +241,12 @@ describe('PublishedSnapshotViewer', () => {
     expect(props.exists()).toBe(true)
     // 默认选中第一个字段：TEXT 的冻结配置以只读控件表面展示（执行提示14）
     const inputs = props.findAll('.snapshot-props-surface__input')
-    expect(inputs).toHaveLength(5)
+    // 审查23 501:19159：数据与规则前三值（标识/类型/最大长度）承接为只读输入框
+    expect(inputs).toHaveLength(8)
     expect((inputs[0].element as HTMLInputElement).value).toBe('采购名称')
-    const text = props.text()
-    expect(text).toContain('title')
-    expect(text).toContain('TEXT')
-    expect(text).toContain('80')
+    expect((inputs[5].element as HTMLInputElement).value).toBe('title')
+    expect((inputs[6].element as HTMLInputElement).value).toBe('TEXT')
+    expect((inputs[7].element as HTMLInputElement).value).toBe('80')
 
     // 点选 TABLE 字段：子字段数/行配置切换显示
     const cells = wrapper.findAll('.snapshot-design__cell')
@@ -255,7 +255,9 @@ describe('PublishedSnapshotViewer', () => {
     expect(
       (props.findAll('.snapshot-props-surface__input')[0].element as HTMLInputElement).value,
     ).toBe('采购明细')
-    expect(props.text()).toContain('TABLE')
+    expect(
+      (props.findAll('.snapshot-props-surface__input')[6].element as HTMLInputElement).value,
+    ).toBe('TABLE')
     // 冻结字段属性面板不提供保存/编辑入口（「查看」为只读详情）
     const saving = wrapper
       .find('.snapshot-side--props')
@@ -345,8 +347,14 @@ describe('PublishedSnapshotViewer', () => {
     expect(wrapper.text()).toContain('return ["2"];')
 
     await openSection(wrapper, '流程设置')
-    expect(wrapper.text()).toContain('return ["2"];')
+    // 审查23 S14-E：监听表脚本经「查看」呈现，审批人脚本在独立分支
+    await wrapper.findAll('.snapshot-settings__nav button')[1].trigger('click') // 监听
+    const viewButtons = wrapper.findAll('.snapshot-listener-table .el-button')
+    expect(viewButtons.length).toBeGreaterThan(0)
+    await viewButtons[0].trigger('click')
     expect(wrapper.text()).toContain('return 1;')
+    await wrapper.findAll('.snapshot-settings__nav button')[3].trigger('click') // 审批人脚本
+    expect(wrapper.text()).toContain('return ["2"];')
   })
 
   it('节点、高级配置、变量和触发器均来自冻结流程版本', async () => {
@@ -358,10 +366,12 @@ describe('PublishedSnapshotViewer', () => {
     expect(wrapper.text()).toContain('assetStartListener')
 
     await openSection(wrapper, '流程设置')
+    // 审查23 S14-E：左导航分 通知/监听/变量/审批人脚本 分支
+    const navButtons = wrapper.findAll('.snapshot-settings__nav button')
+    await navButtons[2].trigger('click') // 变量
     expect(wrapper.text()).toContain('var_ok')
     expect(wrapper.text()).toContain('是否通过')
-
-    await openSection(wrapper, '流程设置')
+    await navButtons[1].trigger('click') // 监听
     expect(wrapper.text()).toContain('节点开始前检查')
     expect(wrapper.text()).toContain('节点开始前')
   })

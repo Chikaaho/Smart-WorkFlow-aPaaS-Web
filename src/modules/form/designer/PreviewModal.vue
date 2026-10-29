@@ -30,7 +30,8 @@ function schemaForField(field: FormSchemaField): FormSchema {
 <template>
   <el-dialog
     v-model="visible"
-    fullscreen
+    width="1120px"
+    top="6vh"
     :title="schema.title || t('form.preview')"
     class="preview-modal"
     append-to-body
@@ -74,13 +75,17 @@ function schemaForField(field: FormSchemaField): FormSchema {
 }
 
 .preview-modal__stage {
-  min-height: 60vh;
+  min-height: 0;
+  max-height: calc(88vh - 120px);
+  overflow-y: auto;
   background: var(--sw-fill-base);
   padding: var(--sw-space-24);
 }
 
 .preview-modal__form {
-  max-width: 920px;
+  box-sizing: border-box;
+  width: 1022px;
+  max-width: 100%;
   margin: 0 auto;
   background: #fff;
   border-radius: var(--sw-radius-card);
@@ -128,5 +133,17 @@ function schemaForField(field: FormSchemaField): FormSchema {
   font-size: var(--sw-font-body);
   text-align: center;
   background: #fff;
+}
+</style>
+
+<style>
+/* 审查23 F07-P：预览外壳 1120 居中 / r12 / 16/24 标题 */
+.preview-modal.el-dialog {
+  border-radius: 12px;
+}
+.preview-modal .el-dialog__title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
 }
 </style>

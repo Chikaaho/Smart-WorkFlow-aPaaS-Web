@@ -89,7 +89,9 @@ describe('HistoryVersionsDialog', () => {
     const wrapper = await mountOpen()
 
     // 选中历史卡后经『对比当前』打开只读预览
-    const card = wrapper.findAll('.history-card').find((c) => c.text().includes('2026-05-11 14:00'))
+    const card = wrapper
+      .findAll('.history-table tbody tr')
+      .find((c) => c.text().includes('2026-05-11 14:00'))
     expect(card).toBeTruthy()
     await card!.trigger('click')
     await flushPromises()
@@ -131,7 +133,7 @@ describe('HistoryVersionsDialog', () => {
     expect(current.text()).toContain('已发布')
     expect(current.text()).not.toContain('当前草稿')
     expect(current.text()).not.toContain('未发布')
-    expect(wrapper.find('.history-card').text()).toContain('已发布 v3.2')
+    expect(wrapper.find('.history-table tbody tr').text()).toContain('已发布 v3.2')
   })
 
   it('宿主为草稿时仍标记未发布，缺 status 的历史快照不会被带成草稿', async () => {
@@ -144,12 +146,14 @@ describe('HistoryVersionsDialog', () => {
     const current = wrapper.find('.history-dialog__current')
     expect(current.text()).toContain('当前草稿 v2')
     expect(current.text()).toContain('未发布')
-    expect(wrapper.find('.history-card').text()).toContain('已发布 v2')
+    expect(wrapper.find('.history-table tbody tr').text()).toContain('已发布 v2')
   })
 
   it('把选中版本交给完整只读快照查看器', async () => {
     const wrapper = await mountOpen()
-    const card = wrapper.findAll('.history-card').find((c) => c.text().includes('2026-05-11 14:00'))
+    const card = wrapper
+      .findAll('.history-table tbody tr')
+      .find((c) => c.text().includes('2026-05-11 14:00'))
     expect(card).toBeTruthy()
     await card!.trigger('click')
 

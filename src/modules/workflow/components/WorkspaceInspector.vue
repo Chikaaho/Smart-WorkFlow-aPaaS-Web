@@ -179,6 +179,43 @@ function isStackable() {
   <aside class="winsp">
     <header class="winsp__head">
       <h3>{{ t('workspace.inspector.title') }}</h3>
+      <button type="button" class="winsp__delete" @click="emit('remove', card.id)">
+        {{ t('workspace.inspector.remove') }}
+      </button>
+    </header>
+
+    <div class="winsp__body">
+      <section class="winsp__section">
+        <label class="winsp__label">{{ t('workspace.inspector.titleField') }}</label>
+        <el-input :model-value="card.title" @update:model-value="patch({ title: $event })" />
+      </section>
+
+      <section class="winsp__geometry">
+        <label>
+          <span class="winsp__label">{{ t('workspace.inspector.width') }}</span>
+          <el-select :model-value="card.span" @update:model-value="patch({ span: Number($event) })">
+            <el-option
+              v-for="option in widthOptions"
+              :key="option.span"
+              :label="`${option.percent}%`"
+              :value="option.span"
+            />
+          </el-select>
+        </label>
+        <label>
+          <span class="winsp__label">{{ t('workspace.inspector.height') }}</span>
+          <el-input-number
+            :model-value="card.height"
+            :min="120"
+            :max="1600"
+            :step="20"
+            controls-position="right"
+            @update:model-value="patch({ height: Number($event) })"
+          />
+        </label>
+      </section>
+
+      <!-- 审查23 W19-I：数据/样式 140×32 双页签铺在宽高下方 -->
       <div v-if="hasStyle" class="winsp__tabs">
         <button
           type="button"
@@ -197,50 +234,6 @@ function isStackable() {
           {{ t('workspace.inspector.styleTab') }}
         </button>
       </div>
-      <button type="button" class="winsp__delete" @click="emit('remove', card.id)">
-        {{ t('workspace.inspector.remove') }}
-      </button>
-    </header>
-
-    <div class="winsp__body">
-      <section class="winsp__section">
-        <label class="winsp__label">{{ t('workspace.inspector.titleField') }}</label>
-        <el-input
-          :model-value="card.title"
-          size="small"
-          @update:model-value="patch({ title: $event })"
-        />
-      </section>
-
-      <section class="winsp__geometry">
-        <label>
-          <span class="winsp__label">{{ t('workspace.inspector.width') }}</span>
-          <el-select
-            :model-value="card.span"
-            size="small"
-            @update:model-value="patch({ span: Number($event) })"
-          >
-            <el-option
-              v-for="option in widthOptions"
-              :key="option.span"
-              :label="`${option.percent}%`"
-              :value="option.span"
-            />
-          </el-select>
-        </label>
-        <label>
-          <span class="winsp__label">{{ t('workspace.inspector.height') }}</span>
-          <el-input-number
-            :model-value="card.height"
-            size="small"
-            :min="120"
-            :max="1600"
-            :step="20"
-            controls-position="right"
-            @update:model-value="patch({ height: Number($event) })"
-          />
-        </label>
-      </section>
 
       <template v-if="tab === 'data'">
         <template v-if="kind === 'system'">
@@ -273,7 +266,7 @@ function isStackable() {
                     : t('workspace.formPicker.title')
                 }}</span>
               </button>
-              <el-button v-if="card.config.formKey" text size="small" @click="onFormChange('')">
+              <el-button v-if="card.config.formKey" text @click="onFormChange('')">
                 {{ t('workspace.formPicker.clear') }}
               </el-button>
             </div>
@@ -293,7 +286,6 @@ function isStackable() {
             <label class="winsp__label">{{ t('workspace.inspector.metricField') }}</label>
             <el-select
               :model-value="card.config.metricField ?? '__count__'"
-              size="small"
               @update:model-value="onMetricField"
             >
               <el-option :label="t('workspace.inspector.recordCount')" value="__count__" />
@@ -309,7 +301,6 @@ function isStackable() {
             <label class="winsp__label">{{ t('workspace.inspector.agg') }}</label>
             <el-select
               :model-value="card.config.metricAgg ?? 'COUNT'"
-              size="small"
               @update:model-value="onMetricAgg"
             >
               <el-option label="COUNT" value="COUNT" />
@@ -323,7 +314,6 @@ function isStackable() {
             <label class="winsp__label">{{ t('workspace.inspector.numberFormat') }}</label>
             <el-select
               :model-value="card.config.metricFormat ?? 'integer'"
-              size="small"
               @update:model-value="patchConfig({ metricFormat: $event })"
             >
               <el-option :label="t('workspace.inspector.integer')" value="integer" />
@@ -336,7 +326,7 @@ function isStackable() {
             <section class="winsp__section">
               <label class="winsp__label">{{ t('workspace.inspector.chartType') }}</label>
               <div class="winsp__inline">
-                <el-select :model-value="chartType" size="small" @update:model-value="onChartType">
+                <el-select :model-value="chartType" @update:model-value="onChartType">
                   <el-option
                     v-for="type in [
                       'bar',
@@ -357,7 +347,7 @@ function isStackable() {
                     :value="type"
                   />
                 </el-select>
-                <el-button size="small" plain @click="emit('open-chart-type')">
+                <el-button plain @click="emit('open-chart-type')">
                   {{ t('workspace.inspector.choose') }}
                 </el-button>
               </div>
@@ -371,7 +361,7 @@ function isStackable() {
                 <span>{{ t('workspace.inspector.metrics') }}</span>
                 <strong>{{ metricCount }}</strong>
               </div>
-              <el-button size="small" plain @click="emit('open-metrics')">
+              <el-button plain @click="emit('open-metrics')">
                 {{ t('workspace.inspector.editMetrics') }}
               </el-button>
             </section>
@@ -381,7 +371,7 @@ function isStackable() {
             <section class="winsp__section">
               <div class="winsp__inline">
                 <span class="winsp__label">{{ t('workspace.inspector.columns') }}</span>
-                <el-button size="small" plain @click="emit('open-columns')">
+                <el-button plain @click="emit('open-columns')">
                   {{ t('workspace.inspector.editColumns') }}
                 </el-button>
               </div>
@@ -391,7 +381,6 @@ function isStackable() {
               <label class="winsp__label">{{ t('workspace.inspector.sortField') }}</label>
               <el-select
                 :model-value="card.config.sortField ?? ''"
-                size="small"
                 clearable
                 @update:model-value="patchConfig({ sortField: $event || undefined })"
               >
@@ -445,7 +434,6 @@ function isStackable() {
               <label class="winsp__label">{{ t('workspace.inspector.pageSize') }}</label>
               <el-select
                 :model-value="card.config.pageSize ?? 5"
-                size="small"
                 @update:model-value="patchConfig({ pageSize: Number($event) })"
               >
                 <el-option :label="'3'" :value="3" />
@@ -459,7 +447,7 @@ function isStackable() {
           <section class="winsp__section">
             <div class="winsp__inline">
               <span class="winsp__label">{{ t('workspace.inspector.filters') }}</span>
-              <el-button size="small" plain @click="emit('open-filters')">
+              <el-button plain @click="emit('open-filters')">
                 {{ t('workspace.inspector.setFilters') }}
               </el-button>
             </div>
@@ -475,7 +463,6 @@ function isStackable() {
           <label class="winsp__label">{{ t('workspace.inspector.palette') }}</label>
           <el-select
             :model-value="card.config.style?.palette ?? 'classic'"
-            size="small"
             @update:model-value="patchStyle({ palette: $event })"
           >
             <el-option
@@ -558,7 +545,6 @@ function isStackable() {
           <label class="winsp__label">{{ t('workspace.inspector.legendPosition') }}</label>
           <el-select
             :model-value="card.config.style?.legendPosition ?? 'top'"
-            size="small"
             @update:model-value="patchStyle({ legendPosition: $event })"
           >
             <el-option :label="t('workspace.inspector.top')" value="top" />
@@ -635,8 +621,10 @@ function isStackable() {
 .winsp__tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  width: 96px;
-  height: 24px;
+  box-sizing: border-box;
+  width: 288px;
+  height: 32px;
+  margin-bottom: 12px;
   border: 1px solid var(--sw-border-light, #eef0f4);
   border-radius: 4px;
   overflow: hidden;
@@ -647,7 +635,7 @@ function isStackable() {
   border: 0;
   background: transparent;
   color: var(--sw-text-secondary);
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -782,8 +770,10 @@ function isStackable() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  box-sizing: border-box;
+  height: 44px;
   gap: 8px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--sw-text-secondary);
 }
 

@@ -438,15 +438,15 @@ onMounted(() => void initialize())
       show-icon
       style="margin-bottom: 12px"
     />
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="list">
       <el-table-column prop="label" :label="t('system.dictLabel')" min-width="140" />
       <el-table-column prop="dictValue" :label="t('system.dictValue')" min-width="120" />
       <el-table-column prop="sort" :label="t('common.sort')" width="80" align="center" />
       <el-table-column prop="status" :label="t('common.status')" width="80">
         <template #default="{ row }">
-          <el-tag :type="row.status === 0 ? 'success' : 'info'" size="small">
-            {{ row.status === 0 ? t('common.statusNormal') : t('common.disable') }}
-          </el-tag>
+          <span class="sys-status-text">{{
+            row.status === 0 ? t('common.statusNormal') : t('common.disable')
+          }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="isDefault" :label="t('system.defaultLabel')" width="70" align="center">

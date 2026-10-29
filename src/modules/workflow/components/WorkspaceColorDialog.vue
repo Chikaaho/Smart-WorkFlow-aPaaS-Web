@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* global MouseEvent, HTMLElement */
 /** 图表系列自定义颜色：HEX + 不透明度，输出 6/8 位 HEX。 */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from '@/locales'
@@ -39,6 +40,21 @@ function onHexInput(value: string): void {
   hex.value = value.startsWith('#') ? value : `#${value}`
 }
 
+/* 审查23 W19-C：430×156 渐变取色（白→当前色→黑），点击仅改当前色与 HEX */
+function channelAt(c: number, t: number): string {
+  const v = t < 0.5 ? Math.round(255 + (c - 255) * (t * 2)) : Math.round(c * (1 - (t - 0.5) * 2))
+  return v.toString(16).padStart(2, '0')
+}
+
+function onGradientClick(event: MouseEvent): void {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const t = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+  const r = parseInt(hex.value.slice(1, 3), 16)
+  const g = parseInt(hex.value.slice(3, 5), 16)
+  const b = parseInt(hex.value.slice(5, 7), 16)
+  hex.value = `#${channelAt(r, t)}${channelAt(g, t)}${channelAt(b, t)}`
+}
+
 function choose(color: string): void {
   hex.value = color
 }
@@ -54,25 +70,27 @@ function confirm(): void {
   <el-dialog
     :model-value="modelValue"
     :title="t('workspace.color.title')"
-    width="440px"
+    width="480px"
     append-to-body
+    class="wcolor-dialog"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="wcolor">
       <p v-if="name" class="wcolor__name">{{ name }}</p>
+      <div
+        class="wcolor__gradient"
+        :style="{
+          background: `linear-gradient(90deg, #ffffff 0%, ${valid ? hex : '#7c3aed'} 50%, #000000 100%)`,
+        }"
+        @click="onGradientClick"
+      />
       <div class="wcolor__preview">
         <i :style="{ background: preview }" />
       </div>
       <div class="wcolor__row">
-        <input
-          class="wcolor__picker"
-          type="color"
-          :value="valid ? hex : '#000000'"
-          @input="hex = ($event.target as HTMLInputElement).value"
-        />
         <span class="wcolor__label">{{ t('workspace.color.hex') }}</span>
-        <el-input :model-value="hex" size="small" maxlength="7" @update:model-value="onHexInput" />
-        <el-input-number v-model="opacity" :min="0" :max="100" :step="1" size="small" />
+        <el-input :model-value="hex" maxlength="7" @update:model-value="onHexInput" />
+        <el-input-number v-model="opacity" :min="0" :max="100" :step="1" />
         <span class="wcolor__percent">%</span>
       </div>
       <p v-if="!valid" class="wcolor__error">{{ t('workspace.color.invalid') }}</p>
@@ -112,9 +130,19 @@ function confirm(): void {
   color: var(--sw-text-primary, #1f2937);
 }
 
+.wcolor__gradient {
+  box-sizing: content-box;
+  width: 430px;
+  height: 156px;
+  border: 1px solid var(--sw-border-light, #eef0f4);
+  border-radius: 8px;
+  cursor: crosshair;
+}
+
 .wcolor__preview {
   position: relative;
-  height: 72px;
+  box-sizing: border-box;
+  height: 36px;
   border: 1px solid var(--sw-border-light, #eef0f4);
   border-radius: 8px;
   overflow: hidden;
@@ -146,6 +174,11 @@ function confirm(): void {
 
 .wcolor__row :deep(.el-input) {
   width: 120px;
+}
+.wcolor__row :deep(.el-input__wrapper),
+.wcolor__row :deep(.el-input-number .el-input__wrapper) {
+  box-sizing: border-box;
+  height: 32px;
 }
 
 .wcolor__row :deep(.el-input-number) {
@@ -200,5 +233,18 @@ function confirm(): void {
 .wcolor__swatch.is-active {
   outline: 2px solid var(--sw-color-primary, #2563eb);
   outline-offset: 1px;
+}
+</style>
+
+<style>
+/* 审查23 W19-C：480 窗口、72×32 底栏 */
+.wcolor-dialog.el-dialog {
+  padding: 20px;
+}
+.wcolor-dialog .el-dialog__footer .el-button {
+  width: 72px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
 }
 </style>

@@ -164,8 +164,9 @@ const colorValue = computed(() => {
   <el-dialog
     :model-value="modelValue"
     :title="t('workspace.metrics.title')"
-    width="820px"
+    width="1120px"
     append-to-body
+    class="wmetrics-dialog"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="wmetrics">
@@ -173,7 +174,7 @@ const colorValue = computed(() => {
         <div class="wmetrics__axis-row">
           <label>
             <span>{{ t('workspace.metrics.xField') }}</span>
-            <el-select v-model="xField" size="small">
+            <el-select v-model="xField">
               <el-option
                 v-for="field in numericFields"
                 :key="field.name"
@@ -184,7 +185,7 @@ const colorValue = computed(() => {
           </label>
           <label>
             <span>{{ t('workspace.metrics.yField') }}</span>
-            <el-select v-model="yField" size="small">
+            <el-select v-model="yField">
               <el-option
                 v-for="field in numericFields"
                 :key="field.name"
@@ -199,7 +200,7 @@ const colorValue = computed(() => {
         <div class="wmetrics__axis-row">
           <label>
             <span>{{ t('workspace.metrics.dimension') }}</span>
-            <el-select v-model="groupBy" size="small">
+            <el-select v-model="groupBy">
               <el-option
                 v-for="field in groupFields"
                 :key="field.name"
@@ -210,7 +211,7 @@ const colorValue = computed(() => {
           </label>
           <label v-if="['line', 'area', 'bar', 'hbar', 'combo', 'heatmap'].includes(chartType)">
             <span>{{ t('workspace.metrics.groupSeries') }}</span>
-            <el-select v-model="groupBy2" size="small" clearable>
+            <el-select v-model="groupBy2" clearable>
               <el-option :label="t('workspace.metrics.none')" value="" />
               <el-option
                 v-for="field in groupFields"
@@ -222,7 +223,7 @@ const colorValue = computed(() => {
           </label>
           <label v-if="chartType === 'gauge'">
             <span>{{ t('workspace.metrics.target') }}</span>
-            <el-input-number v-model="target" size="small" :min="1" :max="1000000" />
+            <el-input-number v-model="target" :min="1" :max="1000000" />
           </label>
         </div>
 
@@ -237,7 +238,7 @@ const colorValue = computed(() => {
             <span />
           </div>
           <div v-for="(metric, index) in metrics" :key="index" class="wmetrics__row">
-            <el-select v-model="metric.field" size="small" clearable>
+            <el-select v-model="metric.field" clearable>
               <el-option
                 v-for="field in fieldOptions(metric)"
                 :key="field.name"
@@ -245,23 +246,23 @@ const colorValue = computed(() => {
                 :value="field.name"
               />
             </el-select>
-            <el-select v-model="metric.agg" size="small" @change="onAggChange(metric)">
+            <el-select v-model="metric.agg" @change="onAggChange(metric)">
               <el-option label="COUNT" value="COUNT" />
               <el-option label="SUM" value="SUM" />
               <el-option label="AVG" value="AVG" />
               <el-option label="MIN" value="MIN" />
               <el-option label="MAX" value="MAX" />
             </el-select>
-            <el-select v-if="isCartesian" v-model="metric.axis" size="small">
+            <el-select v-if="isCartesian" v-model="metric.axis">
               <el-option :label="t('workspace.metrics.leftAxis')" value="left" />
               <el-option :label="t('workspace.metrics.rightAxis')" value="right" />
             </el-select>
-            <el-select v-if="isCartesian" v-model="metric.presentation" size="small">
+            <el-select v-if="isCartesian" v-model="metric.presentation">
               <el-option :label="t('workspace.metrics.bar')" value="bar" />
               <el-option :label="t('workspace.metrics.line')" value="line" />
               <el-option :label="t('workspace.metrics.area')" value="area" />
             </el-select>
-            <el-input v-model="metric.unit" size="small" />
+            <el-input v-model="metric.unit" />
             <button
               type="button"
               class="wmetrics__color"
@@ -271,22 +272,20 @@ const colorValue = computed(() => {
             />
             <button type="button" class="wmetrics__remove" @click="removeMetric(index)">×</button>
           </div>
-          <el-button size="small" plain @click="addMetric">{{
-            t('workspace.metrics.add')
-          }}</el-button>
+          <el-button plain @click="addMetric">{{ t('workspace.metrics.add') }}</el-button>
         </div>
 
         <div v-if="isCartesian" class="wmetrics__bounds">
           <label>
             <span>{{ t('workspace.metrics.leftAxis') }}</span>
-            <el-select v-model="axisLeftMax" size="small">
+            <el-select v-model="axisLeftMax">
               <el-option :label="axisLabel('left', 0)" :value="0" />
               <el-option :label="axisLabel('left', 100)" :value="100" />
             </el-select>
           </label>
           <label>
             <span>{{ t('workspace.metrics.rightAxis') }}</span>
-            <el-select v-model="axisRightMax" size="small">
+            <el-select v-model="axisRightMax">
               <el-option :label="axisLabel('right', 0)" :value="0" />
               <el-option :label="axisLabel('right', 100)" :value="100" />
             </el-select>
@@ -315,6 +314,24 @@ const colorValue = computed(() => {
   gap: 14px;
 }
 
+/* 审查23 W19-M：34 表头 / 85 行距 / 24 内边距 / 80×32 底栏 */
+.wmetrics__head {
+  height: 34px;
+  box-sizing: border-box;
+  align-content: center;
+  background: #f5f7fa;
+  border-radius: 4px;
+  padding: 0 12px;
+  color: var(--sw-text-tertiary);
+  font-size: 12px;
+}
+
+.wmetrics__row {
+  min-height: 85px;
+  padding: 0 12px;
+  border-bottom: 1px solid #f0f2f7;
+}
+
 .wmetrics__axis-row {
   display: flex;
   gap: 16px;
@@ -341,11 +358,6 @@ const colorValue = computed(() => {
   grid-template-columns: 1.4fr 0.8fr 0.7fr 0.8fr 0.7fr 44px 24px;
   gap: 8px;
   align-items: center;
-}
-
-.wmetrics__head {
-  color: var(--sw-text-tertiary);
-  font-size: 11px;
 }
 
 .wmetrics__color {
@@ -378,5 +390,21 @@ const colorValue = computed(() => {
   color: var(--sw-text-tertiary);
   font-size: 16px;
   cursor: pointer;
+}
+</style>
+
+<style>
+/* 审查23 W19-M：1120 窗口 24 内边距、80×32 底栏 */
+.wmetrics-dialog.el-dialog {
+  padding: 24px;
+}
+.wmetrics-dialog .el-dialog__footer {
+  margin-top: 18px;
+}
+.wmetrics-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
 }
 </style>

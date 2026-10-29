@@ -90,8 +90,9 @@ watch(
   <el-dialog
     :model-value="modelValue"
     :title="t('workspace.formPicker.title')"
-    width="760px"
+    width="880px"
     append-to-body
+    class="wsfp-dialog"
     :close-on-click-modal="false"
     @update:model-value="emit('update:modelValue', $event)"
   >
@@ -167,6 +168,7 @@ watch(
 </template>
 
 <style scoped>
+/* 审查23 W19-F：880 窗口、192 目录、单列 64 高表单行、搜索 830 */
 .wsfp {
   display: flex;
   flex-direction: column;
@@ -177,7 +179,7 @@ watch(
 }
 .wsfp__body {
   display: grid;
-  grid-template-columns: 176px minmax(0, 1fr);
+  grid-template-columns: 192px minmax(0, 1fr);
   gap: 12px;
   min-height: 280px;
 }
@@ -237,19 +239,21 @@ watch(
 }
 .wsfp__forms {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   align-content: start;
   padding: 4px;
   overflow-y: auto;
-  max-height: 320px;
+  max-height: 456px;
 }
 .wsfp__form {
   position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  box-sizing: border-box;
+  height: 64px;
+  padding: 0 12px;
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-card);
   background: var(--sw-surface-card);
@@ -315,5 +319,19 @@ watch(
   margin: 0;
   font-size: 12px;
   color: var(--sw-text-secondary);
+}
+</style>
+
+<style>
+/* 审查23 W19-F：内部搜索 830 宽、72×32 底栏 */
+.wsfp-dialog .wsfp__search {
+  width: 830px;
+  max-width: 100%;
+}
+.wsfp-dialog .el-dialog__footer .el-button {
+  width: 72px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
 }
 </style>

@@ -347,3 +347,10 @@ body {
   border-right-width: 2px !important;
   border-bottom-width: 2px !important;
 }
+
+/* 审查23 Y-S：系统列表状态列纯文字 */
+.sys-status-text {
+  color: #303133;
+  font-size: 14px;
+  line-height: 22px;
+}

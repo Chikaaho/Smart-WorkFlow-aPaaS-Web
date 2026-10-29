@@ -622,6 +622,18 @@ const advancedConfigCapable = computed(
       !!allowedActionsField.value),
 )
 
+/* 审查23 D08-F：字段页签顶部字段搜索（仅过滤列表，不改变权限绑定） */
+const fieldPermKeyword = ref('')
+
+const fieldPermVisibleFields = computed(() => {
+  const keyword = fieldPermKeyword.value.trim().toLowerCase()
+  if (!keyword) return mainFormFields.value
+  return mainFormFields.value.filter(
+    (f) =>
+      f.name.toLowerCase().includes(keyword) || (f.label || '').toLowerCase().includes(keyword),
+  )
+})
+
 const nodeFieldStates = computed<NodeFieldStates>(() => {
   const config = (selectedNode.value?.config ?? {}) as { fieldStates?: NodeFieldStates }
   return config.fieldStates ?? {}
@@ -1995,6 +2007,33 @@ watch(
 )
 /** 打开节点时检测到的参与人数据形态（旧数据兼容展示提示的依据）。 */
 const participantShape = ref<ParticipantShapeKind>('empty')
+
+/* 审查23 D08-B：分段顺序按原图——指定人员/表单组件/JS脚本在前，其余合法策略保留在后。 */
+const PARTICIPANT_SOURCE_SEGMENT_ORDER = ['FIXED_USER', 'FORM_FIELD', 'EXPRESSION']
+const participantSourceSegments = computed(() => {
+  const options = participantStrategyOptions.value
+  const head = PARTICIPANT_SOURCE_SEGMENT_ORDER.map((value) =>
+    options.find((option) => option.value === value),
+  ).filter((option): option is { value: string; label: string } => Boolean(option))
+  const tail = options.filter((option) => !PARTICIPANT_SOURCE_SEGMENT_ORDER.includes(option.value))
+  return [...head, ...tail]
+})
+
+const CONSENSUS_MODE_SEGMENT_ORDER = ['ALL', 'RATIO', 'COUNT'] as const
+type ConsensusModeOption = { label: string; value: string }
+const consensusModeSegments = computed<ConsensusModeOption[]>(() => {
+  const all: ConsensusModeOption[] = CONSENSUS_MODE_OPTIONS.map((option) => ({
+    label: option.label,
+    value: option.value,
+  }))
+  const head = CONSENSUS_MODE_SEGMENT_ORDER.map((value) =>
+    all.find((option) => option.value === value),
+  ).filter((option): option is ConsensusModeOption => Boolean(option))
+  const tail = all.filter(
+    (option) => !(CONSENSUS_MODE_SEGMENT_ORDER as readonly string[]).includes(option.value),
+  )
+  return [...head, ...tail]
+})
 
 const participantStrategyOptions = computed(() => {
   // 策略全集以服务端 validation.strategies 优先；未下发时回退契约常量（含 P63 FORM_FIELD）
@@ -3755,7 +3794,7 @@ function nodeLabelLines(label: string) {
                 {{ t('workflow.basicPropsSection') }}
               </div>
               <!-- 0.1.7 #36（Owner）：面板内不再混用 small 尺寸——输入框/选择器/按钮统一 32px 高 -->
-              <el-form label-position="top" :inert="isVersionPreview">
+              <el-form class="designer-props__basic" label-position="top" :inert="isVersionPreview">
                 <div v-if="selectedNode" class="props-node-type">
                   {{ nodeTypeHint(selectedNode.type) }}
                 </div>
@@ -3774,15 +3813,21 @@ function nodeLabelLines(label: string) {
                 </el-form-item>
                 <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
                 <template v-if="participantField">
-                  <el-form-item label="审批人策略">
-                    <el-select v-model="participantForm.strategy" @change="applyParticipant">
-                      <el-option
-                        v-for="option in participantStrategyOptions"
+                  <!-- 审查23 D08-B：审批人来源按原图分段（指定人员/表单组件/JS脚本在前，额外合法策略保留） -->
+                  <el-form-item label="审批人来源">
+                    <el-radio-group
+                      v-model="participantForm.strategy"
+                      class="participant-source-seg"
+                      @change="() => applyParticipant()"
+                    >
+                      <el-radio-button
+                        v-for="option in participantSourceSegments"
                         :key="option.value"
-                        :label="option.label"
                         :value="option.value"
-                      />
-                    </el-select>
+                      >
+                        {{ option.label }}
+                      </el-radio-button>
+                    </el-radio-group>
                   </el-form-item>
                   <!-- FIXED_USER：人员多选（复用审批人候选弹窗人员页签；id 数组保持精度） -->
                   <el-form-item v-if="participantForm.strategy === 'FIXED_USER'" label="指定人员">
@@ -4172,17 +4217,23 @@ function nodeLabelLines(label: string) {
                     v-else-if="field.key === 'mode' && selectedNode?.type === 'CONSENSUS'"
                     :label="field.label"
                   >
-                    <el-select
+                    <!-- 审查23 D08-B：通过条件按原图分段（全员/比例/人数在前，额外合法条件保留） -->
+                    <el-radio-group
+                      class="participant-source-seg"
                       :model-value="String(propForm.mode ?? 'ALL')"
-                      @change="onConsensusModeChange"
+                      @change="
+                        (value: string | number | boolean | undefined) =>
+                          onConsensusModeChange(String(value))
+                      "
                     >
-                      <el-option
-                        v-for="option in CONSENSUS_MODE_OPTIONS"
+                      <el-radio-button
+                        v-for="option in consensusModeSegments"
                         :key="option.value"
-                        :label="option.label"
                         :value="option.value"
-                      />
-                    </el-select>
+                      >
+                        {{ option.label }}
+                      </el-radio-button>
+                    </el-radio-group>
                   </el-form-item>
                   <template v-else-if="field.key === 'ratio' && selectedNode?.type === 'CONSENSUS'">
                     <el-form-item
@@ -4278,8 +4329,15 @@ function nodeLabelLines(label: string) {
 
             <!-- BF20261013-013：字段属性——该节点对每个表单字段的必填/编辑/隐藏三态 -->
             <template v-else>
+              <el-input
+                v-model="fieldPermKeyword"
+                class="field-states__search"
+                :placeholder="t('workflow.fieldStatesSearchPlaceholder')"
+                clearable
+                :inert="isVersionPreview"
+              />
               <table
-                v-if="mainFormFields.length"
+                v-if="fieldPermVisibleFields.length"
                 class="field-states__table"
                 :inert="isVersionPreview"
               >
@@ -4292,7 +4350,7 @@ function nodeLabelLines(label: string) {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="f in mainFormFields" :key="f.name">
+                  <tr v-for="f in fieldPermVisibleFields" :key="f.name">
                     <td class="field-states__name">{{ f.label || f.name }}</td>
                     <td>
                       <el-checkbox
@@ -5997,10 +6055,25 @@ function nodeLabelLines(label: string) {
   color: var(--sw-color-primary);
   font-weight: 500;
 }
+.field-states__search {
+  margin-bottom: 8px;
+}
+.field-states__search :deep(.el-input__wrapper) {
+  box-sizing: border-box;
+  height: 32px;
+}
 .field-states__table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+}
+.field-states__table :deep(.el-checkbox__inner) {
+  width: 18px !important;
+  height: 18px !important;
+}
+.field-states__table :deep(.el-checkbox__inner::after) {
+  left: 6px;
+  top: 2px;
 }
 .field-states__table th,
 .field-states__table td {
@@ -6032,6 +6105,27 @@ function nodeLabelLines(label: string) {
   line-height: 17px;
   padding-bottom: 4px;
   margin-bottom: 4px;
+}
+/* 审查23 D08-B：基础分支标签 14/22 */
+.designer-props__basic :deep(.el-form-item__label) {
+  font-size: 14px !important;
+  line-height: 22px;
+}
+
+/* 审查23 D08-B：来源/通过条件分段通栏、32 高 */
+.participant-source-seg {
+  display: flex;
+  width: 100%;
+}
+.participant-source-seg .el-radio-button {
+  flex: 1 1 0;
+}
+.participant-source-seg :deep(.el-radio-button__inner) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 6px;
+  line-height: 30px;
 }
 .designer-props :deep(.el-input.is-disabled .el-input__inner) {
   color: #19233b;

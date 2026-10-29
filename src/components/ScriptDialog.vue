@@ -256,38 +256,42 @@ function onSave() {
         <p class="script-dialog__catalog-title">{{ t('scriptWorkspace.functions') }}</p>
         <el-input
           v-model="search"
+          class="script-dialog__search"
           :placeholder="t('scriptWorkspace.search')"
           :aria-label="t('scriptWorkspace.search')"
           clearable
         />
-        <section v-for="group in categories" :key="group.name" class="script-dialog__group">
-          <p class="script-dialog__group-name">{{ group.name }}</p>
-          <div v-for="fn in group.items" :key="fn.name" class="script-dialog__fn">
-            <button
-              type="button"
-              class="script-dialog__fn-name"
-              :class="{ 'is-selected': helpFunction?.name === fn.name }"
-              :title="fn.snippet"
-              @mousedown.prevent
-              @click="insertFunction(fn)"
-            >
-              {{ fn.name }}
-            </button>
-            <el-tooltip :content="fn.desc" placement="top">
+        <!-- 审查23 J22-D：滚动收内层，目录内宽/搜索 248 不被滚条挤压 -->
+        <div class="script-dialog__catalog-scroll">
+          <section v-for="group in categories" :key="group.name" class="script-dialog__group">
+            <p class="script-dialog__group-name">{{ group.name }}</p>
+            <div v-for="fn in group.items" :key="fn.name" class="script-dialog__fn">
               <button
                 type="button"
-                class="script-dialog__fn-help"
-                :aria-label="t('scriptWorkspace.help', { name: fn.name })"
-                @click="selected = fn"
+                class="script-dialog__fn-name"
+                :class="{ 'is-selected': helpFunction?.name === fn.name }"
+                :title="fn.snippet"
+                @mousedown.prevent
+                @click="insertFunction(fn)"
               >
-                ?
+                {{ fn.name }}
               </button>
-            </el-tooltip>
-          </div>
-        </section>
-        <p v-if="!categories.length" class="script-dialog__empty">
-          {{ t('scriptWorkspace.noFunctions') }}
-        </p>
+              <el-tooltip :content="fn.desc" placement="top">
+                <button
+                  type="button"
+                  class="script-dialog__fn-help"
+                  :aria-label="t('scriptWorkspace.help', { name: fn.name })"
+                  @click="selected = fn"
+                >
+                  ?
+                </button>
+              </el-tooltip>
+            </div>
+          </section>
+          <p v-if="!categories.length" class="script-dialog__empty">
+            {{ t('scriptWorkspace.noFunctions') }}
+          </p>
+        </div>
       </aside>
       <div class="script-dialog__editor">
         <section class="script-dialog__code">
@@ -364,11 +368,35 @@ function onSave() {
 }
 .script-dialog__catalog {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   width: 280px;
   flex: 0 0 280px;
   padding: var(--sw-space-16);
-  overflow: auto;
+  overflow: hidden;
   background: var(--sw-surface-page);
+}
+.script-dialog__search {
+  width: 248px;
+}
+.script-dialog__search :deep(.el-input__wrapper) {
+  box-sizing: border-box;
+  height: 32px;
+}
+.script-dialog__catalog-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 248px;
+  box-sizing: border-box;
+  padding-right: 8px;
+  overflow-y: auto;
+}
+.script-dialog__catalog-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.script-dialog__catalog-scroll::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: #c9d2e3;
 }
 .script-dialog__catalog-title {
   margin: 0 0 var(--sw-space-8);

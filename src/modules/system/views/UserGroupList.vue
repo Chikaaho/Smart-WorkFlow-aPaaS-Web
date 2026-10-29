@@ -396,7 +396,7 @@ onMounted(loadList)
       show-icon
       style="margin-bottom: 12px"
     />
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="list">
       <el-table-column prop="groupCode" :label="t('common.businessKey')" min-width="110" />
       <el-table-column prop="groupName" :label="t('system.groupName')" min-width="140" />
       <el-table-column
@@ -407,9 +407,9 @@ onMounted(loadList)
       />
       <el-table-column prop="status" :label="t('common.status')" width="90">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'info' : 'success'" size="small">
-            {{ row.status === 1 ? t('common.disable') : t('common.enable') }}
-          </el-tag>
+          <span class="sys-status-text">{{
+            row.status === 1 ? t('common.disable') : t('common.enable')
+          }}</span>
         </template>
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="150" />

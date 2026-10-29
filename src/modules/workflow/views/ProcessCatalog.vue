@@ -634,8 +634,14 @@ onMounted(() => {
 }
 .catalog-tree__count {
   flex: none;
-  font-size: 13px;
+  font-family: var(--sw-font-family);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
   color: var(--sw-text-secondary);
+}
+.catalog-tree__item.is-active .catalog-tree__count {
+  font-weight: 500;
 }
 .catalog-tree__item.is-active .catalog-tree__glyph,
 .catalog-tree__item.is-active .catalog-tree__count {
@@ -750,9 +756,10 @@ onMounted(() => {
 }
 .catalog-section__title {
   margin: 0 0 11px;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 20px;
+  font-family: var(--sw-font-family);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
   color: var(--sw-text-primary);
 }
 /* 参考 97:2：竖排灰底行 38 高、8 间距；14px 文档图标 + 名称 + 右侧「发起 ›」。 */
@@ -816,7 +823,10 @@ onMounted(() => {
   padding: 0;
   border: none;
   background: transparent;
-  font-size: 13px;
+  font-family: var(--sw-font-family);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
   color: var(--sw-color-primary);
   cursor: pointer;
 }
@@ -838,8 +848,10 @@ onMounted(() => {
   height: 40px;
   padding: 0;
   background: #f4f6fb;
-  font-size: 13px;
-  font-weight: 500;
+  font-family: var(--sw-font-family);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
   color: var(--sw-text-secondary);
   text-align: left;
 }
@@ -925,7 +937,10 @@ onMounted(() => {
   border: none;
   border-radius: 4px;
   background: var(--sw-color-primary);
-  font-size: 13px;
+  font-family: var(--sw-font-family);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
   color: #ffffff;
   cursor: pointer;
 }

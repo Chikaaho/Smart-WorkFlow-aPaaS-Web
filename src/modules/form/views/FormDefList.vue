@@ -464,11 +464,16 @@ onMounted(loadList)
       />
       <el-table v-loading="loading" :data="displayList" stripe>
         <!-- 459:15228（执行提示18）：原八列表头锚点 38/195/632/868/1004/1120/1256/1472 -->
-        <el-table-column width="157">
+        <el-table-column width="157" show-overflow-tooltip>
           <template #header>{{ t('system.tenantName') }}</template>
           <template #default="{ row }">{{ row.tenantName || '—' }}</template>
         </el-table-column>
-        <el-table-column prop="name" :label="t('common.formName')" width="437" />
+        <el-table-column
+          prop="name"
+          :label="t('common.formName')"
+          width="437"
+          show-overflow-tooltip
+        />
         <el-table-column width="236">
           <template #header>{{ t('form.appCenter.belongApp') }}</template>
           <template #default="{ row }">{{ appNameOf(row.appId) }}</template>

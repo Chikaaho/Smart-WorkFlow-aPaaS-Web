@@ -198,6 +198,12 @@ const emit = defineEmits<{
   gap: var(--sw-space-8);
   height: 32px;
 }
+.standard-list--design :deep(.list-actions .el-button:not(.is-link)) {
+  width: 72px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+}
 .standard-list--design :deep(.list-actions .el-button.is-link) {
   min-width: 40px;
   height: 32px;

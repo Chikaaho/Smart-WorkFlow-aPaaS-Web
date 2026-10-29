@@ -73,7 +73,7 @@ const form = reactive<FormAppSaveReq>({
 })
 
 const dialogTitle = computed(() =>
-  editingId.value ? t('form.appCenter.editApp') : t('form.appCenter.newApp'),
+  editingId.value ? t('form.appCenter.appSetting') : t('form.appCenter.newApp'),
 )
 
 function openCreate() {
@@ -296,7 +296,7 @@ onMounted(() => {
         >
         <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="saving" @click="handleSave">
-          {{ t('common.save') }}
+          {{ t('common.confirm') }}
         </el-button>
       </template>
     </DetailDialog>
@@ -317,6 +317,9 @@ onMounted(() => {
 <style>
 .el-overlay:has(.app-manage-dialog--covered) {
   visibility: hidden;
+}
+.app-manage-dialog.el-dialog {
+  border-radius: 12px;
 }
 .app-manage-dialog .el-form-item {
   margin-bottom: 12px;

@@ -194,7 +194,7 @@ async function restoreSelected() {
   <el-dialog
     v-model="visible"
     :title="t('form.draftHistoryTitle')"
-    width="640px"
+    width="1000px"
     append-to-body
     class="history-dialog"
     modal-class="p53-dialog-overlay-35"
@@ -210,25 +210,36 @@ async function restoreSelected() {
     <div v-else-if="snapshots.length === 0" class="history-dialog__empty">
       {{ t('form.noHistoryVersions') }}
     </div>
-    <div v-else class="history-dialog__list">
-      <button
-        v-for="(row, i) in snapshots"
-        :key="row.formVersion"
-        type="button"
-        class="history-card"
-        :class="{ 'history-card--active': row.formVersion === selectedVersion }"
-        @click="selectedVersion = row.formVersion"
-      >
-        <span class="history-card__head">
-          <b class="history-card__time">{{ formatTime(row.createTime) }}</b>
-          <span class="history-card__badge" :class="badgeClass(row, i)">{{ badgeOf(row, i) }}</span>
-        </span>
-        <span v-if="row.author" class="history-card__meta">{{
-          t('form.snapshotAuthorScope', { author: row.author })
-        }}</span>
-        <span v-if="row.note" class="history-card__note">{{ row.note }}</span>
-      </button>
-    </div>
+    <!-- 审查23 S14-H：版本列表还原 1000 宽表格（34 表头 / 46 行），值绑真实快照 -->
+    <table v-else class="history-table">
+      <thead>
+        <tr>
+          <th class="history-table__version">{{ t('form.historyColVersion') }}</th>
+          <th>{{ t('form.historyColTime') }}</th>
+          <th>{{ t('form.historyColPublisher') }}</th>
+          <th class="history-table__note">{{ t('form.historyColNote') }}</th>
+          <th class="history-table__status">{{ t('form.historyColStatus') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="(row, i) in snapshots"
+          :key="row.formVersion"
+          :class="{ 'is-active': row.formVersion === selectedVersion }"
+          @click="selectedVersion = row.formVersion"
+        >
+          <td class="history-table__version">v{{ row.versionLabel ?? row.formVersion }}</td>
+          <td>{{ formatTime(row.createTime) }}</td>
+          <td>{{ row.author || '—' }}</td>
+          <td class="history-table__note">{{ row.note || '—' }}</td>
+          <td class="history-table__status">
+            <span class="history-card__badge" :class="badgeClass(row, i)">{{
+              badgeOf(row, i)
+            }}</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
 
     <template #footer>
       <div class="history-dialog__footer">
@@ -376,13 +387,49 @@ async function restoreSelected() {
 }
 
 /* 版本卡片列表 */
-.history-dialog__list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: 46vh;
-  overflow-y: auto;
-  padding-right: 2px;
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 1px solid #ebeef5;
+}
+.history-table th {
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  background: #f4f6fb;
+  color: #606266;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 22px;
+  text-align: left;
+  white-space: nowrap;
+}
+.history-table td {
+  height: 46px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border-top: 1px solid #ebeef5;
+  color: #303133;
+  font-size: 13px;
+  line-height: 22px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.history-table tbody tr.is-active td {
+  background: var(--sw-color-primary-soft, #eff6ff);
+}
+.history-table__version {
+  width: 120px;
+}
+.history-table__note {
+  width: auto;
+}
+.history-table__status {
+  width: 150px;
 }
 
 .history-card {

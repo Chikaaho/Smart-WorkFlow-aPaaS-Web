@@ -1360,11 +1360,10 @@ async function loadBreadcrumbCategory() {
    且历史弹窗 append-to-body，故该段使用全局作用域；类名为本页专用。
    0.1.7 #39：字段清单由弹窗上收为工作区页签，其弹窗几何样式随之移除。 */
 .el-dialog.history-dialog {
-  /* 覆盖组件内 width prop（内联 CSS 变量），需 !important；
-     节点 14：538 宽、右上泊位（0.0381 最优态）。 */
-  width: 538px !important;
+  /* 审查23 S14-H：1000 宽居中版本表（覆盖组件内联变量需 !important）。 */
+  width: 1000px !important;
   max-width: calc(100vw - 48px);
-  margin: 96px 32px 50px auto;
+  margin: 96px auto 50px;
   --el-dialog-padding-primary: 0px;
   --el-dialog-border-radius: 14px;
 }

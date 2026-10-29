@@ -526,7 +526,7 @@ onMounted(loadList)
   box-sizing: border-box;
   height: 64px;
   margin-top: 0;
-  padding: 0 16px 0 20px;
+  padding: 0 16px 0 16px;
   border: 1px solid #dde3ef;
   border-radius: 8px;
   background: var(--sw-surface-card);

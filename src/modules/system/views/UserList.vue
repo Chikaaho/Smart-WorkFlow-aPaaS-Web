@@ -36,12 +36,7 @@ import type {
 } from '@/modules/system/types/user'
 import type { PageQuery } from '@/contracts/common'
 import { hasPerm } from '@/foundation/permission'
-import {
-  SYS_USER_STATUS,
-  userStatusOptions,
-  userStatusTagType,
-  userStatusLabel,
-} from '@/modules/system/constants'
+import { SYS_USER_STATUS, userStatusOptions, userStatusLabel } from '@/modules/system/constants'
 import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { useUserStore } from '@/stores/user'
@@ -527,7 +522,7 @@ onMounted(loadList)
       show-icon
       style="margin-bottom: 12px"
     />
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="list">
       <el-table-column
         v-if="userStore.superAdmin"
         prop="tenantName"
@@ -556,9 +551,7 @@ onMounted(loadList)
       </el-table-column>
       <el-table-column prop="status" :label="t('common.status')" width="80">
         <template #default="{ row }">
-          <el-tag :type="userStatusTagType(row.status)" size="small">
-            {{ userStatusLabel(row.status) }}
-          </el-tag>
+          <span class="sys-status-text">{{ userStatusLabel(row.status) }}</span>
         </template>
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="120" />

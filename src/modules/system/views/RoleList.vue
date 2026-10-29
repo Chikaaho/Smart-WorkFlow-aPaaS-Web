@@ -618,15 +618,15 @@ onMounted(loadList)
       show-icon
       style="margin-bottom: 12px"
     />
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="list">
       <el-table-column prop="name" :label="t('system.roleName')" min-width="140" />
       <el-table-column prop="code" :label="t('system.roleCode')" min-width="120" />
       <el-table-column prop="sort" :label="t('common.sort')" width="70" />
       <el-table-column prop="status" :label="t('common.status')" width="80">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
-            {{ row.status === 1 ? t('common.statusNormal') : t('common.disable') }}
-          </el-tag>
+          <span class="sys-status-text">{{
+            row.status === 1 ? t('common.statusNormal') : t('common.disable')
+          }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="builtIn" :label="t('system.builtIn')" width="70">

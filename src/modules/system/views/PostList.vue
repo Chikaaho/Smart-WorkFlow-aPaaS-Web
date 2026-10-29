@@ -293,7 +293,7 @@ onMounted(loadList)
       show-icon
       style="margin-bottom: 12px"
     />
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="list">
       <el-table-column prop="code" :label="t('system.postCode')" min-width="120" />
       <el-table-column prop="name" :label="t('system.postName')" min-width="140" />
       <el-table-column prop="sort" :label="t('common.sort')" width="70" />
