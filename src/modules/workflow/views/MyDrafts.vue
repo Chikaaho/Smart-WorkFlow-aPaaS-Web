@@ -311,7 +311,7 @@ onMounted(() => {
         <template #default="{ row }">
           <div class="drafts-actions">
             <el-button link type="primary" @click.stop="openEdit(row as BpmDraft)">{{
-              t('common.edit')
+              t('workflow.continueEditing')
             }}</el-button>
             <el-dropdown
               trigger="click"
@@ -367,17 +367,18 @@ onMounted(() => {
   width: max-content;
 }
 .drafts-page :deep(.drafts-actions-cell) .cell {
-  padding: 0 8px;
+  padding: 0 !important;
 }
 .drafts-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0;
   height: 32px;
+  white-space: nowrap;
 }
 .drafts-actions :deep(.el-button.is-link) {
   min-width: 0;
-  padding: 0 2px;
+  padding: 0;
   font-size: 14px;
   font-weight: 500;
 }

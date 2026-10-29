@@ -84,6 +84,7 @@ async function submit() {
           type="password"
           autocomplete="current-password"
           show-password
+          :placeholder="t('auth.oldPasswordPlaceholder')"
         />
       </el-form-item>
       <el-form-item :label="t('auth.newPassword')" required>
@@ -92,6 +93,7 @@ async function submit() {
           type="password"
           autocomplete="new-password"
           show-password
+          :placeholder="t('auth.newPasswordPlaceholder')"
         />
       </el-form-item>
       <el-form-item :label="t('auth.confirmPassword')" required>
@@ -100,6 +102,7 @@ async function submit() {
           type="password"
           autocomplete="new-password"
           show-password
+          :placeholder="t('auth.confirmPasswordPlaceholder')"
           @keyup.enter="submit"
         />
       </el-form-item>
@@ -107,7 +110,7 @@ async function submit() {
     <template #footer>
       <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :loading="submitting" @click="submit">
-        {{ t('common.save') }}
+        {{ t('common.modify') }}
       </el-button>
     </template>
   </DetailDialog>

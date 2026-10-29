@@ -144,6 +144,20 @@ function expandAncestorsOfActive(): void {
   walk(items.value, [])
 }
 
+// ── 712:43454：收起态完整名自定义提示（x72、72×34、#111B3B、12/18、r6，随触发行居中） ──
+const hint = ref<{ text: string; top: number; left: number } | null>(null)
+function showHint(node: MenuNode, anchor: HTMLElement): void {
+  const rect = anchor.getBoundingClientRect()
+  hint.value = {
+    text: labelOf(node),
+    left: 72,
+    top: Math.max(8, Math.min(rect.top + rect.height / 2 - 17, window.innerHeight - 42)),
+  }
+}
+function hideHint(): void {
+  hint.value = null
+}
+
 // ── 收起态目录子树浮层（单实例；点击目录打开，不更换正文） ──
 const flyout = ref<{ node: MenuNode; top: number } | null>(null)
 const flyoutExpanded = ref<Set<string>>(new Set())
@@ -154,6 +168,7 @@ const flyoutStyle = computed((): CSSProperties => {
   return { position: 'fixed', left: '72px', top: `${top}px` }
 })
 function openFlyout(node: MenuNode, anchor: HTMLElement): void {
+  hideHint()
   if (flyout.value && toFullPath(flyout.value.node) === toFullPath(node)) {
     closeFlyout()
     return
@@ -309,7 +324,21 @@ const inboxTabs = computed(() => [
       :toggle-dir="toggleDir"
       :open-flyout="openFlyout"
       :flyout-dir-path="flyout ? toFullPath(flyout.node) : undefined"
+      :show-hint="showHint"
+      :hide-hint="hideHint"
     />
+
+    <!-- 712:43454：收起态完整名自定义提示（深色浮签，随触发行居中） -->
+    <teleport to="body">
+      <div
+        v-if="hint && collapse"
+        class="app-sidebar-hint"
+        :style="{ left: hint.left + 'px', top: hint.top + 'px' }"
+        role="tooltip"
+      >
+        {{ hint.text }}
+      </div>
+    </teleport>
 
     <!-- 收起态目录子树浮层（单实例；256px；距侧栏 8px；子树内滚动） -->
     <teleport to="body">
@@ -426,6 +455,22 @@ const inboxTabs = computed(() => [
 .sb-row__char {
   font-size: 14px;
   font-weight: 600;
+}
+/* 712:43454：收起态完整名提示（x72、12/18 字、左右12/上下8、r6、#111B3B） */
+.app-sidebar-hint {
+  position: fixed;
+  z-index: 2100;
+  box-sizing: border-box;
+  max-width: 260px;
+  padding: 8px 12px;
+  background: #111b3b;
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+  pointer-events: none;
 }
 /* 收起态目录子树浮层 */
 .app-sidebar-flyout {

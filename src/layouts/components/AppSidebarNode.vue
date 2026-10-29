@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/* global HTMLElement, MouseEvent, KeyboardEvent */
+/* global HTMLElement, MouseEvent, KeyboardEvent, FocusEvent */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowDown, ArrowRight } from '@element-plus/icons-vue'
@@ -21,6 +21,9 @@ const props = defineProps<{
   toggleDir: (node: MenuNode) => void
   openFlyout: (node: MenuNode, anchor: HTMLElement) => void
   flyoutDirPath?: string
+  /** 712:43454：收起态完整名自定义提示（悬停/聚焦显示，离开/失焦关闭）。 */
+  showHint?: (node: MenuNode, anchor: HTMLElement) => void
+  hideHint?: () => void
 }>()
 
 const router = useRouter()
@@ -46,6 +49,7 @@ function subtreeContains(node: MenuNode, path: string): boolean {
 }
 
 function onRowClick(event: MouseEvent): void {
+  props.hideHint?.()
   if (props.collapse && isDir.value) {
     props.openFlyout(props.node, event.currentTarget as HTMLElement)
     return
@@ -55,6 +59,11 @@ function onRowClick(event: MouseEvent): void {
     return
   }
   void router.push(full.value)
+}
+
+function onHintShow(event: MouseEvent | FocusEvent): void {
+  const el = event.currentTarget as HTMLElement | null
+  if (el) props.showHint?.(props.node, el)
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -82,9 +91,12 @@ const flyoutOpen = computed(() => !!props.flyoutDirPath && props.flyoutDirPath =
     :aria-label="nodeTitle(node)"
     :aria-expanded="isDir ? flyoutOpen : undefined"
     :aria-current="isActive ? 'page' : undefined"
-    :title="nodeTitle(node)"
     @click="onRowClick"
     @keydown="onKeydown"
+    @mouseenter="onHintShow"
+    @mouseleave="props.hideHint?.()"
+    @focus="onHintShow"
+    @blur="props.hideHint?.()"
   >
     <span class="sb-node__slot">
       <el-icon v-if="iconEl" :size="18"><component :is="iconEl" /></el-icon>

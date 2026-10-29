@@ -1624,6 +1624,13 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
+/* 101:2（执行提示20）：日期控件随所属半列伸展（不硬编码列宽），高度保持 32 */
+.form-render-page__field[data-grid-field-type='DATE'] :deep(.el-date-editor) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+}
+
 .form-render-page__field-error {
   margin: var(--sw-space-4) 0 0;
   color: var(--sw-danger);
