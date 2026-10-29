@@ -239,10 +239,10 @@ describe('PublishedSnapshotViewer', () => {
 
     const props = wrapper.find('.snapshot-side--props')
     expect(props.exists()).toBe(true)
-    // 默认选中第一个字段：TEXT 的冻结配置可见
-    expect(props.find('.snapshot-side--props .snapshot-design__props-target').text()).toBe(
-      '采购名称',
-    )
+    // 默认选中第一个字段：TEXT 的冻结配置以只读控件表面展示（执行提示14）
+    const inputs = props.findAll('.snapshot-props-surface__input')
+    expect(inputs).toHaveLength(5)
+    expect((inputs[0].element as HTMLInputElement).value).toBe('采购名称')
     const text = props.text()
     expect(text).toContain('title')
     expect(text).toContain('TEXT')
@@ -252,13 +252,16 @@ describe('PublishedSnapshotViewer', () => {
     const cells = wrapper.findAll('.snapshot-design__cell')
     expect(cells).toHaveLength(2)
     await cells[1].trigger('click')
-    expect(wrapper.find('.snapshot-side--props .snapshot-design__props-target').text()).toBe(
-      '采购明细',
-    )
-    expect(wrapper.find('.snapshot-side--props').text()).toContain('1')
-    // 冻结字段属性面板不提供任何保存/编辑入口
-    const buttons = wrapper.find('.snapshot-side--props').findAll('button')
-    expect(buttons).toHaveLength(0)
+    expect(
+      (props.findAll('.snapshot-props-surface__input')[0].element as HTMLInputElement).value,
+    ).toBe('采购明细')
+    expect(props.text()).toContain('TABLE')
+    // 冻结字段属性面板不提供保存/编辑入口（「查看」为只读详情）
+    const saving = wrapper
+      .find('.snapshot-side--props')
+      .findAll('button')
+      .filter((b) => /保存|恢复|发布/.test(b.text()))
+    expect(saving).toHaveLength(0)
   })
 
   it('脚本与校验行可打开只读详情', async () => {

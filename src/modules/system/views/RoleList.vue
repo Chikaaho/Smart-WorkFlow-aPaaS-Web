@@ -756,10 +756,10 @@ onMounted(loadList)
             @input="filterPermissionTree"
           />
           <el-button class="role-edit__tree-tool" @click="setPermissionTreeExpanded(true)">{{
-            t('system.expandAll')
+            t('system.expandAllNodes')
           }}</el-button>
           <el-button class="role-edit__tree-tool" @click="setPermissionTreeExpanded(false)">{{
-            t('system.collapseAll')
+            t('system.collapseAllNodes')
           }}</el-button>
         </div>
         <div class="role-edit__tree-body">
@@ -917,6 +917,9 @@ onMounted(loadList)
   height: 32px;
   margin: 0;
   padding: 0;
+  color: var(--sw-color-primary, #2563eb);
+  font-size: 14px;
+  line-height: 22px;
 }
 .role-edit__pair {
   display: flex;

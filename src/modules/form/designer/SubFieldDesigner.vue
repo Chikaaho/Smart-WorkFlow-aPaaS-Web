@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ArrowDown, ArrowUp, Delete, Plus } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '@/locales'
 import FieldConfigPanel from './FieldConfigPanel.vue'
@@ -183,13 +183,7 @@ function cancel(): void {
       <span class="subfield-dialog__count">{{
         t('form.subFieldCountLabel', { count: working.length })
       }}</span>
-      <el-button
-        class="subfield-dialog__add"
-        type="primary"
-        :icon="Plus"
-        :disabled="readonly"
-        @click="openAdd"
-      >
+      <el-button class="subfield-dialog__add" type="primary" :disabled="readonly" @click="openAdd">
         {{ t('form.subFieldAdd') }}
       </el-button>
     </div>
@@ -295,7 +289,9 @@ function cancel(): void {
   line-height: 20px;
 }
 .subfield-dialog__add {
+  width: 80px;
   margin-left: auto;
+  padding: 0 8px;
 }
 .subfield-dialog__name {
   display: flex;
@@ -347,6 +343,13 @@ function cancel(): void {
 }
 .subfield-dialog .el-table th.el-table__cell > .cell {
   text-align: left;
+}
+.subfield-dialog .el-table td.el-table__cell > .cell {
+  text-align: left;
+}
+/* 273:1396（执行提示14）：首列文字与原图约 443 左锚（表 x425 + 18） */
+.subfield-dialog .el-table .el-table__cell:first-child .cell {
+  padding-left: 18px;
 }
 .subfield-dialog .el-table td.el-table__cell {
   height: 45px;

@@ -1057,6 +1057,8 @@ watch(
 <style>
 /* 495:18648/18663：字体 208×224（6 行 36）、字号 120×260（7 行 36）浮层。 */
 /* 495:18648/18663（执行提示13）：含边框可见外框 208×224 / 120×260；选中面 #EFF6FF 文字蓝。 */
+/* 执行提示14：外框内 4px 顶距（1px 边 + 3px 内距）、文字左距外框 14px、
+   一次完整显示（6×36=216 / 7×36=252 不产生内滚条/上下箭头）、常规字重。 */
 .rt-font-popper {
   box-sizing: border-box;
   width: 208px;
@@ -1065,15 +1067,26 @@ watch(
 .rt-font-popper .el-select-dropdown {
   box-sizing: border-box;
   height: 222px;
+  max-height: none;
   padding: 3px 0;
+  overflow: hidden;
+}
+.rt-font-popper .el-scrollbar__wrap {
+  height: 216px;
+  max-height: none;
+  overflow: hidden;
 }
 .rt-font-popper .el-select-dropdown__list {
-  max-height: 216px;
-  overflow-y: auto;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
 }
 .rt-font-popper .el-select-dropdown__item {
+  box-sizing: border-box;
   height: 36px;
   line-height: 36px;
+  padding: 0 13px;
+  font-weight: 400;
 }
 .rt-font-popper .el-select-dropdown__item.is-hovering,
 .rt-font-popper .el-select-dropdown__item:hover {
@@ -1082,6 +1095,7 @@ watch(
 .rt-font-popper .el-select-dropdown__item.is-selected {
   color: var(--sw-color-primary, #2563eb);
   background-color: #eff6ff;
+  font-weight: 400;
 }
 .rt-size-popper {
   box-sizing: border-box;
@@ -1091,15 +1105,26 @@ watch(
 .rt-size-popper .el-select-dropdown {
   box-sizing: border-box;
   height: 258px;
+  max-height: none;
   padding: 3px 0;
+  overflow: hidden;
+}
+.rt-size-popper .el-scrollbar__wrap {
+  height: 252px;
+  max-height: none;
+  overflow: hidden;
 }
 .rt-size-popper .el-select-dropdown__list {
-  max-height: 252px;
-  overflow-y: auto;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
 }
 .rt-size-popper .el-select-dropdown__item {
+  box-sizing: border-box;
   height: 36px;
   line-height: 36px;
+  padding: 0 13px;
+  font-weight: 400;
 }
 .rt-size-popper .el-select-dropdown__item.is-hovering,
 .rt-size-popper .el-select-dropdown__item:hover {
@@ -1108,6 +1133,7 @@ watch(
 .rt-size-popper .el-select-dropdown__item.is-selected {
   color: var(--sw-color-primary, #2563eb);
   background-color: #eff6ff;
+  font-weight: 400;
 }
 /* 受控令牌的固定样式（内容由 innerHTML 写入，scoped 选择器无法命中）。 */
 .rt-editor [data-rt-font='default'] {

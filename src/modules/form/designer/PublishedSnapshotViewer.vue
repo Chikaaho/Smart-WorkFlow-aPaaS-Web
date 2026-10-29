@@ -240,7 +240,42 @@ const frozenGraph = computed<{ nodes: FrozenGraphNode[]; edges: FrozenGraphEdge[
   return { nodes, edges }
 })
 
-const nodeById = computed(() => new Map(frozenGraph.value.nodes.map((n) => [n.id, n])))
+const nodeById = computed(() => new Map(frozenLayoutNodes.value.map((n) => [n.id, n])))
+
+/* 272:1518（执行提示14）：缺坐标的冻结节点仅在查看层按真实拓扑确定性分离（不写回版本）；
+   有真实坐标的节点原样保留。 */
+type FrozenLayoutNode = FrozenGraphNode & { derived: boolean }
+
+const frozenLayoutNodes = computed<FrozenLayoutNode[]>(() => {
+  const { nodes, edges } = frozenGraph.value
+  const laid: FrozenLayoutNode[] = nodes.map((n) => ({ ...n, derived: n.x === 0 && n.y === 0 }))
+  if (!laid.some((n) => n.derived)) return laid
+  const layerOf = new Map<string, number>()
+  for (const n of laid) layerOf.set(n.id, 0)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const e of edges) {
+      const sourceLayer = layerOf.get(e.source)
+      if (sourceLayer == null) continue
+      const targetLayer = layerOf.get(e.target)
+      if (targetLayer == null || targetLayer < sourceLayer + 1) {
+        layerOf.set(e.target, sourceLayer + 1)
+        changed = true
+      }
+    }
+  }
+  const rowsPerLayer = new Map<number, number>()
+  for (const n of laid) {
+    if (!n.derived) continue
+    const layer = layerOf.get(n.id) ?? 0
+    const row = rowsPerLayer.get(layer) ?? 0
+    rowsPerLayer.set(layer, row + 1)
+    n.x = 140 + layer * 300
+    n.y = 80 + row * 90
+  }
+  return laid
+})
 
 function frozenNodeCenter(id: string): { x: number; y: number } | null {
   const node = nodeById.value.get(id)
@@ -254,8 +289,8 @@ function frozenEdgePoints(edge: FrozenGraphEdge): Array<{ x: number; y: number }
   return [source, ...edge.waypoints, target]
 }
 
-const frozenViewBox = computed<string | null>(() => {
-  const nodes = frozenGraph.value.nodes
+const frozenViewBoxRect = computed<{ x: number; y: number; w: number; h: number } | null>(() => {
+  const nodes = frozenLayoutNodes.value
   if (nodes.length === 0) return null
   let minX = Infinity
   let minY = Infinity
@@ -278,7 +313,13 @@ const frozenViewBox = computed<string | null>(() => {
   }
   for (const edge of frozenGraph.value.edges) for (const p of frozenEdgePoints(edge)) grow(p.x, p.y)
   if (!Number.isFinite(minX)) return null
-  return [minX - 40, minY - 40, maxX - minX + 80, maxY - minY + 80].join(' ')
+  return { x: minX - 40, y: minY - 40, w: maxX - minX + 80, h: maxY - minY + 80 }
+})
+
+/* 初始展示 1:1：宽高属性等于视盒尺寸，不做放大。 */
+const frozenViewBox = computed<string | null>(() => {
+  const r = frozenViewBoxRect.value
+  return r ? [r.x, r.y, r.w, r.h].join(' ') : null
 })
 
 const frozenNotification = computed<Record<string, unknown> | null>(() => {
@@ -989,11 +1030,6 @@ watch(
           </aside>
           <div class="snapshot-tabbody__main">
             <section class="snapshot-section">
-              <div class="snapshot-section__head">
-                <div>
-                  <h3>{{ sectionLabel('design') }}</h3>
-                </div>
-              </div>
               <p v-if="!schema || schema.fields.length === 0" class="snapshot-empty">
                 {{ t('form.snapshotViewer.noData') }}
               </p>
@@ -1018,24 +1054,27 @@ watch(
               </div>
             </section>
           </div>
-          <aside class="snapshot-side snapshot-side--props">
+          <aside class="snapshot-side snapshot-side--props snapshot-side--props-surface">
             <h4>{{ t('form.snapshotViewer.propsTitle') }}</h4>
             <template v-if="selectedField">
-              <p class="snapshot-design__props-target">
-                {{ selectedField.label || selectedField.name }}
-              </p>
-              <dl>
-                <template v-for="row in frozenFieldPropRows.slice(0, 5)" :key="row.label">
-                  <dt>{{ row.label }}</dt>
-                  <dd>{{ row.value }}</dd>
-                </template>
-              </dl>
-              <h4>{{ t('form.snapshotViewer.propDataRules') }}</h4>
-              <dl>
+              <div class="snapshot-props-surface">
+                <div
+                  v-for="row in frozenFieldPropRows.slice(0, 5)"
+                  :key="row.label"
+                  class="snapshot-props-surface__group"
+                >
+                  <label class="snapshot-props-surface__label">{{ row.label }}</label>
+                  <input class="snapshot-props-surface__input" :value="row.value" readonly />
+                </div>
+              </div>
+              <h4 class="snapshot-props-surface__rules-title">
+                {{ t('form.snapshotViewer.propDataRules') }}
+              </h4>
+              <div class="snapshot-props-surface__rules">
                 <template v-for="row in frozenFieldPropRows.slice(5)" :key="row.label">
-                  <dt>{{ row.label }}</dt>
-                  <dd>
-                    {{ row.value }}
+                  <div class="snapshot-props-surface__rule">
+                    <span class="snapshot-props-surface__rule-label">{{ row.label }}</span>
+                    <span class="snapshot-props-surface__rule-value">{{ row.value }}</span>
                     <el-button
                       v-if="row.detail"
                       link
@@ -1045,9 +1084,12 @@ watch(
                     >
                       {{ t('common.view') }}
                     </el-button>
-                  </dd>
+                  </div>
+                  <pre v-if="row.detail === 'script'" class="snapshot-props-surface__script">{{
+                    fieldScriptOf(selectedField.name)
+                  }}</pre>
                 </template>
-              </dl>
+              </div>
             </template>
             <p v-else class="snapshot-empty">
               {{ t('form.snapshotViewer.noData') }}
@@ -1112,6 +1154,8 @@ watch(
               <div v-else class="snapshot-frozen-graph">
                 <svg
                   :viewBox="frozenViewBox ?? undefined"
+                  :width="frozenViewBoxRect ? frozenViewBoxRect.w + 2 : undefined"
+                  :height="frozenViewBoxRect ? frozenViewBoxRect.h + 2 : undefined"
                   role="img"
                   :aria-label="sectionLabel('nodes')"
                 >
@@ -1140,7 +1184,7 @@ watch(
                     marker-end="url(#frozen-edge-arrow)"
                   />
                   <g
-                    v-for="node in frozenGraph.nodes"
+                    v-for="node in frozenLayoutNodes"
                     :key="node.id"
                     class="snapshot-frozen-graph__node"
                     :class="{
@@ -1708,10 +1752,15 @@ watch(
 }
 
 /* 272:1518（执行提示13）：冻结图只读渲染（事件胶囊/网关菱形/普通节点 230×44，连线 #8996AB）。 */
+/* 执行提示14：svg 宽高属性=视盒尺寸（1:1 初始展示，不放大），容器内滚动承接大图。 */
+.snapshot-frozen-graph {
+  overflow: auto;
+}
+
 .snapshot-frozen-graph svg {
   box-sizing: border-box;
-  width: 100%;
-  max-height: 460px;
+  display: block;
+  max-width: none;
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-base);
   background: #f8fafe;
@@ -1781,6 +1830,100 @@ watch(
   font-size: 12px;
 }
 
+/* 272:1518（执行提示14）：表单右栏只读控件表面——TEXT 前五框 x1604/w296/h32、y188/264/340/416/492，
+   标签 14/22 mb6、组距 16（步距 76）、默认边框 #DDE3EF；数据规则/脚本/显隐按真实配置可读承接。 */
+.snapshot-tabbody--design .snapshot-side--props-surface {
+  padding: 20px;
+}
+
+.snapshot-props-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.snapshot-props-surface__group {
+  display: flex;
+  flex-direction: column;
+}
+
+.snapshot-props-surface__label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--sw-text-regular);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.snapshot-props-surface__input {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid #dde3ef;
+  border-radius: 4px;
+  background: #fff;
+  color: var(--sw-text-regular);
+  font-size: 14px;
+  line-height: 30px;
+  font-family: inherit;
+}
+
+.snapshot-props-surface__input[readonly] {
+  cursor: default;
+}
+
+.snapshot-props-surface__rules-title {
+  margin: 20px 0 12px;
+}
+
+.snapshot-props-surface__rules {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.snapshot-props-surface__rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.snapshot-props-surface__rule-label {
+  flex: 0 0 auto;
+  color: var(--sw-text-regular);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.snapshot-props-surface__rule-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--sw-text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.snapshot-props-surface__script {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 160px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 4px;
+  background: #f8fafc;
+  color: var(--sw-text-regular);
+  font-size: 12px;
+  line-height: 18px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* 查看属性只读双列。 */
 .snapshot-frozen-props {
   display: grid;
@@ -1828,11 +1971,12 @@ watch(
   font-size: 16px;
 }
 
+/* 执行提示14：中央只读组件画布恢复原白色表面（移除灰色大卡片） */
 .snapshot-design {
-  padding: var(--sw-space-20) var(--sw-space-24);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-  background: var(--sw-fill-base);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: #fff;
 }
 
 .snapshot-design__description {

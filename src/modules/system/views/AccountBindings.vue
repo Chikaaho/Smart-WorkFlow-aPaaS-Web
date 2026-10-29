@@ -202,7 +202,8 @@ onMounted(() => {
 .account-bindings-dialog .el-dialog__body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 4px 25px 0;
+  /* 273:1563（执行提示14）：三行内容组下移 19px——绑定按钮顶 438/522/606；标题/页脚不动 */
+  padding: 23px 25px 0;
 }
 .account-bindings-dialog .el-dialog__footer {
   display: flex;
