@@ -259,12 +259,20 @@ function rowActions(r: unknown): ListAction[] {
   ]
 }
 
+/** 446:14964：展示层时间格式 ISO → YYYY-MM-DD HH:mm（仅显示，不改数据；无值显示空） */
+function formatDateTime(value?: string | null): string {
+  if (!value) return ''
+  return value.replace('T', ' ').slice(0, 16)
+}
+
 onMounted(loadList)
 </script>
 
 <template>
   <StandardListTemplate
+    class="dict-list"
     appearance="design"
+    :title="t('system.dictManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -312,7 +320,7 @@ onMounted(loadList)
       show-icon
       style="margin-bottom: 12px"
     />
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="list">
       <el-table-column prop="name" :label="t('system.dictName')" min-width="140" />
       <el-table-column prop="code" :label="t('system.dictCode')" min-width="140" />
       <el-table-column prop="status" :label="t('common.status')" width="80">
@@ -328,10 +336,10 @@ onMounted(loadList)
         min-width="160"
         show-overflow-tooltip
       />
-      <!-- 446:14964（执行提示17）：恢复更新时间列（真实 update_time，无值显示空） -->
-      <el-table-column width="170">
+      <!-- 446:14964（执行提示18）：真实更新时间按年月日时分单行展示，完整值悬浮提示 -->
+      <el-table-column width="170" show-overflow-tooltip>
         <template #header>{{ t('common.updateTime') }}</template>
-        <template #default="{ row }">{{ row.updateTime || '' }}</template>
+        <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
       </el-table-column>
       <!-- BF20261013-038 全局巡检：150 装不下「编辑/管理字典项/删除」三格（实测中文 166、英文 181），
            末格被裁 48px；按四格标准放宽到 200 -->
@@ -496,7 +504,18 @@ onMounted(loadList)
   min-height: 80px;
 }
 
-/* 446:14964（执行提示17）：名称筛选框 220（x337=257+72+8）、状态筛选框 300（x627） */
+/* 446:14964（执行提示18）：名称框 x338/w220、状态框 x627/w300；编码筛选保留在剩余空间 */
+.dict-list :deep(.list-filter-bar__fields) {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+.dict-list :deep(.list-filter-bar__fields > *) {
+  flex: 0 0 auto;
+}
+.dict-list :deep(.list-filter-bar__actions) {
+  margin-left: auto;
+}
 .dict-list__name-filter {
   grid-template-columns: 57px 220px !important;
   width: max-content;
@@ -504,6 +523,10 @@ onMounted(loadList)
 .dict-list__status-filter {
   grid-template-columns: 50px 300px !important;
   width: max-content;
+}
+/* “字典管理”标题下沿到表头上沿 208（24 行 + 4 补距 + 16 模板间距） */
+.dict-list :deep(.list-toolbar) {
+  padding-bottom: 4px;
 }
 </style>
 

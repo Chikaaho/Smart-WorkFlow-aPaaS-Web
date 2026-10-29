@@ -140,7 +140,7 @@ function onPanelColor(value: string | null) {
             }"
             :style="{ maskImage: iconMask(key) }"
           />
-          <AppIcon v-else :icon="key" :size="20" :box-size="20" soft />
+          <AppIcon v-else :icon="key" :size="24" :box-size="24" soft />
         </button>
       </div>
       <p v-if="!filteredIcons.length">{{ t('common.noData') }}</p>
@@ -229,21 +229,22 @@ function onPanelColor(value: string | null) {
   flex-direction: column;
   gap: var(--sw-space-16);
 }
-/* 471:16799（执行提示17）：三行六列，列锚 685 起（600 弹窗 + 25 内距 + 84 格 + 9 隙） */
+/* 471:16799（执行提示18）：6×81.5 + 5×11.5 = 546.5，列锚 685/778/…/1150，52 格高 68 行步长 */
 .app-appearance-icons__grid {
   display: grid;
-  grid-template-columns: repeat(6, 84px);
-  gap: var(--sw-space-16) 9px;
+  grid-template-columns: repeat(6, 81.5px);
+  gap: 16px 11.5px;
   justify-content: start;
-  padding: 0 1px;
   max-height: 188px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .app-appearance-icons__grid button {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 52px;
+  padding: 0;
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-sm);
   background: var(--sw-surface-card);
@@ -255,22 +256,29 @@ function onPanelColor(value: string | null) {
   background: var(--sw-color-primary-soft);
 }
 .app-appearance-icons__asset {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   background: currentColor;
   mask-size: contain;
   mask-position: center;
   mask-repeat: no-repeat;
 }
+/* 流程图标按 16 原尺寸，保留 SVG 原内留白（不按墨迹强放大） */
+.app-appearance-icons__asset--start,
+.app-appearance-icons__asset--end,
+.app-appearance-icons__asset--countersign {
+  width: 16px;
+  height: 16px;
+}
 /* 末行开始/停止/成员原语义色 */
 .app-appearance-icons__asset--start {
-  background-color: #1f9d55;
+  background-color: #12805c;
 }
 .app-appearance-icons__asset--end {
-  background-color: #d93026;
+  background-color: #c2303a;
 }
 .app-appearance-icons__asset--countersign {
-  background-color: #2563eb;
+  background-color: #945f00;
 }
 .app-appearance-colors {
   display: flex;

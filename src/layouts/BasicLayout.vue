@@ -36,6 +36,8 @@ const showAside = computed(
   () =>
     route.path !== '/portal' &&
     route.path !== '/form/app-manage' &&
+    // 459:15228（执行提示18）：超管「表单管理」为全宽列表，退出 236 侧区占位
+    route.path !== '/form/form-def-list' &&
     !route.path.startsWith('/form/designer') &&
     !route.path.endsWith('/design') &&
     !route.path.startsWith('/form/app-center') &&

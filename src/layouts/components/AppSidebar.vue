@@ -433,16 +433,17 @@ const inboxTabs = computed(() => [
   box-sizing: border-box;
   width: 256px;
   max-height: calc(100vh - 24px);
-  padding: 8px 0;
+  /* 710:43009（执行提示18）：同两子项外高 141，内部垂直留白收回 5 */
+  padding: 7px 0;
   overflow-y: auto;
   background: var(--sw-bg-color, #fff);
   border: 1px solid var(--sw-border-color, #dcdfe6);
   border-radius: var(--sw-radius-base, 6px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
-/* 710:43009（执行提示17）：目录浮层标题 Noto Sans SC/500/14/22/#172033 */
+/* 710:43009（执行提示18）：标题 14/22/500/#172033 保持，行高与步长不变 */
 .app-sidebar-flyout__header {
-  padding: 6px 14px 8px;
+  padding: 6px 14px 6px;
   color: #172033;
   font-family: 'Noto Sans SC', inherit;
   font-size: 14px;
@@ -450,6 +451,6 @@ const inboxTabs = computed(() => [
   line-height: 22px;
 }
 .app-sidebar-flyout__body {
-  padding-bottom: 4px;
+  padding-bottom: 3px;
 }
 </style>

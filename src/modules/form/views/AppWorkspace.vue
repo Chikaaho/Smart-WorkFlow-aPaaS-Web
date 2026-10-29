@@ -169,7 +169,6 @@ async function handleDeleteDir(dir: { id: string; name: string }) {
       t('form.appCenter.deleteDirConfirm', { name: dir.name }),
       t('common.deleteConfirmTitle'),
       {
-        type: 'warning',
         customClass: 'sw-delete-confirm',
         confirmButtonText: t('common.delete'),
         cancelButtonText: t('common.cancel'),
@@ -270,7 +269,6 @@ async function handleDeleteForm(item: FormAppFormItem) {
       t('form.appCenter.deleteFormConfirm', { name: item.name }),
       t('common.deleteConfirmTitle'),
       {
-        type: 'warning',
         customClass: 'sw-delete-confirm',
         confirmButtonText: t('common.delete'),
         cancelButtonText: t('common.cancel'),
@@ -410,25 +408,56 @@ onMounted(() => {
 </style>
 
 <style>
-/* 527:24284（执行提示17）：删除表单/目录确认浮层 440 宽居中、删除按钮原危险红 80×32 */
+/* 527:24284（执行提示18）：外盒 440×172@(740,454)；标题/正文/按钮恢复原锚点，删除 #C2303A */
 .sw-delete-confirm {
+  box-sizing: border-box;
   width: 440px !important;
-  min-height: 172px;
+  height: 172px;
+  padding: 28px 25px 27px 24px;
   border-radius: 12px;
   /* EP 以内联 --el-messagebox-width 定宽，需覆盖变量 */
   --el-messagebox-width: 440px;
+  --el-messagebox-padding-primary: 0px;
+}
+.sw-delete-confirm .el-message-box__header {
+  padding-bottom: 22px;
+}
+.sw-delete-confirm .el-message-box__headerbtn {
+  top: 26px;
+  right: 25px;
+  width: 32px;
+  height: 32px;
+}
+.sw-delete-confirm .el-message-box__title {
+  color: #172033;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+.sw-delete-confirm .el-message-box__content {
+  padding: 0;
+}
+.sw-delete-confirm .el-message-box__message p {
+  color: #606266;
+  font-size: 14px;
+  line-height: 22px;
+}
+.sw-delete-confirm .el-message-box__btns {
+  gap: 8px;
+  padding-top: 17px;
 }
 .sw-delete-confirm .el-message-box__btns .el-button {
   min-width: 80px;
   width: 80px;
   height: 32px;
+  margin: 0;
 }
 .sw-delete-confirm .el-message-box__btns .el-button--primary {
-  background-color: #d93026;
-  border-color: #d93026;
+  background-color: #c2303a;
+  border-color: #c2303a;
 }
 .sw-delete-confirm .el-message-box__btns .el-button--primary:not(:hover):not(:focus) {
-  background-color: #d93026;
-  border-color: #d93026;
+  background-color: #c2303a;
+  border-color: #c2303a;
 }
 </style>

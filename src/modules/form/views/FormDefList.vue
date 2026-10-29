@@ -134,7 +134,9 @@ const displayList = computed(() => {
   })()
   const tn = tenantFilter.value
   if (!tn) return rows
-  return rows.filter((row) => (row as { tenantName?: string | null }).tenantName === tn)
+  const tenantName = tenantOptions.value.find((option) => option.id === tn)?.name
+  if (!tenantName) return rows
+  return rows.filter((row) => (row as { tenantName?: string | null }).tenantName === tenantName)
 })
 
 const displayTotal = computed(() =>
@@ -199,14 +201,6 @@ function appNameOf(appId: string | null | undefined): string {
 
 function handleQuery() {
   currentKeyword.value = keyword.value.trim()
-  pageNum.value = 1
-  void loadList()
-}
-
-function handleReset() {
-  keyword.value = ''
-  currentKeyword.value = ''
-  tenantFilter.value = null
   pageNum.value = 1
   void loadList()
 }
@@ -429,7 +423,86 @@ onMounted(loadList)
 
 <template>
   <div class="form-def-page">
-    <!-- 459:15228（执行提示17）：原全宽外壳——分类能力收进可折叠次区，不再占用固定左栏 -->
+    <StandardListTemplate
+      appearance="design"
+      :total="displayTotal"
+      :page-num="pageNum"
+      :page-size="pageSize"
+      :empty="isEmpty"
+      @update:page-num="handlePageNumChange"
+      @update:page-size="handlePageSizeChange"
+    >
+      <!-- 筛选区（459:15228 执行提示18）：原租户/名称筛选；名称走服务端关键字 -->
+      <template #filter>
+        <ListFilterItem class="form-def-page__tenant-filter" :label="t('system.tenantShort')">
+          <el-select v-model="tenantFilter" :placeholder="t('common.all')" clearable>
+            <el-option v-for="tn in tenantOptions" :key="tn.id" :label="tn.name" :value="tn.id" />
+          </el-select>
+        </ListFilterItem>
+        <ListFilterItem class="form-def-page__name-filter" :label="t('common.formName')">
+          <el-input
+            v-model="keyword"
+            :placeholder="t('common.pleaseInput')"
+            clearable
+            @keyup.enter="handleQuery"
+          />
+        </ListFilterItem>
+      </template>
+      <template #filter-actions>
+        <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+        <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
+      </template>
+
+      <!-- 表格 -->
+      <el-alert
+        v-if="errorMsg"
+        :title="errorMsg"
+        type="error"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
+      <el-table v-loading="loading" :data="displayList" stripe>
+        <!-- 459:15228（执行提示18）：原八列表头锚点 38/195/632/868/1004/1120/1256/1472 -->
+        <el-table-column width="157">
+          <template #header>{{ t('system.tenantName') }}</template>
+          <template #default="{ row }">{{ row.tenantName || '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="name" :label="t('common.formName')" width="437" />
+        <el-table-column width="236">
+          <template #header>{{ t('form.appCenter.belongApp') }}</template>
+          <template #default="{ row }">{{ appNameOf(row.appId) }}</template>
+        </el-table-column>
+        <el-table-column width="136">
+          <template #header>{{ t('form.appCenter.flowColumn') }}</template>
+          <template #default>{{ '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="status" :label="t('form.publishStatus')" width="116">
+          <template #default="{ row }">
+            <el-tag :type="getFormDefStatusType(row.status)" size="small">
+              {{ getFormDefStatusLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="formVersion" width="136">
+          <template #header>{{ t('common.version') }}</template>
+          <template #default="{ row }">v{{ row.formVersion }}</template>
+        </el-table-column>
+        <el-table-column prop="updateTime" width="216">
+          <template #header>{{ t('common.updateTime') }}</template>
+          <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
+        </el-table-column>
+        <!-- 444：与其余列合计 1878，恢复原八列表头锚点；三直显按钮英文不裁尾 -->
+        <ListActionsColumn :actions="rowActions" :width="444" />
+      </el-table>
+
+      <!-- 空态 -->
+      <template #empty-action>
+        <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
+      </template>
+    </StandardListTemplate>
+
+    <!-- 分类次区：可收起，位于列表下方，不压缩主区/不遮新建 -->
     <el-collapse class="form-def-page__cats">
       <el-collapse-item :title="t('form.categoryTreeTitle')" name="cats">
         <el-tree
@@ -452,85 +525,6 @@ onMounted(loadList)
         </el-tree>
       </el-collapse-item>
     </el-collapse>
-    <StandardListTemplate
-      appearance="design"
-      :total="displayTotal"
-      :page-num="pageNum"
-      :page-size="pageSize"
-      :empty="isEmpty"
-      @update:page-num="handlePageNumChange"
-      @update:page-size="handlePageSizeChange"
-    >
-      <!-- 筛选区（459:15228 执行提示17）：原租户/名称筛选；名称走服务端关键字 -->
-      <template #filter>
-        <ListFilterItem :label="t('system.tenantName')">
-          <el-select v-model="tenantFilter" :placeholder="t('common.all')" clearable>
-            <el-option v-for="tn in tenantOptions" :key="tn.id" :label="tn.name" :value="tn.id" />
-          </el-select>
-        </ListFilterItem>
-        <ListFilterItem :label="t('common.formName')">
-          <el-input
-            v-model="keyword"
-            :placeholder="t('common.pleaseInput')"
-            clearable
-            @keyup.enter="handleQuery"
-          />
-        </ListFilterItem>
-      </template>
-      <template #filter-actions>
-        <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
-        <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
-        <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
-      </template>
-
-      <!-- 表格 -->
-      <el-alert
-        v-if="errorMsg"
-        :title="errorMsg"
-        type="error"
-        :closable="false"
-        show-icon
-        style="margin-bottom: 12px"
-      />
-      <el-table v-loading="loading" :data="displayList" stripe>
-        <!-- 459:15228（执行提示17）：原列 租户/表单/应用/流程/状态/版本/更新/操作，左对齐 -->
-        <el-table-column width="140">
-          <template #header>{{ t('system.tenantName') }}</template>
-          <template #default="{ row }">{{ row.tenantName || '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="name" :label="t('common.formName')" min-width="180" />
-        <el-table-column width="150">
-          <template #header>{{ t('form.appCenter.appName') }}</template>
-          <template #default="{ row }">{{ appNameOf(row.appId) }}</template>
-        </el-table-column>
-        <el-table-column width="150">
-          <template #header>{{ t('workflow.processName') }}</template>
-          <template #default>{{ '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="status" :label="t('form.publishStatus')" width="110">
-          <template #default="{ row }">
-            <el-tag :type="getFormDefStatusType(row.status)" size="small">
-              {{ getFormDefStatusLabel(row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="formVersion" width="90">
-          <template #header>{{ t('common.version') }}</template>
-          <template #default="{ row }">v{{ row.formVersion }}</template>
-        </el-table-column>
-        <el-table-column prop="updateTime" width="170">
-          <template #header>{{ t('common.updateTime') }}</template>
-          <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
-        </el-table-column>
-        <!-- 240：三直显按钮（编辑/发起范围/停用）英文 locale 不裁尾（复核 G1） -->
-        <ListActionsColumn :actions="rowActions" :width="240" />
-      </el-table>
-
-      <!-- 空态 -->
-      <template #empty-action>
-        <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
-      </template>
-    </StandardListTemplate>
   </div>
 
   <el-dialog
@@ -629,15 +623,40 @@ onMounted(loadList)
   margin: 0 0 12px;
 }
 
-/* 459:15228：分类次区折叠挂右上，不推筛选/表头起点 */
+/* 459:15228（执行提示18）：全宽外壳下分类次区落在列表下方，默认收起，不占筛选/表头 */
 .form-def-page__cats {
-  position: absolute;
-  top: 8px;
-  right: 20px;
-  z-index: 5;
-  width: 320px;
+  width: 100%;
+  margin-top: 12px;
   background: #fff;
   border: 1px solid var(--sw-border-light);
   border-radius: 8px;
+}
+.form-def-page__cats :deep(.el-collapse-item__header) {
+  height: 44px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+.form-def-page__cats :deep(.el-collapse-item__content) {
+  padding: 0 16px 12px;
+}
+/* 459:15228（执行提示18）：筛选字段贴原锚点——租户 38/名 73、名称 356/输入 419 */
+.form-def-page :deep(.list-filter-bar__fields) {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.form-def-page :deep(.list-filter-bar__fields > *) {
+  flex: 0 0 auto;
+}
+.form-def-page :deep(.list-filter-bar__actions) {
+  margin-left: auto;
+}
+.form-def-page__tenant-filter {
+  grid-template-columns: 29px 274px !important;
+  width: max-content;
+}
+.form-def-page__name-filter {
+  grid-template-columns: 56px 336px !important;
+  width: max-content;
 }
 </style>

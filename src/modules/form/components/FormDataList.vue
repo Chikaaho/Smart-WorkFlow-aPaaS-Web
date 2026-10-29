@@ -256,6 +256,12 @@ function applyColumnSettings() {
   globalThis.localStorage?.setItem(`${COLUMN_PREF_PREFIX}${props.formKey}`, JSON.stringify(next))
 }
 
+/** 272:1831：确定沿用即时生效口径，关闭弹窗。 */
+function confirmColumnSettings() {
+  applyColumnSettings()
+  columnDrawerVisible.value = false
+}
+
 function toggleDraftColumn(index: number, visible: boolean) {
   const col = draftColumns.value[index]
   if (!col) return
@@ -861,15 +867,16 @@ async function handleExport() {
       </div>
     </div>
 
-    <!-- 表头/筛选设置：字段顺序、显示与筛选栏字段，改动即时生效 -->
-    <el-drawer
+    <!-- 272:1831（执行提示18）：显示列设置改回 520 宽居中弹窗；筛选字段配置保留为次级分区 -->
+    <el-dialog
       v-model="columnDrawerVisible"
-      :title="t('form.appCenter.columnSettings')"
-      direction="rtl"
-      size="320px"
+      class="form-columns-dialog"
+      :title="t('form.appCenter.columnSettingsTitle')"
+      width="520px"
+      align-center
       append-to-body
+      :close-on-click-modal="false"
     >
-      <p class="form-data-list__drawer-section">{{ t('form.appCenter.sectionColumns') }}</p>
       <ul class="form-data-list__cols" data-testid="column-settings-list">
         <li
           v-for="(col, index) in draftColumns"
@@ -881,26 +888,24 @@ async function handleExport() {
           @drop="onColumnDrop(index)"
           @dragend="onColumnDragEnd"
         >
+          <el-checkbox
+            :model-value="col.visible"
+            class="form-data-list__col-check"
+            :title="t('form.appCenter.columnShow')"
+            :aria-label="t('form.appCenter.columnShow')"
+            @update:model-value="toggleDraftColumn(index, Boolean($event))"
+          />
           <span class="form-data-list__col-label">{{ col.label }}</span>
-          <span class="form-data-list__col-ops">
-            <el-checkbox
-              :model-value="col.visible"
-              size="small"
-              :title="t('form.appCenter.columnShow')"
-              :aria-label="t('form.appCenter.columnShow')"
-              @update:model-value="toggleDraftColumn(index, Boolean($event))"
-            />
-            <span
-              class="form-data-list__col-handle"
-              :title="t('form.appCenter.columnDragHint')"
-              @mousedown="armColumnDrag(index)"
-            >
-              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                <rect x="1" y="3" width="14" height="1.6" rx="0.8" fill="currentColor" />
-                <rect x="1" y="7.2" width="14" height="1.6" rx="0.8" fill="currentColor" />
-                <rect x="1" y="11.4" width="14" height="1.6" rx="0.8" fill="currentColor" />
-              </svg>
-            </span>
+          <span
+            class="form-data-list__col-handle"
+            :title="t('form.appCenter.columnDragHint')"
+            @mousedown="armColumnDrag(index)"
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+              <rect x="1" y="3" width="14" height="1.6" rx="0.8" fill="currentColor" />
+              <rect x="1" y="7.2" width="14" height="1.6" rx="0.8" fill="currentColor" />
+              <rect x="1" y="11.4" width="14" height="1.6" rx="0.8" fill="currentColor" />
+            </svg>
           </span>
         </li>
       </ul>
@@ -909,18 +914,25 @@ async function handleExport() {
         <p class="form-data-list__drawer-section">{{ t('form.appCenter.sectionFilters') }}</p>
         <ul class="form-data-list__cols" data-testid="filter-settings-list">
           <li v-for="ff in filterCandidates" :key="ff.field" class="form-data-list__col-row">
-            <span class="form-data-list__col-label">{{ ff.label }}</span>
             <el-checkbox
               :model-value="draftQueryFields.includes(ff.field)"
-              size="small"
+              class="form-data-list__col-check"
               :title="t('common.query')"
               :aria-label="t('common.query')"
               @update:model-value="toggleQueryField(ff.field, Boolean($event))"
             />
+            <span class="form-data-list__col-label">{{ ff.label }}</span>
           </li>
         </ul>
       </template>
-    </el-drawer>
+
+      <template #footer>
+        <el-button @click="columnDrawerVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmColumnSettings">{{
+          t('common.confirm')
+        }}</el-button>
+      </template>
+    </el-dialog>
 
     <BusinessDetailDialog
       v-model="detailVisible"
@@ -1037,7 +1049,7 @@ async function handleExport() {
 }
 
 .form-data-list__drawer-section {
-  margin: 0 0 8px;
+  margin: 16px 0 8px;
   color: var(--sw-text-regular, #606266);
   font-size: 13px;
   font-weight: 600;
@@ -1050,39 +1062,59 @@ async function handleExport() {
 .form-data-list__cols {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* 272:1831（执行提示18）：显示列行 41 步长、18 勾选框、拖动柄右端 */
 .form-data-list__col-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: #fafbfe;
+  gap: 13px;
+  box-sizing: border-box;
+  height: 41px;
+  padding: 0;
+  border-bottom: 1px solid #e9edf5;
+  background: #fff;
 }
 
 .form-data-list__col-row:hover {
-  background: #f0f4fb;
+  background: #f7f9fd;
+}
+
+.form-data-list__col-check {
+  flex: 0 0 auto;
+  height: 18px;
+}
+
+/* tokens.css 全局把勾选框放到 28（!important），本节点按原图收回 18 */
+.form-data-list__col-check :deep(.el-checkbox__inner) {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.form-data-list__col-check :deep(.el-checkbox__inner::after) {
+  width: 3px !important;
+  height: 9px !important;
+  left: 6px;
+  top: 2px;
+  border-right-width: 2px !important;
+  border-bottom-width: 2px !important;
 }
 
 .form-data-list__col-label {
+  overflow: hidden;
   color: var(--sw-text-primary, #303133);
   font-size: 13px;
-}
-
-.form-data-list__col-ops {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .form-data-list__col-handle {
   display: inline-flex;
+  margin-left: auto;
   padding: 2px;
   color: #909399;
   cursor: grab;
@@ -1097,5 +1129,50 @@ async function handleExport() {
   font-size: 13px;
   font-weight: 600;
   color: #606266;
+}
+</style>
+
+<style>
+/* 272:1831（执行提示18）：显示列设置 520 宽居中、圆角 12、标题/底栏原锚点 */
+.form-columns-dialog.el-dialog {
+  box-sizing: border-box;
+  padding: 24px 24px 26px;
+  border: 1px solid #dde3ef;
+  border-radius: 12px;
+}
+.form-columns-dialog .el-dialog__header {
+  box-sizing: border-box;
+  height: 32px;
+  margin: 0 0 14px;
+  padding: 4px 32px 4px 0;
+}
+.form-columns-dialog .el-dialog__title {
+  color: #172033;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+.form-columns-dialog .el-dialog__headerbtn {
+  top: 24px;
+  right: 24px;
+  width: 32px;
+  height: 32px;
+}
+.form-columns-dialog .el-dialog__body {
+  padding: 0;
+}
+.form-columns-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  height: 32px;
+  margin-top: 18px;
+  padding: 0;
+}
+.form-columns-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  height: 32px;
+  margin: 0;
 }
 </style>

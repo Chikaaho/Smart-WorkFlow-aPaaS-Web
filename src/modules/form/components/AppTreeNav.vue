@@ -1,17 +1,21 @@
 <script setup lang="ts">
+/* global document, window, HTMLElement, MouseEvent, Event */
 /**
  * AppTreeNav — 应用目录/表单树唯一实现。
  *
  * 用户端应用内页与管理端应用工作台共用；页头与底部动作由宿主通过插槽提供，
  * 目录/表单管理菜单按 form:app:manage 权限显隐。
  */
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   ArrowLeft,
   CaretRight,
   DArrowLeft,
   DArrowRight,
+  Document,
   Folder,
+  FolderOpened,
+  Grid,
   MoreFilled,
   Edit,
   Plus,
@@ -69,23 +73,158 @@ function toggleDir(dirId: string) {
     : [...collapsedDirIds.value, dirId]
 }
 
-/** 整栏收起（设计 272:1296）：收起后左缘保留浮动展开按钮，展开态按钮位于应用名行右端。 */
+/** 整栏收起（设计 272:1296）：收起后保留 64px 图标轨道，展开态按钮位于应用名行右端。 */
 const navCollapsed = ref(false)
+
+/* ── 收起态图标轨道与目录子树浮层（272:1296 / 710:44122） ── */
+
+interface RailFlyout {
+  key: string
+  title: string
+  top: number
+  forms: FormAppFormItem[]
+}
+
+const railFlyout = ref<RailFlyout | null>(null)
+
+function formsOfApp(): FormAppFormItem[] {
+  const forms: FormAppFormItem[] = []
+  for (const dir of props.dirs) forms.push(...(dir.forms ?? []))
+  forms.push(...props.directForms)
+  return forms
+}
+
+function toggleRailFlyout(key: string, title: string, forms: FormAppFormItem[], event: Event) {
+  if (railFlyout.value?.key === key) {
+    railFlyout.value = null
+    return
+  }
+  const el = event.currentTarget as HTMLElement | null
+  const anchorTop = el ? el.getBoundingClientRect().top : 64
+  railFlyout.value = {
+    key,
+    title,
+    forms,
+    top: Math.max(8, Math.min(anchorTop, window.innerHeight - 160)),
+  }
+}
+
+function pickFromRailFlyout(item: FormAppFormItem) {
+  railFlyout.value = null
+  emit('select', item)
+}
+
+function onDocumentClick(event: MouseEvent) {
+  if (!railFlyout.value) return
+  const target = event.target as HTMLElement | null
+  if (target?.closest('.app-tree-flyout') || target?.closest('.app-tree-rail')) return
+  railFlyout.value = null
+}
+
+watch(navCollapsed, (value) => {
+  if (!value) railFlyout.value = null
+})
+
+onMounted(() => document.addEventListener('click', onDocumentClick))
+onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
 </script>
 
 <template>
   <aside class="app-tree-nav" :class="{ 'is-collapsed': navCollapsed }">
-    <button
-      v-if="navCollapsed"
-      type="button"
-      class="app-tree-nav__expander"
-      data-testid="app-tree-nav-expand"
-      :title="t('form.appCenter.expandNav')"
-      :aria-label="t('form.appCenter.expandNav')"
-      @click="navCollapsed = false"
-    >
-      <el-icon><DArrowRight /></el-icon>
-    </button>
+    <template v-if="navCollapsed">
+      <!-- 272:1296：收起态 64px 图标轨道，应用/目录入口与折叠底栏可达 -->
+      <div class="app-tree-rail">
+        <button
+          type="button"
+          class="app-tree-rail__item"
+          data-testid="app-tree-rail-app"
+          :title="appName || t('form.appCenter.appNavTitle')"
+          :aria-label="appName || t('form.appCenter.appNavTitle')"
+          @click="
+            toggleRailFlyout(
+              'app',
+              appName || t('form.appCenter.appNavTitle'),
+              formsOfApp(),
+              $event,
+            )
+          "
+        >
+          <el-icon :size="18"><Grid /></el-icon>
+        </button>
+        <button
+          v-for="dir in dirs"
+          :key="dir.id"
+          type="button"
+          class="app-tree-rail__item"
+          :class="{ 'is-open': railFlyout?.key === 'dir:' + dir.id }"
+          :data-testid="'app-tree-rail-dir-' + dir.id"
+          :title="dir.name"
+          :aria-label="dir.name"
+          :aria-expanded="railFlyout?.key === 'dir:' + dir.id"
+          @click="toggleRailFlyout('dir:' + dir.id, dir.name, dir.forms ?? [], $event)"
+        >
+          <el-icon :size="18">
+            <FolderOpened v-if="(dir.forms?.length ?? 0) > 0" />
+            <Folder v-else />
+          </el-icon>
+        </button>
+        <button
+          v-for="item in directForms"
+          :key="item.formId"
+          type="button"
+          class="app-tree-rail__item"
+          :class="{ 'is-active': item.formKey === selectedFormKey }"
+          :data-testid="'app-tree-rail-form-' + item.formKey"
+          :title="item.name"
+          :aria-label="item.name"
+          @click="emit('select', item)"
+        >
+          <el-icon :size="18"><Document /></el-icon>
+        </button>
+      </div>
+      <div class="app-tree-rail__foot">
+        <button
+          type="button"
+          class="app-tree-rail__expand"
+          data-testid="app-tree-nav-expand"
+          :title="t('form.appCenter.expandNav')"
+          :aria-label="t('form.appCenter.expandNav')"
+          @click="navCollapsed = false"
+        >
+          <el-icon :size="18"><DArrowRight /></el-icon>
+        </button>
+      </div>
+      <!-- 710:44122：目录/应用子树浮层（x72/w256，标题 14/22/500/#172033，子项 44 步长） -->
+      <Teleport to="body">
+        <div
+          v-if="railFlyout"
+          class="app-tree-flyout"
+          :style="{ top: railFlyout.top + 'px' }"
+          role="menu"
+          :aria-label="railFlyout.title"
+        >
+          <div class="app-tree-flyout__header">{{ railFlyout.title }}</div>
+          <div class="app-tree-flyout__body">
+            <button
+              v-for="item in railFlyout.forms"
+              :key="item.formId"
+              type="button"
+              class="app-tree-flyout__item"
+              :class="{ 'is-active': item.formKey === selectedFormKey }"
+              role="menuitem"
+              :data-testid="'app-tree-flyout-form-' + item.formKey"
+              @click="pickFromRailFlyout(item)"
+            >
+              <el-icon :size="18"><Document /></el-icon>
+              <span>{{ item.name }}</span>
+            </button>
+            <p v-if="railFlyout.forms.length === 0" class="app-tree-flyout__empty">
+              {{ t('form.appCenter.emptyDir') }}
+            </p>
+          </div>
+        </div>
+      </Teleport>
+    </template>
 
     <template v-else>
       <div v-if="backTitle || appName" class="app-tree-nav__head">
@@ -165,7 +304,7 @@ const navCollapsed = ref(false)
                   <el-dropdown-item command="form">
                     <el-icon><Plus /></el-icon>{{ t('form.appCenter.newFormInDir') }}
                   </el-dropdown-item>
-                  <el-dropdown-item command="delete" divided class="sw-op-menu__danger">
+                  <el-dropdown-item command="delete" class="sw-op-menu__danger">
                     <el-icon><Delete /></el-icon>{{ t('common.delete') }}
                   </el-dropdown-item>
                 </el-dropdown-menu>
@@ -201,10 +340,10 @@ const navCollapsed = ref(false)
                       <el-icon><EditPen /></el-icon>{{ t('form.appCenter.enterFormDesign') }}
                     </el-dropdown-item>
                     <el-dropdown-item command="rename">
-                      <el-icon><Edit /></el-icon>{{ t('common.edit') }}
+                      <el-icon><Edit /></el-icon>{{ t('common.rename') }}
                     </el-dropdown-item>
-                    <el-dropdown-item command="delete" divided class="sw-op-menu__danger">
-                      <el-icon><Delete /></el-icon>{{ t('common.delete') }}
+                    <el-dropdown-item command="delete" class="sw-op-menu__danger">
+                      <el-icon><Delete /></el-icon>{{ t('form.appCenter.deleteFormMenu') }}
                     </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -231,6 +370,7 @@ const navCollapsed = ref(false)
             v-if="canManage"
             class="app-tree-nav__more"
             trigger="click"
+            popper-class="sw-op-menu"
             @command="(cmd: string) => emit('form-command', cmd, item)"
           >
             <span class="app-tree-nav__more-trigger" @click.stop>
@@ -239,12 +379,14 @@ const navCollapsed = ref(false)
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="design">
-                  {{ t('form.appCenter.enterFormDesign') }}
+                  <el-icon><EditPen /></el-icon>{{ t('form.appCenter.enterFormDesign') }}
                 </el-dropdown-item>
-                <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
-                <el-dropdown-item command="delete" divided>{{
-                  t('common.delete')
-                }}</el-dropdown-item>
+                <el-dropdown-item command="rename">
+                  <el-icon><Edit /></el-icon>{{ t('common.rename') }}
+                </el-dropdown-item>
+                <el-dropdown-item command="delete" class="sw-op-menu__danger">
+                  <el-icon><Delete /></el-icon>{{ t('form.appCenter.deleteFormMenu') }}
+                </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -270,35 +412,69 @@ const navCollapsed = ref(false)
   border-right: 1px solid #ebeef5;
 }
 
-/* 整栏收起：面板隐藏为 0 宽，仅保留左缘浮动展开按钮（设计 272:1296） */
+/* 272:1296：收起态保留 64px 图标轨道（主区筛选随之为 x84） */
 .app-tree-nav.is-collapsed {
-  flex-basis: 0;
-  width: 0;
+  flex: 0 0 64px;
+  width: 64px;
   border-right: none;
-  position: relative;
+  background: #fff;
 }
 
-.app-tree-nav__expander {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
+.app-tree-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.app-tree-rail__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #909399;
+  cursor: pointer;
+}
+
+.app-tree-rail__item:hover {
+  background: #f5f7fa;
+  color: #303133;
+}
+
+.app-tree-rail__item.is-open,
+.app-tree-rail__item.is-active {
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.app-tree-rail__foot {
+  display: flex;
+  justify-content: center;
+  margin-top: auto;
+  padding: 12px 0;
+  border-top: 1px solid #f0f2f5;
+}
+
+.app-tree-rail__expand {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 40px;
-  border: 1px solid #e4e7ed;
-  border-left: none;
-  border-radius: 0 6px 6px 0;
-  background: #fff;
+  width: 40px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
   color: #606266;
   cursor: pointer;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.04);
 }
 
-.app-tree-nav__expander:hover {
+.app-tree-rail__expand:hover {
   color: var(--sw-color-primary, #409eff);
+  background: #f5f7fa;
 }
 
 .app-tree-nav__collapse {
@@ -514,27 +690,106 @@ const navCollapsed = ref(false)
 </style>
 
 <style>
-/* 273:1709/1731（执行提示17）：目录/表单操作菜单 192 宽、行 38、左图标、危险项红 */
-.sw-op-menu {
+/* 273:1709/1731（执行提示18）：菜单外盒 192×122（含边框）、项 182×36/首项 top5/步长38、危险 #C2303A */
+.sw-op-menu.el-popper {
+  box-sizing: border-box;
   width: 192px;
+  padding: 0;
+}
+.sw-op-menu .el-dropdown-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
 }
 .sw-op-menu .el-dropdown-menu__item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 38px;
-  line-height: 38px;
-  padding: 0 16px;
+  gap: 9px;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 13px;
 }
 .sw-op-menu .el-dropdown-menu__item .el-icon {
   margin-right: 0;
 }
+.sw-op-menu .el-dropdown-menu__item--divided {
+  margin: 0;
+  border-top: none;
+}
+/* EP 的 divided 会额外插入一个空分隔 li（无内容），行距已由 gap 控制 */
+.sw-op-menu .el-dropdown-menu > li.el-dropdown-menu__item--divided:empty {
+  display: none;
+}
 .sw-op-menu .sw-op-menu__danger {
-  color: #d93026;
+  color: #c2303a;
 }
 .sw-op-menu .sw-op-menu__danger:not(.is-disabled):hover,
 .sw-op-menu .sw-op-menu__danger:not(.is-disabled):focus {
-  color: #d93026;
+  color: #c2303a;
   background-color: #fdf0f1;
+}
+
+/* 710:44122：应用目录子树浮层 x72/w256、标题 14/22/500/#172033、子项 44 步长 */
+.app-tree-flyout {
+  position: fixed;
+  left: 72px;
+  z-index: 2000;
+  box-sizing: border-box;
+  width: 256px;
+  background: #fff;
+  border: 1px solid #dde3ef;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.app-tree-flyout__header {
+  box-sizing: border-box;
+  height: 44px;
+  padding: 11px 10px;
+  color: #172033;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-tree-flyout__body {
+  padding: 0 8px 8px;
+}
+.app-tree-flyout__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  padding: 0 10px 0 16px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #303133;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.app-tree-flyout__item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-tree-flyout__item:hover {
+  background: #f5f7fa;
+}
+.app-tree-flyout__item.is-active {
+  background: #eff6ff;
+  color: #2563eb;
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+.app-tree-flyout__empty {
+  margin: 0;
+  padding: 10px 16px;
+  color: #c0c4cc;
+  font-size: 12px;
 }
 </style>

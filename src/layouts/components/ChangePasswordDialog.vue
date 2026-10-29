@@ -72,6 +72,7 @@ async function submit() {
   <DetailDialog
     v-model="visible"
     appearance="design"
+    class="sw-password-dialog"
     :title="t('auth.changePassword')"
     width="520px"
     :error="error"
@@ -111,3 +112,46 @@ async function submit() {
     </template>
   </DetailDialog>
 </template>
+
+<style>
+/* 135:2（执行提示18）：浮层 520×354 居中；三输入 470×32、步长 72；底栏 80×32@y658 */
+.sw-password-dialog.el-dialog {
+  border-radius: 12px;
+  padding-bottom: 26px;
+}
+.sw-password-dialog .el-dialog__header {
+  margin-bottom: 15px;
+}
+.sw-password-dialog .el-form-item {
+  margin-bottom: 11px;
+}
+.sw-password-dialog .el-form-item:last-child {
+  margin-bottom: 0;
+}
+.sw-password-dialog .el-form-item__label {
+  height: 22px;
+  margin-bottom: 7px;
+  padding: 0;
+  color: var(--sw-text-regular, #606266);
+  font-size: 13px;
+  line-height: 22px;
+}
+.sw-password-dialog .el-input__wrapper {
+  box-sizing: border-box;
+  height: 32px;
+}
+.sw-password-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  height: 32px;
+  margin-top: 18px;
+  padding: 0;
+}
+.sw-password-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+</style>

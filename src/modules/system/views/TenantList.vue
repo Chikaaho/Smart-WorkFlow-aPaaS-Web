@@ -596,29 +596,58 @@ onMounted(loadList)
     </template>
   </DetailDialog>
 
-  <el-dialog v-model="detailVisible" :title="t('system.tenantDetail')" width="560px">
-    <el-descriptions v-if="detailRow" :column="1" border>
-      <el-descriptions-item :label="t('system.tenantCode')">{{
-        detailRow.code
-      }}</el-descriptions-item>
-      <el-descriptions-item :label="t('system.tenantName')">{{
-        detailRow.name
-      }}</el-descriptions-item>
-      <el-descriptions-item :label="t('system.tenantAdmin')">
-        {{ detailRow.adminUsername || t('system.tenantAdminUnset') }}
-      </el-descriptions-item>
-      <el-descriptions-item :label="t('common.status')">
-        {{ statusLabel(detailRow.status) }}
-      </el-descriptions-item>
-      <el-descriptions-item :label="t('common.createTime')">
-        {{ displayTime(detailRow.createTime) }}
-      </el-descriptions-item>
-    </el-descriptions>
-    <div class="tenant-create-hint">{{ t('system.tenantRootReadonly') }}</div>
+  <!-- 458:13000（执行提示18）：只读浮层 600×354 居中、三项只读表面 550×32；附加信息收进次级详情 -->
+  <DetailDialog
+    v-model="detailVisible"
+    appearance="design"
+    class="sw-tenant-detail"
+    :title="detailRow?.name || t('system.tenantDetail')"
+    width="600px"
+  >
+    <div v-if="detailRow" class="sw-tenant-detail__fields">
+      <div class="sw-tenant-detail__field">
+        <label class="sw-tenant-detail__label">{{ t('system.tenantCode') }}</label>
+        <el-input class="sw-tenant-detail__input" :model-value="detailRow.code ?? ''" readonly />
+      </div>
+      <div class="sw-tenant-detail__field">
+        <label class="sw-tenant-detail__label">{{ t('system.tenantName') }}</label>
+        <el-input class="sw-tenant-detail__input" :model-value="detailRow.name" readonly />
+      </div>
+      <div class="sw-tenant-detail__field">
+        <label class="sw-tenant-detail__label">{{ t('system.dataScopeField') }}</label>
+        <el-input
+          class="sw-tenant-detail__input"
+          :model-value="t('system.tenantDataScopeAll')"
+          readonly
+        />
+      </div>
+    </div>
     <template #footer>
-      <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
+      <div class="sw-tenant-detail__footer">
+        <el-popover placement="top-start" :width="320" trigger="click">
+          <template #reference>
+            <el-button link type="primary" class="sw-tenant-detail__more">
+              {{ t('system.tenantMoreInfo') }}
+            </el-button>
+          </template>
+          <el-descriptions v-if="detailRow" :column="1" border size="small">
+            <el-descriptions-item :label="t('system.tenantAdmin')">
+              {{ detailRow.adminUsername || t('system.tenantAdminUnset') }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('common.status')">
+              {{ statusLabel(detailRow.status) }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('common.createTime')">
+              {{ displayTime(detailRow.createTime) }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </el-popover>
+        <el-button class="sw-tenant-detail__close" @click="detailVisible = false">{{
+          t('common.close')
+        }}</el-button>
+      </div>
     </template>
-  </el-dialog>
+  </DetailDialog>
 </template>
 
 <style scoped>
@@ -736,6 +765,56 @@ onMounted(loadList)
 }
 .tenant-dialog .el-dialog__footer .el-button {
   width: 80px;
+  margin: 0;
+}
+
+/* 458:13000（执行提示18）：600×354 只读浮层；三只读表面 550×32、y 步长 72；关闭 80×32 */
+.sw-tenant-detail.el-dialog {
+  border-radius: 12px;
+  padding-bottom: 26px;
+}
+.sw-tenant-detail .el-dialog__header {
+  margin-bottom: 15px;
+}
+.sw-tenant-detail__field + .sw-tenant-detail__field {
+  margin-top: 11px;
+}
+.sw-tenant-detail__label {
+  display: block;
+  height: 22px;
+  margin-bottom: 7px;
+  color: var(--sw-text-regular, #606266);
+  font-size: 13px;
+  line-height: 22px;
+}
+.sw-tenant-detail__input .el-input__wrapper {
+  box-sizing: border-box;
+  height: 32px;
+  background: #f4f6fb;
+  box-shadow: 0 0 0 1px #dde3ef inset;
+}
+.sw-tenant-detail__input .el-input__inner {
+  color: var(--sw-text-primary, #303133);
+}
+.sw-tenant-detail .el-dialog__footer {
+  height: 32px;
+  margin-top: 18px;
+  padding: 0;
+}
+.sw-tenant-detail__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+.sw-tenant-detail__more {
+  margin-right: auto;
+  font-size: 13px;
+}
+.sw-tenant-detail__close {
+  width: 80px;
+  height: 32px;
   margin: 0;
 }
 </style>

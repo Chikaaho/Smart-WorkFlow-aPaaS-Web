@@ -13,8 +13,9 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ListActionsColumn, StandardListTemplate, ListFilterItem } from '@/components/page-layout'
-import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
+import { ArrowDown } from '@element-plus/icons-vue'
+import { StandardListTemplate, ListFilterItem } from '@/components/page-layout'
+import { pageFormDefs } from '@/adapters/form-catalog'
 import { myDrafts, deleteDraft, submitDraft, pollCommandStatus } from '@/modules/workflow/api'
 import type { BpmDraft, BpmDraftStatus } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
@@ -78,6 +79,22 @@ function formatDateTime(value: string | null): string {
   return value.replace('T', ' ').slice(0, 16)
 }
 
+/** 278:1437：表单显示名走既有表单目录元数据；元数据缺失时保留真实 formKey。 */
+const formNames = ref<Map<string, string>>(new Map())
+
+async function loadFormNames() {
+  try {
+    const page = await pageFormDefs({ pageNum: 1, pageSize: 500 }, undefined, 'BUSINESS')
+    formNames.value = new Map(page.list.map((item) => [item.formKey, item.name]))
+  } catch {
+    formNames.value = new Map()
+  }
+}
+
+function formNameOf(formKey: string): string {
+  return formNames.value.get(formKey) || formKey
+}
+
 async function loadList() {
   loading.value = true
   errorMsg.value = ''
@@ -117,10 +134,12 @@ function openEdit(row: BpmDraft) {
 /** 查看：与其它列表共用只读详情弹窗；草稿内容取本地 payload，不触发整页跳转。 */
 const detailVisible = ref(false)
 const detailFormKey = ref('')
+const detailProcessKey = ref('')
 const detailRecord = ref<Record<string, unknown> | null>(null)
 
 function openDetail(row: BpmDraft) {
   detailFormKey.value = row.formKey
+  detailProcessKey.value = row.processDefKey ?? ''
   try {
     const parsed = JSON.parse(row.payload || '{}')
     detailRecord.value =
@@ -193,43 +212,22 @@ async function handleSubmit(row: BpmDraft) {
   }
 }
 
-// el-table row slot 的 DefaultRow 类型不兼容，桥接为类型化行操作（V012-BUG-002 操作列工厂）
-function draftActions(row: unknown): ListAction[] {
-  const item = row as BpmDraft
-  return [
-    {
-      key: 'detail',
-      label: t('common.view'),
-      onClick: () => openDetail(item),
-    },
-    {
-      key: 'edit',
-      label: t('common.edit'),
-      type: 'primary',
-      onClick: () => openEdit(item),
-    },
-    {
-      key: 'submit',
-      label: t('common.submit'),
-      type: 'success',
-      loading: submittingId.value === item.id,
-      disabled: submittingId.value !== null,
-      onClick: () => void handleSubmit(item),
-    },
-    {
-      key: 'delete',
-      label: t('common.delete'),
-      type: 'danger',
-      onClick: () => void handleDelete(item),
-    },
-  ]
+/** 278:1437：操作首项继续编辑；查看/提交/删除收进「更多」，逐项完整可达。 */
+function onDraftCommand(command: string, row: BpmDraft) {
+  if (command === 'view') openDetail(row)
+  else if (command === 'submit') void handleSubmit(row)
+  else if (command === 'delete') void handleDelete(row)
 }
 
-onMounted(loadList)
+onMounted(() => {
+  void loadFormNames()
+  void loadList()
+})
 </script>
 
 <template>
   <StandardListTemplate
+    class="drafts-page"
     appearance="design"
     :total="total"
     :page-num="pageNum"
@@ -238,9 +236,9 @@ onMounted(loadList)
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <!-- 筛选容器（278:1437 执行提示17）：@(256,84)/h64；标题关键字过滤既有真实记录 -->
+    <!-- 筛选容器（278:1437 执行提示18）：标签“草稿”、输入 x309/w364；过滤既有真实记录 -->
     <template #filter>
-      <ListFilterItem :label="t('common.title')">
+      <ListFilterItem class="drafts-page__filter" :label="t('common.statusDraft')">
         <el-input
           v-model="titleFilter"
           :placeholder="t('common.pleaseInput')"
@@ -278,43 +276,121 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
 
-    <!-- 表格 -->
+    <!-- 表格（278:1437 执行提示18）：标题/表单名称/状态/失败原因/更新时间/操作 六列 -->
     <el-table v-loading="loading" :data="displayList" stripe style="width: 100%">
-      <el-table-column :label="t('common.title')" min-width="140">
+      <el-table-column :label="t('common.title')" width="632">
         <template #default="{ row }">
           {{ row.title ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="formKey" :label="t('common.formKey')" min-width="130" />
-      <el-table-column :label="t('common.process')" min-width="140">
-        <template #default="{ row }">
-          {{ row.processDefKey ?? '-' }}
-        </template>
+      <el-table-column :label="t('common.formName')" width="351">
+        <template #default="{ row }">{{ formNameOf(row.formKey) }}</template>
       </el-table-column>
-      <el-table-column :label="t('common.status')" width="100">
+      <el-table-column :label="t('common.status')" width="112">
         <template #default="{ row }">
           <el-tag :type="STATUS_TAG[row.status as BpmDraftStatus]?.type ?? 'info'" size="small">
             {{ STATUS_TAG[row.status as BpmDraftStatus]?.label ?? row.status }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.failureReason')" min-width="160">
+      <el-table-column :label="t('common.failureReason')" width="232">
         <template #default="{ row }">
           {{ row.lastError ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column min-width="170">
+      <el-table-column width="237">
         <template #header>{{ t('common.updateTime') }}</template>
         <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
       </el-table-column>
-      <ListActionsColumn :actions="draftActions" :width="210" />
+      <el-table-column
+        :label="t('common.actions')"
+        width="78"
+        fixed="right"
+        class-name="drafts-actions-cell"
+      >
+        <template #default="{ row }">
+          <div class="drafts-actions">
+            <el-button link type="primary" @click.stop="openEdit(row as BpmDraft)">{{
+              t('common.edit')
+            }}</el-button>
+            <el-dropdown
+              trigger="click"
+              popper-class="sw-op-menu"
+              @command="(command: string) => onDraftCommand(command, row as BpmDraft)"
+            >
+              <button type="button" class="drafts-actions__more" @click.stop>
+                <el-icon :size="12"><ArrowDown /></el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="view">{{ t('common.view') }}</el-dropdown-item>
+                  <el-dropdown-item command="submit" :disabled="submittingId !== null">{{
+                    t('common.submit')
+                  }}</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided class="sw-op-menu__danger">{{
+                    t('common.delete')
+                  }}</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </template>
+      </el-table-column>
     </el-table>
   </StandardListTemplate>
 
+  <!-- 278:1437：流程 ID 并入行详情 -->
   <BusinessDetailDialog
     v-model="detailVisible"
     :title="t('common.detail')"
     :form-key="detailFormKey"
     :record="detailRecord"
+    :process-definition-key="detailProcessKey"
   />
 </template>
+
+<style scoped>
+/* 278:1437（执行提示18）：筛选标签“草稿”，输入 x309/w364；六列表格与行内操作 */
+.drafts-page :deep(.list-filter-bar__fields) {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+.drafts-page :deep(.list-filter-bar__fields > *) {
+  flex: 0 0 auto;
+}
+.drafts-page :deep(.list-filter-bar__actions) {
+  margin-left: auto;
+}
+.drafts-page__filter {
+  grid-template-columns: 29px 364px !important;
+  width: max-content;
+}
+.drafts-page :deep(.drafts-actions-cell) .cell {
+  padding: 0 8px;
+}
+.drafts-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+}
+.drafts-actions :deep(.el-button.is-link) {
+  min-width: 0;
+  padding: 0 2px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.drafts-actions__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--sw-color-primary, #409eff);
+  cursor: pointer;
+}
+</style>

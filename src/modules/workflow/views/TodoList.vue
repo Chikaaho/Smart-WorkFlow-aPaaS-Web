@@ -339,6 +339,7 @@ onMounted(() => Promise.all([loadList(), loadPendingSigns()]))
       <!-- 表格 -->
       <el-table
         v-loading="loading"
+        class="todo-table"
         :data="displayList"
         stripe
         highlight-current-row
@@ -386,9 +387,20 @@ onMounted(() => Promise.all([loadList(), loadPendingSigns()]))
 </template>
 
 <style scoped>
-/* 278:1235（执行提示17）：行高 45；长申请单编号单行省略 */
+/* 278:1235（执行提示18）：tbody 实绘行外高 45（消解 padding/line-height/border 额外 4） */
 .todo-page {
   --sw-list-design-row-height: 45px;
+}
+.todo-page :deep(.todo-table .el-table__row) {
+  height: 45px;
+}
+.todo-page :deep(.todo-table td.el-table__cell) {
+  box-sizing: border-box;
+  height: 45px;
+  padding: 0;
+}
+.todo-page :deep(.todo-table td.el-table__cell .cell) {
+  line-height: 22px;
 }
 .todo-business-key {
   display: block;
