@@ -489,7 +489,8 @@ onMounted(loadList)
       <ListFilterItem v-if="userStore.superAdmin" :label="t('tenantContext.label')">
         <TenantSelect v-model="filterTenant" />
       </ListFilterItem>
-      <ListFilterItem :label="t('common.username')">
+      <!-- 446:13479：原标签为「账号」，自然标签排布下首框锚 x309 依赖 2 字标签宽 -->
+      <ListFilterItem :label="t('system.account')">
         <el-input
           v-model="filter.username"
           :placeholder="t('common.pleaseInput')"

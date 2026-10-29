@@ -34,6 +34,7 @@ import {
   type SnapshotScriptKind,
   type SnapshotScriptView,
 } from './published-snapshot'
+import { getFieldTypeDescriptor, getFieldTypeStorage } from './field-types'
 
 /**
  * PublishedSnapshotViewer — one read-only surface for a frozen form + workflow version.
@@ -77,6 +78,22 @@ const selectedField = computed<FormSchema['fields'][number] | null>(() => {
 let requestGeneration = 0
 
 const fields = computed(() => (schema.value ? flattenSnapshotFields(schema.value) : []))
+
+/* 审查27 S14-F：主表列=名称/组件/字段标识/数据类型/宽度/必填/查看；序号/长度在查看详情 */
+function snapshotComponentLabel(field: FormSchema['fields'][number]): string {
+  if (field.type === 'TEXT' && (field as { multiline?: boolean }).multiline === true) {
+    return t('form.paletteMultiline')
+  }
+  return getFieldTypeDescriptor(field.type)?.label ?? field.type
+}
+
+function snapshotStorageLabel(type: string): string {
+  return getFieldTypeStorage(type)
+}
+
+function snapshotWidthText(colSpan: number | undefined): string {
+  return colSpan ? `${Math.round((colSpan / 24) * 100)}%` : '—'
+}
 const constraints = computed(() => buildSnapshotConstraints(fields.value))
 const visibility = computed(() => (schema.value ? buildSnapshotVisibility(schema.value) : []))
 const permissions = computed(() =>
@@ -812,29 +829,27 @@ watch(
             <table v-else class="snapshot-table snapshot-fields-table">
               <thead>
                 <tr>
-                  <th class="snapshot-table__index">#</th>
                   <th>{{ t('fieldList.colName') }}</th>
-                  <th>{{ t('fieldList.colKey') }}</th>
                   <th>{{ t('fieldList.colComponent') }}</th>
-                  <th>{{ t('fieldList.colLength') }}</th>
+                  <th>{{ t('fieldList.colKey') }}</th>
+                  <th>{{ t('fieldList.colType') }}</th>
+                  <th>{{ t('form.snapshotViewer.width') }}</th>
                   <th>{{ t('form.snapshotViewer.required') }}</th>
                   <th>{{ t('common.actions') }}</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(field, index) in fields" :key="field.key">
-                  <td class="snapshot-table__index">{{ index + 1 }}</td>
+                <tr v-for="field in fields" :key="field.key">
                   <td>
                     {{ field.label || '—' }}
                     <small v-if="field.table === 'subtable'">{{ field.parentLabel }}</small>
                   </td>
+                  <td>{{ snapshotComponentLabel(field.field) }}</td>
                   <td>
                     <code>{{ field.path }}</code>
                   </td>
-                  <td>
-                    <code>{{ field.type }}</code>
-                  </td>
-                  <td>{{ ('length' in field.field && field.field.length) || '—' }}</td>
+                  <td>{{ snapshotStorageLabel(field.type) }}</td>
+                  <td>{{ snapshotWidthText(field.width) }}</td>
                   <td>{{ field.required ? t('common.yes') : t('common.no') }}</td>
                   <td>
                     <el-button link type="primary" size="small" @click="openFieldProps(field.path)">
@@ -886,104 +901,104 @@ watch(
             </details>
           </details>
 
-          <section class="snapshot-section">
-            <div class="snapshot-section__head">
-              <div>
-                <h3>{{ sectionLabel('validation') }}</h3>
-              </div>
-            </div>
-            <p v-if="constraints.length === 0" class="snapshot-empty">
-              {{ t('form.snapshotViewer.noData') }}
-            </p>
-            <table v-else class="snapshot-table">
-              <thead>
-                <tr>
-                  <th>{{ t('form.snapshotViewer.fieldPath') }}</th>
-                  <th>{{ t('form.snapshotViewer.label') }}</th>
-                  <th>{{ t('form.snapshotViewer.rule') }}</th>
-                  <th>{{ t('form.snapshotViewer.value') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in constraints" :key="`${row.path}:${row.kind}`">
-                  <td>
-                    <code>{{ row.path }}</code>
-                  </td>
-                  <td>{{ row.label }}</td>
-                  <td>{{ validationLabel(row.kind) }}</td>
-                  <td>
-                    <code>{{ row.value }}</code>
-                    <el-button link type="primary" size="small" @click="openValidationDetail(row)">
+          <!-- 审查27 S14-F：校验/显隐/脚本收可达折叠详情，不连续撑长主面 -->
+          <details class="snapshot-fields-secondary">
+            <summary>{{ sectionLabel('validation') }}</summary>
+            <section class="snapshot-section">
+              <p v-if="constraints.length === 0" class="snapshot-empty">
+                {{ t('form.snapshotViewer.noData') }}
+              </p>
+              <table v-else class="snapshot-table">
+                <thead>
+                  <tr>
+                    <th>{{ t('form.snapshotViewer.fieldPath') }}</th>
+                    <th>{{ t('form.snapshotViewer.label') }}</th>
+                    <th>{{ t('form.snapshotViewer.rule') }}</th>
+                    <th>{{ t('form.snapshotViewer.value') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in constraints" :key="`${row.path}:${row.kind}`">
+                    <td>
+                      <code>{{ row.path }}</code>
+                    </td>
+                    <td>{{ row.label }}</td>
+                    <td>{{ validationLabel(row.kind) }}</td>
+                    <td>
+                      <code>{{ row.value }}</code>
+                      <el-button
+                        link
+                        type="primary"
+                        size="small"
+                        @click="openValidationDetail(row)"
+                      >
+                        {{ t('common.view') }}
+                      </el-button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+          </details>
+
+          <details class="snapshot-fields-secondary">
+            <summary>{{ sectionLabel('visibility') }}</summary>
+            <section class="snapshot-section">
+              <p v-if="visibility.length === 0" class="snapshot-empty">
+                {{ t('form.snapshotViewer.noData') }}
+              </p>
+              <template v-else>
+                <article v-for="rule in visibility" :key="rule.target" class="snapshot-rule">
+                  <header>
+                    <strong>{{ rule.targetLabel }}</strong
+                    ><code>{{ rule.target }}</code
+                    ><span>{{ rule.logic }}</span>
+                  </header>
+                  <ul>
+                    <li
+                      v-for="(condition, index) in rule.conditions"
+                      :key="`${condition.field}:${index}`"
+                    >
+                      <strong>{{ condition.label }}</strong>
+                      <code>{{ condition.field }}</code> {{ condition.op }}
+                      <code v-if="condition.value != null">{{ condition.value }}</code>
+                    </li>
+                  </ul>
+                </article>
+              </template>
+            </section>
+          </details>
+
+          <details class="snapshot-fields-secondary">
+            <summary>{{ sectionLabel('scripts') }}</summary>
+            <section class="snapshot-section">
+              <p v-if="scripts.length === 0" class="snapshot-empty">
+                {{ t('form.snapshotViewer.noData') }}
+              </p>
+              <template v-else>
+                <article v-for="row in scripts" :key="row.key" class="snapshot-code-card">
+                  <header>
+                    <strong>{{ row.label }}</strong>
+                    <span>{{ scriptKindLabel(row.kind) }}</span>
+                    <span>{{ scriptSourceLabel(row) }}</span>
+                    <span v-if="row.event">{{ eventLabel(row.event) }}</span>
+                    <span v-if="row.nodeKey">{{ row.nodeKey }}</span>
+                    <span v-if="row.enabled != null">
+                      {{
+                        row.enabled
+                          ? t('form.snapshotViewer.enabled')
+                          : t('form.snapshotViewer.disabled')
+                      }}
+                    </span>
+                    <el-button link type="primary" size="small" @click="openScriptDetail(row)">
                       {{ t('common.view') }}
                     </el-button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
-
-          <section class="snapshot-section">
-            <div class="snapshot-section__head">
-              <div>
-                <h3>{{ sectionLabel('visibility') }}</h3>
-              </div>
-            </div>
-            <p v-if="visibility.length === 0" class="snapshot-empty">
-              {{ t('form.snapshotViewer.noData') }}
-            </p>
-            <template v-else>
-              <article v-for="rule in visibility" :key="rule.target" class="snapshot-rule">
-                <header>
-                  <strong>{{ rule.targetLabel }}</strong
-                  ><code>{{ rule.target }}</code
-                  ><span>{{ rule.logic }}</span>
-                </header>
-                <ul>
-                  <li
-                    v-for="(condition, index) in rule.conditions"
-                    :key="`${condition.field}:${index}`"
-                  >
-                    <strong>{{ condition.label }}</strong>
-                    <code>{{ condition.field }}</code> {{ condition.op }}
-                    <code v-if="condition.value != null">{{ condition.value }}</code>
-                  </li>
-                </ul>
-              </article>
-            </template>
-          </section>
-
-          <section class="snapshot-section">
-            <div class="snapshot-section__head">
-              <div>
-                <h3>{{ sectionLabel('scripts') }}</h3>
-              </div>
-            </div>
-            <p v-if="scripts.length === 0" class="snapshot-empty">
-              {{ t('form.snapshotViewer.noData') }}
-            </p>
-            <template v-else>
-              <article v-for="row in scripts" :key="row.key" class="snapshot-code-card">
-                <header>
-                  <strong>{{ row.label }}</strong>
-                  <span>{{ scriptKindLabel(row.kind) }}</span>
-                  <span>{{ scriptSourceLabel(row) }}</span>
-                  <span v-if="row.event">{{ eventLabel(row.event) }}</span>
-                  <span v-if="row.nodeKey">{{ row.nodeKey }}</span>
-                  <span v-if="row.enabled != null">
-                    {{
-                      row.enabled
-                        ? t('form.snapshotViewer.enabled')
-                        : t('form.snapshotViewer.disabled')
-                    }}
-                  </span>
-                  <el-button link type="primary" size="small" @click="openScriptDetail(row)">
-                    {{ t('common.view') }}
-                  </el-button>
-                </header>
-                <pre>{{ row.code }}</pre>
-              </article>
-            </template>
-          </section>
+                  </header>
+                  <pre>{{ row.code }}</pre>
+                </article>
+              </template>
+            </section>
+          </details>
 
           <section class="snapshot-section">
             <div class="snapshot-section__head">
@@ -1970,16 +1985,21 @@ watch(
 .snapshot-fields-section {
   margin-top: 0;
 }
+/* 审查27 S14-F：44/44（border-box，抵消基础 9px 上下内距） */
 .snapshot-fields-table th {
-  height: 34px;
+  box-sizing: border-box;
+  height: 44px;
 }
 .snapshot-fields-table td {
-  height: 46px;
+  box-sizing: border-box;
+  height: 44px;
 }
 
 .snapshot-settings {
+  box-sizing: border-box;
   display: flex;
   gap: 24px;
+  background: var(--sw-surface-page, #f4f6fb);
 }
 .snapshot-settings__nav {
   flex: 0 0 200px;
@@ -2003,9 +2023,15 @@ watch(
   color: var(--sw-color-primary);
   font-weight: 500;
 }
+/* 审查27 S14-E：设置内容区浅底上的白卡容器 + 24 内距 */
 .snapshot-settings__main {
+  box-sizing: border-box;
   flex: 1 1 auto;
   min-width: 0;
+  align-self: flex-start;
+  padding: 24px;
+  border-radius: var(--sw-radius-base, 8px);
+  background: var(--sw-surface-card, #fff);
 }
 .snapshot-listener-table th {
   height: 34px;
@@ -2435,6 +2461,23 @@ watch(
 
 .snapshot-raw--card {
   margin-bottom: 8px;
+}
+
+/* 审查27 S14-F：校验/显隐/脚本折叠详情卡（白卡容器） */
+.snapshot-fields-secondary {
+  margin-bottom: 8px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-surface-card, #fff);
+}
+.snapshot-fields-secondary > summary {
+  padding: 9px 12px;
+  color: var(--sw-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+.snapshot-fields-secondary .snapshot-section {
+  padding: 0 12px 12px;
 }
 
 .snapshot-principal-list {

@@ -84,10 +84,10 @@ function confirm(): void {
         }"
         @click="onGradientClick"
       />
-      <div class="wcolor__preview">
-        <i :style="{ background: preview }" />
-      </div>
       <div class="wcolor__row">
+        <div class="wcolor__preview">
+          <i :style="{ background: preview }" />
+        </div>
         <span class="wcolor__label">{{ t('workspace.color.hex') }}</span>
         <el-input :model-value="hex" maxlength="7" @update:model-value="onHexInput" />
         <el-input-number v-model="opacity" :min="0" :max="100" :step="1" />
@@ -102,10 +102,11 @@ function confirm(): void {
           type="button"
           class="wcolor__swatch"
           :class="{ 'is-active': item.toLowerCase() === hex.toLowerCase() }"
-          :style="{ background: item }"
           :aria-label="item"
           @click="choose(item)"
-        />
+        >
+          <i :style="{ background: item }" />
+        </button>
       </div>
     </div>
     <template #footer>
@@ -142,6 +143,8 @@ function confirm(): void {
 .wcolor__preview {
   position: relative;
   box-sizing: border-box;
+  flex: none;
+  width: 36px;
   height: 36px;
   border: 1px solid var(--sw-border-light, #eef0f4);
   border-radius: 8px;
@@ -170,6 +173,10 @@ function confirm(): void {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.wcolor__row .wcolor__preview + .wcolor__label {
+  margin-left: 8px;
 }
 
 .wcolor__row :deep(.el-input) {
@@ -212,9 +219,9 @@ function confirm(): void {
 
 .wcolor__common {
   display: grid;
-  grid-template-columns: repeat(6, 26px);
-  align-items: center;
-  gap: 8px;
+  grid-template-columns: repeat(6, 56px);
+  column-gap: 16px;
+  row-gap: 20px;
 }
 
 .wcolor__common .wcolor__label {
@@ -222,12 +229,24 @@ function confirm(): void {
 }
 
 .wcolor__swatch {
-  width: 26px;
-  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 56px;
+  height: 36px;
   padding: 0;
   border: 1px solid var(--sw-border-light, #eef0f4);
   border-radius: 6px;
   cursor: pointer;
+  background: #fff;
+}
+
+.wcolor__swatch i {
+  display: block;
+  width: 30px;
+  height: 24px;
+  border-radius: 4px;
 }
 
 .wcolor__swatch.is-active {

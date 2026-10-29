@@ -394,7 +394,7 @@ async function restoreSelected() {
   border: 1px solid #ebeef5;
 }
 .history-table th {
-  height: 34px;
+  height: 40px;
   box-sizing: border-box;
   padding: 0 12px;
   background: #f4f6fb;
@@ -406,7 +406,7 @@ async function restoreSelected() {
   white-space: nowrap;
 }
 .history-table td {
-  height: 46px;
+  height: 49px;
   box-sizing: border-box;
   padding: 0 12px;
   border-top: 1px solid #ebeef5;

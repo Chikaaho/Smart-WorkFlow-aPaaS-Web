@@ -6513,33 +6513,40 @@ function nodeLabelLines(label: string) {
   }
 }
 
-/* ── P53 节点12：审批人候选弹窗（容器层几何覆盖，不改组件 script） ── */
+/* ── P53 节点12：审批人候选弹窗（审查24 D08-P 收口：980/标题16/24/按钮80×32） ── */
 .approver-dialog-host :deep(.el-dialog) {
-  --el-dialog-width: min(1018px, calc(100vw - 40px)) !important;
+  --el-dialog-width: min(980px, calc(100vw - 40px)) !important;
   padding: 0;
   border: 1px solid #dde3ef;
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 12px 32px rgba(19, 31, 58, 0.18);
   overflow: hidden;
   color: #19233b;
 }
 .approver-dialog-host :deep(.el-dialog__header) {
   box-sizing: border-box;
-  min-height: 94px;
-  padding: 24px 28px 18px;
+  padding: 20px 24px 12px;
   border-bottom: 1px solid #dde3ef;
 }
 .approver-dialog-host :deep(.el-dialog__title) {
-  font-size: 22px;
+  font-size: 16px;
+  line-height: 24px;
   color: #19233b;
 }
 .approver-dialog-host :deep(.el-dialog__headerbtn) {
-  top: 24px;
-  right: 28px;
+  top: 20px;
+  right: 24px;
   font-size: 20px;
 }
 .approver-dialog-host :deep(.el-dialog__body) {
-  padding: 16px 28px 24px;
+  padding: 16px 24px 24px;
+}
+.approver-dialog-host :deep(.el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
 }
 /* 搜索框：设计 36px 高 / #FBFCFF 底 / #CBD6E8 描边 */
 .approver-dialog-host :deep(.el-input__wrapper) {
@@ -6581,31 +6588,35 @@ function nodeLabelLines(label: string) {
  * 覆盖传送后的根节点。节点 12 的结构尺寸必须直接落在实际弹窗上。
  */
 :global(.el-dialog.approver-dialog) {
-  width: 1020px !important;
+  /* 审查24/27 D08-P：980 外框、三栏 200/404/294、56 行、80×32 底栏 */
+  width: 980px !important;
   height: 732px !important;
   margin-top: 146px !important;
   box-sizing: border-box;
   padding: 0 !important;
   border: 1px solid #dde3ef;
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 12px 32px rgba(19, 31, 58, 0.18);
   overflow: hidden;
   color: #19233b;
 }
 :global(.el-dialog.approver-dialog .el-dialog__header) {
   box-sizing: border-box;
-  height: 96px;
-  min-height: 96px;
-  padding: 22px 27px 18px;
+  padding: 20px 24px 12px;
   border-bottom: 1px solid #dde3ef;
 }
+:global(.el-dialog.approver-dialog .el-dialog__title) {
+  font-size: 16px;
+  line-height: 24px;
+  color: #19233b;
+}
 :global(.el-dialog.approver-dialog .el-dialog__headerbtn) {
-  top: 24px;
-  right: 28px;
+  top: 20px;
+  right: 24px;
   font-size: 20px;
 }
 :global(.el-dialog.approver-dialog .el-dialog__body) {
-  padding: 16px 27px 16px;
+  padding: 16px 24px 16px;
 }
 :global(.el-dialog.approver-dialog .el-dialog__footer) {
   box-sizing: border-box;
@@ -6632,11 +6643,11 @@ function nodeLabelLines(label: string) {
   left: -2px;
 }
 :global(.el-dialog.approver-dialog .approver-dialog__panes) {
-  grid-template-columns: 236px 406px 290px;
+  grid-template-columns: 200px 404px 294px;
   gap: 16px;
 }
 :global(.el-dialog.approver-dialog .approver-pane) {
-  padding: 17px 15px 14px;
+  padding: 14px;
 }
 :global(.el-dialog.approver-dialog .approver-pane__workspace) {
   top: 8px;
@@ -6671,9 +6682,8 @@ function nodeLabelLines(label: string) {
   padding-left: 12px !important;
 }
 :global(.el-dialog.approver-dialog .approver-user) {
-  height: 60px;
+  height: 56px;
   box-sizing: border-box;
-  margin-bottom: 8px;
   gap: 12px;
 }
 :global(.el-dialog.approver-dialog .approver-user__avatar) {
@@ -6701,11 +6711,11 @@ function nodeLabelLines(label: string) {
   margin-bottom: 24px;
 }
 :global(.el-dialog.approver-dialog .approver-dialog__footer > .el-button:first-child) {
-  width: 88px;
+  width: 80px;
 }
 :global(.el-dialog.approver-dialog .approver-dialog__confirm) {
-  width: 108px;
-  min-width: 108px;
+  width: 80px;
+  min-width: 80px;
 }
 :global(.el-dialog.approver-dialog .approver-dialog__confirm > span) {
   white-space: nowrap;

@@ -254,7 +254,7 @@ function patchDescription(row: FieldRow, description: string) {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
   height: 100%;
   min-height: 0;
   padding: 20px;
@@ -319,7 +319,7 @@ function patchDescription(row: FieldRow, description: string) {
   margin-left: auto;
 }
 
-/* 字段表：白卡 + 44 表头 / 49 行，行内输入 32 高 */
+/* 审查27 F07-L：工具栏后到表格间隔 12（原 20 使表外沿 216 对 208） */
 .field-list__table {
   border: 1px solid #ebeef5;
   border-radius: 8px;

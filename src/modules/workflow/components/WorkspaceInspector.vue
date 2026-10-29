@@ -16,6 +16,7 @@ import {
   defaultChartStyle,
   paletteColors,
   type WorkspaceChartType,
+  type WorkspaceMetricConfig,
 } from '../utils/workspace-data'
 import { chartTypeOf, kindOf, type StudioCard } from '../utils/workspace-studio'
 
@@ -79,7 +80,6 @@ const numericFields = computed(() =>
 )
 const sortableFields = computed(() => props.fields)
 const filterCount = computed(() => props.card.config.filters?.length ?? 0)
-const metricCount = computed(() => props.card.config.metrics?.length ?? 0)
 
 function patch(patchValue: Partial<StudioCard>): void {
   emit('update', { ...props.card, ...patchValue })
@@ -119,6 +119,14 @@ function onMetricAgg(value: string): void {
 
 function onChartType(value: WorkspaceChartType): void {
   patchConfig({ chartType: value })
+}
+
+/* 审查27 W19-I：数据分支逐指标卡承接字段/聚合/轴/单位的既有编辑 */
+function patchMetric(index: number, patchValue: Partial<WorkspaceMetricConfig>): void {
+  const metrics = (props.card.config.metrics ?? []).map((metric, i) =>
+    i === index ? { ...metric, ...patchValue } : metric,
+  )
+  patchConfig({ metrics })
 }
 
 function seriesColorValue(index: number, fieldName: string): string {
@@ -255,6 +263,37 @@ function isStackable() {
         </template>
 
         <template v-else>
+          <!-- 审查27 W19-I：图表类型置于关联表单之前 -->
+          <section v-if="kind === 'chart'" class="winsp__section">
+            <label class="winsp__label">{{ t('workspace.inspector.chartType') }}</label>
+            <div class="winsp__inline">
+              <el-select :model-value="chartType" @update:model-value="onChartType">
+                <el-option
+                  v-for="type in [
+                    'bar',
+                    'hbar',
+                    'line',
+                    'area',
+                    'combo',
+                    'pie',
+                    'donut',
+                    'scatter',
+                    'radar',
+                    'funnel',
+                    'gauge',
+                    'heatmap',
+                  ]"
+                  :key="type"
+                  :label="t(`workspace.chartType.${type}`)"
+                  :value="type"
+                />
+              </el-select>
+              <el-button plain @click="emit('open-chart-type')">
+                {{ t('workspace.inspector.choose') }}
+              </el-button>
+            </div>
+          </section>
+
           <section class="winsp__section">
             <label class="winsp__label">{{ t('workspace.inspector.form') }}</label>
             <div class="winsp__form-row">
@@ -324,43 +363,95 @@ function isStackable() {
 
           <template v-if="kind === 'chart'">
             <section class="winsp__section">
-              <label class="winsp__label">{{ t('workspace.inspector.chartType') }}</label>
+              <label class="winsp__label">{{ t('workspace.inspector.dimension') }}</label>
+              <el-select
+                :model-value="card.config.groupBy ?? ''"
+                clearable
+                @update:model-value="patchConfig({ groupBy: $event || undefined })"
+              >
+                <el-option
+                  v-for="field in fields"
+                  :key="field.name"
+                  :label="field.label"
+                  :value="field.name"
+                />
+              </el-select>
+            </section>
+            <section
+              v-for="(metric, index) in card.config.metrics ?? []"
+              :key="index"
+              class="winsp__section winsp__metric-card"
+            >
+              <p class="winsp__metric-title">
+                {{
+                  metric.label ||
+                  fields.find((f) => f.name === metric.field)?.label ||
+                  metric.field ||
+                  t('workspace.inspector.recordCount')
+                }}
+              </p>
               <div class="winsp__inline">
-                <el-select :model-value="chartType" @update:model-value="onChartType">
+                <el-select
+                  :model-value="metric.field || '__count__'"
+                  @update:model-value="
+                    patchMetric(index, { field: $event === '__count__' ? '' : $event })
+                  "
+                >
+                  <el-option :label="t('workspace.inspector.recordCount')" value="__count__" />
                   <el-option
-                    v-for="type in [
-                      'bar',
-                      'hbar',
-                      'line',
-                      'area',
-                      'combo',
-                      'pie',
-                      'donut',
-                      'scatter',
-                      'radar',
-                      'funnel',
-                      'gauge',
-                      'heatmap',
-                    ]"
-                    :key="type"
-                    :label="t(`workspace.chartType.${type}`)"
-                    :value="type"
+                    v-for="field in numericFields"
+                    :key="field.name"
+                    :label="field.label"
+                    :value="field.name"
                   />
                 </el-select>
-                <el-button plain @click="emit('open-chart-type')">
-                  {{ t('workspace.inspector.choose') }}
-                </el-button>
+                <el-select
+                  :model-value="metric.agg"
+                  @update:model-value="patchMetric(index, { agg: $event })"
+                >
+                  <el-option
+                    v-for="agg in ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX']"
+                    :key="agg"
+                    :label="agg"
+                    :value="agg"
+                  />
+                </el-select>
+              </div>
+              <div class="winsp__inline">
+                <el-input
+                  :model-value="metric.unit"
+                  :placeholder="t('workspace.inspector.unit')"
+                  @update:model-value="patchMetric(index, { unit: $event })"
+                />
+                <el-select
+                  :model-value="metric.axis"
+                  @update:model-value="patchMetric(index, { axis: $event })"
+                >
+                  <el-option :label="t('workspace.inspector.axisLeft')" value="left" />
+                  <el-option :label="t('workspace.inspector.axisRight')" value="right" />
+                </el-select>
+              </div>
+            </section>
+            <section v-if="isStackable()" class="winsp__section">
+              <label class="winsp__label">{{ t('workspace.inspector.seriesMode') }}</label>
+              <div class="winsp__segmented">
+                <button
+                  type="button"
+                  :class="{ 'is-active': card.config.style?.stack !== 'stack' }"
+                  @click="patchStyle({ stack: 'group' })"
+                >
+                  {{ t('workspace.inspector.group') }}
+                </button>
+                <button
+                  type="button"
+                  :class="{ 'is-active': card.config.style?.stack === 'stack' }"
+                  @click="patchStyle({ stack: 'stack' })"
+                >
+                  {{ t('workspace.inspector.stack') }}
+                </button>
               </div>
             </section>
             <section class="winsp__section">
-              <div class="winsp__summary">
-                <span>{{ t('workspace.inspector.dimension') }}</span>
-                <strong>{{ card.config.groupBy || '—' }}</strong>
-              </div>
-              <div class="winsp__summary">
-                <span>{{ t('workspace.inspector.metrics') }}</span>
-                <strong>{{ metricCount }}</strong>
-              </div>
               <el-button plain @click="emit('open-metrics')">
                 {{ t('workspace.inspector.editMetrics') }}
               </el-button>
@@ -619,20 +710,21 @@ function isStackable() {
 }
 
 .winsp__tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  box-sizing: border-box;
+  display: flex;
+  gap: 8px;
   width: 288px;
   height: 32px;
   margin-bottom: 12px;
-  border: 1px solid var(--sw-border-light, #eef0f4);
-  border-radius: 4px;
-  overflow: hidden;
 }
 
 .winsp__tab {
+  box-sizing: border-box;
+  flex: 0 0 140px;
+  width: 140px;
+  height: 32px;
   padding: 0;
-  border: 0;
+  border: 1px solid var(--sw-border-light, #eef0f4);
+  border-radius: 4px;
   background: transparent;
   color: var(--sw-text-secondary);
   font-size: 13px;
@@ -718,6 +810,21 @@ function isStackable() {
 
 .winsp__inline .winsp__label {
   flex: 1;
+}
+
+.winsp__metric-card {
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--sw-border-light, #eef0f4);
+  border-radius: 6px;
+  background: var(--sw-surface-card, #fff);
+}
+
+.winsp__metric-title {
+  margin: 0 0 6px;
+  color: var(--sw-text-primary);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .winsp__summary {

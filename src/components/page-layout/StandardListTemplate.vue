@@ -152,8 +152,43 @@ const emit = defineEmits<{
   order: 0;
   margin: 0;
   border: 1px solid var(--sw-border-light);
-  padding: calc(var(--sw-space-16) - 1px) var(--sw-space-16);
+  /* 446:13479：左内距 5 使「账号」首框锚 x309（标签右缘 301 + gap 8） */
+  padding: calc(var(--sw-space-16) - 1px) var(--sw-space-16) calc(var(--sw-space-16) - 1px) 5px;
   box-shadow: none;
+}
+/* 446:13479（Y-S）：design 筛选自然标签排布——标签自然宽、控件 284，锚 309/627 */
+.standard-list--design :deep(.list-filter-bar__fields) {
+  display: flex;
+  align-items: center;
+}
+.standard-list--design :deep(.list-filter-bar__fields > *) {
+  grid-column: auto;
+}
+.standard-list--design :deep(.list-filter-item) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.standard-list--design :deep(.list-filter-item__label) {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: none;
+}
+.standard-list--design :deep(.list-filter-item__control) {
+  flex: 0 0 272px;
+  width: 272px;
+}
+.standard-list--design :deep(.list-filter-bar__actions) {
+  margin-left: auto;
+}
+.standard-list--design :deep(.list-filter-bar__actions .el-button) {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 32px;
+  margin-left: 0;
+  padding: 0;
+  justify-content: center;
 }
 .standard-list--design > .list-toolbar {
   order: 1;
@@ -167,6 +202,7 @@ const emit = defineEmits<{
 .standard-list--design > .list-table {
   order: 2;
   flex: 0 0 auto;
+  margin-top: 4px;
   border: 1px solid var(--sw-border-light);
   box-shadow: none;
 }

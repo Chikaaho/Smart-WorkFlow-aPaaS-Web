@@ -755,7 +755,8 @@ onMounted(() => {
   font-size: 13px;
 }
 .catalog-section__title {
-  margin: 0 0 11px;
+  /* 审查27 S20-F：标题 24 行高较原 20 多占 4px，邻接占位补偿 −4（11→7） */
+  margin: 0 0 7px;
   font-family: var(--sw-font-family);
   font-size: 16px;
   font-weight: 500;

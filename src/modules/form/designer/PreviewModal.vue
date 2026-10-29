@@ -79,12 +79,14 @@ function schemaForField(field: FormSchemaField): FormSchema {
   max-height: calc(88vh - 120px);
   overflow-y: auto;
   background: var(--sw-fill-base);
-  padding: var(--sw-space-24);
+  /* 审查27 F07-P：水平仅留 9（外壳16+9=25），承载区 1070 锚 x425 */
+  padding: var(--sw-space-24) 9px;
 }
 
 .preview-modal__form {
   box-sizing: border-box;
-  width: 1022px;
+  /* 审查27 F07-P：仅一层 stage 24 内缩，承载区 1070 与 x425 对齐 */
+  width: 1070px;
   max-width: 100%;
   margin: 0 auto;
   background: #fff;
