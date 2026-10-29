@@ -10,7 +10,7 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate, ListFilterItem } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   queryTodoTasks,
@@ -54,6 +54,14 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
 // 真分页
 const pageNum = ref(1)
 const pageSize = ref(10)
+
+/** 278:1235：主题关键字过滤既有真实任务（仅展示层，不改任务状态） */
+const titleFilter = ref('')
+const displayList = computed(() => {
+  const kw = titleFilter.value.trim().toLowerCase()
+  if (!kw) return list.value
+  return list.value.filter((row) => (row.theme ?? '').toLowerCase().includes(kw))
+})
 
 async function loadList() {
   loading.value = true
@@ -219,126 +227,173 @@ onMounted(() => Promise.all([loadList(), loadPendingSigns()]))
 </script>
 
 <template>
-  <StandardListTemplate
-    :total="total"
-    :page-num="pageNum"
-    :page-size="pageSize"
-    :empty="isEmpty"
-    @update:page-num="handlePageNumChange"
-    @update:page-size="handlePageSizeChange"
-  >
-    <!-- 0.1.7 #8：去掉右上角「已办任务 / 批量审批」按钮（噪音） -->
-
-    <!-- 空态（无需操作按钮） -->
-    <template #empty-action>
-      <span />
-    </template>
-
-    <!-- 错误提示 -->
-    <el-alert
-      v-if="errorMsg"
-      :title="errorMsg"
-      type="error"
-      :closable="false"
-      show-icon
-      style="margin-bottom: 12px"
-    />
-
-    <el-card v-if="pendingSigns.length" shadow="never" class="todo-sign-card">
-      <template #header>{{ t('workflow.pendingSignTitle') }}</template>
-      <el-table :data="pendingSigns" size="small">
-        <el-table-column :label="t('workflow.pendingSignTask')" min-width="180">
-          <template #default="{ row }">{{ row.taskName || row.nodeKey }}</template>
-        </el-table-column>
-        <el-table-column :label="t('workflow.pendingSignPosition')" width="110">
-          <template #default="{ row }">
-            {{
-              t(
-                row.signPosition === 'AFTER'
-                  ? 'workflow.signAfterShort'
-                  : 'workflow.signBeforeShort',
-              )
-            }}
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('workflow.pendingSignOrder')" width="90">
-          <template #default="{ row }">{{ row.seqNo + 1 }}</template>
-        </el-table-column>
-        <el-table-column :label="t('workflow.pendingSignComment')" min-width="180">
-          <template #default="{ row }">
-            <el-input
-              v-model="signComments[row.recordId]"
-              :placeholder="row.comment || t('workflow.pendingSignCommentPlaceholder')"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('common.action')" width="238">
-          <template #default="{ row }">
-            <el-button
-              size="small"
-              type="success"
-              :disabled="row.serialBlocked || signingId !== null"
-              :loading="signingId === row.recordId"
-              @click="respondSign(row, 'APPROVE')"
-              >{{ t('common.approve') }}</el-button
-            >
-            <el-button
-              size="small"
-              type="danger"
-              plain
-              :disabled="row.serialBlocked || signingId !== null"
-              @click="respondSign(row, 'DISAPPROVE')"
-              >{{ t('common.reject') }}</el-button
-            >
-            <el-button
-              size="small"
-              plain
-              :disabled="signingId !== null"
-              @click="cancelPendingSign(row)"
-              >{{ t('workflow.cancelSignAction') }}</el-button
-            >
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
-
-    <!-- 表格 -->
-    <el-table
-      v-loading="loading"
-      :data="list"
-      stripe
-      highlight-current-row
-      style="width: 100%"
-      @row-click="handleRowClick"
+  <div class="todo-page">
+    <StandardListTemplate
+      appearance="design"
+      :total="total"
+      :page-num="pageNum"
+      :page-size="pageSize"
+      :empty="isEmpty"
+      @update:page-num="handlePageNumChange"
+      @update:page-size="handlePageSizeChange"
     >
-      <!-- V012-BUG-010：列改版 主题/流程状态/申请单编号/申请人/接收时间；去 formKey 噪音列 -->
-      <el-table-column type="index" :label="t('common.indexNo')" width="70" />
-      <el-table-column :label="t('common.theme')" min-width="220">
-        <template #default="{ row }">
-          <span class="todo-theme">{{ row.theme || row.processName || '—' }}</span>
-          <span v-if="row.theme" class="todo-theme__process">{{ row.processName }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('workflow.flowStatus')" width="100">
-        <template #default="{ row }">
-          <el-tag v-if="row.candidate" size="small" type="info">{{
-            t('workflow.candidatePending')
-          }}</el-tag>
-          <el-tag v-else size="small" type="warning">{{ t('workflow.pendingReview') }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="140" />
-      <el-table-column :label="t('workflow.applicant')" min-width="110">
-        <template #default="{ row }">{{ row.initiatorName || '—' }}</template>
-      </el-table-column>
-      <el-table-column prop="createTime" :label="t('workflow.receiveTime')" min-width="170" />
-      <ListActionsColumn :actions="rowActions" :width="120" />
-    </el-table>
-  </StandardListTemplate>
+      <!-- 筛选容器（278:1235 执行提示17）：@(256,84)/h64；主题关键字过滤既有真实任务 -->
+      <template #filter>
+        <ListFilterItem :label="t('common.title')">
+          <el-input
+            v-model="titleFilter"
+            :placeholder="t('common.pleaseInput')"
+            clearable
+            @keyup.enter="loadList"
+          />
+        </ListFilterItem>
+      </template>
+      <template #filter-actions>
+        <el-button type="primary" @click="loadList">{{ t('common.query') }}</el-button>
+        <el-button
+          @click="
+            (() => {
+              titleFilter = ''
+              void loadList()
+            })()
+          "
+        >
+          {{ t('common.reset') }}
+        </el-button>
+      </template>
+      <!-- 0.1.7 #8：去掉右上角「已办任务 / 批量审批」按钮（噪音） -->
 
-  <TaskDetailDialog
-    v-model="detailVisible"
-    :task-id="detailTaskId"
-    @completed="onDetailCompleted"
-  />
+      <!-- 空态（无需操作按钮） -->
+      <template #empty-action>
+        <span />
+      </template>
+
+      <!-- 错误提示 -->
+      <el-alert
+        v-if="errorMsg"
+        :title="errorMsg"
+        type="error"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
+
+      <el-card v-if="pendingSigns.length" shadow="never" class="todo-sign-card">
+        <template #header>{{ t('workflow.pendingSignTitle') }}</template>
+        <el-table :data="pendingSigns" size="small">
+          <el-table-column :label="t('workflow.pendingSignTask')" min-width="180">
+            <template #default="{ row }">{{ row.taskName || row.nodeKey }}</template>
+          </el-table-column>
+          <el-table-column :label="t('workflow.pendingSignPosition')" width="110">
+            <template #default="{ row }">
+              {{
+                t(
+                  row.signPosition === 'AFTER'
+                    ? 'workflow.signAfterShort'
+                    : 'workflow.signBeforeShort',
+                )
+              }}
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('workflow.pendingSignOrder')" width="90">
+            <template #default="{ row }">{{ row.seqNo + 1 }}</template>
+          </el-table-column>
+          <el-table-column :label="t('workflow.pendingSignComment')" min-width="180">
+            <template #default="{ row }">
+              <el-input
+                v-model="signComments[row.recordId]"
+                :placeholder="row.comment || t('workflow.pendingSignCommentPlaceholder')"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('common.action')" width="238">
+            <template #default="{ row }">
+              <el-button
+                size="small"
+                type="success"
+                :disabled="row.serialBlocked || signingId !== null"
+                :loading="signingId === row.recordId"
+                @click="respondSign(row, 'APPROVE')"
+                >{{ t('common.approve') }}</el-button
+              >
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                :disabled="row.serialBlocked || signingId !== null"
+                @click="respondSign(row, 'DISAPPROVE')"
+                >{{ t('common.reject') }}</el-button
+              >
+              <el-button
+                size="small"
+                plain
+                :disabled="signingId !== null"
+                @click="cancelPendingSign(row)"
+                >{{ t('workflow.cancelSignAction') }}</el-button
+              >
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
+      <!-- 表格 -->
+      <el-table
+        v-loading="loading"
+        :data="displayList"
+        stripe
+        highlight-current-row
+        style="width: 100%"
+        @row-click="handleRowClick"
+      >
+        <!-- V012-BUG-010：列改版 主题/流程状态/申请单编号/申请人/接收时间；去 formKey 噪音列 -->
+        <el-table-column type="index" :label="t('common.indexNo')" width="70" />
+        <el-table-column :label="t('common.theme')" min-width="220">
+          <template #default="{ row }">
+            <span class="todo-theme">{{ row.theme || row.processName || '—' }}</span>
+            <span v-if="row.theme" class="todo-theme__process">{{ row.processName }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('workflow.flowStatus')" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="row.candidate" size="small" type="info">{{
+              t('workflow.candidatePending')
+            }}</el-tag>
+            <el-tag v-else size="small" type="warning">{{ t('workflow.pendingReview') }}</el-tag>
+          </template>
+        </el-table-column>
+        <!-- 278:1235：长标识单行省略并完整提示（UUID 保留为详情信息） -->
+        <el-table-column prop="businessKey" :label="t('common.businessNo')" min-width="140">
+          <template #default="{ row }">
+            <span class="todo-business-key" :title="row.businessKey ?? ''">{{
+              row.businessKey ?? '-'
+            }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('workflow.applicant')" min-width="110">
+          <template #default="{ row }">{{ row.initiatorName || '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="createTime" :label="t('workflow.receiveTime')" min-width="170" />
+        <ListActionsColumn :actions="rowActions" :width="120" />
+      </el-table>
+    </StandardListTemplate>
+
+    <TaskDetailDialog
+      v-model="detailVisible"
+      :task-id="detailTaskId"
+      @completed="onDetailCompleted"
+    />
+  </div>
 </template>
+
+<style scoped>
+/* 278:1235（执行提示17）：行高 45；长申请单编号单行省略 */
+.todo-page {
+  --sw-list-design-row-height: 45px;
+}
+.todo-business-key {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

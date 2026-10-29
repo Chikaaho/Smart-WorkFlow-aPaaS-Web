@@ -133,9 +133,14 @@ function onPanelColor(value: string | null) {
           <span
             v-if="ICON_ASSETS[key]"
             class="app-appearance-icons__asset"
+            :class="{
+              'app-appearance-icons__asset--start': key === 'Start',
+              'app-appearance-icons__asset--end': key === 'End',
+              'app-appearance-icons__asset--countersign': key === 'Countersign',
+            }"
             :style="{ maskImage: iconMask(key) }"
           />
-          <AppIcon v-else :icon="key" :size="24" :box-size="24" soft />
+          <AppIcon v-else :icon="key" :size="20" :box-size="20" soft />
         </button>
       </div>
       <p v-if="!filteredIcons.length">{{ t('common.noData') }}</p>
@@ -224,10 +229,13 @@ function onPanelColor(value: string | null) {
   flex-direction: column;
   gap: var(--sw-space-16);
 }
+/* 471:16799（执行提示17）：三行六列，列锚 685 起（600 弹窗 + 25 内距 + 84 格 + 9 隙） */
 .app-appearance-icons__grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--sw-space-16) var(--sw-space-12);
+  grid-template-columns: repeat(6, 84px);
+  gap: var(--sw-space-16) 9px;
+  justify-content: start;
+  padding: 0 1px;
   max-height: 188px;
   overflow-y: auto;
 }
@@ -247,12 +255,22 @@ function onPanelColor(value: string | null) {
   background: var(--sw-color-primary-soft);
 }
 .app-appearance-icons__asset {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   background: currentColor;
   mask-size: contain;
   mask-position: center;
   mask-repeat: no-repeat;
+}
+/* 末行开始/停止/成员原语义色 */
+.app-appearance-icons__asset--start {
+  background-color: #1f9d55;
+}
+.app-appearance-icons__asset--end {
+  background-color: #d93026;
+}
+.app-appearance-icons__asset--countersign {
+  background-color: #2563eb;
 }
 .app-appearance-colors {
   display: flex;
@@ -360,5 +378,12 @@ function onPanelColor(value: string | null) {
   .app-appearance-icons__grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
+</style>
+
+<style>
+/* 471:16799/16800（执行提示17）：选择图标/颜色浮层外框圆角 12 */
+.app-appearance-dialog.el-dialog {
+  border-radius: 12px;
 }
 </style>

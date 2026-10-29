@@ -25,10 +25,11 @@ import { disableFormDef, enableFormDef } from '@/modules/form/api/i2-choices'
 import { getFormDefStatusLabel, getFormDefStatusType } from '@/modules/form/utils/form-def-status'
 import type { FormDefListItem } from '@/modules/form/api/form-def'
 import type { PageQuery } from '@/contracts/common'
-import { StandardListTemplate, ListActionsColumn, CategorySidebar } from '@/components/page-layout'
+import { StandardListTemplate, ListActionsColumn, ListFilterItem } from '@/components/page-layout'
 import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { listFormApps, getFormAppContent } from '@/modules/form/api/app-center'
+import { pageTenants } from '@/adapters/org-tenant'
 import type { FormApp, FormAppContent } from '@/contracts/app-center'
 
 const router = useRouter()
@@ -126,14 +127,30 @@ const selectedFormIds = computed<Set<string> | null>(() => {
 
 /** 表格数据：节点过滤时用本地集合（不改变服务端分页语义）。 */
 const displayList = computed(() => {
-  const ids = selectedFormIds.value
-  if (!ids) return list.value
-  return allForms.value.filter((def) => ids.has(def.id)).slice(0, 200)
+  const rows = (() => {
+    const ids = selectedFormIds.value
+    if (!ids) return list.value
+    return allForms.value.filter((def) => ids.has(def.id)).slice(0, 200)
+  })()
+  const tn = tenantFilter.value
+  if (!tn) return rows
+  return rows.filter((row) => (row as { tenantName?: string | null }).tenantName === tn)
 })
 
 const displayTotal = computed(() =>
   selectedFormIds.value ? displayList.value.length : total.value,
 )
+
+async function loadTenantOptions() {
+  try {
+    const page = await pageTenants({ pageNum: 1, pageSize: 100 }, {})
+    tenantOptions.value = page.list.map((tn) => ({ id: String(tn.id), name: tn.name }))
+  } catch {
+    tenantOptions.value = []
+  }
+}
+
+void loadTenantOptions()
 
 async function loadCategoryTree() {
   try {
@@ -169,13 +186,38 @@ function onTreeNodeClick(data: AppTreeNode) {
 
 void loadCategoryTree()
 
+/** 459:15228（执行提示17）：原租户/名称筛选——名称走服务端关键字；租户仅按行内真实字段过滤（无值即空结果） */
+const keyword = ref('')
+const currentKeyword = ref('')
+const tenantFilter = ref<string | null>(null)
+const tenantOptions = ref<Array<{ id: string; name: string }>>([])
+
+function appNameOf(appId: string | null | undefined): string {
+  if (!appId) return '—'
+  return apps.value.find((a) => a.id === appId)?.name ?? '—'
+}
+
+function handleQuery() {
+  currentKeyword.value = keyword.value.trim()
+  pageNum.value = 1
+  void loadList()
+}
+
+function handleReset() {
+  keyword.value = ''
+  currentKeyword.value = ''
+  tenantFilter.value = null
+  pageNum.value = 1
+  void loadList()
+}
+
 async function loadList() {
   loading.value = true
   errorMsg.value = ''
   try {
     const pageQuery: PageQuery = { pageNum: pageNum.value, pageSize: pageSize.value }
     // BF20261013-020：本列表是「业务表单」维护面——审批意见表单归流程管理，不混入
-    const result = await pageFormDefs(pageQuery, undefined, 'BUSINESS')
+    const result = await pageFormDefs(pageQuery, currentKeyword.value || undefined, 'BUSINESS')
     list.value = result.list
     total.value = result.total
   } catch (err) {
@@ -387,29 +429,31 @@ onMounted(loadList)
 
 <template>
   <div class="form-def-page">
-    <!-- 左侧分类树（分类 → 表单，多级）：点分类过滤右侧列表，点表单直接进设计器 -->
-    <CategorySidebar :title="t('form.categoryTreeTitle')" fill>
-      <el-tree
-        :data="categoryTree"
-        node-key="key"
-        :props="{ label: 'label', children: 'children' }"
-        :expand-on-click-node="false"
-        :default-expanded-keys="['all']"
-        highlight-current
-        @node-click="onTreeNodeClick"
-      >
-        <template #default="{ data }">
-          <span class="form-def-page__node">
-            <span class="form-def-page__node-label">{{ data.label }}</span>
-            <span v-if="data.count !== undefined" class="form-def-page__node-count">{{
-              data.count
-            }}</span>
-          </span>
-        </template>
-      </el-tree>
-    </CategorySidebar>
+    <!-- 459:15228（执行提示17）：原全宽外壳——分类能力收进可折叠次区，不再占用固定左栏 -->
+    <el-collapse class="form-def-page__cats">
+      <el-collapse-item :title="t('form.categoryTreeTitle')" name="cats">
+        <el-tree
+          :data="categoryTree"
+          node-key="key"
+          :props="{ label: 'label', children: 'children' }"
+          :expand-on-click-node="false"
+          :default-expanded-keys="['all']"
+          highlight-current
+          @node-click="onTreeNodeClick"
+        >
+          <template #default="{ data }">
+            <span class="form-def-page__node">
+              <span class="form-def-page__node-label">{{ data.label }}</span>
+              <span v-if="data.count !== undefined" class="form-def-page__node-count">{{
+                data.count
+              }}</span>
+            </span>
+          </template>
+        </el-tree>
+      </el-collapse-item>
+    </el-collapse>
     <StandardListTemplate
-      large
+      appearance="design"
       :total="displayTotal"
       :page-num="pageNum"
       :page-size="pageSize"
@@ -417,12 +461,27 @@ onMounted(loadList)
       @update:page-num="handlePageNumChange"
       @update:page-size="handlePageSizeChange"
     >
-      <!-- 工具栏：新建按钮 -->
-      <template #toolbar-actions>
+      <!-- 筛选区（459:15228 执行提示17）：原租户/名称筛选；名称走服务端关键字 -->
+      <template #filter>
+        <ListFilterItem :label="t('system.tenantName')">
+          <el-select v-model="tenantFilter" :placeholder="t('common.all')" clearable>
+            <el-option v-for="tn in tenantOptions" :key="tn.id" :label="tn.name" :value="tn.id" />
+          </el-select>
+        </ListFilterItem>
+        <ListFilterItem :label="t('common.formName')">
+          <el-input
+            v-model="keyword"
+            :placeholder="t('common.pleaseInput')"
+            clearable
+            @keyup.enter="handleQuery"
+          />
+        </ListFilterItem>
+      </template>
+      <template #filter-actions>
+        <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+        <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
         <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
       </template>
-
-      <!-- BF20261013-050：本页不再放名称搜索（Owner：表单管理搜索框去掉；流程中心的搜索保留） -->
 
       <!-- 表格 -->
       <el-alert
@@ -434,22 +493,19 @@ onMounted(loadList)
         style="margin-bottom: 12px"
       />
       <el-table v-loading="loading" :data="displayList" stripe>
+        <!-- 459:15228（执行提示17）：原列 租户/表单/应用/流程/状态/版本/更新/操作，左对齐 -->
+        <el-table-column width="140">
+          <template #header>{{ t('system.tenantName') }}</template>
+          <template #default="{ row }">{{ row.tenantName || '—' }}</template>
+        </el-table-column>
         <el-table-column prop="name" :label="t('common.formName')" min-width="180" />
-        <!-- V012-BUG-015：列为 表单名称/创建人/创建时间/更新时间/发布状态 -->
-        <el-table-column prop="createByName" :label="t('common.creator')" width="120">
-          <template #default="{ row }">
-            {{ row.createByName || '—' }}
-          </template>
+        <el-table-column width="150">
+          <template #header>{{ t('form.appCenter.appName') }}</template>
+          <template #default="{ row }">{{ appNameOf(row.appId) }}</template>
         </el-table-column>
-        <el-table-column prop="createTime" :label="t('common.createTime')" width="170">
-          <template #default="{ row }">
-            {{ formatDateTime(row.createTime) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="updateTime" :label="t('common.updateTime')" width="170">
-          <template #default="{ row }">
-            {{ formatDateTime(row.updateTime) }}
-          </template>
+        <el-table-column width="150">
+          <template #header>{{ t('workflow.processName') }}</template>
+          <template #default>{{ '—' }}</template>
         </el-table-column>
         <el-table-column prop="status" :label="t('form.publishStatus')" width="110">
           <template #default="{ row }">
@@ -457,6 +513,14 @@ onMounted(loadList)
               {{ getFormDefStatusLabel(row.status) }}
             </el-tag>
           </template>
+        </el-table-column>
+        <el-table-column prop="formVersion" width="90">
+          <template #header>{{ t('common.version') }}</template>
+          <template #default="{ row }">v{{ row.formVersion }}</template>
+        </el-table-column>
+        <el-table-column prop="updateTime" width="170">
+          <template #header>{{ t('common.updateTime') }}</template>
+          <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
         </el-table-column>
         <!-- 240：三直显按钮（编辑/发起范围/停用）英文 locale 不裁尾（复核 G1） -->
         <ListActionsColumn :actions="rowActions" :width="240" />
@@ -525,10 +589,10 @@ onMounted(loadList)
 
 <style scoped>
 .form-def-page {
-  /* 用 grid 而不是 flex：右侧列表模板根元素类名不受本文件控制，
-     用列轨道定位更稳（flex 下曾出现模板被挤到下方、页面看起来“崩了”）。 */
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  /* 459:15228（执行提示17）：全宽外壳——分类收进可折叠次区（浮于右上，不推列表起点） */
+  position: relative;
+  display: flex;
+  flex-direction: column;
   /* BF20261013-052：行高取内容区高度（minmax(0,1fr)）而不是由内容撑——
      左列面板据此封顶在列高内，树比面板长时在面板内滚动（Owner：树单独面板内滚动）。 */
   grid-template-rows: minmax(0, 1fr);
@@ -563,5 +627,17 @@ onMounted(loadList)
   color: var(--sw-color-text-secondary);
   font-size: var(--sw-font-size-sm);
   margin: 0 0 12px;
+}
+
+/* 459:15228：分类次区折叠挂右上，不推筛选/表头起点 */
+.form-def-page__cats {
+  position: absolute;
+  top: 8px;
+  right: 20px;
+  z-index: 5;
+  width: 320px;
+  background: #fff;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 8px;
 }
 </style>

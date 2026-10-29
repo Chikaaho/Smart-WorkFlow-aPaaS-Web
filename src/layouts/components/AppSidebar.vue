@@ -440,10 +440,14 @@ const inboxTabs = computed(() => [
   border-radius: var(--sw-radius-base, 6px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
+/* 710:43009（执行提示17）：目录浮层标题 Noto Sans SC/500/14/22/#172033 */
 .app-sidebar-flyout__header {
   padding: 6px 14px 8px;
-  color: var(--sw-text-secondary, #909399);
-  font-size: 12px;
+  color: #172033;
+  font-family: 'Noto Sans SC', inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
 }
 .app-sidebar-flyout__body {
   padding-bottom: 4px;

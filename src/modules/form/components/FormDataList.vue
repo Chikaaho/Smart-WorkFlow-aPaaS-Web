@@ -700,6 +700,7 @@ async function handleExport() {
   <div class="form-data-list">
     <StandardListTemplate
       v-if="canQuery"
+      appearance="design"
       :total="result?.total ?? 0"
       :page-num="pageNum"
       :page-size="pageSize"

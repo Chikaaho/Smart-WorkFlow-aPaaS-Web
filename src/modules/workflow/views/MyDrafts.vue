@@ -13,7 +13,7 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
+import { ListActionsColumn, StandardListTemplate, ListFilterItem } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { myDrafts, deleteDraft, submitDraft, pollCommandStatus } from '@/modules/workflow/api'
 import type { BpmDraft, BpmDraftStatus } from '@/contracts/bpm'
@@ -62,6 +62,20 @@ const STATUS_TAG: Record<
     },
     type: 'danger',
   },
+}
+
+/** 278:1437：标题关键字过滤既有真实记录（仅展示层，不改数据） */
+const titleFilter = ref('')
+const displayList = computed(() => {
+  const kw = titleFilter.value.trim().toLowerCase()
+  if (!kw) return list.value
+  return list.value.filter((row) => (row.title ?? '').toLowerCase().includes(kw))
+})
+
+/** 展示层时间格式：ISO → YYYY-MM-DD HH:mm（仅显示，不改数据） */
+function formatDateTime(value: string | null): string {
+  if (!value) return '-'
+  return value.replace('T', ' ').slice(0, 16)
 }
 
 async function loadList() {
@@ -216,6 +230,7 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
+    appearance="design"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -223,6 +238,31 @@ onMounted(loadList)
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
+    <!-- 筛选容器（278:1437 执行提示17）：@(256,84)/h64；标题关键字过滤既有真实记录 -->
+    <template #filter>
+      <ListFilterItem :label="t('common.title')">
+        <el-input
+          v-model="titleFilter"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="loadList"
+        />
+      </ListFilterItem>
+    </template>
+    <template #filter-actions>
+      <el-button type="primary" @click="loadList">{{ t('common.query') }}</el-button>
+      <el-button
+        @click="
+          (() => {
+            titleFilter = ''
+            void loadList()
+          })()
+        "
+      >
+        {{ t('common.reset') }}
+      </el-button>
+    </template>
+
     <!-- 空态 -->
     <template #empty-action>
       <span />
@@ -239,7 +279,7 @@ onMounted(loadList)
     />
 
     <!-- 表格 -->
-    <el-table v-loading="loading" :data="list" stripe style="width: 100%">
+    <el-table v-loading="loading" :data="displayList" stripe style="width: 100%">
       <el-table-column :label="t('common.title')" min-width="140">
         <template #default="{ row }">
           {{ row.title ?? '-' }}
@@ -263,7 +303,10 @@ onMounted(loadList)
           {{ row.lastError ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="updateTime" :label="t('common.updateTime')" min-width="170" />
+      <el-table-column min-width="170">
+        <template #header>{{ t('common.updateTime') }}</template>
+        <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
+      </el-table-column>
       <ListActionsColumn :actions="draftActions" :width="210" />
     </el-table>
   </StandardListTemplate>

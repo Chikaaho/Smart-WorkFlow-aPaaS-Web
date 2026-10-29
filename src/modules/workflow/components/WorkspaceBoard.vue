@@ -2039,11 +2039,12 @@ onBeforeUnmount(() => {
   font-size: 14px;
   cursor: pointer;
 }
+/* 3:2（执行提示17）：瓦片两行垂直几何——首行 y335/h32、次行 y399（行距 32） */
 .wsd-quickgrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px 16px;
-  margin-top: 12px;
+  gap: 32px 16px;
+  margin-top: 34px;
 }
 .wsd-quick__label {
   width: 100%;
@@ -2054,7 +2055,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
+  height: 32px;
   padding: 0 12px;
   border: 1px solid var(--sw-border-light);
   border-radius: 6px;

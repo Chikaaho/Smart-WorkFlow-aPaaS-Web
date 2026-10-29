@@ -112,6 +112,12 @@ function handleRowDblclick(row: FormDefListItem) {
   confirmSelection()
 }
 
+/** 472:16071 行内选择：点「选择」直接回填并关闭 */
+function handleRowPick(row: FormDefListItem) {
+  selectedFormKey.value = row.formKey
+  confirmSelection()
+}
+
 /* ── 确认 / 取消 ── */
 
 function confirmSelection() {
@@ -155,18 +161,12 @@ watch(
     :title="title ?? '选择审批意见表单'"
     :close-on-click-modal="false"
     destroy-on-close
-    width="720px"
+    align-center
+    width="640px"
     @update:model-value="emit('update:visible', $event)"
   >
     <div class="form-select">
-      <!-- 提示条：只展示与当前场景匹配的已发布表单 -->
-      <el-alert type="info" :closable="false" show-icon style="margin-bottom: var(--sw-space-16)">
-        <template #title>{{
-          formType === 'BUSINESS' ? '仅展示已发布的业务表单' : '仅展示已发布的审批意见表单'
-        }}</template>
-      </el-alert>
-
-      <!-- 搜索栏 -->
+      <!-- 搜索栏（472:16071 执行提示17：640 居中、32 搜索、无提示条） -->
       <div class="form-select__search">
         <el-input
           v-model="keyword"
@@ -203,6 +203,18 @@ watch(
             <el-tag :type="getFormDefStatusType(row.status)" size="small">
               {{ getFormDefStatusLabel(row.status) }}
             </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column width="70">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              :data-testid="'form-select-pick-' + (row as FormDefListItem).formKey"
+              @click.stop="handleRowPick(row as FormDefListItem)"
+            >
+              {{ t('form.confirmSelection') }}
+            </el-button>
           </template>
         </el-table-column>
 
@@ -249,5 +261,9 @@ watch(
   display: flex;
   align-items: center;
   gap: var(--sw-space-8);
+}
+/* 472:16071（执行提示17）：清单行高 48 */
+.form-select :deep(.el-table td.el-table__cell) {
+  height: 48px;
 }
 </style>

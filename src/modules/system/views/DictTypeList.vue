@@ -265,7 +265,6 @@ onMounted(loadList)
 <template>
   <StandardListTemplate
     appearance="design"
-    :title="t('system.dictManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -273,20 +272,21 @@ onMounted(loadList)
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <!-- 工具栏：新建按钮 -->
-    <template #toolbar-actions>
-      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
-    </template>
-
-    <!-- 筛选区 -->
+    <!-- 筛选区（446:14964 执行提示17）：名称 x337/w220、状态 x627/w300；编码筛选保留在剩余空间 -->
     <template #filter>
-      <ListFilterItem :label="t('system.dictName')">
+      <ListFilterItem class="dict-list__name-filter" :label="t('system.dictName')">
         <el-input
           v-model="filter.name"
           :placeholder="t('common.pleaseInput')"
           clearable
           @keyup.enter="handleQuery"
         />
+      </ListFilterItem>
+      <ListFilterItem class="dict-list__status-filter" :label="t('common.status')">
+        <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
+          <el-option :label="t('common.statusNormal')" :value="0" />
+          <el-option :label="t('common.disable')" :value="1" />
+        </el-select>
       </ListFilterItem>
       <ListFilterItem :label="t('system.dictCode')">
         <el-input
@@ -296,16 +296,11 @@ onMounted(loadList)
           @keyup.enter="handleQuery"
         />
       </ListFilterItem>
-      <ListFilterItem :label="t('common.status')">
-        <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
-          <el-option :label="t('common.statusNormal')" :value="0" />
-          <el-option :label="t('common.disable')" :value="1" />
-        </el-select>
-      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
       <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
     </template>
 
     <!-- 表格区 -->
@@ -333,6 +328,11 @@ onMounted(loadList)
         min-width="160"
         show-overflow-tooltip
       />
+      <!-- 446:14964（执行提示17）：恢复更新时间列（真实 update_time，无值显示空） -->
+      <el-table-column width="170">
+        <template #header>{{ t('common.updateTime') }}</template>
+        <template #default="{ row }">{{ row.updateTime || '' }}</template>
+      </el-table-column>
       <!-- BF20261013-038 全局巡检：150 装不下「编辑/管理字典项/删除」三格（实测中文 166、英文 181），
            末格被裁 48px；按四格标准放宽到 200 -->
       <ListActionsColumn :actions="rowActions" :width="200" />
@@ -494,6 +494,16 @@ onMounted(loadList)
   box-sizing: border-box;
   height: 80px;
   min-height: 80px;
+}
+
+/* 446:14964（执行提示17）：名称筛选框 220（x337=257+72+8）、状态筛选框 300（x627） */
+.dict-list__name-filter {
+  grid-template-columns: 57px 220px !important;
+  width: max-content;
+}
+.dict-list__status-filter {
+  grid-template-columns: 50px 300px !important;
+  width: max-content;
 }
 </style>
 

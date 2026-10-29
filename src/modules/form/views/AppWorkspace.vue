@@ -168,7 +168,12 @@ async function handleDeleteDir(dir: { id: string; name: string }) {
     await ElMessageBox.confirm(
       t('form.appCenter.deleteDirConfirm', { name: dir.name }),
       t('common.deleteConfirmTitle'),
-      { type: 'warning' },
+      {
+        type: 'warning',
+        customClass: 'sw-delete-confirm',
+        confirmButtonText: t('common.delete'),
+        cancelButtonText: t('common.cancel'),
+      },
     )
   } catch {
     return
@@ -264,7 +269,12 @@ async function handleDeleteForm(item: FormAppFormItem) {
     await ElMessageBox.confirm(
       t('form.appCenter.deleteFormConfirm', { name: item.name }),
       t('common.deleteConfirmTitle'),
-      { type: 'warning' },
+      {
+        type: 'warning',
+        customClass: 'sw-delete-confirm',
+        confirmButtonText: t('common.delete'),
+        cancelButtonText: t('common.cancel'),
+      },
     )
   } catch {
     return
@@ -396,5 +406,29 @@ onMounted(() => {
   align-items: stretch;
   flex: 1;
   min-height: 0;
+}
+</style>
+
+<style>
+/* 527:24284（执行提示17）：删除表单/目录确认浮层 440 宽居中、删除按钮原危险红 80×32 */
+.sw-delete-confirm {
+  width: 440px !important;
+  min-height: 172px;
+  border-radius: 12px;
+  /* EP 以内联 --el-messagebox-width 定宽，需覆盖变量 */
+  --el-messagebox-width: 440px;
+}
+.sw-delete-confirm .el-message-box__btns .el-button {
+  min-width: 80px;
+  width: 80px;
+  height: 32px;
+}
+.sw-delete-confirm .el-message-box__btns .el-button--primary {
+  background-color: #d93026;
+  border-color: #d93026;
+}
+.sw-delete-confirm .el-message-box__btns .el-button--primary:not(:hover):not(:focus) {
+  background-color: #d93026;
+  border-color: #d93026;
 }
 </style>

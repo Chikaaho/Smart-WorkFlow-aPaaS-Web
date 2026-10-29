@@ -13,6 +13,10 @@ import {
   DArrowRight,
   Folder,
   MoreFilled,
+  Edit,
+  Plus,
+  Delete,
+  EditPen,
 } from '@element-plus/icons-vue'
 import type { FormAppDir, FormAppFormItem } from '@/contracts/app-center'
 import { hasPerm } from '@/foundation/permission'
@@ -143,6 +147,7 @@ const navCollapsed = ref(false)
               v-if="canManage"
               class="app-tree-nav__more"
               trigger="click"
+              popper-class="sw-op-menu"
               @command="(cmd: string) => emit('dir-command', cmd, dir)"
             >
               <span
@@ -154,12 +159,14 @@ const navCollapsed = ref(false)
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
-                  <el-dropdown-item command="form">
-                    {{ t('form.appCenter.newFormInDir') }}
+                  <el-dropdown-item command="rename">
+                    <el-icon><Edit /></el-icon>{{ t('common.edit') }}
                   </el-dropdown-item>
-                  <el-dropdown-item command="delete" divided>
-                    {{ t('common.delete') }}
+                  <el-dropdown-item command="form">
+                    <el-icon><Plus /></el-icon>{{ t('form.appCenter.newFormInDir') }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="delete" divided class="sw-op-menu__danger">
+                    <el-icon><Delete /></el-icon>{{ t('common.delete') }}
                   </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -182,6 +189,7 @@ const navCollapsed = ref(false)
                 v-if="canManage"
                 class="app-tree-nav__more"
                 trigger="click"
+                popper-class="sw-op-menu"
                 @command="(cmd: string) => emit('form-command', cmd, item)"
               >
                 <span class="app-tree-nav__more-trigger" @click.stop>
@@ -190,11 +198,13 @@ const navCollapsed = ref(false)
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="design">
-                      {{ t('form.appCenter.enterFormDesign') }}
+                      <el-icon><EditPen /></el-icon>{{ t('form.appCenter.enterFormDesign') }}
                     </el-dropdown-item>
-                    <el-dropdown-item command="rename">{{ t('common.edit') }}</el-dropdown-item>
-                    <el-dropdown-item command="delete" divided>
-                      {{ t('common.delete') }}
+                    <el-dropdown-item command="rename">
+                      <el-icon><Edit /></el-icon>{{ t('common.edit') }}
+                    </el-dropdown-item>
+                    <el-dropdown-item command="delete" divided class="sw-op-menu__danger">
+                      <el-icon><Delete /></el-icon>{{ t('common.delete') }}
                     </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -249,11 +259,12 @@ const navCollapsed = ref(false)
 </template>
 
 <style scoped>
+/* 272:851（执行提示17）：应用内数据页展开侧栏 236 */
 .app-tree-nav {
   display: flex;
-  flex: 0 0 240px;
+  flex: 0 0 236px;
   flex-direction: column;
-  width: 240px;
+  width: 236px;
   min-height: 0;
   background: #fff;
   border-right: 1px solid #ebeef5;
@@ -499,5 +510,31 @@ const navCollapsed = ref(false)
 
 .app-tree-nav__foot :deep(.el-button) {
   width: 100%;
+}
+</style>
+
+<style>
+/* 273:1709/1731（执行提示17）：目录/表单操作菜单 192 宽、行 38、左图标、危险项红 */
+.sw-op-menu {
+  width: 192px;
+}
+.sw-op-menu .el-dropdown-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  line-height: 38px;
+  padding: 0 16px;
+}
+.sw-op-menu .el-dropdown-menu__item .el-icon {
+  margin-right: 0;
+}
+.sw-op-menu .sw-op-menu__danger {
+  color: #d93026;
+}
+.sw-op-menu .sw-op-menu__danger:not(.is-disabled):hover,
+.sw-op-menu .sw-op-menu__danger:not(.is-disabled):focus {
+  color: #d93026;
+  background-color: #fdf0f1;
 }
 </style>
