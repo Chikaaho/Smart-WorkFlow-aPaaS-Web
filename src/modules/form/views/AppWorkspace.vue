@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Document, Folder, Plus } from '@element-plus/icons-vue'
 import AppContentPanel from '@/modules/form/components/AppContentPanel.vue'
 import AppTreeNav from '@/modules/form/components/AppTreeNav.vue'
 import {
@@ -314,17 +314,23 @@ onMounted(() => {
         @form-command="onFormCommand"
       >
         <template #footer>
-          <el-dropdown v-perm="'form:app:manage'" trigger="click" @command="onCreateCommand">
+          <!-- 273:1773（执行提示28 项1）：底部新建菜单 192 宽/项 36 高/带原图标；sw-op-menu 样式根在 AppTreeNav 全局块 -->
+          <el-dropdown
+            v-perm="'form:app:manage'"
+            trigger="click"
+            popper-class="sw-op-menu"
+            @command="onCreateCommand"
+          >
             <el-button class="app-ws__create" data-testid="app-ws-create" :icon="Plus">
               {{ t('form.appCenter.createAction') }}
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="dir" data-testid="dir-create">
-                  {{ t('form.appCenter.newDir') }}
+                  <el-icon><Folder /></el-icon>{{ t('form.appCenter.newDir') }}
                 </el-dropdown-item>
                 <el-dropdown-item command="form" data-testid="form-create">
-                  {{ t('form.appCenter.newForm') }}
+                  <el-icon><Document /></el-icon>{{ t('form.appCenter.newForm') }}
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>

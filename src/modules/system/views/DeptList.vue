@@ -24,12 +24,7 @@ import type { SysDept, DeptQuery } from '@/modules/system/types/dept'
 import type { SysUser } from '@/modules/system/types/user'
 import { pageUsers } from '@/modules/system/api/user'
 import { hasPerm } from '@/foundation/permission'
-import {
-  SYS_DEPT_STATUS,
-  deptStatusOptions,
-  deptStatusTagType,
-  deptStatusLabel,
-} from '@/modules/system/constants'
+import { SYS_DEPT_STATUS, deptStatusOptions, deptStatusLabel } from '@/modules/system/constants'
 import { ListToolbar, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
@@ -476,8 +471,12 @@ onMounted(() => {
           :value="opt.value"
         />
       </el-select>
-      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
-      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+      <el-button class="dept-list__filter-btn" type="primary" @click="handleQuery">{{
+        t('common.query')
+      }}</el-button>
+      <el-button class="dept-list__filter-btn" @click="handleReset">{{
+        t('common.reset')
+      }}</el-button>
       <el-button v-perm="'system:dept:create'" type="primary" @click="openCreate()">{{
         t('system.newDept')
       }}</el-button>
@@ -526,9 +525,9 @@ onMounted(() => {
         <el-table-column prop="sort" :label="t('common.sort')" width="70" />
         <el-table-column prop="status" :label="t('common.status')" width="80">
           <template #default="{ row }">
-            <el-tag v-if="!row.tenantGroup" :type="deptStatusTagType(row.status)" size="small">
-              {{ deptStatusLabel(row.status) }}
-            </el-tag>
+            <span v-if="!row.tenantGroup" class="sys-status-text">{{
+              deptStatusLabel(row.status)
+            }}</span>
           </template>
         </el-table-column>
         <ListActionsColumn :actions="rowActions" :width="150" />
@@ -688,6 +687,45 @@ onMounted(() => {
   background: var(--sw-surface-card);
   border: 1px solid var(--sw-border-light);
   border-radius: var(--sw-radius-base);
+}
+
+/* 459:13104：查询/重置 72×32；动作按钮间距统一交给 flex gap */
+.dept-list__filter :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+.dept-list__filter-btn {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* 459:13104：标题行 28px（y164-192），展开/收起 72×28；表外沿落在 y208 */
+.dept-list :deep(.list-toolbar) {
+  margin-bottom: 0;
+  min-height: 28px;
+}
+.dept-list :deep(.list-toolbar .el-button) {
+  width: 72px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+}
+
+/* 459:13104：44 表头（灰底同页面背景）/53 数据行，与 StandardListTemplate design 基线一致 */
+.dept-list__table-card :deep(.el-table__header-wrapper th) {
+  box-sizing: border-box;
+  height: var(--sw-list-design-header-height);
+  background: var(--sw-surface-page);
+  font-weight: var(--sw-font-weight-body);
+  border-bottom-color: transparent;
+}
+.dept-list__table-card :deep(.el-table__body-wrapper .el-table__row) {
+  height: var(--sw-list-design-row-height);
+}
+.dept-list__table-card :deep(.el-table .cell) {
+  line-height: 22px;
 }
 
 .dept-list__empty {

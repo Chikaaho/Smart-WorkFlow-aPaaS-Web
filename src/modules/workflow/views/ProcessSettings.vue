@@ -497,19 +497,22 @@ onMounted(load)
   align-items: flex-start;
   gap: 36px;
 }
+/* 0.2.0 Q09（设计 50:88）：导航按钮 188×32——容器保持 188 外宽（内容卡起点 x244 不动），
+   内边距与描边让位给按钮：按钮整宽填充、外角随容器圆角裁切。 */
 .ps-nav {
   box-sizing: border-box;
   display: flex;
   flex: 0 0 188px;
   flex-direction: column;
   gap: 4px;
-  padding: 8px;
+  padding: 0;
   border-radius: var(--sw-radius-card, 10px);
   background: var(--sw-surface-card);
-  border: 1px solid var(--sw-border-light);
+  overflow: hidden;
 }
 .ps-nav__item {
-  height: 38px;
+  width: 100%;
+  height: 32px;
   padding: 0 16px;
   border: 0;
   border-radius: var(--sw-radius-base);
@@ -553,6 +556,23 @@ onMounted(load)
   align-items: center;
   gap: 28px;
   min-height: 32px;
+}
+/* 0.2.0 Q09（设计 50:88）：本页勾选视觉框回到 14×14——tokens.css（BF20261013-016）
+   的全局 2 倍放大在本页让位；点击热区仍由 el-checkbox 默认 32px 行高保留。 */
+.ps-page :deep(.el-checkbox__inner),
+.ps-page :deep(.el-checkbox--small .el-checkbox__inner),
+.ps-page :deep(.el-checkbox--large .el-checkbox__inner) {
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 2px;
+}
+.ps-page :deep(.el-checkbox__inner::after),
+.ps-page :deep(.el-checkbox--small .el-checkbox__inner::after),
+.ps-page :deep(.el-checkbox--large .el-checkbox__inner::after) {
+  width: 3px !important;
+  height: 7px !important;
+  border-right-width: 1px !important;
+  border-bottom-width: 1px !important;
 }
 .ps-hint {
   margin: 8px 0 0;

@@ -25,6 +25,7 @@ import type { SysDictData, DictDataFilter } from '@/modules/system/types/dict'
 import type { PageQuery } from '@/contracts/common'
 import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
+import { ArrowLeft } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -316,6 +317,13 @@ function handleGoBack() {
   void router.push({ path: '/system/dict' })
 }
 
+/** 459:14490：列表标题行承接返回与字典类型标题（「{类型名} / 字典项」），无独立页级返回条 */
+const listTitle = computed(() =>
+  dictName.value
+    ? t('system.dictItemTitlePath', { dictName: dictName.value })
+    : t('system.dictItemManagement'),
+)
+
 // el-table row slot 的 DefaultRow 类型不与 SysDictData 兼容，通过包装函数桥接。
 function editRow(r: unknown) {
   openEdit(r as SysDictData)
@@ -345,18 +353,6 @@ onMounted(() => void initialize())
 </script>
 
 <template>
-  <!-- 返回导航 + 字典类型信息 -->
-  <div class="dict-data-header">
-    <el-button link type="primary" @click="handleGoBack">
-      {{ t('system.backToDictTypeList') }}
-    </el-button>
-    <span class="dict-data-header__info">
-      <template v-if="dictName">{{
-        t('system.dictTypeWithCode', { dictName, dictCode })
-      }}</template>
-      <template v-else>{{ t('system.dictCodeLabel', { dictCode }) }}</template>
-    </span>
-  </div>
   <el-alert
     v-if="typeError"
     :title="typeError"
@@ -367,8 +363,8 @@ onMounted(() => void initialize())
   />
 
   <StandardListTemplate
+    class="dict-data-page"
     appearance="design"
-    :title="t('system.dictItemManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -376,6 +372,19 @@ onMounted(() => void initialize())
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
+    <!-- 459:14490：标题行（y164）承接返回入口与字典类型标题，不再单设页级返回条 -->
+    <template #table-title>
+      <el-button
+        link
+        class="dict-data-back"
+        :aria-label="t('system.backToDictTypeList')"
+        @click="handleGoBack"
+      >
+        <el-icon><ArrowLeft /></el-icon>
+      </el-button>
+      <span class="dict-data-title">{{ listTitle }}</span>
+    </template>
+
     <!-- 工具栏：新建按钮 -->
     <template #toolbar-actions>
       <el-button type="primary" :disabled="!dictCode" @click="openCreate">{{
@@ -451,9 +460,7 @@ onMounted(() => void initialize())
       </el-table-column>
       <el-table-column prop="isDefault" :label="t('system.defaultLabel')" width="70" align="center">
         <template #default="{ row }">
-          <el-tag :type="row.isDefault === 1 ? 'warning' : 'info'" size="small">
-            {{ row.isDefault === 1 ? t('common.yes') : t('common.no') }}
-          </el-tag>
+          <span>{{ row.isDefault === 1 ? t('common.yes') : t('common.no') }}</span>
         </template>
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="120" />
@@ -569,17 +576,26 @@ onMounted(() => void initialize())
 </template>
 
 <style scoped>
-.dict-data-header {
-  display: flex;
-  align-items: center;
-  gap: var(--sw-space-16);
-  padding: var(--sw-space-16) var(--sw-space-24);
-  margin-bottom: var(--sw-space-8);
+/* 459:14490：标题行 24px（y164-188）承接返回与字典标题；去掉模板 panel-head 自带
+   8px 下边距，让筛选 84/64、表外沿 208 与其他 design 列表一致。 */
+.dict-data-page :deep(.standard-list__panel-head) {
+  justify-content: flex-start;
+  gap: var(--sw-space-8);
+  margin-bottom: 0;
 }
 
-.dict-data-header__info {
-  font-size: var(--sw-font-secondary);
+.dict-data-back {
+  height: 24px;
+  padding: 0;
+  font-size: 14px;
   color: var(--sw-text-secondary);
+}
+
+.dict-data-title {
+  font-size: var(--sw-font-h2);
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: 24px;
+  color: var(--sw-text-primary);
 }
 
 .form-field {

@@ -224,7 +224,7 @@ function handleDeptTreeCheck() {
 
 // ─── 弹窗状态 ───
 
-// ─── 成员维护弹窗（I1：角色成员反向视图） ───
+// ─── 成员维护弹窗（I1：角色成员反向视图；446:16226 执行提示28：暂存语义，保存才生效） ───
 
 const membersDialogVisible = ref(false)
 const membersRole = ref<SysRole | null>(null)
@@ -237,9 +237,47 @@ const membersError = ref('')
 const candidateUser = ref('')
 const candidateOptions = ref<SysUser[]>([])
 
+/** 待提交变更（仅前端暂存）：新增成员 / 待移除成员 id；保存才写回，取消不写入 */
+const pendingAddUsers = ref<SysUser[]>([])
+const pendingRemoveIds = ref<string[]>([])
+const membersSaving = ref(false)
+
+type MemberRowState = 'pending-add' | 'effective' | 'pending-remove'
+interface MemberRow {
+  user: SysUser
+  state: MemberRowState
+}
+
+/** 展示行 = 待提交新增（置顶）+ 已生效成员（服务端当前页，待移除者标记） */
+const memberRows = computed<MemberRow[]>(() => {
+  const rows: MemberRow[] = pendingAddUsers.value.map((user) => ({
+    user,
+    state: 'pending-add' as const,
+  }))
+  for (const user of members.value) {
+    const id = String(user.id ?? '')
+    rows.push({
+      user,
+      state: pendingRemoveIds.value.includes(id) ? 'pending-remove' : 'effective',
+    })
+  }
+  return rows
+})
+
+const hasMembersPending = computed(
+  () => pendingAddUsers.value.length > 0 || pendingRemoveIds.value.length > 0,
+)
+
+function resetMembersStaging() {
+  pendingAddUsers.value = []
+  pendingRemoveIds.value = []
+  membersSaving.value = false
+}
+
 function openMembers(row: SysRole) {
   membersRole.value = row
   membersPageNum.value = 1
+  resetMembersStaging()
   membersDialogVisible.value = true
   void loadMembers()
   void loadCandidates()
@@ -293,60 +331,76 @@ async function loadCandidates(keyword = '') {
   }
 }
 
-/** 添加成员：读取用户现有角色，追加本角色后整量写回 */
+/** 添加成员 → 暂存为「待提交」（复用既有 getUserRoles 查重，只读不写） */
 async function addMember(user: SysUser) {
   if (!membersRole.value?.id || !user.id) return
+  if (pendingAddUsers.value.some((item) => item.id === user.id)) return
   try {
     const existing = await getUserRoles(user.id)
     if (existing.includes(membersRole.value.id)) {
       ElMessage.info(t('system.userAlreadyRoleMember'))
       return
     }
-    await updateUserRoles(user.id, [...existing, membersRole.value.id])
-    ElMessage.success(t('system.memberAdded'))
+    pendingAddUsers.value = [...pendingAddUsers.value, user]
     candidateUser.value = ''
-    await loadMembers()
   } catch (err) {
     ElMessage.error(err instanceof ApiError ? err.msg : t('system.memberAddFailed'))
   }
 }
 
-/** 移除成员：读取用户现有角色，剔除本角色后整量写回 */
-async function removeMember(user: SysUser) {
-  if (!membersRole.value?.id || !user.id) return
+/** 移除已生效成员 → 暂存为「待移除」（不写库；保存时统一写回） */
+function removeMember(user: SysUser) {
+  const id = String(user.id ?? '')
+  if (!id || pendingRemoveIds.value.includes(id)) return
+  pendingRemoveIds.value = [...pendingRemoveIds.value, id]
+}
+
+/** 撤销「待移除」标记（成员保持已生效） */
+function undoRemoveMember(user: SysUser) {
+  pendingRemoveIds.value = pendingRemoveIds.value.filter((id) => id !== String(user.id ?? ''))
+}
+
+/** 撤销「待提交」新增 */
+function unstageAddMember(user: SysUser) {
+  pendingAddUsers.value = pendingAddUsers.value.filter((item) => item.id !== user.id)
+}
+
+/** 保存：按暂存集整量写回每个用户的角色列表（既有 updateUserRoles 能力），成功后清空暂存 */
+async function saveMembers() {
+  if (!membersRole.value?.id || membersSaving.value || !hasMembersPending.value) return
+  const roleId = membersRole.value.id
+  membersSaving.value = true
   try {
-    await ElMessageBox.confirm(
-      t('system.confirmRemoveRoleMember', { name: membersRole.value.name }),
-      t('system.removeConfirmTitle'),
-      {
-        get confirmButtonText() {
-          return t('common.confirm')
-        },
-        get cancelButtonText() {
-          return t('common.cancel')
-        },
-        type: 'warning',
-      },
-    )
-  } catch {
-    return
-  }
-  try {
-    const existing = await getUserRoles(user.id)
-    await updateUserRoles(
-      user.id,
-      existing.filter((id) => id !== membersRole.value!.id),
-    )
-    ElMessage.success(t('system.memberRemoved'))
+    for (const user of pendingAddUsers.value) {
+      const existing = await getUserRoles(user.id!)
+      if (existing.includes(roleId)) continue
+      await updateUserRoles(user.id!, [...existing, roleId])
+    }
+    for (const id of pendingRemoveIds.value) {
+      const existing = await getUserRoles(id)
+      await updateUserRoles(
+        id,
+        existing.filter((item) => item !== roleId),
+      )
+    }
+    ElMessage.success(t('system.roleMembersSaved'))
+    resetMembersStaging()
+    membersPageNum.value = 1
     await loadMembers()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : t('system.memberRemoveFailed'))
+    ElMessage.error(err instanceof ApiError ? err.msg : t('system.roleMembersSaveFailed'))
+  } finally {
+    membersSaving.value = false
   }
 }
 
-// el-table row slot 的 DefaultRow 类型不与 SysUser 兼容，通过包装函数桥接。
-function removeMemberRow(r: unknown) {
-  removeMember(r as SysUser)
+// el-table row slot 的 DefaultRow 类型不与 MemberRow 兼容，通过包装函数桥接：
+// 待提交新增 → 撤销暂存；待移除 → 恢复；已生效 → 暂存移除。
+function memberRowAction(r: unknown) {
+  const row = r as MemberRow
+  if (row.state === 'pending-add') unstageAddMember(row.user)
+  else if (row.state === 'pending-remove') undoRemoveMember(row.user)
+  else removeMember(row.user)
 }
 
 const dialogVisible = ref(false)
@@ -790,11 +844,13 @@ onMounted(loadList)
       >
     </template>
   </el-dialog>
-  <!-- 成员维护弹窗（I1） -->
+  <!-- 成员维护弹窗（I1；446:16226：860 宽，44 表头/53 行，底部保存/取消，暂存语义） -->
   <el-dialog
     v-model="membersDialogVisible"
+    class="role-members-dialog"
     :title="t('system.roleMembersDialogTitle', { name: membersRole?.name ?? '' })"
-    width="640px"
+    width="860px"
+    @closed="resetMembersStaging"
   >
     <el-alert
       v-if="membersError"
@@ -832,14 +888,52 @@ onMounted(loadList)
         >{{ t('common.add') }}</el-button
       >
     </div>
-    <el-table v-loading="membersLoading" :data="members" stripe size="small">
-      <el-table-column prop="username" :label="t('common.username')" min-width="120" />
-      <el-table-column prop="realName" :label="t('system.fullName')" min-width="100" />
-      <el-table-column :label="t('common.actions')" width="90">
+    <!-- 待提交变更摘要：保存才生效，取消不写入 -->
+    <div v-if="hasMembersPending" class="role-members__pending" data-testid="role-members-pending">
+      {{
+        t('system.roleMembersPendingSummary', {
+          adds: pendingAddUsers.length,
+          removes: pendingRemoveIds.length,
+        })
+      }}
+    </div>
+    <el-table v-loading="membersLoading" :data="memberRows">
+      <el-table-column prop="username" :label="t('common.username')" min-width="200">
         <template #default="{ row }">
-          <el-button size="small" link type="danger" @click="removeMemberRow(row)">{{
-            t('common.remove')
-          }}</el-button>
+          <span>{{ (row as MemberRow).user.username }}</span>
+          <el-tag
+            v-if="(row as MemberRow).state === 'pending-add'"
+            class="role-members__mark"
+            size="small"
+            type="warning"
+            >{{ t('system.roleMembersPendingAdd') }}</el-tag
+          >
+          <el-tag
+            v-else-if="(row as MemberRow).state === 'pending-remove'"
+            class="role-members__mark"
+            size="small"
+            type="danger"
+            >{{ t('system.roleMembersPendingRemove') }}</el-tag
+          >
+        </template>
+      </el-table-column>
+      <el-table-column min-width="180">
+        <template #header>{{ t('system.fullName') }}</template>
+        <template #default="{ row }">{{ (row as MemberRow).user.realName }}</template>
+      </el-table-column>
+      <el-table-column :label="t('common.actions')" width="100">
+        <template #default="{ row }">
+          <el-button
+            size="small"
+            link
+            :type="(row as MemberRow).state === 'pending-remove' ? 'primary' : 'danger'"
+            @click="memberRowAction(row)"
+            >{{
+              (row as MemberRow).state === 'pending-remove'
+                ? t('system.roleMembersUndoRemove')
+                : t('common.remove')
+            }}</el-button
+          >
         </template>
       </el-table-column>
     </el-table>
@@ -851,6 +945,16 @@ onMounted(loadList)
       @update:page-num="handleMembersPageChange"
       @update:page-size="handleMembersPageSizeChange"
     />
+    <template #footer>
+      <el-button @click="membersDialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button
+        type="primary"
+        :loading="membersSaving"
+        :disabled="!hasMembersPending"
+        @click="saveMembers"
+        >{{ t('common.save') }}</el-button
+      >
+    </template>
   </el-dialog>
 </template>
 
@@ -974,5 +1078,36 @@ onMounted(loadList)
 }
 .role-editor .el-dialog__footer {
   flex: 0 0 auto;
+}
+
+/* 446:16226（执行提示28）：角色成员弹窗 860 宽，44 表头/53 数据行，底部 80×32 保存/取消靠右。 */
+.role-members-dialog .el-table__header-wrapper th.el-table__cell {
+  box-sizing: border-box;
+  height: var(--sw-list-design-header-height);
+  background: var(--sw-surface-page);
+  font-weight: var(--sw-font-weight-body);
+}
+.role-members-dialog .el-table__body-wrapper .el-table__row {
+  height: var(--sw-list-design-row-height);
+}
+.role-members-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.role-members-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+.role-members__pending {
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--sw-text-secondary);
+}
+.role-members__mark {
+  margin-left: 8px;
 }
 </style>

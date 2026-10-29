@@ -556,9 +556,13 @@ async function saveDraft() {
   await doSave()
 }
 
-/* ── V011-BUG-015：已发布表单发布新版本（原子落库，不经草稿） ── */
+/* ── V011-BUG-015：已发布表单发布新版本（原子落库，不经草稿） ──
+   Q55（272:1594）：确认改用 580 宽自定义对话框（取消/发布 80×32，说明用业务语言）；
+   校验前置与确认/取消语义与原 ElMessageBox 流程一致。 */
+const publishConfirmVisible = ref(false)
+const publishConfirmBusy = ref(false)
 
-async function publishNewVersion() {
+function publishNewVersion() {
   if (rejected.value || !formId.value) return
   if (savePhase.value === 'saving') return
   const eventErrors = validateFormEvents(formEvents.value)
@@ -571,19 +575,12 @@ async function publishNewVersion() {
     ElMessage.warning(preCheckError)
     return
   }
-  try {
-    await ElMessageBox.confirm(
-      t('form.publishNewVersionConfirm'),
-      t('common.publishConfirmTitle'),
-      {
-        confirmButtonText: t('form.publishNewVersion'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning',
-      },
-    )
-  } catch {
-    return
-  }
+  publishConfirmVisible.value = true
+}
+
+async function confirmPublishNewVersion() {
+  if (publishConfirmBusy.value || !formId.value) return
+  publishConfirmBusy.value = true
   savePhase.value = 'saving'
   try {
     await publishNewFormVersion(formId.value, JSON.stringify(buildDefinition()))
@@ -592,6 +589,9 @@ async function publishNewVersion() {
     loadForm(formId.value)
   } catch {
     savePhase.value = 'error'
+  } finally {
+    publishConfirmBusy.value = false
+    publishConfirmVisible.value = false
   }
 }
 
@@ -976,6 +976,25 @@ async function loadBreadcrumbCategory() {
       :form-status="status"
       @restored="reloadAfterRestore"
     />
+
+    <!-- Q55（272:1594）：发布确认——580 宽 / 取消·发布 80×32；说明为业务语言，确认动作与原绑定一致 -->
+    <el-dialog
+      v-model="publishConfirmVisible"
+      class="designer-publish-dialog"
+      :title="t('common.publish')"
+      width="580px"
+      append-to-body
+    >
+      <p class="designer-publish-dialog__message">{{ t('form.publishNewVersionConfirm') }}</p>
+      <template #footer>
+        <el-button :disabled="publishConfirmBusy" @click="publishConfirmVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button type="primary" :loading="publishConfirmBusy" @click="confirmPublishNewVersion">
+          {{ t('common.publish') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -1425,5 +1444,35 @@ async function loadBreadcrumbCategory() {
   position: static;
   top: auto;
   left: auto;
+}
+
+/* ═══ Q55 发布确认（272:1594）：580 宽弹窗，底栏 取消/发布 80×32 ═══
+   append-to-body 弹层，样式落真实弹窗根（类名本页专用）。 */
+.el-dialog.designer-publish-dialog {
+  --el-dialog-border-radius: 12px;
+}
+
+.el-dialog.designer-publish-dialog .el-dialog__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2a44;
+}
+
+.el-dialog.designer-publish-dialog .el-dialog__body {
+  padding-top: 8px;
+}
+
+.el-dialog.designer-publish-dialog .designer-publish-dialog__message {
+  margin: 0;
+  color: #303133;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.el-dialog.designer-publish-dialog .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  padding: 0;
 }
 </style>

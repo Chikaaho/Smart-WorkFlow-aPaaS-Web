@@ -26,7 +26,7 @@ const { t } = useI18n()
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft, Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
 import {
   getProcessDefDefinition,
   getDefVersionGraph,
@@ -1932,16 +1932,18 @@ const selectedCapability = computed(() => {
 /** 参与人结构化面板覆盖的节点类型；其余节点保持既有 approver/object 渲染路径。 */
 const PARTICIPANT_PANEL_NODE_TYPES = ['APPROVAL', 'CONSENSUS']
 
-/** 参与人策略展示名（本批改动文件域不含 locale 资源，文案先落在设计器，后续可迁 locale 键）。 */
+/** 参与人策略展示名（本批改动文件域不含 locale 资源，文案先落在设计器，后续可迁 locale 键）。
+ *  审查28 D08-B：主分段前两项按设计原图命名（指定人员/表单组件）；
+ *  表达式与 JS 脚本是两种真实来源，独立表达式不得冒充 JS，第三主分段保留真实名「表达式」。 */
 const PARTICIPANT_STRATEGY_LABELS: Record<ParticipantStrategy, string> = {
-  FIXED_USER: '选择人员',
+  FIXED_USER: '指定人员',
   ROLE: '选择角色',
   DEPT_LEADER: '选择部门',
   POST: '选择岗位',
   DEPT_POST: '部门岗位',
   EXPRESSION: '表达式',
   ADAPTER: '外部适配器',
-  FORM_FIELD: '表单字段',
+  FORM_FIELD: '表单组件',
   NODE_FORM_AGGREGATE: '节点表单聚合',
 }
 
@@ -2008,7 +2010,9 @@ watch(
 /** 打开节点时检测到的参与人数据形态（旧数据兼容展示提示的依据）。 */
 const participantShape = ref<ParticipantShapeKind>('empty')
 
-/* 审查23 D08-B：分段顺序按原图——指定人员/表单组件/JS脚本在前，其余合法策略保留在后。 */
+/* 审查28 D08-B：主行收为设计原图三项主分段（指定人员/表单组件/表达式），单行 32 高；
+ * 角色/部门/岗位等额外合法策略整体移入次级切换，展开后仍可达（32 高），
+ * 来源策略契约本身零改动——仅展示分组。 */
 const PARTICIPANT_SOURCE_SEGMENT_ORDER = ['FIXED_USER', 'FORM_FIELD', 'EXPRESSION']
 const participantSourceSegments = computed(() => {
   const options = participantStrategyOptions.value
@@ -2018,6 +2022,29 @@ const participantSourceSegments = computed(() => {
   const tail = options.filter((option) => !PARTICIPANT_SOURCE_SEGMENT_ORDER.includes(option.value))
   return [...head, ...tail]
 })
+/** 主分段：严格按主行顺序取前三（缺省策略未下发时自动缺项，不补假项）。 */
+const participantMainSourceSegments = computed(() =>
+  participantSourceSegments.value.filter((option) =>
+    PARTICIPANT_SOURCE_SEGMENT_ORDER.includes(option.value),
+  ),
+)
+/** 次级分段：主分段之外的额外合法策略（保持服务端下发的相对顺序）。 */
+const participantExtraSourceSegments = computed(() =>
+  participantSourceSegments.value.filter(
+    (option) => !PARTICIPANT_SOURCE_SEGMENT_ORDER.includes(option.value),
+  ),
+)
+/** 次级来源切换：当前策略命中次级时自动展开（保证已选来源回显可达），其余默认收起。 */
+const participantExtraSourcesOpen = ref(false)
+function syncParticipantExtraSourcesOpen(strategy: string) {
+  participantExtraSourcesOpen.value =
+    strategy !== '' && !PARTICIPANT_SOURCE_SEGMENT_ORDER.includes(strategy)
+}
+watch(
+  () => participantForm.value.strategy,
+  (strategy) => syncParticipantExtraSourcesOpen(strategy),
+  { immediate: true },
+)
 
 const CONSENSUS_MODE_SEGMENT_ORDER = ['ALL', 'RATIO', 'COUNT'] as const
 type ConsensusModeOption = { label: string; value: string }
@@ -2844,6 +2871,8 @@ watch(selectedNode, (node, prev) => {
     const built = buildParticipantFormDraft(raw)
     participantForm.value = built.draft
     participantShape.value = built.shape
+    // 审查28 D08-B：换节点后按新策略重置次级来源展开态（同策略不触发 watch，需显式同步）
+    syncParticipantExtraSourcesOpen(participantForm.value.strategy)
   } else {
     participantShape.value = 'empty'
   }
@@ -3813,21 +3842,62 @@ function nodeLabelLines(label: string) {
                 </el-form-item>
                 <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
                 <template v-if="participantField">
-                  <!-- 审查23 D08-B：审批人来源按原图分段（指定人员/表单组件/JS脚本在前，额外合法策略保留） -->
+                  <!-- 审查28 D08-B：来源主行按原图收为三项主分段（32 高单行、间隔与原图一致）；
+                       角色/部门/岗位等额外合法策略移入次级切换，展开后仍可达（32 高）。 -->
                   <el-form-item label="审批人来源">
-                    <el-radio-group
-                      v-model="participantForm.strategy"
-                      class="participant-source-seg"
-                      @change="() => applyParticipant()"
-                    >
-                      <el-radio-button
-                        v-for="option in participantSourceSegments"
-                        :key="option.value"
-                        :value="option.value"
+                    <div class="participant-source-area">
+                      <el-radio-group
+                        v-model="participantForm.strategy"
+                        class="participant-source-seg participant-source-seg--split"
+                        @change="() => applyParticipant()"
                       >
-                        {{ option.label }}
-                      </el-radio-button>
-                    </el-radio-group>
+                        <el-radio-button
+                          v-for="option in participantMainSourceSegments"
+                          :key="option.value"
+                          :value="option.value"
+                        >
+                          {{ option.label }}
+                        </el-radio-button>
+                      </el-radio-group>
+                      <div
+                        v-if="participantExtraSourceSegments.length > 0"
+                        class="participant-source-extra"
+                      >
+                        <el-radio-group
+                          v-show="participantExtraSourcesOpen"
+                          v-model="participantForm.strategy"
+                          class="participant-source-seg participant-source-seg--split"
+                          @change="() => applyParticipant()"
+                        >
+                          <el-radio-button
+                            v-for="option in participantExtraSourceSegments"
+                            :key="option.value"
+                            :value="option.value"
+                          >
+                            {{ option.label }}
+                          </el-radio-button>
+                        </el-radio-group>
+                        <button
+                          type="button"
+                          class="participant-source-extra__toggle"
+                          @click="participantExtraSourcesOpen = !participantExtraSourcesOpen"
+                        >
+                          {{
+                            participantExtraSourcesOpen
+                              ? '收起其他来源'
+                              : `其他来源（${participantExtraSourceSegments
+                                  .map((option) => option.label)
+                                  .join('/')}）`
+                          }}
+                          <el-icon
+                            class="participant-source-extra__arrow"
+                            :class="{ 'is-open': participantExtraSourcesOpen }"
+                          >
+                            <ArrowDown />
+                          </el-icon>
+                        </button>
+                      </div>
+                    </div>
                   </el-form-item>
                   <!-- FIXED_USER：人员多选（复用审批人候选弹窗人员页签；id 数组保持精度） -->
                   <el-form-item v-if="participantForm.strategy === 'FIXED_USER'" label="指定人员">
@@ -4762,10 +4832,11 @@ function nodeLabelLines(label: string) {
     </el-dialog>
 
     <!-- ═══ P64 阶段Ⅰ：流程变量配置弹窗 ═══ -->
+    <!-- 审查28 Q10：窗口 960 宽；表头底色带 42 高、行内输入 32 高（样式见文件尾 p64-dialog 全局块） -->
     <el-dialog
       v-model="variablesVisible"
       title="流程变量"
-      width="min(860px, 94vw)"
+      width="min(960px, 94vw)"
       class="p64-dialog"
       append-to-body
     >
@@ -4786,7 +4857,8 @@ function nodeLabelLines(label: string) {
         </el-table-column>
       </el-table>
       <el-divider />
-      <el-form label-position="top" size="small">
+      <!-- 审查28 Q10：去掉 small 尺寸（输入框/选择器统一 32 高），配置能力原样保留 -->
+      <el-form label-position="top">
         <div class="p64-grid">
           <el-form-item label="变量标识">
             <el-input
@@ -4892,10 +4964,13 @@ function nodeLabelLines(label: string) {
     </el-dialog>
 
     <!-- ═══ P64 阶段Ⅰ：触发规则配置弹窗 ═══ -->
+    <!-- 审查28 Q10：设计器工具栏「触发器」调用方——1120 宽、标题「流程触发器」；
+         表头底色带 42 高、字段 32 高，编辑区按原图「触发时机 → 判断脚本 → 结果分区」排布。
+         流程设置页的事件监听（ProcessSettings）是另一消费者，本批不改。 -->
     <el-dialog
       v-model="triggersVisible"
-      title="事件监听"
-      width="min(980px, 94vw)"
+      title="流程触发器"
+      width="min(1120px, 94vw)"
       class="p64-dialog"
       append-to-body
     >
@@ -4953,21 +5028,10 @@ function nodeLabelLines(label: string) {
         </el-table-column>
       </el-table>
       <el-divider />
-      <el-form label-position="top" size="small">
+      <!-- 审查28 Q10：去掉 small 尺寸（字段统一 32 高）；
+           分区按原图排布——触发时机（+可读取变量）在前，规则标识等次之，随后判断脚本与结果分支。 -->
+      <el-form label-position="top">
         <div class="p64-grid">
-          <el-form-item label="规则标识">
-            <el-input
-              v-model="triggerDraft.triggerId"
-              :disabled="triggerEditIndex !== null"
-              placeholder="trg_example"
-            />
-          </el-form-item>
-          <el-form-item label="名称">
-            <el-input v-model="triggerDraft.name" />
-          </el-form-item>
-          <el-form-item label="启用">
-            <el-switch v-model="triggerDraft.enabled" />
-          </el-form-item>
           <el-form-item label="触发时机">
             <el-select v-model="triggerDraft.event">
               <el-option
@@ -4987,6 +5051,21 @@ function nodeLabelLines(label: string) {
                 :value="item.varId"
               />
             </el-select>
+          </el-form-item>
+        </div>
+        <div class="p64-grid">
+          <el-form-item label="规则标识">
+            <el-input
+              v-model="triggerDraft.triggerId"
+              :disabled="triggerEditIndex !== null"
+              placeholder="trg_example"
+            />
+          </el-form-item>
+          <el-form-item label="名称">
+            <el-input v-model="triggerDraft.name" />
+          </el-form-item>
+          <el-form-item label="启用">
+            <el-switch v-model="triggerDraft.enabled" />
           </el-form-item>
         </div>
         <el-form-item label="判断脚本">
@@ -6112,7 +6191,7 @@ function nodeLabelLines(label: string) {
   line-height: 22px;
 }
 
-/* 审查23 D08-B：来源/通过条件分段通栏、32 高 */
+/* 审查23 D08-B：来源/通过条件分段通栏、32 高（通过条件等共用分段保持连体样式） */
 .participant-source-seg {
   display: flex;
   width: 100%;
@@ -6126,6 +6205,64 @@ function nodeLabelLines(label: string) {
   height: 32px;
   padding: 0 6px;
   line-height: 30px;
+}
+/* 审查28 D08-B：来源主行按原图拆为三枚独立分段（等宽 + 8px 间隔），32 高单行；
+ * 仅修饰来源分段（--split），不改变共用 participant-source-seg（通过条件）的连体几何。 */
+.participant-source-area {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.participant-source-seg--split {
+  gap: 8px;
+}
+.participant-source-seg--split :deep(.el-radio-button) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.participant-source-seg--split :deep(.el-radio-button__inner) {
+  border-radius: 6px;
+  border: 1px solid #cbd6e8;
+  box-shadow: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.participant-source-seg--split :deep(.el-radio-button__original:checked + .el-radio-button__inner) {
+  background: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+  box-shadow: none;
+}
+/* 次级来源切换：展开后与主行同构（32 高），收起时仅留一行低键量切换入口 */
+.participant-source-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.participant-source-extra__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--sw-text-secondary);
+  cursor: pointer;
+}
+.participant-source-extra__toggle:hover {
+  color: var(--sw-color-primary);
+}
+.participant-source-extra__arrow {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+.participant-source-extra__arrow.is-open {
+  transform: rotate(180deg);
 }
 .designer-props :deep(.el-input.is-disabled .el-input__inner) {
   color: #19233b;
@@ -6829,5 +6966,18 @@ function nodeLabelLines(label: string) {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+}
+/* ═══ 审查28 Q10：变量/触发器弹窗表格表头底色带 42 高（设计原图 #f4f6fb 色带）；
+   table-cell 高度必须 box-sizing:border-box。仅作用于本文件两个 p64 弹窗，
+   不影响流程设置页（ProcessSettings）的事件监听表格。 ═══ */
+.el-dialog.p64-dialog .p64-table {
+  --el-table-header-bg-color: #f4f6fb;
+  --el-table-header-text-color: #7c8390;
+}
+.el-dialog.p64-dialog .p64-table th.el-table__cell {
+  box-sizing: border-box;
+  height: 42px;
+  padding: 4px 0;
+  font-weight: 400;
 }
 </style>

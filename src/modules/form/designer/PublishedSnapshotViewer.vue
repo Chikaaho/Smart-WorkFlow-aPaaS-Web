@@ -10,7 +10,7 @@ import {
   loadSnapshotProcessVersionGraph,
   type SnapshotProcessVersionCandidate,
 } from '@/adapters/published-snapshot'
-import type { FormSchema, VisibilityRule } from '@/contracts/form-schema'
+import type { FormSchema, VisibilityRule, FieldType } from '@/contracts/form-schema'
 import { useI18n } from '@/locales'
 import {
   getFormSnapshotDefinition,
@@ -80,8 +80,8 @@ let requestGeneration = 0
 const fields = computed(() => (schema.value ? flattenSnapshotFields(schema.value) : []))
 
 /* 审查27 S14-F：主表列=名称/组件/字段标识/数据类型/宽度/必填/查看；序号/长度在查看详情 */
-function snapshotComponentLabel(field: FormSchema['fields'][number]): string {
-  if (field.type === 'TEXT' && (field as { multiline?: boolean }).multiline === true) {
+function snapshotComponentLabel(field: { type: FieldType; multiline?: boolean }): string {
+  if (field.type === 'TEXT' && field.multiline === true) {
     return t('form.paletteMultiline')
   }
   return getFieldTypeDescriptor(field.type)?.label ?? field.type
@@ -122,11 +122,44 @@ const scriptDetailVisible = ref(false)
 const scriptDetailTitle = ref('')
 const scriptDetailCode = ref('')
 const scriptDetailMeta = ref('')
+/* Q21（509:18714）：JS 监听脚本用 1200 宽只读代码窗（全文+行号）；内置动作摘要保持短摘要弹窗 */
+const scriptDetailMode = ref<'summary' | 'code'>('summary')
+const scriptDetailLines = computed(() => scriptDetailCode.value.split(/\r?\n/))
 const validationDetailVisible = ref(false)
 const validationDetailTitle = ref('')
 const validationDetailRow = ref<SnapshotConstraintRow | null>(null)
 
+/* 内置动作摘要（如 `设置流程变量('k','v')`）为单行函数调用、无 JS 语句结构 → 保持摘要弹窗；
+   含 return/块语句/箭头函数或多行的函数体按 JS 代码窗展示。 */
+function isJsBody(code: string): boolean {
+  const trimmed = code.trim()
+  if (!trimmed || trimmed === '—') return false
+  if (/[\r\n]/.test(trimmed)) return true
+  return /\breturn\b|=>|[;{}]/.test(trimmed)
+}
+
+function openListenerScript(row: {
+  name: string
+  timing: string
+  code: string
+  meta: string
+}): void {
+  scriptDetailCode.value = row.code
+  const headline = `${row.name} · ${row.timing}`
+  if (isJsBody(row.code)) {
+    scriptDetailMode.value = 'code'
+    scriptDetailTitle.value = t('form.snapshotViewer.listenerScriptTitle')
+    scriptDetailMeta.value = row.meta ? `${headline} · ${row.meta}` : headline
+  } else {
+    scriptDetailMode.value = 'summary'
+    scriptDetailTitle.value = headline
+    scriptDetailMeta.value = row.meta
+  }
+  scriptDetailVisible.value = true
+}
+
 function openScriptDetail(row: SnapshotScriptView): void {
+  scriptDetailMode.value = 'summary'
   scriptDetailTitle.value = `${row.label} · ${scriptKindLabel(row.kind)}`
   scriptDetailCode.value = row.code
   const meta = [
@@ -536,11 +569,12 @@ const listenerRows = computed(() => [
         ? t('form.snapshotViewer.disabled')
         : t('form.snapshotViewer.enabled'),
     view: () => {
-      scriptDetailTitle.value =
-        (row.trigger.name || row.trigger.triggerId) + ' · ' + eventLabel(row.trigger.event)
-      scriptDetailCode.value = row.trigger.script || '—'
-      scriptDetailMeta.value = `${row.processName} · v${row.graphVersion}`
-      scriptDetailVisible.value = true
+      openListenerScript({
+        name: row.trigger.name || row.trigger.triggerId,
+        timing: eventLabel(row.trigger.event),
+        code: row.trigger.script || '—',
+        meta: `${row.processName} · v${row.graphVersion}`,
+      })
     },
   })),
   ...frozenFormEvents.value.flatMap((group) =>
@@ -550,10 +584,12 @@ const listenerRows = computed(() => [
       timing: group.kind,
       enabled: row.enabled ? t('form.snapshotViewer.enabled') : t('form.snapshotViewer.disabled'),
       view: () => {
-        scriptDetailTitle.value = (row.name || row.id) + ' · ' + group.kind
-        scriptDetailCode.value = row.script || '—'
-        scriptDetailMeta.value = ''
-        scriptDetailVisible.value = true
+        openListenerScript({
+          name: row.name || row.id,
+          timing: group.kind,
+          code: row.script || '—',
+          meta: '',
+        })
       },
     })),
   ),
@@ -584,6 +620,7 @@ function openFrozenDetail(row: FrozenFieldPropRow): void {
   } else if (row.detail === 'visibility') {
     const rule = fieldVisibilityOf(field.name)
     if (rule) {
+      scriptDetailMode.value = 'summary'
       scriptDetailTitle.value =
         t('form.snapshotViewer.visibility') + ' · ' + (field.label || field.name)
       scriptDetailCode.value = JSON.stringify(rule, null, 2)
@@ -1412,7 +1449,11 @@ watch(
             </button>
           </aside>
           <div class="snapshot-settings__main">
-            <section v-if="settingsBranch === 'notification'" class="snapshot-section">
+            <!-- 执行提示28 S14-E：分支内容各成白卡（浅底 main 只做定位，卡内距 24） -->
+            <section
+              v-if="settingsBranch === 'notification'"
+              class="snapshot-section snapshot-settings__card snapshot-settings__card--notify"
+            >
               <div class="snapshot-section__head">
                 <div>
                   <h3>{{ sectionLabel('notification') }}</h3>
@@ -1433,7 +1474,10 @@ watch(
               </div>
             </section>
 
-            <section v-else-if="settingsBranch === 'listeners'" class="snapshot-section">
+            <section
+              v-else-if="settingsBranch === 'listeners'"
+              class="snapshot-section snapshot-settings__card"
+            >
               <div class="snapshot-section__head">
                 <div>
                   <h3>{{ sectionLabel('eventListeners') }}</h3>
@@ -1468,7 +1512,10 @@ watch(
               </table>
             </section>
 
-            <section v-else-if="settingsBranch === 'variables'" class="snapshot-section">
+            <section
+              v-else-if="settingsBranch === 'variables'"
+              class="snapshot-section snapshot-settings__card"
+            >
               <div class="snapshot-section__head">
                 <div>
                   <h3>{{ sectionLabel('variables') }}</h3>
@@ -1504,7 +1551,7 @@ watch(
               </table>
             </section>
 
-            <section v-else class="snapshot-section">
+            <section v-else class="snapshot-section snapshot-settings__card">
               <div class="snapshot-section__head">
                 <div>
                   <h3>{{ sectionLabel('approvalScripts') }}</h3>
@@ -1563,15 +1610,41 @@ watch(
         </template>
       </dl>
     </DetailDialog>
+    <!-- Q21（509:18714）：JS 监听脚本 → 1200 宽只读代码窗（冻结全文 + 行号 + 只读标识 + 关闭 80×32）；
+         内置动作摘要 → 原有 640 宽短摘要弹窗。两模式同一 DetailDialog 宿主。 -->
     <DetailDialog
       v-model="scriptDetailVisible"
+      class="snapshot-script-dialog"
       :title="scriptDetailTitle"
-      width="640px"
-      :show-footer="false"
+      :width="scriptDetailMode === 'code' ? '1200px' : '640px'"
+      :show-footer="scriptDetailMode === 'code'"
       append-to-body
     >
-      <p v-if="scriptDetailMeta" class="snapshot-dialog-meta">{{ scriptDetailMeta }}</p>
-      <pre class="snapshot-dialog-code">{{ scriptDetailCode }}</pre>
+      <template v-if="scriptDetailMode === 'code'">
+        <p class="snapshot-dialog-meta snapshot-script-view__meta">
+          <span>{{ scriptDetailMeta }}</span>
+          <span class="snapshot-script-view__badge">
+            {{ t('form.snapshotViewer.readonlyBadge') }}
+          </span>
+        </p>
+        <div class="snapshot-script-code" data-testid="snapshot-script-code">
+          <p class="snapshot-script-code__lang">JavaScript</p>
+          <div class="snapshot-script-code__lines">
+            <div
+              v-for="(line, index) in scriptDetailLines"
+              :key="index"
+              class="snapshot-script-code__line"
+            >
+              <span class="snapshot-script-code__no">{{ index + 1 }}</span>
+              <span class="snapshot-script-code__text">{{ line === '' ? ' ' : line }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template v-else>
+        <p v-if="scriptDetailMeta" class="snapshot-dialog-meta">{{ scriptDetailMeta }}</p>
+        <pre class="snapshot-dialog-code">{{ scriptDetailCode }}</pre>
+      </template>
     </DetailDialog>
 
     <DetailDialog
@@ -2023,24 +2096,109 @@ watch(
   color: var(--sw-color-primary);
   font-weight: 500;
 }
-/* 审查27 S14-E：设置内容区浅底上的白卡容器 + 24 内距 */
+/* 审查27 S14-E（执行提示28）：设置内容区分两层——main 只是浅底定位容器（页面底=浅色），
+   白卡由各分支 section 自身承担；内边距按 1920 实测几何落位（main x225/y98 → 卡 x244/y120）。 */
 .snapshot-settings__main {
   box-sizing: border-box;
   flex: 1 1 auto;
   min-width: 0;
   align-self: flex-start;
+  padding: 22px 23px 24px 19px;
+}
+.snapshot-settings__card {
+  box-sizing: border-box;
   padding: 24px;
   border-radius: var(--sw-radius-base, 8px);
   background: var(--sw-surface-card, #fff);
 }
+/* 通知分支白卡固定 1160 宽（505:23296）；空态按真实配置自然增高 */
+.snapshot-settings__card--notify {
+  width: 1160px;
+  max-width: 100%;
+}
+/* 冻结事件监听表头 36 高（border-box，含 1px 底边；505:23398）；
+   行高不动，保持真实行步长 65 与 12 条记录。 */
 .snapshot-listener-table th {
-  height: 34px;
+  box-sizing: border-box;
+  height: 36px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 .snapshot-listener-table td {
   height: 46px;
 }
 .snapshot-listener-table__action {
   width: 88px;
+}
+
+/* Q21（509:18714）：JS 监听脚本只读代码窗——行号列 + 等宽正文，不提供运行/应用入口。 */
+.snapshot-script-view__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.snapshot-script-view__badge {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 4px;
+  background: #fdf6ec;
+  color: #b88230;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.snapshot-script-code {
+  box-sizing: border-box;
+  padding: 12px 16px 16px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base, 8px);
+  background: #fff;
+}
+
+.snapshot-script-code__lang {
+  margin: 0 0 8px;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.snapshot-script-code__lines {
+  max-height: 56vh;
+  overflow: auto;
+  color: var(--sw-text-primary);
+  font-family: var(--sw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.snapshot-script-code__line {
+  display: flex;
+}
+
+.snapshot-script-code__no {
+  flex: 0 0 32px;
+  padding-right: 12px;
+  color: var(--sw-text-secondary);
+  text-align: right;
+  user-select: none;
+}
+
+.snapshot-script-code__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 代码窗 footer「关闭」80×32（509:18714）；teleport 弹层样式落真实弹窗根。 */
+:global(.snapshot-script-dialog .el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
 }
 
 .snapshot-side .snapshot-node-props-title {

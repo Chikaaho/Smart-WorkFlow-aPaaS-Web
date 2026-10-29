@@ -11,9 +11,18 @@ const { t } = useI18n()
  * 路由参数：taskId
  */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import type { Component } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
+import {
+  ArrowDown,
+  ArrowLeft,
+  Bell,
+  ChatLineSquare,
+  Plus,
+  Rank,
+  User,
+} from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import {
   queryTaskDetail,
@@ -944,6 +953,15 @@ interface ApprovalMoreAction {
   divided?: boolean
 }
 
+/** 设计 299:1725 每项原图标：催办=铃、转办=双向箭头、委托=人员、沟通=会话、加签=加号。 */
+const APPROVAL_MORE_ICONS: Record<ApprovalMoreCommand, Component> = {
+  URGE: Bell,
+  TRANSFER: Rank,
+  DELEGATE: User,
+  COMMUNICATE: ChatLineSquare,
+  ADD_SIGN: Plus,
+}
+
 const LIFECYCLE_PERMISSIONS: Record<LifecycleKind, string> = {
   TRANSFER: 'workflow:task:transfer',
   DELEGATE: 'workflow:task:delegate',
@@ -957,27 +975,31 @@ function lifecycleVisible(command: LifecycleKind): boolean {
   return nodeAllows(command)
 }
 
+/* 设计 299:1725 顺序：催办置顶，其后为转办/委托/沟通/加签（补签随权限与节点策略合法出现）；
+   分隔语义保留：催办组与生命周期组仍以 divided 标记（落在首个生命周期项上），
+   原图两项间无可见分隔线，样式层由浮层样式统一行距。 */
 const approvalMoreActions = computed<ApprovalMoreAction[]>(() => {
   const actions: ApprovalMoreAction[] = []
+  if (canUrge.value) {
+    actions.push({ command: 'URGE', label: t('taskDetailUi.urgeAction'), divided: false })
+  }
+  const lifecycleActions: ApprovalMoreAction[] = []
   if (lifecycleVisible('TRANSFER')) {
-    actions.push({ command: 'TRANSFER', label: t('workflow.transferOwnTask') })
+    lifecycleActions.push({ command: 'TRANSFER', label: t('workflow.transferOwnTask') })
   }
   if (lifecycleVisible('DELEGATE')) {
-    actions.push({ command: 'DELEGATE', label: t('workflow.delegateAction') })
+    lifecycleActions.push({ command: 'DELEGATE', label: t('workflow.delegateAction') })
   }
   if (lifecycleVisible('COMMUNICATE')) {
-    actions.push({ command: 'COMMUNICATE', label: t('workflow.consultTask') })
+    lifecycleActions.push({ command: 'COMMUNICATE', label: t('workflow.consultTask') })
   }
   if (lifecycleVisible('ADD_SIGN')) {
-    actions.push({ command: 'ADD_SIGN', label: t('workflow.addSign') })
+    lifecycleActions.push({ command: 'ADD_SIGN', label: t('workflow.addSign') })
   }
-  if (canUrge.value) {
-    actions.push({
-      command: 'URGE',
-      label: t('taskDetailUi.urgeAction'),
-      divided: actions.length > 0,
-    })
+  if (actions.length > 0 && lifecycleActions.length > 0) {
+    lifecycleActions[0].divided = true
   }
+  actions.push(...lifecycleActions)
   return actions
 })
 const hasApprovalMoreActions = computed(() => approvalMoreActions.value.length > 0)
@@ -1363,6 +1385,7 @@ onMounted(loadDetail)
               v-if="hasApprovalMoreActions"
               class="detail-actions__more"
               trigger="click"
+              popper-class="detail-actions-more-popper"
               :disabled="acting !== null"
               @command="handleApprovalMore"
             >
@@ -1384,6 +1407,9 @@ onMounted(loadDetail)
                     :disabled="acting !== null"
                     :data-testid="`approval-more-${action.command.toLowerCase()}`"
                   >
+                    <el-icon class="detail-actions__more-item-icon" aria-hidden="true">
+                      <component :is="APPROVAL_MORE_ICONS[action.command]" />
+                    </el-icon>
                     {{ action.label }}
                   </el-dropdown-item>
                 </el-dropdown-menu>
@@ -1530,15 +1556,16 @@ onMounted(loadDetail)
       </template>
     </el-dialog>
 
-    <!-- 驳回申请弹窗（设计 272:1746）：驳回原因可选，确认后直提 REJECT -->
+    <!-- 驳回申请弹窗（设计 272:1746）：驳回原因可选，确认后直提 REJECT；560 宽 / 输入 510×32 / 底栏按钮 80×32 -->
     <el-dialog
       v-model="rejectDialogVisible"
       :title="t('workflow.rejectDialogTitle')"
-      width="550px"
+      width="560px"
+      class="reject-dialog"
       :close-on-click-modal="false"
       data-testid="reject-dialog"
     >
-      <el-form label-position="top" size="small" @submit.prevent>
+      <el-form label-position="top" @submit.prevent>
         <el-form-item :label="t('workflow.rejectReasonLabel')">
           <el-input
             v-model="rejectReason"
@@ -2169,5 +2196,49 @@ onMounted(loadDetail)
   margin: 0 0 12px;
   font-size: 13px;
   color: var(--sw-text-secondary, #909399);
+}
+/* 设计 272:1746 驳回申请弹窗：560 宽 / 原因输入 510×32（左右内边距 25px，输入随表单整宽、
+   默认尺寸 32 高）/ 底栏 取消/确定 80×32。表单已从 small 回到默认尺寸。 */
+.task-detail :deep(.reject-dialog.el-dialog) {
+  padding: var(--el-dialog-padding-primary) 25px;
+}
+.task-detail :deep(.reject-dialog .el-dialog__footer .el-button) {
+  width: 80px;
+  height: 32px;
+}
+</style>
+
+<style>
+/* 设计 299:1725（Q68）更多菜单：teleport 浮层根按类定宽 192（含边框），
+   适用项 36 高、相邻步长 38（gap 2）、每项带原图标（铃/双向箭头/人员/会话/加号）。
+   EP 的 divided 语义保留在 DOM，但原图两项间无分隔线，行距由 gap 控制
+   （同批次应用卡操作菜单 app-card-op-menu 同一模式）。 */
+.detail-actions-more-popper.el-popper {
+  box-sizing: border-box;
+  width: 192px;
+  padding: 0;
+}
+.detail-actions-more-popper .el-dropdown-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+}
+.detail-actions-more-popper .el-dropdown-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 16px;
+}
+.detail-actions-more-popper .el-dropdown-menu__item .el-icon {
+  margin-right: 0;
+  font-size: 16px;
+}
+.detail-actions-more-popper .el-dropdown-menu__item--divided {
+  /* EP 的 divided 会插入一个空的分隔 li：原图两项间无可见分隔线，行距由 gap 控制，
+     分隔语义保留在 divided prop 与 DOM 标记上，display:none 保证相邻步长恒为 38。 */
+  display: none;
 }
 </style>

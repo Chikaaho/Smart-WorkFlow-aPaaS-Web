@@ -121,12 +121,34 @@ function onChartType(value: WorkspaceChartType): void {
   patchConfig({ chartType: value })
 }
 
-/* 审查27 W19-I：数据分支逐指标卡承接字段/聚合/轴/单位的既有编辑 */
-function patchMetric(index: number, patchValue: Partial<WorkspaceMetricConfig>): void {
-  const metrics = (props.card.config.metrics ?? []).map((metric, i) =>
-    i === index ? { ...metric, ...patchValue } : metric,
+/* 提示28 W19-I：右栏指标只留 288×50 两行摘要卡，字段/聚合/轴/单位编辑走指标窗口 */
+const AGG_SUMMARY_KEYS: Record<string, string> = {
+  COUNT: 'aggCount',
+  SUM: 'aggSum',
+  AVG: 'aggAvg',
+  MIN: 'aggMin',
+  MAX: 'aggMax',
+}
+
+function metricName(metric: WorkspaceMetricConfig): string {
+  return (
+    metric.label ||
+    props.fields.find((field) => field.name === metric.field)?.label ||
+    metric.field ||
+    t('workspace.inspector.recordCount')
   )
-  patchConfig({ metrics })
+}
+
+function metricSummary(metric: WorkspaceMetricConfig): string {
+  return [
+    t(`workspace.metrics.${AGG_SUMMARY_KEYS[metric.agg] ?? 'aggCount'}`),
+    metric.axis === 'right'
+      ? t('workspace.inspector.axisRight')
+      : t('workspace.inspector.axisLeft'),
+    metric.unit,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 function seriesColorValue(index: number, fieldName: string): string {
@@ -377,59 +399,36 @@ function isStackable() {
                 />
               </el-select>
             </section>
-            <section
-              v-for="(metric, index) in card.config.metrics ?? []"
-              :key="index"
-              class="winsp__section winsp__metric-card"
-            >
-              <p class="winsp__metric-title">
-                {{
-                  metric.label ||
-                  fields.find((f) => f.name === metric.field)?.label ||
-                  metric.field ||
-                  t('workspace.inspector.recordCount')
-                }}
-              </p>
-              <div class="winsp__inline">
-                <el-select
-                  :model-value="metric.field || '__count__'"
-                  @update:model-value="
-                    patchMetric(index, { field: $event === '__count__' ? '' : $event })
-                  "
-                >
-                  <el-option :label="t('workspace.inspector.recordCount')" value="__count__" />
-                  <el-option
-                    v-for="field in numericFields"
-                    :key="field.name"
-                    :label="field.label"
-                    :value="field.name"
-                  />
-                </el-select>
-                <el-select
-                  :model-value="metric.agg"
-                  @update:model-value="patchMetric(index, { agg: $event })"
-                >
-                  <el-option
-                    v-for="agg in ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX']"
-                    :key="agg"
-                    :label="agg"
-                    :value="agg"
-                  />
-                </el-select>
+            <!-- 提示28 W19-I：Y 轴 / 指标 摘要卡（288×50 两行），详细设置一律走既有指标窗口 -->
+            <section class="winsp__section">
+              <div class="winsp__metrics-head">
+                <span class="winsp__label">{{ t('workspace.inspector.yAxisMetrics') }}</span>
+                <button type="button" class="winsp__metrics-add" @click="emit('open-metrics')">
+                  + {{ t('workspace.metrics.add') }}
+                </button>
               </div>
-              <div class="winsp__inline">
-                <el-input
-                  :model-value="metric.unit"
-                  :placeholder="t('workspace.inspector.unit')"
-                  @update:model-value="patchMetric(index, { unit: $event })"
-                />
-                <el-select
-                  :model-value="metric.axis"
-                  @update:model-value="patchMetric(index, { axis: $event })"
-                >
-                  <el-option :label="t('workspace.inspector.axisLeft')" value="left" />
-                  <el-option :label="t('workspace.inspector.axisRight')" value="right" />
-                </el-select>
+              <div
+                v-for="(metric, index) in card.config.metrics ?? []"
+                :key="index"
+                class="winsp__metric-card"
+              >
+                <div class="winsp__metric-row">
+                  <i
+                    class="winsp__metric-dot"
+                    :style="{ background: seriesColorValue(index, metric.field) }"
+                  />
+                  <span class="winsp__metric-name">{{ metricName(metric) }}</span>
+                  <button
+                    type="button"
+                    class="winsp__metric-edit"
+                    :title="t('common.edit')"
+                    :aria-label="t('common.edit')"
+                    @click="emit('open-metrics')"
+                  >
+                    ···
+                  </button>
+                </div>
+                <p class="winsp__metric-summary">{{ metricSummary(metric) }}</p>
               </div>
             </section>
             <section v-if="isStackable()" class="winsp__section">
@@ -450,11 +449,6 @@ function isStackable() {
                   {{ t('workspace.inspector.stack') }}
                 </button>
               </div>
-            </section>
-            <section class="winsp__section">
-              <el-button plain @click="emit('open-metrics')">
-                {{ t('workspace.inspector.editMetrics') }}
-              </el-button>
             </section>
           </template>
 
@@ -812,19 +806,85 @@ function isStackable() {
   flex: 1;
 }
 
+/* 提示28 W19-I：指标摘要卡 288×50 两行（名称 + 聚合/轴/单位） */
+.winsp__metrics-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.winsp__metrics-add {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sw-color-primary, #2563eb);
+  font-size: 12px;
+  line-height: 22px;
+  cursor: pointer;
+}
+
 .winsp__metric-card {
   box-sizing: border-box;
-  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  height: 50px;
+  padding: 0 12px;
   border: 1px solid var(--sw-border-light, #eef0f4);
   border-radius: 6px;
   background: var(--sw-surface-card, #fff);
 }
 
-.winsp__metric-title {
-  margin: 0 0 6px;
+.winsp__metric-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.winsp__metric-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.winsp__metric-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--sw-text-primary);
   font-size: 13px;
   font-weight: 500;
+  line-height: 18px;
+}
+
+.winsp__metric-edit {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sw-text-tertiary);
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.winsp__metric-summary {
+  margin: 0;
+  padding-left: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sw-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .winsp__summary {

@@ -6,7 +6,7 @@
  * 横向「图标 + 名称/表单数」，管理端额外叠加三点菜单与「新建应用」卡。
  * perRow 为空时按容器宽度自动铺排；传入时固定每行数量（用户端个人偏好）。
  */
-import { MoreFilled } from '@element-plus/icons-vue'
+import { Delete, Edit, MoreFilled } from '@element-plus/icons-vue'
 import AppIcon from './AppIcon.vue'
 import type { FormApp } from '@/contracts/app-center'
 import { useI18n } from '@/locales'
@@ -75,6 +75,7 @@ const { t } = useI18n()
         v-if="showActions"
         class="app-grid__more"
         trigger="click"
+        popper-class="app-card-op-menu"
         @command="(cmd: string) => emit('command', cmd, app)"
       >
         <button
@@ -87,12 +88,18 @@ const { t } = useI18n()
           <el-icon><MoreFilled /></el-icon>
         </button>
         <template #dropdown>
+          <!-- 273:1753（执行提示28 项2）：152 宽/项 36 高/带图标；删除项危险色，弹层随视口上下翻转（EP popper 默认语义） -->
           <el-dropdown-menu>
             <el-dropdown-item v-perm="'form:app:manage'" command="edit">
-              {{ t('common.edit') }}
+              <el-icon><Edit /></el-icon>{{ t('form.appCenter.editApp') }}
             </el-dropdown-item>
-            <el-dropdown-item v-perm="'form:app:manage'" command="delete" divided>
-              {{ t('common.delete') }}
+            <el-dropdown-item
+              v-perm="'form:app:manage'"
+              command="delete"
+              divided
+              class="app-card-op-menu__danger"
+            >
+              <el-icon><Delete /></el-icon>{{ t('form.appCenter.deleteApp') }}
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -250,5 +257,48 @@ const { t } = useI18n()
   color: #909399;
   text-align: center;
   padding: 48px 0;
+}
+</style>
+
+<style>
+/* 273:1753（执行提示28 项2）：应用卡操作菜单——teleport 浮层根按类定宽 152（含边框），
+   项 36 高、图标同行；删除项危险色 #C2303A。本组件自包含（应用管理页不加载 AppTreeNav 的 sw-op-menu 样式）。 */
+.app-card-op-menu.el-popper {
+  box-sizing: border-box;
+  width: 152px;
+  padding: 0;
+}
+.app-card-op-menu .el-dropdown-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+}
+.app-card-op-menu .el-dropdown-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 13px;
+}
+.app-card-op-menu .el-dropdown-menu__item .el-icon {
+  margin-right: 0;
+}
+.app-card-op-menu .el-dropdown-menu__item--divided {
+  margin: 0;
+  border-top: none;
+}
+/* EP 的 divided 会额外插入一个空分隔 li；原图两项间无分隔线，行距由 gap 控制 */
+.app-card-op-menu .el-dropdown-menu > li.el-dropdown-menu__item--divided:empty {
+  display: none;
+}
+.app-card-op-menu .app-card-op-menu__danger {
+  color: #c2303a;
+}
+.app-card-op-menu .app-card-op-menu__danger:not(.is-disabled):hover,
+.app-card-op-menu .app-card-op-menu__danger:not(.is-disabled):focus {
+  color: #c2303a;
+  background-color: #fdf0f1;
 }
 </style>
