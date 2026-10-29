@@ -1,11 +1,30 @@
-/* 446 系列编辑弹窗（0.2.0 执行提示12）：默认细边框 #DDE3EF、正文内滚动、右下 80×32 页脚。
-   760 宽 @x580：根内距清零后正文 25px 内距 → 字段 x605/970、列宽 345、页脚按钮右下。 */
+/* 446 系列编辑弹窗（0.2.0 执行提示12/13）：默认细边框 #DDE3EF、正文内滚动、右下 80×32 页脚。
+   760 宽 @x580：根内距清零后正文 25px 内距 → 字段 x605/970、列宽 345、页脚按钮右下。
+   13 收口：头框内缩 25（标题 Noto Medium 16/24、头区 32 高）、共同输入/步进可见外框 32。 */
 .sw-edit-dialog.el-dialog {
   --el-border-color: #dde3ef;
   --el-input-border-color: #dde3ef;
   --el-dialog-padding-primary: 0px;
   max-width: calc(100vw - 32px);
   padding: 0;
+}
+.sw-edit-dialog .el-dialog__header {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 32px 25px 17px;
+}
+.sw-edit-dialog .el-dialog__title {
+  display: block;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--sw-text-primary, #1f2a44);
+}
+.sw-edit-dialog .el-dialog__headerbtn {
+  top: 34px;
+  right: 25px;
+  width: 24px;
+  height: 24px;
 }
 .sw-edit-dialog .el-dialog__body {
   box-sizing: border-box;
@@ -26,7 +45,7 @@
   margin: 0;
 }
 
-/* 两列字段网格：760 宽 → x605/970、列宽 345；控件 32 高。 */
+/* 两列字段网格：760 宽 → x605/970、列宽 345；标签 14/22、行 60+16 间距；控件可见外框 32。 */
 .sw-edit-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 345px));
@@ -47,8 +66,21 @@
   content: '* ';
   color: var(--sw-danger);
 }
+.sw-edit-grid .el-input {
+  --el-input-height: 32px;
+}
 .sw-edit-grid .el-input__wrapper,
 .sw-edit-grid .el-select__wrapper {
+  box-sizing: border-box;
+  min-height: 32px;
+  height: 32px;
+}
+.sw-edit-grid .el-input-number {
+  --el-input-height: 32px;
+  height: 32px;
+  line-height: 30px;
+}
+.sw-edit-grid .el-textarea__inner {
   min-height: 32px;
 }
 .sw-edit-grid__full {

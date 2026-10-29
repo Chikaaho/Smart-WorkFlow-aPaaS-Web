@@ -195,7 +195,7 @@ function cancel(): void {
     </div>
 
     <el-table :data="working" max-height="560">
-      <el-table-column :label="t('form.subFieldName')" min-width="240">
+      <el-table-column :label="t('form.subFieldName')" min-width="560">
         <template #default="{ row }">
           <div class="subfield-dialog__name">
             <strong>{{ row.label || row.name }}</strong>
@@ -203,15 +203,15 @@ function cancel(): void {
           </div>
         </template>
       </el-table-column>
-      <el-table-column :label="t('form.subFieldComponent')" min-width="150">
+      <el-table-column :label="t('form.subFieldComponent')" min-width="260">
         <template #default="{ row }">{{ typeLabelRow(row) }}</template>
       </el-table-column>
-      <el-table-column :label="t('form.subFieldRequired')" min-width="110">
+      <el-table-column :label="t('form.subFieldRequired')" min-width="130">
         <template #default="{ row }">{{
           row.required ? t('common.yes') : t('common.no')
         }}</template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" min-width="260">
+      <el-table-column :label="t('common.actions')" min-width="120">
         <template #default="{ $index }">
           <el-button
             link
@@ -314,11 +314,32 @@ function cancel(): void {
 <style>
 .subfield-dialog.el-dialog,
 .subfield-config-dialog.el-dialog {
+  --el-dialog-padding-primary: 0px;
   border-radius: var(--sw-radius-card);
+  padding: 0;
+}
+/* 273:1396（执行提示13）：正文/表 x425..1495（w1070）、标题 x425、取消 x1327/确定 x1415。 */
+.subfield-dialog .el-dialog__header {
+  padding: 28px 25px 12px;
+}
+.subfield-dialog .el-dialog__title,
+.subfield-dialog .subfield-dialog__title {
+  padding: 0;
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--sw-text-primary, #1f2a44);
+}
+.subfield-dialog .el-table .cell {
+  white-space: nowrap;
+}
+.subfield-dialog .el-table__cell .el-button + .el-button {
+  margin-left: 6px;
 }
 /* 273:1396：标题独立、工具行、表头42/行45、左右内距24、右下 80×32。 */
 .subfield-dialog .el-dialog__body {
-  padding: 0 24px 4px;
+  padding: 0 25px 4px;
 }
 .subfield-dialog .el-table th.el-table__cell {
   height: 42px;
@@ -334,8 +355,8 @@ function cancel(): void {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
-  padding: 16px 24px 20px;
+  gap: 8px;
+  padding: 16px 25px 20px;
 }
 .subfield-dialog .el-dialog__footer .el-button {
   width: 80px;

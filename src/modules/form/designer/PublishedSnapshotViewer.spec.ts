@@ -217,8 +217,8 @@ describe('PublishedSnapshotViewer', () => {
     await openSection(wrapper, '流程设计')
     expect(wrapper.text()).toContain('资产采购审批')
     expect(wrapper.text()).toContain('asset_purchase · v4')
-    // 流程设置页签：原始冻结定义
-    await openSection(wrapper, '流程设置')
+    // 字段清单页签：基础信息承接原始冻结定义
+    await openSection(wrapper, '字段清单')
     expect(wrapper.text()).toContain('原始冻结定义')
   })
 
@@ -301,15 +301,15 @@ describe('PublishedSnapshotViewer', () => {
     expect(wrapper.text()).toContain('items.amount')
     expect(wrapper.text()).toContain('NOT_EMPTY')
 
-    await openSection(wrapper, '流程设置')
+    // 权限承接在字段清单页签的真实语义入口
     expect(wrapper.text()).toContain('role:buyer')
     expect(wrapper.text()).toContain('role:purchaser')
     expect(wrapper.text()).toContain('submit')
   })
 
-  it('版本化列配置只读取 definition 中的冻结值', async () => {
+  it('版本化列配置只读取 definition 中的冻结值（字段清单语义入口）', async () => {
     const wrapper = await mountViewer()
-    await openSection(wrapper, '编号设置')
+    await openSection(wrapper, '字段清单')
 
     expect(wrapper.text()).toContain('采购名称')
     expect(wrapper.text()).toContain('LIKE')
@@ -317,7 +317,7 @@ describe('PublishedSnapshotViewer', () => {
     expect(wrapper.text()).toContain('view、edit')
   })
 
-  it('没有冻结列配置时明确说明限制，不回退当前列表配置', async () => {
+  it('没有冻结列配置/编号规则时明确说明限制，不回退当前数据', async () => {
     const noListConfig = { ...definition }
     delete (noListConfig as { listConfig?: unknown }).listConfig
     mockGetFormSnapshotDefinition.mockResolvedValue({
@@ -325,9 +325,11 @@ describe('PublishedSnapshotViewer', () => {
       definition: JSON.stringify(noListConfig),
     })
     const wrapper = await mountViewer()
-    await openSection(wrapper, '编号设置')
-
+    // 列配置在字段清单承接（同布局限制说明）；编号设置承接冻结编号规则（无数据 → 空态）
+    await openSection(wrapper, '字段清单')
     expect(wrapper.text()).toContain('该历史版本未保存列表配置，无法展示。')
+    await openSection(wrapper, '编号设置')
+    expect(wrapper.text()).toContain('该版本未冻结编号规则，无法展示。')
   })
 
   it('脚本区展示字段脚本、表单事件、监听脚本和审批人表达式', async () => {

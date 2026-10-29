@@ -93,7 +93,9 @@ function openEdit(row: MenuManageItem) {
 }
 
 function rowActions(r: unknown): ListAction[] {
-  const row = r as MenuManageItem
+  // 树表首层行是 { dir, subItems } 组对象：操作必须解析回真实菜单项（G27：标题/排序按当前对象回显）。
+  const group = r as { dir?: MenuManageItem }
+  const row = (group?.dir ?? group) as MenuManageItem
   return [
     {
       key: 'edit',

@@ -154,6 +154,30 @@ const deptTree = ref<SysDept[]>([])
 const deptTreeError = ref('')
 const deptTreeRef = ref<TreeInstance | null>(null)
 const permissionTreeRef = ref<TreeInstance | null>(null)
+
+/* 446:14465：权限树搜索/展开收起工具条（复用既有树操作，不改变勾选语义）。 */
+const permissionFilter = ref('')
+const permissionTreeExpanded = ref(true)
+
+function filterPermissionTree() {
+  permissionTreeRef.value?.filter(permissionFilter.value.trim())
+}
+
+function filterPermissionNode(value: string, data: { title?: string }): boolean {
+  if (!value) return true
+  return (data.title ?? '').toLowerCase().includes(String(value).toLowerCase())
+}
+
+function setPermissionTreeExpanded(expanded: boolean) {
+  const checked = [
+    ...(permissionTreeRef.value?.getCheckedKeys() ?? []),
+    ...(permissionTreeRef.value?.getHalfCheckedKeys() ?? []),
+  ] as Array<string | number>
+  permissionTreeExpanded.value = expanded
+  void nextTick(() => {
+    permissionTreeRef.value?.setCheckedKeys(checked)
+  })
+}
 const permissionTreeRaw = ref<MenuNode[]>([])
 /** 授权树绑定用：标题按当前语言解析（服务端标题作回退）。 */
 const permissionTree = useLocalizedMenuTree(permissionTreeRaw)
@@ -663,27 +687,19 @@ onMounted(loadList)
             show-word-limit
           />
         </div>
-        <div class="form-field">
-          <label class="form-field__label">{{ t('common.sort') }}</label>
-          <el-input-number v-model="form.sort" :min="0" :max="9999" style="width: 100%" />
-        </div>
-        <div class="form-field">
-          <label class="form-field__label">{{ t('common.status') }}</label>
-          <el-select v-model="form.status" style="width: 100%" :disabled="isProtectedRole">
-            <el-option :label="t('common.statusNormal')" :value="1" />
-            <el-option :label="t('common.disable')" :value="0" />
-          </el-select>
-        </div>
-        <div class="form-field">
-          <label class="form-field__label">{{ t('common.remark') }}</label>
-          <el-input
-            v-model="form.description"
-            type="textarea"
-            :rows="2"
-            :placeholder="t('common.remarkPlaceholder')"
-            maxlength="256"
-            show-word-limit
-          />
+        <!-- 446:14465：排序/状态同排（排序 150 + 状态占满余量），数据范围在备注之前 -->
+        <div class="role-edit__pair">
+          <div class="form-field role-edit__pair-sort">
+            <label class="form-field__label">{{ t('common.sort') }}</label>
+            <el-input-number v-model="form.sort" :min="0" :max="9999" style="width: 100%" />
+          </div>
+          <div class="form-field">
+            <label class="form-field__label">{{ t('common.status') }}</label>
+            <el-select v-model="form.status" style="width: 100%" :disabled="isProtectedRole">
+              <el-option :label="t('common.statusNormal')" :value="1" />
+              <el-option :label="t('common.disable')" :value="0" />
+            </el-select>
+          </div>
         </div>
         <div class="form-field">
           <label class="form-field__label">{{ t('system.dataScopeField') }}</label>
@@ -715,16 +731,46 @@ onMounted(loadList)
           </div>
           <div v-else class="dept-tree-box dept-tree-box--tip">{{ t('system.noDeptData') }}</div>
         </div>
+        <div class="form-field">
+          <label class="form-field__label">{{ t('common.remark') }}</label>
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="2"
+            class="role-edit__remark"
+            :placeholder="t('common.remarkPlaceholder')"
+            maxlength="256"
+            show-word-limit
+          />
+        </div>
       </div>
       <div class="role-edit__tree">
         <div class="role-edit__tree-title">{{ t('system.menuPermissions') }}</div>
+        <!-- 446:14465：搜索 248×32 + 展开/收起各 88×32 工具条，复用既有树操作 -->
+        <div class="role-edit__tree-tools">
+          <el-input
+            v-model="permissionFilter"
+            class="role-edit__tree-search"
+            :placeholder="t('system.menuSearchPlaceholder')"
+            clearable
+            @input="filterPermissionTree"
+          />
+          <el-button class="role-edit__tree-tool" @click="setPermissionTreeExpanded(true)">{{
+            t('system.expandAll')
+          }}</el-button>
+          <el-button class="role-edit__tree-tool" @click="setPermissionTreeExpanded(false)">{{
+            t('system.collapseAll')
+          }}</el-button>
+        </div>
         <div class="role-edit__tree-body">
           <el-tree
             ref="permissionTreeRef"
+            :key="permissionTreeExpanded ? 'perm-expand' : 'perm-collapse'"
             :data="permissionTree"
             node-key="id"
             show-checkbox
-            default-expand-all
+            :default-expand-all="permissionTreeExpanded"
+            :filter-node-method="filterPermissionNode"
             :props="{ label: 'title', children: 'children' }"
             :disabled="isProtectedRole"
             @check="handlePermissionCheck"
@@ -853,6 +899,40 @@ onMounted(loadList)
   font-size: 14px;
   line-height: 22px;
   color: var(--sw-text-regular);
+}
+.role-edit__tree-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.role-edit__tree-search {
+  flex: 0 0 248px;
+  width: 248px;
+  --el-input-height: 32px;
+}
+.role-edit__tree-tool {
+  flex: 0 0 88px;
+  width: 88px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+}
+.role-edit__pair {
+  display: flex;
+  gap: 10px;
+}
+.role-edit__pair-sort {
+  flex: 0 0 150px;
+  width: 150px;
+}
+.role-edit__pair .form-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.role-edit__remark .el-textarea__inner {
+  min-height: 80px;
+  height: 80px;
 }
 .role-edit__tree-body {
   flex: 1 1 auto;

@@ -9,19 +9,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Aim,
-  Clock,
-  DataLine,
-  Filter,
-  Grid,
-  Histogram,
-  List as ListIcon,
-  Odometer,
-  PieChart,
-  Promotion,
-  TrendCharts,
-} from '@element-plus/icons-vue'
 import { useI18n } from '@/locales'
 import { ApiError } from '@/foundation/request'
 import {
@@ -108,25 +95,81 @@ const CHART_CODES: Record<WorkspaceChartType, string> = {
   heatmap: 'chart_heatmap',
 }
 
-const ICONS: Record<string, unknown> = {
-  todo: Clock,
-  favoriteItems: Promotion,
-  activity: DataLine,
-  efficiency: Odometer,
-  metric: Histogram,
-  dataList: ListIcon,
-  chart_bar: Histogram,
-  chart_hbar: Histogram,
-  chart_line: TrendCharts,
-  chart_area: TrendCharts,
-  chart_combo: DataLine,
-  chart_pie: PieChart,
-  chart_donut: PieChart,
-  chart_scatter: Aim,
-  chart_radar: Aim,
-  chart_funnel: Filter,
-  chart_gauge: Odometer,
-  chart_heatmap: Grid,
+/* 273:1600（执行提示13）：组件库图标按当前蓝色原图 18 项一一对应，#2563EB 线性 20×20。 */
+const LIBRARY_ICONS: Record<string, readonly string[]> = {
+  todo: [
+    'M3.5 5.5L5.5 7.5L9 4',
+    'M12 5.5H17',
+    'M3.5 12.5L5.5 14.5L9 11',
+    'M12 12.5H17',
+    'M3.5 5.5',
+    'M3.5 12.5',
+  ],
+  favoriteItems: [
+    'M3.5 3.5H8.5V8.5H3.5Z',
+    'M11.5 3.5H16.5V8.5H11.5Z',
+    'M3.5 11.5H8.5V16.5H3.5Z',
+    'M14 11.5V16.5',
+    'M11.5 14H16.5',
+  ],
+  activity: [
+    'M3.5 3.5H8.5V8.5H3.5Z',
+    'M11.5 3.5H16.5V8.5H11.5Z',
+    'M3.5 11.5H8.5V16.5H3.5Z',
+    'M11.5 11.5H16.5V16.5H11.5Z',
+  ],
+  efficiency: [
+    'M3.5 3.5H8.5V8.5H3.5Z',
+    'M11.5 3.5H16.5V8.5H11.5Z',
+    'M3.5 11.5H8.5V16.5H3.5Z',
+    'M11.5 11.5H16.5',
+    'M11.5 16.5H16.5',
+    'M11.5 14H16.5',
+  ],
+  metric: ['M3.5 16.5H16.5', 'M5.5 16.5V10.5', 'M10 16.5V6.5', 'M14.5 16.5V3.5'],
+  chart_bar: ['M3.5 16.5H16.5', 'M6 16.5V9', 'M10 16.5V4', 'M14 16.5V11.5'],
+  chart_hbar: ['M3.5 3.5V16.5', 'M3.5 5.5H13', 'M3.5 10H16', 'M3.5 14.5H9.5'],
+  chart_line: ['M3.5 3.5V16.5H16.5', 'M5.5 12.5L9.5 8L12.5 10.5L16 5'],
+  chart_area: [
+    'M3.5 3.5V16.5H16.5',
+    'M5.5 13L9 8.5L12 11L16 5.5',
+    'M5.5 13L9 8.5L12 11L16 5.5V16.5H5.5',
+  ],
+  chart_combo: [
+    'M3.5 16.5H16.5',
+    'M6 16.5V11',
+    'M10 16.5V13',
+    'M14 16.5V8.5',
+    'M4.5 6.5L9 8.5L15.5 3.5',
+  ],
+  chart_pie: ['M10 10L10 3.5', 'M10 10L15.6 13.2', 'M17 10A7 7 0 1 1 3 10A7 7 0 1 1 17 10Z'],
+  chart_donut: ['M17 10A7 7 0 1 1 3 10A7 7 0 1 1 17 10Z', 'M13 10A3 3 0 1 1 7 10A3 3 0 1 1 13 10Z'],
+  chart_scatter: [
+    'M5.5 6L5.5 6.01',
+    'M10.5 12L10.5 12.01',
+    'M14.5 7L14.5 7.01',
+    'M7 15L7 15.01',
+    'M14 14.5L14 14.51',
+    'M3.5 16.5H16.5',
+  ],
+  chart_radar: ['M10 3L16.5 8L14 16L6 16L3.5 8Z', 'M10 7.5L12.8 9.6L11.7 13H8.3L7.2 9.6Z'],
+  chart_funnel: ['M4 4H16L12.2 10V14.5L7.8 16.5V10Z'],
+  chart_gauge: ['M3.5 13.5A6.5 6.5 0 1 1 16.5 13.5', 'M10 12.5L13.8 8.2', 'M10 12.5L10 12.51'],
+  chart_heatmap: [
+    'M3.5 3.5H8V8H3.5Z',
+    'M12 3.5H16.5V8H12Z',
+    'M3.5 12H8V16.5H3.5Z',
+    'M12 12H16.5V16.5H12Z',
+    'M8 8H12V12H8Z',
+  ],
+  dataList: [
+    'M5.5 5L5.5 5.01',
+    'M5.5 10L5.5 10.01',
+    'M5.5 15L5.5 15.01',
+    'M9 5H16',
+    'M9 10H16',
+    'M9 15H16',
+  ],
 }
 
 const contentWidth = computed(() => canvasWidth.value || 1200)
@@ -630,7 +673,9 @@ onBeforeUnmount(() => {
               @click="addComponent(item)"
               @dragstart="onLibraryDragStart($event, item)"
             >
-              <el-icon :size="16"><component :is="ICONS[item.typeCode]" /></el-icon>
+              <svg class="wstudio__item-icon" viewBox="0 0 20 20" aria-hidden="true">
+                <path v-for="(d, di) in LIBRARY_ICONS[item.typeCode]" :key="di" :d="d" />
+              </svg>
               <span>{{ t(item.labelKey) }}</span>
             </button>
           </div>
@@ -647,7 +692,9 @@ onBeforeUnmount(() => {
               @click="addComponent(item)"
               @dragstart="onLibraryDragStart($event, item)"
             >
-              <el-icon :size="16"><component :is="ICONS[item.typeCode]" /></el-icon>
+              <svg class="wstudio__item-icon" viewBox="0 0 20 20" aria-hidden="true">
+                <path v-for="(d, di) in LIBRARY_ICONS[item.typeCode]" :key="di" :d="d" />
+              </svg>
               <span>{{ t(item.labelKey) }}</span>
             </button>
           </div>
@@ -885,6 +932,15 @@ onBeforeUnmount(() => {
   margin-top: 18px;
 }
 
+/* 273:1600：系统首行 y246、数据首行 y396。 */
+.wstudio__group:first-of-type {
+  margin-top: 21px;
+}
+
+.wstudio__group + .wstudio__group {
+  margin-top: 17px;
+}
+
 .wstudio__group h3 {
   margin: 0 0 8px;
   color: var(--sw-text-tertiary);
@@ -898,6 +954,16 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(2, 92px);
   /* 273:1600：92×48 按钮、水平 8 / 垂直 12 间距。 */
   gap: 12px 8px;
+}
+
+.wstudio__item-icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .wstudio__item {

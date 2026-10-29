@@ -532,9 +532,72 @@ function onFieldKeySuffix(raw: string) {
   --el-component-size-small: 32px;
 }
 
-/* G36（490:16184）：文字专用面板内距 20（右栏 336 从 x1584 由宿主承担） */
+/* G36（490:16184）：文字专用面板内距 20（右栏 336 从 x1584 由宿主承担）；
+   13 收口：六控件可见框 内容(0,208,296,80)/对齐(0,336,296,36)/字号(0,420,140,32)/
+   字重(1760,420,140,32)/颜色(0,500,296,32)/宽度(0,580,296,32)，默认边框 #DDE3EF，标签 14/22。 */
 aside.config.config--label {
   padding: 20px;
+  --el-border-color: #dde3ef;
+  --el-input-border-color: #dde3ef;
+}
+
+aside.config.config--label .config__head {
+  margin-bottom: 12px;
+}
+
+aside.config.config--label .config__row {
+  margin-bottom: 0;
+}
+
+aside.config.config--label .config__row + .config__row,
+aside.config.config--label .config__row + .config__cols,
+aside.config.config--label .config__cols + .config__row {
+  margin-top: 20px;
+}
+
+/* 字号/字重两列内部的相邻行不参与纵向节奏（否则字重列下坠 20px 并抬高后续行） */
+aside.config.config--label .config__cols .config__row + .config__row {
+  margin-top: 0;
+}
+
+aside.config.config--label .config__label {
+  margin-bottom: 6px;
+  line-height: 22px;
+}
+
+aside.config.config--label :deep(.el-textarea__inner) {
+  box-sizing: border-box;
+  min-height: 80px;
+  height: 80px;
+  border: 1px solid #dde3ef;
+}
+
+aside.config.config--label :deep(.config__align .el-radio-button__inner) {
+  height: 36px;
+  line-height: 34px;
+}
+
+aside.config.config--label .config__cols {
+  column-gap: 16px;
+}
+
+aside.config.config--label .config__cols .el-button {
+  width: 100%;
+}
+
+aside.config.config--label :deep(.el-input__wrapper),
+aside.config.config--label :deep(.el-select__wrapper) {
+  min-height: 32px;
+  height: 32px;
+}
+
+aside.config.config--label .config__color {
+  box-sizing: border-box;
+  height: 32px;
+}
+
+aside.config.config--label .config__color-picker :deep(.el-color-picker__trigger) {
+  height: 30px;
 }
 
 /* V011-BUG-013：恢复输入框常规内边距——文本不再贴边/被裁切（此前 padding 被清零） */

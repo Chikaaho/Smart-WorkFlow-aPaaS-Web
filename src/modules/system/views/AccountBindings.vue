@@ -138,8 +138,9 @@ onMounted(() => {
 .provider-row {
   display: flex;
   align-items: center;
-  height: 84px;
-  padding: 0 4px;
+  height: 66px;
+  margin-bottom: 18px;
+  padding: 0;
 }
 .provider-name {
   font-size: 14px;
@@ -182,8 +183,8 @@ onMounted(() => {
 }
 .account-bindings-dialog .el-dialog__header {
   box-sizing: border-box;
-  margin: 0 0 8px;
-  padding: 24px 24px 0;
+  margin: 0;
+  padding: 28px 25px 0;
 }
 .account-bindings-dialog .el-dialog__title,
 .account-bindings-dialog__title {
@@ -193,22 +194,22 @@ onMounted(() => {
   line-height: 24px;
 }
 .account-bindings-dialog .el-dialog__headerbtn {
-  top: 24px;
-  right: 24px;
-  width: 24px;
-  height: 24px;
+  top: 25px;
+  right: 25px;
+  width: 32px;
+  height: 32px;
 }
 .account-bindings-dialog .el-dialog__body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 8px 40px 0;
+  padding: 4px 25px 0;
 }
 .account-bindings-dialog .el-dialog__footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   margin: 0;
-  padding: 12px 40px 24px;
+  padding: 37px 25px 27px;
 }
 .account-bindings-dialog .el-dialog__footer .el-button {
   width: 80px;
@@ -216,7 +217,7 @@ onMounted(() => {
   margin: 0;
 }
 .account-bindings-dialog .provider-btn {
-  width: 80px;
+  width: 72px;
   height: 32px;
   margin: 0;
 }

@@ -464,9 +464,28 @@ function onDocumentPointerDown(event: MouseEvent): void {
   colorOpen.value = false
 }
 
+/* 495:18680（执行提示13）：颜色面板 430×286 随宿主锚定、边界内完整可见（fixed 定位防画布裁切）。 */
+const colorPanelStyle = ref<{ position: 'fixed'; left: string; top: string } | null>(null)
+
+function placeColorPanel(): void {
+  const btn = colorWrapRef.value?.querySelector('.rt-tool--color') as HTMLElement | null
+  if (!btn) return
+  const r = btn.getBoundingClientRect()
+  let left = r.left
+  if (left + 430 > window.innerWidth - 8) left = window.innerWidth - 8 - 430
+  let top = r.bottom + 6
+  if (top + 286 > window.innerHeight - 8) top = Math.max(8, r.top - 286 - 6)
+  colorPanelStyle.value = {
+    position: 'fixed',
+    left: `${Math.round(left)}px`,
+    top: `${Math.round(top)}px`,
+  }
+}
+
 function openColor(): void {
   saveSelection()
   colorOpen.value = !colorOpen.value
+  if (colorOpen.value) void nextTick(placeColorPanel)
 }
 
 onMounted(() => {
@@ -548,7 +567,12 @@ watch(
         >
           A
         </button>
-        <div v-if="colorOpen" class="rt-colors" @mousedown.prevent>
+        <div
+          v-if="colorOpen"
+          class="rt-colors"
+          :style="colorPanelStyle ?? undefined"
+          @mousedown.prevent
+        >
           <p class="rt-colors__label">{{ t('appearance.presetColors') }}</p>
           <div class="rt-colors__swatches">
             <button
@@ -1032,12 +1056,16 @@ watch(
 
 <style>
 /* 495:18648/18663：字体 208×224（6 行 36）、字号 120×260（7 行 36）浮层。 */
+/* 495:18648/18663（执行提示13）：含边框可见外框 208×224 / 120×260；选中面 #EFF6FF 文字蓝。 */
 .rt-font-popper {
+  box-sizing: border-box;
   width: 208px;
+  height: 224px;
 }
 .rt-font-popper .el-select-dropdown {
   box-sizing: border-box;
-  padding: 4px 0;
+  height: 222px;
+  padding: 3px 0;
 }
 .rt-font-popper .el-select-dropdown__list {
   max-height: 216px;
@@ -1047,12 +1075,23 @@ watch(
   height: 36px;
   line-height: 36px;
 }
+.rt-font-popper .el-select-dropdown__item.is-hovering,
+.rt-font-popper .el-select-dropdown__item:hover {
+  background-color: #eff6ff;
+}
+.rt-font-popper .el-select-dropdown__item.is-selected {
+  color: var(--sw-color-primary, #2563eb);
+  background-color: #eff6ff;
+}
 .rt-size-popper {
+  box-sizing: border-box;
   width: 120px;
+  height: 260px;
 }
 .rt-size-popper .el-select-dropdown {
   box-sizing: border-box;
-  padding: 4px 0;
+  height: 258px;
+  padding: 3px 0;
 }
 .rt-size-popper .el-select-dropdown__list {
   max-height: 252px;
@@ -1061,6 +1100,14 @@ watch(
 .rt-size-popper .el-select-dropdown__item {
   height: 36px;
   line-height: 36px;
+}
+.rt-size-popper .el-select-dropdown__item.is-hovering,
+.rt-size-popper .el-select-dropdown__item:hover {
+  background-color: #eff6ff;
+}
+.rt-size-popper .el-select-dropdown__item.is-selected {
+  color: var(--sw-color-primary, #2563eb);
+  background-color: #eff6ff;
 }
 /* 受控令牌的固定样式（内容由 innerHTML 写入，scoped 选择器无法命中）。 */
 .rt-editor [data-rt-font='default'] {
