@@ -351,6 +351,11 @@ function cancel(): void {
 .subfield-dialog .el-table .el-table__cell:first-child .cell {
   padding-left: 18px;
 }
+/* 273:1396（执行提示15）：tbody 组件类型/必填值文字较原图偏右 8px——仅这两列正文内距 -8（表头/首列/操作区不动） */
+.subfield-dialog .el-table tbody .el-table__cell:nth-child(2) .cell,
+.subfield-dialog .el-table tbody .el-table__cell:nth-child(3) .cell {
+  padding-left: 4px;
+}
 .subfield-dialog .el-table td.el-table__cell {
   height: 45px;
 }
