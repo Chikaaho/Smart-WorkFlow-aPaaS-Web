@@ -20,6 +20,14 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const draft = ref<WorkspaceFilter[]>([])
 
+/** 操作符枚举只用于内部取值；下拉展示统一走本地化文案，避免直接暴露 EQ/LIKE 等枚举。 */
+const OP_LABEL_KEYS: Record<WorkspaceFilterOp, string> = {
+  EQ: 'form.opEquals',
+  LIKE: 'workspace.filter.opLike',
+  GE: 'workspace.filter.opGe',
+  LE: 'workspace.filter.opLe',
+}
+
 watch(
   () => props.modelValue,
   (open) => {
@@ -90,7 +98,12 @@ const valid = computed(() =>
           />
         </el-select>
         <el-select v-model="filter.op" class="wfilter__op">
-          <el-option v-for="op in ops(filter.field)" :key="op" :label="op" :value="op" />
+          <el-option
+            v-for="op in ops(filter.field)"
+            :key="op"
+            :label="t(OP_LABEL_KEYS[op])"
+            :value="op"
+          />
         </el-select>
         <el-select
           v-if="options(filter.field).length"
@@ -122,8 +135,8 @@ const valid = computed(() =>
       <button type="button" class="wfilter__add" @click="addFilter">
         + {{ t('workspace.filter.add') }}
       </button>
-      <!-- 命中数表面：只在拿到真实计数且有条件时显示；零条件保持空态，不造命中数 -->
-      <p v-if="typeof matchCount === 'number' && draft.length" class="wfilter__match">
+      <!-- 命中数表面：只在拿到真实计数且条件完整时显示；空条件/空值保持空态，不造命中数 -->
+      <p v-if="typeof matchCount === 'number' && draft.length && valid" class="wfilter__match">
         {{ t('workspace.filter.matchCount', { count: matchCount }) }}
       </p>
     </div>

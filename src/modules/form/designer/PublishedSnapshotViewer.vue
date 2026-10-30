@@ -176,6 +176,17 @@ function openScriptDetail(row: SnapshotScriptView): void {
   scriptDetailVisible.value = true
 }
 
+/** Q29（518:24135）：审批人来源脚本固定走 1200 宽只读代码窗（行号 + 只读标识 + 关闭 80×32）。 */
+function openApprovalScript(row: SnapshotScriptView): void {
+  scriptDetailMode.value = 'code'
+  scriptDetailTitle.value = t('form.snapshotViewer.approvalScripts')
+  scriptDetailCode.value = row.code
+  scriptDetailMeta.value = [row.label, scriptSourceLabel(row), row.nodeKey]
+    .filter(Boolean)
+    .join(' · ')
+  scriptDetailVisible.value = true
+}
+
 function openValidationDetail(row: SnapshotConstraintRow): void {
   validationDetailTitle.value = `${row.label} · ${validationLabel(row.kind)}`
   validationDetailRow.value = row
@@ -1566,12 +1577,21 @@ watch(
                     <strong>{{ row.label }}</strong
                     ><span>{{ scriptKindLabel(row.kind) }}</span
                     ><span>{{ row.nodeKey || '—' }}</span
-                    ><span>{{ eventLabel(row.event) }}</span
+                    ><span v-if="row.event">{{ eventLabel(row.event) }}</span
                     ><span v-if="row.enabled != null">{{
                       row.enabled
                         ? t('form.snapshotViewer.enabled')
                         : t('form.snapshotViewer.disabled')
                     }}</span>
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      data-testid="approval-script-view"
+                      @click="openApprovalScript(row)"
+                    >
+                      {{ t('common.view') }}
+                    </el-button>
                   </header>
                   <pre>{{ row.code }}</pre>
                 </article>

@@ -350,9 +350,11 @@ function nodeInlineScripts(
   for (const [key, value] of Object.entries(node.config)) {
     if (typeof value !== 'string' || !value.trim()) continue
     if (!/(script|expression)$/i.test(key)) continue
+    // 通用脚本清单只按配置键收集；是否为审批人来源由参与人策略元数据判定，
+    // 不按键名（如 participantScript/approverExpression）猜类型。
     rows.push({
       key: `${process.defId}:${process.graphVersion}:${node.id}:${key}`,
-      kind: /participant|approver/i.test(key) ? 'approverExpression' : 'nodeConfig',
+      kind: 'nodeConfig',
       source: `${process.defName} · v${process.graphVersion}`,
       label: `${node.name} · ${key}`,
       nodeKey: node.id,
@@ -360,22 +362,18 @@ function nodeInlineScripts(
     })
   }
 
-  const participant = parseObject(node.config.participant ?? node.config.approver)
-  const strategy = text(participant?.strategy ?? participant?.type)
-  if (strategy === 'EXPRESSION') {
-    const expression = participant?.value ?? participant?.expression ?? participant?.script
-    const code = typeof expression === 'string' ? expression : JSON.stringify(expression ?? '')
-    if (code.trim()) {
-      rows.push({
-        key: `${process.defId}:${process.graphVersion}:${node.id}:approver-expression`,
-        kind: 'approverExpression',
-        source: `${process.defName} · v${process.graphVersion}`,
-        label: node.name,
-        nodeKey: node.id,
-        code,
-      })
-    }
+  const approvalScript = approvalParticipantScript(node)
+  if (approvalScript) {
+    rows.push({
+      key: `${process.defId}:${process.graphVersion}:${node.id}:approver-expression`,
+      kind: 'approverExpression',
+      source: `${process.defName} · v${process.graphVersion}`,
+      label: node.name,
+      nodeKey: node.id,
+      code: approvalScript,
+    })
   }
+
   node.listeners.forEach((listener, listenerIndex) => {
     for (const [key, value] of Object.entries(listener)) {
       if (typeof value !== 'string' || !value.trim()) continue
@@ -447,14 +445,29 @@ export function buildSnapshotScripts(
   return dedupeScripts(rows)
 }
 
+/**
+ * 审批人来源脚本的真实判据（冻结 JSON 元数据）：
+ * 节点类型属于审批/会签人工节点，且 participant|approver 的 strategy|type 为 EXPRESSION，
+ * value 为非空表达式文本。监听器与节点/流程触发器属于「监听」分类，不得混入本区。
+ */
+function approvalParticipantScript(node: SnapshotNodeView): string {
+  const nodeType = node.type.trim().toUpperCase()
+  if (nodeType !== 'APPROVAL' && nodeType !== 'CONSENSUS') return ''
+  const participant = parseObject(node.config.participant) ?? parseObject(node.config.approver)
+  const strategy = text(participant?.strategy ?? participant?.type)
+    .trim()
+    .toUpperCase()
+  if (strategy !== 'EXPRESSION') return ''
+  const expression = participant?.value
+  return typeof expression === 'string' && expression.trim() ? expression : ''
+}
+
 export function buildSnapshotApprovalScripts(
   processes: SnapshotProcessSource[],
 ): SnapshotScriptView[] {
+  // 只保留参与人元数据判定出的审批人来源脚本；节点/流程触发器与监听器不在本分类。
   return buildSnapshotScripts({ title: '', fields: [] }, processes).filter(
-    (row) =>
-      row.kind === 'approverExpression' ||
-      (row.kind === 'nodeTrigger' &&
-        (row.event === 'NODE_ENTERING' || row.event === 'NODE_ROUND_COMPLETED')),
+    (row) => row.kind === 'approverExpression',
   )
 }
 

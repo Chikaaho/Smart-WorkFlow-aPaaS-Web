@@ -668,7 +668,12 @@ async function runAction(
   }
 }
 
-async function handleApprove() {
+// ── 设计 272:1767 同意申请弹窗：独立 560 宽确认窗（取消/确定 80×32） ──
+// 当前节点没有"办理时选人"条件，弹窗只承接确认语义，不额外造选人控件。
+const agreeDialogVisible = ref(false)
+const agreeSubmitting = ref(false)
+
+function handleApprove() {
   if (acting.value || !canApprove.value) return
   if (!ensureOpinionData()) return
   // P64 阶段Ⅰ：节点表单必填客户端预检（服务端 2433 为权威口径）
@@ -676,10 +681,19 @@ async function handleApprove() {
     openValidationDialog(nodeFormMissingItems())
     return
   }
+  agreeDialogVisible.value = true
+}
+
+/** 弹窗内确认后才提交；取消关闭不触发任何审批请求。 */
+async function confirmAgree(): Promise<void> {
+  if (agreeSubmitting.value) return
+  agreeSubmitting.value = true
   acting.value = 'approve'
   try {
-    await taskApproval.submit('APPROVE')
+    await taskApproval.submit('APPROVE', { skipConfirm: true })
+    agreeDialogVisible.value = false
   } finally {
+    agreeSubmitting.value = false
     acting.value = null
   }
 }
@@ -1442,22 +1456,42 @@ onMounted(loadDetail)
       </div>
     </el-card>
 
-    <!-- I3 生命周期动作弹窗 -->
+    <!-- I3 生命周期动作弹窗；转办按设计 273:1877 用 640 宽与 32 高输入/底栏 -->
     <el-dialog
       v-model="lifecycleDialogVisible"
-      :title="lifecycleDialog ? LIFECYCLE_META[lifecycleDialog.kind].title : ''"
-      width="420px"
+      :title="
+        lifecycleDialog
+          ? lifecycleDialog.kind === 'TRANSFER'
+            ? t('workflow.transferOwnTask')
+            : LIFECYCLE_META[lifecycleDialog.kind].title
+          : ''
+      "
+      :width="lifecycleDialog?.kind === 'TRANSFER' ? '640px' : '420px'"
+      :class="lifecycleDialog?.kind === 'TRANSFER' ? 'transfer-dialog' : undefined"
       :close-on-click-modal="false"
     >
-      <el-form label-position="top" size="small">
+      <el-form
+        label-position="top"
+        :size="lifecycleDialog?.kind === 'TRANSFER' ? 'default' : 'small'"
+      >
         <template
           v-if="lifecycleDialog?.kind === 'TRANSFER' || lifecycleDialog?.kind === 'DELEGATE'"
         >
-          <el-form-item :label="t('workflow.targetUser')">
+          <el-form-item
+            :label="
+              lifecycleDialog?.kind === 'TRANSFER'
+                ? t('common.selectUser')
+                : t('workflow.targetUser')
+            "
+          >
             <!-- V012-BUG-019：目标用户改选择器（存 id 显示姓名） -->
             <UserRemoteSelect
               :model-value="lifecycleDialog.targetUserId || undefined"
-              :placeholder="t('workflow.pickTargetUser')"
+              :placeholder="
+                lifecycleDialog?.kind === 'TRANSFER'
+                  ? t('common.selectUser')
+                  : t('workflow.pickTargetUser')
+              "
               style="width: 100%"
               @update:model-value="
                 (v: string | string[] | null) => {
@@ -1525,7 +1559,14 @@ onMounted(loadDetail)
           "
           :label="t('common.remark')"
         >
-          <el-input v-model="opinionComment" :placeholder="t('notify.optionalTag')" />
+          <el-input
+            v-model="opinionComment"
+            :placeholder="
+              lifecycleDialog?.kind === 'TRANSFER'
+                ? t('common.pleaseInput')
+                : t('notify.optionalTag')
+            "
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -1552,6 +1593,32 @@ onMounted(loadDetail)
         <el-button @click="cancelDialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="cancelSubmitting" @click="submitCancelReservation">
           确认取消
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 同意申请弹窗（设计 272:1767）：560 宽 / 用户语言确认句 / 底栏 取消·确定 80×32；
+         打开后取消即关闭，不提交同意。 -->
+    <el-dialog
+      v-model="agreeDialogVisible"
+      :title="t('workflow.agreeDialogTitle')"
+      width="560px"
+      class="agree-dialog"
+      :close-on-click-modal="false"
+      data-testid="agree-dialog"
+    >
+      <p class="agree-dialog__message">{{ t('workflow.agreeDialogMessage') }}</p>
+      <template #footer>
+        <el-button :disabled="agreeSubmitting" @click="agreeDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="agreeSubmitting"
+          data-testid="agree-confirm"
+          @click="confirmAgree"
+        >
+          {{ t('common.confirm') }}
         </el-button>
       </template>
     </el-dialog>
@@ -2203,6 +2270,42 @@ onMounted(loadDetail)
   padding: var(--el-dialog-padding-primary) 25px;
 }
 .task-detail :deep(.reject-dialog .el-dialog__footer .el-button) {
+  width: 80px;
+  height: 32px;
+}
+/* 设计 272:1767 同意申请弹窗：560 宽 / 正文 14-22 / 底栏 取消·确定 80×32。 */
+.task-detail :deep(.agree-dialog.el-dialog) {
+  padding: var(--el-dialog-padding-primary) 25px;
+}
+.task-detail :deep(.agree-dialog .el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+}
+.agree-dialog__message {
+  margin: 0;
+  color: #303133;
+  font-size: 14px;
+  line-height: 22px;
+}
+/* 设计 273:1877 转办弹窗：640 宽（左右 25 → 590 输入）/ 人员与备注 32 高 /
+   底栏 取消·确定 80×32；候选与选择入口沿用 UserRemoteSelect。 */
+.task-detail :deep(.transfer-dialog.el-dialog) {
+  padding: var(--el-dialog-padding-primary) 25px;
+}
+.task-detail :deep(.transfer-dialog .el-form-item__label) {
+  height: 22px;
+  line-height: 22px;
+  margin-bottom: 6px;
+}
+.task-detail :deep(.transfer-dialog .el-select__wrapper),
+.task-detail :deep(.transfer-dialog .el-input__wrapper) {
+  box-sizing: border-box;
+  min-height: 32px;
+  height: 32px;
+}
+.task-detail :deep(.transfer-dialog .el-dialog__footer .el-button) {
+  box-sizing: border-box;
   width: 80px;
   height: 32px;
 }

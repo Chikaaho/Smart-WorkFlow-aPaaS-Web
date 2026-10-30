@@ -337,26 +337,24 @@ onMounted(load)
         </div>
       </section>
 
-      <section v-else class="ps-card">
-        <h2>{{ t('workflow.processSettingsListeners') }}</h2>
-        <p class="ps-hint">{{ t('workflow.processSettingsListenersHint') }}</p>
-        <div class="ps-listener-actions">
+      <section v-else class="ps-card ps-card--listeners">
+        <div class="ps-card__head">
+          <h2>{{ t('workflow.processSettingsListeners') }}</h2>
           <el-button type="primary" @click="openListenerEditor()">
             {{ t('workflow.processSettingsAddListener') }}
           </el-button>
-          <span class="ps-hint">{{ t('workflow.processSettingsListenerSaveHint') }}</span>
         </div>
         <p v-if="processListeners.length === 0" class="ps-empty">
           {{ t('workflow.processSettingsNoListeners') }}
         </p>
-        <el-table v-else :data="processListeners" size="small">
-          <el-table-column :label="t('workflow.processSettingsListenerName')" min-width="180">
+        <el-table v-else :data="processListeners">
+          <el-table-column :label="t('workflow.processSettingsListenerName')" min-width="250">
             <template #default="{ row }">{{ row.name || row.triggerId }}</template>
           </el-table-column>
-          <el-table-column :label="t('workflow.processSettingsListenerEvent')" width="120">
+          <el-table-column :label="t('workflow.processSettingsListenerEvent')" min-width="255">
             <template #default="{ row }">{{ eventLabel(row.event) }}</template>
           </el-table-column>
-          <el-table-column :label="t('workflow.processSettingsListenerEnabled')" width="90">
+          <el-table-column :label="t('workflow.processSettingsListenerEnabled')" min-width="255">
             <template #default="{ row }">
               <el-switch
                 :model-value="row.enabled !== false"
@@ -367,7 +365,7 @@ onMounted(load)
               />
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.actions')" width="260">
+          <el-table-column :label="t('common.actions')" min-width="255">
             <template #default="{ row, $index }">
               <el-button
                 link
@@ -402,6 +400,8 @@ onMounted(load)
             </template>
           </el-table-column>
         </el-table>
+        <p class="ps-hint">{{ t('workflow.processSettingsListenersHint') }}</p>
+        <p class="ps-hint">{{ t('workflow.processSettingsListenerSaveHint') }}</p>
         <p v-if="nodeListenerCount > 0" class="ps-hint">
           {{ t('workflow.processSettingsNodeListenersHint', { count: nodeListenerCount }) }}
         </p>
@@ -413,20 +413,26 @@ onMounted(load)
 
     <el-dialog
       v-model="listenerDialogVisible"
+      class="sw-edit-dialog"
+      align-center
       :title="
         listenerEditId
           ? t('workflow.processSettingsEditListener')
           : t('workflow.processSettingsAddListener')
       "
-      width="520px"
+      width="760px"
       append-to-body
     >
-      <el-form label-position="top" size="small">
-        <el-form-item :label="t('workflow.processSettingsListenerName')">
+      <el-form label-position="top">
+        <el-form-item :label="t('workflow.processSettingsListenerName')" required>
           <el-input v-model="listenerDraft.name" maxlength="60" />
         </el-form-item>
-        <el-form-item :label="t('workflow.processSettingsListenerEvent')">
-          <el-select v-model="listenerDraft.event" style="width: 100%">
+        <el-form-item :label="t('workflow.processSettingsListenerEvent')" required>
+          <el-select
+            v-model="listenerDraft.event"
+            popper-class="ps-listener-event-popper"
+            style="width: 100%"
+          >
             <el-option :label="t('workflow.processSettingsEventStart')" value="PROCESS_START" />
             <el-option :label="t('workflow.processSettingsEventEnd')" value="PROCESS_COMPLETED" />
           </el-select>
@@ -446,7 +452,7 @@ onMounted(load)
       </el-form>
       <template #footer>
         <el-button @click="listenerDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="saveListenerDraft">{{ t('common.confirm') }}</el-button>
+        <el-button type="primary" @click="saveListenerDraft">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
@@ -473,7 +479,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 .ps-header h1 {
   flex: 1;
@@ -542,6 +548,50 @@ onMounted(load)
   font-size: 16px;
   font-weight: 600;
 }
+/* 0.2.0 Q14（设计 380:7782）：监听卡 1652 宽，标题行右侧放新增入口。 */
+.ps-card.ps-card--listeners {
+  max-width: 1652px;
+}
+.ps-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 32px;
+  margin-bottom: 16px;
+}
+.ps-card__head h2 {
+  margin: 0;
+  line-height: 24px;
+}
+/* 表头 36、真实数据行 65；单元格高度按 border-box 计算。 */
+.ps-card--listeners :deep(.el-table) {
+  --sw-list-table-header-background: var(--sw-surface-page);
+}
+.ps-card--listeners :deep(.el-table th.el-table__cell) {
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0;
+  border-bottom: 0;
+  font-size: 12px;
+  font-weight: 400;
+}
+.ps-card--listeners :deep(.el-table td.el-table__cell) {
+  box-sizing: border-box;
+  height: 65px;
+  padding: 0;
+  border-bottom: 0;
+}
+.ps-card--listeners :deep(.el-table__body-wrapper .el-table__row) {
+  height: 65px;
+}
+.ps-card--listeners :deep(.el-table .cell) {
+  padding: 0 16px;
+  line-height: 22px;
+}
+.ps-card--listeners :deep(.el-table__inner-wrapper::before) {
+  display: none;
+}
 .ps-field {
   margin-bottom: 24px;
 }
@@ -585,15 +635,6 @@ onMounted(load)
   color: var(--sw-text-secondary);
   font-size: 13px;
 }
-.ps-listener-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 12px 0;
-}
-.ps-listener-actions .ps-hint {
-  margin: 0;
-}
 .ps-listener-back {
   margin-top: 16px;
 }
@@ -612,5 +653,14 @@ onMounted(load)
 }
 .ps-listeners li span {
   color: var(--sw-text-secondary);
+}
+</style>
+
+<style>
+/* 监听编辑窗的时机下拉：选项 32 高（传送后不带 scoped 属性，需全局选择器）。 */
+.ps-listener-event-popper .el-select-dropdown__item {
+  box-sizing: border-box;
+  height: 32px;
+  line-height: 32px;
 }
 </style>

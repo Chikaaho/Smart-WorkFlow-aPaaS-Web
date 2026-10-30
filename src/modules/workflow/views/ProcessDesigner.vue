@@ -450,20 +450,47 @@ function beforeUnloadGuard(event: { preventDefault(): void; returnValue: string 
   event.preventDefault()
   event.returnValue = ''
 }
+/** 未保存离开确认（设计 272:1575）：600 宽三选一——取消/不保存/保存。 */
+const leaveConfirmVisible = ref(false)
+let leaveConfirmResolver: ((proceed: boolean) => void) | null = null
+
+function settleLeaveConfirm(proceed: boolean): void {
+  const resolve = leaveConfirmResolver
+  leaveConfirmResolver = null
+  leaveConfirmVisible.value = false
+  resolve?.(proceed)
+}
+
+function askLeaveConfirmation(): Promise<boolean> {
+  // 同一时刻只挂一个确认；重复触发按“继续编辑”处理，避免并发导航双弹窗。
+  if (leaveConfirmResolver) return Promise.resolve(false)
+  return new Promise<boolean>((resolve) => {
+    leaveConfirmResolver = resolve
+    leaveConfirmVisible.value = true
+  })
+}
+
 async function confirmLeaveIfDirty(): Promise<boolean> {
   if (!dirty.value) return true
-  try {
-    await ElMessageBox.confirm('您还有未保存的内容，是否退出', '提示', {
-      confirmButtonText: '退出',
-      cancelButtonText: '继续编辑',
-      type: 'warning',
-    })
-    dirty.value = false
-    return true
-  } catch {
-    return false
-  }
+  const proceed = await askLeaveConfirmation()
+  if (!proceed) return false
+  dirty.value = false
+  return true
 }
+
+/** 关闭按钮 / Esc / 点击遮罩：继续编辑。 */
+function onLeaveConfirmClosed(): void {
+  settleLeaveConfirm(false)
+}
+
+/** 保存成功后离开；保存失败留在编辑器（错误沿用既有保存提示）。 */
+function saveAndLeave(): void {
+  void (async () => {
+    const saved = await save()
+    settleLeaveConfirm(saved)
+  })()
+}
+
 onBeforeRouteLeave(() => confirmLeaveIfDirty())
 
 /** 高级配置元数据（定义 payload 的 advancedConfig 扩展；缺省展示占位符）。 */
@@ -5416,6 +5443,29 @@ function nodeLabelLines(label: string) {
       <ProcessGraphView v-if="graph" :graph="graph" :height="640" />
     </el-dialog>
 
+    <!-- 0.2.0 Q55（设计 272:1575）：未保存离开确认，保存成功后才离开。 -->
+    <el-dialog
+      v-model="leaveConfirmVisible"
+      class="designer-leave-confirm"
+      align-center
+      width="600px"
+      append-to-body
+      :title="t('workflow.designerSaveChangesTitle')"
+      @closed="onLeaveConfirmClosed"
+    >
+      <template #footer>
+        <el-button :disabled="saving" @click="settleLeaveConfirm(false)">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button :disabled="saving" @click="settleLeaveConfirm(true)">
+          {{ t('workflow.designerDiscardChanges') }}
+        </el-button>
+        <el-button type="primary" :loading="saving" @click="saveAndLeave">
+          {{ t('common.save') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <ThemeRuleDialog v-model:visible="themeRuleVisible" :def="themeRuleDef" @saved="load" />
   </div>
 </template>
@@ -6979,5 +7029,52 @@ function nodeLabelLines(label: string) {
   height: 42px;
   padding: 4px 0;
   font-weight: 400;
+}
+
+/* ═══ 0.2.0 Q55（设计 272:1575）：未保存离开确认——600 宽、标题 16/24、
+   取消/不保存/保存 三按钮各 80×32，右下对齐。 ═══ */
+.el-dialog.designer-leave-confirm {
+  --el-dialog-padding-primary: 0px;
+  box-sizing: border-box;
+  width: 600px;
+  max-width: calc(100vw - 32px);
+  padding: 0;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 12px;
+}
+.designer-leave-confirm .el-dialog__header,
+.designer-leave-confirm .el-dialog__header.show-close {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 27px 56px 0 24px;
+}
+.designer-leave-confirm .el-dialog__title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--sw-text-primary);
+}
+.designer-leave-confirm .el-dialog__headerbtn {
+  top: 27px;
+  right: 24px;
+  width: 24px;
+  height: 24px;
+}
+.designer-leave-confirm .el-dialog__body {
+  padding: 0;
+}
+.designer-leave-confirm .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 23px 24px 26px;
+}
+.designer-leave-confirm .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
 }
 </style>

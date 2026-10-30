@@ -66,7 +66,8 @@ const queryKey = computed(() =>
     xField: props.config.xField,
     yField: props.config.yField,
     filters: props.config.filters,
-    columns: props.config.columns,
+    // 列宽/列名只影响呈现，不触发重新取数；查询只依赖字段顺序。
+    columns: props.config.columns?.map((column) => column.field),
     sortField: props.config.sortField,
     sortOrder: props.config.sortOrder,
     pageSize: props.config.pageSize,
@@ -136,6 +137,15 @@ const chartMetrics = computed(() =>
 )
 
 const columns = computed(() => props.config.columns ?? [])
+/** 有 width 的列走固定像素宽，未设置宽度的列继续按剩余空间等分。 */
+const listTemplate = computed(() => {
+  const tracks = columns.value.map((column) =>
+    typeof column.width === 'number' && column.width > 0
+      ? `${Math.round(column.width)}px`
+      : 'minmax(0, 1fr)',
+  )
+  return tracks.length ? tracks.join(' ') : 'minmax(0, 1fr)'
+})
 const pageCount = computed(() =>
   Math.max(1, Math.ceil(total.value / Math.max(1, props.config.pageSize ?? 10))),
 )
@@ -339,10 +349,7 @@ function chartStyle() {
     </template>
     <template v-else>
       <div class="wdata__list" :class="{ 'wdata__list--auto': config.presentation === 'auto' }">
-        <div
-          class="wdata__list-head"
-          :style="{ gridTemplateColumns: `repeat(${Math.max(1, columns.length)}, minmax(0, 1fr))` }"
-        >
+        <div class="wdata__list-head" :style="{ gridTemplateColumns: listTemplate }">
           <span v-for="column in columns" :key="column.field">{{ column.label }}</span>
         </div>
         <div class="wdata__list-body">
@@ -350,9 +357,7 @@ function chartStyle() {
             v-for="(row, index) in rows"
             :key="String(row.id ?? index)"
             class="wdata__list-row"
-            :style="{
-              gridTemplateColumns: `repeat(${Math.max(1, columns.length)}, minmax(0, 1fr))`,
-            }"
+            :style="{ gridTemplateColumns: listTemplate }"
           >
             <span v-for="column in columns" :key="column.field">
               {{ cellText(column.field, row[column.field]) }}

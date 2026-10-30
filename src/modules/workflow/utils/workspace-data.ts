@@ -36,6 +36,8 @@ export interface WorkspaceMetricConfig {
 export interface WorkspaceColumnConfig {
   field: string
   label: string
+  /** 列宽（px）；缺省表示沿用列表自适应布局。 */
+  width?: number
 }
 
 export interface WorkspaceChartStyle {

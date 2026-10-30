@@ -303,7 +303,12 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await nextTick()
 
-    await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
+    const approveVm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      confirmAgree: () => Promise<void>
+    }
+    await approveVm.handleApprove()
+    await approveVm.confirmAgree()
     await nextTick()
 
     expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'complete', undefined)
@@ -337,7 +342,12 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await flushPromises()
 
-    await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
+    const approveVm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      confirmAgree: () => Promise<void>
+    }
+    await approveVm.handleApprove()
+    await approveVm.confirmAgree()
     await nextTick()
 
     // 无 opinionForm 且无 comment：payload 不得因此丢掉 nodeFormData（服务端同事务提交依赖它）
@@ -434,7 +444,12 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await nextTick()
 
-    await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
+    const approveVm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      confirmAgree: () => Promise<void>
+    }
+    await approveVm.handleApprove()
+    await approveVm.confirmAgree()
     await nextTick()
 
     expect(ElMessage.error).toHaveBeenCalledWith('任务已被他人办理')
@@ -453,7 +468,12 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await nextTick()
 
-    await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
+    const approveVm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      confirmAgree: () => Promise<void>
+    }
+    await approveVm.handleApprove()
+    await approveVm.confirmAgree()
 
     expect(ElMessage.success).toHaveBeenCalledWith(i18n.global.t('common.statusApproved'))
     expect(ElMessage.error).not.toHaveBeenCalled()
@@ -1134,11 +1154,13 @@ describe('TaskDetail 校验提示弹窗（设计 300:1808）', () => {
 
     const vm = wrapper.vm as unknown as {
       handleApprove: () => Promise<void>
+      confirmAgree: () => Promise<void>
       opinionData: Record<string, unknown>
       validationDialogVisible: boolean
     }
     vm.opinionData = { comment: '同意' }
     await vm.handleApprove()
+    await vm.confirmAgree()
     await nextTick()
 
     expect(vm.validationDialogVisible).toBe(false)
@@ -1217,6 +1239,7 @@ describe('TaskDetail 意见人员字段（direction-ui-completion-020）', () =>
     vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
     vm.opinionData = { assignee: '1001' }
     await vm.handleApprove()
+    await (vm as unknown as { confirmAgree: () => Promise<void> }).confirmAgree()
     await nextTick()
 
     const call = vi.mocked(acceptTaskAction).mock.calls.at(-1)

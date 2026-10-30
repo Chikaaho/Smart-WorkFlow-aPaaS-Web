@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * 数据列表列头：显示、列名、顺序绑定既有列配置。
+ * 数据列表列头：显示、列名、宽度、顺序绑定既有列配置。
  *
- * “显示”勾选表示该列是否随确定写入列配置；宽度由布局自适应呈现，
- * 不新增配置字段、不单独保存列配置（取消退出语义与原先一致）。
+ * “显示”勾选表示该列是否随确定写入列配置；宽度为可选本地配置，
+ * 有值时列表按固定宽度渲染，留空则沿用原有自适应布局。
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from '@/locales'
@@ -57,6 +57,15 @@ function move(index: number, delta: number): void {
   draft.value.splice(target, 0, item)
 }
 
+/** 列宽可留空：留空即回退自适应，不把空值写成 0 或默认宽度。 */
+function setWidth(column: DraftColumn, value: number | null | undefined): void {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    column.width = undefined
+    return
+  }
+  column.width = Math.round(value)
+}
+
 const hasIncluded = computed(() => draft.value.some((column) => column.included && column.field))
 
 function confirm(): void {
@@ -90,12 +99,20 @@ function confirm(): void {
         <el-checkbox v-model="column.included" />
         <span class="wcolumns__field">{{ column.field }}</span>
         <el-input v-model="column.label" class="wcolumns__label" />
-        <el-input
-          class="wcolumns__width"
-          :model-value="t('workspace.columns.adaptive')"
-          readonly
-          :title="t('workspace.columns.adaptive')"
-        />
+        <div class="wcolumns__width-cell">
+          <el-input-number
+            :model-value="column.width"
+            class="wcolumns__width"
+            :min="40"
+            :max="2000"
+            :step="10"
+            :precision="0"
+            :controls="false"
+            :placeholder="t('workspace.columns.adaptive')"
+            @update:model-value="setWidth(column, $event)"
+          />
+          <span v-if="column.width" class="wcolumns__unit">px</span>
+        </div>
         <div class="wcolumns__order">
           <button
             type="button"
@@ -168,10 +185,42 @@ function confirm(): void {
   font-size: 12px;
 }
 
+/* 提示29 Q02：数据行 87 高，控件在行内垂直居中且仍保持 32 高 */
 .wcolumns__row {
-  min-height: 48px;
-  padding: 8px 12px;
+  box-sizing: border-box;
+  height: 87px;
+  padding: 0 12px;
   border-bottom: 1px solid #f0f2f7;
+}
+
+/* 提示29 Q02：勾选视觉框 18×18（Element Plus 默认 14） */
+.wcolumns__row :deep(.el-checkbox) {
+  height: 32px;
+  margin-right: 0;
+}
+
+.wcolumns__row :deep(.el-checkbox__inner) {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+/* 全局 tokens.css 对 checkbox 28×28 用了 !important（BF20261013-016），
+   本窗须以更高特异性 + !important 让位到 18×18。弹窗 teleport 到 body。 */
+:global(.wcolumns-dialog .el-checkbox__inner) {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 4px;
+}
+
+:global(.wcolumns-dialog .el-checkbox__inner::after) {
+  width: 4px !important;
+  height: 8px !important;
+}
+
+.wcolumns__row :deep(.el-checkbox__inner::after) {
+  width: 4px;
+  height: 8px;
 }
 
 .wcolumns__field {
@@ -183,9 +232,21 @@ function confirm(): void {
   font-size: 13px;
 }
 
-/* 宽度由布局自适应呈现：只读展示，不新增配置字段 */
-.wcolumns__width :deep(.el-input__inner) {
+/* 提示29 Q02：宽度可编辑；留空回退自适应，单位与设计一致 */
+.wcolumns__width-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.wcolumns__width {
+  width: 110px;
+}
+
+.wcolumns__unit {
   color: var(--sw-text-tertiary);
+  font-size: 12px;
 }
 
 .wcolumns__order {

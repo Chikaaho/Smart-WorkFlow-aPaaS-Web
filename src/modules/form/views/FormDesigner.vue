@@ -529,7 +529,10 @@ async function doSave(): Promise<boolean> {
 
   savePhase.value = 'saving'
   try {
-    const result = await saveDraftDefinition(definition, formId.value, key, createExtras.value)
+    const result = await saveDraftDefinition(definition, formId.value, key, createExtras.value, {
+      className: 'form-draft-saved-toast',
+      offset: 84,
+    })
     if (seq !== loadSeq) return true
     if (!formId.value && result.id) {
       formId.value = result.id
@@ -1474,5 +1477,32 @@ async function loadBreadcrumbCategory() {
   width: 80px;
   height: 32px;
   padding: 0;
+}
+
+/* ═══ Q75（272:1799）保存草稿成功轻提示：280×48、顶部 84、水平居中、浅绿成功表面 ═══
+   仅本页保存草稿调用传入该专用类（customClass + offset），全局 .el-message 不受影响；
+   ElMessage 根 teleport 到 body，故用全局作用域限定本类。 */
+.el-message.form-draft-saved-toast {
+  box-sizing: border-box;
+  width: 280px;
+  min-width: 280px;
+  height: 48px;
+  padding: 0;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: var(--sw-success-bg, #eafbf7);
+  color: var(--sw-success-text, #12805c);
+}
+
+.el-message.form-draft-saved-toast .el-message__content {
+  color: var(--sw-success-text, #12805c);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* 原图该提示为纯文字表面，无成功图标。 */
+.el-message.form-draft-saved-toast .el-message__icon {
+  display: none;
 }
 </style>
