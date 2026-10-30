@@ -84,7 +84,7 @@ describe('AppManageList', () => {
     expect(listFormApps).toHaveBeenCalledTimes(1)
   })
 
-  it('网格画布：应用渲染为卡片（图标+名称+三点），最后固定「新建应用」卡', async () => {
+  it('应用渲染为卡片，工具栏保留可达的新建应用入口', async () => {
     vi.mocked(listFormApps).mockResolvedValue([
       app({ id: 'a1', name: '全员' }),
       app({ id: 'a2', name: '指定' }),
@@ -98,7 +98,7 @@ describe('AppManageList', () => {
     expect(wrapper.text()).toContain('全员')
   })
 
-  it('空列表仍渲染「新建应用」卡（网格画布不留空白）', async () => {
+  it('空列表仍可从工具栏新建应用', async () => {
     vi.mocked(listFormApps).mockResolvedValue([])
     const wrapper = mount(AppManageList, { global: { stubs: minimalStubs } })
     await nextTick()

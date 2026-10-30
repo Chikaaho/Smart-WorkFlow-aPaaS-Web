@@ -43,7 +43,7 @@ function adaptPage<T>(raw: BackendPageResult<T>): PageResult<T> {
 /** GET /workflow/catalog/items — 普通用户可发起事项（categoryId=0 表示未分类）。 */
 export async function queryCatalogItems(
   page: PageQuery,
-  filters: { keyword?: string; categoryId?: number } = {},
+  filters: { keyword?: string; categoryId?: string | number } = {},
 ): Promise<PageResult<CatalogItem>> {
   const raw = await request<BackendPageResult<CatalogItem>>({
     method: 'GET',
@@ -86,7 +86,10 @@ export async function createCategory(req: CategorySaveReq): Promise<CatalogCateg
 }
 
 /** PUT /workflow/categories/{id} — 更新分类。 */
-export async function updateCategory(id: number, req: CategorySaveReq): Promise<CatalogCategory> {
+export async function updateCategory(
+  id: string | number,
+  req: CategorySaveReq,
+): Promise<CatalogCategory> {
   return request<CatalogCategory>({
     method: 'PUT',
     url: `/workflow/categories/${id}`,
@@ -95,14 +98,14 @@ export async function updateCategory(id: number, req: CategorySaveReq): Promise<
 }
 
 /** DELETE /workflow/categories/{id} — 删除分类（有事项归属时服务端拒绝）。 */
-export async function deleteCategory(id: number): Promise<void> {
+export async function deleteCategory(id: string | number): Promise<void> {
   await request<void>({ method: 'DELETE', url: `/workflow/categories/${id}` })
 }
 
 /** GET /workflow/catalog/admin/items — 管理视角事项列表（含未发布）。 */
 export async function queryAdminCatalogItems(
   page: PageQuery,
-  filters: { keyword?: string; categoryId?: number } = {},
+  filters: { keyword?: string; categoryId?: string | number } = {},
 ): Promise<PageResult<CatalogItem>> {
   const raw = await request<BackendPageResult<CatalogItem>>({
     method: 'GET',
@@ -115,7 +118,7 @@ export async function queryAdminCatalogItems(
 /** PUT /workflow/catalog/admin/items/{processKey}/category — 调整归属（null=未分类）。 */
 export async function assignItemCategory(
   processKey: string,
-  categoryId: number | null,
+  categoryId: string | number | null,
 ): Promise<void> {
   await request<void>({
     method: 'PUT',
@@ -186,14 +189,25 @@ export async function queryMyCopyDetail(id: number): Promise<MyCopyDetail> {
 export interface UrgeResp {
   result: 'ACCEPTED' | 'COOLDOWN' | 'REJECTED'
   detail: string
-  recordId: number
+  recordId: number | string
 }
 
-/** POST /workflow/my/instances/{id}/urge — 发起人催办（10 分钟冷却，重复请求返回冷却信息）。 */
-export async function urgeMyInstance(instanceId: number): Promise<UrgeResp> {
+/** POST /workflow/my/instances/{id}/urge — 发起人催办（10 分钟冷却；message 为可选留言，服务端限 200 字）。 */
+export async function urgeMyInstance(
+  instanceId: number | string,
+  message?: string,
+  recipientIds?: Array<number | string>,
+): Promise<UrgeResp> {
+  const trimmed = message?.trim()
+  const data: Record<string, unknown> = {}
+  if (trimmed) data.message = trimmed
+  if (recipientIds && recipientIds.length > 0) {
+    data.recipientIds = recipientIds.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+  }
   return request<UrgeResp>({
     method: 'POST',
     url: `/workflow/my/instances/${instanceId}/urge`,
+    data: Object.keys(data).length > 0 ? data : undefined,
   })
 }
 

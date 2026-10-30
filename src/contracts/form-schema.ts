@@ -93,6 +93,12 @@ export interface TableSubField {
   label?: string
   required?: boolean
   length?: number
+  /** 非空文本的最小 Unicode 码点数。 */
+  minLength?: number
+  /** 文本完整匹配约束；由服务端线性时间正则引擎复核。 */
+  pattern?: string
+  /** 正则不匹配时的用户提示。 */
+  patternMessage?: string
   /** 字段描述（0.1.7 #38）：字段清单里可直接维护的说明；纯元数据，不参与校验与提交载荷。 */
   description?: string
   dictType?: string
@@ -126,6 +132,9 @@ interface BaseField {
   labelPosition?: FieldLabelPosition
   required?: boolean
   length?: number
+  minLength?: number
+  pattern?: string
+  patternMessage?: string
   /**
    * 字段描述（0.1.7 #38）：字段清单里可直接维护的字段说明（可写「本字段的含义/口径」）。
    * 纯元数据——不参与校验、不进入提交载荷、不影响动态列 DDL。
@@ -148,6 +157,8 @@ interface BaseField {
 
 export interface TextField extends BaseField {
   type: 'TEXT'
+  /** 多行纯文本：以 textarea 填写，换行原样保存/回读；存储族仍为 VARCHAR/TEXT，不改变 API 值。 */
+  multiline?: boolean
 }
 
 export interface RichTextField extends BaseField {
@@ -347,6 +358,69 @@ export interface FormSchema {
    * 构造请求携带无 edit 权字段被整请求拒绝。前端仅用于 UX 显隐提示。
    */
   fieldPermissions?: Record<string, FieldPermissionRule>
+  /** 表单动作权限：动作名 → role:/user:/dept: 主体；空数组表示不设限。 */
+  actionPermissions?: Record<string, string[]>
+  /**
+   * 表单允许调用的受控集成能力稳定标识（随发布快照冻结）。
+   * 缺省/空数组=不允许调用；旧定义没有该字段时按空处理。
+   */
+  allowedIntegrations?: string[]
+  /**
+   * 表单生命周期事件。动作按 order 升序执行，id 在事件内稳定；
+   * 缺省不产生任何隐式动作，兼容历史定义。
+   */
+  events?: FormEvents
+}
+
+export type FormEventName = 'onLoad' | 'beforeSubmitHandler' | 'afterSubmitHandler'
+
+export interface FormEventAction {
+  /** 发布快照内稳定标识，用于结果诊断和提交后幂等重试。 */
+  id: string
+  name: string
+  enabled: boolean
+  order: number
+  script: string
+  /** 有值时先请求用户确认；确认等待独立计时并可在 60 秒内取消。 */
+  confirmMessage?: string
+}
+
+export interface FormEvents {
+  onLoad?: FormEventAction[]
+  beforeSubmitHandler?: FormEventAction[]
+  afterSubmitHandler?: FormEventAction[]
+}
+
+/** 把持久化 JSON 归一为安全事件模型；旧定义缺省事件时保持为空。 */
+export function normalizeFormEvents(raw: unknown): FormEvents | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const source = raw as Record<string, unknown>
+  const events: FormEvents = {}
+  for (const eventName of ['onLoad', 'beforeSubmitHandler', 'afterSubmitHandler'] as const) {
+    const value = source[eventName]
+    if (!Array.isArray(value)) continue
+    const actions = value.flatMap((entry): FormEventAction[] => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
+      const item = entry as Record<string, unknown>
+      const id = typeof item.id === 'string' ? item.id.trim() : ''
+      if (!id || typeof item.script !== 'string') return []
+      const order = typeof item.order === 'number' && Number.isFinite(item.order) ? item.order : 0
+      return [
+        {
+          id,
+          name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : id,
+          enabled: item.enabled !== false,
+          order,
+          script: item.script,
+          ...(typeof item.confirmMessage === 'string' && item.confirmMessage.trim()
+            ? { confirmMessage: item.confirmMessage.trim() }
+            : {}),
+        },
+      ]
+    })
+    if (actions.length) events[eventName] = actions
+  }
+  return Object.keys(events).length ? events : undefined
 }
 
 /** REFERENCE 选择器回填值：id 存库、value 展示。 */

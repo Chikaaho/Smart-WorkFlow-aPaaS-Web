@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { resolveAppColor, resolveAppIcon } from '@/modules/form/utils/app-icons'
+import {
+  resolveAppColor,
+  resolveAppIcon,
+  ICON_ASSETS,
+  iconMask,
+} from '@/modules/form/utils/app-icons'
 
 /**
  * AppIcon — 应用图标（白名单解析 + 主题色底）。
@@ -11,8 +16,10 @@ const props = withDefaults(
     icon?: string | null
     color?: string | null
     size?: number
+    soft?: boolean
+    boxSize?: number
   }>(),
-  { icon: null, color: null, size: 18 },
+  { icon: null, color: null, size: 18, soft: false, boxSize: undefined },
 )
 
 const resolved = computed(() => resolveAppIcon(props.icon))
@@ -21,9 +28,19 @@ const resolved = computed(() => resolveAppIcon(props.icon))
 <template>
   <span
     class="app-icon"
-    :style="{ '--app-icon-color': resolveAppColor(color), '--app-icon-size': `${size}px` }"
+    :class="{ 'app-icon--soft': soft }"
+    :style="{
+      '--app-icon-color': resolveAppColor(color),
+      '--app-icon-size': `${size}px`,
+      '--app-icon-box-size': `${boxSize ?? size * 2}px`,
+    }"
   >
-    <component :is="resolved" />
+    <span
+      v-if="icon && ICON_ASSETS[icon]"
+      class="app-icon__asset"
+      :style="{ maskImage: iconMask(icon) }"
+    />
+    <component :is="resolved" v-else />
   </span>
 </template>
 
@@ -32,15 +49,27 @@ const resolved = computed(() => resolveAppIcon(props.icon))
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: calc(var(--app-icon-size) * 2);
-  height: calc(var(--app-icon-size) * 2);
-  border-radius: 8px;
+  width: var(--app-icon-box-size);
+  height: var(--app-icon-box-size);
+  border-radius: var(--sw-radius-card);
   color: #fff;
   background: var(--app-icon-color);
   flex: none;
 }
+.app-icon--soft {
+  color: var(--app-icon-color);
+  background: color-mix(in srgb, var(--app-icon-color) 10%, white);
+}
 .app-icon :deep(svg) {
   width: var(--app-icon-size);
   height: var(--app-icon-size);
+}
+.app-icon__asset {
+  width: var(--app-icon-size);
+  height: var(--app-icon-size);
+  background: currentColor;
+  mask-position: center;
+  mask-size: contain;
+  mask-repeat: no-repeat;
 }
 </style>

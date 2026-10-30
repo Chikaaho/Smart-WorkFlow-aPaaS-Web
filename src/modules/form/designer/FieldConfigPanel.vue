@@ -5,26 +5,32 @@ const { t } = useI18n()
 /**
  * 配置面板（设计器右栏）—— 宿主只按注册表动态挂载，禁写死类型 switch。
  *
- * P53 节点07 三段结构：
- *  - 基础信息：组件名称 / 宽度（6 档百分比）/ 占位提示 / 必填（全部走 FieldPatch 通用键）；
- *  - 高级信息：字段标识 / 数据类型族 / 类型专属配置（configComponent 动态挂载）；
- *  - 其他信息：扩展属性预留区。
+ * 0.2.0 执行提示12（G07/G36）按当前蓝色原稿分区：
+ *  - 文字（LABEL）选中态：专用排列先行——文字内容/对齐三段/字号+字重同排/颜色/宽度；
+ *    通用元数据收进可展开的高级入口（内距 20，右栏 336 从 x1584）；
+ *  - 其余组件：基础信息 / 高级信息两段，值变更（JS）与显示条件（设置）并入高级信息末尾；
+ *    原第三段「其他信息」扩展占位随原稿移除（0.1.7 #36 的紧凑占位结构一并退场）。
  *
  * 配置面板改动经 @update 抛 FieldPatch，本宿主原样上交给设计器写回选中字段（单一数据源）。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getFieldTypeDescriptor, getFieldTypeStorage } from './field-types'
+import { ArrowDown } from '@element-plus/icons-vue'
+import { getFieldTypeDescriptor } from './field-types'
 import { isColumnNameUnique } from './column-name'
 import type { DesignerItem } from './types'
 import type { FieldPatch } from './field-config'
 import RulesEditor from './config/RulesEditor.vue'
 import ScriptConfig from './ScriptConfig.vue'
+import FieldValidationDialog from './FieldValidationDialog.vue'
 import { WIDTH_COL_STEPS, widthStepPercent } from './width-steps'
 import { normalizeFormFieldColSpan } from '@/contracts/form-layout'
 import {
   DEFAULT_FIELD_LABEL_POSITION,
+  DEFAULT_FIELD_TEXT_ALIGN,
   type FieldLabelPosition,
+  type FieldTextAlign,
+  type LabelField,
   type VisibilityRule,
 } from '@/contracts/form-schema'
 
@@ -55,9 +61,21 @@ const emit = defineEmits<{
   'update-rule': [rule: VisibilityRule | null]
 }>()
 
+/** 字段校验规则独立弹窗（273:1845）：入口在高级信息，确认才回写。 */
+const validationVisible = ref(false)
+
+function applyValidation(patch: FieldPatch) {
+  emit('update', patch)
+}
+
 const descriptor = computed(() =>
   props.field ? getFieldTypeDescriptor(props.field.field.type) : undefined,
 )
+
+const isLabel = computed(() => props.field?.field.type === 'LABEL')
+
+/** 文字专用面板的高级入口（490:16184）：默认收起，展开后为通用元数据。 */
+const labelAdvancedOpen = ref(false)
 
 const colSpan = computed(() =>
   props.field ? normalizeFormFieldColSpan(props.field.field.colSpan, props.field.field.type) : 12,
@@ -105,11 +123,88 @@ function onWidthChange(cols: number | undefined) {
   emit('update', { colSpan: normalizeFormFieldColSpan(cols, props.field.field.type) })
 }
 
-/** 数据类型族展示（BF20261013-009：下拉多选提交为 key 数组，存储族显示 JSON）。 */
-const storageLabel = computed(() => {
+/* ── 文字（LABEL）专用排列（490:16184） ── */
+
+const DEFAULT_LABEL_FONT_SIZE = 14
+/**
+ * 字号选项（490:16919）：首屏六项常用档 14/16/18/20/24/28 各 36 行；
+ * 既有 12/32/36/48 保留在后续滚动区，历史自定义字号追加末尾不丢显。
+ */
+const LABEL_FONT_SIZE_STEPS = [14, 16, 18, 20, 24, 28, 12, 32, 36, 48]
+
+function labelText(): string {
+  return ((props.field?.field as LabelField | undefined)?.text ?? '') as string
+}
+
+function onLabelText(value: string) {
+  emit('update', { text: value })
+}
+
+function labelColor(): string {
+  return ((props.field?.field as LabelField | undefined)?.color ?? '') as string
+}
+
+function onLabelColor(value: string | null) {
+  emit('update', { color: value ?? '' })
+}
+
+function labelFontSize(): number {
+  const size = (props.field?.field as LabelField | undefined)?.fontSize
+  return typeof size === 'number' && size > 0 ? size : DEFAULT_LABEL_FONT_SIZE
+}
+
+const labelFontSizeOptions = computed(() => {
+  const current = labelFontSize()
+  return LABEL_FONT_SIZE_STEPS.includes(current)
+    ? LABEL_FONT_SIZE_STEPS
+    : [...LABEL_FONT_SIZE_STEPS, current]
+})
+
+function onLabelFontSize(value: number | undefined) {
+  emit('update', { fontSize: value ?? undefined })
+}
+
+function labelFontWeight(): 'normal' | 'bold' {
+  return ((props.field?.field as LabelField | undefined)?.fontWeight ?? 'normal') as
+    | 'normal'
+    | 'bold'
+}
+
+function onLabelFontWeight() {
+  emit('update', { fontWeight: labelFontWeight() === 'bold' ? 'normal' : 'bold' })
+}
+
+function labelTextAlign(): FieldTextAlign {
+  return ((props.field?.field as LabelField | undefined)?.textAlign ??
+    DEFAULT_FIELD_TEXT_ALIGN) as FieldTextAlign
+}
+
+function onLabelTextAlign(value: string | number | boolean | undefined) {
+  const align: FieldTextAlign =
+    value === 'center' || value === 'right' ? value : DEFAULT_FIELD_TEXT_ALIGN
+  emit('update', { textAlign: align })
+}
+
+/**
+ * 数据类型展示（2026-10-27 方向）：面向配置者显示逻辑类型名，复用控件元信息；
+ * 单行文本显示「文本」。VARCHAR/JSON 等存储族只属实现细节，不在该行暴露。
+ */
+const logicalTypeLabel = computed(() => {
   if (!props.field) return ''
-  if (props.field.field.type === 'DICT' && props.field.field.multiple) return 'JSON'
-  return getFieldTypeStorage(props.field.field.type)
+  if (props.field.field.type === 'TEXT') return t('form.fieldDataTypeText')
+  return descriptor.value?.label ?? props.field.field.type
+})
+
+/** 右上控件名：多行 TEXT 显示「多行文本」，避免仍标成单行文本。 */
+const controlLabel = computed(() => {
+  if (!props.field) return ''
+  if (
+    props.field.field.type === 'TEXT' &&
+    (props.field.field as { multiline?: boolean }).multiline
+  ) {
+    return t('form.paletteMultiline')
+  }
+  return descriptor.value?.label ?? props.field.field.type
 })
 
 /** 字段标识后缀展示：field_ 前缀被系统吃掉，用户只见后缀（V011-BUG-016）。 */
@@ -137,16 +232,163 @@ function onFieldKeySuffix(raw: string) {
 </script>
 
 <template>
-  <aside class="config">
+  <aside class="config" :class="{ 'config--label': field !== null && isLabel }">
     <div class="config__head">
       <h2 class="config__title">{{ t('form.fieldSettingsTitle') }}</h2>
-      <span v-if="field" class="config__type">{{ descriptor?.label ?? field.field.type }}</span>
+      <span v-if="field" class="config__type">{{ controlLabel }}</span>
     </div>
 
     <div v-if="!field" class="config__empty" />
 
+    <!-- ═══ 文字（LABEL）专用排列（490:16184）：内容→对齐→字号/字重→颜色→宽度 ═══ -->
+    <template v-else-if="isLabel">
+      <div class="config__row">
+        <label class="config__label">{{ t('form.labelBody') }}</label>
+        <el-input
+          :model-value="labelText()"
+          type="textarea"
+          :rows="3"
+          :placeholder="t('form.labelBodyPlaceholder')"
+          :disabled="readonly"
+          @update:model-value="onLabelText"
+        />
+      </div>
+
+      <div class="config__row">
+        <label class="config__label">{{ t('form.labelAlignLabel') }}</label>
+        <el-radio-group
+          :model-value="labelTextAlign()"
+          class="config__align"
+          :disabled="readonly"
+          @update:model-value="onLabelTextAlign"
+        >
+          <el-radio-button value="left">{{ t('form.textAlignLeft') }}</el-radio-button>
+          <el-radio-button value="center">{{ t('form.textAlignCenter') }}</el-radio-button>
+          <el-radio-button value="right">{{ t('form.textAlignRight') }}</el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <div class="config__cols">
+        <div class="config__row">
+          <label class="config__label">{{ t('form.labelFontSize') }}</label>
+          <el-select
+            popper-class="label-font-size-popper"
+            :model-value="labelFontSize()"
+            :disabled="readonly"
+            @update:model-value="onLabelFontSize"
+          >
+            <el-option v-for="size in labelFontSizeOptions" :key="size" :value="size">
+              {{ size }} px
+            </el-option>
+          </el-select>
+        </div>
+        <div class="config__row">
+          <label class="config__label">{{ t('form.labelWeightLabel') }}</label>
+          <el-button
+            class="config__weight"
+            :class="{ 'is-on': labelFontWeight() === 'bold' }"
+            :disabled="readonly"
+            @click="onLabelFontWeight"
+          >
+            {{
+              labelFontWeight() === 'bold' ? t('form.fontWeightBold') : t('form.fontWeightNormal')
+            }}
+          </el-button>
+        </div>
+      </div>
+
+      <div class="config__row">
+        <label class="config__label">{{ t('form.labelColorLabel') }}</label>
+        <div class="config__color">
+          <span
+            class="config__color-swatch"
+            :style="{ background: labelColor() || 'transparent' }"
+          />
+          <span class="config__color-hex">{{ labelColor() || '—' }}</span>
+          <el-icon class="config__color-arrow"><ArrowDown /></el-icon>
+          <el-color-picker
+            class="config__color-picker"
+            popper-class="label-color-popover"
+            :model-value="labelColor()"
+            :predefine="[
+              '#172033',
+              '#303a55',
+              '#6b7280',
+              '#6f2dff',
+              '#d93026',
+              '#1f9d55',
+              '#2563eb',
+              '#d97706',
+            ]"
+            :disabled="readonly"
+            @update:model-value="onLabelColor"
+          />
+        </div>
+      </div>
+
+      <div class="config__row">
+        <label class="config__label">{{ t('form.widthLabel') }}</label>
+        <el-select :model-value="colSpan" :disabled="readonly" @update:model-value="onWidthChange">
+          <el-option
+            v-for="option in widthOptions"
+            :key="option.cols"
+            :value="option.cols"
+            :label="`${option.pct}%`"
+          >
+            <span class="width-option">
+              <span class="width-option__gauge"><i :style="{ width: `${option.pct}%` }" /></span>
+              <span class="width-option__pct">{{ option.pct }}%</span>
+            </span>
+          </el-option>
+        </el-select>
+      </div>
+
+      <!-- 通用元数据高级入口：默认收起，展开为组件名称/字段标识/数据类型/显示条件 -->
+      <h3
+        class="config__section config__section--toggle"
+        data-testid="label-advanced-toggle"
+        @click="labelAdvancedOpen = !labelAdvancedOpen"
+      >
+        {{ t('form.sectionAdvancedInfo') }}
+        <el-icon class="config__section-caret" :class="{ 'is-open': labelAdvancedOpen }">
+          <ArrowDown />
+        </el-icon>
+      </h3>
+      <template v-if="labelAdvancedOpen">
+        <div class="config__row">
+          <label class="config__label">{{ t('fieldList.colName') }}</label>
+          <el-input
+            :model-value="field.field.label ?? ''"
+            :disabled="readonly"
+            @update:model-value="(v: string) => emit('update', { label: v })"
+          />
+        </div>
+        <div class="config__row">
+          <label class="config__label">{{ t('form.fieldKeyLabel') }}</label>
+          <el-input
+            :model-value="fieldKeySuffix"
+            :disabled="keyLocked"
+            :maxlength="58"
+            @update:model-value="onFieldKeySuffix"
+          >
+            <template #prepend>field_</template>
+          </el-input>
+        </div>
+        <div class="config__row">
+          <label class="config__label">{{ t('fieldList.colType') }}</label>
+          <el-input :model-value="logicalTypeLabel" disabled />
+        </div>
+        <RulesEditor
+          :target="field.field.name"
+          :field-names="ruleFieldNames"
+          :rule="rule"
+          @update-rule="(r) => emit('update-rule', r)"
+        />
+      </template>
+    </template>
+
+    <!-- ═══ 其余组件：基础信息 / 高级信息（值变更、显示条件并入高级信息） ═══ -->
     <template v-else>
-      <!-- ═══ 基础信息 ═══ -->
       <h3 class="config__section">{{ t('form.sectionBasicInfo') }}</h3>
       <div class="config__row">
         <label class="config__label">{{ t('fieldList.colName') }}</label>
@@ -208,7 +450,6 @@ function onFieldKeySuffix(raw: string) {
         />
       </div>
 
-      <!-- ═══ 高级信息 ═══ -->
       <h3 class="config__section">{{ t('form.sectionAdvancedInfo') }}</h3>
       <div class="config__row">
         <label class="config__label">{{ t('form.fieldKeyLabel') }}</label>
@@ -225,18 +466,22 @@ function onFieldKeySuffix(raw: string) {
       </div>
       <div class="config__row">
         <label class="config__label">{{ t('fieldList.colType') }}</label>
-        <el-input :model-value="storageLabel" disabled />
+        <el-input :model-value="logicalTypeLabel" disabled />
       </div>
-      <!-- 0.1.7 #36（Owner）：数据类型/最大长度各自整行满宽（原两列半宽格里数字框过窄） -->
-      <div v-if="field.field.type === 'TEXT'" class="config__row">
-        <label class="config__label">{{ t('form.maxLength') }}</label>
-        <el-input-number
-          :model-value="field.field.length"
-          :min="1"
-          :controls="true"
-          :placeholder="t('form.unlimited')"
-          @update:model-value="(v: number | undefined) => emit('update', { length: v })"
-        />
+      <!-- 字段校验规则收进独立弹窗（273:1845）：面板只保留入口，确认才回写 -->
+      <div
+        v-if="field.field.type === 'TEXT' || field.field.type === 'RICH_TEXT'"
+        class="config__row config__row--inline"
+      >
+        <label class="config__label">{{ t('form.fieldValidation') }}</label>
+        <el-button
+          size="small"
+          data-testid="open-field-validation"
+          :disabled="readonly"
+          @click="validationVisible = true"
+        >
+          {{ t('common.configure') }}
+        </el-button>
       </div>
 
       <!-- 类型专属配置（注册表动态挂载；已发布只读时不出可编辑面板） -->
@@ -250,24 +495,17 @@ function onFieldKeySuffix(raw: string) {
         @update="(p: FieldPatch) => emit('update', p)"
       />
       <p v-else-if="!readonly" class="config__placeholder">
-        「{{ descriptor?.label ?? t('form.thisField') }}」配置项待接入（后续刀）
+        {{ t('form.unsupportedConfig') }}
       </p>
 
-      <!-- BF20261013-021：高级编辑（脚本）——值变更时执行的字段脚本（已发布只读不回显可编辑面板） -->
+      <!-- BF20261013-021：值变更（JS）——字段脚本，与显示条件同为高级信息行（490 原稿排列） -->
       <ScriptConfig
         v-if="field.field.type !== 'LABEL'"
         :field="field.field"
         @update="(p: FieldPatch) => emit('update', p)"
       />
 
-      <!-- ═══ 其他信息 ═══ -->
-      <h3 class="config__section">{{ t('form.sectionOtherInfo') }}</h3>
-      <div class="config__extension">
-        <p class="config__extension-title">{{ t('form.extensionAreaTitle') }}</p>
-        <p class="config__extension-hint">{{ t('form.extensionAreaEmptyHint') }}</p>
-      </div>
-
-      <!-- v0.0.2 P2：显隐联动规则（LABEL 非输入字段也可控显隐）；置于其他信息之后 -->
+      <!-- 显隐联动规则：显示条件行 + 展开编辑 -->
       <RulesEditor
         :target="field.field.name"
         :field-names="ruleFieldNames"
@@ -275,6 +513,14 @@ function onFieldKeySuffix(raw: string) {
         @update-rule="(r) => emit('update-rule', r)"
       />
     </template>
+
+    <FieldValidationDialog
+      v-if="field"
+      v-model="validationVisible"
+      :field="field"
+      :readonly="readonly"
+      @confirm="applyValidation"
+    />
   </aside>
 </template>
 
@@ -289,6 +535,74 @@ function onFieldKeySuffix(raw: string) {
      宽度占满面板主体（.config__row 满宽）；文本行盒 17px */
   --el-component-size: 32px;
   --el-component-size-small: 32px;
+}
+
+/* G36（490:16184）：文字专用面板内距 20（右栏 336 从 x1584 由宿主承担）；
+   13 收口：六控件可见框 内容(0,208,296,80)/对齐(0,336,296,36)/字号(0,420,140,32)/
+   字重(1760,420,140,32)/颜色(0,500,296,32)/宽度(0,580,296,32)，默认边框 #DDE3EF，标签 14/22。 */
+aside.config.config--label {
+  padding: 20px;
+  --el-border-color: #dde3ef;
+  --el-input-border-color: #dde3ef;
+}
+
+aside.config.config--label .config__head {
+  margin-bottom: 12px;
+}
+
+aside.config.config--label .config__row {
+  margin-bottom: 0;
+}
+
+aside.config.config--label .config__row + .config__row,
+aside.config.config--label .config__row + .config__cols,
+aside.config.config--label .config__cols + .config__row {
+  margin-top: 20px;
+}
+
+/* 字号/字重两列内部的相邻行不参与纵向节奏（否则字重列下坠 20px 并抬高后续行） */
+aside.config.config--label .config__cols .config__row + .config__row {
+  margin-top: 0;
+}
+
+aside.config.config--label .config__label {
+  margin-bottom: 6px;
+  line-height: 22px;
+}
+
+aside.config.config--label :deep(.el-textarea__inner) {
+  box-sizing: border-box;
+  min-height: 80px;
+  height: 80px;
+  border: 1px solid #dde3ef;
+}
+
+aside.config.config--label :deep(.config__align .el-radio-button__inner) {
+  height: 36px;
+  line-height: 34px;
+}
+
+aside.config.config--label .config__cols {
+  column-gap: 16px;
+}
+
+aside.config.config--label .config__cols .el-button {
+  width: 100%;
+}
+
+aside.config.config--label :deep(.el-input__wrapper),
+aside.config.config--label :deep(.el-select__wrapper) {
+  min-height: 32px;
+  height: 32px;
+}
+
+aside.config.config--label .config__color {
+  box-sizing: border-box;
+  height: 32px;
+}
+
+aside.config.config--label .config__color-picker :deep(.el-color-picker__trigger) {
+  height: 30px;
 }
 
 /* V011-BUG-013：恢复输入框常规内边距——文本不再贴边/被裁切（此前 padding 被清零） */
@@ -320,7 +634,7 @@ function onFieldKeySuffix(raw: string) {
   font-size: var(--sw-font-body);
 }
 
-/* 三段结构小节标题（设计07：基础信息 194 / 高级信息 522） */
+/* 三段结构小节标题 */
 .config__section {
   margin: 25px 0 16px;
   padding-bottom: 8px;
@@ -333,6 +647,25 @@ function onFieldKeySuffix(raw: string) {
 /* 设计07：首段（基础信息）紧随面板头部 */
 .config__section:first-of-type {
   margin-top: 19px;
+}
+
+/* 高级入口（文字专用面板）：可点击展开 */
+.config__section--toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.config__section-caret {
+  font-size: 12px;
+  color: var(--sw-text-secondary);
+  transition: transform 0.15s;
+}
+
+.config__section-caret.is-open {
+  transform: rotate(180deg);
 }
 
 .config__row {
@@ -372,6 +705,86 @@ function onFieldKeySuffix(raw: string) {
 .config__row :deep(.el-select),
 .config__row :deep(.el-input-number) {
   width: 100%;
+}
+
+/* G36：字号/字重同排两列 */
+.config__cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 20px;
+}
+
+/* G36：三段对齐按钮铺满 */
+.config__align {
+  display: flex;
+  width: 100%;
+}
+
+.config__align :deep(.el-radio-button) {
+  flex: 1 1 0;
+}
+
+.config__align :deep(.el-radio-button__inner) {
+  width: 100%;
+}
+
+/* G36：字重按钮（常规/加粗切换；选中蓝描边） */
+.config__weight.is-on {
+  color: var(--sw-color-primary);
+  border-color: var(--sw-color-primary);
+}
+
+/* G36：颜色行 = 白底选择框（色块+HEX+箭头），点击任意处由透明取色器承接面板 */
+.config__color {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--el-border-color, #dcdfe6);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.config__color-swatch {
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border: 1px solid rgb(0 0 0 / 10%);
+  border-radius: 2px;
+}
+
+.config__color-hex {
+  flex: 1 1 auto;
+  font-size: 13px;
+  line-height: 17px;
+  color: var(--sw-text-regular);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.config__color-arrow {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: #a8abb2;
+}
+
+/* 透明取色器铺满整行：点按任意处即弹出原取色面板 */
+.config__color-picker {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+
+.config__color-picker :deep(.el-color-picker__trigger) {
+  width: 100%;
+  height: 100%;
 }
 
 /* BF20261013-016：宽度选项 = 宽度示意图（左）+ 百分比（右） */
@@ -442,25 +855,73 @@ function onFieldKeySuffix(raw: string) {
   font-size: var(--sw-font-secondary);
   text-align: center;
 }
+</style>
 
-/* 其他信息：扩展属性预留区 */
-.config__extension {
-  /* 0.1.7 #36（Owner）：扩展属性区域收敛为紧凑占位（原为大块空白框，内容仅一行标题） */
-  padding: 12px 14px;
-  border: 1px solid #e3e8f4;
-  border-radius: 8px;
-  background: #f7f9fe;
+<style>
+/* Q52（490:16919）：静态文字字号浮层 140×228，首屏 6 行×36（14/16/18/20/24/28），
+   其余既有档位在滚动区可访问。弹层 teleport 到 body，用专属 popper-class 限定作用域。 */
+.label-font-size-popper {
+  box-sizing: border-box;
+  width: 140px;
+  height: 228px;
+}
+.label-font-size-popper .el-select-dropdown {
+  box-sizing: border-box;
+  height: 226px;
+  max-height: none;
+  padding: 5px 0;
+  overflow: hidden;
+}
+.label-font-size-popper .el-scrollbar__wrap {
+  height: 216px;
+  max-height: none;
+  overflow-y: auto;
+}
+.label-font-size-popper .el-select-dropdown__list {
+  max-height: none;
+  padding: 0;
+}
+.label-font-size-popper .el-select-dropdown__item {
+  box-sizing: border-box;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 13px;
+  font-weight: 400;
+}
+.label-font-size-popper .el-select-dropdown__item.is-hovering,
+.label-font-size-popper .el-select-dropdown__item:hover {
+  background-color: #eff6ff;
+}
+.label-font-size-popper .el-select-dropdown__item.is-selected {
+  color: var(--sw-color-primary, #2563eb);
+  background-color: #eff6ff;
+  font-weight: 400;
 }
 
-.config__extension-title {
-  margin: 0 0 4px;
-  font-size: var(--sw-font-emphasis);
-  color: var(--sw-text-regular);
+/* Q52（490:16934）：静态文字颜色浮层 430×286，保留原渐变/色相/HEX/预设与清空确认。
+   面板内容 404×260：饱和度面 384×196，色相条同高；底部原 HEX 输入与清空/确定不变。 */
+.label-color-popover.el-color-picker__panel {
+  box-sizing: border-box;
+  width: 430px;
+  height: 286px;
 }
-
-.config__extension-hint {
-  margin: 0;
-  font-size: var(--sw-font-caption);
-  color: var(--sw-text-secondary);
+.label-color-popover .el-color-picker-panel {
+  box-sizing: content-box;
+  width: 404px;
+  height: 260px;
+  padding: 12px;
+}
+.label-color-popover .el-color-svpanel {
+  width: 384px;
+  height: 196px;
+}
+.label-color-popover .el-color-hue-slider.is-vertical {
+  height: 196px;
+}
+.label-color-popover .el-color-predefine {
+  width: 384px;
+}
+.label-color-popover .el-color-picker-panel__footer .el-input {
+  width: 280px;
 }
 </style>

@@ -73,16 +73,17 @@ function mountField(field: FormSchemaField, modelValue: unknown = '', readonly =
  * ═══════════════════════════════════════════════════ */
 
 describe('DynamicField — readonly', () => {
-  it('TEXT readonly → el-input 设 readonly', () => {
+  it('TEXT readonly 显示完整值且没有可编辑输入', () => {
     const wrapper = mountField({ name: 'f1', type: 'TEXT' }, 'hello', true)
-    expect(wrapper.findComponent({ name: 'ElInput' }).props('readonly')).toBe(true)
+    expect(wrapper.find('.readonly-value').text()).toBe('hello')
+    expect(wrapper.find('input').exists()).toBe(false)
   })
 
-  it('NUMBER readonly → el-input-number 设 disabled', () => {
+  it('NUMBER readonly 保留零值且没有步进操作', () => {
     const wrapper = mountField({ name: 'f3', type: 'NUMBER' }, 0, true)
-    const input = wrapper.find('[data-testid="input-number"]')
-    expect(input.exists()).toBe(true)
-    expect(input.attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.readonly-value').text()).toBe('0')
+    expect(wrapper.find('[data-testid="input-number"]').exists()).toBe(false)
+    expect(wrapper.find('button').exists()).toBe(false)
   })
 
   it('BOOL readonly → el-switch 设 disabled', () => {
@@ -123,7 +124,7 @@ describe('DynamicField — readonly', () => {
     const delBtns = wrapper.findAll('button').filter((b) => b.text() === '删除')
     expect(delBtns.length).toBe(0)
     // 添加行按钮不应出现
-    const addBtns = wrapper.findAll('button').filter((b) => b.text().includes('添加行'))
+    const addBtns = wrapper.findAll('button').filter((b) => b.text().includes('加一行'))
     expect(addBtns.length).toBe(0)
   })
 })
@@ -164,15 +165,17 @@ describe('DynamicField — 8 类字段渲染', () => {
   it('TEXT → el-input', () => {
     const wrapper = mountField({ name: 'f1', type: 'TEXT' })
     expect(wrapper.findComponent({ name: 'ElInput' }).exists()).toBe(true)
-    // RICH_TEXT 与 REFERENCE 也渲染 el-input，确认不是 textarea
+    // REFERENCE 也渲染 el-input；RICH_TEXT 已改为受控富文本编辑器
     const input = wrapper.findComponent({ name: 'ElInput' })
     expect(input.props('type')).toBe('text')
   })
 
-  it('RICH_TEXT → el-input textarea', () => {
+  it('RICH_TEXT → 受控富文本编辑器（工具栏 + contenteditable）', () => {
     const wrapper = mountField({ name: 'f2', type: 'RICH_TEXT' })
-    expect(wrapper.findComponent({ name: 'ElInput' }).exists()).toBe(true)
-    expect(wrapper.findComponent({ name: 'ElInput' }).props('type')).toBe('textarea')
+    const editor = wrapper.find('[data-test="rich-text-editor"]')
+    expect(editor.exists()).toBe(true)
+    expect(editor.find('.rt-editor').attributes('contenteditable')).toBe('true')
+    expect(editor.find('.rt-toolbar').exists()).toBe(true)
   })
 
   it('NUMBER → el-input-number', () => {
@@ -249,7 +252,7 @@ describe('DynamicField — 8 类字段渲染', () => {
     // 添加行按钮（最后一个 button）
     const buttons = wrapper.findAll('button')
     const addBtn = buttons[buttons.length - 1]
-    expect(addBtn.text()).toContain('添加行')
+    expect(addBtn.text()).toContain('加一行')
   })
 
   it('TABLE addRow emits updated rows', async () => {
@@ -257,7 +260,7 @@ describe('DynamicField — 8 类字段渲染', () => {
       { name: 't1', type: 'TABLE', subFields: [{ name: 'c1', type: 'TEXT' }] },
       [],
     )
-    // 点击「添加行」按钮
+    // 点击「加一行」按钮
     const buttons = wrapper.findAll('button')
     const addBtn = buttons[buttons.length - 1]
     await addBtn.trigger('click')
@@ -333,7 +336,7 @@ describe('DynamicField — 8 类字段渲染', () => {
     expect(wrapper.find('[data-testid="switch"]').exists()).toBe(true)
   })
 
-  it('TABLE sub-field RICH_TEXT 渲染 el-input textarea', () => {
+  it('TABLE sub-field RICH_TEXT 渲染子表富文本编辑器', () => {
     const wrapper = mountField(
       {
         name: 't1',
@@ -342,9 +345,9 @@ describe('DynamicField — 8 类字段渲染', () => {
       },
       [{ col: '' }],
     )
-    const input = wrapper.findComponent({ name: 'ElInput' })
-    expect(input.exists()).toBe(true)
-    expect(input.props('type')).toBe('textarea')
+    const editor = wrapper.find('[data-test="rich-text-editor"]')
+    expect(editor.exists()).toBe(true)
+    expect(editor.classes()).toContain('rt-control--sub')
   })
 
   it('TABLE sub-field REFERENCE 渲染 el-input 降级', () => {

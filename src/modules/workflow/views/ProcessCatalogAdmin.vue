@@ -35,6 +35,12 @@ const categoryLoading = ref(false)
 const categoryDialogVisible = ref(false)
 const categoryEditing = ref<CatalogCategory | null>(null)
 const categoryForm = reactive<{ name: string; sortNo: number }>({ name: '', sortNo: 0 })
+/** 278:1591：800 宽「流程分类维护」弹窗（复用既有分类查询/增改删/排序/归属能力）。 */
+const categoryManageVisible = ref(false)
+
+function onCategoryManageCommand(command: string, category: CatalogCategory) {
+  if (command === 'delete') void removeCategory(category)
+}
 
 async function loadCategories() {
   categoryLoading.value = true
@@ -152,7 +158,7 @@ function handlePageSizeChange(s: number) {
 // ─── 归属调整 ───
 const assignVisible = ref(false)
 const assignItem = ref<CatalogItem | null>(null)
-const assignCategoryId = ref<number | null>(null)
+const assignCategoryId = ref<string | number | null>(null)
 
 function openAssign(row: CatalogItem) {
   assignItem.value = row
@@ -172,7 +178,7 @@ async function submitAssign() {
   }
 }
 
-function categoryNameOf(id: number | null): string {
+function categoryNameOf(id: string | number | null): string {
   if (id === null) return t('workflow.uncategorized')
   return categories.value.find((c) => c.id === id)?.name ?? t('workflow.categoryFallback', { id })
 }
@@ -225,6 +231,10 @@ onMounted(() => {
     @update:page-size="handlePageSizeChange"
   >
     <template #toolbar-actions>
+      <!-- 278:1591：明确入口，打开既有分类维护清单（不新增分类模型/权限） -->
+      <el-button data-testid="category-manage-entry" @click="categoryManageVisible = true">
+        {{ t('workflow.categoryManageTitle') }}
+      </el-button>
       <el-button type="primary" @click="openCreateCategory">{{
         t('workflow.newCategory')
       }}</el-button>
@@ -348,6 +358,69 @@ onMounted(() => {
       <ListActionsColumn :actions="categoryActions" :width="120" />
     </el-table>
   </div>
+
+  <!-- 278:1591：流程分类维护 800 宽居中清单，仅复用既有分类消费者/CRUD/排序能力 -->
+  <el-dialog
+    v-model="categoryManageVisible"
+    class="category-manage-dialog"
+    :title="t('workflow.categoryManageTitle')"
+    width="800px"
+    align-center
+    :close-on-click-modal="false"
+  >
+    <el-table
+      v-loading="categoryLoading"
+      :data="categories"
+      class="category-manage-table"
+      data-testid="category-manage-table"
+    >
+      <el-table-column
+        prop="name"
+        :label="t('common.categoryName')"
+        class-name="category-manage-name"
+      />
+      <el-table-column :label="t('common.actions')" width="124">
+        <template #default="{ row }">
+          <div class="category-manage-actions">
+            <el-button link type="primary" @click="openEditCategory(row as CatalogCategory)">{{
+              t('common.edit')
+            }}</el-button>
+            <el-dropdown
+              trigger="click"
+              popper-class="sw-op-menu"
+              @command="
+                (command: string) => onCategoryManageCommand(command, row as CatalogCategory)
+              "
+            >
+              <el-button link type="primary">{{ t('common.moreActions') }}</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item disabled>
+                    {{ t('common.sort') }} {{ (row as CatalogCategory).sortNo }} ·
+                    {{ t('workflow.itemCount') }} {{ (row as CatalogCategory).itemCount }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="delete" divided class="sw-op-menu__danger">
+                    {{ t('common.delete') }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </template>
+      </el-table-column>
+    </el-table>
+    <div class="category-manage__new">
+      <el-button type="primary" @click="openCreateCategory">{{
+        t('workflow.newCategory')
+      }}</el-button>
+    </div>
+    <template #footer>
+      <el-button @click="categoryManageVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="categoryManageVisible = false">{{
+        t('common.confirm')
+      }}</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -359,5 +432,95 @@ onMounted(() => {
   color: var(--sw-color-primary);
   font-size: 13px;
   font-weight: 600;
+}
+
+/* 278:1591：分类维护清单——44 表头 / 45 数据行 / 操作主列 编辑+更多 */
+.category-manage-table {
+  border: 1px solid var(--sw-border-light, #ebeef5);
+  border-radius: 6px;
+}
+.category-manage-table :deep(.el-table__header th) {
+  height: 44px;
+  background: #f4f6fb;
+  color: var(--sw-text-regular, #606266);
+  font-weight: 400;
+  border-bottom: none;
+}
+.category-manage-table :deep(.el-table__body td) {
+  box-sizing: border-box;
+  height: 45px;
+  padding: 0;
+}
+.category-manage-table :deep(.el-table__row) {
+  height: 45px;
+}
+/* 278:1591（执行提示21）：仅名称表头与5条真实名称左对齐，左缘=表格内沿+16（约x602） */
+.category-manage-table :deep(.category-manage-name) .cell {
+  padding-left: 16px;
+  line-height: 22px;
+  text-align: left;
+}
+.category-manage-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.category-manage-actions :deep(.el-button.is-link) {
+  min-width: 0;
+  height: 22px;
+  padding: 0;
+  font-size: 13px;
+}
+.category-manage__new {
+  margin-top: 11px;
+}
+.category-manage__new .el-button {
+  width: 96px;
+  height: 32px;
+}
+</style>
+
+<style>
+/* 278:1591：800 宽居中、内距 25、标题 16/24、底栏 80×32 */
+.category-manage-dialog.el-dialog {
+  box-sizing: border-box;
+  padding: 25px;
+  border: 1px solid #dde3ef;
+  border-radius: 12px;
+}
+.category-manage-dialog .el-dialog__header {
+  box-sizing: border-box;
+  height: 32px;
+  margin: 0 0 15px;
+  padding: 4px 32px 4px 0;
+}
+.category-manage-dialog .el-dialog__title {
+  color: #172033;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+.category-manage-dialog .el-dialog__headerbtn {
+  top: 25px;
+  right: 25px;
+  width: 32px;
+  height: 32px;
+}
+.category-manage-dialog .el-dialog__body {
+  padding: 0;
+}
+.category-manage-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  height: 32px;
+  margin-top: 18px;
+  padding: 0;
+}
+.category-manage-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  height: 32px;
+  margin: 0;
 }
 </style>

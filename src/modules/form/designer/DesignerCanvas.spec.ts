@@ -48,6 +48,14 @@ function mountCanvas(items: DesignerItem[], selectedId: string | null = null) {
 }
 
 describe('DesignerCanvas (WYSIWYG)', () => {
+  it('renders the form description above the field list', () => {
+    const wrapper = mount(DesignerCanvas, {
+      props: { items: [], selectedId: null, description: '请填写演练信息' },
+      global: { stubs },
+    })
+    expect(wrapper.find('.canvas__description').text()).toBe('请填写演练信息')
+  })
+
   it('renders one shell per item without hover metadata or marker', () => {
     const wrapper = mountCanvas([
       item('di_1', 'username', { type: 'TEXT' }),
@@ -108,7 +116,7 @@ describe('DesignerCanvas (WYSIWYG)', () => {
     expect(wrapper.emitted('update:selectedId')?.at(-1)).toEqual([null])
   })
 
-  it('passes REFERENCE through to FormPreview but renders TABLE as a placeholder block', () => {
+  it('renders TABLE shell with edit entry and real design-mode table preview', () => {
     const wrapper = mountCanvas([
       item('di_1', 'ref', { type: 'REFERENCE', targetFormId: 'form_x' }),
       item('di_2', 'tbl', {
@@ -120,13 +128,16 @@ describe('DesignerCanvas (WYSIWYG)', () => {
         ],
       }),
     ])
-    // REFERENCE 仍走 FormPreview（降级由 adapter 负责）；TABLE 不再走 FormPreview。
+    // TABLE 与其余字段都走 FormPreview：TABLE 由 adapter 渲染真实表头（design 态）。
     const previews = wrapper.findAll('[data-testid="fc"]')
-    expect(previews).toHaveLength(1)
+    expect(previews).toHaveLength(2)
     expect((JSON.parse(previews[0].attributes('data-fields')!) as FormSchemaField[])[0].type).toBe(
       'REFERENCE',
     )
-    // TABLE 渲染成占位块：显示标签 + 「N 个子字段」 + 编辑入口。
+    expect((JSON.parse(previews[1].attributes('data-fields')!) as FormSchemaField[])[0].type).toBe(
+      'TABLE',
+    )
+    // TABLE 外壳：显示标签 + 「N 个子字段」 + 编辑入口。
     const table = wrapper.find('.field-shell__table')
     expect(table.exists()).toBe(true)
     expect(table.find('.field-shell__table-label').text()).toBe('明细')

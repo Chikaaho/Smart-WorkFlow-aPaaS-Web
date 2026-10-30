@@ -1,5 +1,17 @@
 import { expect, type Page } from '@playwright/test'
 
+export type VisualThemePreference = 'blue' | 'purple'
+
+/** P53 既有视觉基线按紫色稿建立；固定偏好后继续作为该主题的历史证据。 */
+export async function pinTheme(page: Page, name: VisualThemePreference): Promise<void> {
+  await page.addInitScript((theme) => {
+    window.localStorage.setItem(
+      'sw.appearance.theme',
+      JSON.stringify({ name: theme, customColor: '#b45309' }),
+    )
+  }, name)
+}
+
 /**
  * dev:mock 受控会话辅助。
  *
@@ -9,13 +21,19 @@ import { expect, type Page } from '@playwright/test'
  * username/password 参数保留签名以显式表达受测身份意图（当前 mock 注入固定 superadmin）。
  * 仅用于视觉/布局验证与受控 fixture，不承担真实后端业务证据（方向 §4.7）。
  */
-export async function loginAs(page: Page, username: string, password: string): Promise<void> {
+export async function loginAs(
+  page: Page,
+  username: string,
+  password: string,
+  theme: VisualThemePreference = 'purple',
+): Promise<void> {
   void username
   void password
   // 固定 zh-CN：Playwright 浏览器默认 en-US，i18n 会正确跟随；视觉断言按中文基线。
   await page.addInitScript(() => {
     window.localStorage.setItem('sw.locale', 'zh-CN')
   })
+  await pinTheme(page, theme)
   // 冻结 Date（定时器照常运行）：问候语等时段文案随真实时间变化会造成基线时间脆弱
   // （P53 补证 EV-03 校准说明）。固定为上午 10 点，全部视觉测试时间确定。
   await page.clock.install()

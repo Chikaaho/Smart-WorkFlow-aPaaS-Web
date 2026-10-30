@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { useUserStore } from '@/stores/user'
+import type { SessionUser } from '@/contracts/session'
 
 /* ── 可变的 route mock：测试间可修改 query ── */
 let mockQuery: Record<string, string> = {}
@@ -54,14 +57,15 @@ vi.mock('@/adapters/process-runtime', () => ({
 
 vi.mock('element-plus', async (importOriginal) => {
   const actual = await importOriginal()
+  const message = Object.assign(vi.fn(), {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+  })
   return {
     ...(actual as object),
-    ElMessage: {
-      success: vi.fn(),
-      error: vi.fn(),
-      warning: vi.fn(),
-      info: vi.fn(),
-    },
+    ElMessage: message,
   }
 })
 
@@ -74,9 +78,9 @@ import {
   submitDraft,
   pollCommandStatus,
 } from '@/adapters/process-draft'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import type { BpmDraft } from '@/contracts/bpm'
+import type { BpmDraft, WorkflowCommandStatus } from '@/contracts/bpm'
 import FormRender from './FormRender.vue'
 
 /* ── 通用 stubs ── */
@@ -90,6 +94,7 @@ const baseStubs = {
   ElAlert: { props: ['title'], template: '<div class="el-alert">{{ title }}</div>' },
   ElButton: { template: '<button><slot /></button>' },
   DynamicField: {
+    name: 'DynamicField',
     props: ['field', 'modelValue', 'readonly', 'referenceLabel'],
     template:
       '<div class="dynamic-field-stub" :data-field-name="field.name" :data-readonly="readonly" :data-reference-label="referenceLabel" :data-model-value="String(modelValue)"><label>{{ field.label ?? field.name }}</label></div>',
@@ -181,7 +186,7 @@ describe('FormRender', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('表单定义加载失败')
+    expect(wrapper.text()).toContain('表单配置加载失败，请稍后重试或联系管理员')
   })
 
   it('passes readonly=true when mode=view with recordId', async () => {
@@ -351,6 +356,40 @@ describe('FormRender', () => {
     expect(refField.attributes('data-readonly')).toBe('false')
   })
 
+  it('编辑回填还原主表附件、多选及子表图片，保留实际文件键与名称', async () => {
+    mockQuery = { recordId: 'rec_001', mode: 'edit' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '文件',
+      fields: [
+        { name: 'files', type: 'ATTACHMENT' },
+        { name: 'choices', type: 'DICT', dictType: '', multiple: true },
+        { name: 'lines', type: 'TABLE', subFields: [{ name: 'photos', type: 'IMAGE' }] },
+      ],
+    })
+    const file = { storageKey: 'stored-key', name: '方案.pdf' }
+    vi.mocked(getFormData).mockResolvedValueOnce({
+      id: 'rec_001',
+      version: 1,
+      files: JSON.stringify([file]),
+      choices: '["a","b"]',
+      lines: [{ id: 'line-1', photos: JSON.stringify([file]) }],
+    })
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    const fields = wrapper.findAllComponents({ name: 'DynamicField' })
+    expect(fields.find((w) => w.props('field').name === 'files')?.props('modelValue')).toEqual([
+      file,
+    ])
+    expect(fields.find((w) => w.props('field').name === 'choices')?.props('modelValue')).toEqual([
+      'a',
+      'b',
+    ])
+    const rows = fields.find((w) => w.props('field').name === 'lines')?.props('modelValue')
+    expect(rows).toEqual([
+      { id: 'line-1', photos: [file], _rowAction: 'UNCHANGED', _rowId: 'line-1' },
+    ])
+  })
+
   it('shows submit button for new form (no recordId)', async () => {
     vi.mocked(getFormDefinition).mockResolvedValueOnce({
       title: '新建',
@@ -390,8 +429,73 @@ describe('FormRender', () => {
     expect(wrapper.find('[data-validation-error-for="required_name"]').text()).toBe(
       '此字段为必填项',
     )
-    expect(wrapper.text()).toContain('请完善必填项后再提交')
+    // Q74（300:1692）：本地必填失败不再弹全宽汇总条，仅保留字段红边+就近错误并拦截提交
+    expect(wrapper.text()).not.toContain('请完善必填项后再提交')
     expect(submitForm).not.toHaveBeenCalled()
+  })
+
+  it('RICH_TEXT 仅格式无正文仍按必填失败', async () => {
+    mockQuery = { recordId: 'rec_rich_empty', mode: 'edit' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '富文本必填',
+      fields: [{ name: 'body', type: 'RICH_TEXT', required: true }],
+    })
+    vi.mocked(getFormData).mockResolvedValueOnce({
+      id: 'rec_rich_empty',
+      version: 1,
+      body: '<!--sw-rt:1--><p><br></p>',
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    await flushPromises()
+    await wrapper.find('[data-testid="form-render-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-validation-error-for="body"]').text()).toBe('此字段为必填项')
+  })
+
+  it('RICH_TEXT 长度按可见文本而非格式标记计数', async () => {
+    mockQuery = { recordId: 'rec_rich_len', mode: 'edit' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '富文本长度',
+      fields: [{ name: 'body', type: 'RICH_TEXT', required: false, length: 3 }],
+    })
+    vi.mocked(getFormData).mockResolvedValueOnce({
+      id: 'rec_rich_len',
+      version: 1,
+      body: '<!--sw-rt:1--><p><span data-rt-font="song" data-rt-size="16" data-rt-color="#6F2DFF">你好</span></p>',
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    await flushPromises()
+    await wrapper.find('[data-testid="form-render-submit"]').trigger('click')
+    await flushPromises()
+
+    // 可见文本 2 字，长标签不计入；不应出现超长错误
+    expect(wrapper.find('[data-validation-error-for="body"]').exists()).toBe(false)
+  })
+
+  it('RICH_TEXT 可见文本超长时拒绝提交', async () => {
+    mockQuery = { recordId: 'rec_rich_over', mode: 'edit' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '富文本超长',
+      fields: [{ name: 'body', type: 'RICH_TEXT', required: false, length: 3 }],
+    })
+    vi.mocked(getFormData).mockResolvedValueOnce({
+      id: 'rec_rich_over',
+      version: 1,
+      body: '<!--sw-rt:1--><p>你好世界</p>',
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+    await flushPromises()
+    await wrapper.find('[data-testid="form-render-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-validation-error-for="body"]').text()).toBe('最多填写 3 个字符')
   })
 })
 
@@ -429,7 +533,8 @@ function findButtonByText(wrapper: ReturnType<typeof mount>, text: string) {
 }
 
 /**
- * 提交成功确认：弹层文案固定为「提交成功」，且实例探测走用户态 adapter（表单键 + 记录 ID）。
+ * 提交成功确认：复用 DetailDialog 结果窗（0.2.0 P3/272:1784），
+ * 实例探测走用户态 adapter（表单键 + 记录 ID）。
  */
 describe('FormRender 提交成功确认', () => {
   beforeEach(() => {
@@ -439,7 +544,7 @@ describe('FormRender 提交成功确认', () => {
     mockQuery = {}
   })
 
-  it('新建提交成功后只提示「提交成功」，并按表单键+记录 ID 探测实例', async () => {
+  it('新建提交成功后呈现 DetailDialog 结果窗，并按表单键+记录 ID 探测实例', async () => {
     vi.mocked(getFormDefinition).mockResolvedValueOnce({
       title: '灾备演练',
       fields: [{ name: 'drill_name', label: '演练名称', type: 'TEXT', required: false }],
@@ -448,15 +553,13 @@ describe('FormRender 提交成功确认', () => {
     vi.mocked(countProcessInstancesByBusinessKey).mockResolvedValueOnce(1)
 
     // el-dialog 内容默认 teleport 到 body：桩成内联渲染，断言提交确认面文案
+    // （0.2.0 P3/272:1784：复用 DetailDialog 结果窗，标题「申请已提交」+ 正文 + 「查看」按钮）
     const submitStubs = {
       ...baseStubs,
       'el-dialog': {
-        props: ['modelValue'],
-        template: '<div v-if="modelValue" class="submit-dialog-stub"><slot /></div>',
-      },
-      'el-result': {
-        props: ['title', 'subTitle'],
-        template: '<div class="result-stub" :data-sub-title="subTitle">{{ title }}</div>',
+        props: ['modelValue', 'title'],
+        template:
+          '<div v-if="modelValue" class="submit-dialog-stub"><span class="submit-dialog-title">{{ title }}</span><slot /><slot name="footer" /></div>',
       },
     }
     const wrapper = mount(FormRender, { global: { stubs: submitStubs } })
@@ -468,9 +571,12 @@ describe('FormRender 提交成功确认', () => {
     await flushPromises()
 
     expect(countProcessInstancesByBusinessKey).toHaveBeenCalledWith('test-form-key', 'rec-900')
-    const dialogText = wrapper.find('.submit-dialog-stub').text()
-    expect(dialogText).toBe('提交成功')
-    expect(wrapper.find('.result-stub').attributes('data-sub-title')).toBeUndefined()
+    expect(wrapper.find('.submit-dialog-title').text()).toBe('申请已提交')
+    expect(wrapper.find('[data-testid="submit-success-message"]').text()).toBe(
+      '可前往「我发起的」查看审批进度。',
+    )
+    const confirmBtn = wrapper.find('[data-testid="submit-dialog-confirm"]')
+    expect(confirmBtn.text()).toBe('查看')
     wrapper.unmount()
   })
 })
@@ -570,6 +676,418 @@ describe('FormRender draft mode', () => {
     expect(ElMessage.success).toHaveBeenCalledWith('提交成功')
   })
 
+  it('runs submit events around a formal draft submission without rewriting business submit', async () => {
+    mockQuery = { mode: 'draft', draftId: '5' }
+    vi.mocked(ElMessage.warning).mockClear()
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '请假申请单',
+      fields: draftFields,
+      events: {
+        beforeSubmitHandler: [
+          {
+            id: 'prepare',
+            name: '提交前整理',
+            order: 0,
+            enabled: true,
+            script: '#设置字段值(applicant, "提交前")',
+          },
+        ],
+        afterSubmitHandler: [
+          {
+            id: 'audit',
+            name: '提交后回写展示',
+            order: 0,
+            enabled: true,
+            script: '#设置字段值(applicant, "已提交")',
+          },
+        ],
+      },
+    })
+    vi.mocked(getDraft).mockResolvedValueOnce(draftRecord)
+    vi.mocked(updateDraft).mockResolvedValueOnce(draftRecord)
+    vi.mocked(submitDraft).mockResolvedValueOnce({
+      commandId: 'cmd-1',
+      commandKey: 'k1',
+      commandType: 'DRAFT_SUBMIT',
+      channel: 'ASYNC',
+      status: 'ACCEPTED',
+      duplicated: false,
+    })
+    let resolvePoll!: (status: WorkflowCommandStatus | null) => void
+    vi.mocked(pollCommandStatus).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePoll = resolve
+      }),
+    )
+
+    const wrapper = mount(FormRender, { global: { stubs: draftStubs } })
+    await flushPromises()
+
+    const submitBtn = findButtonByText(wrapper, '提交草稿')
+    expect(submitBtn).not.toBeNull()
+    await submitBtn!.trigger('click')
+    await flushPromises()
+
+    expect(updateDraft).toHaveBeenCalledWith(
+      '5',
+      expect.objectContaining({ payload: JSON.stringify({ applicant: '提交前', days: 3 }) }),
+    )
+    expect(submitDraft).toHaveBeenCalledTimes(1)
+    // 受理尚未确认：提交后动作不能提前执行
+    expect(wrapper.find('[data-field-name="applicant"]').attributes('data-model-value')).toBe(
+      '提交前',
+    )
+
+    resolvePoll({
+      commandId: 'cmd-1',
+      commandType: 'DRAFT_SUBMIT',
+      channel: 'ASYNC',
+      status: 'COMPLETED',
+      result: { recordId: 'rec-1' },
+      failureReason: null,
+      retryCount: 0,
+      createTime: '2026-08-01T10:00:00',
+      finishedAt: '2026-08-01T10:00:01',
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-field-name="applicant"]').attributes('data-model-value')).toBe(
+      '已提交',
+    )
+    expect(getDraft).toHaveBeenCalledTimes(1)
+    expect(ElMessage.success).toHaveBeenCalledWith('提交成功')
+    expect(ElMessage.warning).not.toHaveBeenCalled()
+  })
+
+  it('runs before-submit before final required validation', async () => {
+    mockQuery = { mode: 'draft', draftId: '5' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '请假申请单',
+      fields: [
+        { name: 'applicant', label: '申请人', type: 'TEXT', required: true },
+        { name: 'days', label: '天数', type: 'NUMBER', required: false },
+      ],
+      events: {
+        beforeSubmitHandler: [
+          {
+            id: 'fill-required',
+            name: '补齐必填项',
+            order: 0,
+            enabled: true,
+            script: '#设置字段值(applicant, "提交前补齐")',
+          },
+        ],
+      },
+    })
+    vi.mocked(getDraft).mockResolvedValueOnce({ ...draftRecord, payload: '{"days":3}' })
+    vi.mocked(updateDraft).mockResolvedValueOnce(draftRecord)
+    vi.mocked(submitDraft).mockResolvedValueOnce({
+      commandId: 'cmd-1',
+      commandKey: 'k1',
+      commandType: 'DRAFT_SUBMIT',
+      channel: 'ASYNC',
+      status: 'ACCEPTED',
+      duplicated: false,
+    })
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce({
+      commandId: 'cmd-1',
+      commandType: 'DRAFT_SUBMIT',
+      channel: 'ASYNC',
+      status: 'COMPLETED',
+      result: { recordId: 'rec-1' },
+      failureReason: null,
+      retryCount: 0,
+      createTime: '2026-08-01T10:00:00',
+      finishedAt: '2026-08-01T10:00:01',
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: draftStubs } })
+    await flushPromises()
+
+    await findButtonByText(wrapper, '提交草稿')!.trigger('click')
+    await flushPromises()
+
+    expect(updateDraft).toHaveBeenCalledWith(
+      '5',
+      expect.objectContaining({
+        payload: JSON.stringify({ applicant: '提交前补齐', days: 3 }),
+      }),
+    )
+    expect(submitDraft).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).not.toContain('请完善必填项后再提交')
+  })
+
+  it('blocks formal draft submission when before-submit returns false and preserves input', async () => {
+    mockQuery = { mode: 'draft', draftId: '5' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '请假申请单',
+      fields: draftFields,
+      events: {
+        beforeSubmitHandler: [
+          {
+            id: 'stop',
+            name: '阻止提交',
+            order: 0,
+            enabled: true,
+            script: 'return false',
+          },
+        ],
+      },
+    })
+    vi.mocked(getDraft).mockResolvedValueOnce(draftRecord)
+
+    const wrapper = mount(FormRender, { global: { stubs: draftStubs } })
+    await flushPromises()
+
+    const submitBtn = findButtonByText(wrapper, '提交草稿')
+    await submitBtn!.trigger('click')
+    await flushPromises()
+
+    expect(updateDraft).not.toHaveBeenCalled()
+    expect(submitDraft).not.toHaveBeenCalled()
+    expect(pollCommandStatus).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-field-name="applicant"]').attributes('data-model-value')).toBe(
+      '李四',
+    )
+    expect(wrapper.text()).toContain('提交前动作返回 false，已取消提交')
+  })
+
+  it('keeps draft input when the before-submit confirmation is cancelled', async () => {
+    mockQuery = { mode: 'draft', draftId: '5' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '请假申请单',
+      fields: draftFields,
+      events: {
+        beforeSubmitHandler: [
+          {
+            id: 'confirm',
+            name: '确认后继续',
+            order: 0,
+            enabled: true,
+            confirmMessage: '确认继续提交？',
+            script: '#设置字段值(applicant, "继续")',
+          },
+        ],
+      },
+    })
+    vi.mocked(getDraft).mockResolvedValueOnce(draftRecord)
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValueOnce(new Error('cancel'))
+
+    const wrapper = mount(FormRender, { global: { stubs: draftStubs } })
+    await flushPromises()
+
+    await findButtonByText(wrapper, '提交草稿')!.trigger('click')
+    await flushPromises()
+
+    expect(updateDraft).not.toHaveBeenCalled()
+    expect(submitDraft).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-field-name="applicant"]').attributes('data-model-value')).toBe(
+      '李四',
+    )
+    expect(wrapper.text()).toContain('提交已取消')
+    confirmSpy.mockRestore()
+  })
+
+  it('keeps draft input when a before-submit action throws', async () => {
+    mockQuery = { mode: 'draft', draftId: '5' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '请假申请单',
+      fields: draftFields,
+      events: {
+        beforeSubmitHandler: [
+          {
+            id: 'broken',
+            name: '异常动作',
+            order: 0,
+            enabled: true,
+            script: 'return #获取字段值(not_exists)',
+          },
+        ],
+      },
+    })
+    vi.mocked(getDraft).mockResolvedValueOnce(draftRecord)
+
+    const wrapper = mount(FormRender, { global: { stubs: draftStubs } })
+    await flushPromises()
+
+    await findButtonByText(wrapper, '提交草稿')!.trigger('click')
+    await flushPromises()
+
+    expect(updateDraft).not.toHaveBeenCalled()
+    expect(submitDraft).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-field-name="applicant"]').attributes('data-model-value')).toBe(
+      '李四',
+    )
+    expect(wrapper.text()).toContain('提交前处理失败')
+  })
+
+  it('does not run submit events while saving a draft', async () => {
+    mockQuery = { mode: 'draft', draftId: '5' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '请假申请单',
+      fields: draftFields,
+      events: {
+        beforeSubmitHandler: [
+          {
+            id: 'prepare',
+            name: '不应执行的提交前动作',
+            order: 0,
+            enabled: true,
+            script: '#设置字段值(applicant, "不应执行")',
+          },
+        ],
+        afterSubmitHandler: [
+          {
+            id: 'audit',
+            name: '不应执行的提交后动作',
+            order: 0,
+            enabled: true,
+            script: '#设置字段值(applicant, "不应执行")',
+          },
+        ],
+      },
+    })
+    vi.mocked(getDraft).mockResolvedValueOnce(draftRecord)
+    vi.mocked(updateDraft).mockResolvedValueOnce(draftRecord)
+
+    const wrapper = mount(FormRender, { global: { stubs: draftStubs } })
+    await flushPromises()
+
+    await findButtonByText(wrapper, '保存草稿')!.trigger('click')
+    await flushPromises()
+
+    expect(updateDraft).toHaveBeenCalledWith(
+      '5',
+      expect.objectContaining({ payload: JSON.stringify({ applicant: '李四', days: 3 }) }),
+    )
+    expect(submitDraft).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-field-name="applicant"]').attributes('data-model-value')).toBe(
+      '李四',
+    )
+  })
+
+  it('uses the draft resultRecordId when the command result has no record id', async () => {
+    mockQuery = { mode: 'draft', draftId: '5' }
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '请假申请单',
+      fields: draftFields,
+      events: {
+        afterSubmitHandler: [
+          {
+            id: 'audit',
+            name: '提交后动作',
+            order: 0,
+            enabled: true,
+            script: '#设置字段值(applicant, "已提交")',
+          },
+        ],
+      },
+    })
+    vi.mocked(getDraft)
+      .mockResolvedValueOnce(draftRecord)
+      .mockResolvedValueOnce({ ...draftRecord, status: 'SUBMITTED', resultRecordId: 'rec-2' })
+    vi.mocked(updateDraft).mockResolvedValueOnce(draftRecord)
+    vi.mocked(submitDraft).mockResolvedValueOnce({
+      commandId: 'cmd-1',
+      commandKey: 'k1',
+      commandType: 'DRAFT_SUBMIT',
+      channel: 'ASYNC',
+      status: 'ACCEPTED',
+      duplicated: false,
+    })
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce({
+      commandId: 'cmd-1',
+      commandType: 'DRAFT_SUBMIT',
+      channel: 'ASYNC',
+      status: 'COMPLETED',
+      result: null,
+      failureReason: null,
+      retryCount: 0,
+      createTime: '2026-08-01T10:00:00',
+      finishedAt: '2026-08-01T10:00:01',
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: draftStubs } })
+    await flushPromises()
+
+    await findButtonByText(wrapper, '提交草稿')!.trigger('click')
+    await flushPromises()
+
+    expect(getDraft).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-field-name="applicant"]').attributes('data-model-value')).toBe(
+      '已提交',
+    )
+  })
+
+  it('retains the stable submission id when retrying failed post-submit actions', async () => {
+    mockQuery = { mode: 'draft', draftId: '5' }
+    vi.mocked(ElMessage.warning).mockClear()
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '请假申请单',
+      fields: draftFields,
+      events: {
+        afterSubmitHandler: [
+          {
+            id: 'missing',
+            name: '读取不存在字段',
+            order: 0,
+            enabled: true,
+            script: 'return #获取字段值(not_exists)',
+          },
+        ],
+      },
+    })
+    vi.mocked(getDraft).mockResolvedValueOnce(draftRecord)
+    vi.mocked(updateDraft).mockResolvedValueOnce(draftRecord)
+    vi.mocked(submitDraft).mockResolvedValueOnce({
+      commandId: 'cmd-1',
+      commandKey: 'k1',
+      commandType: 'DRAFT_SUBMIT',
+      channel: 'ASYNC',
+      status: 'ACCEPTED',
+      duplicated: false,
+    })
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce({
+      commandId: 'cmd-1',
+      commandType: 'DRAFT_SUBMIT',
+      channel: 'ASYNC',
+      status: 'COMPLETED',
+      result: { recordId: 'rec-1' },
+      failureReason: null,
+      retryCount: 0,
+      createTime: '2026-08-01T10:00:00',
+      finishedAt: '2026-08-01T10:00:01',
+    })
+
+    const wrapper = mount(FormRender, {
+      global: {
+        stubs: {
+          ...draftStubs,
+          ElAlert: {
+            props: ['title'],
+            template: '<div class="el-alert">{{ title }}<slot /></div>',
+          },
+        },
+      },
+    })
+    await flushPromises()
+
+    await findButtonByText(wrapper, '提交草稿')!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('业务数据已提交，后续处理失败')
+    const retryBtn = findButtonByText(wrapper, '重试后续处理')
+    expect(retryBtn).not.toBeNull()
+    await retryBtn!.trigger('click')
+    await flushPromises()
+
+    expect(updateDraft).toHaveBeenCalledTimes(1)
+    expect(submitDraft).toHaveBeenCalledTimes(1)
+    expect(getDraft).toHaveBeenCalledTimes(1)
+    expect(ElMessage.warning).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('字段不存在「not_exists」')
+  })
+
   it('creates a new draft via createDraft in draft mode without draftId', async () => {
     mockQuery = { mode: 'draft' }
     vi.mocked(getFormDefinition).mockResolvedValueOnce({ title: '请假申请单', fields: draftFields })
@@ -591,5 +1109,97 @@ describe('FormRender draft mode', () => {
     )
     expect(updateDraft).not.toHaveBeenCalled()
     expect(ElMessage.success).toHaveBeenCalledWith('草稿已创建')
+  })
+})
+
+describe('FormRender 字段查看权限渲染过滤（A09）', () => {
+  beforeEach(() => {
+    mockGetInstanceRelation.mockReset()
+    mockGetInstanceRelation.mockResolvedValue({ relation: 'NONE' })
+    vi.mocked(getFormDefinition).mockReset()
+    mockQuery = {}
+    setActivePinia(createPinia())
+  })
+
+  const asUser = (id: string, roles: string[]): void => {
+    const userStore = useUserStore()
+    userStore.user = {
+      id,
+      username: 'u' + id,
+      displayName: '用户' + id,
+      deptId: '100',
+      tenantId: '100',
+    } as SessionUser
+    userStore.roles = new Set(roles)
+  }
+
+  it('无匹配主体：无查看权字段不渲染，其余照常', async () => {
+    asUser('9101', ['tenant_admin'])
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '权限表单',
+      fields: [
+        { name: 'open', type: 'TEXT', required: false },
+        { name: 'only9001', type: 'TEXT', required: false },
+        { name: 'onlyOtherRole', type: 'TEXT', required: false },
+      ],
+      fieldPermissions: {
+        only9001: { view: ['user:9001'] },
+        onlyOtherRole: { view: ['role:other_role'] },
+      },
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+
+    expect(
+      wrapper.findAll('[data-field-name]').map((n) => n.attributes('data-field-name')),
+    ).toEqual(['open'])
+  })
+
+  it('命中 user: 主体：字段照常渲染', async () => {
+    asUser('9001', ['tenant_admin'])
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: '权限表单',
+      fields: [
+        { name: 'open', type: 'TEXT', required: false },
+        { name: 'only9001', type: 'TEXT', required: false },
+        { name: 'onlyOtherRole', type: 'TEXT', required: false },
+      ],
+      fieldPermissions: {
+        only9001: { view: ['user:9001'] },
+        onlyOtherRole: { view: ['role:other_role'] },
+      },
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+
+    expect(
+      wrapper.findAll('[data-field-name]').map((n) => n.attributes('data-field-name')),
+    ).toEqual(['open', 'only9001'])
+  })
+
+  it('命中 role:/dept: 主体与空 view（不设限）均照常渲染', async () => {
+    asUser('9101', ['tenant_admin'])
+    vi.mocked(getFormDefinition).mockResolvedValueOnce({
+      title: 'P',
+      fields: [
+        { name: 'a', type: 'TEXT', required: false },
+        { name: 'b', type: 'TEXT', required: false },
+        { name: 'c', type: 'TEXT', required: false },
+      ],
+      fieldPermissions: {
+        a: { view: ['role:tenant_admin'] },
+        b: { view: ['dept:100'] },
+        c: { view: [] },
+      },
+    })
+
+    const wrapper = mount(FormRender, { global: { stubs: baseStubs } })
+    await flushPromises()
+
+    expect(
+      wrapper.findAll('[data-field-name]').map((n) => n.attributes('data-field-name')),
+    ).toEqual(['a', 'b', 'c'])
   })
 })

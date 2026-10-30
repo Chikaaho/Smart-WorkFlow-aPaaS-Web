@@ -49,6 +49,12 @@ const stubs = {
     template: '<div class="el-empty">{{ description }}</div>',
     props: ['description', 'imageSize'],
   },
+  ListPagination: {
+    template:
+      '<button class="pagination-stub" @click="$emit(\'update:pageNum\', 2)">page2</button>',
+    props: ['total', 'pageNum', 'pageSize'],
+    emits: ['update:pageNum', 'update:pageSize'],
+  },
 }
 
 function mountCatalog() {
@@ -94,13 +100,16 @@ describe('ProcessCatalog 前台流程中心（BF20261013-051：分类维护移�
     await flushPromises()
 
     const items = wrapper.findAll('.catalog-tree__item')
-    expect(items.length).toBe(2) // 「全部」+ 分类「财务」（未分类计数为 0 时不渲染）
+    // 「全部」+ 分类「财务」+ 固定「未分类」入口（参考 97:2 计数 0 也保留）
+    expect(items.length).toBe(3)
     expect(items[1]!.text()).toContain('财务')
+    expect(items[2]!.text()).toContain('未分类')
 
     await items[1]!.trigger('click')
     await flushPromises()
     const lastCall = vi.mocked(oa.queryCatalogItems).mock.calls.at(-1)!
-    expect(lastCall[1]).toMatchObject({ categoryId: 9 })
+    // 雪花分类 ID 按字符串透传（避免 JS 安全整数精度丢失），断言原值不丢
+    expect(lastCall[1]).toMatchObject({ categoryId: '9' })
   })
 
   it('流程中心的搜索框保留（Owner：流程中心保留搜索）', async () => {
@@ -108,6 +117,38 @@ describe('ProcessCatalog 前台流程中心（BF20261013-051：分类维护移�
     await flushPromises()
 
     expect(wrapper.find('.catalog-page__search').exists()).toBe(true)
+  })
+
+  it('分页可请求第二页且首次查询使用 10 条分页', async () => {
+    vi.mocked(oa.queryCatalogItems).mockResolvedValue({
+      list: [
+        {
+          itemKey: 'f1',
+          name: '流程一',
+          formKey: 'form_f1',
+          categoryId: null,
+          status: 'PUBLISHED',
+          formPublished: true,
+          bindingActive: true,
+        },
+      ],
+      total: 21,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const wrapper = mountCatalog()
+    await flushPromises()
+    expect(vi.mocked(oa.queryCatalogItems).mock.calls.at(-1)?.[0]).toMatchObject({
+      pageNum: 1,
+      pageSize: 10,
+    })
+
+    await wrapper.find('.pagination-stub').trigger('click')
+    await flushPromises()
+    expect(vi.mocked(oa.queryCatalogItems).mock.calls.at(-1)?.[0]).toMatchObject({
+      pageNum: 2,
+      pageSize: 10,
+    })
   })
 
   // 0.1.7 #25 回归：左上角标题/描述与「可发起 N 个流程」「全部流程 · N 个可发起」汇总计数为噪音

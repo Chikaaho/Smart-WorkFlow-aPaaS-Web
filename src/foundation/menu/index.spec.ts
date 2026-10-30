@@ -39,7 +39,7 @@ describe('foundation/menu', () => {
     // 验证目录 redirect 指向首叶
     const systemRoute = routes.find((r) => r.path === 'system')
     expect(systemRoute).toBeDefined()
-    expect(systemRoute!.redirect).toBe('/system/dict')
+    expect(systemRoute!.redirect).toBe('/system/tenant')
     expect(systemRoute!.component).toBeUndefined()
   })
 

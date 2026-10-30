@@ -217,6 +217,8 @@ export interface AgentToolExternalConfig {
   url: string
   /** HTTP 方法：GET/POST/PUT（默认 POST） */
   httpMethod: string
+  /** 副作用分类：QUERY=查询无外部写副作用，WRITE=有外部写副作用；null=未分类。 */
+  effectScope: 'QUERY' | 'WRITE' | null
   /** 请求超时（秒），默认 30 */
   timeoutSeconds: number
   /** 启用状态 */
@@ -234,6 +236,7 @@ export interface AgentToolExternalSaveReq {
   inputSchema?: string | null
   url: string
   httpMethod: string
+  effectScope?: 'QUERY' | 'WRITE' | null
   timeoutSeconds?: number
   enabled?: boolean
   remark?: string | null

@@ -4,8 +4,10 @@ import { i18n } from '@/locales'
 import type { ApprovalHistoryItem } from '@/contracts/bpm'
 
 const mockGetProcessDefDefinitionByKey = vi.fn()
+const mockDownloadOpinionAttachment = vi.fn()
 vi.mock('@/modules/workflow/api', () => ({
   getProcessDefDefinitionByKey: (...args: unknown[]) => mockGetProcessDefDefinitionByKey(...args),
+  downloadOpinionAttachment: (...args: unknown[]) => mockDownloadOpinionAttachment(...args),
 }))
 
 import InstanceFlowPanel from './InstanceFlowPanel.vue'
@@ -135,5 +137,150 @@ describe('InstanceFlowPanel（表单详情外挂流程信息唯一控制面）',
 
     expect(mockGetProcessDefDefinitionByKey).not.toHaveBeenCalled()
     expect(vm.graphError).toBe(i18n.global.t('taskDetailUi.graphUnavailable'))
+  })
+})
+
+describe('InstanceFlowPanel 会签聚合（设计 60:190）', () => {
+  const signStubs = {
+    ...stubs,
+    'el-dialog': {
+      props: ['modelValue'],
+      template: '<div v-if="modelValue" class="el-dialog"><slot name="header"/><slot/></div>',
+    },
+    'el-tabs': { props: ['modelValue'], template: '<div><slot/></div>' },
+    'el-tab-pane': { props: ['label', 'name'], template: '<div><slot/></div>' },
+  }
+
+  /** 会签组 node_sign 两人（一同意一待处理）+ 单人审批组 + 派发通知行。 */
+  function signHistory(): ApprovalHistoryItem[] {
+    return [
+      {
+        taskId: 's1',
+        taskName: '总公司会签',
+        assignee: '11',
+        assigneeName: '李宁',
+        assigneeDept: '总公司',
+        createTime: '2026-10-17T10:00:00',
+        endTime: '2026-10-17T10:30:00',
+        approvalResult: 'APPROVED',
+        action: 'APPROVE',
+        opinionData: { comment: '同意' },
+        nodeKey: 'node_sign',
+      },
+      {
+        taskId: 's2',
+        taskName: '总公司会签',
+        assignee: '12',
+        assigneeName: '王芳',
+        assigneeDept: '分公司1',
+        createTime: '2026-10-17T10:00:00',
+        endTime: null,
+        approvalResult: null,
+        nodeKey: 'node_sign',
+      },
+      {
+        taskId: 's3',
+        taskName: '分管领导审批',
+        assignee: '13',
+        assigneeName: '张伟',
+        createTime: '2026-10-17T09:00:00',
+        endTime: '2026-10-17T09:30:00',
+        approvalResult: 'APPROVED',
+        action: 'APPROVE',
+        nodeKey: 'node_leader',
+      },
+    ]
+  }
+
+  it('多人节点聚合为会签记录入口，统计同意/待处理；单人节点不聚合', () => {
+    const wrapper = mount(InstanceFlowPanel, {
+      props: { approvalHistory: signHistory(), processDefinitionKey: 'leave' },
+      global: { plugins: [i18n], stubs: signStubs },
+    })
+
+    const vm = wrapper.vm as unknown as {
+      signGroups: { key: string; approved: number; pending: number }[]
+    }
+    expect(vm.signGroups).toHaveLength(1)
+    expect(vm.signGroups[0].key).toBe('node_sign')
+    expect(vm.signGroups[0].approved).toBe(1)
+    expect(vm.signGroups[0].pending).toBe(1)
+
+    const entry = wrapper.find('[data-testid="sign-group"]')
+    expect(entry.exists()).toBe(true)
+    expect(entry.text()).toContain('会签记录 · 总公司会签')
+    expect(entry.text()).toContain('1人已同意')
+    expect(entry.text()).toContain('1人待处理')
+    expect(entry.text()).toContain('查看全部会签记录')
+  })
+
+  it('点击入口打开会签记录弹窗，筛选已同意仅剩同意行', async () => {
+    const wrapper = mount(InstanceFlowPanel, {
+      props: { approvalHistory: signHistory(), processDefinitionKey: 'leave' },
+      global: { plugins: [i18n], stubs: signStubs },
+    })
+
+    expect(wrapper.find('[data-testid="sign-records-dialog"]').exists()).toBe(false)
+    await wrapper.find('[data-testid="sign-group"]').trigger('click')
+
+    const vm = wrapper.vm as unknown as {
+      signDialogVisible: boolean
+      signFilter: string
+      signDialogRows: ApprovalHistoryItem[]
+    }
+    expect(vm.signDialogVisible).toBe(true)
+    expect(vm.signDialogRows).toHaveLength(2)
+    expect(wrapper.find('[data-testid="sign-records-stats"]').text()).toContain('1人已同意')
+
+    vm.signFilter = 'agreed'
+    await flushPromises()
+    expect(vm.signDialogRows.map((r) => r.taskId)).toEqual(['s1'])
+
+    vm.signFilter = 'rejected'
+    await flushPromises()
+    expect(vm.signDialogRows).toHaveLength(0)
+  })
+})
+
+describe('InstanceFlowPanel 意见附件受控查看（direction-ui-completion-020）', () => {
+  it('结构化引用渲染下载入口；旧纯文本标记不可查看，不拼下载地址', async () => {
+    const wrapper = mount(InstanceFlowPanel, {
+      props: { approvalHistory: [], processDefinitionKey: 'leave' },
+      global: { plugins: [i18n], stubs },
+    })
+    const vm = wrapper.vm as unknown as {
+      opinionDetailRow: ApprovalHistoryItem | null
+      opinionDetailVisible: boolean
+    }
+    vm.opinionDetailRow = {
+      taskId: 's1',
+      taskName: '部门审批',
+      assignee: '3',
+      createTime: '2026-10-17T10:00:00',
+      endTime: '2026-10-17T10:10:00',
+      approvalResult: 'APPROVED',
+      action: 'APPROVE',
+      actionRecordId: 77,
+      opinionData: {
+        comment: '同意',
+        attachments: [{ storageKey: 'store/key-1', name: '方案.pdf' }],
+        files: ['旧文件名.pdf'],
+      },
+    }
+    vm.opinionDetailVisible = true
+    await flushPromises()
+
+    const downloadButtons = wrapper.findAll('.p53-opinion-attachment button')
+    expect(downloadButtons).toHaveLength(1)
+    expect(downloadButtons[0].text()).toContain('方案.pdf')
+
+    const unavailable = wrapper.findAll('.p53-opinion-attachment__unavailable')
+    expect(unavailable).toHaveLength(1)
+    expect(unavailable[0].text()).toContain('旧文件名.pdf')
+    expect(unavailable[0].text()).toContain('不可查看')
+
+    await downloadButtons[0].trigger('click')
+    await flushPromises()
+    expect(mockDownloadOpinionAttachment).toHaveBeenCalledWith(77, 'store/key-1', '方案.pdf')
   })
 })

@@ -8,6 +8,7 @@ import { visibleMenuForArea, toFullPath, buildMenuTrail } from './menu-utils'
 import { useLocalizedMenuTree } from './menu-title'
 import { MenuType } from '@/contracts/menu'
 import type { MenuNode } from '@/contracts/menu'
+import { projectAdminSections } from './admin-sections'
 
 /**
  * 顶部主导航（P53 设计节点 01/04）。
@@ -103,6 +104,11 @@ function isActive(to: string): boolean {
       (route.path.startsWith('/form/designer/') && route.query.tab === 'processes')
     )
   }
+  if (to === '/workflow/defs') {
+    // 同一设计器路由在表单工作台内属于表单管理；直接流程设计仍属于流程管理。
+    if (route.query.from === 'form-workbench' && route.path.endsWith('/design')) return false
+    return route.path === to || route.path.startsWith(`${to}/`)
+  }
   // 应用中心：应用内容（/form/app-center/:appId）与表单数据列表（/form/app-form/:formKey）
   // 都是该栏目的下钻页面，保持顶栏选中态。
   if (to === APP_CENTER_PATH) {
@@ -117,7 +123,9 @@ function isActive(to: string): boolean {
     return (
       route.path === to ||
       (route.path.startsWith('/form/') &&
-        !(route.path.startsWith('/form/designer/') && route.query.tab === 'processes'))
+        !(route.path.startsWith('/form/designer/') && route.query.tab === 'processes')) ||
+      // 表单工作台中的流程设计仍属于「表单管理」；直接进入流程管理设计器则保持流程管理选中。
+      (route.query.from === 'form-workbench' && route.path.endsWith('/design'))
     )
   }
   if (to === '/workflow/analytics') {
@@ -132,14 +140,15 @@ function isActive(to: string): boolean {
 }
 
 const items = computed<MainNavItem[]>(() => {
-  const visible = visibleMenuForArea(localizedMenu.value, area.value)
+  const areaVisible = visibleMenuForArea(localizedMenu.value, area.value)
+  const visible = area.value === 'admin' ? projectAdminSections(areaVisible, t) : areaVisible
   if (area.value === 'portal') {
     const result: MainNavItem[] = [
       {
         key: 'workspace',
         label: t('common.workspace'),
         to: '/workspace',
-        active: route.path === '/workspace',
+        active: route.path === '/workspace' || route.path.startsWith('/workspace/'),
       },
     ]
     const before = result.length
@@ -212,22 +221,32 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
 </script>
 
 <template>
-  <nav class="app-main-nav" :class="[`app-main-nav--${area}`]" :aria-label="t('nav.mainNav')">
-    <router-link
-      v-for="item in items"
-      :key="item.key"
-      :to="item.to"
-      class="app-main-nav__item"
-      :class="{ 'is-active': item.active }"
-    >
-      <span class="app-main-nav__label">{{ item.label }}</span>
-    </router-link>
-  </nav>
+  <div class="app-main-nav-shell" :class="[`app-main-nav-shell--${area}`]">
+    <nav class="app-main-nav" :class="[`app-main-nav--${area}`]" :aria-label="t('nav.mainNav')">
+      <router-link
+        v-for="item in items"
+        :key="item.key"
+        :to="item.to"
+        class="app-main-nav__item"
+        :class="{ 'is-active': item.active }"
+      >
+        <span class="app-main-nav__label">{{ item.label }}</span>
+      </router-link>
+    </nav>
+  </div>
 </template>
 
 <style scoped>
+.app-main-nav-shell {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sw-space-8);
+  height: 100%;
+  min-width: 0;
+}
 .app-main-nav {
   display: flex;
+  flex: 1;
   align-items: stretch;
   /* V012-BUG-020：前台顶栏 tab 左对齐（紧跟 Logo 区域） */
   justify-content: flex-start;
@@ -243,6 +262,8 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
 }
 .app-main-nav--admin {
   --sw-nav-topbar-active-bg: var(--sw-nav-topbar-admin-active-bg);
+  align-items: center;
+  gap: var(--sw-space-8);
 }
 .app-main-nav::-webkit-scrollbar {
   display: none;
@@ -267,17 +288,28 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.08);
 }
+/* 参考 97:2：四导航行盒 14px/22px（与设计同源，垂直居中于 64px 顶栏） */
+.app-main-nav__label {
+  line-height: 22px;
+}
 .app-main-nav__item.is-active {
   color: #ffffff;
   font-weight: 600;
   background: var(--sw-nav-topbar-active-bg);
 }
 .app-main-nav--admin .app-main-nav__item {
-  flex: 1 1 0;
+  flex: 0 0 112px;
+  box-sizing: border-box;
+  height: 40px;
+  font-weight: var(--sw-font-weight-emphasis);
+  border-radius: var(--sw-radius-base);
   /* RA03b 窄屏修复：显式 88px 会压过 flex 的 min-width:auto，nowrap 文字溢出与相邻项重叠；
      max-content 保底不压缩文字，宽屏仍均分、窄屏由容器横向滑动（方向 §4.5 不留不可操作元素） */
   min-width: max-content;
   padding: 0 12px;
+}
+.app-main-nav--admin .app-main-nav__item.is-active::after {
+  display: none;
 }
 /* 设计（节点02）：当前栏目指示线 48×2，居中（PNG 墨迹行 61-62） */
 .app-main-nav__item.is-active::after {
@@ -289,5 +321,32 @@ function collectPaths(nodes: MenuNode[], into: Set<string>): void {
   height: 2px;
   transform: translateX(-50%);
   background: var(--sw-nav-topbar-active-indicator);
+}
+</style>
+
+<style scoped>
+.app-main-nav-shell--portal {
+  box-sizing: border-box;
+  padding-left: 44px;
+}
+.app-main-nav--portal {
+  align-items: center;
+  gap: var(--sw-space-8);
+}
+.app-main-nav--portal .app-main-nav__item {
+  box-sizing: border-box;
+  flex-basis: 124px;
+  height: 40px;
+  border-radius: var(--sw-radius-base);
+  font-weight: var(--sw-font-weight-emphasis);
+}
+.app-main-nav--portal .app-main-nav__item.is-active::after {
+  display: none;
+}
+</style>
+
+<style scoped>
+.app-main-nav--portal .app-main-nav__item.is-active {
+  color: var(--sw-nav-topbar-text);
 }
 </style>

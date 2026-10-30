@@ -6,7 +6,7 @@ import type { LoginChallengeDTO } from '@/foundation/auth'
 import { SSO_PROVIDERS, startSsoLoginAuthorize } from '@/foundation/auth/sso'
 import type { SsoProvider } from '@/foundation/auth/sso'
 import { useI18n } from '@/locales'
-import { Lock, Share, Document, House, MagicStick, User, View, Hide } from '@element-plus/icons-vue'
+import { Lock, House, User, View, Hide, OfficeBuilding } from '@element-plus/icons-vue'
 import LocaleSwitch from '@/components/LocaleSwitch.vue'
 
 // SSO 徽标字：label 经 i18n 解析，徽标按 provider key 固定映射（WECOM=企业微信）
@@ -20,10 +20,13 @@ const router = useRouter()
 const { fetchChallenge, login } = useAuth()
 
 const username = ref('')
+const tenantCode = ref('')
+const tenantCodeVisible = ref(false)
 const password = ref('')
 const passwordVisible = ref(false)
 const captcha = ref('')
 const challenge = ref<LoginChallengeDTO | null>(null)
+const challengeLoadFailed = ref(false)
 const submitting = ref(false)
 const errorMessage = ref('')
 
@@ -42,7 +45,10 @@ async function reloadChallenge(): Promise<void> {
   captcha.value = ''
   try {
     challenge.value = await fetchChallenge()
+    if (challengeLoadFailed.value) errorMessage.value = ''
+    challengeLoadFailed.value = false
   } catch {
+    challengeLoadFailed.value = true
     challenge.value = null
     errorMessage.value = t('errors.network')
   }
@@ -62,6 +68,7 @@ async function onSubmit(): Promise<void> {
   try {
     await login({
       username: username.value,
+      tenantCode: tenantCode.value || undefined,
       password: password.value,
       captcha: captcha.value,
       challenge: challenge.value,
@@ -118,26 +125,25 @@ function onSsoProviderSelect(key: SsoProvider): void {
       <span class="login-page__badge">{{ t('login.brandBadge') }}</span>
       <h1 class="login-page__headline">{{ t('login.brandHeadline') }}</h1>
       <p class="login-page__brand-sub">{{ t('login.brandSub') }}</p>
-      <p class="login-page__trustline">{{ t('login.brandFootnote') }}</p>
       <div class="login-page__pills">
         <span class="login-page__pill">
-          <el-icon :size="18" class="login-page__pill-icon"><Share /></el-icon>
+          <span class="login-page__pill-icon" aria-hidden="true">↗</span>
           <span class="login-page__pill-title">{{ t('login.brandPillFlowTitle') }}</span>
           <span class="login-page__pill-sub">{{ t('login.brandPillFlowSub') }}</span>
         </span>
         <span class="login-page__pill">
-          <el-icon :size="18" class="login-page__pill-icon"><Document /></el-icon>
+          <span class="login-page__pill-icon" aria-hidden="true">▤</span>
           <span class="login-page__pill-title">{{ t('login.brandPillDataTitle') }}</span>
           <span class="login-page__pill-sub">{{ t('login.brandPillDataSub') }}</span>
         </span>
         <span class="login-page__pill">
-          <el-icon :size="18" class="login-page__pill-icon"><MagicStick /></el-icon>
+          <span class="login-page__pill-icon" aria-hidden="true">✧</span>
           <span class="login-page__pill-title">{{ t('login.brandPillAgentTitle') }}</span>
           <span class="login-page__pill-sub">{{ t('login.brandPillAgentSub') }}</span>
         </span>
       </div>
       <div class="login-page__footnote">
-        <span class="login-page__footnote-dot" />{{ t('login.brandFootnote') }}
+        {{ t('login.brandFootnote') }}
       </div>
     </section>
 
@@ -145,20 +151,45 @@ function onSsoProviderSelect(key: SsoProvider): void {
       <form class="login-page__form" @submit.prevent="onSubmit">
         <div class="login-page__top">
           <h2 class="login-page__welcome">{{ t('login.welcome') }}</h2>
-          <span class="login-page__secure">{{ t('login.secureBadge') }}</span>
           <LocaleSwitch class="login-page__locale" />
         </div>
         <p class="login-page__welcome-sub">{{ t('login.welcomeSub') }}</p>
-        <label>
-          账号
+        <label for="login-account">
+          <span class="login-page__label-row">
+            <span id="login-account-label">账号</span>
+            <button
+              type="button"
+              class="login-page__tenant-toggle"
+              :aria-expanded="tenantCodeVisible"
+              aria-controls="login-tenant-code"
+              :aria-label="t('tenantAdmin.loginCode')"
+              @click="tenantCodeVisible = !tenantCodeVisible"
+            >
+              {{ t('tenantAdmin.loginCode') }}
+            </button>
+          </span>
           <span class="login-page__input-wrap">
             <el-icon class="login-page__input-icon"><User /></el-icon>
             <input
+              id="login-account"
               v-model="username"
+              aria-labelledby="login-account-label"
               type="text"
               autocomplete="username"
               placeholder="请输入账号"
               required
+            />
+          </span>
+        </label>
+        <label v-if="tenantCodeVisible" id="login-tenant-code">
+          {{ t('tenantAdmin.loginCode') }}
+          <span class="login-page__input-wrap">
+            <el-icon class="login-page__input-icon"><OfficeBuilding /></el-icon>
+            <input
+              v-model="tenantCode"
+              type="text"
+              autocomplete="organization"
+              :placeholder="t('tenantAdmin.loginCodePlaceholder')"
             />
           </span>
         </label>
@@ -193,7 +224,7 @@ function onSsoProviderSelect(key: SsoProvider): void {
                 v-model="captcha"
                 type="text"
                 autocomplete="off"
-                :placeholder="t('auth.captcha')"
+                :placeholder="t('auth.captchaPlaceholder')"
                 required
                 maxlength="8"
               />
@@ -283,9 +314,18 @@ function onSsoProviderSelect(key: SsoProvider): void {
   flex: 1 1 50%;
   padding: 64px 72px;
   background:
-    radial-gradient(circle 280px at 84.52% 10.74%, rgba(111, 45, 255, 0.42), transparent 100%),
+    radial-gradient(
+      circle 280px at 84.52% 10.74%,
+      color-mix(in srgb, var(--sw-color-primary) 42%, transparent),
+      transparent 100%
+    ),
     radial-gradient(circle 310px at 10.71% 90.82%, rgba(35, 199, 217, 0.26), transparent 100%),
-    linear-gradient(111.75deg, #0c1533 0%, #25134e 52%, #102b4b 100%);
+    linear-gradient(
+      111.75deg,
+      #0c1533 0%,
+      color-mix(in srgb, var(--sw-color-primary) 32%, #0c1533) 52%,
+      #102b4b 100%
+    );
   color: #ffffff;
 }
 .login-page__brand-head {
@@ -372,11 +412,11 @@ function onSsoProviderSelect(key: SsoProvider): void {
   color: #91e7c9;
 }
 .login-page__pill:nth-child(3) .login-page__pill-icon {
-  color: #bfa7ff;
+  color: var(--sw-color-primary-light);
 }
 .login-page__pill-title {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: #ffffff;
 }
 .login-page__pill-sub {
@@ -577,6 +617,8 @@ img.login-page__captcha {
   gap: 10px;
   margin: 0;
   font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
   color: var(--sw-text-secondary);
 }
 .login-page__sso-rule {
@@ -592,8 +634,9 @@ img.login-page__captcha {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
+  line-height: 22px;
   color: var(--sw-text-regular);
 }
 .login-page__sso-provider {
@@ -606,9 +649,11 @@ img.login-page__captcha {
   padding: 0 8px;
   border: 1px solid var(--sw-border-base);
   border-radius: var(--sw-radius-base);
-  color: var(--sw-text-primary);
+  color: var(--sw-text-regular);
   background: var(--sw-surface-card);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
   cursor: pointer;
 }
 .login-page__sso-provider-mark {
@@ -710,180 +755,289 @@ img.login-page__captcha {
   }
 }
 
-/* ── ≥1280px 宽屏自适应（V011-BUG-001）：流式布局替代 P53 节点06 锁定坐标（Owner 2026-09-21 指令优先） ── */
+/* 原生登录控件与页面使用同一套字体。 */
+.login-page input,
+.login-page button {
+  font-family: inherit;
+}
+/* 桌面参考 1920×1080；较小桌面保持流式列宽和完整登录能力。 */
+.login-page__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.login-page__tenant-toggle {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sw-color-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.login-page__tenant-toggle:focus-visible {
+  outline: 2px solid var(--sw-color-primary);
+  outline-offset: 2px;
+}
 @media (min-width: 1280px) {
-  /* 品牌区填满 600px 表单面板之外的剩余宽度；overflow 仅用于裁切装饰圆出血 */
+  .login-page {
+    display: grid;
+    grid-template-columns: 61.458333% minmax(0, 1fr);
+  }
   .login-page__brand {
     position: relative;
+    display: block;
     overflow: hidden;
-    flex: 1 1 auto;
+    box-sizing: border-box;
     min-width: 0;
-    padding: 64px 80px;
-  }
-  /* 装饰：品牌区右上紫圆 / 左下青圆（设计稿色值） */
-  .login-page__brand::before {
-    content: '';
-    position: absolute;
-    top: -160px;
-    right: -120px;
-    width: 560px;
-    height: 560px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(111, 45, 255, 0.5) 0%, rgba(111, 45, 255, 0) 70%);
-  }
-  .login-page__brand::after {
-    content: '';
-    position: absolute;
-    bottom: -180px;
-    left: -140px;
-    width: 520px;
-    height: 520px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(32, 184, 205, 0.18) 0%, rgba(32, 184, 205, 0) 70%);
+    padding: clamp(64px, 15.740741vh, 170px) clamp(40px, 4.375vw, 84px);
+    background: url('@/assets/brand/login-background-020.svg') center / 100% 100% no-repeat;
   }
   .login-page__brand > * {
     position: relative;
   }
-  /* 内容进入流式排布，仅保留宽屏放大的视觉 token */
   .login-page__brand-head {
-    gap: 22px;
+    gap: 24px;
   }
   .login-page__brand-logo {
-    box-sizing: border-box;
-    width: 78px;
-    height: 82px;
-    padding: 13px;
-    border-radius: 10px;
+    width: 84px;
+    height: 88px;
+    padding: 28px 27px;
+    margin-top: -2px;
+    margin-bottom: -2px;
+    border-radius: 6px;
   }
   .login-page__brand-head strong {
-    font-size: 30px;
-    letter-spacing: 0.3px;
+    font-size: 38px;
+    line-height: 48px;
+    letter-spacing: 0;
   }
   .login-page__brand-head span {
+    font-size: 16px;
+    line-height: 24px;
     margin-top: 4px;
-    font-size: 14px;
+    font-weight: 500;
+    color: var(--sw-nav-topbar-text);
   }
   .login-page__badge {
-    color: #dcd4ff;
+    display: block;
+    margin-top: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--sw-nav-topbar-text);
+  }
+  .login-page__headline {
+    max-width: 960px;
+    margin: 28px 0 0;
+    font-size: 42px;
+    line-height: 60px;
+    white-space: pre-line;
+  }
+  .login-page__brand-sub {
+    max-width: 900px;
+    margin-top: 28px;
+    line-height: 22px;
+    color: var(--sw-nav-topbar-text);
   }
   .login-page__pills {
-    gap: 14px;
+    max-width: 896px;
+    margin-top: 30px;
+    gap: 16px;
   }
   .login-page__pills > span {
     box-sizing: border-box;
-    border-color: rgba(255, 255, 255, 0.02);
+    min-height: 128px;
+    padding: 20px 20px 18px;
+    border: 0;
     border-radius: 12px;
-    background: rgba(111, 45, 255, 0.058);
-  }
-  .login-page__pills > span:nth-child(2) {
-    background: rgba(15, 175, 194, 0.058);
-  }
-  .login-page__pills > span:nth-child(3) {
-    background: rgba(21, 168, 127, 0.058);
+    background: #27345c;
   }
   .login-page__pill {
-    gap: 5px;
+    gap: 8px;
   }
   .login-page__pill-icon {
-    color: #bfa7ff;
+    height: 28px;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 28px;
   }
-  .login-page__footnote-dot {
-    background: #3dd6a5;
+  .login-page__pill-icon,
+  .login-page__pill:nth-child(1) .login-page__pill-icon,
+  .login-page__pill:nth-child(2) .login-page__pill-icon,
+  .login-page__pill:nth-child(3) .login-page__pill-icon {
+    color: var(--sw-nav-topbar-text);
   }
-  /* 表单面板 600px 定宽并居中；表单卡流式布局，高度随内容自适应（矮视口不再裁切）。
-     垂直内距 24px：让卡片底部的备案行在 768 高视口内可见，无需滚动即可点击。 */
+  .login-page__pill-title {
+    font-size: 16px;
+    line-height: 24px;
+  }
+  .login-page__pill-sub {
+    font-size: 14px;
+    line-height: 22px;
+    color: var(--sw-nav-topbar-text);
+  }
+  .login-page__footnote {
+    margin-top: 30px;
+    padding: 0;
+    background: transparent;
+    line-height: 18px;
+    color: var(--sw-nav-topbar-text);
+  }
   .login-page__panel {
-    flex: 0 0 600px;
-    padding: 24px 40px;
-    background: #f5f7fc;
+    box-sizing: border-box;
+    padding: 40px 24px;
+    background: #f4f6fb;
   }
   .login-page__form {
-    max-width: 440px;
-    padding: 40px;
-    border-color: #e6e8f0;
-    border-radius: 22px;
-    box-shadow: 0 16px 32px rgba(32, 44, 72, 0.12);
+    position: relative;
+    gap: 0;
+    max-width: 500px;
+    padding: 40px 38px 40px 40px;
+    border-color: var(--sw-border-light);
+    border-radius: 10px;
+    box-shadow: 0 16px 48px rgba(20.4, 28.05, 53.55, 0.1);
+  }
+  .login-page__locale {
+    flex: 0 0 155px;
+    width: 155px;
+  }
+  .login-page__locale :deep(.el-select__wrapper) {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+  .login-page__locale :deep(.el-select__selected-item) {
+    font-size: 14px;
+    line-height: 22px;
+  }
+  .login-page__top {
+    min-height: 42px;
   }
   .login-page__welcome {
-    color: #182037;
+    font-size: 28px;
+    line-height: 28px;
+    color: var(--sw-text-primary);
+    white-space: nowrap;
   }
-  .login-page__secure {
-    padding: 8px 13px;
-    background: #f0ecff;
-    color: #6f2dff;
+  .login-page__welcome-sub {
+    margin: 18px 0 0;
+    font-size: 14px;
+    line-height: 22px;
   }
   .login-page__form > label {
-    gap: 7px;
-    color: #344164;
+    margin-top: 18px;
+    gap: 6px;
+    line-height: 22px;
+    color: var(--sw-text-regular);
+    font-size: 14px;
   }
-  .login-page__form label input {
-    height: 52px;
-    border-color: #dce1ec;
-    border-radius: 9px;
-    background: #fbfcff;
+  .login-page__form input {
+    height: 48px;
+    border-color: var(--sw-border-light);
+    border-radius: 6px;
+    background: #fff;
   }
-  .login-page__form label input::placeholder {
-    color: #9aa3b7;
+  .login-page__input-icon {
+    display: none;
+  }
+  .login-page__input-wrap > input {
+    padding-left: 12px;
   }
   .login-page__captcha-row {
-    gap: 10px;
+    gap: 12px;
   }
   .login-page__captcha {
-    min-width: 128px;
-    border-color: #d9d3f4;
-    border-radius: 9px;
-    background: #eef5ff;
+    box-sizing: border-box;
+    width: 144px;
+    min-width: 144px;
+    height: 48px;
+    border: 0;
+    border-radius: 6px;
   }
   img.login-page__captcha {
-    height: 52px;
-    width: 128px;
-    min-width: 128px;
-    object-fit: fill;
+    height: 48px;
+    object-fit: contain;
   }
   .login-page__submit {
-    width: 100%;
-    height: 52px;
-    background: #7132ff;
-    border-radius: 9px;
+    margin-top: 18px;
+    height: 48px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    /* Q70(32:2)：文字行盒由 normal(20px) 明确为 22px，其余基线保持 */
+    line-height: 22px;
   }
-  .login-page__submit:hover {
-    background: color-mix(in srgb, #7132ff 85%, black);
+  .login-page__sso {
+    margin-top: 18px;
+    gap: 0;
   }
   .login-page__sso-title {
-    color: #8a93a8;
+    /* 文字行盒 18px；上下各补 3px 保持表单总高与其余文字位置不变 */
+    line-height: 18px;
+    padding: 3px 0;
+    text-align: center;
+    gap: 12px;
+    max-width: 324px;
   }
-  .login-page__sso-rule {
-    background: #16a47a;
+  .login-page__sso-rule,
+  .login-page__sso-title::after {
+    flex: 1;
+    height: 1px;
+    background: #e8edf7;
   }
-  .login-page__sso-row select,
-  .login-page__sso-row input {
-    height: 52px;
-    border-color: #dce1ec;
-    border-radius: 9px;
-    background: #ffffff;
-    color: #354260;
+  .login-page__sso-title::after {
+    content: '';
   }
-  .login-page__sso-row input::placeholder {
-    color: #9aa3b7;
+  .login-page__sso-tenant {
+    margin-top: 18px;
+    line-height: 22px;
+    font-size: 14px;
+  }
+  .login-page__form label.login-page__sso-tenant {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 22px;
+    color: var(--sw-text-regular);
+  }
+  .login-page__sso-row {
+    margin-top: 18px;
+    gap: 8px;
   }
   .login-page__sso-row .login-page__sso-provider {
-    height: 52px;
-    padding: 0 8px;
-    border-color: #ccd5e5 !important;
-    border-radius: 9px;
-    background: #ffffff;
-    color: #303a55;
+    flex: 1 1 0;
+    height: 44px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 22px;
+    border: 1px solid var(--sw-border-light);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--sw-text-regular);
   }
-  .login-page__sso-row button {
-    height: 52px;
-    padding: 0 14px;
-    border: 1px solid #dce1ec;
-    border-radius: 9px;
-    background: #ffffff;
-    color: #354260;
+  /* 参考 32:2：第三个 SSO 文字中心比等分按钮中心左移 2px（仅文字对齐，不改外框） */
+  .login-page__sso-row .login-page__sso-provider.is-provider-3 {
+    padding-right: 16px;
   }
-  .login-page__sso-row button:hover {
-    background: var(--sw-fill-base);
+  .login-page__sso-provider-mark {
+    display: none;
+  }
+  .login-page__legal {
+    margin-top: 18px;
+    line-height: 18px;
+  }
+  .login-page__icp {
+    position: absolute;
+    top: calc(100% + 14px);
+    left: 0;
+    right: 0;
+    margin: 0;
+    line-height: 18px;
+  }
+  .login-page__error {
+    margin-top: 12px;
   }
 }
 </style>

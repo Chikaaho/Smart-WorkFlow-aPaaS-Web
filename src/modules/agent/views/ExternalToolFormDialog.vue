@@ -42,6 +42,11 @@ const HTTP_METHOD_OPTIONS = [
   { label: 'PUT', value: 'PUT' },
 ] as const
 
+const EFFECT_SCOPE_OPTIONS = [
+  { labelKey: 'agent.effectScopeQuery', value: 'QUERY' },
+  { labelKey: 'agent.effectScopeWrite', value: 'WRITE' },
+] as const
+
 // ─── 表单状态 ───
 
 const form = reactive({
@@ -49,6 +54,7 @@ const form = reactive({
   description: '',
   url: '',
   httpMethod: 'POST',
+  effectScope: '' as '' | 'QUERY' | 'WRITE',
   timeoutSeconds: 30,
   inputSchema: '',
   enabled: true,
@@ -73,6 +79,7 @@ function resetForm() {
   form.description = ''
   form.url = ''
   form.httpMethod = 'POST'
+  form.effectScope = ''
   form.timeoutSeconds = 30
   form.inputSchema = ''
   form.enabled = true
@@ -85,6 +92,7 @@ function fillForm(detail: AgentToolExternalConfig) {
   form.description = detail.description
   form.url = detail.url
   form.httpMethod = detail.httpMethod
+  form.effectScope = detail.effectScope ?? ''
   form.timeoutSeconds = detail.timeoutSeconds
   form.inputSchema = detail.inputSchema ?? ''
   form.enabled = detail.enabled
@@ -141,6 +149,7 @@ function validate(): string | null {
       return t('agent.inputSchemaInvalidJson')
     }
   }
+  if (!form.effectScope) return t('agent.effectScopeRequired')
   return null
 }
 
@@ -152,6 +161,7 @@ function buildSaveReq() {
     description: form.description.trim(),
     url: form.url.trim(),
     httpMethod: form.httpMethod,
+    effectScope: form.effectScope || null,
     timeoutSeconds: form.timeoutSeconds ?? 30,
     inputSchema: form.inputSchema.trim() || null,
     enabled: form.enabled,
@@ -249,6 +259,18 @@ async function handleSubmit() {
                 :value="opt.value"
               />
             </el-select>
+          </div>
+          <div class="form-field form-field--required">
+            <label class="form-field__label">{{ t('agent.effectScope') }}</label>
+            <el-select v-model="form.effectScope" style="width: 100%">
+              <el-option
+                v-for="opt in EFFECT_SCOPE_OPTIONS"
+                :key="opt.value"
+                :label="t(opt.labelKey)"
+                :value="opt.value"
+              />
+            </el-select>
+            <span class="form-field__hint">{{ t('agent.effectScopeHint') }}</span>
           </div>
           <div class="form-field">
             <label class="form-field__label">{{ t('agent.timeoutSeconds') }}</label>

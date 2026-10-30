@@ -17,11 +17,13 @@ import { i18n } from '@/locales'
 const mockPageProcessDefs = vi.fn()
 const mockCreateProcessDef = vi.fn()
 const mockGetProcessDefThemeRule = vi.fn()
+const mockGetProcessNodeCapabilities = vi.fn()
 
 vi.mock('@/modules/workflow/api', () => ({
   pageProcessDefs: (...args: unknown[]) => mockPageProcessDefs(...args),
   createProcessDef: (...args: unknown[]) => mockCreateProcessDef(...args),
   getProcessDefThemeRule: (...args: unknown[]) => mockGetProcessDefThemeRule(...args),
+  getProcessNodeCapabilities: (...args: unknown[]) => mockGetProcessNodeCapabilities(...args),
   updateProcessDefThemeRule: vi.fn(),
 }))
 
@@ -210,5 +212,94 @@ describe('RelatedProcessesPanel', () => {
 
     // el-dialog 桩无条件渲染插槽，故以「规则请求未发出」为准（真实可见性由 el-dialog 自己管）
     expect(mockGetProcessDefThemeRule).not.toHaveBeenCalled()
+  })
+
+  // ── Q56：零关联流程分支展示未配置空画布 + 节点库（纯展示），打开不创建任何定义 ──
+  const emptyResult = { list: [], total: 0, pageNum: 1, pageSize: 10 }
+  const capabilityResult = [
+    {
+      type: 'START',
+      displayName: '开始',
+      description: '',
+      category: 'EVENT',
+      version: '1',
+      topology: {},
+      configFields: [],
+      supports: { design: true, save: true, publish: true, run: true },
+    },
+    {
+      type: 'APPROVAL',
+      displayName: '审批',
+      description: '',
+      category: 'HUMAN',
+      version: '1',
+      topology: {},
+      configFields: [],
+      supports: { design: true, save: true, publish: true, run: true },
+    },
+  ]
+
+  it('零关联流程：展示节点库 + 未配置空画布 + 创建入口，不展示空表格', async () => {
+    mockPageProcessDefs.mockResolvedValueOnce(emptyResult)
+    mockGetProcessNodeCapabilities.mockResolvedValue(capabilityResult)
+    const wrapper = mount(RelatedProcessesPanel, {
+      props: { formId: 'uuid-1', formKey: 'leave-request' },
+      global: globalOpts(),
+    })
+    await flushPromises()
+
+    // 打开空状态只发起只读 GET（能力目录 + 流程列表），绝不 POST 创建
+    expect(mockGetProcessNodeCapabilities).toHaveBeenCalledTimes(1)
+    expect(mockCreateProcessDef).not.toHaveBeenCalled()
+
+    expect(wrapper.find('[data-testid="unconfigured-flow-board"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="unconfigured-flow-palette"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="unconfigured-flow-canvas"]').exists()).toBe(true)
+    // 节点库复用设计器同一能力投影（分组标题 + 节点名 + 类型标记）
+    expect(wrapper.find('[data-node-type="START"]').exists()).toBe(true)
+    expect(wrapper.find('[data-node-type="APPROVAL"]').exists()).toBe(true)
+    // 空分支不再渲染「暂无数据」表格卡片
+    expect(wrapper.find('.related-processes__table-card').exists()).toBe(false)
+    // Q56 P3/472:15663：空分支脱离管理列表壳——筛选栏/列表卡片边距整体去除，
+    // 根节点切到原设计器工作区布局（节点库 220px + 白底空画布 16px 内距）
+    expect(wrapper.find('.related-processes__filter').exists()).toBe(false)
+    expect(wrapper.find('.related-processes--unconfigured').exists()).toBe(true)
+    // 创建入口由空画布承接（仍走既有命名弹窗链路）
+    expect(wrapper.find('[data-testid="unconfigured-flow-create"]').exists()).toBe(true)
+  })
+
+  it('零关联流程：空画布创建入口只打开命名弹窗，取消不发起创建请求', async () => {
+    mockPageProcessDefs.mockResolvedValue(emptyResult)
+    mockGetProcessNodeCapabilities.mockResolvedValue(capabilityResult)
+    const wrapper = mount(RelatedProcessesPanel, {
+      props: { formId: 'uuid-1', formKey: 'leave-request' },
+      global: globalOpts(),
+    })
+    await flushPromises()
+
+    const boardCreate = wrapper.find('[data-testid="unconfigured-flow-create"]')
+    expect(boardCreate.exists()).toBe(true)
+    await boardCreate.trigger('click')
+    expect(wrapper.find('input[placeholder="请输入流程名称"]').exists()).toBe(true)
+    expect(mockCreateProcessDef).not.toHaveBeenCalled()
+
+    const footerButtons = wrapper.findAll('.stub-dialog button')
+    const cancelBtn = footerButtons.find((b) => b.text().trim() === i18n.global.t('common.cancel'))
+    await cancelBtn!.trigger('click')
+    await flushPromises()
+    expect(mockCreateProcessDef).not.toHaveBeenCalled()
+    // 空状态画布仍在（未做本地持久化，也未跳转设计器）
+    expect(wrapper.find('[data-testid="unconfigured-flow-board"]').exists()).toBe(true)
+  })
+
+  it('已有关联流程：不渲染未配置空画布（维持既有列表/进设计器行为）', async () => {
+    const wrapper = mount(RelatedProcessesPanel, {
+      props: { formId: 'uuid-1', formKey: 'leave-request' },
+      global: globalOpts(),
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="unconfigured-flow-board"]').exists()).toBe(false)
+    expect(wrapper.find('.related-processes__table-card').exists()).toBe(true)
   })
 })

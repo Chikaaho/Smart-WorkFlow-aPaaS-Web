@@ -12,6 +12,38 @@ import { i18n } from '@/locales'
  * 未登记的线值回落为线值本身，避免把内部键名泄漏到界面（宁可显示 PUBLISHED 也不显示 agent.xxx）。
  */
 export const ENUM_LABEL_KEYS = {
+  WORKFLOW_TRIGGER: {
+    MATCHED: 'workflow.triggerMatched',
+    UNMATCHED: 'workflow.triggerUnmatched',
+    FAILED: 'common.resultFailed',
+  },
+  WORKFLOW_ACTION_REF: {
+    INTENT_SUBMITTED: 'workflow.actionSubmitted',
+    STARTING: 'workflow.actionStarting',
+    STARTED: 'workflow.actionStarted',
+    FAILED: 'common.resultFailed',
+  },
+  WORKFLOW_CHILD_BATCH: {
+    WAITING: 'workflow.batchWaiting',
+    SETTLED: 'workflow.batchSettled',
+    BLOCKED: 'workflow.batchBlocked',
+    CANCELLED: 'workflow.runtimeStateCancelled',
+  },
+  WORKFLOW_CHILD_ITEM: {
+    DISPATCHED: 'workflow.childDispatched',
+    WRITTEN: 'workflow.childWritten',
+    CONFLICT: 'workflow.childConflict',
+    FAILED: 'common.resultFailed',
+    LATE: 'workflow.childLate',
+    REFUSED: 'workflow.childRefused',
+  },
+  WORKFLOW_WAIT_POLICY: {
+    ALL: 'workflow.waitAll',
+    ANY: 'workflow.waitAny',
+    COUNT: 'workflow.waitCount',
+    NONE: 'workflow.waitNone',
+  },
+
   /** IoT 连接健康状态（后端 connectivity 探测结果）。 */
   IOT_HEALTH: {
     HEALTHY: 'iot.health',

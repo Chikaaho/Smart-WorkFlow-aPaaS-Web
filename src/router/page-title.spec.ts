@@ -19,6 +19,8 @@ const translate = (key: string) => `T:${key}`
 describe('page-title', () => {
   it('管理端路径 → 顶栏一级功能', () => {
     expect(sectionTitleKey('/system/user')).toBe('menu.system')
+    expect(sectionTitleKey('/form/app-manage')).toBe('form.appCenter.manageTitle')
+    expect(sectionTitleKey('/form/app-manage/app-1')).toBe('form.appCenter.manageTitle')
     expect(sectionTitleKey('/system/dict-manage')).toBe('menu.system')
     expect(sectionTitleKey('/form/form-def-list')).toBe('menu.lowcode')
     expect(sectionTitleKey('/form/designer/abc')).toBe('menu.lowcode')

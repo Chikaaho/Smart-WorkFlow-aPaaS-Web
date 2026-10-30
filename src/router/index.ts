@@ -37,6 +37,17 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // 0.2.0 r2：全屏三栏工作台配置（273:1600）。旧 /workspace/edit 保持兼容。
+        path: 'workspace/config',
+        name: 'workspace-config',
+        component: () => import('@/modules/workflow/views/WorkspaceStudio.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workspace.studio.title')
+          },
+        },
+      },
+      {
         // V012-BUG-023：工作台本地列表页（暂与流程中心同组件，后续做展示内容区分）。
         path: 'workspace/todo',
         name: 'workspace-todo',
@@ -54,6 +65,28 @@ export const routes: RouteRecordRaw[] = [
         meta: {
           get title() {
             return i18n.global.t('workflow.processedTasks')
+          },
+        },
+      },
+      {
+        // 个人实例与待办一样由登录身份定域，菜单缺省不影响本人申请回看。
+        path: 'workspace/my-instances',
+        alias: '/workflow/my-instances',
+        name: 'my-instances-static',
+        component: () => import('@/modules/workflow/views/MyInstances.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('common.startedByMe')
+          },
+        },
+      },
+      {
+        path: 'workspace/my-cc',
+        name: 'workspace-my-cc',
+        component: () => import('@/modules/workflow/views/MyCc.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('router.myCc')
           },
         },
       },
@@ -160,6 +193,18 @@ export const routes: RouteRecordRaw[] = [
           },
           // 查看数据列表只需 query；模板/导入/导出是页内动作按钮，不能反过来阻断整页。
           authority: ['form:data:query'],
+        },
+      },
+      {
+        // 字典类型页与独立菜单均跳转到该上下文页；保持动态菜单可选、深链始终可达。
+        path: 'system/dict-data',
+        name: 'system-dict-data',
+        component: () => import('@/modules/system/views/DictDataList.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('system.dictItemManagement')
+          },
+          authority: ['system:dict:view'],
         },
       },
       {
@@ -274,6 +319,16 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'workflow/authorize-rules',
+        name: 'workflow-authorize-rules',
+        component: () => import('@/modules/workflow/views/AuthorizeRules.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.authorizeRulesTitle')
+          },
+        },
+      },
+      {
         // I3 第一方流程设计器：统一节点能力端点构建面板与配置，ProcessGraph 单一图契约。
         path: 'workflow/defs/:defId/design',
         name: 'workflow-def-designer',
@@ -281,6 +336,18 @@ export const routes: RouteRecordRaw[] = [
         meta: {
           get title() {
             return i18n.global.t('router.processDesigner')
+          },
+          authority: ['workflow:def:design'],
+        },
+      },
+      {
+        // 50:88 流程设置：结束通知配置（随定义版本冻结）。
+        path: 'workflow/defs/:defId/settings',
+        name: 'workflow-def-settings',
+        component: () => import('@/modules/workflow/views/ProcessSettings.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('workflow.processSettings')
           },
           authority: ['workflow:def:design'],
         },

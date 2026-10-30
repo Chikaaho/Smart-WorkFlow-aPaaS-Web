@@ -284,7 +284,7 @@
     "key": "perm.WorkflowDefValidate",
     "en": "Validate process draft"
   },
-  "流程设计器页": {
+  "流程设计器": {
     "key": "menu.WorkflowDesigner",
     "en": "Process designer"
   },

@@ -18,6 +18,8 @@ let refreshPromise: Promise<void> | null = null
 
 export interface LoginPayload {
   username: string
+  /** 租户编码（可选）：同一账号名存在于多个租户时用于精确定位 */
+  tenantCode?: string
   /** RSA-OAEP 加密前的明文密码（仅在内存中存在，加密后提交） */
   password: string
   /** 用户输入的验证码内容 */
@@ -43,6 +45,7 @@ export async function login(payload: LoginPayload): Promise<void> {
     url: '/auth/login',
     data: {
       username: payload.username,
+      ...(payload.tenantCode?.trim() ? { tenantCode: payload.tenantCode.trim() } : {}),
       password: encryptedPassword,
       captcha: payload.captcha,
       captchaId: payload.challenge.captchaId,
@@ -61,6 +64,16 @@ export async function logout(): Promise<void> {
   } finally {
     clearToken()
   }
+}
+
+export interface ChangePasswordPayload {
+  oldPassword: string
+  newPassword: string
+}
+
+/** 当前登录账号修改密码；成功后服务端会驱逐既有登录态。 */
+export async function changePassword(payload: ChangePasswordPayload): Promise<void> {
+  await request<null>({ method: 'POST', url: '/auth/password', data: payload })
 }
 
 export async function refresh(): Promise<void> {
@@ -92,6 +105,7 @@ export function useAuth() {
     fetchChallenge,
     login,
     logout,
+    changePassword,
     refresh,
   }
 }

@@ -1,18 +1,19 @@
+@import './fonts.css';
+
 /**
- * 品牌色单一数据源（P53 全局 UI 视觉基线，取代 0.1.0 紫莓 #7e306b 基线）。
- * 品牌主色 #6F2DFF 与深色导航阶 #17213A/#19233B/#172033、语义色 #18A67A/#F59E0B/#E5484D/#20B8CD
- * 均来自 P53 设计包（docs/ui/，身份见 search_fallback/p53-figma-ui-current-seams-supplement-01.md G1）。
+ * 品牌色单一数据源。0.2.0 默认蓝色 #2563EB，紫色 #6F2DFF 继续作为可切换主题保留。
+ * 深色导航阶与结果语义色独立于主题；品牌色阶、选中态、焦点和导航强调由主题运行时覆盖。
  * 换色只改 --sw-color-primary 这一行，其余各档由 color-mix 运行时派生，
  * 与 Element Plus 自身派生算法一致（light-i = i×10% 白色混入，dark-2 = 20% 黑色）。
  * color-mix 现代浏览器（2023+）均支持；若某目标浏览器不支持，退路是用硬编码色值覆盖。
  */
 :root {
   --el-overlay-color-lighter: rgba(16, 24, 47, 0.32);
-  --sw-color-primary: #6f2dff; /* 唯一品牌色源（P53 设计包） */
+  --sw-color-primary: #2563eb; /* 默认蓝色主题；紫色、青色和自定义由主题模块覆盖 */
   --sw-color-primary-dark: color-mix(in srgb, var(--sw-color-primary) 85%, black);
-  --sw-color-primary-light: #bfa7ff; /* 设计确认的浅强调变体（登录页） */
-  --sw-color-primary-soft: #ece9ff; /* 主色浅底（标签/选中底） */
-  --sw-color-primary-softer: #e9e1ff; /* 主色最浅底 */
+  --sw-color-primary-light: color-mix(in srgb, var(--sw-color-primary) 40%, white); /* 浅强调 */
+  --sw-color-primary-soft: color-mix(in srgb, var(--sw-color-primary) 10%, white); /* 标签/选中底 */
+  --sw-color-primary-softer: color-mix(in srgb, var(--sw-color-primary) 14%, white); /* 最浅底 */
 
   /* ═══════════════════════════════════════════════════════
    * 设计系统 Token 全量（P53 设计基线 · 工程宪法 §5 结构保留）
@@ -20,10 +21,9 @@
    * 暗色模式将来通过 [data-theme='dark'] 覆盖。
    * ═══════════════════════════════════════════════════════ */
 
-  /* ── 字体（本地安全回退链，不引入外部字体文件；Inter/PingFang 仅在系统已装时生效；
-       实测 Windows 下 Noto 与 YaHei 差异互有胜负，维持 YaHei 回退） ── */
+  /* ── 字体（自托管 Noto Sans SC，保留系统字体回退链） ── */
   --sw-font-family:
-    'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+    'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 
   /* ── 中性色 ── */
   --sw-text-primary: #172033;
@@ -35,25 +35,33 @@
   --sw-border-lighter: #e9edf5;
   --sw-fill-base: #f4f6fb;
 
-  /* ── 深色导航阶（侧栏/管理端顶栏；#7E89A1 on #17213A 对比度 4.55:1 ≥ AA 4.5:1） ── */
+  /* ── 深色导航阶（侧栏/管理端顶栏；0.2.0 参考非选中导航文字 #E2E8F0，on #17213A 对比度远超 AA 4.5:1） ── */
   --sw-nav-sidebar-bg: #111b3b;
-  --sw-nav-item-active-bg: #6f2dff;
-  --sw-nav-subitem-active-bg: #29235c;
-  --sw-nav-topbar-portal-bg: #40369a;
-  --sw-nav-topbar-portal-active-bg: #332b81;
+  --sw-nav-item-active-bg: var(--sw-color-primary);
+  --sw-nav-subitem-active-bg: color-mix(in srgb, var(--sw-color-primary) 20%, #111b3b);
+  --sw-nav-topbar-portal-bg: color-mix(in srgb, var(--sw-color-primary) 60%, #111b3b);
+  --sw-nav-topbar-portal-active-bg: color-mix(in srgb, var(--sw-color-primary) 45%, #111b3b);
   --sw-nav-topbar-admin-bg: #111b3b;
-  --sw-nav-topbar-admin-active-bg: #27345c;
-  --sw-nav-topbar-text: #ece9ff;
-  --sw-nav-topbar-active-indicator: #d8c9ff;
+  --sw-nav-topbar-admin-active-bg: color-mix(in srgb, var(--sw-color-primary) 30%, #111b3b);
+  --sw-nav-topbar-text: color-mix(in srgb, var(--sw-color-primary) 10%, white);
+  --sw-nav-sidebar-active-bg: color-mix(in srgb, var(--sw-color-primary) 30%, #111b3b);
+  --sw-nav-topbar-active-indicator: color-mix(in srgb, var(--sw-color-primary) 30%, white);
   --sw-nav-bg-raised: #19233b;
   --sw-nav-text: #ffffff;
-  --sw-nav-text-secondary: #7e89a1;
+  --sw-nav-text-secondary: #e2e8f0;
   --sw-nav-border: rgba(201, 209, 232, 0.16);
-  --sw-nav-hover-bg: rgba(111, 45, 255, 0.28);
+  --sw-nav-hover-bg: color-mix(in srgb, var(--sw-color-primary) 28%, transparent);
   /* P53 设计（节点15-18）：弹窗蒙层为轻压暗（非 EP 默认 50% 黑） */
   --el-overlay-color-lighter: rgba(16, 24, 47, 0.32);
   /* P53 设计（节点02）：侧栏描边盒边框色 */
   --sw-nav-box-border: #27345c;
+  /* 0.2.0 新稿：管理端侧栏为浅色表面（设计 458:12701），与用户端深色侧栏区分 */
+  --sw-nav-sidebar-light-bg: #ffffff;
+  --sw-nav-sidebar-light-border: #e9edf5;
+  --sw-nav-sidebar-light-text: #303a55;
+  --sw-nav-sidebar-light-hover-bg: #f4f6fb;
+  --sw-nav-sidebar-light-active-bg: var(--sw-color-primary-soft);
+  --sw-nav-sidebar-light-active-text: var(--sw-color-primary);
   /* P53 设计（节点01/02）：侧栏底部空间卡 */
   --sw-nav-area-card-bg: #172447;
 
@@ -63,6 +71,7 @@
 
   /* ── 语义色（色值 + 浅底，P53 设计基线；同时重绑 EP 语义色保持组件一致） ── */
   --sw-success: #18a67a;
+  --sw-success-text: #12805c;
   --sw-success-bg: #eafbf7;
   --sw-warning: #f59e0b;
   --sw-warning-bg: #fff7e8;
@@ -71,6 +80,9 @@
   --sw-info: #20b8cd;
   --sw-info-bg: #e7f8fa;
 
+  /* 流程设计器节点语义色：会签保持独立棕色，动态并行跟随当前品牌主题。 */
+  --sw-process-consensus: #945f00;
+  --sw-process-dynamic-parallel: var(--sw-color-primary);
 
   /* ── 字号阶梯（size + weight 成对） ── */
   --sw-font-h1: 20px;
@@ -113,13 +125,17 @@
   --sw-form-row-gap: 22px;
   --sw-table-row-height: 44px;
   --sw-table-row-height-compact: 38px;
+  --sw-list-design-header-height: 44px;
+  --sw-list-design-row-height: 53px; /* 新稿数据行 52px + 分隔线 1px */
   --sw-cell-padding-x: 16px;
   --sw-card-padding: 12px 16px;
   --sw-section-gap: 10px;
 
-  /* ── 布局（P53 设计：顶栏 64px 主导航 + 深色侧栏 220px） ── */
-  --sw-layout-aside-width: 224px;
+  /* ── 布局（P53 设计：顶栏 64px；0.2.0 参考 3:2/4:2 用户端深色侧栏 236px） ── */
+  --sw-layout-aside-width: 236px;
   --sw-layout-aside-width-collapsed: 64px;
+  /* 0.2.0 参考顶栏：品牌列宽与侧栏解耦（97/3/4 同节点导航起点 x263 需品牌列 224） */
+  --sw-layout-logo-width: 224px;
   --sw-layout-header-height: 64px;
   --sw-layout-header-padding-x: 16px;
 }
@@ -237,7 +253,7 @@ html:root {
 /* P53 button/tag paint is audited from the locked SVG stroke declarations.
  * V012-BUG-015：操作列 link 按钮为纯文字（无底色/无描边），描边仅作用于实心/描边主按钮。 */
 :where(html) .el-button.el-button--primary:not(.is-link) {
-  border-color: #8552ff !important;
+  border-color: var(--sw-color-primary) !important;
 }
 :where(html) .el-tag.el-tag--success .el-tag__content {
   color: #18a67a !important;
@@ -255,19 +271,19 @@ html:root {
 }
 :where(html) .el-tag.el-tag--info {
   --el-tag-text-color: #0e7a8a;
-  --el-tag-bg-color: #f0eaff;
-  --el-tag-border-color: #d8c9ff;
+  --el-tag-bg-color: var(--sw-color-primary-soft);
+  --el-tag-border-color: var(--sw-nav-topbar-active-indicator);
   color: #0e7a8a !important;
-  background-color: #f0eaff !important;
-  border-color: #d8c9ff !important;
+  background-color: var(--sw-color-primary-soft) !important;
+  border-color: var(--sw-nav-topbar-active-indicator) !important;
 }
 :where(html) .el-tag.el-tag--primary {
-  --el-tag-text-color: #6f2dff;
-  --el-tag-bg-color: #f6f1ff;
-  --el-tag-border-color: #d8c9ff;
-  color: #6f2dff !important;
-  background-color: #f6f1ff !important;
-  border-color: #d8c9ff !important;
+  --el-tag-text-color: var(--sw-color-primary);
+  --el-tag-bg-color: var(--sw-color-primary-soft);
+  --el-tag-border-color: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary) !important;
+  background-color: var(--sw-color-primary-soft) !important;
+  border-color: var(--sw-color-primary-soft) !important;
 }
 
 /**
@@ -292,7 +308,7 @@ body {
    比 :root 更近；因此直接落 th（含固定列），未走 ListTable 的页面也拿到同一底色，
    避免"表头白底压在白卡片上=看不见"与"表头色≈页面底色"两类撞色。 */
 #app .el-table th.el-table__cell {
-  background-color: #fafbfe;
+  background-color: var(--sw-list-table-header-background, #fafbfe);
 }
 
 /* P53 设计弹窗遮罩：设计 SVG 三层 #10182F@0.116 叠加的等效合成 32%，全局统一弹层背板
@@ -330,4 +346,11 @@ body {
   height: 14px !important;
   border-right-width: 2px !important;
   border-bottom-width: 2px !important;
+}
+
+/* 审查23 Y-S：系统列表状态列纯文字 */
+.sys-status-text {
+  color: #303133;
+  font-size: 14px;
+  line-height: 22px;
 }

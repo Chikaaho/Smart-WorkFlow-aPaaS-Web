@@ -13,13 +13,20 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ListActionsColumn, ListFilterItem, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
-import { myInstances, myInstanceDetail, withdrawInstance } from '@/modules/workflow/api'
+import {
+  myInstances,
+  myInstanceDetail,
+  withdrawInstance,
+  discardInstance,
+  supplementSignInstance,
+} from '@/modules/workflow/api'
 import { urgeMyInstance } from '@/modules/workflow/api/oa'
 import type { ProcessInstance, MyInstanceDetail } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 import { hasPerm } from '@/foundation/permission'
 import BusinessDetailDialog from '@/components/business-detail/BusinessDetailDialog.vue'
+import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 
 const router = useRouter()
 
@@ -74,6 +81,7 @@ const STATUS_TAG: Record<
 
 /** I3 §4.7：发起人撤回（尚未越过不可撤回边界时可用；重复请求幂等）。 */
 const withdrawingId = ref<string | null>(null)
+const discardingId = ref<string | null>(null)
 
 function asInstance(row: unknown): ProcessInstance {
   return row as ProcessInstance
@@ -110,6 +118,38 @@ async function withdrawRow(rowRaw: unknown) {
   }
 }
 
+async function discardRow(rowRaw: unknown) {
+  const row = asInstance(rowRaw)
+  let reason: string
+  try {
+    const prompt = await ElMessageBox.prompt(
+      t('workflow.discardReasonPrompt'),
+      t('workflow.discardTitle'),
+      {
+        confirmButtonText: t('workflow.discardAction'),
+        cancelButtonText: t('common.cancel'),
+        inputType: 'textarea',
+        inputValidator: (value: string) =>
+          Boolean(value?.trim()) || t('workflow.discardReasonRequired'),
+        type: 'warning',
+      },
+    )
+    reason = prompt.value.trim()
+  } catch {
+    return
+  }
+  discardingId.value = row.processInstanceId
+  try {
+    await discardInstance(row.processInstanceId, { reason, action: 'DISCARD' })
+    ElMessage.success(t('workflow.statusDiscarded'))
+    await loadList()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.discardFailed'))
+  } finally {
+    discardingId.value = null
+  }
+}
+
 function statusLabel(status: string): string {
   return STATUS_TAG[status]?.label ?? status
 }
@@ -130,7 +170,7 @@ async function loadList() {
       timeTo: dateRange.value?.[1] ? `${dateRange.value[1]} 23:59:59` : undefined,
     })
     list.value = result.list
-    total.value = result.total
+    total.value = Number(result.total)
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
@@ -166,7 +206,7 @@ function handlePageSizeChange(s: number) {
   void loadList()
 }
 
-/** 展示层时间格式：真实时间戳 → MM-DD HH:mm（设计02列宽内的显示格式，仅显示不改数据） */
+/** 展示层时间格式：真实时间戳 → YYYY-MM-DD HH:mm（仅显示，不改业务时间） */
 function formatTime(value: string | null): string {
   if (!value) return '-'
   const d = new Date(value.replace(' ', 'T'))
@@ -175,7 +215,7 @@ function formatTime(value: string | null): string {
   const dd = String(d.getDate()).padStart(2, '0')
   const hh = String(d.getHours()).padStart(2, '0')
   const mi = String(d.getMinutes()).padStart(2, '0')
-  return `${mm}-${dd} ${hh}:${mi}`
+  return `${d.getFullYear()}-${mm}-${dd} ${hh}:${mi}`
 }
 
 // ─── 详情弹窗 ───
@@ -196,7 +236,7 @@ async function openDetail(row: ProcessInstance) {
 }
 
 // ─── 催办（v0.0.2：发起人对运行中实例催办当前待办人；10 分钟冷却） ───
-const urgingId = ref<number | null>(null)
+const urgingId = ref<number | string | null>(null)
 
 async function urge(row: ProcessInstance) {
   urgingId.value = row.id
@@ -216,6 +256,98 @@ async function urge(row: ProcessInstance) {
   }
 }
 
+// ─── 终态补签：仅补充既有责任，不重开或改写流程终态 ───
+const supplementVisible = ref(false)
+const supplementTarget = ref<ProcessInstance | null>(null)
+const supplementNodeKey = ref('')
+const supplementNodeOptions = ref<Array<{ nodeKey: string; label: string }>>([])
+const supplementParticipants = ref<string[]>([])
+const supplementMessage = ref('')
+const supplementLoading = ref(false)
+const supplementSubmitting = ref(false)
+const supplementError = ref('')
+
+function isTerminalInstance(status: string): boolean {
+  return status !== 'RUNNING'
+}
+
+async function openSupplement(row: ProcessInstance): Promise<void> {
+  supplementTarget.value = row
+  supplementVisible.value = true
+  supplementLoading.value = true
+  supplementNodeKey.value = ''
+  supplementNodeOptions.value = []
+  supplementParticipants.value = []
+  supplementMessage.value = ''
+  supplementError.value = ''
+  try {
+    const detail = await myInstanceDetail(row.id)
+    const nodes = new Map<string, string>()
+    for (const item of detail.history) {
+      if (item.nodeKey && !nodes.has(item.nodeKey)) {
+        nodes.set(item.nodeKey, item.taskName || item.nodeKey)
+      }
+    }
+    for (const item of detail.progress) {
+      if (item.nodeKey && !nodes.has(item.nodeKey)) {
+        nodes.set(item.nodeKey, item.taskName || item.nodeKey)
+      }
+    }
+    supplementNodeOptions.value = [...nodes].map(([nodeKey, label]) => ({ nodeKey, label }))
+    supplementNodeKey.value = supplementNodeOptions.value.at(-1)?.nodeKey ?? ''
+    if (!supplementNodeKey.value) supplementError.value = t('workflow.supplementNoNode')
+  } catch (err) {
+    supplementError.value = err instanceof ApiError ? err.msg : t('workflow.supplementLoadFailed')
+  } finally {
+    supplementLoading.value = false
+  }
+}
+
+function closeSupplement(): void {
+  supplementVisible.value = false
+}
+
+function resetSupplement(): void {
+  supplementTarget.value = null
+  supplementNodeKey.value = ''
+  supplementNodeOptions.value = []
+  supplementParticipants.value = []
+  supplementMessage.value = ''
+  supplementError.value = ''
+  supplementLoading.value = false
+  supplementSubmitting.value = false
+}
+
+async function submitSupplement(): Promise<void> {
+  const target = supplementTarget.value
+  if (!target || supplementSubmitting.value) return
+  if (!supplementNodeKey.value) {
+    ElMessage.warning(t('workflow.supplementNoNode'))
+    return
+  }
+  if (supplementParticipants.value.length === 0) {
+    ElMessage.warning(t('workflow.participantsRequired'))
+    return
+  }
+  supplementSubmitting.value = true
+  supplementError.value = ''
+  try {
+    const comment = supplementMessage.value.trim()
+    await supplementSignInstance(target.processInstanceId, {
+      participants: [...supplementParticipants.value],
+      nodeKey: supplementNodeKey.value,
+      ...(comment ? { comment } : {}),
+    })
+    ElMessage.success(t('workflow.supplementSubmitted'))
+    closeSupplement()
+    await loadList()
+  } catch (err) {
+    supplementError.value = err instanceof ApiError ? err.msg : t('workflow.supplementFailed')
+  } finally {
+    supplementSubmitting.value = false
+  }
+}
+
 /**
  * 操作列（V012-BUG-002）：详情直显；催办/撤回仅 RUNNING 且有对应权限时可见
  * （原 v-if + v-perm 显隐转为 visible 表达式，服务端仍是最终权威）。
@@ -225,8 +357,15 @@ function rowActions(row: unknown): ListAction[] {
   return [
     {
       key: 'detail',
-      label: t('common.viewDetails'),
+      label: t('common.view'),
       onClick: () => void openDetail(item),
+    },
+    {
+      key: 'supplement',
+      label: t('workflow.supplementSign'),
+      visible: isTerminalInstance(item.status) && hasPerm('workflow:task:add-sign'),
+      testId: 'instance-supplement',
+      onClick: () => void openSupplement(item),
     },
     {
       key: 'urge',
@@ -244,6 +383,14 @@ function rowActions(row: unknown): ListAction[] {
       disabled: withdrawingId.value === item.processInstanceId,
       onClick: () => void withdrawRow(item),
     },
+    {
+      key: 'discard',
+      label: t('workflow.discardAction'),
+      type: 'danger',
+      visible: item.status === 'RUNNING' && hasPerm('workflow:task:discard'),
+      disabled: discardingId.value === item.processInstanceId,
+      onClick: () => void discardRow(item),
+    },
   ]
 }
 
@@ -252,8 +399,10 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
+    class="my-instances"
+    appearance="design"
+    filter-layout="inline"
     :show-toolbar-total="false"
-    large
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -263,10 +412,10 @@ onMounted(loadList)
   >
     <!-- 筛选区（关键字、状态、发起时间均进入列表查询参数） -->
     <template #filter>
-      <ListFilterItem :label="t('workflow.filterKeywordLabel')">
+      <ListFilterItem :label="t('workflow.instanceMatter')">
         <el-input
           v-model="filter.keyword"
-          :placeholder="t('common.pleaseInput')"
+          :placeholder="t('workflow.instanceSearchPlaceholder')"
           clearable
           @keyup.enter="handleSearch"
         />
@@ -283,31 +432,23 @@ onMounted(loadList)
           <el-option :label="t('common.statusRejected')" value="REJECTED" />
         </el-select>
       </ListFilterItem>
-      <ListFilterItem :label="t('common.startTimeShort')">
+      <ListFilterItem :label="t('common.createTime')">
         <el-date-picker
           v-model="dateRange"
           type="daterange"
           value-format="YYYY-MM-DD"
-          :start-placeholder="t('common.startTimeShort')"
-          :end-placeholder="t('common.endTime')"
+          :start-placeholder="t('workflow.instanceRangeStart')"
+          :end-placeholder="t('workflow.instanceRangeEnd')"
           range-separator="—"
         />
       </ListFilterItem>
     </template>
 
     <template #filter-actions>
-      <el-button type="primary" @click="handleSearch">{{ t('common.query') }}</el-button>
       <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
-    </template>
-
-    <template #table-title>
-      <h3 class="my-instances-panel-title">{{ t('common.processApplyTitle') }}</h3>
-      <el-button
-        class="my-instances-panel-create"
-        type="primary"
-        @click="router.push('/workflow/catalog')"
-      >
-        ＋ {{ t('common.create') }}
+      <el-button @click="handleSearch">{{ t('common.query') }}</el-button>
+      <el-button type="primary" @click="router.push('/workflow/catalog')">
+        {{ t('common.start') }}
       </el-button>
     </template>
 
@@ -326,54 +467,114 @@ onMounted(loadList)
     />
 
     <!-- 表格 -->
-    <el-table
-      v-loading="loading"
-      :data="list"
-      stripe
-      style="width: 100%"
-      class="my-instances-table"
-    >
-      <el-table-column :label="t('common.processName')" min-width="260">
+    <el-table v-loading="loading" :data="list" style="width: 100%" class="my-instances-table">
+      <el-table-column :label="t('workflow.itemName')" width="365">
         <template #default="{ row }">
           {{ row.processName ?? '-' }}
         </template>
       </el-table-column>
       <!-- BF20261013-044：流程编号列展示发起时按编号规则生成的实例编号（主题），
            不再错绑业务标识（businessKey 仍在详情弹窗以「业务单号」展示） -->
-      <el-table-column :label="t('common.processNo')" min-width="200" show-overflow-tooltip>
+      <el-table-column
+        :label="t('workflow.instanceApplicationNo')"
+        width="282"
+        show-overflow-tooltip
+      >
         <template #default="{ row }">{{ row.theme || '—' }}</template>
       </el-table-column>
-      <el-table-column :label="t('common.currentNode')" min-width="160">
+      <el-table-column :label="t('common.currentNode')" width="376">
         <template #default="{ row }">
           {{ row.currentNode ?? t('common.dash') }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.status')" min-width="120">
+      <el-table-column :label="t('common.status')" width="87" class-name="instance-status">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">
             {{ statusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" :label="t('common.startTimeShort')" min-width="200">
+      <el-table-column :label="t('common.initiator')" width="132">
+        <template #default="{ row }">{{ row.initiatorName || t('common.dash') }}</template>
+      </el-table-column>
+      <el-table-column prop="createTime" :label="t('common.createTime')" width="312">
         <template #default="{ row }">
           {{ formatTime(row.createTime) }}
         </template>
       </el-table-column>
-      <ListActionsColumn :actions="rowActions" :width="150" />
+      <ListActionsColumn :actions="rowActions" :width="87" :inline-limit="1" />
     </el-table>
 
     <!-- 详情弹窗 -->
   </StandardListTemplate>
   <BusinessDetailDialog
     v-model="detailVisible"
-    :title="t('workflow.instanceDetail')"
+    :title="t('common.detail')"
     :form-key="detail?.formKey ?? ''"
     :record-id="detail?.businessKey ?? ''"
     :approval-history="detail?.history ?? []"
     :process-definition-key="detail?.instance.processDefKey ?? ''"
     :current-node-key="detail?.progress?.[0]?.nodeKey ?? ''"
   />
+  <el-dialog
+    v-model="supplementVisible"
+    :title="t('workflow.supplementSign')"
+    width="520px"
+    :close-on-click-modal="false"
+    @closed="resetSupplement"
+  >
+    <div v-loading="supplementLoading" class="supplement-dialog">
+      <p class="supplement-dialog__hint">{{ t('workflow.supplementDialogHint') }}</p>
+      <el-alert
+        v-if="supplementError"
+        :title="supplementError"
+        type="error"
+        :closable="false"
+        show-icon
+      />
+      <el-form label-position="top" size="small">
+        <el-form-item :label="t('workflow.supplementTargetNode')" required>
+          <el-select v-model="supplementNodeKey" :disabled="supplementLoading" style="width: 100%">
+            <el-option
+              v-for="node in supplementNodeOptions"
+              :key="node.nodeKey"
+              :label="node.label"
+              :value="node.nodeKey"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('workflow.supplementConfirmerLabel')" required>
+          <UserRemoteSelect
+            v-model="supplementParticipants"
+            multiple
+            :placeholder="t('workflow.pickConfirmers')"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item :label="t('common.description')">
+          <el-input
+            v-model="supplementMessage"
+            type="textarea"
+            :rows="3"
+            :placeholder="t('workflow.supplementTriggerNote')"
+          />
+        </el-form-item>
+      </el-form>
+    </div>
+    <template #footer>
+      <el-button :disabled="supplementSubmitting" @click="closeSupplement">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="supplementSubmitting"
+        :disabled="supplementLoading || !supplementNodeKey || supplementParticipants.length === 0"
+        @click="submitSupplement"
+      >
+        {{ t('workflow.supplementSign') }}
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -399,96 +600,119 @@ onMounted(loadList)
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-.my-instances-panel-title {
-  margin: 0;
-  font-size: 17px;
-  line-height: 28px;
-  font-weight: 600;
-  color: var(--sw-text-primary);
-  transform: translateY(-7px);
+.my-instances {
+  --sw-list-design-header-height: 42px;
+  --sw-list-design-row-height: 45px;
 }
-.standard-list :deep(.list-toolbar__title--large) {
-  font-size: 26px;
-  line-height: 28px;
+.my-instances :deep(.list-filter-bar__fields) {
+  gap: var(--sw-space-8);
 }
-.standard-list :deep(.standard-list__panel-head) {
-  padding: 0 24px;
+.my-instances :deep(.list-filter-item) {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--sw-space-8);
 }
-.my-instances-panel-create {
-  position: relative;
-  width: 86px;
-  height: 38px;
-  transform: translateY(-8px);
+.my-instances :deep(.list-filter-item__label) {
+  flex: 0 0 auto;
+  color: var(--sw-text-regular);
+  font-size: var(--sw-font-body);
+  line-height: 22px;
 }
-.my-instances-panel-create :deep(span) {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 86px;
-  line-height: 38px;
-  /* BF20261013-046：按钮文字居中（原 fixture 左对齐，＋ 新建 贴按钮左缘） */
-  text-align: center;
+.my-instances :deep(.list-filter-item__control) {
+  width: 264px;
 }
-
-.my-instances-table :deep(th.el-table__cell),
-.my-instances-table :deep(td.el-table__cell) {
-  padding-left: 32px;
+.my-instances :deep(.list-filter-item:nth-child(2) .list-filter-item__control) {
+  width: 144px;
+}
+.my-instances :deep(.list-filter-item:nth-child(3) .list-filter-item__control) {
+  width: 216px;
+}
+.my-instances :deep(.el-date-editor) {
+  box-sizing: border-box;
+}
+/* 参考 4:2：时间范围为单框紧凑「开始 — 结束」，两段输入按内容收缩而非均分整框 */
+.my-instances :deep(.el-date-editor) {
+  justify-content: flex-start;
+}
+.my-instances :deep(.el-date-editor .el-range-input) {
+  flex: 0 0 auto;
+  width: auto;
+  field-sizing: content;
+  text-align: left;
+}
+.my-instances :deep(.el-date-editor .el-range-separator) {
+  flex: 0 0 auto;
+  /* 参考 4:2：占位态「开始 — 结束」整串同为 #9AA1B2，分隔符不另用深色 */
+  color: #9aa1b2;
+}
+/* 参考 4:2：日期范围控件不带前置日历图标 */
+.my-instances :deep(.el-range__icon) {
+  display: none;
+}
+/* 参考 4:2：未选中页码为无底色表面 */
+.my-instances :deep(.el-pager li:not(.is-active)) {
+  background: transparent;
+}
+.my-instances :deep(.list-filter-bar__actions > .el-button) {
+  min-width: 80px;
+}
+.my-instances :deep(.list-filter-bar__actions > .el-button:last-child) {
+  width: 56px;
+  min-width: 56px;
+  padding-inline: 0;
+}
+.my-instances :deep(.list-filter-bar__actions) {
+  margin-left: auto;
+}
+.my-instances-table :deep(.el-table .cell) {
+  padding-left: var(--sw-space-16);
   padding-right: 0;
 }
-.my-instances-table :deep(th.el-table_1_column_6),
-.my-instances-table :deep(td.el-table_1_column_6) {
-  padding-left: 32px;
-}
-.my-instances-table :deep(th.el-table_1_column_4),
-.my-instances-table :deep(td.el-table_1_column_4) {
-  padding-left: 24px;
-}
-.my-instances-table :deep(th.el-table_1_column_6),
-.my-instances-table :deep(td.el-table_1_column_6) {
-  padding-left: 26px;
-}
-.my-instances-table :deep(.el-tag) {
-  width: 72px;
-  height: 28px;
-  padding: 0;
-  line-height: 28px;
-}
-.my-instances-table :deep(.el-tag__content) {
-  display: block;
-  width: 72px;
-  line-height: 28px;
-  /* BF20261013-046：状态徽标文字居中（原定宽 72px + 左对齐，文字贴左） */
-  text-align: center;
-}
-</style>
-
-<style scoped>
-/* 设计（节点02）：表格行距 68px（设计行 538→606→674 实测）、表头 44px。
-   td 显式定高：RUNNING 行的催办/撤回真实操作链接不得换行撑高行（列宽已放宽单行容纳）。 */
 .my-instances-table :deep(td.el-table__cell) {
-  height: 67px;
-  padding: 4px 0 4px 32px;
+  height: 45px;
+  padding-block: 0;
 }
 .my-instances-table :deep(th.el-table__cell) {
-  height: 32px;
-  padding-left: 32px;
-  padding-right: 0;
+  height: 42px;
+  padding-block: 0;
 }
-.my-instances-table :deep(th.el-table_1_column_6.el-table__cell),
-.my-instances-table :deep(td.el-table_1_column_6.el-table__cell) {
-  padding-left: 26px;
+.my-instances-table :deep(.el-tag) {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  font-size: 13px;
 }
-.my-instances-table :deep(th.el-table_1_column_6.el-table__cell) {
-  padding-left: 32px;
+/* 参考 4:2：状态/操作列头文字与列起点对齐，行内控件从列起点起排 */
+.my-instances-table :deep(th.instance-status .cell),
+.my-instances-table :deep(th:last-child .cell) {
+  padding-left: var(--sw-space-16);
 }
-.my-instances-table :deep(.el-table__header-wrapper tr),
-.my-instances-table :deep(.el-table__header-wrapper th) {
-  height: 32px !important;
-  padding-top: 4px !important;
-  padding-bottom: 4px !important;
+.my-instances-table :deep(td.instance-status .cell),
+.my-instances-table :deep(td:last-child .cell) {
+  padding-left: 1px;
 }
-.my-instances-table :deep(.el-table__header-wrapper .cell) {
-  position: relative;
-  top: 6px;
+@media (max-width: 767px) {
+  .my-instances :deep(.list-filter-item),
+  .my-instances :deep(.list-filter-item__control) {
+    width: 100%;
+  }
+  .my-instances :deep(.list-filter-item:nth-child(2) .list-filter-item__control),
+  .my-instances :deep(.list-filter-item:nth-child(3) .list-filter-item__control) {
+    width: 100%;
+  }
+}
+
+.supplement-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sw-space-12);
+}
+
+.supplement-dialog__hint {
+  margin: 0;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
 }
 </style>

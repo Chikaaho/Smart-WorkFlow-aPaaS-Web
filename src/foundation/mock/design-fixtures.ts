@@ -586,8 +586,9 @@ const OVERRIDES: Record<string, Record<string, DesignMockHandler>> = {
       taskName: '会签审批',
       assigneeName: '赵辰',
       createTime: '2026-09-15 09:24:00',
-      endTime: null,
-      opinionData: { comment: '' },
+      endTime: '2026-09-15 10:31:00',
+      approvalResult: 'REJECTED',
+      opinionData: { comment: '票据不合规，驳回。' },
     }),
   ]),
   node17: taskDetailWithHistory([
@@ -1093,8 +1094,21 @@ function designProcessGraphPayload(): Record<string, unknown> {
       postPurpose: '用途：业务状态同步、数据回写、事件通知',
       postFailure: '失败策略：记录日志并按配置重试',
     },
+    triggers: [
+      {
+        triggerId: 'node_enter_sign',
+        name: '科技负责人会签开始前',
+        event: 'NODE_ENTERING',
+        nodeKey: 'tech',
+        script: 'return true;',
+        variables: [],
+        branches: [],
+        unmatchedDisposition: 'IGNORE',
+        errorDisposition: 'IGNORE',
+      },
+    ],
     elements: [
-      { id: 'start', kind: 'node', type: 'START', x: 416, y: 54, config: { name: '开始节点' } },
+      { id: 'start', kind: 'node', type: 'START', x: 416, y: 54, config: { name: '开始' } },
       {
         id: 'draft',
         kind: 'node',
@@ -1102,7 +1116,7 @@ function designProcessGraphPayload(): Record<string, unknown> {
         x: 416,
         y: 145,
         config: {
-          name: '起草节点',
+          name: '起草',
           nodeClass: 'draft',
           approver: JSON.stringify({ type: 'DESIGNATED', value: ['2', '103'] }),
         },
@@ -1121,15 +1135,25 @@ function designProcessGraphPayload(): Record<string, unknown> {
       {
         id: 'tech',
         kind: 'node',
-        type: 'APPROVAL',
+        type: 'CONSENSUS',
         x: 416,
         y: 327,
         config: {
-          name: '办公室资产管理员意见',
-          nodeKey: 'NODE_ASSET_MANAGER',
-          approveMode: '单人审批',
-          approverName: '资产管理员',
-          approver: JSON.stringify({ type: 'DESIGNATED', value: ['2', '103'] }),
+          name: '科技负责人会签',
+          participant: { type: 'DESIGNATED', value: ['2', '103'] },
+          mode: 'RATIO',
+          ratio: 75,
+          nodeForm: { formKey: 'form_approval_comment' },
+          allowedActions: [
+            'APPROVE',
+            'DISAPPROVE',
+            'REJECT',
+            'RETURN',
+            'TRANSFER',
+            'DELEGATE',
+            'COMMUNICATE',
+            'ADD_SIGN',
+          ],
           listeners: [
             {
               phase: 'before',
@@ -1191,7 +1215,7 @@ function designProcessGraphPayload(): Record<string, unknown> {
         y: 667,
         config: { name: '会签部门意见' },
       },
-      { id: 'end', kind: 'node', type: 'END', x: 416, y: 748, config: { name: '结束节点' } },
+      { id: 'end', kind: 'node', type: 'END', x: 416, y: 748, config: { name: '结束' } },
       { id: 'e1', kind: 'edge', source: 'start', target: 'draft' },
       { id: 'e2', kind: 'edge', source: 'draft', target: 'dept' },
       { id: 'e3', kind: 'edge', source: 'dept', target: 'tech' },
@@ -1279,6 +1303,7 @@ function processDesignerGraphFixtures(): Record<string, DesignMockHandler> {
           },
           MOCK_WORKFLOW_NODE_CAPABILITIES.find((cap) => cap.type === 'APPROVAL'),
           MOCK_WORKFLOW_NODE_CAPABILITIES.find((cap) => cap.type === 'CONSENSUS'),
+          MOCK_WORKFLOW_NODE_CAPABILITIES.find((cap) => cap.type === 'DYNAMIC_PARALLEL'),
           {
             ...MOCK_WORKFLOW_NODE_CAPABILITIES.find((cap) => cap.type === 'CONDITION'),
             displayName: '条件网关',
@@ -1385,6 +1410,18 @@ const DESIGNER_FORM_DEFINITION = JSON.stringify({
       required: false,
       placeholder: '点击上传或将文件拖拽到此处',
       colSpan: 24,
+    },
+    {
+      name: 'drill_resources',
+      label: '演练资源',
+      type: 'TABLE',
+      required: false,
+      colSpan: 24,
+      subFields: [
+        { name: 'resource_name', label: '资源名称', type: 'TEXT', required: true },
+        { name: 'quantity', label: '数量', type: 'NUMBER', required: false },
+        { name: 'owner', label: '负责人', type: 'USER', required: false },
+      ],
     },
   ],
 })

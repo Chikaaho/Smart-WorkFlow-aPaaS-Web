@@ -3,17 +3,12 @@ import { computed } from 'vue'
 import { useI18n } from '@/locales'
 
 // 左上角品牌 logo：资源与文案只在本组件维护，不写死进其它位置。
-// mark/wordmark 资产为 P53 锁定设计包原生裁切（docs/ui/png 24,12 40×42 / 77,20 90×26），与设计逐像素同源。
-import logoUrl from '@/assets/brand/logo-block.png'
-import wordmarkUrl from '@/assets/brand/wordmark.png'
+// 图形复用原生品牌资产，文字使用当前设计字体。
+import adminLogoUrl from '@/assets/brand/logo-020.png'
 
 const props = defineProps<{ collapse: boolean; area: 'portal' | 'admin' }>()
 const { t } = useI18n()
 const brandLabel = computed(() => t(props.area === 'admin' ? 'nav.brandAdmin' : 'nav.brandPortal'))
-// 管理端字标 = 同一 wordmark 资产 + 语言文本后缀（zh:· 管理端 / en:· Admin）
-const brandAdminSuffix = computed(() =>
-  t('nav.brandAdmin').replace(t('nav.brandPortal'), '').trim(),
-)
 </script>
 
 <template>
@@ -23,9 +18,18 @@ const brandAdminSuffix = computed(() =>
     role="img"
     :aria-label="brandLabel"
   >
-    <img class="app-logo__mark-frame" :src="logoUrl" alt="" />
-    <img class="app-logo__wordmark" :src="wordmarkUrl" alt="" />
-    <span v-if="area === 'admin'" class="app-logo__text">{{ brandAdminSuffix }}</span>
+    <template v-if="area === 'admin'">
+      <span class="app-logo__admin-mark"
+        ><img :src="adminLogoUrl" alt="" width="30" height="32"
+      /></span>
+      <span class="app-logo__text">{{ brandLabel }}</span>
+    </template>
+    <template v-else>
+      <span class="app-logo__portal-mark"
+        ><img :src="adminLogoUrl" alt="" width="30" height="32"
+      /></span>
+      <span class="app-logo__text app-logo__portal-text">{{ brandLabel }}</span>
+    </template>
   </div>
 </template>
 
@@ -34,12 +38,11 @@ const brandAdminSuffix = computed(() =>
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  /* 0.1.7 #5：品牌列宽度与深色侧栏同源对齐（portal=--sw-layout-aside-width 224px），
-     多分辨率下跟随同一 token，不再用独立 240px 定宽错位 */
-  flex: 0 0 var(--sw-layout-aside-width);
+  /* 0.2.0 参考：品牌列独立 224（顶栏导航起点 x263），侧栏 236 由 aside token 管理 */
+  flex: 0 0 var(--sw-layout-logo-width, 224px);
   gap: 13px;
   height: 64px;
-  width: var(--sw-layout-aside-width);
+  width: var(--sw-layout-logo-width, 224px);
   padding: 0 0 0 24px;
   overflow: hidden;
 }
@@ -49,21 +52,22 @@ const brandAdminSuffix = computed(() =>
   justify-content: center;
   padding: 0;
 }
-.app-logo__mark-frame {
-  box-sizing: border-box;
-  background-color: #ffffff;
-  display: inline-flex;
-  flex: 0 0 40px;
-  width: 40px;
-  height: 42px;
-  margin-top: 2px;
-  border-radius: 8px;
+.app-logo__portal-mark {
+  display: flex;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  background: var(--sw-surface-card);
+  border-radius: var(--sw-radius-base);
 }
-.app-logo__wordmark {
-  flex: 0 0 auto;
-  width: 90px;
-  height: 26px;
-  margin-top: 2px;
+.app-logo--portal {
+  gap: 10px;
+}
+.app-logo--portal .app-logo__portal-text {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
 }
 .app-logo__text {
   font-size: 14px;
@@ -75,14 +79,22 @@ const brandAdminSuffix = computed(() =>
   /* 0.1.7 #5：管理端侧栏 236px（BasicLayout .basic-layout__aside--admin 同值） */
   flex-basis: 236px;
   width: 236px;
-  gap: 12px;
-}
-.app-logo--admin .app-logo__wordmark {
-  width: 70px;
-  height: 20px;
+  gap: 10px;
+  height: 40px;
+  padding: 0;
 }
 .app-logo--admin .app-logo__text {
-  margin-left: -8px;
-  font-size: 13px;
+  font-size: var(--sw-font-h2);
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: 24px;
+}
+.app-logo__admin-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 34px;
+  height: 36px;
+  background: var(--sw-surface-card);
+  border-radius: var(--sw-radius-base);
 }
 </style>

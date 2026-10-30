@@ -11,6 +11,8 @@ export interface SysUser {
   username: string
   /** 用户所属租户；角色配置按该租户筛选 */
   tenantId?: string
+  tenantName?: string
+  protectedAccount?: boolean
   realName?: string
   email?: string
   phone?: string
@@ -35,6 +37,7 @@ export interface PostAssociation {
 
 /** 用户创建/更新表单（镜像 UserFormRequest DTO） */
 export interface UserFormRequest {
+  tenantId?: string
   id?: string
   username: string
   realName?: string
@@ -52,6 +55,7 @@ export interface UserFormRequest {
 
 /** 用户分页筛选 */
 export interface UserFilter {
+  tenantId?: string
   username?: string
   realName?: string
   status?: number

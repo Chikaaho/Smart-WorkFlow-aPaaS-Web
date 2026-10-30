@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { CaretBottom } from '@element-plus/icons-vue'
+import { ArrowRight, Back, Setting, Switch, SwitchButton, User } from '@element-plus/icons-vue'
 import { useI18n } from '@/locales'
 import { SUPPORTED_LOCALES, setLocale, type AppLocale } from '@/locales'
 import { useMenuStore } from '@/stores/menu'
@@ -11,6 +11,13 @@ import { clearDynamicRoutes } from '@/router/guard'
 import { canEnterAdminArea, firstAdminLeafPath, resolveArea } from '@/foundation/area'
 import { buildMenuTrail } from '../menu-utils'
 import { useLocalizedMenuTree } from '../menu-title'
+import ThemeDialog from './ThemeDialog.vue'
+import ChangePasswordDialog from './ChangePasswordDialog.vue'
+import DetailDialog from '@/components/DetailDialog.vue'
+import operationManual from '../../../docs/user-guide/operation-manual.md?raw'
+import searchIcon from '@/assets/brand/search-020.svg'
+import bellIcon from '@/assets/brand/bell-020.svg'
+import arrowIcon from '@/assets/brand/arrow-down-020.svg'
 import {
   unreadNotifyCount,
   pageNotifyInbox,
@@ -36,6 +43,13 @@ const { logout } = useAuth()
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 const displayName = computed(() => userStore.user?.displayName || t('auth.notSignedIn'))
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
+const themeVisible = ref(false)
+const manualVisible = ref(false)
+const passwordVisible = ref(false)
+const manualLines = operationManual.split('\n')
+/** 个人菜单次级入口展开态（操作手册/修改密码，归入「设置」次级层）。 */
+const moreOpen = ref(false)
+const userMenuRef = ref<{ handleClose: () => void } | null>(null)
 
 // 通知铃铛：仅在服务端菜单树含收件箱入口时显示；未读数失败静默为 0（顶栏韧性）。
 const bellVisible = computed(() => {
@@ -139,7 +153,15 @@ async function onLogout(): Promise<void> {
   await router.push('/login')
 }
 
+async function onPasswordChanged(): Promise<void> {
+  passwordVisible.value = false
+  clearDynamicRoutes(router)
+  await router.push('/login')
+}
+
 function onCommand(command: string): void {
+  if (command === 'manual') manualVisible.value = true
+  if (command === 'change-password') passwordVisible.value = true
   if (command === 'logout') {
     void onLogout()
   }
@@ -153,15 +175,34 @@ function onCommand(command: string): void {
     onBackPortal()
   }
 }
+
+/** 个人菜单项统一收口：先关闭下拉再执行，避免弹层残留。 */
+function runCommand(command: string): void {
+  userMenuRef.value?.handleClose()
+  moreOpen.value = false
+  onCommand(command)
+}
 </script>
 
 <template>
-  <div class="app-topbar">
-    <!-- V011-BUG-005：多语言切换（主导航与搜索之间，Owner 2026-09-22 指定位置） -->
+  <div class="app-topbar" :class="`app-topbar--${currentArea}`">
+    <span
+      v-if="currentArea === 'admin' && userStore.user?.tenantId != null"
+      class="app-topbar__tenant"
+    >
+      {{
+        t(userStore.superAdmin ? 'nav.superTenant' : 'nav.tenant', {
+          tenant: userStore.user?.tenantId,
+        })
+      }}
+    </span>
+    <button class="app-topbar__theme" type="button" @click="themeVisible = true">
+      {{ t('common.theme') }}
+    </button>
+    <!-- 参考 4:2/6:2/97:2：“中文”后无下拉指示（下拉仍由点击触发） -->
     <el-dropdown trigger="click" @command="onLocale">
       <button class="app-topbar__locale" type="button" :aria-label="t('locale.switch')">
         <span class="app-topbar__locale-current">{{ currentLocaleLabel }}</span>
-        <el-icon class="app-topbar__locale-caret"><CaretBottom /></el-icon>
       </button>
       <template #dropdown>
         <el-dropdown-menu class="app-topbar__locale-menu">
@@ -177,18 +218,19 @@ function onCommand(command: string): void {
       </template>
     </el-dropdown>
     <span class="app-topbar__search" aria-hidden="true">
+      <img v-if="currentArea === 'admin'" :src="searchIcon" alt="" width="18" height="18" />
       <!-- P53 设计同源图标：路径取自锁定 SVG（1225,23 20×20 / 1263,23 20×20） -->
-      <svg viewBox="1225 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
+      <svg v-else viewBox="1225 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
         <path
           d="M1234.17 38.0002C1237.39 38.0002 1240 35.3885 1240 32.1668C1240 28.9452 1237.39 26.3335 1234.17 26.3335C1230.95 26.3335 1228.33 28.9452 1228.33 32.1668C1228.33 35.3885 1230.95 38.0002 1234.17 38.0002Z"
-          stroke="#ECE9FF"
+          stroke="currentColor"
           stroke-width="1.41667"
           stroke-linecap="round"
           stroke-linejoin="round"
         />
         <path
           d="M1238.33 36.3335L1241.67 39.6668"
-          stroke="#ECE9FF"
+          stroke="currentColor"
           stroke-width="1.41667"
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -208,17 +250,25 @@ function onCommand(command: string): void {
       <template #reference>
         <button class="app-topbar__bell" type="button" :aria-label="t('nav.notifications')">
           <el-badge :value="unread" :hidden="unread <= 0" :max="99">
-            <svg viewBox="1263 22 20 20" width="20" height="20" fill="none" aria-hidden="true">
+            <img v-if="currentArea === 'admin'" :src="bellIcon" alt="" width="18" height="18" />
+            <svg
+              v-else
+              viewBox="1263 22 20 20"
+              width="20"
+              height="20"
+              fill="none"
+              aria-hidden="true"
+            >
               <path
                 d="M1278 29.6665C1278 28.3404 1277.47 27.0687 1276.54 26.131C1275.6 25.1933 1274.33 24.6665 1273 24.6665C1271.67 24.6665 1270.4 25.1933 1269.46 26.131C1268.53 27.0687 1268 28.3404 1268 29.6665C1268 35.4998 1265.5 35.4998 1265.5 37.1665H1280.5C1280.5 35.4998 1278 35.4998 1278 29.6665Z"
-                stroke="#ECE9FF"
+                stroke="currentColor"
                 stroke-width="1.41667"
                 stroke-linecap="round"
                 stroke-linejoin="round"
               />
               <path
                 d="M1271.33 40.5H1274.67"
-                stroke="#ECE9FF"
+                stroke="currentColor"
                 stroke-width="1.41667"
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -257,30 +307,97 @@ function onCommand(command: string): void {
       </div>
     </el-popover>
 
-    <el-dropdown trigger="click" @command="onCommand">
-      <span class="app-topbar__user">
+    <el-dropdown ref="userMenuRef" trigger="click" popper-class="app-topbar-user-popper">
+      <span class="app-topbar__user" :aria-label="displayName">
         <span class="app-topbar__avatar" aria-hidden="true">{{ avatarText }}</span>
         <span class="app-topbar__user-name">{{ displayName }}</span>
-        <el-icon class="app-topbar__caret"><CaretBottom /></el-icon>
+        <img class="app-topbar__caret" :src="arrowIcon" alt="" width="12" height="12" />
       </span>
       <template #dropdown>
-        <!-- V011-BUG-004：仅三个小菜单项，无摘要头 -->
-        <el-dropdown-menu class="app-topbar__dropdown">
-          <el-dropdown-item command="account-bindings">{{
-            t('auth.accountBindings')
-          }}</el-dropdown-item>
-          <el-dropdown-item v-if="showEnterAdmin" command="enter-admin">
-            {{ t('auth.enterBackend') }}
-          </el-dropdown-item>
-          <el-dropdown-item v-if="currentArea === 'admin'" command="back-portal">
-            {{ t('auth.backToPortal') }}
-          </el-dropdown-item>
-          <el-dropdown-item command="logout" divided class="app-topbar__logout">
-            {{ t('auth.signOut') }}
-          </el-dropdown-item>
-        </el-dropdown-menu>
+        <!-- 主层与参考 103:2/103:398 同构三项；操作手册/修改密码归入「设置」次级层 -->
+        <div class="app-topbar__dropdown" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            class="app-topbar__menu-item"
+            @click="runCommand('account-bindings')"
+          >
+            <el-icon :size="16"><User /></el-icon>
+            <span>{{ t('auth.accountBindings') }}</span>
+          </button>
+          <button
+            v-if="showEnterAdmin"
+            type="button"
+            role="menuitem"
+            class="app-topbar__menu-item"
+            @click="runCommand('enter-admin')"
+          >
+            <el-icon :size="16"><Switch /></el-icon>
+            <span>{{ t('auth.enterBackend') }}</span>
+          </button>
+          <button
+            v-if="currentArea === 'admin'"
+            type="button"
+            role="menuitem"
+            class="app-topbar__menu-item"
+            @click="runCommand('back-portal')"
+          >
+            <el-icon :size="16"><Back /></el-icon>
+            <span>{{ t('auth.backToPortal') }}</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            class="app-topbar__menu-item app-topbar__menu-item--danger"
+            @click="runCommand('logout')"
+          >
+            <el-icon :size="16"><SwitchButton /></el-icon>
+            <span>{{ t('auth.signOut') }}</span>
+          </button>
+          <div class="app-topbar__menu-sep" role="separator"></div>
+          <button
+            type="button"
+            class="app-topbar__menu-item app-topbar__menu-item--secondary"
+            :aria-expanded="moreOpen ? 'true' : 'false'"
+            @click="moreOpen = !moreOpen"
+          >
+            <el-icon :size="16"><Setting /></el-icon>
+            <span>{{ t('common.settings') }}</span>
+            <el-icon class="app-topbar__menu-caret" :class="{ 'is-open': moreOpen }">
+              <ArrowRight />
+            </el-icon>
+          </button>
+          <div v-if="moreOpen" class="app-topbar__submenu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              class="app-topbar__submenu-item"
+              @click="runCommand('manual')"
+            >
+              {{ t('nav.operationManual') }}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="app-topbar__submenu-item"
+              @click="runCommand('change-password')"
+            >
+              {{ t('auth.changePassword') }}
+            </button>
+          </div>
+        </div>
       </template>
     </el-dropdown>
+    <ThemeDialog v-model="themeVisible" />
+    <ChangePasswordDialog v-model="passwordVisible" @changed="onPasswordChanged" />
+    <DetailDialog v-model="manualVisible" :title="t('nav.operationManual')" width="920px">
+      <article class="app-topbar__manual">
+        <template v-for="(line, index) in manualLines" :key="index">
+          <h3 v-if="line.startsWith('## ')">{{ line.slice(3) }}</h3>
+          <p v-else-if="line && !line.startsWith('# ')">{{ line }}</p>
+        </template>
+      </article>
+    </DetailDialog>
   </div>
 </template>
 
@@ -291,6 +408,64 @@ function onCommand(command: string): void {
   /* 设计（节点02）：搜索/铃铛/用户区间距 18px，个人区总宽 336 */
   gap: 18px;
   height: 100%;
+}
+.app-topbar__theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--sw-surface-card);
+  font: inherit;
+  font-size: var(--sw-font-caption);
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.app-topbar__tenant {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 88px;
+  height: 24px;
+  color: var(--sw-color-primary);
+  background: var(--sw-color-primary-soft);
+  border-radius: var(--sw-radius-base);
+  font-size: var(--sw-font-caption);
+  white-space: nowrap;
+}
+.app-topbar--admin {
+  gap: var(--sw-space-8);
+}
+.app-topbar--admin .app-topbar__locale {
+  padding: 0;
+  font-size: 12px;
+}
+.app-topbar--admin .app-topbar__search,
+.app-topbar--admin .app-topbar__bell {
+  width: 18px;
+  height: 18px;
+}
+.app-topbar--admin .app-topbar__user {
+  gap: 8px;
+  width: 110px;
+}
+.app-topbar--admin .app-topbar__avatar {
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
+  font-weight: 500;
+  transform: none;
+}
+.app-topbar__manual {
+  color: var(--sw-text-primary);
+  line-height: 1.7;
+}
+.app-topbar__manual h3 {
+  color: var(--sw-color-primary);
 }
 .app-topbar__bell {
   display: inline-flex;
@@ -357,7 +532,7 @@ function onCommand(command: string): void {
   border-bottom: none;
 }
 .app-bell-panel__item:hover {
-  background: var(--sw-color-primary-light-5, #f2eaf0);
+  background: var(--sw-color-primary-soft);
 }
 .app-bell-panel__dot {
   flex: 0 0 auto;
@@ -365,7 +540,7 @@ function onCommand(command: string): void {
   height: 8px;
   margin-top: 5px;
   border-radius: 50%;
-  background: var(--el-color-primary, #7e306b);
+  background: var(--el-color-primary);
 }
 .app-bell-panel__dot.is-read {
   background: transparent;
@@ -405,8 +580,9 @@ function onCommand(command: string): void {
 .app-topbar__user {
   display: flex;
   align-items: center;
-  /* 设计（节点02）：头像 32 + 10px 文距（用户区总宽 116） */
-  gap: 10px;
+  /* 参考 4:2/6:2/97:2 账户入口：110×40 容器，头像 32 + 8 间距 + 名称槽 28 + 8 间距 + chevron 12 */
+  width: 110px;
+  gap: 8px;
   cursor: pointer;
   outline: none;
 }
@@ -414,6 +590,7 @@ function onCommand(command: string): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 32px;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -424,18 +601,17 @@ function onCommand(command: string): void {
   transform: translateY(1px);
 }
 .app-topbar__user-name {
+  flex: 0 0 28px;
+  width: 28px;
   font-size: 14px;
   color: #ffffff;
-  max-width: 120px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .app-topbar__caret {
-  /* 设计（节点02）：用户名后紧随 12px 下拉箭头 */
-  font-size: 12px;
-  margin-left: -6px;
-  color: rgba(255, 255, 255, 0.9);
+  /* 参考：用户名后细线 chevron（12px 盒，可见笔画约 10px） */
+  flex: 0 0 12px;
 }
 .app-topbar__logout {
   color: var(--sw-danger);
@@ -443,26 +619,27 @@ function onCommand(command: string): void {
 .app-topbar__logout :deep(.el-icon) {
   color: var(--sw-danger);
 }
-/* V011-BUG-005：顶栏语言切换（主导航与搜索之间，深色顶栏上的白色文字控件） */
+/* V011-BUG-005：顶栏语言切换（主导航与搜索之间，深色顶栏上的白色文字控件）
+ * 参考 4:2/6:2/97:2：中文 12px，文本后无指示图标，控件无横向内距（与搜索图标间距 8） */
 .app-topbar__locale {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   height: 28px;
-  padding: 0 8px;
+  padding: 0;
   border: none;
   border-radius: var(--sw-radius-base);
   background: transparent;
   color: rgba(255, 255, 255, 0.92);
-  font-size: 13px;
+  font-family: var(--sw-font-family);
+  font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .app-topbar__locale:hover {
   background: var(--sw-nav-hover-bg);
   color: #ffffff;
-}
-.app-topbar__locale-caret {
-  font-size: 12px;
 }
 </style>
 
@@ -473,7 +650,7 @@ function onCommand(command: string): void {
 .app-topbar__locale-menu .el-dropdown-menu__item.is-current {
   color: var(--sw-color-primary);
   font-weight: 600;
-  background: var(--sw-color-primary-light-5, #f2eaf0);
+  background: var(--sw-color-primary-soft);
 }
 /* 铃铛通知面板 popper（V012-BUG-007）：白卡 + 无箭头 */
 .el-popper.app-bell-popover {
@@ -493,7 +670,7 @@ function onCommand(command: string): void {
 }
 .el-popper:has(.app-topbar__dropdown) {
   position: fixed !important;
-  top: 74px !important;
+  top: 60px !important;
   right: 24px !important;
   left: auto !important;
   transform: none !important;
@@ -501,30 +678,113 @@ function onCommand(command: string): void {
   border: 0 !important;
   box-shadow: none !important;
 }
-/* V011-BUG-004：个人菜单收敛为白卡内三个小菜单项（无摘要头、无描边按钮盒）。 */
-.app-topbar__dropdown.el-dropdown-menu {
-  width: 200px;
+/* 个人菜单：主层与参考 103:2/103:398 同构三项，操作手册/修改密码收进「设置」次级层。 */
+.app-topbar__dropdown {
+  width: 192px;
   box-sizing: border-box;
-  padding: 8px;
+  padding: 4px;
   border-radius: 10px;
   background: #ffffff;
   border: 1px solid #dfe6f2;
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.08);
 }
-.app-topbar__dropdown .el-dropdown-menu__item {
-  height: 32px;
-  line-height: 32px;
-  margin: 2px 0 0;
+.app-topbar__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 14px;
+  color: var(--sw-text-primary, #303133);
+  text-align: left;
+  cursor: pointer;
+}
+.app-topbar__menu-item:hover {
+  background: var(--sw-color-primary-soft);
+}
+.app-topbar__menu-item--danger {
+  color: #e04b55;
+}
+.app-topbar__menu-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: #ebeef5;
+}
+.app-topbar__menu-item--secondary {
+  color: var(--sw-text-secondary, #6b7280);
+}
+.app-topbar__menu-caret {
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+.app-topbar__menu-caret.is-open {
+  transform: rotate(90deg);
+}
+.app-topbar__submenu {
+  padding-left: 20px;
+}
+.app-topbar__submenu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 30px;
   padding: 0 10px;
   border: 0;
   border-radius: 6px;
-  font-size: 13px;
-  justify-content: flex-start;
+  background: transparent;
+  font-size: 12px;
+  color: var(--sw-text-secondary, #6b7280);
+  text-align: left;
+  cursor: pointer;
 }
-.app-topbar__dropdown .el-dropdown-menu__item:not(.is-disabled):hover {
-  background: var(--sw-color-primary-light-5, #f2eaf0);
+.app-topbar__submenu-item:hover {
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-text-primary, #303133);
 }
-.app-topbar__dropdown .app-topbar__logout {
-  color: #e04b55;
+@media (max-width: 767px) {
+  .app-topbar {
+    gap: 8px;
+  }
+  .app-topbar__search,
+  .app-topbar__user-name,
+  .app-topbar__caret {
+    display: none;
+  }
+  .app-topbar__user {
+    gap: 0;
+  }
+}
+</style>
+
+<style scoped>
+.app-topbar--portal {
+  gap: var(--sw-space-8);
+}
+.app-topbar--portal .app-topbar__avatar {
+  flex: 0 0 32px;
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
+  font-weight: var(--sw-font-weight-emphasis);
+  transform: none;
+}
+.app-topbar--portal .app-topbar__user {
+  width: 110px;
+  gap: 8px;
+}
+.app-topbar--portal .app-topbar__user-name {
+  flex: 0 0 28px;
+  width: 28px;
+  font-weight: var(--sw-font-weight-body);
+}
+.app-topbar--portal .app-topbar__search,
+.app-topbar--portal .app-topbar__bell {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 </style>

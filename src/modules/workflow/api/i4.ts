@@ -182,6 +182,8 @@ export interface AnalyticsSummary {
   launchTrendPercent?: number
   durationTrendPercent?: number
   overdueTrendPercent?: number
+  /** 超时任务环比数量差（7:2 第三卡；无可比基期为 null） */
+  overdueTrendDelta?: number | null
   handlerWorkload: Record<string, number>
   nodeStats: Record<string, { count: number; avgStayMs: number; p90StayMs: number }>
   dailyTrend?: Array<{ date: string; count: number }>
@@ -256,8 +258,8 @@ export interface HandoverItem {
 }
 
 export async function submitHandover(req: {
-  fromUserId: number
-  toUserId: number
+  fromUserId: number | string
+  toUserId: number | string
   scopeDefKeys?: string[]
   includeProxyRules?: boolean
 }): Promise<HandoverResult> {

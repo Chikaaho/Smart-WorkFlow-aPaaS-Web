@@ -48,11 +48,13 @@ interface TableScope {
   rows: FieldRow[]
 }
 
-/** 主表范围 = 非 TABLE 字段（TABLE 字段自身成为子表范围，不出现在主表行里）。 */
+/** 主表范围 = 全部主字段（含 TABLE 本身；设计 49:2 明确列出“演练资源/子表/JSON”行）。 */
 function mainRows(): FieldRow[] {
-  return props.items
-    .filter((item) => item.field.type !== 'TABLE')
-    .map((item, index) => ({ key: item.id, index: index + 1, field: item.field }))
+  return props.items.map((item, index) => ({
+    key: item.id,
+    index: index + 1,
+    field: item.field,
+  }))
 }
 
 function subRows(item: DesignerItem): FieldRow[] {
@@ -111,9 +113,12 @@ const rows = computed<FieldRow[]>(() => {
   )
 })
 
-/** 控件类型（注册表中文名；未知类型回落字段编码）。 */
-function componentLabel(type: string): string {
-  return getFieldTypeDescriptor(type as FormSchemaField['type'])?.label ?? type
+/** 控件类型（注册表中文名；TEXT 按 multiline 区分单行/多行；未知类型回落字段编码）。 */
+function componentLabel(field: FormSchemaField): string {
+  if (field.type === 'TEXT' && (field as { multiline?: boolean }).multiline === true) {
+    return t('form.paletteMultiline')
+  }
+  return getFieldTypeDescriptor(field.type)?.label ?? field.type
 }
 
 /** 字段类型 → 存储列类型族（展示语义，映射见 field-types 共享表）。 */
@@ -136,41 +141,39 @@ function patchDescription(row: FieldRow, description: string) {
 
 <template>
   <div class="field-list">
-    <!-- 表范围：仅多表（主表 + 子表）时出现——单表无从切换，不占一行 -->
-    <div
-      v-if="hasMultipleTables"
-      class="field-list__scopes"
-      role="tablist"
-      :aria-label="t('fieldList.mainTable')"
-    >
-      <button
-        v-for="scope in scopes"
-        :key="scope.key"
-        type="button"
-        role="tab"
-        class="field-list__scope"
-        :class="{ 'is-active': scope.key === activeScope.key }"
-        :aria-selected="scope.key === activeScope.key"
-        :data-testid="'field-scope-' + scope.key"
-        @click="activeScopeKey = scope.key"
-      >
-        {{ scope.label }}
-      </button>
-    </div>
-
+    <!-- 审查23 F07-L：1880×64 工具栏卡（字段名称筛选 256 + 主表/子表切换 32 高） -->
     <div class="field-list__meta">
-      <span
-        v-if="hasMultipleTables"
-        class="field-list__table-name"
-        data-testid="field-table-name"
-        >{{ t('fieldList.tableName', { name: activeScope.tableName }) }}</span
-      >
+      <span class="field-list__label">{{ t('fieldList.searchLabel') }}</span>
       <el-input
         v-model="search"
         class="field-list__search"
         :placeholder="t('fieldList.searchPlaceholder')"
         clearable
       />
+      <!-- 表范围：仅多表（主表 + 子表）时出现——单表无从切换 -->
+      <div
+        v-if="hasMultipleTables"
+        class="field-list__scopes"
+        role="tablist"
+        :aria-label="t('fieldList.mainTable')"
+      >
+        <button
+          v-for="scope in scopes"
+          :key="scope.key"
+          type="button"
+          role="tab"
+          class="field-list__scope"
+          :class="{ 'is-active': scope.key === activeScope.key }"
+          :aria-selected="scope.key === activeScope.key"
+          :data-testid="'field-scope-' + scope.key"
+          @click="activeScopeKey = scope.key"
+        >
+          {{ scope.label }}
+        </button>
+        <span class="field-list__table-name" data-testid="field-table-name">{{
+          t('fieldList.tableName', { name: activeScope.tableName })
+        }}</span>
+      </div>
       <el-button class="field-list__export" data-testid="field-export" @click="emit('export')">{{
         t('fieldList.exportFields')
       }}</el-button>
@@ -207,9 +210,9 @@ function patchDescription(row: FieldRow, description: string) {
         >
       </el-table-column>
       <el-table-column :label="t('fieldList.colComponent')" width="116">
-        <template #default="{ row }">{{ componentLabel(row.field.type) }}</template>
+        <template #default="{ row }">{{ componentLabel(row.field) }}</template>
       </el-table-column>
-      <el-table-column :label="t('fieldList.colType')" width="110">
+      <el-table-column :label="t('fieldList.storageType')" width="110">
         <template #default="{ row }">{{ storageTypeOf(row.field.type) }}</template>
       </el-table-column>
       <el-table-column :label="t('fieldList.colLength')" width="132">
@@ -251,22 +254,47 @@ function patchDescription(row: FieldRow, description: string) {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   height: 100%;
   min-height: 0;
-  padding: 18px 24px 24px;
+  padding: 20px;
   overflow: auto;
-  background: #fff;
+  background: #f4f6fb;
 }
 
-/* 表范围：主表 / 子表（明细表） */
+/* 审查23 F07-L：1880×64 工具栏卡 */
+.field-list__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  height: 64px;
+  padding: 0 20px;
+  border: 1px solid #dde3ef;
+  border-radius: 8px;
+  background: var(--sw-surface-card, #fff);
+}
+.field-list__label {
+  flex: none;
+  color: #303a55;
+  font-size: 14px;
+  line-height: 22px;
+}
+.field-list__search {
+  flex: none;
+  width: 256px;
+}
+
+/* 表范围：主表 / 子表（明细表），32 高切换 */
 .field-list__scopes {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
 }
 .field-list__scope {
   height: 32px;
+  box-sizing: border-box;
   padding: 0 16px;
   border: 1px solid #e3e8f4;
   border-radius: 8px;
@@ -276,28 +304,37 @@ function patchDescription(row: FieldRow, description: string) {
   cursor: pointer;
 }
 .field-list__scope.is-active {
-  border-color: var(--el-color-primary, #6f2dff);
+  border-color: var(--el-color-primary);
   background: #fff;
-  color: var(--el-color-primary, #6f2dff);
+  color: var(--el-color-primary);
   font-weight: 600;
-}
-
-.field-list__meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 .field-list__table-name {
   font-size: 13px;
   color: #46506a;
 }
-.field-list__search {
-  width: 320px;
-  margin-left: auto;
-}
 .field-list__export {
   width: 116px;
   height: 32px;
+  margin-left: auto;
+}
+
+/* 审查27 F07-L：工具栏后到表格间隔 12（原 20 使表外沿 216 对 208） */
+.field-list__table {
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fff;
+}
+.field-list__table :deep(.el-table__header th) {
+  height: 44px;
+  background: #f4f6fb;
+}
+.field-list__table :deep(.el-table__row td) {
+  height: 49px;
+  padding: 0;
+}
+.field-list__table :deep(.el-table .cell) {
+  line-height: 22px;
 }
 
 .field-list__key {

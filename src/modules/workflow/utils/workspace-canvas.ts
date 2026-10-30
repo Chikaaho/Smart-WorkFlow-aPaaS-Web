@@ -27,7 +27,7 @@ export interface SnapResult {
 /** 对齐吸附阈值（px）：ProcessOn 风格的近距吸附。 */
 export const WORKSPACE_SNAP = 6
 export const WORKSPACE_MIN_W = 240
-export const WORKSPACE_MIN_H = 150
+export const WORKSPACE_MIN_H = 100
 /** 无布局环境（单测/jsdom）取不到画布宽度时的名义参考宽度。 */
 export const WORKSPACE_NOMINAL_W = 1200
 
@@ -209,10 +209,14 @@ export function toAbsoluteRect(raw: unknown, canvasW: number): CardRect | null {
     return { x: cx, y: Math.round(y), w: cw, h: Math.round(h) }
   }
   if (!Number.isFinite(canvasW) || canvasW <= 0) return null
+  // 用户自定义布局可能因编辑画布/只读画布宽度差导致 x+w 略大于画布；
+  // 展开时把整卡收回画布内，避免右列越界产生横向裁切。
+  const cw = Math.min(Math.round(w * canvasW), Math.round(canvasW))
+  const cx = Math.min(Math.round(x * canvasW), Math.max(0, Math.round(canvasW) - cw))
   return {
-    x: Math.round(x * canvasW),
+    x: cx,
     y: Math.round(y),
-    w: Math.round(w * canvasW),
+    w: cw,
     h: Math.round(h),
   }
 }

@@ -21,6 +21,7 @@ export async function listDeptTree(params?: DeptQuery): Promise<SysDept[]> {
   const name = params?.name?.trim()
   if (name) query.name = name
   if (params?.status !== undefined) query.status = params.status
+  if (params?.tenantId !== undefined) query.tenantId = params.tenantId
   return request<SysDept[]>({
     method: 'GET',
     url: '/system/dept/tree',

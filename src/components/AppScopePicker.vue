@@ -19,7 +19,7 @@ import type { SysPost } from '@/modules/system/types/post'
  * 候选装载失败（如缺系统查看权限）时该维度候选为空，不影响其它维度保存。
  */
 export interface AppScopeValue {
-  userIds: number[]
+  userIds: Array<number | string>
   deptIds: number[]
   roleCodes: string[]
   postIds: number[]
@@ -129,7 +129,7 @@ const scopeEmpty = computed(
           :model-value="scope.userIds"
           multiple
           @update:model-value="
-            (v: number | number[] | null) => patch({ userIds: Array.isArray(v) ? v : [] })
+            (v: string | string[] | null) => patch({ userIds: Array.isArray(v) ? v : [] })
           "
         />
       </el-tab-pane>

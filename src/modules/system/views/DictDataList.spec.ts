@@ -4,6 +4,7 @@ import { nextTick } from 'vue'
 
 vi.mock('@/modules/system/api/dict', () => ({
   pageDictData: vi.fn(),
+  pageDictTypes: vi.fn(),
   getDictData: vi.fn(),
   createDictData: vi.fn(),
   updateDictData: vi.fn(),
@@ -14,11 +15,11 @@ const mockPush = vi.fn()
 const mockRouteQuery: Record<string, string> = { dictCode: 'gender', dictName: '性别' }
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: vi.fn() }),
   useRoute: () => ({ query: mockRouteQuery, params: {} }),
 }))
 
-import { pageDictData, deleteDictData } from '@/modules/system/api/dict'
+import { pageDictData, pageDictTypes, deleteDictData } from '@/modules/system/api/dict'
 import type { SysDictData } from '@/modules/system/types/dict'
 import DictDataList from './DictDataList.vue'
 
@@ -30,6 +31,12 @@ describe('DictDataList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(pageDictData).mockResolvedValue(stubPageResult())
+    vi.mocked(pageDictTypes).mockResolvedValue({
+      list: [{ id: '1', name: '性别', code: 'gender', status: 0 }],
+      total: 1,
+      pageNum: 1,
+      pageSize: 200,
+    })
   })
 
   const minimalStubs = {
@@ -60,12 +67,25 @@ describe('DictDataList', () => {
 
   // ─── 路由参数 ───
 
-  it('calls pageDictData with dictCode from route query on mount', () => {
+  it('calls pageDictData with dictCode from route query on mount', async () => {
     mount(DictDataList, { global: { stubs: minimalStubs } })
+    await nextTick()
+    await Promise.resolve()
+    await nextTick()
     expect(pageDictData).toHaveBeenCalledWith(
       { pageNum: 1, pageSize: 10 },
       expect.objectContaining({ dictCode: 'gender' }),
     )
+  })
+
+  it('loads the page list once during initial type and data initialization', async () => {
+    vi.mocked(pageDictData).mockClear()
+    mount(DictDataList, { global: { stubs: minimalStubs } })
+    await nextTick()
+    await Promise.resolve()
+    await nextTick()
+
+    expect(pageDictData).toHaveBeenCalledTimes(1)
   })
 
   // ─── 分页 ───

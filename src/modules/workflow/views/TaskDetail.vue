@@ -11,23 +11,35 @@ const { t } = useI18n()
  * 路由参数：taskId
  */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import type { Component } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import {
+  ArrowDown,
+  ArrowLeft,
+  Bell,
+  ChatLineSquare,
+  Plus,
+  Rank,
+  User,
+} from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import {
   queryTaskDetail,
   acceptTaskAction,
   latestTaskCommand,
   pollCommandStatus,
+  myInstances,
   transferTask,
   delegateTask,
   communicateTask,
   addSignTask,
-  supplementSignInstance,
+  getApprovalOpinionDraft,
+  saveApprovalOpinionDraft,
   type TaskActionSegment,
 } from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
+import { hasPerm } from '@/foundation/permission'
 import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 import type { ApprovalHistoryItem, TaskDetail } from '@/contracts/bpm'
 import type { ApprovalActionRequest, ApprovalOpinionConfig } from '@/contracts/bpm-node'
@@ -35,7 +47,9 @@ import type { FormSchema } from '@/contracts/form-schema'
 import type { TaskNodeFormView } from '@/contracts/p64'
 import { getTaskNodeForm, saveTaskNodeFormDraft } from '@/modules/workflow/api/p64'
 import DynamicField from '@/components/DynamicField.vue'
-import { createFieldScripts } from '@/adapters/form-runtime'
+import HintTip from '@/components/HintTip.vue'
+import { createFieldScripts, loadScriptOrgContext } from '@/adapters/form-runtime'
+import type { ScriptOrgContext } from '@/adapters/form-runtime'
 import InstanceFlowPanel from '../components/InstanceFlowPanel.vue'
 import BusinessFormReadonly from '@/components/business-detail/BusinessFormReadonly.vue'
 
@@ -66,6 +80,8 @@ const acting = ref<string | null>(null) // 'approve' | 'reject' | null
 const lastExpired = ref<{ reason: string } | null>(null)
 const opinionComment = ref('')
 const opinionData = ref<Record<string, unknown>>({})
+const opinionDraftSaving = ref(false)
+const opinionDraftRestored = ref(false)
 const returnTargetNodeId = ref('')
 /** 本次提交的表单记录数据（businessKey = 表单记录 ID，经 form 模块只读接口回查） */
 const formRecord = ref<Record<string, unknown> | null>(null)
@@ -74,9 +90,11 @@ const formRecordLoading = ref(false)
 async function loadDetail() {
   loading.value = true
   errorMsg.value = ''
+  opinionDraftRestored.value = false
   try {
     detail.value = await queryTaskDetail(taskId)
     initializeOpinionData(detail.value)
+    void loadOpinionDraft()
     void loadFormRecord()
     void loadReservations()
     void loadLastExpired()
@@ -89,6 +107,46 @@ async function loadDetail() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+async function loadOpinionDraft() {
+  if (!detail.value?.canHandle) return
+  try {
+    const draft = await getApprovalOpinionDraft(taskId)
+    const form = detail.value.opinionForm
+    if (
+      draft &&
+      (!form?.formId || draft.opinionFormId === form.formId) &&
+      (!form?.version || draft.opinionFormVersion === form.version)
+    ) {
+      opinionComment.value = draft.comment ?? ''
+      opinionData.value = { ...draft.opinionData }
+      opinionDraftRestored.value = true
+    }
+  } catch {
+    // 暂存读取失败不阻断正式办理，页面给出可重试的保存入口。
+  }
+}
+
+async function saveOpinionDraft() {
+  if (opinionDraftSaving.value || !detail.value?.canHandle) return
+  opinionDraftSaving.value = true
+  try {
+    const form = detail.value.opinionForm
+    await saveApprovalOpinionDraft(taskId, {
+      opinionFormId: form?.formId,
+      opinionFormVersion: form?.version,
+      comment: opinionComment.value,
+      opinionData: { ...opinionData.value },
+    })
+    // 保存成功仅更新草稿，不代表本次打开时已从服务器恢复。
+    opinionDraftRestored.value = false
+    ElMessage.success(t('workflow.opinionDraftSaved'))
+  } catch (error) {
+    ElMessage.error(error instanceof ApiError ? error.msg : t('workflow.opinionDraftSaveFailed'))
+  } finally {
+    opinionDraftSaving.value = false
   }
 }
 
@@ -122,12 +180,26 @@ const nodeFormSubmitted = computed(() => nodeForm.value?.status === 'SUBMITTED')
 /** 待办且未最终提交时可编辑；已提交或历史任务只读回看。 */
 const nodeFormEditable = computed(() => nodeFormBound.value && !nodeFormSubmitted.value)
 
+/** 组织目录快照：复用选择器的同一授权查询，供节点表单脚本组织函数同步读取。 */
+const scriptOrgContext = ref<ScriptOrgContext | null>(null)
+
 // BF20261013-021：节点表单字段脚本（值变更触发；onLoad 在装载后执行；只读回看不执行）
 const nodeFieldScripts = createFieldScripts({
   getSchema: () =>
     nodeForm.value ? ({ title: '', fields: nodeFormFields.value } as unknown as FormSchema) : null,
   model: () => nodeFormModel.value,
   enabled: () => nodeFormEditable.value,
+  processContext: () => ({
+    status: detail.value?.instanceStatus ?? '',
+    taskId: detail.value?.taskId ?? '',
+    ...(detail.value?.processVariables ?? {}),
+  }),
+  formContext: () => ({
+    formKey: detail.value?.formKey ?? '',
+    version: null,
+    submissionId: detail.value?.businessKey ?? '',
+  }),
+  orgContext: () => scriptOrgContext.value,
 })
 onUnmounted(() => nodeFieldScripts.dispose())
 
@@ -167,6 +239,13 @@ async function loadNodeForm() {
     nodeFormModel.value = { ...(view.data ?? {}) }
     // 装载整体替换模型：重置基线避免装载被当作“值变更”，随后执行 onLoad 脚本
     nodeFieldScripts.resetBaseline()
+    if (nodeFormFields.value.some((f) => !!f.script?.code)) {
+      try {
+        scriptOrgContext.value = await loadScriptOrgContext()
+      } catch {
+        scriptOrgContext.value = null
+      }
+    }
     nodeFieldScripts.runOnLoad()
   } catch {
     nodeForm.value = null
@@ -204,10 +283,10 @@ watch([nodeForm, formRecord], () => {
   prefillNodeFormTables()
 })
 
-/** 节点表单必填校验（客户端 UX 提示；服务端提交仍全量校验，1401/2433 为权威口径）。 */
-function validateNodeFormRequired(): boolean {
-  nodeFormErrors.value = []
-  if (!nodeFormBound.value || nodeFormSubmitted.value) return true
+/** 节点表单必填缺失字段名（单一判定源；内联错误与校验弹窗共用）。 */
+function collectNodeFormMissingLabels(): string[] {
+  if (!nodeFormBound.value || nodeFormSubmitted.value) return []
+  const missing: string[] = []
   for (const field of nodeFormFields.value) {
     if (nodeFormHiddenAll.value.has(field.name)) continue
     if (!nodeFieldRequired(field)) continue
@@ -216,9 +295,19 @@ function validateNodeFormRequired(): boolean {
       value == null ||
       (typeof value === 'string' && value.trim() === '') ||
       (Array.isArray(value) && value.length === 0)
-    if (empty) nodeFormErrors.value.push(`${field.label || field.name}: 必填`)
+    if (empty) missing.push(field.label || field.name)
   }
+  return missing
+}
+
+/** 节点表单必填校验（客户端 UX 提示；服务端提交仍全量校验，1401/2433 为权威口径）。 */
+function validateNodeFormRequired(): boolean {
+  nodeFormErrors.value = collectNodeFormMissingLabels().map((label) => `${label}: 必填`)
   return nodeFormErrors.value.length === 0
+}
+
+function nodeFormMissingItems(): string[] {
+  return collectNodeFormMissingLabels().map((label) => t('workflow.validationFillPrefix') + label)
 }
 
 async function handleNodeFormDraft() {
@@ -378,7 +467,7 @@ const taskApproval = useTaskApproval({
       !nodeFormSubmitted.value &&
       !validateNodeFormRequired()
     ) {
-      ElMessage.error(nodeFormErrors.value[0] ?? t('workflow.taskFormValidationFailed'))
+      openValidationDialog(nodeFormMissingItems())
       return false
     }
     return true
@@ -504,18 +593,44 @@ function setOpinionFieldValue(key: string, value: unknown) {
   opinionData.value[key] = value
 }
 
-function opinionFieldRequiredMissing(): boolean {
-  return visibleOpinionFields.value.some((field) => {
+// ── 设计 300:1808 校验提示弹窗：提交前必填缺失聚合为清单（红条目 + 说明行） ──
+const validationDialogVisible = ref(false)
+const validationItems = ref<string[]>([])
+
+function openValidationDialog(items: string[]): boolean {
+  if (items.length === 0) return true
+  validationItems.value = items
+  validationDialogVisible.value = true
+  return false
+}
+
+function opinionMissingFields() {
+  return visibleOpinionFields.value.filter((field) => {
     if (!field.required || field.type === 'NOTE') return false
     const value = opinionData.value[field.key]
     return value == null || (typeof value === 'string' && value.trim() === '')
   })
 }
 
+const opinionErrorKeys = ref<string[]>([])
+
+function opinionFieldInvalid(key: string): boolean {
+  return (
+    opinionErrorKeys.value.includes(key) &&
+    opinionMissingFields().some((field) => field.key === key)
+  )
+}
+
+function opinionMissingItems(): string[] {
+  return opinionMissingFields().map(
+    (field) => t('workflow.validationFillPrefix') + (field.label || field.key),
+  )
+}
+
 function ensureOpinionData(): boolean {
-  if (!opinionFieldRequiredMissing()) return true
-  ElMessage.warning(t('workflow.commentRequired'))
-  return false
+  const missing = opinionMissingFields()
+  opinionErrorKeys.value = missing.map((field) => field.key)
+  return openValidationDialog(opinionMissingItems())
 }
 
 /**
@@ -553,73 +668,129 @@ async function runAction(
   }
 }
 
-async function handleApprove() {
-  if (acting.value) return
+// ── 设计 272:1767 同意申请弹窗：独立 560 宽确认窗（取消/确定 80×32） ──
+// 当前节点没有"办理时选人"条件，弹窗只承接确认语义，不额外造选人控件。
+const agreeDialogVisible = ref(false)
+const agreeSubmitting = ref(false)
+
+function handleApprove() {
+  if (acting.value || !canApprove.value) return
   if (!ensureOpinionData()) return
   // P64 阶段Ⅰ：节点表单必填客户端预检（服务端 2433 为权威口径）
   if (nodeFormBound.value && !nodeFormSubmitted.value && !validateNodeFormRequired()) {
-    ElMessage.error(nodeFormErrors.value[0] ?? t('workflow.taskFormValidationFailed'))
+    openValidationDialog(nodeFormMissingItems())
     return
   }
+  agreeDialogVisible.value = true
+}
+
+/** 弹窗内确认后才提交；取消关闭不触发任何审批请求。 */
+async function confirmAgree(): Promise<void> {
+  if (agreeSubmitting.value) return
+  agreeSubmitting.value = true
   acting.value = 'approve'
   try {
-    await taskApproval.submit('APPROVE')
+    await taskApproval.submit('APPROVE', { skipConfirm: true })
+    agreeDialogVisible.value = false
   } finally {
+    agreeSubmitting.value = false
     acting.value = null
   }
 }
 
-async function handleReject() {
-  if (acting.value) return
+// ── 设计 272:1746 驳回申请弹窗：驳回原因（可选）收进弹窗，确认后直提 ──
+const rejectDialogVisible = ref(false)
+const rejectReason = ref('')
+const rejectSubmitting = ref(false)
+
+function handleReject() {
+  if (acting.value || !negativeAction.value) return
   if (!ensureOpinionData()) return
+  rejectReason.value = ''
+  rejectDialogVisible.value = true
+}
+
+async function confirmReject(): Promise<void> {
+  if (rejectSubmitting.value) return
+  if (!ensureOpinionData()) return
+  const reason = rejectReason.value.trim()
+  if (reason) {
+    if (visibleOpinionFields.value.length === 0) {
+      opinionComment.value = reason
+    } else if (typeof opinionData.value.comment !== 'string' || !opinionData.value.comment) {
+      opinionData.value = { ...opinionData.value, comment: reason }
+    }
+  }
+  rejectSubmitting.value = true
   acting.value = 'reject'
   try {
-    await taskApproval.submit('REJECT')
+    await taskApproval.submit(negativeAction.value ?? 'REJECT', { skipConfirm: true })
+    rejectDialogVisible.value = false
   } finally {
+    rejectSubmitting.value = false
     acting.value = null
   }
 }
 
-async function handleReturn() {
-  if (acting.value) return
+// ── 设计 273:2001 退回申请弹窗：退回目标选择收进弹窗（说明行 + 取消/确定） ──
+const returnDialogVisible = ref(false)
+const returnSubmitting = ref(false)
+const returnComment = ref('')
+
+function handleReturn() {
+  if (acting.value || !canReturn.value) return
+  if (!returnTargetNodeId.value) returnTargetNodeId.value = returnTargets.value[0]?.nodeKey ?? ''
+  if (!returnTargetNodeId.value) {
+    ElMessage.warning(t('workflow.noReturnTargets'))
+    return
+  }
+  returnComment.value = ''
+  returnDialogVisible.value = true
+}
+
+async function confirmReturn(): Promise<void> {
+  if (returnSubmitting.value) return
   const target = returnTargetNodeId.value || returnTargets.value[0]?.nodeKey
   if (!target) {
     ElMessage.warning(t('workflow.noReturnTargets'))
     return
   }
-  try {
-    await ElMessageBox.confirm(t('workflow.confirmReturn'), t('workflow.returnConfirmTitle'), {
-      get confirmButtonText() {
-        return t('common.returnBack')
-      },
-      get cancelButtonText() {
-        return t('common.cancel')
-      },
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+  returnSubmitting.value = true
   acting.value = 'return'
-  await runAction(
-    'return',
-    { action: 'RETURN', returnTargetNodeId: target, ...actionPayload('RETURN') },
-    t('common.statusReturned'),
-    t('workflow.returnFailed'),
-  )
+  try {
+    returnDialogVisible.value = false
+    const base = actionPayload('RETURN')
+    const comment = returnComment.value.trim()
+    const payload = comment
+      ? {
+          ...(base ?? { action: 'RETURN' as const }),
+          comment,
+          opinionData: { ...(base?.opinionData ?? {}), comment },
+        }
+      : base
+    await runAction(
+      'return',
+      { action: 'RETURN', returnTargetNodeId: target, ...payload },
+      t('common.statusReturned'),
+      t('workflow.returnFailed'),
+    )
+  } finally {
+    returnSubmitting.value = false
+    acting.value = null
+  }
 }
 
-// ═════════ I3 生命周期动作（转办/委托/沟通/加签/补签） ═══════════════════
+// ═════════ I3 生命周期动作（转办/委托/沟通/加签） ═══════════════════════
 
 // V012-BUG-019：生命周期弹窗用户输入改选择器；仍以 CSV 字符串承载提交契约
-function csvToIds(value: string | undefined): number[] {
+function csvToIds(value: string | undefined): string[] {
   return (value ?? '')
     .split(',')
-    .map((item) => Number(item.trim()))
-    .filter((id) => Number.isInteger(id) && id > 0)
+    .map((item) => item.trim())
+    .filter((id) => /^\d+$/.test(id) && !/^0+$/.test(id))
 }
-function idsToCsv(ids: number[] | null | undefined): string {
-  return (ids ?? []).join(',')
+function idsToCsv(ids: Array<number | string> | null | undefined): string {
+  return (ids ?? []).map(String).join(',')
 }
 
 const lifecycleDialogVisible = computed({
@@ -629,13 +800,16 @@ const lifecycleDialogVisible = computed({
   },
 })
 
+type LifecycleKind = 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN'
+
 const lifecycleDialog = ref<null | {
-  kind: 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN' | 'SUPPLEMENT_SIGN'
+  kind: LifecycleKind
   targetUserId?: string
   message?: string
   receivers?: string
   participants?: string
   mode?: 'SERIAL' | 'PARALLEL'
+  signPosition?: 'BEFORE' | 'AFTER'
 }>(null)
 const lifecycleSubmitting = ref(false)
 
@@ -664,21 +838,11 @@ const LIFECYCLE_META: Record<string, { title: string; confirm: string }> = {
     },
     confirm: t('workflow.addSignConfirm'),
   },
-  SUPPLEMENT_SIGN: {
-    get title() {
-      return t('workflow.supplementSign')
-    },
-    get confirm() {
-      return t('workflow.supplementSignConfirm')
-    },
-  },
 }
 
-function openLifecycle(
-  kind: 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN' | 'SUPPLEMENT_SIGN',
-) {
+function openLifecycle(kind: LifecycleKind) {
   if (acting.value) return
-  lifecycleDialog.value = { kind, mode: 'PARALLEL' }
+  lifecycleDialog.value = { kind, mode: 'PARALLEL', signPosition: 'BEFORE' }
 }
 
 async function submitLifecycle() {
@@ -694,32 +858,23 @@ async function submitLifecycle() {
     }
     payload = { targetUserId: target, reason: opinionComment.value || undefined }
   } else if (dialog.kind === 'COMMUNICATE') {
-    const receivers = (dialog.receivers ?? '')
-      .split(',')
-      .map((item) => Number(item.trim()))
-      .filter((item) => Number.isInteger(item) && item > 0)
+    const receivers = csvToIds(dialog.receivers)
     if (receivers.length === 0) {
       ElMessage.warning(t('workflow.consultReceiversRequired'))
       return
     }
     payload = { receivers, message: dialog.message ?? '' }
   } else {
-    const raw = (dialog.participants ?? '')
-      .split(',')
-      .map((item) => Number(item.trim()))
-      .filter((item) => Number.isInteger(item) && item > 0)
+    const raw = csvToIds(dialog.participants)
     if (raw.length === 0) {
       ElMessage.warning(t('workflow.participantsRequired'))
       return
     }
-    if (dialog.kind === 'ADD_SIGN') {
-      payload = {
-        participants: raw,
-        mode: dialog.mode ?? 'PARALLEL',
-        comment: opinionComment.value || undefined,
-      }
-    } else {
-      payload = { participants: raw, nodeKey: detail.value.processDefinitionKey ?? undefined }
+    payload = {
+      ...(actionPayload('ADD_SIGN') ?? { action: 'ADD_SIGN' }),
+      participants: raw,
+      mode: dialog.mode ?? 'PARALLEL',
+      signPosition: dialog.signPosition ?? 'BEFORE',
     }
   }
   lifecycleSubmitting.value = true
@@ -730,10 +885,8 @@ async function submitLifecycle() {
       await delegateTask(taskId, payload)
     } else if (dialog.kind === 'COMMUNICATE') {
       await communicateTask(taskId, payload)
-    } else if (dialog.kind === 'ADD_SIGN') {
-      await addSignTask(taskId, payload)
     } else {
-      await supplementSignInstance(detail.value.processInstanceId, payload)
+      await addSignTask(taskId, payload)
     }
     ElMessage.success(meta.title + t('common.statusSubmitted'))
     lifecycleDialog.value = null
@@ -761,13 +914,34 @@ const canAct = computed(
   () => detail.value?.taskStatus !== 'FINISHED' && detail.value?.canHandle === true,
 )
 
-/** 嵌入统一详情弹窗时，仅在有流程信息时呈现「审批进度」区块。 */
-const hasFlow = computed(
-  () =>
-    (detail.value?.approvalHistory?.length ?? 0) > 0 || Boolean(detail.value?.processDefinitionKey),
-)
+type NodeActionCode =
+  | 'APPROVE'
+  | 'DISAPPROVE'
+  | 'REJECT'
+  | 'RETURN'
+  | 'TRANSFER'
+  | 'DELEGATE'
+  | 'COMMUNICATE'
+  | 'ADD_SIGN'
 
-/** 催办仅对流程发起人呈现（真实契约：POST /workflow/my/instances/{id}/urge）。 */
+/** Missing metadata keeps legacy behavior; an explicit array is the node policy boundary. */
+function nodeAllows(action: NodeActionCode): boolean {
+  const allowed = detail.value?.allowedActions
+  return !Array.isArray(allowed) || allowed.includes(action)
+}
+
+const canApprove = computed(() => canAct.value && nodeAllows('APPROVE'))
+const canReject = computed(() => canAct.value && nodeAllows('REJECT'))
+const canReturn = computed(() => canAct.value && nodeAllows('RETURN'))
+const canDisapprove = computed(() => canAct.value && nodeAllows('DISAPPROVE'))
+/** 负向动作按节点策略路由：REJECT=流程级终态优先；仅允许 DISAPPROVE 时呈现「不通过」（节点结算）。 */
+const negativeAction = computed<'REJECT' | 'DISAPPROVE' | null>(() => {
+  if (canReject.value) return 'REJECT'
+  if (canDisapprove.value) return 'DISAPPROVE'
+  return null
+})
+
+/** 催办对发起人与当前待办参与人呈现；服务端按实例参与人再核验。 */
 const isInitiator = computed(() => {
   const d = detail.value
   const uid = userStore.user?.id
@@ -782,16 +956,151 @@ const flowActive = computed(() => {
   return d.taskStatus === 'RUNNING'
 })
 
-const canUrge = computed(() => isInitiator.value && flowActive.value)
+const canUrge = computed(
+  () => (isInitiator.value || canAct.value) && flowActive.value && hasPerm('workflow:urge'),
+)
 
-async function onUrge(): Promise<void> {
+type ApprovalMoreCommand = LifecycleKind | 'URGE'
+interface ApprovalMoreAction {
+  command: ApprovalMoreCommand
+  label: string
+  divided?: boolean
+}
+
+/** 设计 299:1725 每项原图标：催办=铃、转办=双向箭头、委托=人员、沟通=会话、加签=加号。 */
+const APPROVAL_MORE_ICONS: Record<ApprovalMoreCommand, Component> = {
+  URGE: Bell,
+  TRANSFER: Rank,
+  DELEGATE: User,
+  COMMUNICATE: ChatLineSquare,
+  ADD_SIGN: Plus,
+}
+
+const LIFECYCLE_PERMISSIONS: Record<LifecycleKind, string> = {
+  TRANSFER: 'workflow:task:transfer',
+  DELEGATE: 'workflow:task:delegate',
+  COMMUNICATE: 'workflow:task:communicate',
+  ADD_SIGN: 'workflow:task:add-sign',
+}
+
+/** Permission, task state and server-supplied node policy form the UI intersection. */
+function lifecycleVisible(command: LifecycleKind): boolean {
+  if (!canAct.value || !hasPerm(LIFECYCLE_PERMISSIONS[command])) return false
+  return nodeAllows(command)
+}
+
+/* 设计 299:1725 顺序：催办置顶，其后为转办/委托/沟通/加签（补签随权限与节点策略合法出现）；
+   分隔语义保留：催办组与生命周期组仍以 divided 标记（落在首个生命周期项上），
+   原图两项间无可见分隔线，样式层由浮层样式统一行距。 */
+const approvalMoreActions = computed<ApprovalMoreAction[]>(() => {
+  const actions: ApprovalMoreAction[] = []
+  if (canUrge.value) {
+    actions.push({ command: 'URGE', label: t('taskDetailUi.urgeAction'), divided: false })
+  }
+  const lifecycleActions: ApprovalMoreAction[] = []
+  if (lifecycleVisible('TRANSFER')) {
+    lifecycleActions.push({ command: 'TRANSFER', label: t('workflow.transferOwnTask') })
+  }
+  if (lifecycleVisible('DELEGATE')) {
+    lifecycleActions.push({ command: 'DELEGATE', label: t('workflow.delegateAction') })
+  }
+  if (lifecycleVisible('COMMUNICATE')) {
+    lifecycleActions.push({ command: 'COMMUNICATE', label: t('workflow.consultTask') })
+  }
+  if (lifecycleVisible('ADD_SIGN')) {
+    lifecycleActions.push({ command: 'ADD_SIGN', label: t('workflow.addSign') })
+  }
+  if (actions.length > 0 && lifecycleActions.length > 0) {
+    lifecycleActions[0].divided = true
+  }
+  actions.push(...lifecycleActions)
+  return actions
+})
+const hasApprovalMoreActions = computed(() => approvalMoreActions.value.length > 0)
+
+function isLifecycleKind(value: string): value is LifecycleKind {
+  return ['TRANSFER', 'DELEGATE', 'COMMUNICATE', 'ADD_SIGN'].includes(value)
+}
+
+function handleApprovalMore(command: string): void {
+  if (acting.value) return
+  if (command === 'URGE') {
+    openUrgeDialog()
+    return
+  }
+  if (isLifecycleKind(command) && lifecycleVisible(command)) openLifecycle(command)
+}
+
+// ── 设计 273:2025 催办弹窗：说明 + 催办留言（可空，服务端限 200 字） ──
+const urgeDialogVisible = ref(false)
+const urgeMessage = ref('')
+
+/** 可选催办接收人：当前待办人 + 活动参与人（排除自己）；服务端再校验合法子集。 */
+const urgeRecipientOptions = computed<Array<{ id: string; name: string }>>(() => {
   const d = detail.value
-  if (!d?.processInstanceId) return
+  if (!d) return []
+  const self = userStore.user?.id != null ? String(userStore.user.id) : ''
+  const map = new Map<string, string>()
+  const add = (id?: string | null, name?: string | null) => {
+    if (!id || !/^\d+$/.test(id) || id === self) return
+    map.set(id, name?.trim() || id)
+  }
+  add(d.assignee, d.assigneeName)
+  for (const row of d.approvalHistory ?? []) {
+    if (row.endTime == null) add(row.assignee, row.assigneeName)
+  }
+  return [...map.entries()].map(([id, name]) => ({ id, name }))
+})
+/** 已选接收人；空 = 沿用实例级旧语义（催办全部当前待办人）。 */
+const urgeRecipientIds = ref<string[]>([])
+
+function openUrgeDialog(): void {
+  if (acting.value || !canUrge.value) return
+  urgeMessage.value = ''
+  urgeRecipientIds.value = []
+  urgeDialogVisible.value = true
+}
+
+async function confirmUrge(): Promise<void> {
+  await onUrge(urgeMessage.value.trim(), urgeRecipientIds.value)
+  urgeDialogVisible.value = false
+}
+
+async function onUrge(message?: string, recipientIds?: string[]): Promise<void> {
+  const d = detail.value
+  if (!d?.processInstanceId || !canUrge.value) return
   try {
+    // 实例记录标识优先取任务详情（参与人可用）；旧响应缺省时回退发起人实例列表
+    let instanceRecordId: number | string | null = d.instanceId ?? null
+    if (instanceRecordId == null) {
+      const page = await myInstances(
+        { pageNum: 1, pageSize: 100 },
+        d.businessKey ? { keyword: d.businessKey } : undefined,
+      )
+      const instance = page.list.find(
+        (item) =>
+          item.processInstanceId === d.processInstanceId &&
+          String(item.initiatorId) === String(d.initiatorId),
+      )
+      if (!instance) {
+        ElMessage.info(t('workflow.urgeNotAvailable'))
+        return
+      }
+      instanceRecordId = instance.id
+    }
     const { urgeMyInstance } = await import('@/modules/workflow/api/oa')
-    const resp = await urgeMyInstance(Number(d.processInstanceId))
-    void resp
-    ElMessage.success(t('workflow.urgeSent'))
+    const resp = await urgeMyInstance(
+      instanceRecordId,
+      message,
+      recipientIds && recipientIds.length > 0 ? recipientIds : undefined,
+    )
+    if (resp.result === 'ACCEPTED') {
+      ElMessage.success(resp.detail || t('workflow.urgeSent'))
+    } else if (resp.result === 'COOLDOWN') {
+      ElMessage.warning(resp.detail || t('workflow.urgeCoolingDown'))
+    } else {
+      ElMessage.info(resp.detail || t('workflow.urgeNotAvailable'))
+    }
   } catch (err) {
     ElMessage.error(err instanceof ApiError ? err.msg : t('workflow.urgeFailed'))
   }
@@ -854,18 +1163,20 @@ onMounted(loadDetail)
         show-icon
       >
         <p>
-          上次提交的审批命令已过期：{{ lastExpired.reason || '准入截止到期且未执行（效果未发生）' }}
+          {{
+            t('workflow.approvalExpired', {
+              reason: lastExpired.reason || t('workflow.approvalExpiredDefault'),
+            })
+          }}
         </p>
-        <p>可直接重试本次操作（将重新提交审批命令，原过期记录保留可查）。</p>
+        <p>{{ t('workflow.approvalExpiredRetry') }}</p>
       </el-alert>
 
       <!-- 本次提交的表单数据：与抄送详情共用同一套业务表单只读展示 -->
-      <h4 v-if="embedded" class="task-detail__section">
-        {{ t('workflow.formDataReadonlySnapshot') }}
-      </h4>
       <BusinessFormReadonly
         v-if="detail.formKey && detail.businessKey"
         :form-key="detail.formKey"
+        :record-id="detail.businessKey"
         :record="formRecord"
         :loading="formRecordLoading"
       />
@@ -875,7 +1186,6 @@ onMounted(loadDetail)
         <template #header>
           <div class="card-head">
             <span>IoT 预约</span>
-            <span class="card-head__hint">设备动作预约下发记录</span>
           </div>
         </template>
         <div v-loading="reservationsLoading" class="iot-reservations">
@@ -939,9 +1249,6 @@ onMounted(loadDetail)
     </div>
 
     <!-- 流程信息作为表单详情的外挂组件：与表单详情/任务详情共用同一控制面 -->
-    <h4 v-if="embedded && hasFlow" class="task-detail__section">
-      {{ t('workflow.approvalProgress') }}
-    </h4>
     <InstanceFlowPanel
       v-if="detail"
       :approval-history="detail.approvalHistory"
@@ -983,7 +1290,12 @@ onMounted(loadDetail)
           </div>
         </div>
         <div v-if="canAct && visibleOpinionFields.length > 0" class="opinion-form">
-          <div v-for="field in visibleOpinionFields" :key="field.key" class="opinion-field">
+          <div
+            v-for="field in visibleOpinionFields"
+            :key="field.key"
+            class="opinion-field"
+            :class="{ 'is-invalid': opinionFieldInvalid(field.key) }"
+          >
             <template v-if="field.type === 'NOTE'">
               <span class="opinion-note">{{ field.label }}</span>
             </template>
@@ -1001,6 +1313,12 @@ onMounted(loadDetail)
                 @input="
                   setOpinionFieldValue(field.key, ($event.target as HTMLTextAreaElement).value)
                 "
+              />
+              <DynamicField
+                v-else-if="field.type === 'USER'"
+                :field="{ name: field.key, type: 'USER', label: field.label }"
+                :model-value="opinionFieldValue(field)"
+                @update:model-value="setOpinionFieldValue(field.key, $event)"
               />
               <select
                 v-else-if="field.type === 'SELECT'"
@@ -1045,6 +1363,9 @@ onMounted(loadDetail)
                 "
               />
             </template>
+            <p v-if="opinionFieldInvalid(field.key)" class="opinion-field__error" role="alert">
+              {{ t('workflow.validationRequiredInline', { label: field.label || field.key }) }}
+            </p>
           </div>
         </div>
         <textarea
@@ -1054,66 +1375,80 @@ onMounted(loadDetail)
           rows="3"
           :placeholder="t('workflow.remarkOptional')"
         />
-        <!-- 0.1.7 #18：所有操作按钮统一放右下角（退回/转办/委托/沟通/加签/补签/驳回/同意/催办） -->
+        <div v-if="canAct" class="opinion-draft-actions">
+          <el-button size="small" :loading="opinionDraftSaving" @click="saveOpinionDraft">
+            {{ t('workflow.saveOpinionDraft') }}
+          </el-button>
+          <span v-if="opinionDraftRestored">{{ t('workflow.opinionDraftRestored') }}</span>
+          <HintTip :content="t('workflow.opinionDraftNote')" />
+        </div>
+        <!-- 主操作保持直达；有权限且被节点策略允许的转办/委托/沟通/加签与催办统一收进“更多”。 -->
         <div class="detail-actions__bar">
-          <div v-if="canAct && returnTargets.length > 0" class="return-config">
-            <span>{{ t('workflow.returnToLabel') }}</span>
-            <el-select
-              v-model="returnTargetNodeId"
-              :placeholder="t('workflow.selectApprovedNode')"
-              style="width: 180px"
-            >
-              <el-option
-                v-for="target in returnTargets"
-                :key="target.nodeKey"
-                :label="target.taskName"
-                :value="target.nodeKey"
-              />
-            </el-select>
+          <div v-if="canReturn && returnTargets.length > 0" class="return-config">
             <el-button
               type="warning"
               :loading="acting === 'return'"
               :disabled="acting !== null"
+              data-testid="return-open-dialog"
               @click="handleReturn"
               >{{ t('common.returnBack') }}</el-button
             >
           </div>
           <div class="detail-actions__btns">
-            <el-button v-if="canUrge" :disabled="acting !== null" @click="onUrge">
-              {{ t('taskDetailUi.urgeAction') }}
-            </el-button>
-            <template v-if="canAct">
-              <el-button :disabled="acting !== null" @click="openLifecycle('TRANSFER')">
-                {{ t('workflow.transferOwnTask') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('DELEGATE')">
-                {{ t('workflow.delegateAction') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('COMMUNICATE')">
-                {{ t('workflow.consultTask') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('ADD_SIGN')">
-                {{ t('workflow.addSign') }}
-              </el-button>
-              <el-button :disabled="acting !== null" @click="openLifecycle('SUPPLEMENT_SIGN')">
-                {{ t('workflow.supplementSign') }}
-              </el-button>
+            <el-dropdown
+              v-if="hasApprovalMoreActions"
+              class="detail-actions__more"
+              trigger="click"
+              popper-class="detail-actions-more-popper"
+              :disabled="acting !== null"
+              @command="handleApprovalMore"
+            >
               <el-button
+                class="detail-actions__more-trigger"
+                :disabled="acting !== null"
+                data-testid="approval-more-trigger"
+              >
+                {{ t('common.moreActions') }}
+                <el-icon><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu class="detail-actions__more-menu">
+                  <el-dropdown-item
+                    v-for="action in approvalMoreActions"
+                    :key="action.command"
+                    :command="action.command"
+                    :divided="action.divided"
+                    :disabled="acting !== null"
+                    :data-testid="`approval-more-${action.command.toLowerCase()}`"
+                  >
+                    <el-icon class="detail-actions__more-item-icon" aria-hidden="true">
+                      <component :is="APPROVAL_MORE_ICONS[action.command]" />
+                    </el-icon>
+                    {{ action.label }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <template v-if="canAct">
+              <el-button
+                v-if="negativeAction"
                 type="danger"
                 plain
+                data-testid="negative-action-button"
                 :loading="acting === 'reject'"
                 :disabled="acting !== null"
                 @click="quickReject"
               >
-                {{ t('common.reject') }}
+                {{ negativeAction === 'REJECT' ? t('common.reject') : t('workflow.disapprove') }}
               </el-button>
               <el-button
-                type="success"
+                v-if="canApprove"
+                type="primary"
                 :loading="acting === 'approve'"
                 :disabled="acting !== null"
                 @click="quickApprove"
               >
-                {{ t('common.approve') }}
+                {{ t('workflow.approveTask') }}
               </el-button>
             </template>
           </div>
@@ -1121,27 +1456,43 @@ onMounted(loadDetail)
       </div>
     </el-card>
 
-    <!-- I3 生命周期动作弹窗 -->
+    <!-- I3 生命周期动作弹窗；转办/委托/沟通/加签按设计 273:1877/1901/1925/1949 统一
+         640 宽（左右 25 → 内容 590）与 32 高输入、80×32 底栏 -->
     <el-dialog
       v-model="lifecycleDialogVisible"
-      :title="lifecycleDialog ? LIFECYCLE_META[lifecycleDialog.kind].title : ''"
-      width="420px"
+      :title="
+        lifecycleDialog
+          ? lifecycleDialog.kind === 'TRANSFER'
+            ? t('workflow.transferOwnTask')
+            : LIFECYCLE_META[lifecycleDialog.kind].title
+          : ''
+      "
+      width="640px"
+      class="action-dialog"
       :close-on-click-modal="false"
     >
-      <el-form label-position="top" size="small">
+      <el-form label-position="top">
         <template
           v-if="lifecycleDialog?.kind === 'TRANSFER' || lifecycleDialog?.kind === 'DELEGATE'"
         >
-          <el-form-item :label="t('workflow.targetUser')">
+          <el-form-item
+            :label="
+              lifecycleDialog?.kind === 'TRANSFER'
+                ? t('common.selectUser')
+                : t('workflow.targetUser')
+            "
+          >
             <!-- V012-BUG-019：目标用户改选择器（存 id 显示姓名） -->
             <UserRemoteSelect
-              :model-value="
-                lifecycleDialog.targetUserId ? Number(lifecycleDialog.targetUserId) : undefined
+              :model-value="lifecycleDialog.targetUserId || undefined"
+              :placeholder="
+                lifecycleDialog?.kind === 'TRANSFER'
+                  ? t('common.selectUser')
+                  : t('workflow.pickTargetUser')
               "
-              :placeholder="t('workflow.pickTargetUser')"
               style="width: 100%"
               @update:model-value="
-                (v: number | number[] | null) => {
+                (v: string | string[] | null) => {
                   if (!lifecycleDialog) return
                   lifecycleDialog.targetUserId = v == null || Array.isArray(v) ? '' : String(v)
                 }
@@ -1158,7 +1509,7 @@ onMounted(loadDetail)
               :placeholder="t('workflow.pickReceivers')"
               style="width: 100%"
               @update:model-value="
-                (v: number | number[] | null) => {
+                (v: string | string[] | null) => {
                   if (!lifecycleDialog) return
                   lifecycleDialog.receivers = Array.isArray(v) ? idsToCsv(v) : ''
                 }
@@ -1178,7 +1529,7 @@ onMounted(loadDetail)
               :placeholder="t('workflow.pickParticipants')"
               style="width: 100%"
               @update:model-value="
-                (v: number | number[] | null) => {
+                (v: string | string[] | null) => {
                   if (!lifecycleDialog) return
                   lifecycleDialog.participants = Array.isArray(v) ? idsToCsv(v) : ''
                 }
@@ -1191,28 +1542,11 @@ onMounted(loadDetail)
               <el-radio value="SERIAL">{{ t('workflow.serial') }}</el-radio>
             </el-radio-group>
           </el-form-item>
-        </template>
-        <template v-if="lifecycleDialog?.kind === 'SUPPLEMENT_SIGN'">
-          <el-form-item :label="t('workflow.supplementConfirmerLabel')">
-            <!-- V012-BUG-019：补充确认人改选择器（存 id 显示姓名） -->
-            <UserRemoteSelect
-              :model-value="csvToIds(lifecycleDialog.participants)"
-              multiple
-              :placeholder="t('workflow.pickConfirmers')"
-              style="width: 100%"
-              @update:model-value="
-                (v: number | number[] | null) => {
-                  if (!lifecycleDialog) return
-                  lifecycleDialog.participants = Array.isArray(v) ? idsToCsv(v) : ''
-                }
-              "
-            />
-          </el-form-item>
-          <el-form-item :label="t('common.description')">
-            <el-input
-              v-model="lifecycleDialog.message"
-              :placeholder="t('workflow.supplementTriggerNote')"
-            />
+          <el-form-item :label="t('workflow.signPosition')">
+            <el-radio-group v-model="lifecycleDialog.signPosition">
+              <el-radio value="BEFORE">{{ t('workflow.signBefore') }}</el-radio>
+              <el-radio value="AFTER">{{ t('workflow.signAfter') }}</el-radio>
+            </el-radio-group>
           </el-form-item>
         </template>
         <el-form-item
@@ -1223,7 +1557,14 @@ onMounted(loadDetail)
           "
           :label="t('common.remark')"
         >
-          <el-input v-model="opinionComment" :placeholder="t('notify.optionalTag')" />
+          <el-input
+            v-model="opinionComment"
+            :placeholder="
+              lifecycleDialog?.kind === 'TRANSFER'
+                ? t('common.pleaseInput')
+                : t('notify.optionalTag')
+            "
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -1250,6 +1591,183 @@ onMounted(loadDetail)
         <el-button @click="cancelDialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="cancelSubmitting" @click="submitCancelReservation">
           确认取消
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 同意申请弹窗（设计 272:1767）：560 宽 / 用户语言确认句 / 底栏 取消·确定 80×32；
+         打开后取消即关闭，不提交同意。 -->
+    <el-dialog
+      v-model="agreeDialogVisible"
+      :title="t('workflow.agreeDialogTitle')"
+      width="560px"
+      class="agree-dialog"
+      :close-on-click-modal="false"
+      data-testid="agree-dialog"
+    >
+      <p class="agree-dialog__message">{{ t('workflow.agreeDialogMessage') }}</p>
+      <template #footer>
+        <el-button :disabled="agreeSubmitting" @click="agreeDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="agreeSubmitting"
+          data-testid="agree-confirm"
+          @click="confirmAgree"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 驳回申请弹窗（设计 272:1746）：驳回原因可选，确认后直提 REJECT；560 宽 / 输入 510×32 / 底栏按钮 80×32 -->
+    <el-dialog
+      v-model="rejectDialogVisible"
+      :title="t('workflow.rejectDialogTitle')"
+      width="560px"
+      class="reject-dialog"
+      :close-on-click-modal="false"
+      data-testid="reject-dialog"
+    >
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item :label="t('workflow.rejectReasonLabel')">
+          <el-input
+            v-model="rejectReason"
+            :placeholder="t('workflow.rejectReasonPlaceholder')"
+            data-testid="reject-reason-input"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="rejectSubmitting" @click="rejectDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="rejectSubmitting"
+          data-testid="reject-confirm"
+          @click="confirmReject"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 退回申请弹窗（设计 273:2001）：退回目标选择 + 轮次说明 -->
+    <el-dialog
+      v-model="returnDialogVisible"
+      :title="t('workflow.returnDialogTitle')"
+      width="550px"
+      :close-on-click-modal="false"
+      data-testid="return-dialog"
+    >
+      <el-form label-position="top" size="small" @submit.prevent>
+        <el-form-item :label="t('workflow.returnTargetLabel')">
+          <el-select
+            v-model="returnTargetNodeId"
+            :placeholder="t('workflow.selectApprovedNode')"
+            style="width: 100%"
+            data-testid="return-target-select"
+          >
+            <el-option
+              v-for="target in returnTargets"
+              :key="target.nodeKey"
+              :label="target.taskName"
+              :value="target.nodeKey"
+            />
+          </el-select>
+          <span class="return-dialog__hint">{{ t('workflow.returnRoundHint') }}</span>
+        </el-form-item>
+        <el-form-item :label="t('workflow.returnCommentLabel')">
+          <el-input
+            v-model="returnComment"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            show-word-limit
+            data-testid="return-comment"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="returnSubmitting" @click="returnDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="returnSubmitting"
+          data-testid="return-confirm"
+          @click="confirmReturn"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 催办弹窗（设计 273:2025）：说明 + 催办留言（可空）；与转办等同构 640 宽 / 80×32 底栏 -->
+    <el-dialog
+      v-model="urgeDialogVisible"
+      :title="t('workflow.urgeDialogTitle')"
+      width="640px"
+      class="action-dialog"
+      :close-on-click-modal="false"
+      data-testid="urge-dialog"
+    >
+      <p class="urge-dialog__hint">{{ t('workflow.urgeDialogHint') }}</p>
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item
+          v-if="urgeRecipientOptions.length > 0"
+          :label="t('workflow.urgeRecipientsLabel')"
+        >
+          <el-checkbox-group v-model="urgeRecipientIds" data-testid="urge-recipients">
+            <el-checkbox v-for="user in urgeRecipientOptions" :key="user.id" :value="user.id">
+              {{ user.name }}
+            </el-checkbox>
+          </el-checkbox-group>
+          <small class="urge-dialog__hint">{{ t('workflow.urgeRecipientsHint') }}</small>
+        </el-form-item>
+        <el-form-item :label="t('workflow.urgeMessageLabel')">
+          <el-input
+            v-model="urgeMessage"
+            type="textarea"
+            :rows="3"
+            maxlength="200"
+            :placeholder="t('workflow.urgeMessagePlaceholder')"
+            data-testid="urge-message-input"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="urgeDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" data-testid="urge-confirm" @click="confirmUrge">
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 校验提示弹窗（设计 300:1808）：必填缺失清单（红条目 + 说明行） -->
+    <el-dialog
+      v-model="validationDialogVisible"
+      :title="t('workflow.validationDialogTitle')"
+      width="480px"
+      data-testid="validation-dialog"
+    >
+      <p class="validation-dialog__hint">{{ t('workflow.validationDialogHint') }}</p>
+      <ul class="validation-dialog__list">
+        <li
+          v-for="(item, index) in validationItems"
+          :key="index"
+          class="validation-dialog__item"
+          data-testid="validation-item"
+        >
+          <span class="validation-dialog__icon" aria-hidden="true">!</span>
+          <span>{{ item }}</span>
+        </li>
+      </ul>
+      <template #footer>
+        <el-button type="primary" @click="validationDialogVisible = false">
+          {{ t('common.confirm') }}
         </el-button>
       </template>
     </el-dialog>
@@ -1286,13 +1804,6 @@ onMounted(loadDetail)
   overflow: visible;
   padding: 0;
   background: transparent;
-}
-/* 与统一只读详情弹窗的区块标题同一视觉口径。 */
-.task-detail__section {
-  margin: 16px 0 8px;
-  color: var(--sw-color-primary);
-  font-size: 13px;
-  font-weight: 600;
 }
 .detail-header__arrow {
   display: inline-flex;
@@ -1347,11 +1858,6 @@ onMounted(loadDetail)
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 0;
-}
-.card-head__hint {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--sw-text-secondary);
 }
 /* 数据表单与发起页同款（V012-BUG-013）：字段名在上，值落入带边框灰底只读盒 */
 .data-rows {
@@ -1446,6 +1952,12 @@ onMounted(loadDetail)
   flex-wrap: wrap;
   margin-left: auto;
 }
+.detail-actions__more {
+  flex: 0 0 auto;
+}
+.detail-actions__more-trigger :deep(.el-icon) {
+  margin-left: 4px;
+}
 .return-config {
   display: flex;
   align-items: center;
@@ -1469,11 +1981,31 @@ onMounted(loadDetail)
   gap: 12px;
   width: 100%;
 }
+.opinion-draft-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 12px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
 .opinion-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-bottom: 0;
+}
+.opinion-field.is-invalid input,
+.opinion-field.is-invalid textarea,
+.opinion-field.is-invalid select {
+  border-color: var(--el-color-danger);
+}
+.opinion-field__error {
+  margin: 0;
+  color: var(--el-color-danger);
+  font-size: 12px;
+  line-height: 18px;
 }
 .opinion-field input,
 .opinion-field textarea,
@@ -1683,5 +2215,141 @@ onMounted(loadDetail)
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.validation-dialog__hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--sw-text-secondary, #909399);
+}
+.validation-dialog__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.validation-dialog__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #fef0f0;
+  color: #ef5d71;
+  font-size: 13px;
+}
+.validation-dialog__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-size: 11px;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.return-dialog__hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--sw-text-secondary, #909399);
+}
+.urge-dialog__hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--sw-text-secondary, #909399);
+}
+/* 设计 272:1746 驳回申请弹窗：560 宽 / 原因输入 510×32（左右内边距 25px，输入随表单整宽、
+   默认尺寸 32 高）/ 底栏 取消/确定 80×32。表单已从 small 回到默认尺寸。 */
+.task-detail :deep(.reject-dialog.el-dialog) {
+  padding: var(--el-dialog-padding-primary) 25px;
+}
+.task-detail :deep(.reject-dialog .el-dialog__footer .el-button) {
+  width: 80px;
+  height: 32px;
+}
+/* 设计 272:1767 同意申请弹窗：560 宽 / 正文 14-22 / 底栏 取消·确定 80×32。 */
+.task-detail :deep(.agree-dialog.el-dialog) {
+  padding: var(--el-dialog-padding-primary) 25px;
+}
+.task-detail :deep(.agree-dialog .el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+}
+.agree-dialog__message {
+  margin: 0;
+  color: #303133;
+  font-size: 14px;
+  line-height: 22px;
+}
+/* 设计 273:1877/1901/1925/1949/2025 生命周期动作弹窗（转办/委托/沟通/加签/催办）：
+   640 宽（左右 25 → 内容 590）/ 输入类控件 32 高（多行文本沿原行数）/
+   底栏 取消·确定 80×32；候选与选择入口沿用 UserRemoteSelect。 */
+.task-detail :deep(.action-dialog.el-dialog) {
+  padding: var(--el-dialog-padding-primary) 25px;
+}
+.task-detail :deep(.action-dialog .el-form-item__label) {
+  height: 22px;
+  line-height: 22px;
+  margin-bottom: 6px;
+}
+.task-detail :deep(.action-dialog .el-select__wrapper),
+.task-detail :deep(.action-dialog .el-input__wrapper) {
+  box-sizing: border-box;
+  min-height: 32px;
+  height: 32px;
+}
+/* Q61（273:1925）/Q65（273:2025）：沟通内容/催办留言视觉外框 32 高，长文本在框内滚动不丢值 */
+.task-detail :deep(.action-dialog .el-textarea__inner) {
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 32px;
+  padding: 5px 11px;
+  overflow-y: auto;
+}
+.task-detail :deep(.action-dialog .el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+}
+</style>
+
+<style>
+/* 设计 299:1725（Q68）更多菜单：teleport 浮层根按类定宽 192（含边框），
+   适用项 36 高、相邻步长 38（gap 2）、每项带原图标（铃/双向箭头/人员/会话/加号）。
+   EP 的 divided 语义保留在 DOM，但原图两项间无分隔线，行距由 gap 控制
+   （同批次应用卡操作菜单 app-card-op-menu 同一模式）。 */
+.detail-actions-more-popper.el-popper {
+  box-sizing: border-box;
+  width: 192px;
+  padding: 0;
+}
+.detail-actions-more-popper .el-dropdown-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+}
+.detail-actions-more-popper .el-dropdown-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 16px;
+}
+.detail-actions-more-popper .el-dropdown-menu__item .el-icon {
+  margin-right: 0;
+  font-size: 16px;
+}
+.detail-actions-more-popper .el-dropdown-menu__item--divided {
+  /* EP 的 divided 会插入一个空的分隔 li：原图两项间无可见分隔线，行距由 gap 控制，
+     分隔语义保留在 divided prop 与 DOM 标记上，display:none 保证相邻步长恒为 38。 */
+  display: none;
 }
 </style>

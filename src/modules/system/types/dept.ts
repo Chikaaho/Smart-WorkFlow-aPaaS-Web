@@ -7,6 +7,9 @@
 
 /** 部门实体（镜像 SysDept） */
 export interface SysDept {
+  tenantId?: string
+  tenantName?: string
+  tenantGroup?: boolean
   id?: string
   parentId?: string
   name: string
@@ -32,6 +35,7 @@ export interface SysDept {
  * - status：0=正常、1=停用（SYS_DEPT_STATUS）；不传 = 全部；非法值后端显式 400，前端不产生。
  */
 export interface DeptQuery {
+  tenantId?: string
   name?: string
   status?: number
 }

@@ -68,6 +68,7 @@ onMounted(() => {
   <div class="app-center">
     <AppGridToolbar
       v-model="keyword"
+      :label="t('appearance.appName')"
       :placeholder="t('form.appCenter.appSearchPlaceholder')"
       test-id="app-center-search"
     >
@@ -98,9 +99,9 @@ onMounted(() => {
 
 <style scoped>
 .app-center {
-  padding: 12px 16px 8px;
+  padding: var(--sw-space-20);
 }
 .app-center__error {
-  color: #f56c6c;
+  color: var(--sw-danger);
 }
 </style>

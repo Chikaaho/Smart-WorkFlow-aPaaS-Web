@@ -106,7 +106,7 @@ describe('DictTypeList', () => {
 
   // ─── 导航 ───
 
-  it('handleManageData navigates to /dict-data with correct query', async () => {
+  it('handleManageData navigates through the registered dictionary item route', async () => {
     mockPush.mockClear()
     const wrapper = mount(DictTypeList, { global: { stubs: minimalStubs } })
     await nextTick()
@@ -118,7 +118,7 @@ describe('DictTypeList', () => {
     await nextTick()
 
     expect(mockPush).toHaveBeenCalledWith({
-      path: '/dict-data',
+      name: 'system-dict-data',
       query: { dictCode: 'gender', dictName: '性别' },
     })
   })

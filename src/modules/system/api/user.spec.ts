@@ -149,7 +149,7 @@ describe('modules/system/api/user — 用户管理 7 个', () => {
     )
   })
 
-  // I1 契约：岗位任职为 {postId, deptId} 对象数组，API 层做 number↔string 防腐
+  // I1 契约：岗位任职为 {postId, deptId} 对象数组，API 层保留 Long 字符串
   it('getUserPosts/updateUserPosts：岗位任职含任职部门，双向防腐转换', async () => {
     mockRequest.mockResolvedValueOnce([
       { postId: 1, deptId: 2 },
@@ -166,7 +166,18 @@ describe('modules/system/api/user — 用户管理 7 个', () => {
       expect.objectContaining({
         method: 'PUT',
         url: '/system/user/1/posts',
-        data: [{ postId: 1, deptId: 2 }, { postId: 2 }],
+        data: [{ postId: '1', deptId: '2' }, { postId: '2' }],
+      }),
+    )
+  })
+  it('任职请求保留超过 JavaScript 安全整数范围的岗位和部门标识', async () => {
+    mockRequest.mockResolvedValueOnce(undefined)
+    await updateUserPosts('2113285377233043457', [
+      { postId: '2113285377233043458', deptId: '2113285377233043459' },
+    ])
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [{ postId: '2113285377233043458', deptId: '2113285377233043459' }],
       }),
     )
   })

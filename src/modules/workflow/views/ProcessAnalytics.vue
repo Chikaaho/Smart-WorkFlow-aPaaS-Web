@@ -10,12 +10,47 @@ const { t } = useI18n()
 import { ref, computed, onMounted } from 'vue'
 import { ListPagination } from '@/components/page-layout'
 import { queryAnalyticsSummary, type AnalyticsSummary } from '@/modules/workflow/api/i4'
+import { pageProcessDefs } from '@/modules/workflow/api'
 import { ApiError } from '@/foundation/request'
 
 const summary = ref<AnalyticsSummary | null>(null)
 const loading = ref(false)
 const errorMsg = ref('')
 const processDefKey = ref('')
+
+// 定义列表移出的统计卡在此承接：四项定义状态统计按真实列表聚合，超上限或缺权时留空
+const DEF_STATS_LIMIT = 1000
+const defStats = ref<{
+  total: number | null
+  published: number | null
+  draft: number | null
+  disabled: number | null
+}>({ total: null, published: null, draft: null, disabled: null })
+
+async function loadDefStats() {
+  try {
+    const page = await pageProcessDefs({ pageNum: 1, pageSize: DEF_STATS_LIMIT })
+    const counts = page.list.reduce(
+      (acc, item) => {
+        if (item.status === 'PUBLISHED') acc.published += 1
+        else if (item.status === 'DRAFT') acc.draft += 1
+        else if (item.status === 'DISABLED' || item.status === 'SUSPENDED') acc.disabled += 1
+        return acc
+      },
+      { published: 0, draft: 0, disabled: 0 },
+    )
+    const total = Number(page.total ?? page.list.length)
+    const complete = page.list.length >= total
+    defStats.value = {
+      total,
+      published: complete ? counts.published : null,
+      draft: complete ? counts.draft : null,
+      disabled: complete ? counts.disabled : null,
+    }
+  } catch {
+    defStats.value = { total: null, published: null, draft: null, disabled: null }
+  }
+}
 
 const nodeEntries = computed(() =>
   Object.entries(summary.value?.nodeStats ?? {}).map(([nodeKey, stat]) => ({ nodeKey, ...stat })),
@@ -83,7 +118,10 @@ async function loadSummary() {
   }
 }
 
-onMounted(loadSummary)
+onMounted(() => {
+  void loadSummary()
+  void loadDefStats()
+})
 </script>
 
 <template>
@@ -103,6 +141,33 @@ onMounted(loadSummary)
     </div>
 
     <el-alert v-if="errorMsg" :title="errorMsg" type="error" :closable="false" />
+
+    <el-row :gutter="16" class="stat-row">
+      <el-col :span="6"
+        ><div class="stat-card">
+          <div class="stat-value">{{ defStats.total ?? '—' }}</div>
+          <div class="stat-label">{{ t('workflow.metricTotalDefs') }}</div>
+        </div></el-col
+      >
+      <el-col :span="6"
+        ><div class="stat-card">
+          <div class="stat-value">{{ defStats.published ?? '—' }}</div>
+          <div class="stat-label">{{ t('common.statusPublished') }}</div>
+        </div></el-col
+      >
+      <el-col :span="6"
+        ><div class="stat-card">
+          <div class="stat-value">{{ defStats.draft ?? '—' }}</div>
+          <div class="stat-label">{{ t('common.statusDraft') }}</div>
+        </div></el-col
+      >
+      <el-col :span="6"
+        ><div class="stat-card">
+          <div class="stat-value">{{ defStats.disabled ?? '—' }}</div>
+          <div class="stat-label">{{ t('common.statusDisabled') }}</div>
+        </div></el-col
+      >
+    </el-row>
 
     <template v-if="summary">
       <el-row :gutter="16" class="stat-row">

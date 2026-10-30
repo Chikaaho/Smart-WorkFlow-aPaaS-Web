@@ -1,371 +1,501 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+/* global document, window, HTMLElement, MouseEvent, KeyboardEvent */
+import { computed, ref, watch, onBeforeUnmount, reactive, type CSSProperties } from 'vue'
+import sidebarGrid from '@/assets/navigation/sidebar-grid.svg'
+import sidebarDocument from '@/assets/navigation/sidebar-document.svg'
+import sidebarClock from '@/assets/navigation/sidebar-clock.svg'
+import sidebarCheck from '@/assets/navigation/sidebar-check.svg'
+import sidebarBell from '@/assets/navigation/sidebar-bell.svg'
+import sidebarEdit from '@/assets/navigation/sidebar-edit.svg'
+import { useRoute, useRouter } from 'vue-router'
 import { useMenuStore } from '@/stores/menu'
 import { resolveArea } from '@/foundation/area'
 import { visibleMenuForArea, toFullPath } from '../menu-utils'
-import { useLocalizedMenuTree } from '../menu-title'
+import { useLocalizedMenuTree, useNodeTitle } from '../menu-title'
 import { MenuType, type MenuNode } from '@/contracts/menu'
-import AppSidebarItem from './AppSidebarItem.vue'
-import iconWorkspace from '@/assets/brand/icon-workspace.png'
-import iconIntelligence from '@/assets/brand/icon-intelligence.png'
+import AppSidebarNode from './AppSidebarNode.vue'
+import { projectAdminSections } from '../admin-sections'
+import { useI18n } from '@/locales'
 
-// 侧边栏（P53 深色导航阶）：只读 menu store（单一数据源），不二次拉取。
-// 选中态与展开态随当前路由派生；只渲染当前区域（前台/后台）的菜单分支。
-const props = defineProps<{ collapse: boolean }>()
+// 0.2.0 多级侧栏（direction-sidebar-navigation-020）：
+// 展开态=左对齐菜单树（叶子/目录/弱分组标题）；收起态=最外层入口图标列＋目录右侧子树浮层。
+// 只读 menu store（单一数据源）；导航、顺序、权限沿服务端过滤后的树，不摊平不臆造父级。
+const props = defineProps<{ collapse: boolean; dark?: boolean }>()
 
 const route = useRoute()
+const router = useRouter()
 const menuStore = useMenuStore()
-void props
+const { t } = useI18n()
+const nodeTitle = useNodeTitle()
 
 const localizedMenu = useLocalizedMenuTree(computed(() => menuStore.menu))
 
 const area = computed(() => resolveArea(route.path))
+/** 视觉主题：部分管理节点（6:2）按深色导航呈现，内容/权限仍按真实 area。 */
+const tone = computed(() => (props.dark ? 'portal' : area.value))
 
-/**
- * 工作台页轻量导航（V012-BUG-004）：/workspace 下侧栏仅保留 待办/已办/草稿
- * 三个直达项（工作台固定项另渲染）。仍只读菜单单一数据源——从当前区域树中
- * 按路径平铺挑出目标页面节点，不二次拉取、不另设菜单源。
- */
+/** 工作台页轻量导航（V012-BUG-004）：/workspace 下五个直达项。 */
 const workspaceSlim = computed(() => area.value === 'portal' && route.path.startsWith('/workspace'))
-
-/**
- * 流程中心上下文（V012-BUG-006）：/workflow/*（portal 区）侧栏只渲染「流程管理」
- * 分组的子项，不再出现工作台固定项、通知分组与智能能力占位——与顶部导航分区一致。
- */
+/** 流程中心上下文（V012-BUG-006）：/workflow/* 仅流程管理分组子项。 */
 const catalogSlim = computed(() => area.value === 'portal' && route.path.startsWith('/workflow'))
-
-/**
- * 收件箱上下文（V012-BUG-008）：/notify/*（portal 区）侧栏只渲染 全部/已读/未读
- * 三个分类直达项（固定项，见模板），不渲染菜单树。
- */
+/** 收件箱上下文（V012-BUG-008）：/notify/* 仅分类直达项。 */
 const inboxSlim = computed(() => area.value === 'portal' && route.path.startsWith('/notify'))
 
 /**
- * 后台侧栏按**顶部导航分区**收敛：只渲染当前分区（与顶栏同一份菜单数据）。
- * 顶栏进入「系统管理」时，侧栏不应再出现「流程管理」等其它分区的页面。
- * 前台（portal）按页面上下文收敛：工作台页三直达项、流程中心仅流程管理分组
- * （V012-BUG-006）、收件箱仅分类项（V012-BUG-008）；其余保持原有派生。
+ * 后台侧栏按顶部导航分区收敛；前台按页面上下文收敛（V012-BUG-004/006/008）。
  */
 const items = computed(() => {
   const current = resolveArea(route.path)
-  const scoped = visibleMenuForArea(localizedMenu.value, current)
+  const areaVisible = visibleMenuForArea(localizedMenu.value, current)
+  const scoped = current === 'admin' ? projectAdminSections(areaVisible, t) : areaVisible
   if (current !== 'admin') {
-    // 工作台页轻量导航（V012-BUG-004/023）：固定本地直达项在模板渲染，树项不出现
     if (workspaceSlim.value) return []
-    // 收件箱上下文不渲染菜单树（分类项在模板固定渲染，V012-BUG-008）
     if (inboxSlim.value) return []
-    // 流程中心上下文仅流程管理分组（V012-BUG-006）
     if (catalogSlim.value) {
       const group = scoped.find((node) => toFullPath(node) === '/workflow')
       return group?.children?.length ? group.children : scoped
     }
     return scoped
   }
-  // 按「子树是否覆盖当前路由」定位分区：不能只看首段路径——
-  // 开放接口(/openapi)、文件管理(/storage) 等已并入系统管理，首段与分组路径不一致，
-  // 按首段匹配会找不到分组而回退成整棵树（表现为「点开放接口后所有分组又都展开了」）。
   const group = scoped.find((node) => subtreeContains(node, route.path))
   if (!group) return scoped
   return group.children?.length ? group.children : [group]
 })
 
-/** 节点自身或其任一后代页面路径是否覆盖当前路由（相等或为其前缀）。 */
+/** 纯展示分组标题（展开态弱化小标题；收起态隐去）：后台=当前分区名，工作台=协作分组。 */
+const adminSectionTitle = computed(() => {
+  if (area.value !== 'admin') return ''
+  return (
+    projectAdminSections(visibleMenuForArea(localizedMenu.value, 'admin'), t).find((node) =>
+      subtreeContains(node, route.path),
+    )?.title ?? ''
+  )
+})
+const groupTitle = computed(() => {
+  if (props.collapse) return ''
+  if (adminSectionTitle.value) return adminSectionTitle.value
+  if (workspaceSlim.value) return t('workflow.collaborationSection')
+  return ''
+})
+
 function subtreeContains(node: MenuNode, path: string): boolean {
   const full = toFullPath(node)
   if (path === full || path.startsWith(`${full}/`)) return true
   return (node.children ?? []).some((child) => subtreeContains(child, path))
 }
-// 深链上下文激活映射（设计节点03/27）：表单渲染→流程中心；任务详情→我的待办
+
+/** 深链激活映射（设计节点03/27）：表单渲染→流程中心；任务详情→我的待办。 */
 const activePath = computed(() => {
-  // 收件箱分类项的 index 含 query（全部/已读/未读），激活态需按 fullPath 匹配（V012-BUG-008）
   if (inboxSlim.value) return route.fullPath ?? route.path
   if (route.path.startsWith('/form/form-render/')) return '/workflow/catalog'
   if (route.path.startsWith('/workflow/task/')) return '/workflow/todo'
-  // 详情页高亮到所属菜单项（如 /form/designer/:id → 表单设计）
   return resolveAdminActive(route.path) || route.path
 })
-// 任务/数据详情帧（设计02/03/19/20）：二级激活描边为暗调 #344164，非品牌紫
-const detailFrame = computed(
-  () =>
-    route.path.startsWith('/workflow/task/') ||
-    route.path.startsWith('/workflow/my-instances') ||
-    route.path.startsWith('/workflow/todo') ||
-    route.path.startsWith('/workflow/my-cc'),
-)
-const taskDetailFrame = computed(() => route.path.startsWith('/workflow/task/'))
-// 设计（节点01/02/04）：导航分组默认全展开，保持完整可达路径可见。
-const openeds = computed(() => {
-  const keys: string[] = []
-  const walk = (nodes: ReturnType<typeof visibleMenuForArea>): void => {
-    for (const node of nodes) {
-      if (node.menuType === MenuType.DIRECTORY) keys.push(toFullPath(node))
-      if (node.children?.length) walk(node.children as ReturnType<typeof visibleMenuForArea>)
-    }
-  }
-  walk(items.value)
-  return keys
-})
 
-/** 详情页（如 /form/designer/:id、/workflow/defs/:id/design）高亮到所属菜单项。 */
+/** 详情页高亮到所属菜单项（如 /form/designer/:id → 表单设计）。 */
 function resolveAdminActive(path: string): string {
   let matched = ''
-  const walk = (nodes: ReturnType<typeof visibleMenuForArea>): void => {
+  const walk = (nodes: MenuNode[]): void => {
     for (const node of nodes) {
       const full = toFullPath(node)
       if (node.menuType === MenuType.MENU && (path === full || path.startsWith(`${full}/`))) {
         if (full.length > matched.length) matched = full
       }
-      if (node.children?.length) walk(node.children as ReturnType<typeof visibleMenuForArea>)
+      if (node.children?.length) walk(node.children as MenuNode[])
     }
   }
   walk(items.value)
   return matched
 }
+
+// ── 目录展开状态：按区域分别保留（direction：不同模块状态不串用）。
+// 组件实例作用域：侧栏在 SPA 存活期内不重挂，区域键隔离已满足；测试间天然隔离。 ──
+const expandedByArea = reactive<Record<string, Set<string>>>({})
+/** 按区域取目录展开集（懒建；写入经 reactive 记录保持响应）。 */
+function expandedSetFor(key: string): Set<string> {
+  if (!expandedByArea[key]) expandedByArea[key] = new Set<string>()
+  return expandedByArea[key]
+}
+function isExpanded(node: MenuNode): boolean {
+  return expandedSetFor(area.value).has(toFullPath(node))
+}
+function toggleDir(node: MenuNode): void {
+  const key = toFullPath(node)
+  const set = expandedSetFor(area.value)
+  if (set.has(key)) set.delete(key)
+  else set.add(key)
+}
+
+/** 深链/刷新：展开当前路径的全部祖先目录，使当前项可见。 */
+function expandAncestorsOfActive(): void {
+  const walk = (nodes: MenuNode[], ancestors: string[]): boolean => {
+    for (const node of nodes) {
+      const full = toFullPath(node)
+      if (full === activePath.value) {
+        ancestors.forEach((a) => expandedSetFor(area.value).add(a))
+        return true
+      }
+      if (node.children?.length) {
+        if (walk(node.children as MenuNode[], [...ancestors, full])) return true
+      }
+    }
+    return false
+  }
+  walk(items.value, [])
+}
+
+// ── 712:43454：收起态完整名自定义提示（x72、72×34、#111B3B、12/18、r6，随触发行居中） ──
+const hint = ref<{ text: string; top: number; left: number } | null>(null)
+function showHint(node: MenuNode, anchor: HTMLElement): void {
+  const rect = anchor.getBoundingClientRect()
+  hint.value = {
+    text: labelOf(node),
+    left: 72,
+    top: Math.max(8, Math.min(rect.top + rect.height / 2 - 17, window.innerHeight - 42)),
+  }
+}
+function hideHint(): void {
+  hint.value = null
+}
+
+// ── 收起态目录子树浮层（单实例；点击目录打开，不更换正文） ──
+const flyout = ref<{ node: MenuNode; top: number } | null>(null)
+const flyoutExpanded = ref<Set<string>>(new Set())
+const flyoutAnchorEl = ref<HTMLElement | null>(null)
+const flyoutStyle = computed((): CSSProperties => {
+  if (!flyout.value) return {}
+  const top = Math.max(8, Math.min(flyout.value.top, window.innerHeight - 24 - 320))
+  return { position: 'fixed', left: '72px', top: `${top}px` }
+})
+function openFlyout(node: MenuNode, anchor: HTMLElement): void {
+  hideHint()
+  if (flyout.value && toFullPath(flyout.value.node) === toFullPath(node)) {
+    closeFlyout()
+    return
+  }
+  const rect = anchor.getBoundingClientRect()
+  flyout.value = { node, top: rect.top }
+  flyoutAnchorEl.value = anchor
+  const seed = new Set<string>()
+  const seedActive = (nodes: MenuNode[]): boolean => {
+    for (const n of nodes) {
+      const full = toFullPath(n)
+      if (full === activePath.value) return true
+      if (n.children?.length && seedActive(n.children as MenuNode[])) {
+        seed.add(full)
+        return true
+      }
+    }
+    return false
+  }
+  seedActive((node.children ?? []) as MenuNode[])
+  flyoutExpanded.value = seed
+}
+function closeFlyout(): void {
+  flyout.value = null
+}
+function flyoutIsExpanded(node: MenuNode): boolean {
+  return flyoutExpanded.value.has(toFullPath(node))
+}
+function flyoutToggle(node: MenuNode): void {
+  const key = toFullPath(node)
+  if (flyoutExpanded.value.has(key)) flyoutExpanded.value.delete(key)
+  else flyoutExpanded.value.add(key)
+}
+function onDocumentClick(event: MouseEvent): void {
+  const target = event.target as HTMLElement
+  if (flyoutAnchorEl.value?.contains(target)) return
+  if (target.closest('.app-sidebar-flyout')) return
+  closeFlyout()
+}
+function onDocumentKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && flyout.value) {
+    closeFlyout()
+    flyoutAnchorEl.value?.focus()
+  }
+}
+watch(
+  activePath,
+  () => {
+    expandAncestorsOfActive()
+    closeFlyout()
+  },
+  { immediate: true },
+)
+watch(
+  () => props.collapse,
+  () => closeFlyout(),
+)
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', onDocumentClick)
+  document.addEventListener('keydown', onDocumentKeydown)
+  onBeforeUnmount(() => {
+    document.removeEventListener('click', onDocumentClick)
+    document.removeEventListener('keydown', onDocumentKeydown)
+  })
+}
+
+// ── 工作台固定直达项（V012-BUG-004） ──
+const workspaceFixedItems = computed(() => [
+  { path: '/workspace/todo', label: t('workflow.myTodoTitle'), icon: sidebarDocument },
+  { path: '/workspace/my-instances', label: t('common.startedByMe'), icon: sidebarClock },
+  { path: '/workspace/processed', label: t('workflow.processedNav'), icon: sidebarCheck },
+  { path: '/workspace/my-cc', label: t('router.myCc'), icon: sidebarBell },
+  { path: '/workspace/my-drafts', label: t('common.statusDraft'), icon: sidebarEdit },
+])
+function navigate(path: string): void {
+  void router.push(path)
+}
+function labelOf(node: MenuNode): string {
+  return String(nodeTitle(node) ?? '').trim()
+}
+const inboxTabs = computed(() => [
+  { path: '/notify/inbox', label: t('common.all') },
+  { path: '/notify/inbox?read=true', label: t('notify.read') },
+  { path: '/notify/inbox?read=false', label: t('notify.unread') },
+])
 </script>
 
 <template>
-  <el-menu
-    class="app-sidebar"
-    :class="[
-      `app-sidebar--${area}`,
-      {
-        'app-sidebar--detail': detailFrame,
-        'app-sidebar--task-detail': taskDetailFrame,
-        'app-sidebar--catalog': activePath.startsWith('/workflow/catalog'),
-      },
-    ]"
-    router
-    :collapse="collapse"
-    :default-active="activePath"
-    :default-openeds="openeds"
+  <nav
+    class="app-sidebar-tree"
+    :class="[`app-sidebar-tree--${tone}`, `app-sidebar--${tone}`, { 'is-collapsed': collapse }]"
+    :aria-label="t('nav.mainNav')"
   >
-    <!-- 工作台固定项：流程中心/收件箱上下文不渲染（V012-BUG-006/008） -->
-    <el-menu-item v-if="area === 'portal' && !catalogSlim && !inboxSlim" index="/workspace">
-      <img class="app-sidebar__design-icon" :src="iconWorkspace" alt="" aria-hidden="true" />
-      <template #title>{{ $t('common.workspace') }}</template>
-    </el-menu-item>
-    <!-- 工作台本地列表直达（V012-BUG-023）：待办/已办/草稿留在工作台分区，不再跳流程中心 -->
+    <!-- 纯展示分组标题：展开态弱化小标题；收起态隐去（细分隔保留分组） -->
+    <div v-if="groupTitle" class="app-sidebar-tree__group-title">{{ groupTitle }}</div>
+    <div
+      v-else-if="collapse && items.length"
+      class="app-sidebar-tree__divider"
+      aria-hidden="true"
+    />
+
+    <!-- 工作台固定项（workspaceSlim）：工作台 + 五直达 -->
     <template v-if="workspaceSlim">
-      <el-menu-item index="/workspace/todo">
-        <template #title>{{ $t('workflow.todoTasks') }}</template>
-      </el-menu-item>
-      <el-menu-item index="/workspace/processed">
-        <template #title>{{ $t('workflow.processedTasks') }}</template>
-      </el-menu-item>
-      <el-menu-item index="/workspace/my-drafts">
-        <template #title>{{ $t('workflow.myDrafts') }}</template>
-      </el-menu-item>
+      <button
+        type="button"
+        class="sb-row sb-row--leaf"
+        :class="{ 'is-active': activePath === '/workspace' }"
+        :aria-current="activePath === '/workspace' ? 'page' : undefined"
+        @click="navigate('/workspace')"
+      >
+        <span class="sb-row__slot"><img :src="sidebarGrid" alt="" class="sb-row__img" /></span>
+        <span v-if="!collapse" class="sb-row__name">{{ $t('common.workspace') }}</span>
+      </button>
+      <button
+        v-for="item in workspaceFixedItems"
+        :key="item.path"
+        type="button"
+        class="sb-row sb-row--leaf"
+        :class="{ 'is-active': activePath === item.path }"
+        :aria-current="activePath === item.path ? 'page' : undefined"
+        @click="navigate(item.path)"
+      >
+        <span class="sb-row__slot"><img :src="item.icon" alt="" class="sb-row__img" /></span>
+        <span v-if="!collapse" class="sb-row__name">{{ item.label }}</span>
+      </button>
     </template>
-    <!-- 收件箱分类直达（V012-BUG-008）：全部/已读/未读，query 驱动列表过滤 -->
+
+    <!-- 收件箱分类直达（V012-BUG-008） -->
     <template v-if="inboxSlim">
-      <el-menu-item index="/notify/inbox">
-        <template #title>{{ $t('common.all') }}</template>
-      </el-menu-item>
-      <el-menu-item index="/notify/inbox?read=true">
-        <template #title>{{ $t('notify.read') }}</template>
-      </el-menu-item>
-      <el-menu-item index="/notify/inbox?read=false">
-        <template #title>{{ $t('notify.unread') }}</template>
-      </el-menu-item>
+      <button
+        v-for="tabItem in inboxTabs"
+        :key="tabItem.path"
+        type="button"
+        class="sb-row sb-row--leaf sb-row--plain"
+        :class="{ 'is-active': activePath === tabItem.path }"
+        :aria-current="activePath === tabItem.path ? 'page' : undefined"
+        @click="navigate(tabItem.path)"
+      >
+        <span v-if="!collapse" class="sb-row__name">{{ tabItem.label }}</span>
+        <span v-else class="sb-row__char">{{ Array.from(tabItem.label)[0] }}</span>
+      </button>
     </template>
-    <AppSidebarItem
+
+    <!-- 菜单树（目录/叶子递归；收起态为图标列＋目录浮层） -->
+    <AppSidebarNode
       v-for="node in items"
       :key="node.id"
       :node="node"
-      :task-detail="taskDetailFrame"
+      :depth="0"
+      :collapse="collapse"
+      :active-path="activePath"
+      :is-expanded="isExpanded"
+      :toggle-dir="toggleDir"
+      :open-flyout="openFlyout"
+      :flyout-dir-path="flyout ? toFullPath(flyout.node) : undefined"
+      :show-hint="showHint"
+      :hide-hint="hideHint"
     />
-    <div
-      v-if="area === 'portal' && !workspaceSlim && !catalogSlim && !inboxSlim"
-      class="app-sidebar__design-extra"
-      aria-hidden="true"
-    >
-      <img class="app-sidebar__design-icon" :src="iconIntelligence" alt="" aria-hidden="true" />
-      <span class="app-sidebar__design-extra-label" style="margin-left: 2px">
-        {{ $t('nav.intelligenceSuite') }}
-      </span>
-    </div>
-  </el-menu>
+
+    <!-- 712:43454：收起态完整名自定义提示（深色浮签，随触发行居中） -->
+    <teleport to="body">
+      <div
+        v-if="hint && collapse"
+        class="app-sidebar-hint"
+        :style="{ left: hint.left + 'px', top: hint.top + 'px' }"
+        role="tooltip"
+      >
+        {{ hint.text }}
+      </div>
+    </teleport>
+
+    <!-- 收起态目录子树浮层（单实例；256px；距侧栏 8px；子树内滚动） -->
+    <teleport to="body">
+      <div
+        v-if="flyout"
+        class="app-sidebar-flyout"
+        :class="[`app-sidebar-flyout--${tone}`, { 'app-sidebar--admin': tone === 'admin' }]"
+        :style="flyoutStyle"
+        role="menu"
+        :aria-label="labelOf(flyout.node)"
+      >
+        <div class="app-sidebar-flyout__header">{{ labelOf(flyout.node) }}</div>
+        <div class="app-sidebar-flyout__body">
+          <AppSidebarNode
+            v-for="child in (flyout.node.children ?? []) as MenuNode[]"
+            :key="child.id"
+            :node="child"
+            :depth="0"
+            :collapse="false"
+            :active-path="activePath"
+            :is-expanded="flyoutIsExpanded"
+            :toggle-dir="flyoutToggle"
+            :open-flyout="() => undefined"
+          />
+        </div>
+      </div>
+    </teleport>
+  </nav>
 </template>
 
 <style scoped>
-.app-sidebar {
-  --el-menu-bg-color: transparent;
-  --sw-nav-text-secondary: #c9d1e8;
-  --el-menu-text-color: var(--sw-nav-text-secondary);
-  --el-menu-hover-text-color: var(--sw-nav-text);
-  --el-menu-hover-bg-color: var(--sw-nav-hover-bg);
-  --el-menu-active-color: var(--sw-nav-text);
-  --el-menu-border-color: transparent;
-  /* 设计（节点02）：侧栏导航 x=12 起、项高 40、顶部留 18px */
-  --el-menu-item-height: 40px;
-  --el-menu-base-level-padding: 13px;
-  padding-top: 18px;
-  border-right: none;
-}
-.app-sidebar--portal {
-  --sw-nav-subitem-active-bg: #29235c;
-}
-.app-sidebar--detail {
-  --sw-nav-subitem-active-bg: #29235c;
-}
-.app-sidebar--catalog {
-  --sw-nav-subitem-active-bg: #282052;
-  --sw-nav-text-secondary: #c8d0e0;
-}
-.app-sidebar--portal :deep(.el-menu--inline > .el-menu-item:nth-child(2)) {
-  transform: translateY(1px);
-}
-.app-sidebar--portal :deep(.el-menu--inline > .el-menu-item:nth-child(3)) {
-  transform: translateY(2px);
-}
-.app-sidebar--portal :deep(.el-menu--inline > .el-menu-item:nth-child(4)) {
-  transform: translateY(3px);
-}
-.app-sidebar:not(.el-menu--collapse) {
+.app-sidebar-tree {
+  display: block;
   width: 100%;
+  color: var(--sw-nav-text-secondary, #c9d1e8);
 }
-/* 一级项与组标题：整行可选区（V012-BUG-005 去边框），左右 12px 边距；图标 20 + 12px 文距 */
-.app-sidebar :deep(> .el-menu-item),
-.app-sidebar :deep(> .el-sub-menu > .el-sub-menu__title) {
-  height: 40px;
-  line-height: 18px;
-  margin: 0 12px;
-  border: none;
-  border-radius: var(--sw-radius-base);
+.app-sidebar-tree__group-title {
+  box-sizing: border-box;
+  padding: 17px 13px 10px;
+  font-size: 12px;
+  color: var(--sw-nav-text-secondary, #c9d1e8);
+  user-select: none;
 }
-.app-sidebar :deep(> .el-menu-item .el-icon),
-.app-sidebar :deep(> .el-sub-menu > .el-sub-menu__title .el-icon) {
-  width: 20px;
-  height: 20px;
-  font-size: 20px;
-  margin-right: 12px;
-  color: var(--sw-nav-text-secondary);
+.app-sidebar--admin .app-sidebar-tree__group-title,
+.app-sidebar-tree--admin .app-sidebar-tree__group-title {
+  color: var(--sw-text-secondary, #909399);
 }
-/* 设计（节点02）：组展开箭头为固定向下 chevron（不随展开态旋转），右缘 12px */
-.app-sidebar :deep(.el-sub-menu__icon-arrow) {
-  display: none;
+.app-sidebar-tree__divider {
+  height: 1px;
+  margin: 8px 10px;
+  background: currentColor;
+  opacity: 0.12;
 }
-.app-sidebar :deep(> .el-sub-menu > .el-sub-menu__title) {
-  position: relative;
-}
-.app-sidebar :deep(> .el-sub-menu > .el-sub-menu__title)::after {
-  content: '';
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  width: 16px;
-  height: 16px;
-  transform: translateY(-50%);
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6L8 10L12 6' stroke='%238690AE' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-    no-repeat center / contain;
-}
-.app-sidebar :deep(.app-sidebar__design-icon) {
-  flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  margin-right: 12px;
-}
-.app-sidebar :deep(.el-menu-item > span),
-.app-sidebar :deep(.el-sub-menu__title > span),
-.app-sidebar__design-extra-label {
-  position: relative;
-  top: -1.5px;
-}
-/* 设计（节点02）：一级项之间 12px 间隔 */
-.app-sidebar :deep(> .el-menu-item) {
-  margin-bottom: 12px;
-}
-.app-sidebar :deep(.el-menu-item.is-active) {
-  background: var(--sw-color-primary);
-  color: #ffffff;
-  font-weight: 500;
-}
-/* 设计（节点04）：二级子项激活块为深紫蓝 #29235C，顶级激活保持品牌紫（V012-BUG-005 去描边） */
-.app-sidebar :deep(.el-menu--inline .el-menu-item.is-active) {
-  background: var(--sw-nav-subitem-active-bg);
-}
-.app-sidebar--task-detail :deep(.el-menu--inline .el-menu-item > span) {
-  top: -1.5px;
-}
-.app-sidebar--task-detail :deep(.el-menu--inline .el-menu-item) {
-  line-height: 17px !important;
-}
-/* 设计（节点02）：二级子项为整行可选区（36px 高、左 48/右 12 对齐、2px 间隔、无图标；V012-BUG-005 去描边） */
-.app-sidebar :deep(.el-menu--inline) {
-  position: relative;
-  background: transparent;
-  width: 100%;
-  padding: 3px 0 13px;
-}
-.app-sidebar :deep(.el-menu--inline)::before {
-  content: '';
-  position: absolute;
-  left: 36px;
-  top: 2px;
-  bottom: 21px;
-  width: 1px;
-  background: #354164;
-}
-.app-sidebar :deep(.el-menu--inline .el-menu-item) {
-  height: 36px;
-  line-height: 17px;
-  margin: 1px 12px 1px 48px;
-  padding-left: 17px;
-  border-radius: var(--sw-radius-base);
-}
-.app-sidebar :deep(.el-menu--inline .el-menu-item .el-icon) {
-  display: none;
-}
-.app-sidebar :deep(.el-menu-item:hover),
-.app-sidebar :deep(.el-sub-menu__title:hover) {
-  background: var(--sw-nav-hover-bg);
-}
-/* 设计（节点02）：智能能力折叠组占位（前台常驻标脚，非交互装饰；V012-BUG-005 去边框） */
-.app-sidebar__design-extra {
+/* 工作台/收件箱固定行（与树行同几何；图标行与树同一左对齐线 x24→名称 x58） */
+.sb-row {
   display: flex;
   align-items: center;
+  gap: 10px;
   box-sizing: border-box;
+  width: 100%;
   height: 40px;
-  transform: translateY(3px);
-  margin: 0 12px;
-  padding: 0 0 0 13px;
-  border-radius: var(--sw-radius-base);
-  color: #c9d1e8;
+  margin-bottom: 4px;
+  padding: 0 24px;
+  border: 0;
+  background: transparent;
+  color: inherit;
   font-size: 14px;
+  text-align: left;
+  cursor: pointer;
 }
-.app-sidebar__design-extra-icon {
-  color: var(--sw-nav-text-secondary);
+/* 纯文字直达行（收件箱分类）无图标槽，保持原文字起点，不并入图标对齐线 */
+.sb-row--plain {
+  padding: 0 13px;
 }
-
-.app-sidebar__design-extra::after {
-  content: '';
-  margin-left: auto;
-  margin-right: 13px;
-  width: 16px;
-  height: 16px;
-  transform: rotate(-90deg);
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6L8 10L12 6' stroke='%238690AE' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-    no-repeat center / contain;
+.sb-row:hover {
+  background: var(--sw-nav-hover-bg, rgba(255, 255, 255, 0.08));
+  color: var(--sw-nav-text, #e8ecf6);
 }
-/* 设计（节点04）：后台权限说明注脚（后台常驻） */
-.app-sidebar__design-note {
-  /* 设计（节点04）：辅助说明 x=20 */
-  margin: 10px 12px 0 20px;
-  color: var(--sw-nav-text-secondary);
+.app-sidebar-tree--admin .sb-row:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--sw-text-primary, #303133);
+}
+.sb-row--leaf.is-active {
+  box-sizing: border-box;
+  width: calc(100% - 24px);
+  margin: 0 12px 4px;
+  padding-left: 12px;
+  border-radius: 8px;
+  background: var(--sw-color-primary);
+  color: #ffffff;
+  box-shadow: none;
+}
+.app-sidebar-tree--admin .sb-row--leaf.is-active {
+  color: var(--sw-text-primary, #303133);
+}
+.sb-row__slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+}
+.sb-row__img {
+  width: 18px;
+  height: 18px;
+}
+.sb-row__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-row__char {
+  font-size: 14px;
+  font-weight: 600;
+}
+/* 712:43454：收起态完整名提示（x72、12/18 字、左右12/上下8、r6、#111B3B） */
+.app-sidebar-hint {
+  position: fixed;
+  z-index: 2100;
+  box-sizing: border-box;
+  max-width: 260px;
+  padding: 8px 12px;
+  background: #111b3b;
+  color: #fff;
   font-size: 12px;
+  line-height: 18px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+  pointer-events: none;
 }
-/* 设计（节点04）：管理端侧栏变体——组/子项贴右缘 224，子项 176×36 连排，组间 12（V012-BUG-005 去边框） */
-.app-sidebar--admin :deep(> .el-sub-menu > .el-sub-menu__title) {
-  width: 212px;
-  margin: 0 0 0 12px;
+/* 收起态目录子树浮层 */
+.app-sidebar-flyout {
+  z-index: 2000;
+  box-sizing: border-box;
+  width: 256px;
+  max-height: calc(100vh - 24px);
+  /* 710:43009（执行提示18）：同两子项外高 141，内部垂直留白收回 5 */
+  padding: 7px 0;
+  overflow-y: auto;
+  background: var(--sw-bg-color, #fff);
+  border: 1px solid var(--sw-border-color, #dcdfe6);
+  border-radius: var(--sw-radius-base, 6px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
-
-.app-sidebar--admin :deep(.el-menu--inline) {
-  padding: 4px 0 12px;
+/* 710:43009（执行提示18）：标题 14/22/500/#172033 保持，行高与步长不变 */
+.app-sidebar-flyout__header {
+  padding: 6px 14px 6px;
+  color: #172033;
+  font-family: 'Noto Sans SC', inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
 }
-.app-sidebar--admin :deep(.el-menu--inline .el-menu-item) {
-  width: 176px;
-  margin: 0 0 0 48px;
+.app-sidebar-flyout__body {
+  padding-bottom: 3px;
 }
 </style>

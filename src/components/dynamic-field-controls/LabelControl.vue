@@ -27,7 +27,9 @@ const styleVars = computed<Record<string, string>>(() => {
 </script>
 
 <template>
-  <div class="label-control" :style="styleVars">{{ text }}</div>
+  <div class="label-control" :class="{ 'label-control--readonly': readonly }" :style="styleVars">
+    {{ text }}
+  </div>
 </template>
 
 <style scoped>
@@ -38,5 +40,8 @@ const styleVars = computed<Record<string, string>>(() => {
   line-height: 1.6;
   color: var(--sw-text-regular, #303a55);
   word-break: break-word;
+}
+.label-control--readonly {
+  color: var(--sw-text-primary);
 }
 </style>

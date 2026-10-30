@@ -388,6 +388,21 @@ describe('StandardFormTemplate', () => {
 describe('StandardListTemplate', () => {
   const baseProps = { total: 100, pageNum: 1, pageSize: 10 }
 
+  it('design card keeps a single pagination control and forwards page changes', async () => {
+    const wrapper = mount(StandardListTemplate, {
+      props: { ...baseProps, appearance: 'design' },
+      global: { stubs: { ElPagination: { template: '<div class="el-pagination" />' } } },
+    })
+    const pager = wrapper.findComponent(ListPagination)
+    expect(wrapper.findAllComponents(ListPagination)).toHaveLength(1)
+    expect(wrapper.find('.list-table .list-pagination').exists()).toBe(true)
+    expect(pager.text()).toContain('共 100 条记录')
+    await pager.vm.$emit('update:pageNum', 3)
+    await pager.vm.$emit('update:pageSize', 20)
+    expect(wrapper.emitted('update:pageNum')).toEqual([[3]])
+    expect(wrapper.emitted('update:pageSize')).toEqual([[20]])
+  })
+
   it('empty=true → 表头仍在（0.1.7 #7：空列表保留表头，不再整表换 ListEmpty）', () => {
     const wrapper = mount(StandardListTemplate, {
       props: { ...baseProps, empty: true },
@@ -557,6 +572,41 @@ describe('ListActionsColumn', () => {
     })
     expect(wrapper.findAll('.stub-btn')).toHaveLength(3)
     expect(wrapper.find('.stub-dropdown').exists()).toBe(false)
+  })
+
+  it('窄列保留查看与更多，隐藏动作不进入菜单，菜单仍执行原动作', async () => {
+    const supplement = vi.fn()
+    const wrapper = mount(ListActionsColumn, {
+      props: {
+        inlineLimit: 1,
+        actions: () => [
+          { key: 'view', label: '查看', onClick: vi.fn() },
+          { key: 'hidden', label: '无权动作', visible: false, onClick: vi.fn() },
+          { key: 'supplement', label: '补签', onClick: supplement },
+        ],
+      },
+      global: {
+        stubs: {
+          'el-table-column': { template: '<div><slot name="default" :row="{}" /></div>' },
+          'el-button': { template: '<button class="stub-btn"><slot /></button>' },
+          'el-dropdown': {
+            name: 'ActionMenuStub',
+            template: '<div class="stub-dropdown"><slot/><slot name="dropdown"/></div>',
+            emits: ['command'],
+          },
+          'el-dropdown-menu': { template: '<div><slot/></div>' },
+          'el-dropdown-item': {
+            template: '<div class="stub-item"><slot/></div>',
+            props: ['command'],
+          },
+        },
+      },
+    })
+    expect(wrapper.findAll('.stub-btn').map((b) => b.text())).toEqual(['查看', '更多'])
+    expect(wrapper.findAll('.stub-item').map((b) => b.text())).toEqual(['补签'])
+    wrapper.findComponent({ name: 'ActionMenuStub' }).vm.$emit('command', 'supplement')
+    await wrapper.vm.$nextTick()
+    expect(supplement).toHaveBeenCalledOnce()
   })
 
   it('testId 透传到操作按钮，便于页面回归定位', () => {

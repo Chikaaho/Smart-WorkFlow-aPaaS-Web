@@ -1,163 +1,409 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
+import { ArrowDown, ArrowUp, Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '@/locales'
-
-const { t } = useI18n()
-/**
- * 子表盖层子画布 —— 编辑子表字段的内部字段。
- *
- * 盖满设计区、盖在主画布之上（主画布在底下、本盖层独占交互）。复用主画布那整套机制
- * （控件库 / 画布 / 六类配置面板 / 列名校验 / 字段类型注册表），但作用在「这个子表的
- * 内部字段」这个**独立上下文**：
- *  - 状态独立：子画布的 items / 选中项与主画布严格隔离（本组件 v-if 挂载，每次打开从
- *    subFields 重新播种；主画布的 items / selectedId 引用不被触碰）。
- *  - 控件库只露通用数据字段（ALLOWED_SUBFIELD_TYPES，P63 起含 USER/DEPT），
- *    硬挡 REFERENCE / TABLE 进子表（防递归）。
- *  - 列名查重范围 = **当前子表内部的子字段们**（独立物理子表，列名空间与主表、与别的
- *    子表隔离）；existing-names / other-names 全取自子画布 items，不掺主表字段。
- *  - 拖放 group 用独立名 'designer-subfields'，与主画布 'designer-fields' 互不串。
- *
- * 返回时把子画布 items 转回 TableSubField[] 抛给宿主写回该子表字段的 subFields。
- */
-import { ref, computed } from 'vue'
-import { ArrowLeft } from '@element-plus/icons-vue'
-import FieldPalette from './FieldPalette.vue'
-import DesignerCanvas from './DesignerCanvas.vue'
 import FieldConfigPanel from './FieldConfigPanel.vue'
 import { applyFieldPatch, type FieldPatch } from './field-config'
-import { subFieldsToItems, itemsToSubFields, ALLOWED_SUBFIELD_TYPES } from './subfield-convert'
-import type { DesignerItem } from './types'
+import { itemsToSubFields, subFieldsToItems, type AllowedSubFieldType } from './subfield-convert'
+import { nextDesignerItemId, type DesignerItem } from './types'
 import type { TableSubField } from '@/contracts/form-schema'
 
 const props = withDefaults(
   defineProps<{
-    /** 正在编辑的子表标签（盖层标题展示）。 */
     tableLabel: string
-    /** 子表当前子字段，作为盖层初始播种数据源。 */
     subFields: readonly TableSubField[]
-    /** 已发布表单：子画布全程只读（拖入/排序/删除/配置全禁）。 */
     readonly?: boolean
   }>(),
   { readonly: false },
 )
 
 const emit = defineEmits<{
-  /** 返回主画布；携带最新子字段供宿主写回该子表字段的 subFields。 */
   close: [subFields: TableSubField[]]
 }>()
 
-/* ── 独立子画布状态（与主画布互不串；组件 v-if 挂载，每次打开 setup 重跑即重新播种） ── */
-const subItems = ref<DesignerItem[]>(subFieldsToItems(props.subFields))
-const subSelectedId = ref<string | null>(null)
+const { t } = useI18n()
+const working = ref<TableSubField[]>(props.subFields.map(cloneSubField))
+const configVisible = ref(false)
+const editingIndex = ref<number | null>(null)
+const configItem = ref<DesignerItem | null>(null)
+const configTitle = computed(() => {
+  if (!configItem.value) return t('form.subFieldConfigure')
+  const action = editingIndex.value === -1 ? t('form.subFieldAdd') : t('form.subFieldConfigure')
+  return `${action} · ${configItem.value.field.label || configItem.value.field.name}`
+})
 
-/* 列名查重范围严格限子表内部：取自子画布 items，不掺主表。 */
-const existingNames = computed(() => subItems.value.map((it) => it.field.name))
-const selectedItem = computed(
-  () => subItems.value.find((it) => it.id === subSelectedId.value) ?? null,
-)
+const TYPE_LABELS: Record<AllowedSubFieldType, string> = {
+  TEXT: 'fieldTypeText',
+  RICH_TEXT: 'fieldTypeRichText',
+  NUMBER: 'fieldTypeNumber',
+  DATE: 'fieldTypeDate',
+  BOOL: 'fieldTypeSwitch',
+  DICT: 'fieldTypeDict',
+  USER: 'fieldTypeUser',
+  DEPT: 'fieldTypeDept',
+}
+
 const otherNames = computed(() =>
-  subItems.value.filter((it) => it.id !== subSelectedId.value).map((it) => it.field.name),
+  working.value.filter((_, index) => index !== editingIndex.value).map((field) => field.name),
 )
 
-/** 子画布控件库点击添加：与主画布共享默认字段形态，但状态只写入子表上下文。 */
-function addPaletteItem(item: DesignerItem) {
+function cloneSubField(field: TableSubField): TableSubField {
+  return JSON.parse(JSON.stringify(field)) as TableSubField
+}
+
+function typeLabel(field: TableSubField): string {
+  if (!(field.type in TYPE_LABELS)) return field.type
+  return t(`form.${TYPE_LABELS[field.type as AllowedSubFieldType]}`)
+}
+
+function typeLabelRow(raw: unknown): string {
+  return typeLabel(raw as TableSubField)
+}
+
+function uniqueName(): string {
+  const names = new Set(working.value.map((field) => field.name))
+  let index = working.value.length + 1
+  while (names.has(`field_${index}`)) index += 1
+  return `field_${index}`
+}
+
+function openAdd(): void {
   if (props.readonly) return
-  subItems.value.push(item)
-  subSelectedId.value = item.id
+  const name = uniqueName()
+  configItem.value = {
+    id: nextDesignerItemId(),
+    field: {
+      name,
+      type: 'TEXT',
+      label: t('form.fieldDefaultLabel', { count: working.value.length + 1 }),
+      required: false,
+    },
+  }
+  editingIndex.value = -1
+  configVisible.value = true
 }
 
-/** 组件库拖拽中的待插入子字段：盖层画布据此渲染落点真实预览。 */
-const draggingSubItem = ref<DesignerItem | null>(null)
-
-function startPaletteDrag(item: DesignerItem) {
+function openConfig(index: number): void {
   if (props.readonly) return
-  draggingSubItem.value = item
+  const [item] = subFieldsToItems([working.value[index]])
+  configItem.value = item ?? null
+  editingIndex.value = index
+  configVisible.value = Boolean(item)
 }
 
-/** 放置落点确认：把候选子字段插到画布算出的下标（流式顺序，不做自由定位）。 */
-function addDroppedItem(item: DesignerItem, index: number) {
-  draggingSubItem.value = null
+function patchConfig(patch: FieldPatch): void {
+  if (configItem.value) applyFieldPatch(configItem.value.field, patch)
+}
+
+function saveConfig(): void {
+  if (!configItem.value) return
+  const field = itemsToSubFields([configItem.value])[0]
+  if (!field) {
+    ElMessage.warning(t('form.subFieldTypeInvalid'))
+    return
+  }
+  const name = field.name.trim()
+  if (!name) {
+    ElMessage.warning(t('form.fieldNameRequired'))
+    return
+  }
+  if (otherNames.value.includes(name)) {
+    ElMessage.warning(t('form.fieldNameDuplicate'))
+    return
+  }
+  field.name = name
+  if (editingIndex.value === -1) working.value.push(field)
+  else if (editingIndex.value !== null) working.value.splice(editingIndex.value, 1, field)
+  configVisible.value = false
+  configItem.value = null
+  editingIndex.value = null
+}
+
+function cancelConfig(): void {
+  configVisible.value = false
+  configItem.value = null
+  editingIndex.value = null
+}
+
+function moveField(index: number, offset: number): void {
   if (props.readonly) return
-  const at = Math.min(Math.max(index, 0), subItems.value.length)
-  subItems.value.splice(at, 0, item)
-  subSelectedId.value = item.id
+  const next = index + offset
+  if (next < 0 || next >= working.value.length) return
+  const [field] = working.value.splice(index, 1)
+  if (field) working.value.splice(next, 0, field)
 }
 
-/** 配置面板回写：就地把补丁合并进选中子字段（单一数据源，复用主画布同一条路径）。 */
-function patchSelected(patch: FieldPatch) {
-  const item = subItems.value.find((it) => it.id === subSelectedId.value)
-  if (item) applyFieldPatch(item.field, patch)
+/** 必填勾选：沿用字段已有的 required 语义，仅改本地工作副本。 */
+function toggleRequired(raw: unknown, value: boolean | string | number): void {
+  if (props.readonly) return
+  const field = raw as TableSubField
+  field.required = value === true
 }
 
-/** 返回主画布：把子画布 items 转回 subFields 抛给宿主写回。 */
-function back() {
-  emit('close', itemsToSubFields(subItems.value))
+async function removeField(index: number): Promise<void> {
+  if (props.readonly) return
+  const field = working.value[index]
+  if (!field) return
+  try {
+    await ElMessageBox.confirm(
+      t('form.subFieldDeleteConfirm', { name: field.label || field.name }),
+      t('form.subFieldDeleteTitle'),
+      {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+  working.value.splice(index, 1)
+}
+
+function confirmFields(): void {
+  emit('close', working.value.map(cloneSubField))
+}
+
+function cancel(): void {
+  emit('close', props.subFields.map(cloneSubField))
 }
 </script>
 
 <template>
-  <div class="sub-designer">
-    <header class="sub-designer__header">
-      <el-button class="sub-designer__back" :icon="ArrowLeft" link @click="back">{{
-        t('common.back')
-      }}</el-button>
-      <span class="sub-designer__title">{{ t('form.subFieldEditorTitle', { tableLabel }) }}</span>
-    </header>
+  <el-dialog
+    :model-value="true"
+    append-to-body
+    class="subfield-dialog"
+    align-center
+    width="1120px"
+    :close-on-click-modal="false"
+    :show-close="true"
+    @update:model-value="(value: boolean) => !value && cancel()"
+  >
+    <template #header>
+      <h2 class="subfield-dialog__title">{{ t('form.subFieldEditorTitle', { tableLabel }) }}</h2>
+    </template>
 
-    <div class="sub-designer__body">
-      <FieldPalette
-        :existing-names="existingNames"
-        :allowed-types="ALLOWED_SUBFIELD_TYPES"
-        :disabled="readonly"
-        @add="addPaletteItem"
-        @drag-start="startPaletteDrag"
-        @drag-end="draggingSubItem = null"
-      />
-      <DesignerCanvas
-        v-model:items="subItems"
-        v-model:selected-id="subSelectedId"
-        group="designer-subfields"
-        :readonly="readonly"
-        :pending-item="draggingSubItem"
-        @add="addDroppedItem"
-      />
-      <FieldConfigPanel
-        :field="selectedItem"
-        :other-names="otherNames"
-        :readonly="readonly"
-        :subfield="true"
-        @update="patchSelected"
-      />
+    <div class="subfield-dialog__toolbar">
+      <span class="subfield-dialog__table-label">{{ tableLabel }}</span>
+      <span class="subfield-dialog__count">{{
+        t('form.subFieldCountLabel', { count: working.length })
+      }}</span>
+      <el-button class="subfield-dialog__add" type="primary" :disabled="readonly" @click="openAdd">
+        {{ t('form.subFieldAdd') }}
+      </el-button>
     </div>
-  </div>
+
+    <el-table :data="working" max-height="560">
+      <el-table-column :label="t('form.subFieldName')" min-width="560">
+        <template #default="{ row }">
+          <div class="subfield-dialog__name">
+            <strong>{{ row.label || row.name }}</strong>
+            <span>{{ row.name }}</span>
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('form.subFieldComponent')" min-width="260">
+        <template #default="{ row }">{{ typeLabelRow(row) }}</template>
+      </el-table-column>
+      <el-table-column :label="t('form.subFieldRequired')" min-width="130">
+        <template #default="{ row }">
+          <el-checkbox
+            class="subfield-dialog__required"
+            :model-value="row.required === true"
+            :disabled="readonly"
+            @update:model-value="(value: boolean | string | number) => toggleRequired(row, value)"
+          />
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('common.actions')" min-width="120">
+        <template #default="{ $index }">
+          <el-button
+            link
+            :icon="ArrowUp"
+            :disabled="readonly || $index === 0"
+            :aria-label="t('form.moveUp')"
+            @click="moveField($index, -1)"
+          />
+          <el-button
+            link
+            :icon="ArrowDown"
+            :disabled="readonly || $index === working.length - 1"
+            :aria-label="t('form.moveDown')"
+            @click="moveField($index, 1)"
+          />
+          <el-button link type="primary" :disabled="readonly" @click="openConfig($index)">
+            {{ t('form.subFieldConfigure') }}
+          </el-button>
+          <el-button
+            link
+            type="danger"
+            :icon="Delete"
+            :disabled="readonly"
+            :aria-label="t('common.delete')"
+            @click="removeField($index)"
+          />
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <template #footer>
+      <el-button @click="cancel">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="confirmFields">{{ t('common.confirm') }}</el-button>
+    </template>
+  </el-dialog>
+
+  <el-dialog
+    v-model="configVisible"
+    append-to-body
+    class="subfield-config-dialog"
+    width="760px"
+    :title="configTitle"
+    :close-on-click-modal="false"
+  >
+    <FieldConfigPanel
+      :field="configItem"
+      :other-names="otherNames"
+      :readonly="readonly"
+      :subfield="true"
+      @update="patchConfig"
+    />
+    <template #footer>
+      <el-button @click="cancelConfig">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="saveConfig">{{ t('common.confirm') }}</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
-.sub-designer {
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  background: #fff;
+.subfield-dialog__title {
+  margin: 0;
+  color: var(--sw-text-primary);
+  font-size: 16px;
+  font-weight: 600;
 }
-
-.sub-designer__header {
+.subfield-dialog__toolbar {
   display: flex;
   align-items: center;
-  gap: var(--sw-space-12);
-  padding: var(--sw-space-12) var(--sw-space-24);
-  border-bottom: 1px solid var(--sw-border-light);
+  gap: 12px;
+  margin-bottom: 12px;
 }
-
-.sub-designer__title {
-  font-size: var(--sw-font-h2);
-  font-weight: var(--sw-font-weight-h2);
+.subfield-dialog__table-label {
   color: var(--sw-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
 }
-
-.sub-designer__body {
+.subfield-dialog__count {
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+.subfield-dialog__add {
+  width: 80px;
+  margin-left: auto;
+  padding: 0 8px;
+}
+.subfield-dialog__name {
   display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
+  align-items: center;
+  gap: var(--sw-space-8);
+}
+.subfield-dialog__name strong {
+  font-weight: 500;
+}
+.subfield-dialog__name span {
+  color: var(--sw-text-secondary);
+  font-size: var(--sw-font-caption);
+}
+</style>
+
+<style>
+.subfield-dialog.el-dialog,
+.subfield-config-dialog.el-dialog {
+  --el-dialog-padding-primary: 0px;
+  border-radius: var(--sw-radius-card);
+  padding: 0;
+}
+/* 273:1396（执行提示13）：正文/表 x425..1495（w1070）、标题 x425、取消 x1327/确定 x1415。 */
+.subfield-dialog .el-dialog__header {
+  padding: 28px 25px 12px;
+}
+.subfield-dialog .el-dialog__title,
+.subfield-dialog .subfield-dialog__title {
+  padding: 0;
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--sw-text-primary, #1f2a44);
+}
+.subfield-dialog .el-table .cell {
+  white-space: nowrap;
+}
+.subfield-dialog .el-table__cell .el-button + .el-button {
+  margin-left: 6px;
+}
+/* 273:1396：标题独立、工具行、表头42/行45、左右内距24、右下 80×32。 */
+.subfield-dialog .el-dialog__body {
+  padding: 0 25px 4px;
+}
+/* 273:1463：表头34、行48；必填列以18×18勾选呈现（全局 tokens 把 checkbox 放大到28，需此处覆盖）。 */
+.subfield-dialog .el-table th.el-table__cell {
+  height: 34px;
+  padding: 0;
+  background: #f5f7fb;
+}
+.subfield-dialog .el-table th.el-table__cell > .cell {
+  text-align: left;
+}
+.subfield-dialog .el-table td.el-table__cell > .cell {
+  text-align: left;
+}
+/* 273:1396（执行提示14）：首列文字与原图约 443 左锚（表 x425 + 18） */
+.subfield-dialog .el-table .el-table__cell:first-child .cell {
+  padding-left: 18px;
+}
+/* 273:1396（执行提示15）：tbody 组件类型/必填值文字较原图偏右 8px——仅这两列正文内距 -8（表头/首列/操作区不动） */
+.subfield-dialog .el-table tbody .el-table__cell:nth-child(2) .cell,
+.subfield-dialog .el-table tbody .el-table__cell:nth-child(3) .cell {
+  padding-left: 4px;
+}
+.subfield-dialog .el-table td.el-table__cell {
+  height: 48px;
+}
+/* 必填列：18×18 勾选；tokens.css 的全局 28px 规则带 !important，这里用更高选择器优先级覆盖。 */
+.subfield-dialog .subfield-dialog__required {
+  height: 18px;
+  margin-right: 0;
+}
+.subfield-dialog .subfield-dialog__required .el-checkbox__inner {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 2px;
+}
+.subfield-dialog .subfield-dialog__required .el-checkbox__inner::after {
+  top: 2px;
+  left: 5px;
+  width: 4px;
+  height: 8px;
+  border-width: 2px;
+}
+.subfield-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 25px 20px;
+}
+.subfield-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+.subfield-config-dialog .el-dialog__body {
+  max-height: min(660px, calc(100vh - 180px));
+  overflow: auto;
 }
 </style>

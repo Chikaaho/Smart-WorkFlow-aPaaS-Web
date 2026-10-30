@@ -77,6 +77,7 @@ const mockDetail: AgentToolExternalConfig = {
   description: '网络搜索',
   url: 'https://api.search.com/v1/search',
   httpMethod: 'POST',
+  effectScope: 'QUERY',
   timeoutSeconds: 30,
   inputSchema: '{"type":"object","properties":{"query":{"type":"string"}}}',
   enabled: true,
@@ -262,6 +263,7 @@ describe('ExternalToolFormDialog.vue', () => {
         description: string
         url: string
         httpMethod: string
+        effectScope: string
         timeoutSeconds: number
         inputSchema: string
         enabled: boolean
@@ -273,6 +275,7 @@ describe('ExternalToolFormDialog.vue', () => {
     vm.form.description = 'API 调用'
     vm.form.url = 'https://api.example.com/call'
     vm.form.httpMethod = 'GET'
+    vm.form.effectScope = 'QUERY'
     vm.form.timeoutSeconds = 60
     vm.form.inputSchema = ''
     vm.form.enabled = true
@@ -284,6 +287,7 @@ describe('ExternalToolFormDialog.vue', () => {
       description: 'API 调用',
       url: 'https://api.example.com/call',
       httpMethod: 'GET',
+      effectScope: 'QUERY',
       timeoutSeconds: 60,
       inputSchema: null,
       enabled: true,
@@ -305,6 +309,7 @@ describe('ExternalToolFormDialog.vue', () => {
         description: string
         url: string
         httpMethod: string
+        effectScope: string
         timeoutSeconds: number
         inputSchema: string
         enabled: boolean
@@ -316,6 +321,7 @@ describe('ExternalToolFormDialog.vue', () => {
     vm.form.description = '更新搜索'
     vm.form.url = 'https://api.updated.com/search'
     vm.form.httpMethod = 'PUT'
+    vm.form.effectScope = 'WRITE'
     vm.form.timeoutSeconds = 45
     vm.form.inputSchema = '{"type":"object"}'
     vm.form.enabled = false
@@ -327,6 +333,7 @@ describe('ExternalToolFormDialog.vue', () => {
       description: '更新搜索',
       url: 'https://api.updated.com/search',
       httpMethod: 'PUT',
+      effectScope: 'WRITE',
       timeoutSeconds: 45,
       inputSchema: '{"type":"object"}',
       enabled: false,
@@ -346,6 +353,7 @@ describe('ExternalToolFormDialog.vue', () => {
         description: string
         url: string
         httpMethod: string
+        effectScope: string
         timeoutSeconds: number
       }
       handleSubmit: () => Promise<void>
@@ -355,6 +363,7 @@ describe('ExternalToolFormDialog.vue', () => {
     vm.form.description = 'desc'
     vm.form.url = 'https://example.com'
     vm.form.httpMethod = 'POST'
+    vm.form.effectScope = 'QUERY'
     vm.form.timeoutSeconds = 30
     await vm.handleSubmit()
 
@@ -377,6 +386,7 @@ describe('ExternalToolFormDialog.vue', () => {
         description: string
         url: string
         httpMethod: string
+        effectScope: string
         timeoutSeconds: number
         inputSchema: string
         enabled: boolean
@@ -388,6 +398,7 @@ describe('ExternalToolFormDialog.vue', () => {
     vm.form.description = 'Schema 往返测试'
     vm.form.url = 'https://api.test.com/v1/search'
     vm.form.httpMethod = 'POST'
+    vm.form.effectScope = 'QUERY'
     vm.form.timeoutSeconds = 30
     vm.form.inputSchema = schema
     vm.form.enabled = true
@@ -406,6 +417,7 @@ describe('ExternalToolFormDialog.vue', () => {
       description: 'Schema 往返测试',
       url: 'https://api.test.com/v1/search',
       httpMethod: 'POST',
+      effectScope: 'QUERY',
       timeoutSeconds: 30,
       inputSchema: schema,
       enabled: true,
@@ -435,6 +447,7 @@ describe('ExternalToolFormDialog.vue', () => {
           description: string
           url: string
           httpMethod: string
+          effectScope: string
           timeoutSeconds: number
         }
         handleSubmit: () => Promise<void>
@@ -443,6 +456,7 @@ describe('ExternalToolFormDialog.vue', () => {
       vm.form.description = 'test'
       vm.form.url = 'https://test.com'
       vm.form.httpMethod = method
+      vm.form.effectScope = 'QUERY'
       vm.form.timeoutSeconds = 10
       await vm.handleSubmit()
 

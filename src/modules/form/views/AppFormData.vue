@@ -78,4 +78,11 @@ function backToApp() {
   border-color: var(--el-color-primary-light-7, #c6e2ff);
   background: var(--el-color-primary-light-9, #ecf5ff);
 }
+
+/* 272:1144（执行提示28 项3）：应用数据页表头顶 168→160——
+   仅本消费者把 design 列表筛选→表格间距 16 收为 8（表格自身 margin-top 4 保留，合计 12）。
+   StandardListTemplate 全局间距不动，其他列表页的 y208 基线不受影响。 */
+.afd :deep(.standard-list--design) {
+  gap: calc(var(--sw-space-16) - var(--sw-space-8));
+}
 </style>

@@ -42,6 +42,7 @@ const SECTION_RULES: ReadonlyArray<readonly [RegExp, string]> = [
   [/^\/notify\/inbox(\/|$)/, 'menu.notifyInbox'],
   // 管理端顶栏一级功能
   [/^\/system(\/|$)/, 'menu.system'],
+  [/^\/form\/app-manage(\/|$)/, 'form.appCenter.manageTitle'],
   [/^\/form(\/|$)/, 'menu.lowcode'],
   [/^\/workflow(\/|$)/, 'menu.workflow'],
   [/^\/notify(\/|$)/, 'menu.notify'],

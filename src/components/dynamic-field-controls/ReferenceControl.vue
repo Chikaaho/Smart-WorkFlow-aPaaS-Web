@@ -41,7 +41,7 @@ function onReferenceSelect(payload: IdValueProperty) {
   <!-- 只读回看：静态展示已选业务名称，不再渲染输入框与禁用按钮 -->
   <div v-if="readonly" class="dynamic-field__reference-readonly">
     <span v-if="referenceDisplayText">{{ referenceDisplayText }}</span>
-    <span v-else class="dynamic-field__reference-empty">{{ t('common.notSelected') }}</span>
+    <span v-else class="dynamic-field__reference-empty">{{ t('form.notSelected') }}</span>
   </div>
 
   <div v-else class="dynamic-field__reference">

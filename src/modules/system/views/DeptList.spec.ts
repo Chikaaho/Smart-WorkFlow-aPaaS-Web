@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 vi.mock('@/modules/system/api/dept', () => ({
@@ -9,6 +9,23 @@ vi.mock('@/modules/system/api/dept', () => ({
   updateDept: vi.fn(),
   deleteDept: vi.fn(),
 }))
+
+const tenantStore = vi.hoisted(() => ({
+  user: { tenantId: '1' },
+  superAdmin: false,
+  permissions: new Set([
+    'system:dept:list',
+    'system:dept:create',
+    'system:dept:update',
+    'system:dept:delete',
+  ]),
+}))
+vi.mock('@/stores/user', () => ({ useUserStore: () => tenantStore }))
+vi.mock('@/modules/system/api/tenant-context', () => ({
+  currentTenantContext: vi.fn(),
+  tenantContextOptions: vi.fn(),
+}))
+vi.mock('@/modules/system/api/user', () => ({ pageUsers: vi.fn() }))
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -24,6 +41,8 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
+import { currentTenantContext, tenantContextOptions } from '@/modules/system/api/tenant-context'
+import { pageUsers } from '@/modules/system/api/user'
 import { listDeptTree, createDept, deleteDept } from '@/modules/system/api/dept'
 import type { SysDept } from '@/modules/system/types/dept'
 import DeptList from './DeptList.vue'
@@ -31,12 +50,30 @@ import DeptList from './DeptList.vue'
 describe('DeptList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    tenantStore.superAdmin = false
+    tenantStore.permissions = new Set([
+      'system:dept:list',
+      'system:dept:create',
+      'system:dept:update',
+      'system:dept:delete',
+    ])
+    vi.mocked(currentTenantContext).mockResolvedValue({
+      id: '1',
+      name: '本租户',
+      code: 'tenant-1',
+      writable: true,
+    })
+    vi.mocked(tenantContextOptions).mockResolvedValue([
+      { id: '1', name: '本租户', code: 'tenant-1', writable: true },
+    ])
+    vi.mocked(pageUsers).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 200 })
     vi.mocked(listDeptTree).mockResolvedValue([])
   })
 
   const minimalStubs = {
     ListToolbar: {
       template: '<div><slot name="actions"/></div>',
+      name: 'ListToolbar',
       props: ['title', 'total'],
     },
     StandardFormTemplate: {
@@ -52,7 +89,10 @@ describe('DeptList', () => {
     },
     'el-table': { template: '<div><slot/></div>', props: ['data', 'rowKey'] },
     'el-table-column': { template: '<div/>' },
-    'el-dialog': { template: '<div v-if="modelValue"><slot/></div>', props: ['modelValue'] },
+    'el-dialog': {
+      template: '<div v-if="modelValue"><slot/><slot name="footer"/></div>',
+      props: ['modelValue'],
+    },
     'el-input': {
       // 桥接 v-model（update:modelValue）与 keyup（供 @keyup.enter 触发查询）
       template:
@@ -124,8 +164,11 @@ describe('DeptList', () => {
     await nextTick()
     const vm = wrapper.vm as unknown as {
       form: SysDept
+      parentDeptOptions: SysDept[]
       handleSubmit: () => Promise<void>
+      openCreate: () => Promise<void>
     }
+    await vm.openCreate()
     vm.form.name = '测试部'
     vm.form.code = 'TEST'
     vm.form.status = 1
@@ -283,6 +326,18 @@ describe('DeptList', () => {
     expect(emptyArea.text()).not.toContain('无匹配部门')
   })
 
+  it('无创建权限时，空态不展示新建部门入口', async () => {
+    tenantStore.permissions = new Set(['system:dept:list'])
+    vi.mocked(listDeptTree).mockResolvedValue([])
+    const wrapper = mount(DeptList, { global: { stubs: minimalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const emptyArea = wrapper.find('.dept-list__empty')
+    expect(emptyArea.exists()).toBe(true)
+    expect(emptyArea.text()).not.toContain('新建部门')
+  })
+
   // ─── 加载态 ───
 
   it('请求进行中 loading=true（v-loading），完成后恢复 false', async () => {
@@ -301,5 +356,65 @@ describe('DeptList', () => {
     await nextTick()
     await nextTick()
     expect(vm.loading).toBe(false)
+  })
+  it('超管全部租户新增先选择，选择后只加载该租户父部门和负责人', async () => {
+    tenantStore.superAdmin = true
+    const wrapper = mount(DeptList, { global: { stubs: minimalStubs } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      openCreate: () => Promise<void>
+      pickerVisible: boolean
+      dialogVisible: boolean
+      selectTarget: (target: object) => void
+      form: SysDept
+      parentDeptOptions: SysDept[]
+      handleSubmit: () => Promise<void>
+    }
+    const opening = vm.openCreate()
+    await flushPromises()
+    expect(vm.pickerVisible).toBe(true)
+    expect(vm.dialogVisible).toBe(false)
+    vm.selectTarget({ id: '2113285377233043457', name: '目标租户', code: 'target', writable: true })
+    await opening
+    expect(vm.parentDeptOptions[0].id).toBe('0')
+    expect(vm.parentDeptOptions[0].name).toBe('无上级部门')
+    expect(listDeptTree).toHaveBeenLastCalledWith({ tenantId: '2113285377233043457' })
+    expect(pageUsers).toHaveBeenLastCalledWith(
+      { pageNum: 1, pageSize: 200 },
+      { status: 0, tenantId: '2113285377233043457' },
+    )
+    vm.form.name = '目标部门'
+    vm.form.code = 'target_dept'
+    vi.mocked(createDept).mockResolvedValue('2113285377233043458')
+    await vm.handleSubmit()
+    expect(createDept).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: '2113285377233043457' }),
+    )
+  })
+
+  it('全租户组织按租户分组，集团节点没有对象写操作', async () => {
+    tenantStore.superAdmin = true
+    vi.mocked(listDeptTree).mockResolvedValue([
+      { id: '1', tenantId: '9001', tenantName: '租户甲', parentId: '0', name: '总部甲', code: 'A' },
+      { id: '2', tenantId: '9002', tenantName: '租户乙', parentId: '0', name: '总部乙', code: 'B' },
+      {
+        id: '3',
+        tenantId: '9001',
+        tenantName: '租户甲',
+        parentId: '1',
+        name: '甲业务组',
+        code: 'A_SUB',
+      },
+    ])
+    const wrapper = mount(DeptList, { global: { stubs: minimalStubs } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      treeData: SysDept[]
+      rowActions: (row: SysDept) => object[]
+    }
+    expect(vm.treeData.map((row) => row.name)).toEqual(['租户甲', '租户乙'])
+    expect(vm.treeData[0].children?.map((row) => row.id)).toEqual(['1'])
+    expect(vm.rowActions(vm.treeData[0])).toEqual([])
+    expect(wrapper.findComponent({ name: 'ListToolbar' }).props('title')).toBe('部门管理')
   })
 })

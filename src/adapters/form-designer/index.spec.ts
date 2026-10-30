@@ -24,6 +24,21 @@ describe('adapters/form-designer/parseDefinition', () => {
     })
   })
 
+  it('normalizes allowed integration identifiers from the definition snapshot', () => {
+    const raw = JSON.stringify({
+      title: 'Integrated',
+      fields: [],
+      allowedIntegrations: [' cap_query ', 'cap_write', 'cap_query', 42, ''],
+    })
+    const schema = parseDefinition(raw)
+    expect(schema.allowedIntegrations).toEqual(['cap_query', 'cap_write'])
+  })
+
+  it('treats a definition without allowed integrations as no integration permission', () => {
+    const schema = parseDefinition(JSON.stringify({ title: 'Legacy', fields: [] }))
+    expect(schema.allowedIntegrations).toBeUndefined()
+  })
+
   it('maps all 8 known field types', () => {
     const raw = JSON.stringify({
       title: 'All Types',
@@ -227,7 +242,7 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     expect(r.value).toBe('')
   })
 
-  it('maps RICH_TEXT to input with textarea props and TODO note', () => {
+  it('maps RICH_TEXT to the shared RichTextControl', () => {
     const schema = {
       title: 'F',
       fields: [{ name: 'bio', type: 'RICH_TEXT' as const }],
@@ -236,10 +251,11 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     expect(rules).toHaveLength(1)
 
     const r = rules[0] as Record<string, unknown>
-    expect(r.type).toBe('input')
-    expect((r.props as Record<string, unknown>).type).toBe('textarea')
-    // 设计（节点07）：画布富文本降高为 2 行
-    expect((r.props as Record<string, unknown>).rows).toBe(2)
+    expect(r.type).toBe('RichTextControl')
+    expect((r.props as Record<string, unknown>).field).toMatchObject({
+      name: 'bio',
+      type: 'RICH_TEXT',
+    })
     expect(r.value).toBe('')
   })
 
@@ -422,7 +438,7 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     expect(props.placeholder).toContain('引用字段')
   })
 
-  it('maps TABLE to group with children matching subFields count', () => {
+  it('maps TABLE to the shared TableControl with subFields intact', () => {
     const schema = {
       title: 'F',
       fields: [
@@ -440,15 +456,18 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     expect(rules).toHaveLength(1)
 
     const r = rules[0] as Record<string, unknown>
-    expect(r.type).toBe('group')
+    // 真实表头/行 + 合法增删行（direction-ui-completion-020）：不再降级 form-create group。
+    expect(r.type).toBe('TableControl')
     expect(r.value).toEqual([])
-    expect(r.children).toHaveLength(2)
-
-    const children = r.children as Record<string, unknown>[]
-    expect(children[0].type).toBe('input')
-    expect(children[0].field).toBe('col1')
-    expect(children[1].type).toBe('inputNumber')
-    expect(children[1].field).toBe('col2')
+    expect(r.children).toBeUndefined()
+    expect((r.props as Record<string, unknown>).field).toMatchObject({
+      name: 'items',
+      type: 'TABLE',
+    })
+    const subFields = (
+      (r.props as Record<string, unknown>).field as { subFields: { name: string }[] }
+    ).subFields
+    expect(subFields.map((sf) => sf.name)).toEqual(['col1', 'col2'])
   })
 
   /* ---- required 映射 ---- */
@@ -554,122 +573,6 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     })
   })
 
-  /* ---- TABLE 子字段完整性 ---- */
-
-  it('TABLE children includes all subFields with correct types', () => {
-    const schema = {
-      title: 'F',
-      fields: [
-        {
-          name: 'tbl',
-          type: 'TABLE' as const,
-          subFields: [
-            { name: 'a', type: 'TEXT' as const },
-            { name: 'b', type: 'NUMBER' as const },
-            { name: 'c', type: 'DATE' as const },
-            { name: 'd', type: 'BOOL' as const },
-          ],
-        },
-      ],
-    }
-    const rules = toFormCreateRule(schema)
-    const children = (rules[0] as Record<string, unknown>).children as Record<string, unknown>[]
-    expect(children).toHaveLength(4)
-    expect(children[0].type).toBe('input')
-    expect(children[1].type).toBe('inputNumber')
-    expect(children[2].type).toBe('datePicker')
-    expect(children[3].type).toBe('switch')
-  })
-
-  /* ── TABLE 子字段 DICT ── */
-
-  it('TABLE children DICT sub-field maps to select with __dictType__', () => {
-    const schema = {
-      title: 'F',
-      fields: [
-        {
-          name: 'tbl',
-          type: 'TABLE' as const,
-          subFields: [{ name: 'col', type: 'DICT' as const, dictType: 'sys_dept' }],
-        },
-      ],
-    }
-    const rules = toFormCreateRule(schema)
-    const children = (rules[0] as Record<string, unknown>).children as Record<string, unknown>[]
-    expect(children).toHaveLength(1)
-    expect(children[0].type).toBe('select')
-    expect(children[0].options).toEqual([])
-    expect((children[0] as Record<string, unknown>).__dictType__).toBe('sys_dept')
-  })
-
-  it('TABLE children DICT sub-field with renderAs="radio" passes renderAs metadata', () => {
-    const schema = {
-      title: 'F',
-      fields: [
-        {
-          name: 'tbl',
-          type: 'TABLE' as const,
-          subFields: [
-            { name: 'col', type: 'DICT' as const, dictType: 'sys_sex', renderAs: 'radio' as const },
-          ],
-        },
-      ],
-    }
-    const rules = toFormCreateRule(schema)
-    const children = (rules[0] as Record<string, unknown>).children as Record<string, unknown>[]
-    // BF20261013-009：renderAs=radio 子字段直接映射 radio 规则（字典来源保留 __dictType__ 元数据）
-    expect(children[0].type).toBe('radio')
-    expect(children[0].__dictType__).toBe('sys_sex')
-  })
-
-  it('TABLE children DICT sub-field without renderAs omits renderAs metadata', () => {
-    const schema = {
-      title: 'F',
-      fields: [
-        {
-          name: 'tbl',
-          type: 'TABLE' as const,
-          subFields: [{ name: 'col', type: 'DICT' as const, dictType: 'sys_role' }],
-        },
-      ],
-    }
-    const rules = toFormCreateRule(schema)
-    const children = (rules[0] as Record<string, unknown>).children as Record<string, unknown>[]
-    expect((children[0] as Record<string, unknown>).renderAs).toBeUndefined()
-  })
-
-  it('TABLE children REFERENCE sub-field falls back to input', () => {
-    const schema = {
-      title: 'F',
-      fields: [
-        {
-          name: 'tbl',
-          type: 'TABLE' as const,
-          subFields: [{ name: 'col', type: 'REFERENCE' as const }],
-        },
-      ],
-    }
-    const rules = toFormCreateRule(schema)
-    const children = (rules[0] as Record<string, unknown>).children as Record<string, unknown>[]
-    expect(children[0].type).toBe('input')
-  })
-
-  it('TABLE children TABLE sub-field falls back to input (no recursion)', () => {
-    const schema = {
-      title: 'F',
-      fields: [
-        {
-          name: 'tbl',
-          type: 'TABLE' as const,
-          subFields: [{ name: 'col', type: 'TABLE' as const }],
-        },
-      ],
-    }
-    const rules = toFormCreateRule(schema)
-    const children = (rules[0] as Record<string, unknown>).children as Record<string, unknown>[]
-    expect(children[0].type).toBe('input')
-  })
-
   /* ---- 未知 type 跳过 + 告警 ---- */
 
   it('skips unknown field type with console.warn, does not break other fields', () => {
@@ -721,13 +624,13 @@ describe('adapters/form-designer/toFormCreateRule', () => {
     const types = (rules as Record<string, unknown>[]).map((r) => r.type)
     expect(types).toEqual([
       'input',
-      'input',
+      'RichTextControl',
       'inputNumber',
       'datePicker',
       'switch',
       'select',
       'input',
-      'group',
+      'TableControl',
     ])
   })
 })

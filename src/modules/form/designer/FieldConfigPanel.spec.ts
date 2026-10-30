@@ -130,11 +130,12 @@ describe('FieldConfigPanel 字段标题位置', () => {
       .findAllComponents({ name: 'ElSelect' })
       .find((s) => s.props('modelValue') === 'top-left')
     expect(select).toBeTruthy()
-    // 标题位置选项（字符串值；数字 1-12 为宽度选择器选项）
+    // 标题位置选项：面板内另有字符串值的输入方式选择器，这里只取标题位置域
+    const LABEL_POSITIONS = ['left', 'right', 'top-left', 'top-right', 'top-center']
     const optionValues = wrapper
       .findAllComponents({ name: 'ElOption' })
       .map((o) => o.props('value'))
-      .filter((v) => typeof v === 'string')
+      .filter((v) => typeof v === 'string' && LABEL_POSITIONS.includes(v))
     expect(optionValues).toEqual(['left', 'right', 'top-left'])
   })
 
@@ -165,24 +166,93 @@ describe('FieldConfigPanel 控件尺寸口径（0.1.7 #36）', () => {
     })
   }
 
-  it('数据类型与最大长度各自整行（不再两列半宽格）', () => {
+  it('最大长度等校验项收进独立弹窗入口，不再内联半宽格', () => {
     const wrapper = mountText()
 
     expect(wrapper.find('.config__type-pair').exists()).toBe(false)
     const rows = wrapper.findAll('.config__row')
     const typeInput = rows.find((row) => row.text().startsWith('数据类型'))
-    const lengthRow = rows.find((row) => row.text().startsWith('最大长度'))
     expect(typeInput).toBeTruthy()
-    expect(lengthRow).toBeTruthy()
-    expect(typeInput!.element).not.toBe(lengthRow!.element)
+    expect(rows.find((row) => row.text().startsWith('最大长度'))).toBeUndefined()
+    expect(wrapper.find('[data-testid="open-field-validation"]').exists()).toBe(true)
   })
 
-  it('扩展属性区为紧凑占位并带空态说明', () => {
-    const wrapper = mountText()
+  // 0.2.0 G07（42:2）：高级信息末尾为值变更（JS）/显示条件（设置）行，原「其他信息」扩展占位随原稿移除
+  it('值变更与显示条件并入高级信息，不再渲染其他信息扩展占位', () => {
+    // 不 stub RulesEditor：显示条件行由 RulesEditor 本体渲染
+    const wrapper = mount(FieldConfigPanel, {
+      props: {
+        field: {
+          id: 'f1',
+          field: { name: 'field_name', type: 'TEXT', label: '姓名', colSpan: 24 },
+        },
+        otherNames: [],
+      },
+    })
 
-    const box = wrapper.find('.config__extension')
-    expect(box.exists()).toBe(true)
-    expect(box.find('.config__extension-title').exists()).toBe(true)
-    expect(box.text()).toContain('当前版本暂无可配置的扩展属性')
+    expect(wrapper.text()).toContain('值变更')
+    expect(wrapper.text()).toContain('显示条件')
+    expect(wrapper.find('[data-testid="script-edit"]').exists()).toBe(true)
+    expect(wrapper.find('.config__extension').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('其他信息')
+  })
+})
+
+// Q52（490:16919 / 490:16934）：静态文字的字号浮层首屏档位与颜色浮层 430×286 的样式钩子
+describe('FieldConfigPanel 静态文字字号/颜色浮层', () => {
+  function mountLabel(fontSize?: number) {
+    return mount(FieldConfigPanel, {
+      props: {
+        field: {
+          id: 'f1',
+          field: {
+            name: 'field_note',
+            type: 'LABEL',
+            label: '文字',
+            colSpan: 24,
+            ...(fontSize === undefined ? {} : { fontSize }),
+          },
+        },
+        otherNames: [],
+      },
+      global: { stubs: { RulesEditor: { template: '<div />' } } },
+    })
+  }
+
+  function numericOptionValues(wrapper: ReturnType<typeof mountLabel>) {
+    return wrapper
+      .findAllComponents({ name: 'ElOption' })
+      .map((option) => option.props('value'))
+      .filter((value): value is number => typeof value === 'number')
+  }
+
+  it('字号首屏顺序为 14/16/18/20/24/28，既有 12/32/36/48 仍在候选中', () => {
+    const wrapper = mountLabel()
+    expect(numericOptionValues(wrapper).slice(0, 10)).toEqual([
+      14, 16, 18, 20, 24, 28, 12, 32, 36, 48,
+    ])
+    const fontSelect = wrapper
+      .findAllComponents({ name: 'ElSelect' })
+      .find((select) => select.props('popperClass') === 'label-font-size-popper')
+    expect(fontSelect).toBeTruthy()
+  })
+
+  it('历史自定义字号保留在候选末尾，不回落默认 14', () => {
+    const wrapper = mountLabel(13)
+    expect(numericOptionValues(wrapper).slice(0, 11)).toEqual([
+      14, 16, 18, 20, 24, 28, 12, 32, 36, 48, 13,
+    ])
+    const fontSelect = wrapper
+      .findAllComponents({ name: 'ElSelect' })
+      .find((select) => select.props('popperClass') === 'label-font-size-popper')
+    expect(fontSelect!.props('modelValue')).toBe(13)
+  })
+
+  it('颜色浮层沿用原取色器并挂 430×286 样式钩子', () => {
+    const wrapper = mountLabel()
+    const picker = wrapper.findComponent({ name: 'ElColorPicker' })
+    expect(picker.exists()).toBe(true)
+    expect(picker.props('popperClass')).toBe('label-color-popover')
+    expect(picker.props('predefine')).toHaveLength(8)
   })
 })

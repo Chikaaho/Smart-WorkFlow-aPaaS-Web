@@ -7,7 +7,7 @@ const { t } = useI18n()
  *
  * 使用 StandardListTemplate 槽位模板，数据外部进。
  * 筛选：name / code / status；操作：新建 / 编辑 / 删除 / 管理字典项。
- * 新建/编辑走 el-dialog 内嵌 StandardFormTemplate + 手写控件（高代码轨）。
+ * 新建/编辑统一 760 宽 el-dialog 手写控件（447:13355 / 446:15178）。
  */
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
@@ -22,14 +22,7 @@ import {
 } from '@/modules/system/api/dict'
 import type { SysDictType, DictTypeFilter } from '@/modules/system/types/dict'
 import type { PageQuery } from '@/contracts/common'
-import {
-  ListFilterItem,
-  StandardListTemplate,
-  StandardFormTemplate,
-  FormSection,
-  FormGrid,
-  ListActionsColumn,
-} from '@/components/page-layout'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
 const router = useRouter()
@@ -157,11 +150,13 @@ function closeDialog() {
 
 async function handleSubmit() {
   if (!form.name.trim()) {
-    formError.value = t('system.dictNameRequired')
+    if (editingId.value) ElMessage.warning(t('system.dictNameRequired'))
+    else formError.value = t('system.dictNameRequired')
     return
   }
   if (!form.code.trim()) {
-    formError.value = t('system.dictCodeRequired')
+    if (editingId.value) ElMessage.warning(t('system.dictCodeRequired'))
+    else formError.value = t('system.dictCodeRequired')
     return
   }
 
@@ -178,11 +173,9 @@ async function handleSubmit() {
     closeDialog()
     void loadList()
   } catch (err) {
-    if (err instanceof ApiError) {
-      formError.value = err.msg
-    } else {
-      formError.value = t('common.saveFailed')
-    }
+    const message = err instanceof ApiError ? err.msg : t('common.saveFailed')
+    if (editingId.value) ElMessage.error(message)
+    else formError.value = message
   } finally {
     submitting.value = false
   }
@@ -221,7 +214,7 @@ async function handleDelete(row: SysDictType) {
 
 function handleManageData(row: SysDictType) {
   void router.push({
-    path: '/dict-data',
+    name: 'system-dict-data',
     query: { dictCode: row.code, dictName: row.name },
   })
 }
@@ -259,11 +252,20 @@ function rowActions(r: unknown): ListAction[] {
   ]
 }
 
+/** 446:14964：展示层时间格式 ISO → YYYY-MM-DD HH:mm（仅显示，不改数据；无值显示空） */
+function formatDateTime(value?: string | null): string {
+  if (!value) return ''
+  return value.replace('T', ' ').slice(0, 16)
+}
+
 onMounted(loadList)
 </script>
 
 <template>
   <StandardListTemplate
+    class="dict-list"
+    appearance="design"
+    :title="t('system.dictManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -271,20 +273,21 @@ onMounted(loadList)
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <!-- 工具栏：新建按钮 -->
-    <template #toolbar-actions>
-      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
-    </template>
-
-    <!-- 筛选区 -->
+    <!-- 筛选区（446:14964 执行提示17）：名称 x337/w220、状态 x627/w300；编码筛选保留在剩余空间 -->
     <template #filter>
-      <ListFilterItem :label="t('system.dictName')">
+      <ListFilterItem class="dict-list__name-filter" :label="t('system.dictName')">
         <el-input
           v-model="filter.name"
           :placeholder="t('common.pleaseInput')"
           clearable
           @keyup.enter="handleQuery"
         />
+      </ListFilterItem>
+      <ListFilterItem class="dict-list__status-filter" :label="t('common.status')">
+        <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
+          <el-option :label="t('common.statusNormal')" :value="0" />
+          <el-option :label="t('common.disable')" :value="1" />
+        </el-select>
       </ListFilterItem>
       <ListFilterItem :label="t('system.dictCode')">
         <el-input
@@ -294,16 +297,11 @@ onMounted(loadList)
           @keyup.enter="handleQuery"
         />
       </ListFilterItem>
-      <ListFilterItem :label="t('common.status')">
-        <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
-          <el-option :label="t('common.statusNormal')" :value="0" />
-          <el-option :label="t('common.disable')" :value="1" />
-        </el-select>
-      </ListFilterItem>
     </template>
     <template #filter-actions>
       <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
       <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
     </template>
 
     <!-- 表格区 -->
@@ -315,14 +313,14 @@ onMounted(loadList)
       show-icon
       style="margin-bottom: 12px"
     />
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="list">
       <el-table-column prop="name" :label="t('system.dictName')" min-width="140" />
       <el-table-column prop="code" :label="t('system.dictCode')" min-width="140" />
       <el-table-column prop="status" :label="t('common.status')" width="80">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
-            {{ row.status === 0 ? t('common.statusNormal') : t('common.disable') }}
-          </el-tag>
+          <span class="sys-status-text">{{
+            row.status === 0 ? t('common.statusNormal') : t('common.disable')
+          }}</span>
         </template>
       </el-table-column>
       <el-table-column
@@ -331,6 +329,11 @@ onMounted(loadList)
         min-width="160"
         show-overflow-tooltip
       />
+      <!-- 446:14964（执行提示18）：真实更新时间按年月日时分单行展示，完整值悬浮提示 -->
+      <el-table-column width="170" show-overflow-tooltip>
+        <template #header>{{ t('common.updateTime') }}</template>
+        <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
+      </el-table-column>
       <!-- BF20261013-038 全局巡检：150 装不下「编辑/管理字典项/删除」三格（实测中文 166、英文 181），
            末格被裁 48px；按四格标准放宽到 200 -->
       <ListActionsColumn :actions="rowActions" :width="200" />
@@ -342,71 +345,105 @@ onMounted(loadList)
     </template>
   </StandardListTemplate>
 
-  <!-- 新建/编辑弹窗 -->
+  <!-- 新建/编辑弹窗：统一 760 宽（447:13355 / 446:15178），编辑子态固定 330 高两列布局 -->
   <el-dialog
     v-model="dialogVisible"
     :title="dialogTitle"
     :close-on-click-modal="false"
     destroy-on-close
-    width="680px"
+    align-center
+    width="760px"
+    :class="['dict-type-dialog', { 'dict-type-dialog--edit': Boolean(editingId) }]"
     @closed="resetForm"
   >
-    <StandardFormTemplate embedded>
-      <template v-if="formError" #alert>
+    <div v-if="editingId" class="dict-edit" data-testid="dict-type-edit-body">
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('system.dictName') }}</label>
+        <el-input
+          v-model="form.name"
+          :placeholder="t('system.dictNamePlaceholder')"
+          maxlength="64"
+        />
+      </div>
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('system.dictCode') }}</label>
+        <el-input
+          v-model="form.code"
+          :placeholder="t('system.dictCodePlaceholder')"
+          maxlength="64"
+          readonly
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('common.status') }}</label>
+        <el-select v-model="form.status" style="width: 100%">
+          <el-option :label="t('common.statusNormal')" :value="0" />
+          <el-option :label="t('common.disable')" :value="1" />
+        </el-select>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('common.remark') }}</label>
+        <el-input
+          v-model="form.description"
+          class="dict-edit__remark"
+          type="textarea"
+          resize="none"
+          :rows="3"
+          :placeholder="t('common.remarkPlaceholder')"
+          maxlength="256"
+        />
+      </div>
+    </div>
+
+    <!-- 新建子态（447:13355）：无装饰性分区，名称/编码两列、状态/备注通栏，底栏按钮靠右 -->
+    <div v-else class="dict-edit" data-testid="dict-type-create-body">
+      <div v-if="formError" class="dict-edit__full">
         <el-alert :title="formError" type="error" :closable="false" show-icon />
-      </template>
+      </div>
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('system.dictName') }}</label>
+        <el-input
+          v-model="form.name"
+          :placeholder="t('system.dictNamePlaceholder')"
+          maxlength="64"
+          show-word-limit
+        />
+      </div>
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('system.dictCode') }}</label>
+        <el-input
+          v-model="form.code"
+          :placeholder="t('system.dictCodePlaceholder')"
+          maxlength="64"
+          show-word-limit
+        />
+      </div>
+      <div class="form-field dict-edit__full">
+        <label class="form-field__label">{{ t('common.status') }}</label>
+        <el-select v-model="form.status" style="width: 100%">
+          <el-option :label="t('common.statusNormal')" :value="0" />
+          <el-option :label="t('common.disable')" :value="1" />
+        </el-select>
+      </div>
+      <div class="form-field dict-edit__full">
+        <label class="form-field__label">{{ t('common.remark') }}</label>
+        <el-input
+          v-model="form.description"
+          type="textarea"
+          :rows="3"
+          :placeholder="t('common.remarkPlaceholder')"
+          maxlength="256"
+          show-word-limit
+        />
+      </div>
+    </div>
 
-      <FormSection :title="t('common.basicInfo')">
-        <FormGrid :columns="2">
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('system.dictName') }}</label>
-            <el-input
-              v-model="form.name"
-              :placeholder="t('system.dictNamePlaceholder')"
-              maxlength="64"
-              show-word-limit
-            />
-          </div>
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('system.dictCode') }}</label>
-            <el-input
-              v-model="form.code"
-              :placeholder="t('system.dictCodePlaceholder')"
-              :disabled="!!editingId"
-              maxlength="64"
-              show-word-limit
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.status') }}</label>
-            <el-select v-model="form.status" style="width: 100%">
-              <el-option :label="t('common.statusNormal')" :value="0" />
-              <el-option :label="t('common.disable')" :value="1" />
-            </el-select>
-          </div>
-        </FormGrid>
-        <FormGrid :columns="1" style="margin-top: 0">
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.remark') }}</label>
-            <el-input
-              v-model="form.description"
-              type="textarea"
-              :rows="3"
-              :placeholder="t('common.remarkPlaceholder')"
-              maxlength="256"
-              show-word-limit
-            />
-          </div>
-        </FormGrid>
-      </FormSection>
-
-      <template #actions>
-        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
-          t('common.save')
-        }}</el-button>
-      </template>
-    </StandardFormTemplate>
+    <template #footer>
+      <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+        t('common.save')
+      }}</el-button>
+    </template>
   </el-dialog>
 </template>
 
@@ -426,5 +463,102 @@ onMounted(loadList)
 .form-field--required .form-field__label::before {
   content: '* ';
   color: var(--sw-danger);
+}
+
+/* 编辑/新建子态共用：四字段两列、行距与备注固定表面。 */
+.dict-edit {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+}
+.dict-edit .form-field {
+  gap: 6px;
+}
+.dict-edit .form-field__label {
+  font-size: 14px;
+  line-height: 22px;
+}
+.dict-edit__full {
+  grid-column: 1 / -1;
+}
+.dict-edit__remark :deep(.el-textarea__inner) {
+  box-sizing: border-box;
+  height: 80px;
+  min-height: 80px;
+}
+
+/* 446:14964（执行提示18）：名称框 x338/w220、状态框 x627/w300；编码筛选保留在剩余空间 */
+.dict-list :deep(.list-filter-bar__fields) {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+.dict-list :deep(.list-filter-bar__fields > *) {
+  flex: 0 0 auto;
+}
+.dict-list :deep(.list-filter-bar__actions) {
+  margin-left: auto;
+}
+.dict-list__name-filter {
+  grid-template-columns: 57px 220px !important;
+  width: max-content;
+}
+.dict-list__status-filter {
+  grid-template-columns: 50px 300px !important;
+  width: max-content;
+}
+</style>
+
+<style>
+/* 设计节点 447:13355 / 446:15178：字典类型弹窗统一 760 宽，头部/底栏/按钮共用；
+   编辑子态（--edit）另固定 330 高。按钮右下 80×32。 */
+.dict-type-dialog.el-dialog {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 8px;
+  /* 本弹窗作用域默认细边框，不覆盖焦点/危险/禁用 */
+  --el-border-color: #dde3ef;
+  --el-input-border-color: #dde3ef;
+}
+.dict-type-dialog--edit.el-dialog {
+  height: 330px;
+}
+.dict-type-dialog .el-dialog__header {
+  box-sizing: border-box;
+  margin: 0 0 20px;
+  padding: 28px 28px 0;
+}
+.dict-type-dialog .el-dialog__title {
+  color: var(--sw-text-primary);
+  font-size: 16px;
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: 24px;
+}
+.dict-type-dialog .el-dialog__headerbtn {
+  top: 28px;
+  right: 24px;
+  width: 24px;
+  height: 24px;
+}
+.dict-type-dialog .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 24px;
+}
+.dict-type-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  margin: 0;
+  padding: 18px 25px 26px;
+}
+.dict-type-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  height: 32px;
+  margin: 0;
 }
 </style>

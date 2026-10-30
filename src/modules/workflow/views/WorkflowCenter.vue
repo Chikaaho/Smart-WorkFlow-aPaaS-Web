@@ -129,7 +129,8 @@ function rowActions(row: unknown, tab: TabKey): ListAction[] {
 // ─── 客户端分页（V012-BUG-003）：各页签一次拉取全量（服务端 pageSize 20），前端切片 ───
 const { pageNum, pageSize, pagedRows, total, handlePageNumChange, handlePageSizeChange } =
   useClientList(currentRows, {
-    pageSize: 20,
+    // 参考 97:2 分页器默认「10 条/页」
+    pageSize: 10,
     searchFields: (row) => [row.name, row.title, row.processDefinitionKey],
   })
 

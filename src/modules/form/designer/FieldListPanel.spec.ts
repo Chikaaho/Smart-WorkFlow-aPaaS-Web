@@ -73,7 +73,7 @@ function labelInputValue(wrapper: Awaited<ReturnType<typeof mountPanel>>, key: s
 }
 
 describe('FieldListPanel（#38/#39 字段清单）', () => {
-  it('主表 + 子表分组：主表列出非 TABLE 字段，子表带自己的表名与子字段', async () => {
+  it('主表 + 子表分组：主表列出全部主字段（含 TABLE 行），子表带自己的表名与子字段', async () => {
     const wrapper = await mountPanel()
 
     const scopes = wrapper.findAll('[role="tab"]')
@@ -82,8 +82,8 @@ describe('FieldListPanel（#38/#39 字段清单）', () => {
     expect(wrapper.find('[data-testid="field-table-name"]').text()).toBe('表名：leave-request')
     expect(labelInputValue(wrapper, 'di_1')).toBe('金额')
     expect(labelInputValue(wrapper, 'di_2')).toBe('申请日期')
-    // TABLE 自身不出现在主表行里（它就是一个子表范围）
-    expect(labelInputValue(wrapper, 'di_3')).toBeNull()
+    // 设计 49:2：TABLE 自身也作为主表一行出现（组件=子表、类型=JSON）
+    expect(labelInputValue(wrapper, 'di_3')).toBe('报销明细')
 
     await wrapper.find('[data-testid="field-scope-di_3"]').trigger('click')
     expect(wrapper.find('[data-testid="field-table-name"]').text()).toBe(
@@ -117,6 +117,36 @@ describe('FieldListPanel（#38/#39 字段清单）', () => {
     expect(wrapper.emitted('patch')?.at(-1)).toEqual([
       { field: mainText, patch: { description: '含税金额（元）' } },
     ])
+  })
+
+  it('控件类型反映输入方式：多行文本/单行文本/富文本分别准确，存储列不变', async () => {
+    const wrapper = await mountPanel({
+      items: [
+        {
+          id: 'ml_1',
+          field: {
+            name: 'multi',
+            type: 'TEXT',
+            label: '多行说明',
+            multiline: true,
+          } as FormSchemaField,
+        },
+        {
+          id: 'ml_2',
+          field: { name: 'single', type: 'TEXT', label: '单行说明' } as FormSchemaField,
+        },
+        {
+          id: 'ml_3',
+          field: { name: 'rich', type: 'RICH_TEXT', label: '富说明' } as FormSchemaField,
+        },
+      ],
+    })
+    const html = wrapper.find('.el-table').html()
+    expect(html).toContain('多行文本')
+    expect(html).toContain('单行文本')
+    expect(html).toContain('富文本')
+    expect(html).toContain('VARCHAR')
+    expect(html).toContain('存储类型')
   })
 
   it('只读事实：字段编码/控件类型/数据类型/必填；非字符串族长度显示「—」', async () => {

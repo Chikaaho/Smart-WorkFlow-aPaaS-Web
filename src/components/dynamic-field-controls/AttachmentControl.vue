@@ -7,15 +7,16 @@ const t = i18n.global.t
 /**
  * 附件/图片（ATTACHMENT/IMAGE）控件。
  * 值 = [{storageKey, name}]；上传走 /workflow/attachments/upload（登录态），
- * 下载/查看由后端按记录对象权限放行。readonly 只读展示文件名。
+ * 下载/查看通过登录态请求，后端核对记录、字段查看权与实际文件关联。
  * 图片模式（image）渲染缩略预览。
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Delete, UploadFilled } from '@element-plus/icons-vue'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
 import type { AttachmentField, AttachmentItem, ImageField } from '@/contracts/form-schema'
-import { request } from '@/foundation/request'
+import { request, ApiError } from '@/foundation/request'
+import documentIcon from '@/assets/form-palette/document.svg'
 
 const props = defineProps<DynamicFieldControlProps>()
 const emit = defineEmits<{ 'update:modelValue': [value: unknown] }>()
@@ -23,11 +24,101 @@ const emit = defineEmits<{ 'update:modelValue': [value: unknown] }>()
 /** image 模式：field.type === 'IMAGE' 时渲染缩略预览。 */
 const isImage = computed(() => (props.field as AttachmentField | ImageField).type === 'IMAGE')
 
-const items = computed<AttachmentItem[]>(() =>
-  Array.isArray(props.modelValue) ? (props.modelValue as AttachmentItem[]) : [],
-)
+const items = computed<AttachmentItem[]>(() => {
+  if (!Array.isArray(props.modelValue)) return []
+  return props.modelValue.flatMap((item): AttachmentItem[] => {
+    if (typeof item === 'string' && item) {
+      return [{ storageKey: item, name: item.split('/').pop() || item }]
+    }
+    if (item && typeof item.storageKey === 'string' && item.storageKey) {
+      return [
+        {
+          storageKey: item.storageKey,
+          name:
+            typeof item.name === 'string' && item.name
+              ? item.name
+              : item.storageKey.split('/').pop() || item.storageKey,
+        },
+      ]
+    }
+    return []
+  })
+})
 
 const uploading = ref(false)
+const downloadingKey = ref<string | null>(null)
+const canDownload = computed(() => Boolean(props.formKey && props.recordId))
+const previewSources = ref<Record<string, string>>({})
+const previewFailed = ref<Record<string, boolean>>({})
+let previewSequence = 0
+onBeforeUnmount(() => {
+  previewSequence++
+})
+
+function attachmentBlob(item: AttachmentItem): Promise<globalThis.Blob> {
+  return request<globalThis.Blob>({
+    method: 'GET',
+    url: `/workflow/attachments/${encodeURIComponent(props.recordId || '')}/download`,
+    params: { formKey: props.formKey, storageKey: item.storageKey, name: item.name },
+    responseType: 'blob',
+  })
+}
+
+async function downloadItem(item: AttachmentItem) {
+  if (!canDownload.value || downloadingKey.value) return
+  downloadingKey.value = item.storageKey
+  try {
+    const blob = await attachmentBlob(item)
+    const url = globalThis.URL.createObjectURL(blob)
+    try {
+      const link = globalThis.document.createElement('a')
+      link.href = url
+      link.download = item.name
+      globalThis.document.body.appendChild(link)
+      try {
+        link.click()
+      } finally {
+        link.remove()
+      }
+    } finally {
+      globalThis.URL.revokeObjectURL(url)
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof ApiError ? error.msg : t('component.attachmentDownloadFailed'))
+  } finally {
+    downloadingKey.value = null
+  }
+}
+
+function imageDataUrl(blob: globalThis.Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new globalThis.FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(new Error('Image preview read failed'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+watch(
+  () => [props.formKey, props.recordId, isImage.value, items.value.map((item) => item.storageKey)],
+  async () => {
+    const sequence = ++previewSequence
+    previewSources.value = {}
+    previewFailed.value = {}
+    if (!isImage.value || !canDownload.value) return
+    await Promise.all(
+      items.value.map(async (item) => {
+        try {
+          const source = await imageDataUrl(await attachmentBlob(item))
+          if (sequence === previewSequence) previewSources.value[item.storageKey] = source
+        } catch {
+          if (sequence === previewSequence) previewFailed.value[item.storageKey] = true
+        }
+      }),
+    )
+  },
+  { immediate: true, deep: true },
+)
 
 /* eslint-disable no-undef */
 interface UploadResp {
@@ -71,24 +162,52 @@ function removeItem(item: AttachmentItem) {
 </script>
 
 <template>
-  <div class="attachment-control">
+  <div class="attachment-control" :class="{ 'attachment-control--readonly': readonly }">
     <ul v-if="items.length" class="attachment-control__list">
       <li v-for="item in items" :key="item.storageKey" class="attachment-control__row">
-        <img
-          v-if="isImage"
-          :src="`/api/workflow/attachments/download?storageKey=${encodeURIComponent(item.storageKey)}&name=${encodeURIComponent(item.name)}`"
-          :alt="item.name"
-          class="attachment-control__thumb"
-        />
-        <span class="attachment-control__name">{{ item.name }}</span>
-        <el-button
-          v-if="!readonly"
-          :icon="Delete"
-          size="small"
-          text
-          type="danger"
-          @click="removeItem(item)"
-        />
+        <div class="attachment-control__entry">
+          <img
+            v-if="isImage && previewSources[item.storageKey] && !previewFailed[item.storageKey]"
+            :src="previewSources[item.storageKey]"
+            :alt="item.name"
+            class="attachment-control__thumb"
+            @error="previewFailed[item.storageKey] = true"
+          />
+          <img
+            v-else
+            :src="documentIcon"
+            class="attachment-control__icon"
+            alt=""
+            aria-hidden="true"
+          />
+          <span class="attachment-control__name" :title="item.name">{{ item.name }}</span>
+          <span
+            v-if="previewFailed[item.storageKey]"
+            class="attachment-control__preview-error"
+            role="status"
+          >
+            {{ t('component.imagePreviewUnavailable') }}
+          </span>
+          <el-button
+            v-if="readonly && canDownload"
+            class="attachment-control__download"
+            link
+            type="primary"
+            :aria-label="t('component.downloadFileNamed', { name: item.name })"
+            :loading="downloadingKey === item.storageKey"
+            :disabled="downloadingKey !== null"
+            @click="downloadItem(item)"
+            >{{ t('common.download') }}</el-button
+          >
+          <el-button
+            v-if="!readonly"
+            :icon="Delete"
+            size="small"
+            text
+            type="danger"
+            @click="removeItem(item)"
+          />
+        </div>
       </li>
     </ul>
     <label v-if="!readonly" class="attachment-control__upload">
@@ -112,16 +231,53 @@ function removeItem(item: AttachmentItem) {
   margin: 0;
   padding: 0;
   list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .attachment-control__row {
+  padding: 4px 0;
+}
+.attachment-control__entry {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0;
+  min-height: 28px;
 }
 .attachment-control__name {
   flex: 1;
-  font-size: 13px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+  color: var(--sw-text-regular);
+}
+.attachment-control--readonly .attachment-control__row {
+  box-sizing: border-box;
+  min-height: 64px;
+  padding: 12px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-fill-base);
+}
+.attachment-control__icon {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+}
+.attachment-control__download {
+  flex: 0 0 auto;
+  min-width: 56px;
+  height: 32px;
+  padding: 0 12px;
+  margin-block: -2px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 22px;
+}
+.attachment-control__preview-error {
+  font-size: 12px;
+  color: var(--sw-text-secondary);
 }
 .attachment-control__thumb {
   width: 48px;

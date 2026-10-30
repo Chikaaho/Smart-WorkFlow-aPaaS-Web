@@ -18,6 +18,8 @@ export interface TodoTask {
   processDefKey?: string | null
   /** 候选任务标记（P64 阶段Ⅱ：须先领取再查看/办理；后端 assignee 为空即 true） */
   candidate?: boolean
+  /** 办理期限（3:2 截止标签只读展示来源；无期限为 null，不伪造） */
+  dueAt?: string | null
 }
 
 // ─── 任务详情 DTO（对齐后端 TaskDetailRespDTO） ───
@@ -30,8 +32,12 @@ export interface TaskDetail {
   instanceStatus?: ProcessInstance['status'] | 'FAILED' | 'TERMINATED' | null
   /** 当前登录用户是否可办理该任务（服务端判定；已办/无权限身份为 false） */
   canHandle?: boolean
+  /** 当前部署节点允许的操作；页面再与办理状态、账号权限取交集，缺省兼容旧后端。 */
+  allowedActions?: string[]
   nodeKey?: string | null
   processInstanceId: string
+  /** 流程实例记录标识（催办等实例级操作定位键；旧响应缺省）。 */
+  instanceId?: number | string | null
   processDefinitionKey: string
   processName: string | null // 流程定义被删除时为 null
   formKey: string
@@ -60,6 +66,8 @@ export interface ApprovalHistoryItem {
   endTime: string | null // 可能为 null
   action?: 'APPROVE' | 'RETURN' | 'REJECT' | null
   opinionData?: Record<string, unknown> | null
+  /** 审批动作记录标识：意见附件受控下载定位键（旧响应缺省）。 */
+  actionRecordId?: string | number | null
   opinionFormId?: string | null
   opinionFormVersion?: string | null
   approvalResult: 'APPROVED' | 'REJECTED' | null // 审批结果：APPROVED=通过, REJECTED=驳回, null=进行中
@@ -101,6 +109,10 @@ export interface ProcessDef {
   versionLabel?: string | null
   /** 主题生成规则（V012-BUG-010；列表行随实体下发，历史响应可能缺省） */
   themeRule?: string | null
+  /** 真实归属租户 ID（实体租户列；历史响应可能缺省；owner-20261030-u020-q69-def-tenant） */
+  tenantId?: number | null
+  /** 租户展示名（列表响应回填，非表列；历史响应可能缺省） */
+  tenantName?: string | null
   p53Stats?: { total: number; published: number; draft: number; disabled: number }
 }
 

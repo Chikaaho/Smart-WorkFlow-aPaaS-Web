@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Document, Folder, Plus } from '@element-plus/icons-vue'
 import AppContentPanel from '@/modules/form/components/AppContentPanel.vue'
 import AppTreeNav from '@/modules/form/components/AppTreeNav.vue'
 import {
@@ -106,22 +106,29 @@ function onCreateCommand(command: string) {
 
 const dirDialogVisible = ref(false)
 const editingDirId = ref<string | null>(null)
-const dirForm = reactive({ name: '', sortNo: 0 })
+/* Q34（272:1698）：上级目录为本地选择字段，不参与创建请求（API 仍只收名称/排序） */
+const dirForm = reactive({ name: '', sortNo: 0, parentId: '' })
 const dirSaving = ref(false)
 
 const dirDialogTitle = computed(() =>
   editingDirId.value ? t('form.appCenter.editDir') : t('form.appCenter.newDir'),
 )
 
+/**
+ * Q34（272:1722）：目录是应用内单层分类，保存契约只改名。
+ * 设置窗按真实数据只读回显当前父级：单层目录没有上级目录，显示「无」，不新增移动目录业务。
+ */
+const currentDirParentName = computed(() => t('form.appCenter.parentDirNone'))
+
 function openCreateDir() {
   editingDirId.value = null
-  Object.assign(dirForm, { name: '', sortNo: 0 })
+  Object.assign(dirForm, { name: '', sortNo: 0, parentId: '' })
   dirDialogVisible.value = true
 }
 
 function openRenameDir(dir: { id: string; name: string; sortNo: number }) {
   editingDirId.value = dir.id
-  Object.assign(dirForm, { name: dir.name, sortNo: dir.sortNo ?? 0 })
+  Object.assign(dirForm, { name: dir.name, sortNo: dir.sortNo ?? 0, parentId: '' })
   dirDialogVisible.value = true
 }
 
@@ -168,7 +175,11 @@ async function handleDeleteDir(dir: { id: string; name: string }) {
     await ElMessageBox.confirm(
       t('form.appCenter.deleteDirConfirm', { name: dir.name }),
       t('common.deleteConfirmTitle'),
-      { type: 'warning' },
+      {
+        customClass: 'sw-delete-confirm',
+        confirmButtonText: t('common.delete'),
+        cancelButtonText: t('common.cancel'),
+      },
     )
   } catch {
     return
@@ -264,7 +275,11 @@ async function handleDeleteForm(item: FormAppFormItem) {
     await ElMessageBox.confirm(
       t('form.appCenter.deleteFormConfirm', { name: item.name }),
       t('common.deleteConfirmTitle'),
-      { type: 'warning' },
+      {
+        customClass: 'sw-delete-confirm',
+        confirmButtonText: t('common.delete'),
+        cancelButtonText: t('common.cancel'),
+      },
     )
   } catch {
     return
@@ -306,17 +321,23 @@ onMounted(() => {
         @form-command="onFormCommand"
       >
         <template #footer>
-          <el-dropdown v-perm="'form:app:manage'" trigger="click" @command="onCreateCommand">
+          <!-- 273:1773（执行提示28 项1）：底部新建菜单 192 宽/项 36 高/带原图标；sw-op-menu 样式根在 AppTreeNav 全局块 -->
+          <el-dropdown
+            v-perm="'form:app:manage'"
+            trigger="click"
+            popper-class="sw-op-menu"
+            @command="onCreateCommand"
+          >
             <el-button class="app-ws__create" data-testid="app-ws-create" :icon="Plus">
               {{ t('form.appCenter.createAction') }}
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="dir" data-testid="dir-create">
-                  {{ t('form.appCenter.newDir') }}
+                  <el-icon><Folder /></el-icon>{{ t('form.appCenter.newDir') }}
                 </el-dropdown-item>
                 <el-dropdown-item command="form" data-testid="form-create">
-                  {{ t('form.appCenter.newForm') }}
+                  <el-icon><Document /></el-icon>{{ t('form.appCenter.newForm') }}
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -334,13 +355,48 @@ onMounted(() => {
       />
     </div>
 
-    <!-- 目录新建/改名对话框（0.1.7 #4：修改只改名称） -->
-    <el-dialog v-model="dirDialogVisible" :title="dirDialogTitle" width="420px">
-      <el-form label-width="80px">
-        <el-form-item :label="t('form.appCenter.fieldName')" required>
+    <!-- 目录新建/改名对话框（0.1.7 #4：修改只改名称）。
+         Q34（272:1698）：新建态 540 宽，目录名称 + 上级目录两字段（上级目录只本地选择、默认无）；
+         Q34（272:1722）：设置态同为 540，名称字段 490×32，并只读回显当前父级。 -->
+    <el-dialog
+      v-model="dirDialogVisible"
+      :title="dirDialogTitle"
+      width="540px"
+      class="ws-dir-dialog"
+    >
+      <template v-if="!editingDirId">
+        <div class="ws-dialog-field">
+          <label class="ws-dialog-field__label ws-dialog-field__label--required">{{
+            t('form.appCenter.dirNameLabel')
+          }}</label>
+          <el-input
+            v-model="dirForm.name"
+            data-testid="dir-name-input"
+            maxlength="100"
+            :placeholder="t('common.namePlaceholder')"
+          />
+        </div>
+        <div class="ws-dialog-field">
+          <label class="ws-dialog-field__label">{{ t('form.appCenter.parentDirLabel') }}</label>
+          <el-select v-model="dirForm.parentId" data-testid="dir-parent-select">
+            <el-option :value="''" :label="t('form.appCenter.parentDirNone')" />
+            <el-option v-for="dir in dirs" :key="dir.id" :value="dir.id" :label="dir.name" />
+          </el-select>
+        </div>
+      </template>
+      <template v-else>
+        <!-- Q34（272:1722）：设置窗目录名称 490×32；契约仅改名，当前父级只读回显，不提供迁移 -->
+        <div class="ws-dialog-field">
+          <label class="ws-dialog-field__label ws-dialog-field__label--required">{{
+            t('form.appCenter.dirNameLabel')
+          }}</label>
           <el-input v-model="dirForm.name" data-testid="dir-name-input" maxlength="100" />
-        </el-form-item>
-      </el-form>
+        </div>
+        <div class="ws-dialog-field">
+          <label class="ws-dialog-field__label">{{ t('form.appCenter.parentDirLabel') }}</label>
+          <el-input :model-value="currentDirParentName" data-testid="dir-parent-echo" readonly />
+        </div>
+      </template>
       <template #footer>
         <el-button @click="dirDialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="dirSaving" @click="handleSaveDir">
@@ -349,28 +405,43 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <!-- 新建表单对话框 -->
-    <el-dialog v-model="formDialogVisible" :title="t('form.appCenter.newForm')" width="420px">
-      <el-form label-width="80px">
-        <el-form-item :label="t('form.appCenter.fieldName')" required>
-          <el-input v-model="newForm.name" data-testid="form-name-input" maxlength="200" />
-        </el-form-item>
-      </el-form>
+    <!-- 新建表单对话框。Q35（527:24216）：440 宽、名称 390×32、底栏 80×32；不点创建不产生任何记录 -->
+    <el-dialog
+      v-model="formDialogVisible"
+      :title="t('form.appCenter.newForm')"
+      width="440px"
+      class="ws-form-dialog"
+    >
+      <div class="ws-dialog-field ws-dialog-field--dialog440">
+        <label class="ws-dialog-field__label">{{ t('form.appCenter.formNameLabel') }}</label>
+        <el-input
+          v-model="newForm.name"
+          data-testid="form-name-input"
+          maxlength="200"
+          :placeholder="t('form.appCenter.formNamePlaceholder')"
+        />
+      </div>
       <template #footer>
         <el-button @click="formDialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" @click="handleCreateForm">
-          {{ t('common.save') }}
+          {{ t('form.appCenter.createFormConfirm') }}
         </el-button>
       </template>
     </el-dialog>
 
-    <!-- 表单改名对话框 -->
-    <el-dialog v-model="renameDialogVisible" :title="t('common.edit')" width="420px">
-      <el-form label-width="80px">
-        <el-form-item :label="t('form.appCenter.fieldName')" required>
-          <el-input v-model="renameTarget.name" maxlength="200" />
-        </el-form-item>
-      </el-form>
+    <!-- 表单改名对话框。Q35（527:24177）：440 宽、名称 390×32、底栏 80×32；仅该表单行重命名调用方 -->
+    <el-dialog
+      v-model="renameDialogVisible"
+      :title="t('common.edit')"
+      width="440px"
+      class="ws-rename-dialog"
+    >
+      <div class="ws-dialog-field ws-dialog-field--dialog440">
+        <label class="ws-dialog-field__label ws-dialog-field__label--required">{{
+          t('form.appCenter.fieldName')
+        }}</label>
+        <el-input v-model="renameTarget.name" data-testid="form-rename-input" maxlength="200" />
+      </div>
       <template #footer>
         <el-button @click="renameDialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="renameSaving" @click="handleRenameForm">
@@ -396,5 +467,115 @@ onMounted(() => {
   align-items: stretch;
   flex: 1;
   min-height: 0;
+}
+</style>
+
+<style>
+/* Q34/Q35（272:1698 / 527:24216）：新建目录 540（字段 490×32）/ 新建表单 440（字段 390×32），
+   底栏统一 80×32；teleport 弹层样式落真实弹窗根（全局块）。 */
+.ws-dir-dialog .el-dialog__footer .el-button,
+.ws-form-dialog .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+.ws-dir-dialog .ws-dialog-field {
+  width: 490px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+.ws-dir-dialog .ws-dialog-field + .ws-dialog-field {
+  margin-top: 16px;
+}
+.ws-form-dialog .ws-dialog-field--dialog440 {
+  width: 390px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+/* Q35（527:24177）：表单重命名 440 宽、名称 390×32、底栏 80×32（仅该调用方）。 */
+.ws-rename-dialog .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+.ws-rename-dialog .ws-dialog-field--dialog440 {
+  width: 390px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+.ws-dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ws-dialog-field__label {
+  color: var(--sw-text-regular, #606266);
+  font-size: 14px;
+  line-height: 22px;
+}
+.ws-dialog-field__label--required::before {
+  content: '* ';
+  color: var(--sw-danger, #c2303a);
+}
+.ws-dialog-field .el-input__wrapper,
+.ws-dialog-field .el-select__wrapper {
+  box-sizing: border-box;
+  min-height: 32px;
+  height: 32px;
+}
+
+/* 527:24284（执行提示18）：外盒 440×172@(740,454)；标题/正文/按钮恢复原锚点，删除 #C2303A */
+.sw-delete-confirm {
+  box-sizing: border-box;
+  width: 440px !important;
+  height: 172px;
+  padding: 28px 25px 27px 24px;
+  border-radius: 12px;
+  /* EP 以内联 --el-messagebox-width 定宽，需覆盖变量 */
+  --el-messagebox-width: 440px;
+  --el-messagebox-padding-primary: 0px;
+}
+.sw-delete-confirm .el-message-box__header {
+  padding-bottom: 22px;
+}
+.sw-delete-confirm .el-message-box__headerbtn {
+  top: 26px;
+  right: 25px;
+  width: 32px;
+  height: 32px;
+}
+.sw-delete-confirm .el-message-box__title {
+  color: #172033;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+.sw-delete-confirm .el-message-box__content {
+  padding: 0;
+}
+.sw-delete-confirm .el-message-box__message p {
+  color: #606266;
+  font-size: 14px;
+  line-height: 22px;
+}
+.sw-delete-confirm .el-message-box__btns {
+  gap: 8px;
+  padding-top: 17px;
+}
+.sw-delete-confirm .el-message-box__btns .el-button {
+  min-width: 80px;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+.sw-delete-confirm .el-message-box__btns .el-button--primary {
+  background-color: #c2303a;
+  border-color: #c2303a;
+}
+.sw-delete-confirm .el-message-box__btns .el-button--primary:not(:hover):not(:focus) {
+  background-color: #c2303a;
+  border-color: #c2303a;
 }
 </style>
