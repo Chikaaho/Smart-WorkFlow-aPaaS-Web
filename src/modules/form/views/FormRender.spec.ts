@@ -533,7 +533,8 @@ function findButtonByText(wrapper: ReturnType<typeof mount>, text: string) {
 }
 
 /**
- * 提交成功确认：弹层文案固定为「提交成功」，且实例探测走用户态 adapter（表单键 + 记录 ID）。
+ * 提交成功确认：复用 DetailDialog 结果窗（0.2.0 P3/272:1784），
+ * 实例探测走用户态 adapter（表单键 + 记录 ID）。
  */
 describe('FormRender 提交成功确认', () => {
   beforeEach(() => {
@@ -543,7 +544,7 @@ describe('FormRender 提交成功确认', () => {
     mockQuery = {}
   })
 
-  it('新建提交成功后只提示「提交成功」，并按表单键+记录 ID 探测实例', async () => {
+  it('新建提交成功后呈现 DetailDialog 结果窗，并按表单键+记录 ID 探测实例', async () => {
     vi.mocked(getFormDefinition).mockResolvedValueOnce({
       title: '灾备演练',
       fields: [{ name: 'drill_name', label: '演练名称', type: 'TEXT', required: false }],
@@ -552,15 +553,13 @@ describe('FormRender 提交成功确认', () => {
     vi.mocked(countProcessInstancesByBusinessKey).mockResolvedValueOnce(1)
 
     // el-dialog 内容默认 teleport 到 body：桩成内联渲染，断言提交确认面文案
+    // （0.2.0 P3/272:1784：复用 DetailDialog 结果窗，标题「申请已提交」+ 正文 + 「查看」按钮）
     const submitStubs = {
       ...baseStubs,
       'el-dialog': {
-        props: ['modelValue'],
-        template: '<div v-if="modelValue" class="submit-dialog-stub"><slot /></div>',
-      },
-      'el-result': {
-        props: ['title', 'subTitle'],
-        template: '<div class="result-stub" :data-sub-title="subTitle">{{ title }}</div>',
+        props: ['modelValue', 'title'],
+        template:
+          '<div v-if="modelValue" class="submit-dialog-stub"><span class="submit-dialog-title">{{ title }}</span><slot /><slot name="footer" /></div>',
       },
     }
     const wrapper = mount(FormRender, { global: { stubs: submitStubs } })
@@ -572,9 +571,12 @@ describe('FormRender 提交成功确认', () => {
     await flushPromises()
 
     expect(countProcessInstancesByBusinessKey).toHaveBeenCalledWith('test-form-key', 'rec-900')
-    const dialogText = wrapper.find('.submit-dialog-stub').text()
-    expect(dialogText).toBe('提交成功')
-    expect(wrapper.find('.result-stub').attributes('data-sub-title')).toBeUndefined()
+    expect(wrapper.find('.submit-dialog-title').text()).toBe('申请已提交')
+    expect(wrapper.find('[data-testid="submit-success-message"]').text()).toBe(
+      '可前往「我发起的」查看审批进度。',
+    )
+    const confirmBtn = wrapper.find('[data-testid="submit-dialog-confirm"]')
+    expect(confirmBtn.text()).toBe('查看')
     wrapper.unmount()
   })
 })

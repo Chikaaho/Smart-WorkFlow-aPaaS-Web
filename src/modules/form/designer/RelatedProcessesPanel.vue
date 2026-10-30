@@ -26,6 +26,7 @@ import {
 import type { ProcessDef } from '@/contracts/bpm'
 import { ListPagination } from '@/components/page-layout'
 import DetailDialog from '@/components/DetailDialog.vue'
+import UnconfiguredFlowBoard from './UnconfiguredFlowBoard.vue'
 
 /** 主题规则设置弹窗经接缝异步加载（跨模块组件不静态直引）。 */
 const ThemeRuleDialog = defineAsyncComponent(themeRuleDialogLoader)
@@ -227,7 +228,15 @@ defineExpose({ openNumberSettings })
         </div>
       </div>
 
-      <section class="related-processes__table-card" aria-label="关联流程列表">
+      <!-- Q56：零关联流程分支展示未配置空画布 + 节点库（纯展示）+ 创建入口；
+           「新建流程」仍走既有命名弹窗链路，打开空状态/取消不创建任何流程定义 -->
+      <UnconfiguredFlowBoard
+        v-if="records.length === 0 && !loading"
+        class="related-processes__board"
+        @create="openCreate"
+      />
+
+      <section v-else class="related-processes__table-card" aria-label="关联流程列表">
         <!-- 列宽/对齐：名称列吸收剩余宽度，其余列固定宽并居中，保证表头与内容同一轴线 -->
         <el-table v-loading="loading" :data="records" class="related-processes__table">
           <el-table-column
@@ -389,11 +398,19 @@ defineExpose({ openNumberSettings })
 
 <style scoped>
 .related-processes {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   box-sizing: border-box;
   padding: 20px 48px 32px;
   overflow: auto;
+}
+
+/* Q56：零关联分支的未配置画布吸收剩余高度（节点库/画布几何对齐流程设计器） */
+.related-processes__board {
+  flex: 1;
+  min-height: 420px;
 }
 
 /* 0.1.7 #25 回归：标题/描述/汇总计数噪音已去除（见模板注释），筛选栏即页首；

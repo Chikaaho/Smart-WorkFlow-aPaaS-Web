@@ -150,6 +150,15 @@ const pageCount = computed(() =>
   Math.max(1, Math.ceil(total.value / Math.max(1, props.config.pageSize ?? 10))),
 )
 
+/** 自动滚动间隔（秒）；未配置或非法值回退 3 秒，保持旧行为。 */
+const autoScrollIntervalMs = computed(() => {
+  const seconds = Number(props.config.autoScrollInterval)
+  return (Number.isFinite(seconds) && seconds > 0 ? seconds : 3) * 1000
+})
+/** 悬停暂停开关；缺省开启（与原设计一致）。 */
+const hoverPauseEnabled = computed(() => props.config.autoScrollHoverPause !== false)
+const hoverPaused = ref(false)
+
 function cellText(fieldName: string, value: unknown): string {
   const field = fields.value.find((item) => item.name === fieldName)
   if (value == null || value === '') return '—'
@@ -186,10 +195,7 @@ function buildMetrics(): Array<{ field: string | null; agg: WorkspaceMetricConfi
 
 async function loadData(): Promise<void> {
   const seq = ++requestSeq
-  if (autoTimer) {
-    globalThis.clearInterval(autoTimer)
-    autoTimer = null
-  }
+  stopAutoScroll()
   if (!formKey.value) {
     aggregate.value = null
     rows.value = []
@@ -262,12 +268,22 @@ function applyRows(response: WorkspaceRowsResp): void {
   if (page.value > pageCount.value) page.value = pageCount.value
 }
 
+function stopAutoScroll(): void {
+  if (autoTimer) {
+    globalThis.clearInterval(autoTimer)
+    autoTimer = null
+  }
+}
+
 function scheduleAutoScroll(): void {
+  stopAutoScroll()
   if (props.config.presentation !== 'auto' || pageCount.value <= 1) return
   autoTimer = globalThis.setInterval(() => {
     if (loading.value) return
+    // 悬停暂停开启且鼠标在卡片上时跳过翻页，鼠标移开后由既有定时器恢复。
+    if (hoverPauseEnabled.value && hoverPaused.value) return
     page.value = page.value >= pageCount.value ? 1 : page.value + 1
-  }, 3000)
+  }, autoScrollIntervalMs.value)
 }
 
 function goPage(next: number): void {
@@ -283,12 +299,11 @@ watch(
 )
 
 watch(
-  () => props.config.presentation,
-  (presentation) => {
-    if (autoTimer) {
-      globalThis.clearInterval(autoTimer)
-      autoTimer = null
-    }
+  // 呈现方式或滚动间隔变化时重置定时器；切到手动翻页即完全停止自动翻页。
+  () => [props.config.presentation, props.config.autoScrollInterval] as const,
+  ([presentation]) => {
+    stopAutoScroll()
+    hoverPaused.value = false
     // 切换到自动滚动时当前页数据已加载，不会再次触发 loadData。
     if (presentation === 'auto') scheduleAutoScroll()
   },
@@ -303,7 +318,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  if (autoTimer) globalThis.clearInterval(autoTimer)
+  stopAutoScroll()
 })
 
 /** 图表配置变化时保持当前页；列表列配置变化也不重置到第一页以外。 */
@@ -348,7 +363,14 @@ function chartStyle() {
       />
     </template>
     <template v-else>
-      <div class="wdata__list" :class="{ 'wdata__list--auto': config.presentation === 'auto' }">
+      <div
+        class="wdata__list"
+        :class="{ 'wdata__list--auto': config.presentation === 'auto' }"
+        data-testid="wdata-list"
+        :data-auto-hover-paused="hoverPauseEnabled && hoverPaused ? 'true' : 'false'"
+        @mouseenter="hoverPaused = true"
+        @mouseleave="hoverPaused = false"
+      >
         <div class="wdata__list-head" :style="{ gridTemplateColumns: listTemplate }">
           <span v-for="column in columns" :key="column.field">{{ column.label }}</span>
         </div>

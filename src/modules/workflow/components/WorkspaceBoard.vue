@@ -17,7 +17,6 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Document } from '@element-plus/icons-vue'
-import { useUserStore } from '@/stores/user'
 import {
   getWorkspaceLayout,
   saveWorkspaceLayout,
@@ -49,7 +48,6 @@ import type { WorkspaceDataConfig } from '@/modules/workflow/utils/workspace-dat
 import WorkspaceDataCard from './WorkspaceDataCard.vue'
 
 const router = useRouter()
-const userStore = useUserStore()
 
 // ─── 布局状态 ───
 const components = ref<WorkspaceComponent[]>([])
@@ -108,14 +106,6 @@ const draftsExtra = ref<PageExtra>({})
 
 // ─── 流程效能（真实分析摘要；无权限/失败 → null → 空值呈现） ───
 const analytics = ref<Awaited<ReturnType<typeof queryAnalyticsSummary>> | null>(null)
-
-const displayName = computed(() => userStore.user?.displayName ?? '')
-const greeting = computed(() => {
-  const hour = new Date().getHours()
-  if (hour < 12) return t('workspace.greetingMorning')
-  if (hour < 18) return t('workspace.greetingAfternoon')
-  return t('workspace.greetingEvening')
-})
 
 /** 统计卡图标（设计01：右上简洁小图标，无彩色底块；数值仍全部为真实 total） */
 const STAT_ICONS: Record<string, { icon: unknown; bg: string; color: string }> = {
@@ -662,6 +652,24 @@ function itemStyle(key: string) {
   }
 }
 
+/**
+ * Q08（645:28703）：保存后的查看态二级工具栏「返回」复用既有进入来源/回跳语义
+ * （同 TaskDetail #20：vue-router 4 history.state.back 记录应用内来源；
+ * 直达无历史时兜底回工作台，与配置页 goBack 同源）。
+ */
+function hasInAppHistory(): boolean {
+  const back = globalThis.history?.state?.back
+  return typeof back === 'string' && back !== ''
+}
+
+function goBackFromView() {
+  if (hasInAppHistory()) {
+    router.back()
+    return
+  }
+  void router.push('/workspace')
+}
+
 function openDraft(item: Record<string, unknown>) {
   const formKey = String(item.formKey ?? '')
   const draftId = String(item.id ?? '')
@@ -1026,15 +1034,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-loading="loading" class="wsd" :class="{ 'is-editing': editing }">
-    <header v-if="!editing" class="wsd-hero">
-      <h2 class="wsd-hero__greeting">
-        {{ greeting }}{{ displayName ? '，' : '' }}{{ displayName }}
-      </h2>
-      <p class="wsd-hero__sub">
-        {{ t('workspace.todoSummary', { count: todoTotal, urgent: todoExtra.urgentTotal ?? 0 }) }}
-      </p>
+    <!-- Q08（645:28703）：查看态恢复全屏框架的二级工具栏（紧贴全局 64px 顶栏，
+         不叠压）：返回 + 「我的工作台」标题 + 右侧配置工作台入口；替换原问候行查看态。 -->
+    <header v-if="!editing" class="wsd-viewbar" data-testid="workspace-view-toolbar">
+      <div class="wsd-viewbar__left">
+        <button class="wsd-viewbar__back" type="button" @click="goBackFromView">
+          ← {{ t('common.backShort') }}
+        </button>
+        <h2 class="wsd-viewbar__title">{{ t('workspace.studio.canvasTitle') }}</h2>
+      </div>
       <button
-        class="wsd-hero__config"
+        class="wsd-viewbar__config"
         type="button"
         :title="t('workspace.configureWorkspace')"
         :aria-label="t('workspace.configureWorkspace')"
@@ -1421,6 +1431,70 @@ onBeforeUnmount(() => {
 .wsd-hero {
   position: relative;
   height: 64px;
+}
+/* Q08（645:28703）保存后的查看态二级工具栏：全宽 56px（y64..120，不叠压全局顶栏），
+   几何对齐配置页工具栏——返回 72×32 @x24/y76（屏级），右侧配置工作台 @x≈1802/y76。 */
+.wsd-viewbar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  flex: none;
+  margin: -20px -20px 0;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--sw-border-light, #eef0f4);
+  background: var(--sw-bg-surface, #fff);
+}
+.wsd-viewbar__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.wsd-viewbar__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 72px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sw-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+.wsd-viewbar__back:hover,
+.wsd-viewbar__back:focus-visible {
+  background: var(--sw-bg-muted, #f3f4f6);
+}
+.wsd-viewbar__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--sw-text-primary);
+}
+.wsd-viewbar__config {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--sw-border, #d9dde6);
+  border-radius: 6px;
+  background: var(--sw-bg-surface, #fff);
+  color: var(--sw-text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+.wsd-viewbar__config:hover,
+.wsd-viewbar__config:focus-visible {
+  background: var(--sw-color-primary-softer);
+  color: var(--sw-color-primary);
 }
 .wsd-hero__greeting {
   margin: 0;

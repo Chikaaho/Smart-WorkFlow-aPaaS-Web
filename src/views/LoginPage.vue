@@ -967,6 +967,8 @@ img.login-page__captcha {
     border-radius: 6px;
     font-size: 14px;
     font-weight: 500;
+    /* Q70(32:2)：文字行盒由 normal(20px) 明确为 22px，其余基线保持 */
+    line-height: 22px;
   }
   .login-page__sso {
     margin-top: 18px;

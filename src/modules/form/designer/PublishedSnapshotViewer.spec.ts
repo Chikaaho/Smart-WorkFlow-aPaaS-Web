@@ -351,6 +351,7 @@ describe('PublishedSnapshotViewer', () => {
     await wrapper.findAll('.snapshot-settings__nav button')[1].trigger('click') // 监听
     expect(wrapper.find('.snapshot-listener-table').text()).toContain('提交前检查')
     expect(wrapper.find('.snapshot-listener-table').text()).not.toContain('节点开始前检查')
+    await wrapper.find('[data-testid="snapshot-trigger-open"]').trigger('click')
     const triggerView = wrapper.find('[data-testid="snapshot-trigger-script-view"]')
     expect(triggerView.exists()).toBe(true)
     await triggerView.trigger('click')
@@ -374,6 +375,7 @@ describe('PublishedSnapshotViewer', () => {
     expect(wrapper.text()).toContain('var_ok')
     expect(wrapper.text()).toContain('是否通过')
     await navButtons[1].trigger('click') // 监听
+    await wrapper.find('[data-testid="snapshot-trigger-open"]').trigger('click')
     expect(wrapper.text()).toContain('节点开始前检查')
     expect(wrapper.text()).toContain('节点开始前')
   })
@@ -407,6 +409,8 @@ describe('PublishedSnapshotViewer', () => {
     const wrapper = await mountViewer()
     await openSection(wrapper, '流程设置')
     await wrapper.findAll('.snapshot-settings__nav button')[1].trigger('click')
+    // 509:19394：触发器 1100 内容宿主到遮罩只读弹窗，页内入口卡片打开
+    await wrapper.find('[data-testid="snapshot-trigger-open"]').trigger('click')
 
     const table = wrapper.find('[data-testid="snapshot-trigger-table"]')
     expect(table.exists()).toBe(true)

@@ -73,6 +73,10 @@ export interface WorkspaceDataConfig {
   sortOrder?: 'ASC' | 'DESC'
   presentation?: 'paged' | 'auto'
   pageSize?: number
+  /** 自动滚动翻页间隔（秒）；缺省按 3 秒处理，保持旧行为。 */
+  autoScrollInterval?: number
+  /** 自动滚动时鼠标悬停是否暂停翻页；缺省为 true（与原设计一致）。 */
+  autoScrollHoverPause?: boolean
   chartType?: WorkspaceChartType
   /** 散点图 X 轴数值字段。 */
   xField?: string

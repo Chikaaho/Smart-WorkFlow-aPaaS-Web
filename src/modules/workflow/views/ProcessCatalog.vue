@@ -724,12 +724,21 @@ onMounted(() => {
   height: 32px;
   padding: 0;
 }
+/* Q71(97:2)：查询/重置文字行盒 22px（14/500 保持），重置文字色 #303A55 */
+.catalog-page__query :deep(span),
+.catalog-page__reset :deep(span) {
+  line-height: 22px;
+}
 .catalog-page__reset {
   width: 70px;
   height: 32px;
   margin-left: 0;
   padding: 0;
-  color: #17213a;
+  color: #303a55;
+}
+/* Q71(97:2)：页容量文字行盒 24px→22px（14/400 保持），仅本页分页器 */
+.catalog-table__footer :deep(.el-pagination__sizes span) {
+  line-height: 22px;
 }
 .catalog-page__alert {
   margin-bottom: 12px;

@@ -142,11 +142,46 @@ describe('WorkspaceHome 布局与查询收敛（R4）', () => {
     expect(mockPush).toHaveBeenCalledWith('/form/form-render/f1')
   })
 
+  it('Q08（645:28703）：查看态恢复二级工具栏（返回/我的工作台/配置工作台），问候行不再渲染', async () => {
+    const wrapper = mount(WorkspaceHome, { global })
+    await flushPromises()
+    const bar = wrapper.find('[data-testid="workspace-view-toolbar"]')
+    expect(bar.exists()).toBe(true)
+    expect(wrapper.find('.wsd-hero').exists()).toBe(false)
+    expect(bar.find('.wsd-viewbar__title').text()).toBe('我的工作台')
+    // 返回复用进入来源语义：应用内有历史即 router.back()
+    const back = window.history.state?.back
+    mockPush.mockClear()
+    await bar.find('.wsd-viewbar__back').trigger('click')
+    if (typeof back === 'string' && back) {
+      expect(mockPush).not.toHaveBeenCalled()
+    } else {
+      expect(mockPush).toHaveBeenCalledWith('/workspace')
+    }
+    // 配置工作台入口保留：进入全屏 /workspace/config
+    mockPush.mockClear()
+    const config = bar.find('.wsd-viewbar__config')
+    expect(config.attributes('aria-label')).toBe('配置工作台')
+    await config.trigger('click')
+    expect(mockPush).toHaveBeenCalledWith('/workspace/config')
+  })
+
+  it('Q08：默认布局（未自定义）查看态同样使用二级工具栏（问候行不渲染）', async () => {
+    getWorkspaceLayout.mockResolvedValue(
+      layoutResp([{ key: 'todo', visible: true, order: 1, span: 2 }], false),
+    )
+    const wrapper = mount(WorkspaceHome, { global })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="workspace-view-toolbar"]').exists()).toBe(true)
+    expect(wrapper.find('.wsd-hero').exists()).toBe(false)
+  })
+
   it('齿轮进入全屏三栏配置而不是旧弹窗', async () => {
     const wrapper = mount(WorkspaceHome, { global })
     await flushPromises()
     mockPush.mockClear()
-    const gear = wrapper.find('.wsd-hero__config')
+    // Q08：保存后的查看态配置入口位于二级工具栏（.wsd-viewbar__config）
+    const gear = wrapper.find('.wsd-viewbar__config')
     expect(gear.attributes('aria-label')).toBe('配置工作台')
     await gear.trigger('click')
     // 0.2.0 r2：首页入口改为全屏 /workspace/config；旧 /workspace/edit 路由仍可达。

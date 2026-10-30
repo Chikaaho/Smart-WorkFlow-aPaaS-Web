@@ -1229,6 +1229,8 @@ type SnapshotTriggerRow = {
 }
 
 const selectedTriggerKey = ref<string | null>(null)
+/* Q28（509:19394）：触发器 1100 只读内容宿主到遮罩只读弹窗（复用 DetailDialog 外壳），不再页内平铺。 */
+const triggerDialogVisible = ref(false)
 const triggerRows = computed<SnapshotTriggerRow[]>(() =>
   triggers.value.map((row) => {
     const processNodes = nodes.value.filter(
@@ -2195,7 +2197,8 @@ watch(
             </section>
 
             <template v-else-if="settingsBranch === 'listeners'">
-              <!-- Q28（509:19394）：冻结触发器只读表 1100——仅真实 trigger 记录，含执行方式/判断脚本 -->
+              <!-- Q28（509:19394）：冻结触发器 1100 只读内容宿主到遮罩只读弹窗（snapshot-triggers-dialog），
+                   页内仅保留入口卡片；表/明细本体见下方 DetailDialog。 -->
               <section
                 class="snapshot-section snapshot-settings__card snapshot-settings__card--triggers"
               >
@@ -2204,76 +2207,19 @@ watch(
                     <h3>{{ sectionLabel('triggers') }}</h3>
                   </div>
                 </div>
-                <p v-if="triggerRows.length === 0" class="snapshot-empty">
-                  {{ t('form.snapshotViewer.triggerMissing') }}
-                </p>
-                <template v-else>
-                  <table
-                    class="snapshot-table snapshot-trigger-table"
-                    data-testid="snapshot-trigger-table"
+                <div class="snapshot-trigger-entry">
+                  <p v-if="triggerRows.length === 0" class="snapshot-empty">
+                    {{ t('form.snapshotViewer.triggerMissing') }}
+                  </p>
+                  <el-button
+                    v-else
+                    type="primary"
+                    data-testid="snapshot-trigger-open"
+                    @click="triggerDialogVisible = true"
                   >
-                    <thead>
-                      <tr>
-                        <th>{{ t('form.snapshotViewer.listenerName') }}</th>
-                        <th>{{ t('form.snapshotViewer.listenerTiming') }}</th>
-                        <th>{{ t('form.snapshotViewer.triggerNode') }}</th>
-                        <th>{{ t('form.snapshotViewer.triggerAction') }}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        v-for="row in triggerRows"
-                        :key="row.key"
-                        :class="{ 'is-selected': selectedTriggerRow?.key === row.key }"
-                        @click="selectedTriggerKey = row.key"
-                      >
-                        <td>{{ row.name }}</td>
-                        <td>{{ row.timing }}</td>
-                        <td>{{ row.nodeName }}</td>
-                        <td>{{ row.actionText }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div
-                    v-if="selectedTriggerRow"
-                    class="snapshot-trigger-detail"
-                    data-testid="snapshot-trigger-detail"
-                  >
-                    <div class="snapshot-trigger-detail__field">
-                      <span class="snapshot-trigger-detail__label">
-                        {{ t('form.snapshotViewer.triggerOrchestration') }}
-                      </span>
-                      <input
-                        class="snapshot-trigger-detail__input"
-                        :value="selectedTriggerRow.orchestrationText"
-                        readonly
-                      />
-                    </div>
-                    <div class="snapshot-trigger-detail__field">
-                      <span class="snapshot-trigger-detail__label">
-                        {{ t('form.snapshotViewer.triggerScript') }}
-                      </span>
-                      <div class="snapshot-trigger-detail__row">
-                        <input
-                          class="snapshot-trigger-detail__input"
-                          :value="
-                            selectedTriggerRow.script || t('form.snapshotViewer.propNotConfigured')
-                          "
-                          readonly
-                        />
-                        <el-button
-                          link
-                          type="primary"
-                          size="small"
-                          data-testid="snapshot-trigger-script-view"
-                          @click="selectedTriggerRow.viewScript()"
-                        >
-                          {{ t('common.view') }}
-                        </el-button>
-                      </div>
-                    </div>
-                  </div>
-                </template>
+                    {{ t('common.view') }}
+                  </el-button>
+                </div>
               </section>
 
               <section class="snapshot-section snapshot-settings__card">
@@ -2532,6 +2478,88 @@ watch(
           </tr>
         </tbody>
       </table>
+    </DetailDialog>
+
+    <!-- Q28（509:19394）：冻结触发器 1100 遮罩只读窗——仅真实 trigger 记录，含执行方式/判断脚本；
+         复用既有只读弹窗外壳（只读标识 + 关闭 80×32），记录多时正文内部滚动（DetailDialog 72vh） -->
+    <DetailDialog
+      v-model="triggerDialogVisible"
+      :title="sectionLabel('triggers')"
+      width="1100px"
+      class="snapshot-triggers-dialog"
+      append-to-body
+    >
+      <p class="snapshot-dialog-meta snapshot-script-view__meta">
+        <span>{{ selectedTriggerRow?.meta || t('form.snapshotViewer.triggers') }}</span>
+        <span class="snapshot-script-view__badge">
+          {{ t('form.snapshotViewer.readonlyBadge') }}
+        </span>
+      </p>
+      <p v-if="triggerRows.length === 0" class="snapshot-empty">
+        {{ t('form.snapshotViewer.triggerMissing') }}
+      </p>
+      <template v-else>
+        <table class="snapshot-table snapshot-trigger-table" data-testid="snapshot-trigger-table">
+          <thead>
+            <tr>
+              <th>{{ t('form.snapshotViewer.listenerName') }}</th>
+              <th>{{ t('form.snapshotViewer.listenerTiming') }}</th>
+              <th>{{ t('form.snapshotViewer.triggerNode') }}</th>
+              <th>{{ t('form.snapshotViewer.triggerAction') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="row in triggerRows"
+              :key="row.key"
+              :class="{ 'is-selected': selectedTriggerRow?.key === row.key }"
+              @click="selectedTriggerKey = row.key"
+            >
+              <td>{{ row.name }}</td>
+              <td>{{ row.timing }}</td>
+              <td>{{ row.nodeName }}</td>
+              <td>{{ row.actionText }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div
+          v-if="selectedTriggerRow"
+          class="snapshot-trigger-detail"
+          data-testid="snapshot-trigger-detail"
+        >
+          <div class="snapshot-trigger-detail__field">
+            <span class="snapshot-trigger-detail__label">
+              {{ t('form.snapshotViewer.triggerOrchestration') }}
+            </span>
+            <input
+              class="snapshot-trigger-detail__input"
+              :value="selectedTriggerRow.orchestrationText"
+              readonly
+            />
+          </div>
+          <div class="snapshot-trigger-detail__field">
+            <span class="snapshot-trigger-detail__label">
+              {{ t('form.snapshotViewer.triggerScript') }}
+            </span>
+            <div class="snapshot-trigger-detail__row">
+              <input
+                class="snapshot-trigger-detail__input"
+                :value="selectedTriggerRow.script || t('form.snapshotViewer.propNotConfigured')"
+                readonly
+              />
+              <el-button
+                link
+                type="primary"
+                size="small"
+                data-testid="snapshot-trigger-script-view"
+                @click="selectedTriggerRow.viewScript()"
+              >
+                {{ t('common.view') }}
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </template>
     </DetailDialog>
 
     <!-- Q25（509:19020）：选中冻结节点的字段权限 1100 只读面——优先节点字段三态，其次字段主体权限；无值不凑空表 -->
@@ -3178,10 +3206,24 @@ watch(
   width: 88px;
 }
 
-/* Q28（509:19394）：冻结触发器独立 1100 只读表；执行方式/判断脚本取冻结 trigger 记录。 */
+/* Q28（509:19394）：触发器内容宿主到 1100 遮罩只读窗；页内仅保留入口卡片。 */
 .snapshot-settings__card--triggers {
-  width: 1100px;
   max-width: 100%;
+}
+
+.snapshot-trigger-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 触发器 1100 只读窗：关闭 80×32（与既有只读窗同款）。 */
+:global(.snapshot-triggers-dialog .el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
 }
 
 .snapshot-trigger-table th {

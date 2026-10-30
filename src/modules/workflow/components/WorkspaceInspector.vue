@@ -570,6 +570,43 @@ function isStackable() {
                 <el-option :label="'20'" :value="20" />
               </el-select>
             </section>
+            <!-- 提示33 Q08：自动滚动模式下补充滚动间隔与悬停暂停，旧配置缺省时按 3 秒/开启处理 -->
+            <template v-if="card.config.presentation === 'auto'">
+              <section class="winsp__section" data-testid="auto-scroll-interval-section">
+                <label class="winsp__label">{{
+                  t('workspace.inspector.autoScrollInterval')
+                }}</label>
+                <div class="winsp__auto-interval">
+                  <el-input-number
+                    data-testid="auto-scroll-interval-input"
+                    :model-value="card.config.autoScrollInterval ?? 3"
+                    :min="1"
+                    :max="3600"
+                    :step="1"
+                    controls-position="right"
+                    @update:model-value="
+                      patchConfig({
+                        autoScrollInterval: Number($event) > 0 ? Number($event) : undefined,
+                      })
+                    "
+                  />
+                  <span class="winsp__interval-unit">{{ t('workspace.inspector.seconds') }}</span>
+                </div>
+              </section>
+              <section
+                class="winsp__section winsp__toggles"
+                data-testid="auto-scroll-hover-pause-section"
+              >
+                <label>
+                  <span>{{ t('workspace.inspector.hoverPause') }}</span>
+                  <el-switch
+                    data-testid="auto-scroll-hover-pause-switch"
+                    :model-value="card.config.autoScrollHoverPause !== false"
+                    @update:model-value="patchConfig({ autoScrollHoverPause: Boolean($event) })"
+                  />
+                </label>
+              </section>
+            </template>
           </template>
 
           <section class="winsp__section">
@@ -1024,6 +1061,24 @@ function isStackable() {
 .winsp__gradient {
   display: flex;
   gap: 8px;
+}
+
+/* 提示33 Q08：滚动间隔输入组（输入框 + 秒单位），自动滚动模式下展示 */
+.winsp__auto-interval {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.winsp__auto-interval :deep(.el-input-number) {
+  flex: 1;
+  width: 100%;
+}
+
+.winsp__interval-unit {
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .winsp__toggles {

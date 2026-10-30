@@ -38,6 +38,7 @@ import {
 import { loadScriptOrgContext } from '@/modules/form/api/i2-choices'
 import { ApiError, getErrorMessage } from '@/foundation/request'
 import DynamicField from '@/components/DynamicField.vue'
+import DetailDialog from '@/components/DetailDialog.vue'
 import { normalizeFormDateFields } from '@/contracts/form-date'
 import { normalizeFormFieldValue } from '@/contracts/form-value'
 import { richTextVisibleText } from '@/modules/form/rich-text'
@@ -335,7 +336,7 @@ const submitDialogGotoInstances = ref(false)
 function confirmSubmitDialog() {
   submitDialogVisible.value = false
   if (submitDialogGotoInstances.value) {
-    void router.push('/workflow/my-instances')
+    void router.push('/workspace/my-instances')
   } else {
     goBack()
   }
@@ -1345,26 +1346,26 @@ onMounted(() => {
       </template>
     </template>
 
-    <!-- 0.1.7 #16：提交成功居中确认弹窗（需用户点击确认） -->
-    <el-dialog
+    <!-- 0.1.7 #16 / 0.2.0 P3/272:1784：提交成功确认窗，复用 DetailDialog 结果窗面
+         （520×172@(700,454)，appearance=design；证据 u020-32-geometry-r99）。
+         确认条件/去向策略不变：已发起 → 我发起的（/workspace/my-instances），仅存数据 → 返回来源页。 -->
+    <DetailDialog
       v-model="submitDialogVisible"
-      width="360px"
-      align-center
+      title="申请已提交"
+      width="520px"
+      appearance="design"
       :close-on-click-modal="false"
       class="form-render-page__submit-dialog"
     >
-      <el-result icon="success" title="提交成功" />
+      <p data-testid="submit-success-message">
+        {{ submitDialogGotoInstances ? '可前往「我发起的」查看审批进度。' : '提交成功。' }}
+      </p>
       <template #footer>
-        <el-button
-          round
-          type="primary"
-          data-testid="submit-dialog-confirm"
-          @click="confirmSubmitDialog"
-        >
-          {{ t('common.confirm') }}
+        <el-button type="primary" data-testid="submit-dialog-confirm" @click="confirmSubmitDialog">
+          查看
         </el-button>
       </template>
-    </el-dialog>
+    </DetailDialog>
   </div>
 </template>
 
