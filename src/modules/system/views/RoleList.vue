@@ -32,6 +32,9 @@ import type { SysDept } from '@/modules/system/types/dept'
 import type { PageQuery } from '@/contracts/common'
 import { hasPerm } from '@/foundation/permission'
 import { updateUserRoles, pageUsers, getUserRoles } from '@/modules/system/api/user'
+import { pageTenants } from '@/modules/system/api/tenant'
+import type { SysTenant } from '@/modules/system/types/tenant'
+import { useUserStore } from '@/stores/user'
 import type { SysUser } from '@/modules/system/types/user'
 import {
   ListFilterItem,
@@ -50,10 +53,32 @@ const pageSize = ref(10)
 const loading = ref(false)
 const errorMsg = ref('')
 
+// ─── 超管租户筛选/归属列（459:13364） ───
+// 后端 SysRole（BaseEntity）行携带 tenantId，/system/role/page 支持 tenantId 等值过滤；
+// 租户候选沿既有 /system/tenant/page，仅超管加载，普通角色视图不变。
+const userStore = useUserStore()
+const isSuperAdmin = computed(() => userStore.superAdmin)
+const tenantOptions = ref<SysTenant[]>([])
+const tenantNameById = computed(() => {
+  const map = new Map<string, string>()
+  for (const tenant of tenantOptions.value) map.set(String(tenant.id), tenant.name)
+  return map
+})
+
+async function loadTenantOptions() {
+  try {
+    const result = await pageTenants({ pageNum: 1, pageSize: 200 }, {})
+    tenantOptions.value = result.list
+  } catch {
+    tenantOptions.value = []
+  }
+}
+
 const filter = reactive<RoleFilter>({
   name: '',
   code: '',
   status: undefined,
+  tenantId: undefined,
 })
 
 const currentFilter = reactive<RoleFilter>({ ...filter })
@@ -82,6 +107,7 @@ function handleQuery() {
     name: filter.name || undefined,
     code: filter.code || undefined,
     status: filter.status,
+    tenantId: isSuperAdmin.value ? filter.tenantId || undefined : undefined,
   })
   pageNum.value = 1
   void loadList()
@@ -91,9 +117,11 @@ function handleReset() {
   filter.name = ''
   filter.code = ''
   filter.status = undefined
+  filter.tenantId = undefined
   currentFilter.name = undefined
   currentFilter.code = undefined
   currentFilter.status = undefined
+  currentFilter.tenantId = undefined
   pageNum.value = 1
   void loadList()
 }
@@ -612,7 +640,11 @@ function rowActions(r: unknown): ListAction[] {
   ]
 }
 
-onMounted(loadList)
+onMounted(() => {
+  void loadList()
+  // 租户筛选候选仅超管加载（普通角色不渲染、不请求）
+  if (isSuperAdmin.value) void loadTenantOptions()
+})
 </script>
 
 <template>
@@ -635,6 +667,17 @@ onMounted(loadList)
 
     <!-- 筛选区 -->
     <template #filter>
+      <!-- 459:13364：租户筛选仅超管渲染（候选沿 /system/tenant/page）；普通角色视图不变 -->
+      <ListFilterItem v-if="isSuperAdmin" :label="t('system.tenantShort')">
+        <el-select v-model="filter.tenantId" :placeholder="t('tenantContext.all')" clearable>
+          <el-option
+            v-for="tenant in tenantOptions"
+            :key="tenant.id"
+            :label="tenant.name"
+            :value="String(tenant.id)"
+          />
+        </el-select>
+      </ListFilterItem>
       <ListFilterItem :label="t('system.roleName')">
         <el-input
           v-model="filter.name"
@@ -673,6 +716,11 @@ onMounted(loadList)
       style="margin-bottom: 12px"
     />
     <el-table v-loading="loading" :data="list">
+      <el-table-column v-if="isSuperAdmin" :label="t('system.tenantShort')" width="110">
+        <template #default="{ row }">{{
+          tenantNameById.get(String((row as SysRole).tenantId ?? '')) || '—'
+        }}</template>
+      </el-table-column>
       <el-table-column prop="name" :label="t('system.roleName')" min-width="140" />
       <el-table-column prop="code" :label="t('system.roleCode')" min-width="120" />
       <el-table-column prop="sort" :label="t('common.sort')" width="70" />

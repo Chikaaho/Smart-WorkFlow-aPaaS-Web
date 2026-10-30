@@ -1252,6 +1252,7 @@ onMounted(() => {
                   v-for="field in renderFields"
                   :key="field.name"
                   class="form-render-page__field"
+                  :class="{ 'form-render-page__field--error': validationErrors[field.name] }"
                   :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
                   :data-col-span="getFormFieldColSpan(field)"
                   :data-grid-field-type="field.type"
@@ -1588,8 +1589,16 @@ onMounted(() => {
   border-radius: var(--sw-radius-card, 8px);
 }
 
+/* 设计 300:1692（Q74）：错误反馈改为顶部浮层呈现——不再占据文档流，
+   避免顶部整条错误提示把填写标题/内容/底栏挤下移；就近字段提示仍在字段下方。 */
 .form-render-page__alert {
-  margin: 12px 24px 0;
+  position: fixed;
+  top: 12px;
+  right: 24px;
+  left: 24px;
+  z-index: 3000;
+  margin: 0;
+  box-shadow: 0 4px 16px rgba(19, 31, 58, 0.12);
 }
 
 /* 0.1.7 #30：外挂流程信息面板 / 审批动作卡——与画布同宽居中、紧贴表单 */
@@ -1636,6 +1645,14 @@ onMounted(() => {
   color: var(--sw-danger);
   font-size: var(--sw-font-caption);
   line-height: 1.5;
+}
+
+/* 设计 300:1692（Q74）：本地必填未过时字段边框转 danger 红边（就近提示文字保持不变） */
+.form-render-page__field--error :deep(.el-input__wrapper),
+.form-render-page__field--error :deep(.el-select__wrapper),
+.form-render-page__field--error :deep(.el-textarea__inner),
+.form-render-page__field--error :deep(.el-input-number__wrapper) {
+  box-shadow: 0 0 0 1px var(--sw-danger, #f56c6c) inset;
 }
 
 /* 窄屏：画布与顶栏收紧 */

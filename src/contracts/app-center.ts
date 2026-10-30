@@ -30,6 +30,10 @@ export interface FormApp {
   /** MANUAL=后台新建；LEGACY_CATEGORY/LEGACY_UNCATEGORIZED=存量承接（只读追溯）。 */
   source: 'MANUAL' | 'LEGACY_CATEGORY' | 'LEGACY_UNCATEGORIZED'
   legacyCategoryId?: number | null
+  /** 应用归属租户（Q40：管理端列表下发；超管视角跨租户可见）。 */
+  tenantId?: number | null
+  /** 归属租户名称（Q40；后端冗余下发，空则前端不展示）。 */
+  tenantName?: string | null
   formCount?: number
   dirCount?: number
   createTime?: string

@@ -234,6 +234,20 @@ onMounted(loadList)
           <span v-else>—</span>
         </template>
       </el-table-column>
+      <!-- 446:14618：目录行补 排序/显示 列（与子表同绑定 dir.sort/dir.hidden，语义同源） -->
+      <el-table-column prop="sort" :label="t('system.menuSort')" width="90">
+        <template #default="{ row }">{{
+          (row as { dir: MenuManageItem }).dir.sort ?? '—'
+        }}</template>
+      </el-table-column>
+      <el-table-column :label="t('system.menuHidden')" width="100">
+        <template #default="{ row }">
+          <el-tag v-if="(row as { dir: MenuManageItem }).dir.hidden" size="small" type="info">{{
+            t('system.menuHiddenYes')
+          }}</el-tag>
+          <el-tag v-else size="small" type="success">{{ t('system.menuHiddenNo') }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column :label="t('system.menuSubCount')" width="100">
         <template #default="{ row }">{{
           (row as { subItems: MenuManageItem[] }).subItems.length
@@ -302,6 +316,11 @@ onMounted(loadList)
 </template>
 
 <style scoped>
+/* 446:14618（项1）：面板标题行下缘并入既有 16px flex 间距，表外沿回到与其他列表页同基线（208±1）。 */
+.standard-list--design :deep(.standard-list__panel-head) {
+  margin-bottom: calc(-1 * var(--sw-space-8));
+}
+
 .table-tree-actions {
   display: flex;
   gap: var(--sw-space-8);

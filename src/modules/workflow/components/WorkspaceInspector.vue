@@ -11,8 +11,9 @@ import type { CatalogItem } from '@/contracts/catalog'
 import type { WorkspaceField, WorkspaceFormSource } from '../api/workspace-analytics'
 import WorkspaceFormPickerDialog from './WorkspaceFormPickerDialog.vue'
 import WorkspaceColorDialog from './WorkspaceColorDialog.vue'
+import WorkspaceFieldPickerDialog from './WorkspaceFieldPickerDialog.vue'
+import WorkspacePaletteDialog from './WorkspacePaletteDialog.vue'
 import {
-  PALETTES,
   defaultChartStyle,
   paletteColors,
   type WorkspaceChartType,
@@ -46,6 +47,22 @@ const pickerVisible = ref(false)
 const colorVisible = ref(false)
 const colorIndex = ref(0)
 const colorField = ref('')
+/* 提示30 Q03/Q05/Q07：维度/排序走 680 字段选择窗，配色走 760 方案弹层 */
+const dimensionVisible = ref(false)
+const sortFieldVisible = ref(false)
+const paletteVisible = ref(false)
+
+const dimensionName = computed(() => {
+  const field = props.fields.find((item) => item.name === props.card.config.groupBy)
+  return field?.label ?? props.card.config.groupBy ?? ''
+})
+
+const sortFieldName = computed(() => {
+  const field = props.fields.find((item) => item.name === props.card.config.sortField)
+  return field?.label ?? props.card.config.sortField ?? ''
+})
+
+const paletteKey = computed(() => props.card.config.style?.palette ?? 'classic')
 
 const boundFormName = computed(
   () =>
@@ -386,18 +403,31 @@ function isStackable() {
           <template v-if="kind === 'chart'">
             <section class="winsp__section">
               <label class="winsp__label">{{ t('workspace.inspector.dimension') }}</label>
-              <el-select
-                :model-value="card.config.groupBy ?? ''"
-                clearable
-                @update:model-value="patchConfig({ groupBy: $event || undefined })"
-              >
-                <el-option
-                  v-for="field in fields"
-                  :key="field.name"
-                  :label="field.label"
-                  :value="field.name"
-                />
-              </el-select>
+              <!-- 提示30 Q03：维度改为 680 字段选择窗入口（653:31851），不再内联下拉 -->
+              <div class="winsp__form-row">
+                <button type="button" class="winsp__form-trigger" @click="dimensionVisible = true">
+                  <span class="winsp__form-trigger-name">
+                    {{ dimensionName || t('workspace.fieldPicker.placeholder') }}
+                  </span>
+                  <span class="winsp__form-trigger-action">{{
+                    t('workspace.inspector.choose')
+                  }}</span>
+                </button>
+                <el-button
+                  v-if="card.config.groupBy"
+                  text
+                  @click="patchConfig({ groupBy: undefined })"
+                >
+                  {{ t('workspace.formPicker.clear') }}
+                </el-button>
+              </div>
+              <WorkspaceFieldPickerDialog
+                v-model="dimensionVisible"
+                :fields="fields"
+                :current-field="card.config.groupBy ?? null"
+                :title-key="'workspace.fieldPicker.dimensionTitle'"
+                @select="patchConfig({ groupBy: $event })"
+              />
             </section>
             <!-- 提示28 W19-I：Y 轴 / 指标 摘要卡（288×50 两行），详细设置一律走既有指标窗口 -->
             <section class="winsp__section">
@@ -464,18 +494,31 @@ function isStackable() {
             </section>
             <section class="winsp__section">
               <label class="winsp__label">{{ t('workspace.inspector.sortField') }}</label>
-              <el-select
-                :model-value="card.config.sortField ?? ''"
-                clearable
-                @update:model-value="patchConfig({ sortField: $event || undefined })"
-              >
-                <el-option
-                  v-for="field in sortableFields"
-                  :key="field.name"
-                  :label="field.label"
-                  :value="field.name"
-                />
-              </el-select>
+              <!-- 提示30 Q05：排序字段改为 680 字段选择窗入口（653:31853），不再内联下拉 -->
+              <div class="winsp__form-row">
+                <button type="button" class="winsp__form-trigger" @click="sortFieldVisible = true">
+                  <span class="winsp__form-trigger-name">
+                    {{ sortFieldName || t('workspace.fieldPicker.placeholder') }}
+                  </span>
+                  <span class="winsp__form-trigger-action">{{
+                    t('workspace.inspector.choose')
+                  }}</span>
+                </button>
+                <el-button
+                  v-if="card.config.sortField"
+                  text
+                  @click="patchConfig({ sortField: undefined })"
+                >
+                  {{ t('workspace.formPicker.clear') }}
+                </el-button>
+              </div>
+              <WorkspaceFieldPickerDialog
+                v-model="sortFieldVisible"
+                :fields="sortableFields"
+                :current-field="card.config.sortField ?? null"
+                :title-key="'workspace.inspector.sortField'"
+                @select="patchConfig({ sortField: $event })"
+              />
             </section>
             <section class="winsp__section">
               <label class="winsp__label">{{ t('workspace.inspector.sortOrder') }}</label>
@@ -546,20 +589,22 @@ function isStackable() {
       <template v-else-if="hasStyle">
         <section class="winsp__section">
           <label class="winsp__label">{{ t('workspace.inspector.palette') }}</label>
-          <el-select
-            :model-value="card.config.style?.palette ?? 'classic'"
-            @update:model-value="patchStyle({ palette: $event })"
-          >
-            <el-option
-              v-for="key in Object.keys(PALETTES)"
-              :key="key"
-              :label="t(`workspace.palette.${key}`)"
-              :value="key"
-            />
-          </el-select>
+          <!-- 提示30 Q07：配色方案改为 760 方案弹层入口（675:37049），不再内联下拉 -->
+          <button type="button" class="winsp__palette-trigger" @click="paletteVisible = true">
+            <span class="winsp__palette-name">{{ t(`workspace.palette.${paletteKey}`) }}</span>
+            <span class="winsp__palette-swatches">
+              <i v-for="(color, index) in palette()" :key="index" :style="{ background: color }" />
+            </span>
+            <span class="winsp__form-trigger-action">{{ t('workspace.inspector.choose') }}</span>
+          </button>
           <div class="winsp__swatches">
             <i v-for="(color, index) in palette()" :key="index" :style="{ background: color }" />
           </div>
+          <WorkspacePaletteDialog
+            v-model="paletteVisible"
+            :current-palette="paletteKey"
+            @select="patchStyle({ palette: $event })"
+          />
         </section>
 
         <section class="winsp__section">
@@ -1032,5 +1077,45 @@ function isStackable() {
   flex: 0 0 auto;
   font-size: 12px;
   color: var(--sw-color-primary);
+}
+
+/* 提示30 Q07：配色方案入口 288×32，名称 + 当前方案色块 + 选择动作 */
+.winsp__palette-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 288px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--sw-border-base);
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-surface-card);
+  cursor: pointer;
+}
+
+.winsp__palette-trigger:hover {
+  border-color: var(--sw-color-primary);
+}
+
+.winsp__palette-name {
+  flex: 0 0 auto;
+  color: var(--sw-text-primary);
+  font-size: 13px;
+}
+
+.winsp__palette-swatches {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.winsp__palette-swatches i {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
 }
 </style>

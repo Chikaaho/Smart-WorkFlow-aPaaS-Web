@@ -20,6 +20,7 @@ withDefaults(
     showActions?: boolean
     showCreate?: boolean
     createLabel?: string
+    showTenant?: boolean
   }>(),
   {
     loading: false,
@@ -28,6 +29,7 @@ withDefaults(
     showActions: false,
     showCreate: false,
     createLabel: '',
+    showTenant: false,
   },
 )
 
@@ -67,6 +69,9 @@ const { t } = useI18n()
           </span>
           <span v-if="showFormCount && app.formCount !== undefined" class="app-grid__meta">
             {{ t('form.appCenter.formCount', { count: app.formCount }) }}
+          </span>
+          <span v-if="showTenant && app.tenantName" class="app-grid__meta">
+            {{ app.tenantName }}
           </span>
         </span>
       </button>

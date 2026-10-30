@@ -128,6 +128,15 @@ const scriptDetailLines = computed(() => scriptDetailCode.value.split(/\r?\n/))
 const validationDetailVisible = ref(false)
 const validationDetailTitle = ref('')
 const validationDetailRow = ref<SnapshotConstraintRow | null>(null)
+/* Q22（509:18825）：校验折叠详情的「查看」改走 800 宽只读规则窗（真实规则名 + 32 高只读值 + 关闭 80×32）；
+   字段属性路径（openFrozenDetail）保留原 520 详情窗。 */
+const validationRuleVisible = ref(false)
+const validationRuleRow = ref<SnapshotConstraintRow | null>(null)
+
+function openValidationRule(row: SnapshotConstraintRow): void {
+  validationRuleRow.value = row
+  validationRuleVisible.value = true
+}
 
 /* 内置动作摘要（如 `设置流程变量('k','v')`）为单行函数调用、无 JS 语句结构 → 保持摘要弹窗；
    含 return/块语句/箭头函数或多行的函数体按 JS 代码窗展示。 */
@@ -974,12 +983,7 @@ watch(
                     <td>{{ validationLabel(row.kind) }}</td>
                     <td>
                       <code>{{ row.value }}</code>
-                      <el-button
-                        link
-                        type="primary"
-                        size="small"
-                        @click="openValidationDetail(row)"
-                      >
+                      <el-button link type="primary" size="small" @click="openValidationRule(row)">
                         {{ t('common.view') }}
                       </el-button>
                     </td>
@@ -1679,6 +1683,26 @@ watch(
       </p>
       <pre class="snapshot-dialog-code">{{ validationDetailRow?.value }}</pre>
     </DetailDialog>
+
+    <!-- Q22（509:18825）：冻结校验规则查看——800 宽只读窗：规则名 + 只读值（32 高）+ 关闭 80×32；
+         不改冻结 JSON / 校验引擎。 -->
+    <DetailDialog
+      v-model="validationRuleVisible"
+      :title="t('form.snapshotViewer.propValidation')"
+      width="800px"
+      class="snapshot-validation-dialog"
+      append-to-body
+    >
+      <p class="snapshot-dialog-meta snapshot-script-view__meta">
+        <span>{{ validationRuleRow ? validationLabel(validationRuleRow.kind) : '' }}</span>
+        <span class="snapshot-script-view__badge">
+          {{ t('form.snapshotViewer.readonlyBadge') }}
+        </span>
+      </p>
+      <div class="snapshot-validation-value" data-testid="snapshot-validation-value">
+        {{ validationRuleRow?.value?.trim() || t('form.snapshotViewer.propNotConfigured') }}
+      </div>
+    </DetailDialog>
   </DetailDialog>
 </template>
 
@@ -2219,6 +2243,31 @@ watch(
   height: 32px;
   margin: 0;
   padding: 0;
+}
+
+/* Q22（509:18825）：校验规则只读窗——32 高只读值框、关闭 80×32（与代码窗同款页脚）。 */
+:global(.snapshot-validation-dialog .el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+}
+
+.snapshot-validation-value {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 4px;
+  background: #f7f8fa;
+  color: var(--sw-text-regular);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  user-select: none;
 }
 
 .snapshot-side .snapshot-node-props-title {

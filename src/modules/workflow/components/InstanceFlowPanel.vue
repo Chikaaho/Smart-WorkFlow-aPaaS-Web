@@ -647,8 +647,9 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
       </el-tab-pane>
     </el-tabs>
 
-    <!-- 意见详情弹窗：仅渲染该行真实可得字段；无对应数据时区块留白，不虚构 -->
-    <el-dialog v-model="opinionDetailVisible" width="780px" top="12vh" class="p53-opinion-dialog">
+    <!-- 意见详情弹窗：仅渲染该行真实可得字段；无对应数据时区块留白，不虚构。
+         设计 60:48：760 宽外壳 + 底部 80×32 关闭按钮（只读，仅关闭）。 -->
+    <el-dialog v-model="opinionDetailVisible" width="760px" top="12vh" class="p53-opinion-dialog">
       <template #header>
         <div v-if="opinionDetailRow" class="p53-opinion-dialog__head">
           <h2>{{ t('taskDetailUi.opinionDetailTitle') }}</h2>
@@ -709,6 +710,16 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
           </div>
         </template>
       </div>
+      <template #footer>
+        <el-button
+          type="primary"
+          class="p53-opinion-dialog__close"
+          data-testid="opinion-detail-close"
+          @click="opinionDetailVisible = false"
+        >
+          {{ t('common.close') }}
+        </el-button>
+      </template>
     </el-dialog>
 
     <!-- 会签记录弹窗（设计 60:190）：说明 + 状态筛选 + 统计行 + 记录表 -->
@@ -1103,7 +1114,7 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
   background: #f0f3f9;
   color: #8a96ad;
 }
-/* ─── 意见详情弹窗：设计几何（780 宽 / 圆角 14 / 头部 meta / 意见面板 / 底部注脚） ─── */
+/* ─── 意见详情弹窗：设计几何（60:48：760 宽 / 圆角 14 / 头部 meta / 意见面板 / 底部 80×32 关闭） ─── */
 .instance-flow-panel :deep(.p53-opinion-dialog) {
   margin-top: 182px !important;
   margin-bottom: auto;
@@ -1148,6 +1159,16 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
   max-height: 484px;
   padding: 4px 28px 0;
   overflow: auto;
+}
+.instance-flow-panel :deep(.p53-opinion-dialog .el-dialog__footer) {
+  box-sizing: border-box;
+  padding: 16px 28px 20px;
+  border-top: none;
+}
+.instance-flow-panel :deep(.p53-opinion-dialog .el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
 }
 .p53-opinion-panel {
   box-sizing: border-box;

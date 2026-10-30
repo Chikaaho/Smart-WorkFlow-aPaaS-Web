@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { LoadErrorState } from '@/components/page-layout'
 import AppScopePicker, { type AppScopeValue } from '@/components/AppScopePicker.vue'
 import AppGrid from '@/modules/form/components/AppGrid.vue'
@@ -14,7 +14,9 @@ import {
   createFormApp,
   deleteFormApp,
   listFormApps,
+  listTenantOptions,
   updateFormApp,
+  type TenantOption,
 } from '@/modules/form/api/app-center'
 import type { FormApp, FormAppSaveReq } from '@/contracts/app-center'
 import { useUserStore } from '@/stores/user'
@@ -36,12 +38,34 @@ const errorMsg = ref('')
 const loadError = ref<ApiError | null>(null)
 const { perRow, options: perRowOptions } = useAppPerRow()
 
+// ─── Q40（459:15041）：超管租户筛选 ───
+// 后端 /form/app/manage/list 支持（同轮新增）tenantId 可选查询参数与 tenantId/tenantName 下发；
+// 候选沿既有 /form/app/manage/tenants。普通租户不渲染筛选、请求不带 tenantId、视图不变。
+const isSuperAdmin = computed(() => userStore.superAdmin)
+const tenantFilter = ref<number | string | ''>('')
+const tenantOptions = ref<TenantOption[]>([])
+
+async function loadTenantOptions() {
+  try {
+    tenantOptions.value = await listTenantOptions()
+  } catch {
+    tenantOptions.value = [] // 候选失败由调用方兜底为空（既有约定）
+  }
+}
+
+function handleTenantFilterChange() {
+  void loadList()
+}
+
 async function loadList() {
   loading.value = true
   errorMsg.value = ''
   loadError.value = null
   try {
-    apps.value = await listFormApps(keyword.value.trim() || undefined)
+    apps.value = await listFormApps(
+      keyword.value.trim() || undefined,
+      isSuperAdmin.value && tenantFilter.value !== '' ? tenantFilter.value : undefined,
+    )
   } catch (err: unknown) {
     loadError.value = err instanceof ApiError ? err : null
     errorMsg.value = loadError.value ? '' : t('form.appCenter.loadFailed', { msg: String(err) })
@@ -181,20 +205,24 @@ function onCardCommand(command: string, app: FormApp) {
     return
   }
   if (command === 'delete') {
-    void handleDelete(app)
+    handleDelete(app)
   }
 }
 
-async function handleDelete(app: FormApp) {
-  try {
-    await ElMessageBox.confirm(
-      t('form.appCenter.deleteConfirm', { name: app.name }),
-      t('common.deleteConfirmTitle'),
-      { type: 'warning' },
-    )
-  } catch {
-    return
-  }
+/* Q39（471:17256）：删除应用改为 440 宽自定义确认弹窗（圆角 12、取消/删除 80×32、删除危险色 #C2303A）；
+   只打开弹窗，确认回调沿用既有删除 handler，删除/拒绝语义不变。 */
+const deleteDialogVisible = ref(false)
+const deleteTarget = ref<FormApp | null>(null)
+
+function handleDelete(app: FormApp) {
+  deleteTarget.value = app
+  deleteDialogVisible.value = true
+}
+
+async function handleDeleteConfirm() {
+  const app = deleteTarget.value
+  if (!app) return
+  deleteDialogVisible.value = false
   try {
     await deleteFormApp(app.id)
     ElMessage.success(t('common.deleteSuccess'))
@@ -207,6 +235,7 @@ async function handleDelete(app: FormApp) {
 
 onMounted(() => {
   void loadList()
+  if (isSuperAdmin.value) void loadTenantOptions()
 })
 </script>
 
@@ -220,6 +249,26 @@ onMounted(() => {
       @search="loadList"
     >
       <template #actions>
+        <!-- Q40：超管租户筛选（候选沿既有 /form/app/manage/tenants）；普通租户不渲染 -->
+        <span v-if="isSuperAdmin" class="app-manage__tenant-label">{{
+          t('system.tenantShort')
+        }}</span>
+        <el-select
+          v-if="isSuperAdmin"
+          v-model="tenantFilter"
+          class="app-manage__tenant-filter"
+          :placeholder="t('tenantContext.all')"
+          clearable
+          data-testid="app-manage-tenant-filter"
+          @change="handleTenantFilterChange"
+        >
+          <el-option
+            v-for="tenant in tenantOptions"
+            :key="tenant.id"
+            :label="tenant.name"
+            :value="tenant.id"
+          />
+        </el-select>
         <AppPerRowSetting v-model="perRow" :options="perRowOptions" />
         <el-button
           v-perm="'form:app:manage'"
@@ -242,6 +291,7 @@ onMounted(() => {
       :per-row="perRow"
       show-actions
       show-form-count
+      :show-tenant="userStore.superAdmin"
       @select="enterWorkspace"
       @command="onCardCommand"
       @create="openCreate"
@@ -300,6 +350,25 @@ onMounted(() => {
         </el-button>
       </template>
     </DetailDialog>
+
+    <!-- Q39（471:17256）：删除应用确认——440 宽/圆角 12、文案带真实应用名与非空保护说明 -->
+    <el-dialog
+      v-model="deleteDialogVisible"
+      :title="t('form.appCenter.deleteApp')"
+      width="440px"
+      class="app-delete-dialog"
+      append-to-body
+    >
+      <p class="app-delete-dialog__text">
+        {{ deleteTarget ? t('form.appCenter.deleteConfirm', { name: deleteTarget.name }) : '' }}
+      </p>
+      <template #footer>
+        <el-button @click="deleteDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button class="app-delete-dialog__confirm" @click="handleDeleteConfirm">
+          {{ t('common.delete') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -311,6 +380,15 @@ onMounted(() => {
 }
 .app-manage__error {
   color: #f56c6c;
+}
+/* Q40：超管租户筛选（工具条 actions 槽内，宽度对齐筛选控件惯例） */
+.app-manage__tenant-label {
+  color: var(--sw-text-regular);
+  font-size: var(--sw-font-body);
+  white-space: nowrap;
+}
+.app-manage__tenant-filter {
+  width: 200px;
 }
 </style>
 
@@ -332,5 +410,31 @@ onMounted(() => {
 }
 .app-manage-dialog .el-dialog__footer .app-manage-dialog__scope {
   margin-right: auto;
+}
+/* Q39（471:17256）：删除确认弹窗——440 宽、圆角 12，底栏取消/删除 80×32，删除 #C2303A。
+   teleport 弹层样式落真实弹窗根（append-to-body → 全局块）。 */
+.app-delete-dialog.el-dialog {
+  border-radius: 12px;
+}
+.app-delete-dialog .el-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.app-delete-dialog .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+.app-delete-dialog .app-delete-dialog__confirm {
+  background-color: #c2303a;
+  border-color: #c2303a;
+  color: #fff;
+}
+.app-delete-dialog .app-delete-dialog__confirm:not(:hover):not(:focus) {
+  background-color: #c2303a;
+  border-color: #c2303a;
+  color: #fff;
 }
 </style>

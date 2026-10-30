@@ -19,6 +19,7 @@ import {
 import {
   getWorkspaceFields,
   listWorkspaceSources,
+  queryWorkspaceRows,
   type WorkspaceField,
   type WorkspaceFormSource,
   type WorkspaceFilter,
@@ -573,6 +574,28 @@ function applyFilters(filters: WorkspaceFilter[]): void {
   updateSelectedConfig({ filters })
 }
 
+/* 提示30 Q01（645:28736）：筛选窗真实命中数。
+   复用既有只读 /form/workspace/analytics/rows 查询（与列表卡同一端点），
+   仅取 pageSize=1 的 total，不拉全量行、不用当前页长度充当总数；
+   空条件/加载中/请求失败保持 undefined，弹窗不显示数字、不捏造。 */
+const matchCount = ref<number>()
+let matchSeq = 0
+
+async function refreshMatchCount(filters: WorkspaceFilter[]): Promise<void> {
+  const formKey = selectedCard.value?.config.formKey
+  if (!formKey || !filters.length) {
+    matchCount.value = undefined
+    return
+  }
+  const seq = ++matchSeq
+  try {
+    const resp = await queryWorkspaceRows({ formKey, filters, pageNum: 1, pageSize: 1 })
+    if (seq === matchSeq) matchCount.value = resp.total
+  } catch {
+    if (seq === matchSeq) matchCount.value = undefined
+  }
+}
+
 function applyColumns(columns: StudioCard['config']['columns']): void {
   updateSelectedConfig({ columns })
 }
@@ -764,7 +787,9 @@ onBeforeUnmount(() => {
       v-model="filterVisible"
       :fields="fields"
       :filters="selectedCard.config.filters ?? []"
+      :match-count="matchCount"
       @apply="applyFilters"
+      @draft-change="refreshMatchCount"
     />
     <WorkspaceColumnsDialog
       v-if="selectedCard"

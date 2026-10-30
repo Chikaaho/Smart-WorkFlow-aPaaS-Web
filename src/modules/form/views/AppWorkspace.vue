@@ -106,7 +106,8 @@ function onCreateCommand(command: string) {
 
 const dirDialogVisible = ref(false)
 const editingDirId = ref<string | null>(null)
-const dirForm = reactive({ name: '', sortNo: 0 })
+/* Q34（272:1698）：上级目录为本地选择字段，不参与创建请求（API 仍只收名称/排序） */
+const dirForm = reactive({ name: '', sortNo: 0, parentId: '' })
 const dirSaving = ref(false)
 
 const dirDialogTitle = computed(() =>
@@ -115,13 +116,13 @@ const dirDialogTitle = computed(() =>
 
 function openCreateDir() {
   editingDirId.value = null
-  Object.assign(dirForm, { name: '', sortNo: 0 })
+  Object.assign(dirForm, { name: '', sortNo: 0, parentId: '' })
   dirDialogVisible.value = true
 }
 
 function openRenameDir(dir: { id: string; name: string; sortNo: number }) {
   editingDirId.value = dir.id
-  Object.assign(dirForm, { name: dir.name, sortNo: dir.sortNo ?? 0 })
+  Object.assign(dirForm, { name: dir.name, sortNo: dir.sortNo ?? 0, parentId: '' })
   dirDialogVisible.value = true
 }
 
@@ -348,9 +349,36 @@ onMounted(() => {
       />
     </div>
 
-    <!-- 目录新建/改名对话框（0.1.7 #4：修改只改名称） -->
-    <el-dialog v-model="dirDialogVisible" :title="dirDialogTitle" width="420px">
-      <el-form label-width="80px">
+    <!-- 目录新建/改名对话框（0.1.7 #4：修改只改名称）。
+         Q34（272:1698）：新建态 540 宽，目录名称 + 上级目录两字段（上级目录只本地选择、默认无）；
+         改名态保持既有单名称表单。 -->
+    <el-dialog
+      v-model="dirDialogVisible"
+      :title="dirDialogTitle"
+      width="540px"
+      class="ws-dir-dialog"
+    >
+      <template v-if="!editingDirId">
+        <div class="ws-dialog-field">
+          <label class="ws-dialog-field__label ws-dialog-field__label--required">{{
+            t('form.appCenter.dirNameLabel')
+          }}</label>
+          <el-input
+            v-model="dirForm.name"
+            data-testid="dir-name-input"
+            maxlength="100"
+            :placeholder="t('common.namePlaceholder')"
+          />
+        </div>
+        <div class="ws-dialog-field">
+          <label class="ws-dialog-field__label">{{ t('form.appCenter.parentDirLabel') }}</label>
+          <el-select v-model="dirForm.parentId" data-testid="dir-parent-select">
+            <el-option :value="''" :label="t('form.appCenter.parentDirNone')" />
+            <el-option v-for="dir in dirs" :key="dir.id" :value="dir.id" :label="dir.name" />
+          </el-select>
+        </div>
+      </template>
+      <el-form v-else label-width="80px">
         <el-form-item :label="t('form.appCenter.fieldName')" required>
           <el-input v-model="dirForm.name" data-testid="dir-name-input" maxlength="100" />
         </el-form-item>
@@ -363,17 +391,26 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <!-- 新建表单对话框 -->
-    <el-dialog v-model="formDialogVisible" :title="t('form.appCenter.newForm')" width="420px">
-      <el-form label-width="80px">
-        <el-form-item :label="t('form.appCenter.fieldName')" required>
-          <el-input v-model="newForm.name" data-testid="form-name-input" maxlength="200" />
-        </el-form-item>
-      </el-form>
+    <!-- 新建表单对话框。Q35（527:24216）：440 宽、名称 390×32、底栏 80×32；不点创建不产生任何记录 -->
+    <el-dialog
+      v-model="formDialogVisible"
+      :title="t('form.appCenter.newForm')"
+      width="440px"
+      class="ws-form-dialog"
+    >
+      <div class="ws-dialog-field ws-dialog-field--dialog440">
+        <label class="ws-dialog-field__label">{{ t('form.appCenter.formNameLabel') }}</label>
+        <el-input
+          v-model="newForm.name"
+          data-testid="form-name-input"
+          maxlength="200"
+          :placeholder="t('form.appCenter.formNamePlaceholder')"
+        />
+      </div>
       <template #footer>
         <el-button @click="formDialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" @click="handleCreateForm">
-          {{ t('common.save') }}
+          {{ t('form.appCenter.createFormConfirm') }}
         </el-button>
       </template>
     </el-dialog>
@@ -414,6 +451,49 @@ onMounted(() => {
 </style>
 
 <style>
+/* Q34/Q35（272:1698 / 527:24216）：新建目录 540（字段 490×32）/ 新建表单 440（字段 390×32），
+   底栏统一 80×32；teleport 弹层样式落真实弹窗根（全局块）。 */
+.ws-dir-dialog .el-dialog__footer .el-button,
+.ws-form-dialog .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+.ws-dir-dialog .ws-dialog-field {
+  width: 490px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+.ws-dir-dialog .ws-dialog-field + .ws-dialog-field {
+  margin-top: 16px;
+}
+.ws-form-dialog .ws-dialog-field--dialog440 {
+  width: 390px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+.ws-dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ws-dialog-field__label {
+  color: var(--sw-text-regular, #606266);
+  font-size: 14px;
+  line-height: 22px;
+}
+.ws-dialog-field__label--required::before {
+  content: '* ';
+  color: var(--sw-danger, #c2303a);
+}
+.ws-dialog-field .el-input__wrapper,
+.ws-dialog-field .el-select__wrapper {
+  box-sizing: border-box;
+  min-height: 32px;
+  height: 32px;
+}
+
 /* 527:24284（执行提示18）：外盒 440×172@(740,454)；标题/正文/按钮恢复原锚点，删除 #C2303A */
 .sw-delete-confirm {
   box-sizing: border-box;

@@ -1456,7 +1456,8 @@ onMounted(loadDetail)
       </div>
     </el-card>
 
-    <!-- I3 生命周期动作弹窗；转办按设计 273:1877 用 640 宽与 32 高输入/底栏 -->
+    <!-- I3 生命周期动作弹窗；转办/委托/沟通/加签按设计 273:1877/1901/1925/1949 统一
+         640 宽（左右 25 → 内容 590）与 32 高输入、80×32 底栏 -->
     <el-dialog
       v-model="lifecycleDialogVisible"
       :title="
@@ -1466,14 +1467,11 @@ onMounted(loadDetail)
             : LIFECYCLE_META[lifecycleDialog.kind].title
           : ''
       "
-      :width="lifecycleDialog?.kind === 'TRANSFER' ? '640px' : '420px'"
-      :class="lifecycleDialog?.kind === 'TRANSFER' ? 'transfer-dialog' : undefined"
+      width="640px"
+      class="action-dialog"
       :close-on-click-modal="false"
     >
-      <el-form
-        label-position="top"
-        :size="lifecycleDialog?.kind === 'TRANSFER' ? 'default' : 'small'"
-      >
+      <el-form label-position="top">
         <template
           v-if="lifecycleDialog?.kind === 'TRANSFER' || lifecycleDialog?.kind === 'DELEGATE'"
         >
@@ -1707,16 +1705,17 @@ onMounted(loadDetail)
       </template>
     </el-dialog>
 
-    <!-- 催办弹窗（设计 273:2025）：说明 + 催办留言（可空） -->
+    <!-- 催办弹窗（设计 273:2025）：说明 + 催办留言（可空）；与转办等同构 640 宽 / 80×32 底栏 -->
     <el-dialog
       v-model="urgeDialogVisible"
       :title="t('workflow.urgeDialogTitle')"
-      width="480px"
+      width="640px"
+      class="action-dialog"
       :close-on-click-modal="false"
       data-testid="urge-dialog"
     >
       <p class="urge-dialog__hint">{{ t('workflow.urgeDialogHint') }}</p>
-      <el-form label-position="top" size="small" @submit.prevent>
+      <el-form label-position="top" @submit.prevent>
         <el-form-item
           v-if="urgeRecipientOptions.length > 0"
           :label="t('workflow.urgeRecipientsLabel')"
@@ -2288,23 +2287,29 @@ onMounted(loadDetail)
   font-size: 14px;
   line-height: 22px;
 }
-/* 设计 273:1877 转办弹窗：640 宽（左右 25 → 590 输入）/ 人员与备注 32 高 /
+/* 设计 273:1877/1901/1925/1949/2025 生命周期动作弹窗（转办/委托/沟通/加签/催办）：
+   640 宽（左右 25 → 内容 590）/ 输入类控件 32 高（多行文本沿原行数）/
    底栏 取消·确定 80×32；候选与选择入口沿用 UserRemoteSelect。 */
-.task-detail :deep(.transfer-dialog.el-dialog) {
+.task-detail :deep(.action-dialog.el-dialog) {
   padding: var(--el-dialog-padding-primary) 25px;
 }
-.task-detail :deep(.transfer-dialog .el-form-item__label) {
+.task-detail :deep(.action-dialog .el-form-item__label) {
   height: 22px;
   line-height: 22px;
   margin-bottom: 6px;
 }
-.task-detail :deep(.transfer-dialog .el-select__wrapper),
-.task-detail :deep(.transfer-dialog .el-input__wrapper) {
+.task-detail :deep(.action-dialog .el-select__wrapper),
+.task-detail :deep(.action-dialog .el-input__wrapper) {
   box-sizing: border-box;
   min-height: 32px;
   height: 32px;
 }
-.task-detail :deep(.transfer-dialog .el-dialog__footer .el-button) {
+.task-detail :deep(.action-dialog .el-textarea__inner) {
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 5px 11px;
+}
+.task-detail :deep(.action-dialog .el-dialog__footer .el-button) {
   box-sizing: border-box;
   width: 80px;
   height: 32px;

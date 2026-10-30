@@ -223,6 +223,7 @@ async function saveThemeRule() {
     :title="t('workflow.themeRuleTitle')"
     width="720px"
     append-to-body
+    class="theme-rule-dialog"
     @update:model-value="emit('update:visible', $event)"
   >
     <p v-if="def" class="theme-dialog__meta">{{ def.name }}（{{ def.processKey }}）</p>
@@ -295,12 +296,14 @@ async function saveThemeRule() {
         <span class="theme-dialog__config-actions">
           <el-button
             :disabled="activeIndex === 0"
+            class="theme-dialog__move"
             data-testid="theme-element-move-left"
             @click="moveElement(-1)"
             >←</el-button
           >
           <el-button
             :disabled="activeIndex === elements.length - 1"
+            class="theme-dialog__move"
             data-testid="theme-element-move-right"
             @click="moveElement(1)"
             >→</el-button
@@ -584,6 +587,18 @@ async function saveThemeRule() {
   gap: 8px;
 }
 .theme-dialog__config-actions :deep(.el-button) {
+  margin: 0;
+}
+/* Q15（273:1368）：历史要素移动箭头 32×32；底栏取消/保存 80×32。 */
+.theme-dialog__config-actions :deep(.el-button.theme-dialog__move) {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+.theme-rule-dialog .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
   margin: 0;
 }
 .theme-dialog__field-label {

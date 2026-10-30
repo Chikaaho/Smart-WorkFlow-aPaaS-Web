@@ -68,6 +68,7 @@ async function loadList() {
     const result = await pageUserGroups(pageQuery, currentFilter)
     list.value = result.list
     total.value = result.total
+    void loadMemberCounts(list.value)
   } catch (err) {
     if (err instanceof ApiError) {
       errorMsg.value = err.msg
@@ -112,6 +113,26 @@ function handlePageSizeChange(s: number) {
 }
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
+
+// ─── 成员数列（446:15569） ──────────────────────────────
+// 列表接口不返回成员计数；沿既有 GET /{id}/members 逐组取真实成员 ID 数（只读、无新增 API）。
+// 加载中/失败显示「—」，不用 0 冒充。
+
+const memberCounts = ref<Record<string, number | undefined>>({})
+
+async function loadMemberCounts(rows: SysUserGroup[]) {
+  await Promise.all(
+    rows.map(async (row) => {
+      if (!row.id) return
+      try {
+        const members = await getUserGroupMembers(row.id)
+        memberCounts.value[row.id] = members.length
+      } catch {
+        memberCounts.value[row.id] = undefined
+      }
+    }),
+  )
+}
 
 // ─── 成员候选（仅启用用户 + 数据范围） ──────────────────
 
@@ -411,6 +432,9 @@ onMounted(loadList)
             row.status === 1 ? t('common.disable') : t('common.enable')
           }}</span>
         </template>
+      </el-table-column>
+      <el-table-column :label="t('system.memberCount')" width="90">
+        <template #default="{ row }">{{ memberCounts[row.id as string] ?? '—' }}</template>
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>

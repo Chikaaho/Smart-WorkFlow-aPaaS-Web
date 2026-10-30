@@ -15,6 +15,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   apply: [filters: WorkspaceFilter[]]
+  /** 草稿条件变化：供上游用既有只读 rows 查询 total，驱动 matchCount。 */
+  'draft-change': [filters: WorkspaceFilter[]]
 }>()
 
 const { t } = useI18n()
@@ -72,6 +74,34 @@ function confirm(): void {
 
 const valid = computed(() =>
   draft.value.every((filter) => String(filter.value ?? '').trim() !== ''),
+)
+
+/** 有效草稿条件（与 confirm 同口径）：空条件/空值不参与计数。 */
+const validDraft = computed(() =>
+  draft.value.filter(
+    (filter) => filter.field && filter.op && String(filter.value ?? '').trim() !== '',
+  ),
+)
+
+watch(
+  validDraft,
+  (filters) =>
+    emit(
+      'draft-change',
+      filters.map((f) => ({ ...f })),
+    ),
+  { deep: true },
+)
+
+watch(
+  () => props.modelValue,
+  (open) => {
+    if (open)
+      emit(
+        'draft-change',
+        validDraft.value.map((f) => ({ ...f })),
+      )
+  },
 )
 </script>
 

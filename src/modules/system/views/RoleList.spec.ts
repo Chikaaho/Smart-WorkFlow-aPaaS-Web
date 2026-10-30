@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 
 vi.mock('@/modules/system/api/role', () => ({
   pageRoles: vi.fn(),
@@ -17,6 +18,10 @@ vi.mock('@/modules/system/api/user', () => ({
   updateUserRoles: vi.fn(),
   pageUsers: vi.fn(),
   getUserRoles: vi.fn(),
+}))
+
+vi.mock('@/modules/system/api/tenant', () => ({
+  pageTenants: vi.fn().mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 200 }),
 }))
 
 const permissionState = vi.hoisted(() => ({
@@ -121,6 +126,8 @@ function stubPageResult() {
 describe('RoleList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // RoleList 自提示30 起消费 userStore.superAdmin（租户筛选/列）：给无 pinia 的挂载一个活动 Pinia
+    setActivePinia(createPinia())
     permissionState.canUpdate = true
     permissionState.canDelete = true
     vi.mocked(pageRoles).mockResolvedValue(stubPageResult())
