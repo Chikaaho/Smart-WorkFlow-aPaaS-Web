@@ -6,7 +6,7 @@
  * 横向「图标 + 名称/表单数」，管理端额外叠加三点菜单与「新建应用」卡。
  * perRow 为空时按容器宽度自动铺排；传入时固定每行数量（用户端个人偏好）。
  */
-import { MoreFilled } from '@element-plus/icons-vue'
+import { Delete, Edit, MoreFilled } from '@element-plus/icons-vue'
 import AppIcon from './AppIcon.vue'
 import type { FormApp } from '@/contracts/app-center'
 import { useI18n } from '@/locales'
@@ -20,6 +20,7 @@ withDefaults(
     showActions?: boolean
     showCreate?: boolean
     createLabel?: string
+    showTenant?: boolean
   }>(),
   {
     loading: false,
@@ -28,6 +29,7 @@ withDefaults(
     showActions: false,
     showCreate: false,
     createLabel: '',
+    showTenant: false,
   },
 )
 
@@ -55,7 +57,7 @@ const { t } = useI18n()
         data-testid="app-card"
         @click="emit('select', app)"
       >
-        <AppIcon :icon="app.icon" :color="app.color" :size="20" />
+        <AppIcon :icon="app.icon" :color="app.color" :size="20" :box-size="36" soft />
         <span class="app-grid__body">
           <span class="app-grid__title">
             <span class="app-grid__name" data-testid="app-card-name" :title="app.name">
@@ -68,6 +70,9 @@ const { t } = useI18n()
           <span v-if="showFormCount && app.formCount !== undefined" class="app-grid__meta">
             {{ t('form.appCenter.formCount', { count: app.formCount }) }}
           </span>
+          <span v-if="showTenant && app.tenantName" class="app-grid__meta">
+            {{ app.tenantName }}
+          </span>
         </span>
       </button>
 
@@ -75,18 +80,31 @@ const { t } = useI18n()
         v-if="showActions"
         class="app-grid__more"
         trigger="click"
+        popper-class="app-card-op-menu"
         @command="(cmd: string) => emit('command', cmd, app)"
       >
-        <span class="app-grid__more-trigger" data-testid="app-card-more" @click.stop>
+        <button
+          type="button"
+          class="app-grid__more-trigger"
+          data-testid="app-card-more"
+          :aria-label="t('common.moreActions')"
+          @click.stop
+        >
           <el-icon><MoreFilled /></el-icon>
-        </span>
+        </button>
         <template #dropdown>
+          <!-- 273:1753（执行提示28 项2）：152 宽/项 36 高/带图标；删除项危险色，弹层随视口上下翻转（EP popper 默认语义） -->
           <el-dropdown-menu>
             <el-dropdown-item v-perm="'form:app:manage'" command="edit">
-              {{ t('common.edit') }}
+              <el-icon><Edit /></el-icon>{{ t('form.appCenter.editApp') }}
             </el-dropdown-item>
-            <el-dropdown-item v-perm="'form:app:manage'" command="delete" divided>
-              {{ t('common.delete') }}
+            <el-dropdown-item
+              v-perm="'form:app:manage'"
+              command="delete"
+              divided
+              class="app-card-op-menu__danger"
+            >
+              <el-icon><Delete /></el-icon>{{ t('form.appCenter.deleteApp') }}
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -114,8 +132,10 @@ const { t } = useI18n()
 <style scoped>
 .app-grid {
   display: grid;
+  align-content: start;
+  align-items: start;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  gap: var(--sw-space-16);
   min-height: 120px;
 }
 
@@ -143,10 +163,12 @@ const { t } = useI18n()
   gap: 12px;
   min-width: 0;
   min-height: 88px;
-  padding: 16px;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  background: #fff;
+  box-sizing: border-box;
+  padding: 0 var(--sw-space-16);
+  border: 1px solid var(--sw-border-light);
+  border-radius: var(--sw-radius-card);
+  background: var(--sw-surface-card);
+  font-family: inherit;
   text-align: left;
   cursor: pointer;
   transition: box-shadow 0.2s;
@@ -194,24 +216,26 @@ const { t } = useI18n()
 
 .app-grid__name {
   overflow: hidden;
-  color: #303133;
-  font-size: 15px;
+  color: var(--sw-text-primary);
+  font-size: var(--sw-font-body);
   font-weight: 500;
+  line-height: 22px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .app-grid__meta {
   min-height: 16px;
-  margin-top: 2px;
-  color: #909399;
-  font-size: 12px;
+  margin-top: var(--sw-space-4);
+  color: var(--sw-text-secondary);
+  font-size: var(--sw-font-caption);
+  line-height: 18px;
 }
 
 .app-grid__more {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: var(--sw-space-8);
+  right: var(--sw-space-8);
 }
 
 .app-grid__more-trigger {
@@ -219,9 +243,12 @@ const { t } = useI18n()
   align-items: center;
   justify-content: center;
   width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  color: #909399;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: var(--sw-radius-base);
+  color: var(--sw-color-primary);
   cursor: pointer;
 }
 
@@ -235,5 +262,48 @@ const { t } = useI18n()
   color: #909399;
   text-align: center;
   padding: 48px 0;
+}
+</style>
+
+<style>
+/* 273:1753（执行提示28 项2）：应用卡操作菜单——teleport 浮层根按类定宽 152（含边框），
+   项 36 高、图标同行；删除项危险色 #C2303A。本组件自包含（应用管理页不加载 AppTreeNav 的 sw-op-menu 样式）。 */
+.app-card-op-menu.el-popper {
+  box-sizing: border-box;
+  width: 152px;
+  padding: 0;
+}
+.app-card-op-menu .el-dropdown-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+}
+.app-card-op-menu .el-dropdown-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 13px;
+}
+.app-card-op-menu .el-dropdown-menu__item .el-icon {
+  margin-right: 0;
+}
+.app-card-op-menu .el-dropdown-menu__item--divided {
+  margin: 0;
+  border-top: none;
+}
+/* EP 的 divided 会额外插入一个空分隔 li；原图两项间无分隔线，行距由 gap 控制 */
+.app-card-op-menu .el-dropdown-menu > li.el-dropdown-menu__item--divided:empty {
+  display: none;
+}
+.app-card-op-menu .app-card-op-menu__danger {
+  color: #c2303a;
+}
+.app-card-op-menu .app-card-op-menu__danger:not(.is-disabled):hover,
+.app-card-op-menu .app-card-op-menu__danger:not(.is-disabled):focus {
+  color: #c2303a;
+  background-color: #fdf0f1;
 }
 </style>

@@ -61,7 +61,7 @@ export const MOCK_SESSION_DATA: MockSessionData = {
     username: 'superadmin',
     displayName: '超级管理员',
     deptId: '101',
-    tenantId: '1',
+    tenantId: '0',
     avatar: null,
   },
   permissions: [
@@ -222,6 +222,30 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
     permission: 'system:view',
     hidden: false,
     children: [
+      {
+        id: '9131',
+        parentId: '1',
+        name: 'Menu',
+        title: '菜单管理',
+        path: 'system/menu',
+        component: 'system/views/MenuList',
+        sort: 4,
+        menuType: 1,
+        permission: 'system:menu:list',
+        hidden: false,
+      },
+      {
+        id: '19',
+        parentId: '1',
+        name: 'Tenant',
+        title: '租户管理',
+        path: 'system/tenant',
+        component: 'system/views/TenantList',
+        sort: 0,
+        menuType: 1,
+        permission: 'system:tenant:list',
+        hidden: false,
+      },
       {
         id: '10',
         parentId: '1',
@@ -504,6 +528,18 @@ export const MOCK_MENU_TREE: MockMenuNode[] = [
         hidden: false,
       },
     ],
+  },
+  {
+    id: '9130',
+    parentId: null,
+    name: 'FormAppManage',
+    title: '应用管理',
+    path: 'form/app-manage',
+    component: 'form/views/AppManageList',
+    sort: 2,
+    menuType: 1,
+    permission: 'form:app:manage',
+    hidden: false,
   },
   {
     id: '2',
@@ -1349,7 +1385,11 @@ export interface MockApp {
   color: string | null
   sortNo: number
   visibleScopeType: 'ALL' | 'SPECIFIED'
-  visibleUserIds: number[] | null
+  visibleUserIds: Array<number | string> | null
+  visibleDeptIds?: number[] | null
+  visibleRoleCodes?: string[] | null
+  visiblePostIds?: number[] | null
+  visibleTenantIds?: number[] | null
   status: 'ENABLED' | 'DISABLED'
   source: 'MANUAL' | 'LEGACY_CATEGORY' | 'LEGACY_UNCATEGORIZED'
   legacyCategoryId?: number | null

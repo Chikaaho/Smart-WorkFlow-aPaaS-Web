@@ -11,7 +11,7 @@ const { t } = useI18n()
  */
 import { computed } from 'vue'
 import type { TableField } from '@/contracts/form-schema'
-import { getSubFieldComponent } from '../dynamic-field-registry'
+import { getSubFieldComponent } from '../dynamic-field-subfield'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
 
 const props = defineProps<DynamicFieldControlProps>()
@@ -26,6 +26,13 @@ const tableRows = computed<Row[]>(() => {
   const v = props.modelValue
   return Array.isArray(v) ? (v as Row[]) : []
 })
+
+/** 画布设计态：无行操作；空数据渲染 2 行示例空行（仅外观，不进 modelValue）。 */
+const isDesign = computed(() => props.design === true)
+const showActions = computed(() => !props.readonly && !isDesign.value)
+const sampleRows = computed(() =>
+  isDesign.value && tableRows.value.length === 0 && subFields.value.length > 0 ? [0, 1] : [],
+)
 
 /** subFields 仅在 TABLE 判别子下存在（本组件只承载 TABLE 字段）。 */
 const subFields = computed(() =>
@@ -65,12 +72,18 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
 </script>
 
 <template>
-  <div class="dynamic-field__table">
+  <div
+    class="dynamic-field__table"
+    :class="{
+      'dynamic-field__table--readonly': readonly,
+      'dynamic-field__table--design': isDesign,
+    }"
+  >
     <table class="dynamic-field__table-inner">
       <thead>
         <tr>
           <th v-for="sf in subFields" :key="sf.name">{{ sf.label || sf.name }}</th>
-          <th v-if="!readonly">{{ t('common.actions') }}</th>
+          <th v-if="showActions">{{ t('common.actions') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -83,19 +96,31 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
                 :model-value="tableRows[rowIdx]?.[sf.name] ?? ''"
                 :readonly="readonly"
                 :sub-field="true"
+                :form-key="formKey"
+                :record-id="recordId"
                 @update:model-value="updateCell(rowIdx, sf.name, $event)"
               />
             </td>
-            <td v-if="!readonly">
+            <td v-if="showActions">
               <el-button size="small" type="danger" @click="removeRow(rowIdx)">{{
                 t('common.delete')
               }}</el-button>
             </td>
           </tr>
         </template>
+        <tr v-for="n in sampleRows" :key="`design-sample-${n}`" class="dynamic-field__table-sample">
+          <td v-for="sf in subFields" :key="sf.name">&nbsp;</td>
+        </tr>
       </tbody>
     </table>
-    <el-button v-if="!readonly" size="small" @click="addRow">{{ t('component.addRow') }}</el-button>
+    <el-button
+      v-if="!readonly && !isDesign"
+      link
+      type="primary"
+      class="dynamic-field__table-add"
+      @click="addRow"
+      >{{ t('component.addRow') }}</el-button
+    >
   </div>
 </template>
 
@@ -122,6 +147,73 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
 .dynamic-field__table-inner th {
   font-size: var(--sw-font-caption);
   font-weight: var(--sw-font-weight-caption);
+  background: var(--sw-fill-base);
+}
+/* 参考 101:2：编辑态子表列头/单元格左对齐，列头 12px 次要色、行高 42/44 */
+.dynamic-field__table:not(.dynamic-field__table--readonly):not(.dynamic-field__table--design)
+  .dynamic-field__table-inner
+  th,
+.dynamic-field__table:not(.dynamic-field__table--readonly):not(.dynamic-field__table--design)
+  .dynamic-field__table-inner
+  td {
+  text-align: left;
+}
+.dynamic-field__table:not(.dynamic-field__table--readonly):not(.dynamic-field__table--design)
+  .dynamic-field__table-inner
+  th {
+  height: 41px;
+  padding: 0 12px;
+  color: var(--sw-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+.dynamic-field__table:not(.dynamic-field__table--readonly):not(.dynamic-field__table--design)
+  .dynamic-field__table-inner
+  td {
+  height: 43px;
+  padding: 0 12px;
+}
+.dynamic-field__table-add {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding-left: 8px;
+}
+.dynamic-field__table--readonly .dynamic-field__table-inner {
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-bottom: 0;
+  border: 1px solid var(--sw-border-light);
+}
+.dynamic-field__table--readonly th,
+.dynamic-field__table--readonly td {
+  box-sizing: border-box;
+  height: 38px;
+  padding: 7px 12px;
+  border: 0;
+  border-right: 1px solid var(--sw-border-light);
+  text-align: left;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+.dynamic-field__table--readonly th {
+  color: var(--sw-text-secondary);
+  background: var(--sw-fill-base);
+  font-size: 12px;
+  line-height: 18px;
+}
+.dynamic-field__table--readonly th:last-child,
+.dynamic-field__table--readonly td:last-child {
+  border-right: 0;
+}
+.dynamic-field__table--readonly th,
+.dynamic-field__table--readonly tbody tr:not(:last-child) td {
+  border-bottom: 1px solid var(--sw-border-light);
+}
+.dynamic-field__table--design .dynamic-field__table-sample td {
+  height: 36px;
   background: var(--sw-fill-base);
 }
 </style>

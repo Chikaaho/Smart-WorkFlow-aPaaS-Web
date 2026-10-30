@@ -2,12 +2,15 @@ import { request } from '@/foundation/request'
 import type { PageQuery, PageResult } from '@/contracts/common'
 import { parseDefinition } from '@/adapters/form-designer'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
+import { normalizeFormDateFields, normalizeFormDateValue } from '@/contracts/form-date'
 
 export interface FormDefDTO {
   formKey: string
   formName: string
   /** 表单 ID（I2：列表配置/生命周期端点按 id 寻址）。 */
   id?: string
+  /** 当前发布版本号（运行期绑定/日志定位用）。 */
+  formVersion?: number
 }
 
 /** 后端分页响应原始形状:字段名为 records(区别于前端契约的 list)。 */
@@ -33,6 +36,70 @@ export async function getFormDefinition(formKey: string): Promise<FormSchema> {
     url: `/form/def/by-key/${formKey}/definition`,
   })
   return parseDefinition(rawJson)
+}
+
+/**
+ * 运行期旧版本回放：按 formKey + 发布版本读取冻结快照 definition。
+ * 旧草稿使用创建时的 formVersion 运行自身脚本，不追溯最新版本。
+ */
+export async function getFormDefinitionVersion(
+  formKey: string,
+  formVersion: number,
+): Promise<FormSchema> {
+  const rawJson = await request<string>({
+    method: 'GET',
+    url: `/form/def/by-key/${formKey}/versions/${formVersion}/definition`,
+  })
+  return parseDefinition(rawJson)
+}
+
+/** 表单设计器可选择的受控集成能力（服务端已按租户/启用/分类过滤，不含 URL）。 */
+export interface FormIntegrationCandidate {
+  name: string
+  description: string
+  effectScope: 'QUERY' | 'WRITE'
+  timeoutSeconds: number
+}
+
+/** GET /api/form/integration/candidates（要求 form:design + agent:tool:view）。 */
+export async function listFormIntegrationCandidates(): Promise<FormIntegrationCandidate[]> {
+  return request<FormIntegrationCandidate[]>({
+    method: 'GET',
+    url: '/form/integration/candidates',
+  })
+}
+
+export type FormIntegrationPhase = 'BEFORE_SUBMIT' | 'AFTER_SUBMIT'
+
+export interface FormIntegrationInvokeReq {
+  formKey: string
+  /** 绑定发布版本；缺省由服务端按当前发布版本解析。 */
+  formVersion?: number
+  /** 已存在记录；提交后写副作用必填。 */
+  recordId?: string
+  phase: FormIntegrationPhase
+  capabilityId: string
+  /** 写副作用幂等标识；提交后阶段通常为提交后的记录 ID。 */
+  requestKey?: string
+  input?: Record<string, unknown>
+}
+
+export interface FormIntegrationInvokeResult {
+  capabilityId: string
+  effectScope: 'QUERY' | 'WRITE'
+  replayed: boolean
+  result: unknown
+}
+
+/** POST /api/form/integration/invoke（要求 form:integration:invoke）。 */
+export async function invokeFormIntegration(
+  req: FormIntegrationInvokeReq,
+): Promise<FormIntegrationInvokeResult> {
+  return request<FormIntegrationInvokeResult>({
+    method: 'POST',
+    url: '/form/integration/invoke',
+    data: req,
+  })
 }
 
 /**
@@ -96,7 +163,8 @@ export function normalizeSubmitData(
       case 'DATE':
         // 可选日期未填写时传 null，避免动态 TIMESTAMP 列收到空字符串而被数据库拒绝。
         // P63 format=datetime：保留完整 "YYYY-MM-DD HH:mm[:ss]" 串（后端按 LocalDateTime 解析）。
-        result[field.name] = String(value).trim() ? String(value) : null
+        result[field.name] =
+          normalizeFormDateValue(value, field.format === 'datetime').trim() || null
         break
       case 'USER':
       case 'DEPT':
@@ -115,7 +183,9 @@ export function normalizeSubmitData(
         break
       case 'TABLE': {
         const rows = Array.isArray(value) ? (value as Record<string, unknown>[]) : []
-        result[field.name] = rows.map(({ _rowAction, _rowId, ...clean }) => clean)
+        result[field.name] = rows.map(({ _rowAction, _rowId, ...clean }) =>
+          normalizeFormDateFields(clean, field.subFields),
+        )
         break
       }
       default:

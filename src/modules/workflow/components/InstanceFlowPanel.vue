@@ -1,10 +1,12 @@
 <script setup lang="ts">
 /* global window */
 import { computed, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useI18n } from '@/locales'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { ApiError } from '@/foundation/request'
-import { getFormDefinition } from '@/adapters/form-runtime'
+import { downloadOpinionAttachment } from '@/modules/workflow/api'
+import { getFormDefinition, resolveUserDisplayNames } from '@/adapters/form-runtime'
 import type { ApprovalHistoryItem } from '@/contracts/bpm'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import { deriveProcessTrace } from '../utils/process-trace'
@@ -179,6 +181,59 @@ const flowRail = computed<FlowRailEntry[]>(() => {
 /** 流程图右侧状态卡数据源：仅真实进行中的节点；无进行中节点时不渲染。 */
 const currentRailEntry = computed(() => flowRail.value.find((e) => e.state === 'current') ?? null)
 
+// ─── 会签聚合（设计 60:190）：多人节点聚合入口 + 会签记录弹窗 ───
+interface SignGroup {
+  key: string
+  name: string
+  rows: ApprovalHistoryItem[]
+  approved: number
+  rejected: number
+  pending: number
+}
+
+/** 会签组 = 同一 nodeKey 下存在多名真实参与人的审批组（派发通知行不计）。 */
+const signGroups = computed<SignGroup[]>(() => {
+  const groups = new Map<string, { name: string; rows: ApprovalHistoryItem[] }>()
+  for (const row of props.approvalHistory) {
+    if (typeof row.nodeKey !== 'string' || !row.nodeKey) continue
+    const g = groups.get(row.nodeKey) ?? { name: row.taskName, rows: [] }
+    g.rows.push(row)
+    groups.set(row.nodeKey, g)
+  }
+  const result: SignGroup[] = []
+  for (const [key, g] of groups) {
+    const real = g.rows.filter((r) => !(r.approvalResult == null && r.endTime != null))
+    if (real.length < 2) continue
+    result.push({
+      key,
+      name: g.name,
+      rows: real,
+      approved: real.filter((r) => r.approvalResult === 'APPROVED').length,
+      rejected: real.filter((r) => r.approvalResult === 'REJECTED').length,
+      pending: real.filter((r) => r.approvalResult == null && r.endTime == null).length,
+    })
+  }
+  return result
+})
+
+const signDialogVisible = ref(false)
+const signFilter = ref<'all' | 'agreed' | 'rejected'>('all')
+const activeSignGroup = ref<SignGroup | null>(null)
+
+function openSignDialog(key: string) {
+  activeSignGroup.value = signGroups.value.find((g) => g.key === key) ?? null
+  signFilter.value = 'all'
+  signDialogVisible.value = true
+}
+
+const signDialogRows = computed(() => {
+  const g = activeSignGroup.value
+  if (!g) return []
+  if (signFilter.value === 'agreed') return g.rows.filter((r) => r.approvalResult === 'APPROVED')
+  if (signFilter.value === 'rejected') return g.rows.filter((r) => r.approvalResult === 'REJECTED')
+  return g.rows
+})
+
 /** 图画布高度：默认 740；高视口（长页基线 1512）下 800。 */
 const graphCanvasHeight = computed(() =>
   typeof window !== 'undefined' && window.innerHeight >= 1100 ? 784 : 740,
@@ -249,24 +304,63 @@ const opinionDetailVisible = ref(false)
 const opinionDetailRow = ref<ApprovalHistoryItem | null>(null)
 /** 意见表单字段名 → 业务标签；未解析到时只显示业务兜底，不暴露内部字段名。 */
 const opinionFieldLabels = ref<Record<string, string>>({})
+/** 人员意见字段的稳定 ID → 显示名；显示名只用于阅读，原始 ID 仍随记录保存。 */
+const opinionUserFieldKeys = ref<string[]>([])
+const opinionUserNames = ref<Record<string, string>>({})
 let opinionSchemaToken = 0
 
 async function loadOpinionFieldLabels(row: ApprovalHistoryItem | null) {
   const token = ++opinionSchemaToken
   opinionFieldLabels.value = {}
+  opinionUserFieldKeys.value = []
+  opinionUserNames.value = {}
   const formKey = row?.opinionFormId
   if (!formKey) return
   try {
     const schema = await getFormDefinition(String(formKey))
     if (token !== opinionSchemaToken) return
     const labels: Record<string, string> = {}
+    const userKeys: string[] = []
     for (const field of schema.fields) {
       if (field.label?.trim()) labels[field.name] = field.label.trim()
+      if (field.type === 'USER') userKeys.push(field.name)
     }
     opinionFieldLabels.value = labels
+    opinionUserFieldKeys.value = userKeys
+    const ids = new Set<string>()
+    for (const key of userKeys) {
+      const value = row?.opinionData?.[key]
+      const list = Array.isArray(value) ? value : value == null ? [] : [value]
+      for (const item of list) {
+        const text = String(item ?? '').trim()
+        if (text) ids.add(text)
+      }
+    }
+    if (ids.size > 0) {
+      const names = await resolveUserDisplayNames([...ids])
+      if (token === opinionSchemaToken) opinionUserNames.value = names
+    }
   } catch {
-    if (token === opinionSchemaToken) opinionFieldLabels.value = {}
+    if (token === opinionSchemaToken) {
+      opinionFieldLabels.value = {}
+      opinionUserFieldKeys.value = []
+      opinionUserNames.value = {}
+    }
   }
+}
+
+/** 人员值展示：显示名（稳定ID）；未解析到显示名时保留 ID，不伪造姓名。 */
+function opinionUserDisplay(_key: string, value: unknown): string {
+  const list = Array.isArray(value) ? value : [value]
+  return list
+    .map((item) => {
+      const id = String(item ?? '').trim()
+      if (!id) return ''
+      const name = opinionUserNames.value[id]
+      return name ? `${name}（${id}）` : id
+    })
+    .filter(Boolean)
+    .join('、')
 }
 
 function businessFieldLabel(key: string): string {
@@ -301,7 +395,12 @@ const opinionDetailEntries = computed(() => {
         value != null &&
         value !== '',
     )
-    .map(([key, value]) => ({ key: businessFieldLabel(key), value: String(value) }))
+    .map(([key, value]) => ({
+      key: businessFieldLabel(key),
+      value: opinionUserFieldKeys.value.includes(key)
+        ? opinionUserDisplay(key, value)
+        : String(value),
+    }))
 })
 
 /** 设计（意见详情）的已确认检查项区块：仅当字段值为非空数组时按检查项芯片渲染。 */
@@ -310,25 +409,83 @@ const opinionDetailCheckEntries = computed(() => {
   if (!row?.opinionData) return []
   return Object.entries(row.opinionData)
     .filter(([key, value]) => key !== 'comment' && Array.isArray(value) && value.length > 0)
-    .map(([key, value]) => [businessFieldLabel(key), value] as const)
+    .map(
+      ([key, value]) =>
+        [
+          businessFieldLabel(key),
+          opinionUserFieldKeys.value.includes(key)
+            ? (value as unknown[]).map((item) => opinionUserDisplay(key, item))
+            : (value as unknown[]),
+        ] as const,
+    )
 })
 
-/** 设计（意见详情）的附件区块：仅当键名命中附件约定且值非空时渲染。 */
+/** 意见附件项的解析结果：仅结构化 { storageKey } 引用可受控下载；纯文本旧值标记不可查看。 */
+interface OpinionAttachmentItem {
+  storageKey: string | null
+  name: string
+}
+
+function attachmentsOf(value: unknown): OpinionAttachmentItem[] {
+  const list = Array.isArray(value) ? value : [value]
+  return list.flatMap((item): OpinionAttachmentItem[] => {
+    if (item == null || item === '') return []
+    if (typeof item === 'object') {
+      const record = item as Record<string, unknown>
+      const storageKey = typeof record.storageKey === 'string' ? record.storageKey : null
+      const name = typeof record.name === 'string' && record.name ? record.name : (storageKey ?? '')
+      return name ? [{ storageKey, name }] : []
+    }
+    // 纯文本/旧文件名没有可解析引用：只展示，不拼下载地址
+    return [{ storageKey: null, name: String(item) }]
+  })
+}
+
 const opinionDetailAttachmentEntries = computed(() => {
   const row = opinionDetailRow.value
   if (!row?.opinionData) return []
   return Object.entries(row.opinionData)
     .filter(([key]) => key !== 'comment' && OPINION_ATTACHMENT_KEY.test(key))
-    .map(([key, value]) => ({
-      key: businessFieldLabel(key),
-      value: Array.isArray(value) ? value.map((item) => String(item)).join('、') : String(value),
-    }))
-    .filter((entry) => entry.value !== '')
+    .map(([key, value]) => ({ key: businessFieldLabel(key), items: attachmentsOf(value) }))
+    .filter((entry) => entry.items.length > 0)
 })
+
+const opinionAttachmentDownloading = ref<string | null>(null)
+
+async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promise<void> {
+  const row = opinionDetailRow.value
+  if (!row?.actionRecordId || !item.storageKey || opinionAttachmentDownloading.value) return
+  opinionAttachmentDownloading.value = item.storageKey
+  try {
+    const blob = await downloadOpinionAttachment(row.actionRecordId, item.storageKey, item.name)
+    const url = globalThis.URL.createObjectURL(blob)
+    try {
+      const link = globalThis.document.createElement('a')
+      link.href = url
+      link.download = item.name
+      globalThis.document.body.appendChild(link)
+      try {
+        link.click()
+      } finally {
+        link.remove()
+      }
+    } finally {
+      globalThis.URL.revokeObjectURL(url)
+    }
+  } catch (error) {
+    ElMessage.error(
+      error && typeof error === 'object' && 'msg' in error
+        ? String((error as { msg?: unknown }).msg)
+        : t('taskDetailUi.opinionAttachmentDownloadFailed'),
+    )
+  } finally {
+    opinionAttachmentDownloading.value = null
+  }
+}
 </script>
 
 <template>
-  <el-card class="instance-flow-panel">
+  <el-card class="instance-flow-panel" shadow="never">
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <!-- 流转记录：四列设计版式，行数据来自真实审批历史 -->
       <el-tab-pane name="records">
@@ -343,10 +500,14 @@ const opinionDetailAttachmentEntries = computed(() => {
           show-icon
         />
         <el-table v-else class="detail-flow-table" :data="flowRecordRows" stripe>
-          <el-table-column prop="time" :label="t('taskDetailUi.recordTime')" width="180" />
-          <el-table-column prop="node" :label="t('taskDetailUi.recordNode')" min-width="180" />
-          <el-table-column prop="operator" :label="t('taskDetailUi.operatorLabel')" width="180" />
-          <el-table-column prop="event" :label="t('taskDetailUi.recordEvent')" min-width="280" />
+          <el-table-column prop="time" :label="t('taskDetailUi.recordTime')" min-width="244" />
+          <el-table-column prop="node" :label="t('taskDetailUi.recordNode')" min-width="344" />
+          <el-table-column
+            prop="operator"
+            :label="t('taskDetailUi.operatorLabel')"
+            min-width="186"
+          />
+          <el-table-column prop="event" :label="t('taskDetailUi.recordEvent')" min-width="664" />
         </el-table>
       </el-tab-pane>
 
@@ -406,9 +567,38 @@ const opinionDetailAttachmentEntries = computed(() => {
       <!-- 审批详情列表：按真实历史逐人一行；已处理行可打开意见详情弹窗，会签节点可开聚合记录 -->
       <el-tab-pane name="people">
         <template #label
-          ><span class="detail-tab-label">{{ t('taskDetailUi.tabPeople') }}</span></template
+          ><span class="detail-tab-label detail-tab-label--people">{{
+            t('taskDetailUi.tabPeople')
+          }}</span></template
         >
-        <el-table class="detail-flow-table" :data="peopleRows" stripe>
+        <!-- 会签聚合（设计 60:190）：多人节点聚合入口，点击进会签记录弹窗 -->
+        <div v-if="signGroups.length" class="sign-groups" data-testid="sign-groups">
+          <button
+            v-for="g in signGroups"
+            :key="g.key"
+            type="button"
+            class="sign-group"
+            data-testid="sign-group"
+            @click="openSignDialog(g.key)"
+          >
+            <span class="sign-group__title">
+              {{ t('taskDetailUi.signGroupTitle') }} · {{ g.name }}
+            </span>
+            <span class="sign-group__stats">
+              <span class="sign-group__stat sign-group__stat--success">
+                {{ g.approved }}{{ t('taskDetailUi.signAgreed') }}
+              </span>
+              <span v-if="g.rejected" class="sign-group__stat sign-group__stat--danger">
+                {{ g.rejected }}{{ t('taskDetailUi.signRejected') }}
+              </span>
+              <span v-if="g.pending" class="sign-group__stat">
+                {{ g.pending }}{{ t('taskDetailUi.signPending') }}
+              </span>
+            </span>
+            <span class="sign-group__link">{{ t('taskDetailUi.viewAllSignRecords') }}</span>
+          </button>
+        </div>
+        <el-table class="detail-flow-table detail-approval-table" :data="peopleRows" stripe>
           <el-table-column prop="taskName" :label="t('workflow.approvalNode')" min-width="260" />
           <el-table-column :label="t('workflow.approver')" width="120">
             <template #default="{ row }">
@@ -457,8 +647,9 @@ const opinionDetailAttachmentEntries = computed(() => {
       </el-tab-pane>
     </el-tabs>
 
-    <!-- 意见详情弹窗：仅渲染该行真实可得字段；无对应数据时区块留白，不虚构 -->
-    <el-dialog v-model="opinionDetailVisible" width="780px" top="12vh" class="p53-opinion-dialog">
+    <!-- 意见详情弹窗：仅渲染该行真实可得字段；无对应数据时区块留白，不虚构。
+         设计 60:48：760 宽外壳 + 底部 80×32 关闭按钮（只读，仅关闭）。 -->
+    <el-dialog v-model="opinionDetailVisible" width="760px" top="12vh" class="p53-opinion-dialog">
       <template #header>
         <div v-if="opinionDetailRow" class="p53-opinion-dialog__head">
           <h2>{{ t('taskDetailUi.opinionDetailTitle') }}</h2>
@@ -499,70 +690,205 @@ const opinionDetailAttachmentEntries = computed(() => {
         <template v-for="entry in opinionDetailAttachmentEntries" :key="entry.key">
           <div class="p53-opinion-attachment-row">
             <label>{{ entry.key }}</label>
-            <div class="p53-opinion-attachment">{{ entry.value }}</div>
+            <div class="p53-opinion-attachment">
+              <template v-for="(item, index) in entry.items" :key="`${item.name}-${index}`">
+                <el-button
+                  v-if="item.storageKey && opinionDetailRow?.actionRecordId"
+                  link
+                  type="primary"
+                  size="small"
+                  :loading="opinionAttachmentDownloading === item.storageKey"
+                  @click="downloadOpinionAttachmentItem(item)"
+                >
+                  {{ item.name }}（{{ t('taskDetailUi.opinionAttachmentDownload') }}）
+                </el-button>
+                <span v-else class="p53-opinion-attachment__unavailable">
+                  {{ item.name }} · {{ t('taskDetailUi.opinionAttachmentUnavailable') }}
+                </span>
+              </template>
+            </div>
           </div>
         </template>
+      </div>
+      <template #footer>
+        <el-button
+          type="primary"
+          class="p53-opinion-dialog__close"
+          data-testid="opinion-detail-close"
+          @click="opinionDetailVisible = false"
+        >
+          {{ t('common.close') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 会签记录弹窗（设计 60:190）：说明 + 状态筛选 + 统计行 + 记录表 -->
+    <el-dialog
+      v-model="signDialogVisible"
+      width="780px"
+      top="12vh"
+      class="p53-sign-dialog"
+      data-testid="sign-records-dialog"
+    >
+      <template #header>
+        <div class="p53-sign-dialog__head">
+          <h2>{{ t('taskDetailUi.signGroupTitle') }}</h2>
+          <p>{{ t('taskDetailUi.signGroupHint') }}</p>
+        </div>
+      </template>
+      <div v-if="activeSignGroup" class="p53-sign-panel">
+        <el-tabs v-model="signFilter" class="p53-sign-tabs">
+          <el-tab-pane :label="t('common.all')" name="all" />
+          <el-tab-pane :label="t('common.resultAgreed')" name="agreed" />
+          <el-tab-pane :label="t('taskDetailUi.signTabRejected')" name="rejected" />
+        </el-tabs>
+        <p class="p53-sign-stats" data-testid="sign-records-stats">
+          <span> {{ activeSignGroup.rows.length }}{{ t('taskDetailUi.signParticipants') }} </span>
+          <span class="is-success">
+            · {{ activeSignGroup.approved }}{{ t('taskDetailUi.signAgreed') }}
+          </span>
+          <span v-if="activeSignGroup.rejected" class="is-danger">
+            · {{ activeSignGroup.rejected }}{{ t('taskDetailUi.signRejected') }}
+          </span>
+          <span v-if="activeSignGroup.pending" class="is-warning">
+            · {{ activeSignGroup.pending }}{{ t('taskDetailUi.signPending') }}
+          </span>
+          <span class="p53-sign-stats__rule">{{ t('taskDetailUi.parallelSignRule') }}</span>
+        </p>
+        <el-table class="detail-flow-table" :data="signDialogRows" stripe>
+          <el-table-column :label="t('workflow.approver')" min-width="120">
+            <template #default="{ row }">
+              {{ row.assigneeName ?? row.assignee ?? '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('taskDetailUi.opinionDeptLabel')" min-width="160">
+            <template #default="{ row }">
+              {{ row.assigneeDept || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('workflow.actionOpinion')" min-width="280">
+            <template #default="{ row }">
+              {{
+                row.opinionFormId
+                  ? t('taskDetailUi.customFormLabel')
+                  : (row.opinionData?.comment ?? row.action ?? '-')
+              }}
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('taskDetailUi.approvalTimeLabel')" width="132">
+            <template #default="{ row }">
+              {{ formatWhen(row.endTime ?? row.createTime) || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('common.status')" width="96">
+            <template #default="{ row }">
+              <span
+                class="people-status"
+                :class="`people-status--${getApprovalResultType(row.approvalResult)}`"
+              >
+                {{ getApprovalResultLabel(row.approvalResult) }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('common.actions')" width="80" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" size="small" @click="openOpinionDetailRow(row)">
+                {{ t('common.view') }}
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
     </el-dialog>
   </el-card>
 </template>
 
 <style scoped>
-/* ─── 页签几何（48px 页签 / 150px 页签宽）；内容由数据撑高，不占位撑满 ─── */
+/* 详情页签与表格使用同一内容宽度，原生页签保留键盘切换。 */
 .instance-flow-panel {
   box-sizing: border-box;
   margin-bottom: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .instance-flow-panel :deep(.el-card__body) {
   padding: 0;
 }
 .instance-flow-panel :deep(.el-tabs__header) {
-  height: 48px;
-  margin-bottom: 0;
-  background: #fafbfe;
+  height: 36px;
+  margin-bottom: 12px;
+  background: var(--sw-bg-white, #fff);
 }
 .instance-flow-panel :deep(.el-tabs__nav-wrap),
 .instance-flow-panel :deep(.el-tabs__nav-scroll),
 .instance-flow-panel :deep(.el-tabs__nav) {
-  height: 48px;
+  height: 36px;
 }
 .instance-flow-panel :deep(.el-tabs__nav) {
-  padding-left: 24px;
+  display: flex;
+  gap: 12px;
+  padding-left: 0;
+}
+.instance-flow-panel :deep(.el-tabs__active-bar),
+.instance-flow-panel :deep(.el-tabs__nav-wrap::after) {
+  display: none;
 }
 .instance-flow-panel :deep(.el-tabs__item) {
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 150px;
-  height: 48px;
-  padding: 0;
-  line-height: 19px;
+  width: auto;
+  height: 32px;
+  margin: 2px 0;
+  padding: 0 !important;
+  border-radius: var(--sw-radius-base);
+  color: var(--sw-color-primary);
+  font-size: 14px;
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: 22px;
   text-align: center;
+}
+.instance-flow-panel :deep(.el-tabs__item.is-active) {
+  background: var(--sw-color-primary);
+  color: #fff;
 }
 .instance-flow-panel :deep(.detail-tab-label) {
   display: inline-block;
-  line-height: 19px;
+  padding: 0 16px;
+  line-height: 22px;
+}
+.instance-flow-panel :deep(.detail-tab-label--people) {
+  padding: 0 12px;
 }
 /* 流转记录与审批详情列表共用同一套表格几何与字体；表格铺满卡片，四周不留白。 */
 .instance-flow-panel :deep(.detail-flow-table) {
   box-sizing: border-box;
   width: 100% !important;
   margin: 0;
+  border: 1px solid var(--sw-border-light);
   color: var(--sw-text-primary);
   font-size: 14px;
 }
 .instance-flow-panel :deep(.detail-flow-table .el-table__header-wrapper th) {
-  height: 44px;
+  height: 42px;
   padding: 0;
   background: var(--sw-fill-base);
   color: var(--sw-text-secondary);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 400;
 }
 .instance-flow-panel :deep(.detail-flow-table .el-table__body-wrapper td) {
-  height: 52px;
+  height: 39px;
   padding: 0;
+}
+/* 90:311：审批详情表独立几何——表头 34、行 53；流转记录与会签记录沿用上面的共用值。 */
+.instance-flow-panel :deep(.detail-approval-table .el-table__header-wrapper th) {
+  height: 34px;
+}
+.instance-flow-panel :deep(.detail-approval-table .el-table__body-wrapper td) {
+  height: 53px;
 }
 .instance-flow-panel :deep(.detail-flow-table .cell) {
   padding: 0 16px;
@@ -583,6 +909,81 @@ const opinionDetailAttachmentEntries = computed(() => {
 }
 .people-status--info {
   color: var(--sw-text-secondary);
+}
+/* ─── 会签聚合入口（设计 60:190）：多人节点一行聚合，右缘查看全部 ─── */
+.sign-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 4px;
+}
+.sign-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fafbfd;
+  cursor: pointer;
+  text-align: left;
+}
+.sign-group:hover {
+  border-color: var(--sw-color-primary, #409eff);
+}
+.sign-group__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+}
+.sign-group__stats {
+  display: inline-flex;
+  gap: 12px;
+  font-size: 13px;
+}
+.sign-group__stat {
+  color: var(--sw-text-secondary);
+}
+.sign-group__stat--success {
+  color: #12aa83;
+}
+.sign-group__stat--danger {
+  color: #ef5d71;
+}
+.sign-group__link {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--sw-color-primary, #409eff);
+}
+/* ─── 会签记录弹窗（设计 60:190）：说明 + 筛选 + 统计行 ─── */
+.p53-sign-dialog__head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+}
+.p53-sign-dialog__head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+.p53-sign-panel {
+  padding: 0 24px 20px;
+}
+.p53-sign-stats {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+}
+.p53-sign-stats .is-success {
+  color: #12aa83;
+}
+.p53-sign-stats .is-danger {
+  color: #ef5d71;
+}
+.p53-sign-stats__rule {
+  margin-left: 12px;
+  font-size: 12px;
 }
 /* 表格页签无内边距；仅空态提示保留与卡片边缘的间距。 */
 .instance-flow-panel :deep(.el-tab-pane > .el-alert) {
@@ -713,14 +1114,14 @@ const opinionDetailAttachmentEntries = computed(() => {
   color: #15a77f;
 }
 .p53-graph-legend__chip--current {
-  background: #f0eaff;
-  color: #6f2dff;
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
 }
 .p53-graph-legend__chip--pending {
   background: #f0f3f9;
   color: #8a96ad;
 }
-/* ─── 意见详情弹窗：设计几何（780 宽 / 圆角 14 / 头部 meta / 意见面板 / 底部注脚） ─── */
+/* ─── 意见详情弹窗：设计几何（60:48：760 宽 / 圆角 14 / 头部 meta / 意见面板 / 底部 80×32 关闭） ─── */
 .instance-flow-panel :deep(.p53-opinion-dialog) {
   margin-top: 182px !important;
   margin-bottom: auto;
@@ -765,6 +1166,16 @@ const opinionDetailAttachmentEntries = computed(() => {
   max-height: 484px;
   padding: 4px 28px 0;
   overflow: auto;
+}
+.instance-flow-panel :deep(.p53-opinion-dialog .el-dialog__footer) {
+  box-sizing: border-box;
+  padding: 16px 28px 20px;
+  border-top: none;
+}
+.instance-flow-panel :deep(.p53-opinion-dialog .el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
 }
 .p53-opinion-panel {
   box-sizing: border-box;
@@ -862,8 +1273,8 @@ const opinionDetailAttachmentEntries = computed(() => {
   justify-content: center;
   padding: 10px 18px;
   border-radius: 7px;
-  background: #f0ecff;
-  color: var(--sw-color-primary, #6f2dff);
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
   font-size: 12px;
   text-align: center;
   overflow: hidden;

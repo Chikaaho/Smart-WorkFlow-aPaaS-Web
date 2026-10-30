@@ -20,13 +20,14 @@ interface UserOption {
   id: string | number
   username?: string
   realName?: string
+  deptId?: string | number | null
 }
 
-export async function loadUserChoices(): Promise<UserChoice[]> {
+async function userOptions(limit: number): Promise<UserChoice[]> {
   const list = await request<UserOption[]>({
     method: 'GET',
     url: '/system/user/options',
-    params: { limit: 100 },
+    params: { limit },
   })
   return (list ?? []).map((u) => ({
     id: String(u.id),
@@ -34,9 +35,69 @@ export async function loadUserChoices(): Promise<UserChoice[]> {
   }))
 }
 
+export async function loadUserChoices(): Promise<UserChoice[]> {
+  return userOptions(100)
+}
+
+/** 服务端组织目录快照原始形状（只含启用目录与有效关联，不含凭据/权限码）。 */
+interface ScriptOrgContextResponse {
+  users?: Array<{
+    id: string | number
+    name: string
+    deptId?: string | number | null
+    roleIds?: Array<string | number>
+    postIds?: Array<string | number>
+  }>
+  depts?: Array<{ id: string | number; name: string; parentId?: string | number | null }>
+  roles?: Array<{ id: string | number; code: string; name: string }>
+  posts?: Array<{ id: string | number; code: string; name: string }>
+}
+
+/**
+ * 表单脚本组织目录快照：服务端按当前租户返回启用用户/部门/角色/岗位与有效成员关系。
+ * 不按管理端权限扩大读取范围；未装载时脚本组织函数明确报错。
+ */
+export async function loadScriptOrgContext(): Promise<
+  import('../utils/script-hosts').ScriptOrgContext
+> {
+  const raw = await request<ScriptOrgContextResponse>({
+    method: 'GET',
+    url: '/system/org/script-context',
+  })
+  const idText = (value: string | number | null | undefined): string | null =>
+    value === null || value === undefined || value === '' ? null : String(value)
+  return {
+    users: (raw.users ?? []).map((user) => ({
+      id: String(user.id),
+      name: user.name,
+      deptId: idText(user.deptId),
+      roleIds: (user.roleIds ?? []).map(String),
+      postIds: (user.postIds ?? []).map(String),
+    })),
+    depts: (raw.depts ?? []).map((dept) => ({
+      id: String(dept.id),
+      name: dept.name,
+      parentId: idText(dept.parentId),
+    })),
+    roles: (raw.roles ?? []).map((role) => ({
+      id: String(role.id),
+      code: role.code,
+      name: role.name,
+    })),
+    posts: (raw.posts ?? []).map((post) => ({
+      id: String(post.id),
+      code: post.code,
+      name: post.name,
+    })),
+  }
+}
+
 export interface DeptChoice {
   id: string
   label: string
+  /** 部门名（无缩进）；旧调用方只用 label，新增字段为附加信息。 */
+  name?: string
+  parentId?: string | null
 }
 
 /** 部门树拍平为候选（保留树序；仅正常状态由服务端保证）。 */
@@ -45,7 +106,12 @@ export async function loadDeptChoices(): Promise<DeptChoice[]> {
   const out: DeptChoice[] = []
   const walk = (nodes: SysDept[], depth: number) => {
     for (const n of nodes) {
-      out.push({ id: String(n.id), label: `${'　'.repeat(depth)}${n.name}` })
+      out.push({
+        id: String(n.id),
+        label: `${'　'.repeat(depth)}${n.name}`,
+        name: n.name,
+        parentId: n.parentId != null ? String(n.parentId) : null,
+      })
       if (Array.isArray(n.children)) walk(n.children, depth + 1)
     }
   }
@@ -96,7 +162,7 @@ export async function saveListConfig(formId: string, config: ListConfig): Promis
   await request<void>({
     method: 'PUT',
     url: `/form/def/${formId}/list-config`,
-    data: { config },
+    data: { config: JSON.stringify(config) },
   })
 }
 

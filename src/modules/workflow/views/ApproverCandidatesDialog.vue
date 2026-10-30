@@ -217,7 +217,7 @@ const RULE_TYPES = [
 <template>
   <el-dialog
     v-model="visible"
-    width="1020px"
+    width="980px"
     append-to-body
     class="approver-dialog"
     modal-class="p53-dialog-overlay-37"
@@ -349,16 +349,16 @@ const RULE_TYPES = [
 
     <template #footer>
       <div class="approver-dialog__footer">
-        <el-button @click="visible = false"
-          >&nbsp;&nbsp;&nbsp;&nbsp;{{ t('common.cancel') }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</el-button
-        >
+        <el-button class="approver-dialog__btn" @click="visible = false">{{
+          t('common.cancel')
+        }}</el-button>
         <el-button
           type="primary"
-          class="approver-dialog__confirm"
+          class="approver-dialog__btn"
           :disabled="confirmDisabled"
           @click="confirmSelection"
         >
-          &nbsp;&nbsp;&nbsp;{{ t('approverPicker.confirm') }}&nbsp;&nbsp;&nbsp;&nbsp;
+          {{ t('approverPicker.confirm') }}
         </el-button>
       </div>
     </template>
@@ -368,8 +368,9 @@ const RULE_TYPES = [
 <style scoped>
 .approver-dialog__heading h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 600;
+  line-height: 24px;
   color: #1f2a44;
 }
 
@@ -399,7 +400,7 @@ const RULE_TYPES = [
 
 .approver-dialog__panes {
   display: grid;
-  grid-template-columns: 250px 1fr 288px;
+  grid-template-columns: 200px 404px 294px;
   gap: 16px;
   /* 设计（节点12）：三栏面板固定 450px，高度与底部分隔线对齐。 */
   min-height: 450px;
@@ -442,8 +443,10 @@ const RULE_TYPES = [
   display: flex;
   align-items: center;
   gap: 10px;
+  box-sizing: border-box;
   width: 100%;
-  padding: 10px 12px;
+  height: 56px;
+  padding: 0 12px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -452,7 +455,7 @@ const RULE_TYPES = [
 }
 
 .approver-user.is-picked {
-  background: #f0eaff;
+  background: var(--sw-color-primary-soft);
 }
 
 .approver-user__avatar {
@@ -521,7 +524,23 @@ const RULE_TYPES = [
   gap: 10px;
 }
 
-.approver-dialog__confirm {
-  min-width: 120px;
+.approver-dialog__btn {
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+}
+
+/* 审查23 D08-P：候选行勾选 18×18（覆盖全局 28 tokens） */
+.approver-dialog__panes :deep(.el-checkbox) {
+  height: 18px;
+}
+.approver-dialog__panes :deep(.el-checkbox__inner) {
+  width: 18px !important;
+  height: 18px !important;
+}
+.approver-dialog__panes :deep(.el-checkbox__inner::after) {
+  left: 6px;
+  top: 2px;
 }
 </style>

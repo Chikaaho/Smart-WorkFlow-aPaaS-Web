@@ -3,9 +3,9 @@ import { useI18n } from '@/locales'
 
 const { t } = useI18n()
 /**
- * 单行文本（TEXT）类型专属配置。
- * P53：组件名称/宽度/占位/必填/字段标识已上收 FieldConfigPanel 通用三段，
- * 本组件只保留类型专属的「最大长度」行。
+ * 文本（TEXT）类型专属配置。
+ * P53：组件名称/宽度/占位/必填/字段标识已上收 FieldConfigPanel 通用三段；
+ * 本组件保留类型专属「输入方式（单行/多行）」「最大长度」「默认值」。
  */
 import type { TextField } from '@/contracts/form-schema'
 import type { FieldPatch } from '../field-config'
@@ -16,6 +16,17 @@ const emit = defineEmits<{ update: [patch: FieldPatch] }>()
 
 <template>
   <div>
+    <div class="row">
+      <label class="row__label">{{ t('form.fieldInputMode') }}</label>
+      <el-select
+        :model-value="props.field.multiline ? 'multiline' : 'single'"
+        class="row__control"
+        @update:model-value="(v: string) => emit('update', { multiline: v === 'multiline' })"
+      >
+        <el-option :label="t('form.fieldTypeText')" value="single" />
+        <el-option :label="t('form.paletteMultiline')" value="multiline" />
+      </el-select>
+    </div>
     <div v-if="!props.hideLength" class="row">
       <label class="row__label">{{ t('form.maxLength') }}</label>
       <el-input-number

@@ -24,8 +24,8 @@ import {
 import type { PageQuery } from '@/contracts/common'
 import type { TaskDetail } from '@/contracts/bpm'
 import { ApiError } from '@/foundation/request'
-import { getFormData, getFormDefinition } from '@/adapters/form-runtime'
-import type { FormSchema } from '@/contracts/form-schema'
+import { getFormData, loadOrgUserChoices } from '@/adapters/form-runtime'
+import BusinessFormReadonly from '@/components/business-detail/BusinessFormReadonly.vue'
 
 type MobileTab = 'todo' | 'initiated' | 'drafts'
 
@@ -44,6 +44,7 @@ interface Row {
   taskId?: string
   id?: string | number
   name?: string
+  processName?: string | null
   processDefinitionKey?: string
   formKey?: string
   status?: string
@@ -57,24 +58,9 @@ const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref<TaskDetail | null>(null)
 const formRecord = ref<Record<string, unknown> | null>(null)
-const formSchema = ref<FormSchema | null>(null)
-/** REFERENCE 字段显示名缓存（id→可读关联对象信息，授权单查解析，取不到回退 id）。 */
-const refDisplayMap = ref<Record<string, string>>({})
 const opinionData = ref<Record<string, unknown>>({})
 const submitting = ref(false)
 const submitError = ref('')
-
-/** 表单宽表的系统列：与业务数据无关，不在详情展示（与 PC TaskDetail 同一口径）。 */
-const SYSTEM_COLUMNS = new Set([
-  'id',
-  'create_by',
-  'create_time',
-  'update_by',
-  'update_time',
-  'del_flag',
-  'tenant_id',
-  'version',
-])
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && rows.value.length === 0)
 
@@ -99,25 +85,6 @@ async function loadTab(tab: MobileTab) {
   }
 }
 
-async function resolveRefDisplays() {
-  refDisplayMap.value = {}
-  if (!formSchema.value || !formRecord.value) return
-  const { resolveReferenceDisplay } = await import('@/adapters/form-runtime')
-  for (const field of formSchema.value.fields) {
-    if (field.type !== 'REFERENCE') continue
-    const refId = formRecord.value['ref_' + field.name + '_id']
-    if (refId == null || refId === '') continue
-    try {
-      refDisplayMap.value[field.name] = await resolveReferenceDisplay(
-        String(field.targetFormId ?? ''),
-        String(refId),
-      )
-    } catch {
-      refDisplayMap.value[field.name] = String(refId)
-    }
-  }
-}
-
 async function openTask(row: Row) {
   const taskId = String(row.taskId ?? '')
   if (!taskId) return
@@ -125,21 +92,15 @@ async function openTask(row: Row) {
   detailLoading.value = true
   detail.value = null
   formRecord.value = null
-  formSchema.value = null
   opinionData.value = {}
   submitError.value = ''
   try {
     detail.value = await queryTaskDetail(taskId)
     initializeOpinionData()
+    void ensureOpinionUsers()
     if (detail.value?.formKey && detail.value?.businessKey) {
       try {
         formRecord.value = await getFormData(detail.value.formKey, detail.value.businessKey)
-        try {
-          formSchema.value = await getFormDefinition(detail.value.formKey)
-        } catch {
-          formSchema.value = null
-        }
-        await resolveRefDisplays()
       } catch {
         formRecord.value = null
       }
@@ -149,81 +110,6 @@ async function openTask(row: Row) {
   } finally {
     detailLoading.value = false
   }
-}
-
-/** 表单数据行：按 schema 字段顺序输出业务标签（外键/业务值经只读接口授权回显）。 */
-const formFieldRows = computed(() => {
-  if (!formRecord.value) return []
-  const out: {
-    key: string
-    label: string
-    value: string
-    attachments?: { storageKey: string; name: string }[]
-  }[] = []
-  const seen = new Set<string>()
-  if (formSchema.value) {
-    for (const field of formSchema.value.fields) {
-      const recordKey = field.type === 'REFERENCE' ? 'ref_' + field.name + '_id' : field.name
-      if (SYSTEM_COLUMNS.has(field.name) || !(recordKey in formRecord.value)) continue
-      seen.add(field.name)
-      const v = formRecord.value[recordKey]
-      // ATTACHMENT/IMAGE 字段：除 storageKey 原始值外，给出授权下载入口（文件名 + key 元数据）
-      let attachments: { storageKey: string; name: string }[] | undefined
-      if (field.type === 'ATTACHMENT' || field.type === 'IMAGE') {
-        try {
-          const parsed = typeof v === 'string' ? JSON.parse(v) : v
-          if (Array.isArray(parsed)) {
-            // 契约值 = storageKey 字符串数组；兼容携带文件名的对象数组
-            attachments = parsed
-              .map((it): { storageKey: string; name: string } | null => {
-                if (typeof it === 'string' && it !== '') {
-                  const seg = it.split('/').pop() ?? it
-                  return { storageKey: it, name: seg }
-                }
-                if (
-                  it &&
-                  typeof it === 'object' &&
-                  typeof (it as { storageKey?: unknown }).storageKey === 'string'
-                ) {
-                  const key = it.storageKey as string
-                  const name = (it as { name?: unknown }).name
-                  return typeof name === 'string' && name !== ''
-                    ? { storageKey: key, name }
-                    : { storageKey: key, name: key.split('/').pop() ?? key }
-                }
-                return null
-              })
-              .filter((it): it is { storageKey: string; name: string } => it !== null)
-          }
-        } catch {
-          attachments = undefined
-        }
-      }
-      out.push({
-        key: field.name,
-        label: field.label || field.name,
-        value:
-          v == null || v === ''
-            ? '-'
-            : field.type === 'REFERENCE'
-              ? (refDisplayMap.value[field.name] ?? String(v))
-              : String(v),
-        attachments,
-      })
-    }
-  }
-  for (const [k, v] of Object.entries(formRecord.value)) {
-    if (SYSTEM_COLUMNS.has(k) || seen.has(k)) continue
-    out.push({ key: k, label: k, value: v == null || v === '' ? '-' : String(v) })
-  }
-  return out
-})
-
-/** 下载入口与详情同源：按记录（businessKey）对象权限放行，未授权由后端拒绝。 */
-const attachmentBase = '/api'
-
-function attachmentDownloadUrl(storageKey: string, name: string): string {
-  return `${attachmentBase}/workflow/attachments/${detail.value?.businessKey ?? ''}/download?storageKey=${encodeURIComponent(storageKey)}&name=${encodeURIComponent(name)}`
 }
 
 // ─── 正式意见表单：动态字段渲染（与 PC 同一配置与校验口径） ───
@@ -263,6 +149,19 @@ function initializeOpinionData() {
   opinionData.value = { ...initial }
 }
 
+/** 人员字段候选（已授权同租户启用用户）；加载失败保持空列表，提交后由服务端复核。 */
+const opinionUsers = ref<Array<{ id: string; name: string }>>([])
+
+async function ensureOpinionUsers(): Promise<void> {
+  if (opinionUsers.value.length > 0) return
+  if (!opinionFields.value.some((field) => field.type === 'USER')) return
+  try {
+    opinionUsers.value = await loadOrgUserChoices()
+  } catch {
+    opinionUsers.value = []
+  }
+}
+
 function opinionFieldValue(field: OpinionField): unknown {
   return opinionData.value[field.key]
 }
@@ -297,9 +196,10 @@ async function submitHandle(action: 'APPROVE' | 'DISAPPROVE') {
         }
       : { comment: '' }
     // 与 PC 同一命令受理链：受理后轮询命令终态，不以受理代替成功
+    // 不通过意见走 disapprove 段（节点结算）；REJECT 是流程级终态，不再被移动端误用
     const accepted = await acceptTaskAction(
       detail.value.taskId,
-      action === 'APPROVE' ? 'complete' : 'reject',
+      action === 'APPROVE' ? 'complete' : 'disapprove',
       payload,
     )
     const finalStatus = await pollCommandStatus(accepted.commandId)
@@ -321,7 +221,7 @@ async function submitHandle(action: 'APPROVE' | 'DISAPPROVE') {
 }
 
 function rowTitle(row: Row): string {
-  return row.name || row.processDefinitionKey || String(row.taskId ?? row.id ?? '')
+  return row.processName || row.name || t('workflow.taskDetail')
 }
 
 function handleTabChange(tab: string | number) {
@@ -378,7 +278,11 @@ void (async () => {
         <div class="m-item-title">{{ rowTitle(row) }}</div>
         <div class="m-item-meta">
           <span>{{
-            row.status || (activeTab === 'todo' ? t('workflow.pendingHandle') : '—')
+            activeTab === 'todo'
+              ? t('workflow.pendingHandle')
+              : activeTab === 'drafts'
+                ? t('common.statusDraft')
+                : enumLabel('WORKFLOW_INSTANCE', row.status)
           }}</span>
           <span>{{ row.createTime || '' }}</span>
         </div>
@@ -456,22 +360,13 @@ void (async () => {
 
           <section class="m-section">
             <h3 class="m-section-title">{{ t('workflow.formDataThisSubmission') }}</h3>
-            <template v-if="formFieldRows.length">
-              <div v-for="row in formFieldRows" :key="row.key" class="m-kv">
-                <span>{{ row.label }}</span>
-                <span v-if="row.attachments" class="m-att-list">
-                  <a
-                    v-for="att in row.attachments"
-                    :key="att.storageKey"
-                    class="m-att-link"
-                    :href="attachmentDownloadUrl(att.storageKey, att.name)"
-                    target="_blank"
-                    >{{ att.name }}</a
-                  >
-                </span>
-                <b v-else>{{ row.value }}</b>
-              </div>
-            </template>
+            <BusinessFormReadonly
+              v-if="detail.formKey && formRecord"
+              :form-key="detail.formKey"
+              :record-id="detail.businessKey"
+              :record="formRecord"
+              class="m-business-form"
+            />
             <p v-else class="m-empty-line">{{ t('workflow.formRecordUnavailable') }}</p>
           </section>
 
@@ -501,6 +396,20 @@ void (async () => {
                     setOpinionFieldValue(field.key, ($event.target as HTMLTextAreaElement).value)
                   "
                 />
+                <select
+                  v-else-if="field.type === 'USER'"
+                  :id="`op-${field.key}`"
+                  class="m-input"
+                  :value="String(opinionFieldValue(field) ?? '')"
+                  @change="
+                    setOpinionFieldValue(field.key, ($event.target as HTMLSelectElement).value)
+                  "
+                >
+                  <option value="">{{ t('common.pleaseSelect') }}</option>
+                  <option v-for="user in opinionUsers" :key="user.id" :value="user.id">
+                    {{ user.name }}
+                  </option>
+                </select>
                 <select
                   v-else-if="field.type === 'SELECT'"
                   :id="`op-${field.key}`"
@@ -694,18 +603,11 @@ void (async () => {
   color: var(--sw-text-secondary);
   font-size: 13px;
 }
-.m-att-list {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  min-width: 0;
+.m-business-form :deep(.business-form__grid) {
+  grid-template-columns: minmax(0, 1fr);
 }
-.m-att-link {
-  font-size: 13px;
-  color: var(--el-color-primary);
-  word-break: break-all;
-  text-align: right;
+.m-business-form :deep(.business-form__field) {
+  grid-column: 1 / -1 !important;
 }
 .m-opinion-field {
   margin-bottom: 10px;

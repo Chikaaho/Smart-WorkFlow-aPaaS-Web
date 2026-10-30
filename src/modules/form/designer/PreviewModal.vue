@@ -30,7 +30,8 @@ function schemaForField(field: FormSchemaField): FormSchema {
 <template>
   <el-dialog
     v-model="visible"
-    fullscreen
+    width="1120px"
+    top="6vh"
     :title="schema.title || t('form.preview')"
     class="preview-modal"
     append-to-body
@@ -41,6 +42,9 @@ function schemaForField(field: FormSchemaField): FormSchema {
     </div>
     <div class="preview-modal__stage">
       <div v-if="hasFields" class="preview-modal__form">
+        <p v-if="schema.description" class="preview-modal__description">
+          {{ schema.description }}
+        </p>
         <p class="preview-modal__hint">
           {{ t('form.requiredHintPrefix') }} <span class="preview-modal__star">*</span>
           {{ t('form.requiredHintSuffix') }}
@@ -71,18 +75,31 @@ function schemaForField(field: FormSchemaField): FormSchema {
 }
 
 .preview-modal__stage {
-  min-height: 60vh;
+  min-height: 0;
+  max-height: calc(88vh - 120px);
+  overflow-y: auto;
   background: var(--sw-fill-base);
-  padding: var(--sw-space-24);
+  /* 审查27 F07-P：水平仅留 9（外壳16+9=25），承载区 1070 锚 x425 */
+  padding: var(--sw-space-24) 9px;
 }
 
 .preview-modal__form {
-  max-width: 920px;
+  box-sizing: border-box;
+  /* 审查27 F07-P：仅一层 stage 24 内缩，承载区 1070 与 x425 对齐 */
+  width: 1070px;
+  max-width: 100%;
   margin: 0 auto;
   background: #fff;
   border-radius: var(--sw-radius-card);
   box-shadow: var(--sw-shadow-card);
   padding: var(--sw-space-24);
+}
+
+.preview-modal__description {
+  margin: 0 0 var(--sw-space-12);
+  color: var(--sw-text-regular);
+  font-size: var(--sw-font-body);
+  line-height: 1.6;
 }
 
 .preview-modal__hint {
@@ -118,5 +135,17 @@ function schemaForField(field: FormSchemaField): FormSchema {
   font-size: var(--sw-font-body);
   text-align: center;
   background: #fff;
+}
+</style>
+
+<style>
+/* 审查23 F07-P：预览外壳 1120 居中 / r12 / 16/24 标题 */
+.preview-modal.el-dialog {
+  border-radius: 12px;
+}
+.preview-modal .el-dialog__title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
 }
 </style>

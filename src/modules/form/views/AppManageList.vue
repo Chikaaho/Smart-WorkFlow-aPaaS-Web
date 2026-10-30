@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { LoadErrorState } from '@/components/page-layout'
 import AppScopePicker, { type AppScopeValue } from '@/components/AppScopePicker.vue'
 import AppGrid from '@/modules/form/components/AppGrid.vue'
 import AppGridToolbar from '@/modules/form/components/AppGridToolbar.vue'
 import AppPerRowSetting from '@/modules/form/components/AppPerRowSetting.vue'
 import { useAppPerRow } from '@/modules/form/components/useAppPerRow'
-import { APP_COLOR_PRESETS, APP_ICON_KEYS } from '@/modules/form/utils/app-icons'
+import AppAppearancePicker from '@/modules/form/components/AppAppearancePicker.vue'
+import DetailDialog from '@/components/DetailDialog.vue'
 import {
   createFormApp,
   deleteFormApp,
   listFormApps,
+  listTenantOptions,
   updateFormApp,
+  type TenantOption,
 } from '@/modules/form/api/app-center'
 import type { FormApp, FormAppSaveReq } from '@/contracts/app-center'
 import { useUserStore } from '@/stores/user'
@@ -22,9 +25,7 @@ import { getErrorMessage } from '@/foundation/request/error-code-map'
 import { ApiError } from '@/foundation/request'
 
 /**
- * 应用管理（0.1.7 #3）：网格式画布——卡片上图标下名称，右上角三点弹「修改 / 删除」，
- * 最后一张固定为「新建应用」，点击直接新建；去掉分页与顶部新建按钮。
- * 颜色仅提供预设色板（0.1.7 #2：禁止自由输入 RGB/HEX）。
+ * 应用管理：共享网格卡片，筛选栏提供新建入口，卡片右上角菜单提供编辑/删除。
  */
 const { t } = useI18n()
 const router = useRouter()
@@ -37,12 +38,34 @@ const errorMsg = ref('')
 const loadError = ref<ApiError | null>(null)
 const { perRow, options: perRowOptions } = useAppPerRow()
 
+// ─── Q40（459:15041）：超管租户筛选 ───
+// 后端 /form/app/manage/list 支持（同轮新增）tenantId 可选查询参数与 tenantId/tenantName 下发；
+// 候选沿既有 /form/app/manage/tenants。普通租户不渲染筛选、请求不带 tenantId、视图不变。
+const isSuperAdmin = computed(() => userStore.superAdmin)
+const tenantFilter = ref<number | string | ''>('')
+const tenantOptions = ref<TenantOption[]>([])
+
+async function loadTenantOptions() {
+  try {
+    tenantOptions.value = await listTenantOptions()
+  } catch {
+    tenantOptions.value = [] // 候选失败由调用方兜底为空（既有约定）
+  }
+}
+
+function handleTenantFilterChange() {
+  void loadList()
+}
+
 async function loadList() {
   loading.value = true
   errorMsg.value = ''
   loadError.value = null
   try {
-    apps.value = await listFormApps(keyword.value.trim() || undefined)
+    apps.value = await listFormApps(
+      keyword.value.trim() || undefined,
+      isSuperAdmin.value && tenantFilter.value !== '' ? tenantFilter.value : undefined,
+    )
   } catch (err: unknown) {
     loadError.value = err instanceof ApiError ? err : null
     errorMsg.value = loadError.value ? '' : t('form.appCenter.loadFailed', { msg: String(err) })
@@ -55,6 +78,8 @@ async function loadList() {
 // ==================== 新建 / 修改对话框 ====================
 
 const dialogVisible = ref(false)
+const appearancePickerActive = ref(false)
+const scopeExpanded = ref(false)
 /** null=新建 */
 const editingId = ref<string | null>(null)
 const saving = ref(false)
@@ -72,19 +97,21 @@ const form = reactive<FormAppSaveReq>({
 })
 
 const dialogTitle = computed(() =>
-  editingId.value ? t('form.appCenter.editApp') : t('form.appCenter.newApp'),
+  editingId.value ? t('form.appCenter.appSetting') : t('form.appCenter.newApp'),
 )
 
 function openCreate() {
   editingId.value = null
+  appearancePickerActive.value = false
+  scopeExpanded.value = false
   Object.assign(form, {
     name: '',
-    icon: 'Folder',
-    color: '#7e306b',
+    icon: 'Grid',
+    color: '#6f2dff',
     sortNo: 0,
     // 新建默认「指定范围」并预选创建者（保存时明确展示，不把空值误作全员）
     visibleScopeType: 'SPECIFIED',
-    userIds: userStore.user?.id ? [Number(userStore.user.id)] : [],
+    userIds: userStore.user?.id ? [userStore.user.id] : [],
     deptIds: [],
     roleCodes: [],
     postIds: [],
@@ -95,10 +122,12 @@ function openCreate() {
 
 function openEdit(app: FormApp) {
   editingId.value = app.id
+  appearancePickerActive.value = false
+  scopeExpanded.value = false
   Object.assign(form, {
     name: app.name,
     icon: app.icon ?? 'Folder',
-    color: app.color ?? '#7e306b',
+    color: app.color ?? '#6f2dff',
     sortNo: app.sortNo ?? 0,
     visibleScopeType: app.visibleScopeType,
     userIds: app.visibleUserIds ? [...app.visibleUserIds] : [],
@@ -176,20 +205,24 @@ function onCardCommand(command: string, app: FormApp) {
     return
   }
   if (command === 'delete') {
-    void handleDelete(app)
+    handleDelete(app)
   }
 }
 
-async function handleDelete(app: FormApp) {
-  try {
-    await ElMessageBox.confirm(
-      t('form.appCenter.deleteConfirm', { name: app.name }),
-      t('common.deleteConfirmTitle'),
-      { type: 'warning' },
-    )
-  } catch {
-    return
-  }
+/* Q39（471:17256）：删除应用改为 440 宽自定义确认弹窗（圆角 12、取消/删除 80×32、删除危险色 #C2303A）；
+   只打开弹窗，确认回调沿用既有删除 handler，删除/拒绝语义不变。 */
+const deleteDialogVisible = ref(false)
+const deleteTarget = ref<FormApp | null>(null)
+
+function handleDelete(app: FormApp) {
+  deleteTarget.value = app
+  deleteDialogVisible.value = true
+}
+
+async function handleDeleteConfirm() {
+  const app = deleteTarget.value
+  if (!app) return
+  deleteDialogVisible.value = false
   try {
     await deleteFormApp(app.id)
     ElMessage.success(t('common.deleteSuccess'))
@@ -202,6 +235,7 @@ async function handleDelete(app: FormApp) {
 
 onMounted(() => {
   void loadList()
+  if (isSuperAdmin.value) void loadTenantOptions()
 })
 </script>
 
@@ -209,12 +243,41 @@ onMounted(() => {
   <div class="app-manage">
     <AppGridToolbar
       v-model="keyword"
-      :placeholder="t('form.appCenter.appSearchPlaceholder')"
+      :label="t('appearance.appName')"
+      :placeholder="t('common.pleaseInput')"
       test-id="app-manage-search"
       @search="loadList"
     >
       <template #actions>
+        <!-- Q40：超管租户筛选（候选沿既有 /form/app/manage/tenants）；普通租户不渲染 -->
+        <span v-if="isSuperAdmin" class="app-manage__tenant-label">{{
+          t('system.tenantShort')
+        }}</span>
+        <el-select
+          v-if="isSuperAdmin"
+          v-model="tenantFilter"
+          class="app-manage__tenant-filter"
+          :placeholder="t('tenantContext.all')"
+          clearable
+          data-testid="app-manage-tenant-filter"
+          @change="handleTenantFilterChange"
+        >
+          <el-option
+            v-for="tenant in tenantOptions"
+            :key="tenant.id"
+            :label="tenant.name"
+            :value="tenant.id"
+          />
+        </el-select>
         <AppPerRowSetting v-model="perRow" :options="perRowOptions" />
+        <el-button
+          v-perm="'form:app:manage'"
+          type="primary"
+          data-testid="app-create"
+          style="width: 80px; padding: 0"
+          @click="openCreate"
+          >{{ t('form.appCenter.newApp') }}</el-button
+        >
       </template>
     </AppGridToolbar>
 
@@ -228,51 +291,37 @@ onMounted(() => {
       :per-row="perRow"
       show-actions
       show-form-count
-      show-create
+      :show-tenant="userStore.superAdmin"
       @select="enterWorkspace"
       @command="onCardCommand"
       @create="openCreate"
     />
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="560px">
-      <el-form label-width="90px">
-        <el-form-item :label="t('form.appCenter.fieldName')" required>
+    <DetailDialog
+      :model-value="dialogVisible"
+      :title="dialogTitle"
+      width="600px"
+      appearance="design"
+      class="app-manage-dialog"
+      :class="{ 'app-manage-dialog--covered': appearancePickerActive }"
+      :destroy-on-close="false"
+      @update:model-value="dialogVisible = $event"
+    >
+      <el-form label-position="top">
+        <el-form-item :label="t('appearance.appName')" required>
           <el-input
             v-model="form.name"
             data-testid="app-name-input"
             maxlength="100"
-            show-word-limit
+            :placeholder="t('common.pleaseInput')"
           />
         </el-form-item>
-        <el-form-item :label="t('form.appCenter.fieldIcon')">
-          <div class="icon-picker">
-            <button
-              v-for="key in APP_ICON_KEYS"
-              :key="key"
-              type="button"
-              class="icon-picker__item"
-              :class="{ 'is-active': form.icon === key }"
-              @click="form.icon = key"
-            >
-              <AppIcon :icon="key" :color="form.color" :size="14" />
-            </button>
-          </div>
-        </el-form-item>
-        <!-- 0.1.7 #2：颜色固定预设几种，禁止自由输入 -->
-        <el-form-item :label="t('form.appCenter.fieldColor')">
-          <div class="color-picker">
-            <button
-              v-for="c in APP_COLOR_PRESETS"
-              :key="c"
-              type="button"
-              class="color-picker__item"
-              :class="{ 'is-active': form.color === c }"
-              :style="{ background: c }"
-              @click="form.color = c"
-            />
-          </div>
-        </el-form-item>
-        <el-form-item :label="t('form.appCenter.fieldScope')">
+        <AppAppearancePicker
+          v-model:icon="form.icon"
+          v-model:color="form.color"
+          @active="appearancePickerActive = $event"
+        />
+        <el-form-item v-if="scopeExpanded" :label="t('form.appCenter.fieldScope')">
           <el-radio-group v-model="form.visibleScopeType" data-testid="app-scope">
             <el-radio value="SPECIFIED">{{ t('form.appCenter.scopeSpecified') }}</el-radio>
             <el-radio value="ALL">{{ t('form.appCenter.scopeAllOption') }}</el-radio>
@@ -280,16 +329,43 @@ onMounted(() => {
         </el-form-item>
         <!-- 0.1.7 #1：可见范围按用户/部门/角色/岗位/租户多维度指定，任一维度命中即可见 -->
         <el-form-item
-          v-if="form.visibleScopeType === 'SPECIFIED'"
+          v-if="scopeExpanded && form.visibleScopeType === 'SPECIFIED'"
           :label="t('form.appCenter.fieldScope')"
         >
           <AppScopePicker :model-value="scopeValue" @update:model-value="applyScope" />
         </el-form-item>
       </el-form>
       <template #footer>
+        <el-button
+          link
+          type="primary"
+          class="app-manage-dialog__scope"
+          :aria-expanded="scopeExpanded"
+          @click="scopeExpanded = !scopeExpanded"
+          >{{ t('form.appCenter.fieldScope') }}</el-button
+        >
         <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="saving" @click="handleSave">
-          {{ t('common.save') }}
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </DetailDialog>
+
+    <!-- Q39（471:17256）：删除应用确认——440 宽/圆角 12、文案带真实应用名与非空保护说明 -->
+    <el-dialog
+      v-model="deleteDialogVisible"
+      :title="t('form.appCenter.deleteApp')"
+      width="440px"
+      class="app-delete-dialog"
+      append-to-body
+    >
+      <p class="app-delete-dialog__text">
+        {{ deleteTarget ? t('form.appCenter.deleteConfirm', { name: deleteTarget.name }) : '' }}
+      </p>
+      <template #footer>
+        <el-button @click="deleteDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button class="app-delete-dialog__confirm" @click="handleDeleteConfirm">
+          {{ t('common.delete') }}
         </el-button>
       </template>
     </el-dialog>
@@ -300,46 +376,73 @@ onMounted(() => {
 .app-manage {
   box-sizing: border-box;
   min-height: 100%;
-  padding: 20px 24px;
+  padding: var(--sw-space-20);
 }
 .app-manage__error {
   color: #f56c6c;
 }
-.icon-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+/* Q40：超管租户筛选（工具条 actions 槽内，宽度对齐筛选控件惯例） */
+.app-manage__tenant-label {
+  color: var(--sw-text-regular);
+  font-size: var(--sw-font-body);
+  white-space: nowrap;
 }
-.icon-picker__item {
-  padding: 2px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: none;
-  cursor: pointer;
+.app-manage__tenant-filter {
+  width: 200px;
 }
-.icon-picker__item.is-active {
-  border-color: #7e306b;
+</style>
+
+<style>
+.el-overlay:has(.app-manage-dialog--covered) {
+  visibility: hidden;
 }
-.color-picker {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.app-manage-dialog.el-dialog {
+  border-radius: 12px;
 }
-.color-picker__item {
-  width: 22px;
+.app-manage-dialog .el-form-item {
+  margin-bottom: 12px;
+}
+.app-manage-dialog .el-form-item__label {
   height: 22px;
-  border-radius: 4px;
-  border: 2px solid transparent;
-  cursor: pointer;
+  line-height: 22px;
+  margin-bottom: 6px;
   padding: 0;
 }
-.color-picker__item.is-active {
-  border-color: #303133;
+.app-manage-dialog .el-dialog__footer .app-manage-dialog__scope {
+  margin-right: auto;
 }
-.scope-users__hint {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #e6a23c;
+/* Q39（471:17256）：删除确认弹窗——440 宽、圆角 12，底栏取消/删除 80×32，删除 #C2303A。
+   teleport 弹层样式落真实弹窗根（append-to-body → 全局块）。 */
+.app-delete-dialog.el-dialog {
+  border-radius: 12px;
+  /* Q39（471:17256）原目标高 172（±1），内容自然高度不足时锁定外壳高度 */
+  height: 172px;
+  display: flex;
+  flex-direction: column;
+}
+.app-delete-dialog .el-dialog__body {
+  flex: 1;
+  overflow: auto;
+}
+.app-delete-dialog .el-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.app-delete-dialog .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+.app-delete-dialog .app-delete-dialog__confirm {
+  background-color: #c2303a;
+  border-color: #c2303a;
+  color: #fff;
+}
+.app-delete-dialog .app-delete-dialog__confirm:not(:hover):not(:focus) {
+  background-color: #c2303a;
+  border-color: #c2303a;
+  color: #fff;
 }
 </style>

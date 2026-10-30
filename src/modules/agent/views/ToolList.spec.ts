@@ -100,6 +100,7 @@ const mockExternalTools: AgentToolExternalConfig[] = [
     description: '网络搜索',
     url: 'https://api.search.com/v1/search',
     httpMethod: 'POST',
+    effectScope: 'QUERY',
     timeoutSeconds: 30,
     inputSchema: '{"type":"object","properties":{"query":{"type":"string"}}}',
     enabled: true,

@@ -8,6 +8,7 @@
  */
 import type { PageQuery, PageResult } from '@/contracts/common'
 import type { ProcessDef } from '@/contracts/bpm'
+import type { BpmNodeCapability } from '@/contracts/bpm-node'
 import type { CreateProcessDefRequest } from '@/modules/workflow/api'
 
 export type { ProcessDef }
@@ -37,5 +38,18 @@ export async function createProcessDef(req: CreateProcessDefRequest): Promise<vo
   const { createProcessDef: create } = await import('@/modules/workflow/api')
   await create(req)
 }
+
+/**
+ * 节点能力目录（Q56：表单工作台零关联流程分支的节点库纯展示用）。
+ * 与设计器同一服务端能力契约；只读 GET，不创建任何流程定义。
+ */
+export async function fetchNodeCapabilities(): Promise<BpmNodeCapability[]> {
+  const { getProcessNodeCapabilities } = await import('@/modules/workflow/api')
+  return getProcessNodeCapabilities()
+}
+
+/** 设计器节点面板的展示层投影（分组 + 图标字形）：空状态节点库与画布同源复用（Q56）。 */
+export { groupPaletteCapabilities, nodeIconPaths } from '@/modules/workflow/utils/designer-palette'
+export type { PaletteGroup } from '@/modules/workflow/utils/designer-palette'
 
 // 0.1.7 #21：流程定义禁删，接缝层不提供删除。

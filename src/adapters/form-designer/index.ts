@@ -3,6 +3,7 @@ import {
   fieldLabelPositionClass,
   isFieldLabelPosition,
   isFieldTextAlign,
+  normalizeFormEvents,
   parseFormFieldOptions,
   type FieldScript,
   type FormFieldOption,
@@ -62,6 +63,9 @@ interface RawSubFieldDef {
   label?: string
   required?: boolean
   length?: number
+  minLength?: number
+  pattern?: string
+  patternMessage?: string
   /** 字段描述（0.1.7 #38 定义契约键透传；纯元数据）。 */
   description?: string
   placeholder?: string
@@ -94,6 +98,8 @@ interface RawSubFieldDef {
 
 interface RawFieldDef extends RawSubFieldDef {
   subFields?: RawSubFieldDef[]
+  /** 多行纯文本（TextField.multiline 契约键透传；缺省单行语义不变）。 */
+  multiline?: boolean
   colSpan?: unknown
   /** 字段标题位置（主字段专属；子表列头不适用）。 */
   labelPosition?: string
@@ -119,6 +125,9 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     ...(isFieldLabelPosition(raw.labelPosition) ? { labelPosition: raw.labelPosition } : {}),
     required: raw.required ?? false,
     ...(raw.length !== undefined ? { length: raw.length } : {}),
+    ...(raw.minLength !== undefined ? { minLength: raw.minLength } : {}),
+    ...(raw.pattern !== undefined ? { pattern: raw.pattern } : {}),
+    ...(raw.patternMessage !== undefined ? { patternMessage: raw.patternMessage } : {}),
     // 0.1.7 #38：字段描述（定义契约键透传；字段清单可直接维护）
     ...(raw.description !== undefined ? { description: raw.description } : {}),
     ...(raw.placeholder !== undefined ? { placeholder: raw.placeholder } : {}),
@@ -220,6 +229,9 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
         ...(sf.label !== undefined ? { label: sf.label } : {}),
         ...(sf.required !== undefined ? { required: sf.required } : {}),
         ...(sf.length !== undefined ? { length: sf.length } : {}),
+        ...(sf.minLength !== undefined ? { minLength: sf.minLength } : {}),
+        ...(sf.pattern !== undefined ? { pattern: sf.pattern } : {}),
+        ...(sf.patternMessage !== undefined ? { patternMessage: sf.patternMessage } : {}),
         // 0.1.7 #38：子表字段描述（字段清单可直接维护）
         ...(sf.description !== undefined ? { description: sf.description } : {}),
         ...(sf.dictType !== undefined ? { dictType: sf.dictType } : {}),
@@ -233,7 +245,15 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     return { ...base, type, subFields }
   }
 
-  // 运行时 KNOWN_FIELD_TYPES gate 保证此处 type ∈ {TEXT,RICH_TEXT,NUMBER,DATE,BOOL}
+  if (type === 'TEXT') {
+    return {
+      ...base,
+      type,
+      ...(raw.multiline !== undefined ? { multiline: raw.multiline } : {}),
+    } as FormSchemaField
+  }
+
+  // 运行时 KNOWN_FIELD_TYPES gate 保证此处 type ∈ {RICH_TEXT,NUMBER,BOOL}
   return { ...base, type } as FormSchemaField
 }
 
@@ -269,6 +289,30 @@ export function parseDefinition(rawJson: string): FormSchema {
             .fieldPermissions as FormSchema['fieldPermissions'],
         }
       : {}),
+    ...((raw as unknown as { actionPermissions?: Record<string, unknown> }).actionPermissions !==
+    undefined
+      ? {
+          actionPermissions: (raw as unknown as { actionPermissions: Record<string, string[]> })
+            .actionPermissions,
+        }
+      : {}),
+    ...(() => {
+      const rawAllowed = (raw as unknown as { allowedIntegrations?: unknown }).allowedIntegrations
+      if (!Array.isArray(rawAllowed)) return {}
+      const allowed = Array.from(
+        new Set(
+          rawAllowed
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean),
+        ),
+      ).slice(0, 50)
+      return allowed.length ? { allowedIntegrations: allowed } : {}
+    })(),
+    ...(() => {
+      const events = normalizeFormEvents((raw as unknown as { events?: unknown }).events)
+      return events ? { events } : {}
+    })(),
   }
 }
 
@@ -335,18 +379,20 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
   switch (field.type) {
     case 'TEXT': {
       rule.type = 'input'
-      if (field.placeholder) rule.props = { placeholder: field.placeholder }
+      // 多行纯文本（契约 TextField.multiline）：设计态/预览态与填写态同显 textarea。
+      const multiline = (field as { multiline?: boolean }).multiline === true
+      rule.props = {
+        ...(multiline ? { type: 'textarea', rows: 3 } : {}),
+        ...(field.placeholder ? { placeholder: field.placeholder } : {}),
+      }
       break
     }
 
     case 'RICH_TEXT': {
-      // TODO(rich-text): 接入富文本编辑器，当前降级为多行 textarea
-      rule.type = 'input'
-      rule.props = {
-        type: 'textarea',
-        rows: 2,
-        ...(field.placeholder ? { placeholder: field.placeholder } : {}),
-      }
+      // 复用动态控件同一份 RichTextControl（受控字体/字号/颜色、粘贴清洗、旧值兼容）。
+      rule.type = 'RichTextControl'
+      rule.value = (field as { defaultValue?: unknown }).defaultValue ?? ''
+      rule.props = { field, readonly: false }
       break
     }
 
@@ -520,94 +566,12 @@ function mapFieldToCreateRule(field: FormSchemaField): Record<string, unknown> |
     }
 
     case 'TABLE': {
-      rule.type = 'group'
-      rule.value = []
-      rule.children = field.subFields.map(mapSubFieldToCreateRule)
+      // 复用动态控件 TableControl：预览态真实表头/行 + 合法增删行（direction-ui-completion-020）。
+      rule.type = 'TableControl'
+      rule.value = (field as { defaultValue?: unknown }).defaultValue ?? []
+      rule.props = { field, readonly: false }
       break
     }
-  }
-
-  return rule
-}
-
-/**
- * TABLE 子字段 → form-create 子规则。
- *
- * TEXT/RICH_TEXT/NUMBER/DATE/BOOL/DICT 按类型映射；
- * DICT 子字段透传 __dictType__ + renderAs 元数据（P3-1b）。
- * REFERENCE / TABLE 回退为普通文本输入（TABLE 不递归）。
- */
-function mapSubFieldToCreateRule(sf: TableSubField): Record<string, unknown> {
-  const rule: Record<string, unknown> = {
-    type: 'input',
-    title: sf.name,
-    field: sf.name,
-    value: '',
-  }
-
-  switch (sf.type) {
-    case 'TEXT':
-      // 默认 input 即可
-      break
-
-    case 'RICH_TEXT':
-      rule.props = { type: 'textarea', rows: 3 }
-      break
-
-    case 'NUMBER':
-      rule.type = 'inputNumber'
-      break
-
-    case 'DATE':
-      rule.type = 'datePicker'
-      rule.props = { valueFormat: 'YYYY-MM-DD' }
-      break
-
-    case 'BOOL':
-      rule.type = 'switch'
-      rule.value = false
-      break
-
-    case 'DICT': {
-      // BF20261013-009：子字段同样支持自定义候选（展示 value、提交 key）与 dict 绑定
-      const customSource = sf.source === 'custom'
-      const customOptions = parseFormFieldOptions(sf.options).filter((o) => o.key !== '')
-      const configured = customSource ? customOptions.length > 0 : !!sf.dictType?.trim()
-      if (sf.renderAs === 'radio' && !configured) {
-        // BF20261013-010：未配置数据源的单选框以禁用输入占位提示
-        rule.type = 'input'
-        rule.value = ''
-        rule.props = { disabled: true, placeholder: i18n.global.t('form.configureDataPrompt') }
-        break
-      }
-      if (sf.renderAs === 'radio') {
-        rule.type = 'radio'
-        rule.value = ''
-        rule.options = customSource
-          ? customOptions.map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
-          : []
-        if (!customSource) (rule as Record<string, unknown>).__dictType__ = sf.dictType ?? ''
-        break
-      }
-      rule.type = 'select'
-      rule.value = sf.multiple ? [] : ''
-      rule.options = customSource
-        ? customOptions.map((opt) => ({ value: opt.key, label: opt.value || opt.key }))
-        : []
-      rule.props = {
-        clearable: true,
-        ...(sf.multiple ? { multiple: true } : {}),
-        ...(configured ? {} : { placeholder: i18n.global.t('form.configureDataPrompt') }),
-      }
-      if (!customSource) (rule as Record<string, unknown>).__dictType__ = sf.dictType ?? ''
-      break
-    }
-
-    case 'REFERENCE':
-    case 'TABLE':
-      // REFERENCE: 子字段无关联上下文，回退文本输入
-      // TABLE: 不支持嵌套子表，回退文本输入
-      break
   }
 
   return rule

@@ -31,12 +31,18 @@ export async function listTenantOptions(): Promise<TenantOption[]> {
   })
 }
 
-/** 应用列表（含停用与承接应用）。 */
-export async function listFormApps(keyword?: string): Promise<FormApp[]> {
+/** 应用列表（含停用与承接应用；tenantId 仅超管可选，按租户过滤）。 */
+export async function listFormApps(
+  keyword?: string,
+  tenantId?: number | string,
+): Promise<FormApp[]> {
   return request<FormApp[]>({
     method: 'GET',
     url: '/form/app/manage/list',
-    params: keyword ? { keyword } : undefined,
+    params: {
+      ...(keyword ? { keyword } : {}),
+      ...(tenantId !== undefined && tenantId !== '' ? { tenantId } : {}),
+    },
   })
 }
 

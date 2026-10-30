@@ -4,6 +4,22 @@ import type { DesignerItem } from './types'
 import { itemsToDefinition, definitionToItems } from './definition-convert'
 
 describe('definition-convert / itemsToDefinition', () => {
+  it('preserves field and action permissions as part of the definition', () => {
+    const schema = itemsToDefinition([], 'Secure', undefined, undefined, {
+      fieldPermissions: { salary: { view: ['role:hr'], edit: ['role:hr'] } },
+      actionPermissions: { view: ['role:hr'] },
+    })
+    expect(schema.fieldPermissions).toEqual({ salary: { view: ['role:hr'], edit: ['role:hr'] } })
+    expect(schema.actionPermissions).toEqual({ view: ['role:hr'] })
+  })
+
+  it('freezes the allowed integration identifiers into the definition', () => {
+    const schema = itemsToDefinition([], 'Integrated', undefined, undefined, {
+      allowedIntegrations: ['cap_query', 'cap_write'],
+    })
+    expect(schema.allowedIntegrations).toEqual(['cap_query', 'cap_write'])
+  })
+
   it('exports empty fields for empty items', () => {
     const schema = itemsToDefinition([], 'Empty')
     expect(schema.title).toBe('Empty')

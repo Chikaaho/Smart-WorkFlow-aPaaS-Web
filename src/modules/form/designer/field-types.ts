@@ -218,21 +218,21 @@ export const FIELD_TYPE_REGISTRY: readonly FieldTypeDescriptor[] = [
   {
     type: 'USER',
     get label() {
-      return i18n.global.t('common.userPicker')
+      return i18n.global.t('form.fieldTypeUser')
     },
     icon: 'User',
     createDefault: (name) =>
-      ({ ...baseField('USER', name, i18n.global.t('common.userPicker')) }) as FormSchemaField,
+      ({ ...baseField('USER', name, i18n.global.t('form.fieldTypeUser')) }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },
   {
     type: 'DEPT',
     get label() {
-      return i18n.global.t('common.deptPicker')
+      return i18n.global.t('form.fieldTypeDept')
     },
     icon: 'OfficeBuilding',
     createDefault: (name) =>
-      ({ ...baseField('DEPT', name, i18n.global.t('common.deptPicker')) }) as FormSchemaField,
+      ({ ...baseField('DEPT', name, i18n.global.t('form.fieldTypeDept')) }) as FormSchemaField,
     configComponent: OaFieldConfig,
   },
   {

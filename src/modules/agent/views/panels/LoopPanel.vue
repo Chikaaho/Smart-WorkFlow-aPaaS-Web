@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from '@/locales'
+import HintTip from '@/components/HintTip.vue'
 
 const { t } = useI18n()
 /**
@@ -18,7 +19,9 @@ defineEmits<{
 
 <template>
   <div class="field-row">
-    <div class="field-label">{{ t('agent.maxIterations') }}</div>
+    <div class="field-label">
+      {{ t('agent.maxIterations') }}<HintTip :content="t('agent.loopPanelHint')" />
+    </div>
     <el-input
       :model-value="String(node.data?.[NODE_CONFIG_KEY_MAX_ITERATIONS] ?? '')"
       type="number"
@@ -27,7 +30,6 @@ defineEmits<{
       @change="(v) => $emit('maxIterationsChange', v)"
     />
   </div>
-  <el-alert :title="t('agent.loopPanelHint')" type="info" :closable="false" show-icon />
 </template>
 
 <style scoped>

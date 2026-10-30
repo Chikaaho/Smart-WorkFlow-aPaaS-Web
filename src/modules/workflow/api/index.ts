@@ -78,7 +78,7 @@ export async function claimTask(taskId: string): Promise<void> {
 // ═══════════════════════════════════════
 
 /** 审批动作的 URL action 段（对齐后端 /workflow/commands/tasks/{taskId}/{action}） */
-export type TaskActionSegment = 'complete' | 'reject' | 'return'
+export type TaskActionSegment = 'complete' | 'reject' | 'return' | 'disapprove'
 
 /**
  * POST /workflow/commands/tasks/{taskId}/{action} → CommandAcceptResp
@@ -229,9 +229,12 @@ export async function createProcessDef(
 export async function pageProcessDefs(
   page: PageQuery,
   formKey?: string,
+  tenantId?: number | string,
 ): Promise<PageResult<ProcessDef>> {
   const params: Record<string, unknown> = { ...page }
   if (formKey) params.formKey = formKey
+  // Q69（459:14712）：租户过滤仅超管传参（调用方门控），普通租户不带此参数
+  if (tenantId !== undefined && tenantId !== null && tenantId !== '') params.tenantId = tenantId
   const raw = await request<BackendPageResult<ProcessDef>>({
     method: 'GET',
     url: '/workflow/defs',
@@ -276,11 +279,13 @@ export interface ProcessScriptPreviewResult {
 export async function previewProcessScript(
   script: string,
   variables: Array<{ name: string; type?: string }>,
+  signal?: AbortSignal,
 ): Promise<ProcessScriptPreviewResult> {
   return request<ProcessScriptPreviewResult>({
     method: 'POST',
     url: '/workflow/scripts/preview',
     data: { script, variables },
+    signal,
   })
 }
 
@@ -369,6 +374,15 @@ export interface ProcessGraphPayload {
   variables?: import('@/contracts/p64').BpmVariableDef[]
   /** P64 阶段Ⅰ：Trigger 判断配置（文档级）。 */
   triggers?: import('@/contracts/p64').TriggerConfig[]
+  /** 50:88 结束通知配置（随版本冻结；缺省 = 旧定义原行为）。 */
+  notification?: ProcessNotificationConfigPayload
+}
+
+export interface ProcessNotificationConfigPayload {
+  initiator?: boolean
+  approvers?: boolean
+  otherRecipientIds?: Array<number | string>
+  channels?: string[]
 }
 
 // ═══════════════════════════════════════
@@ -625,7 +639,7 @@ export async function getDefVersionGraph(
 }
 
 /** POST /workflow/defs/{id}/versions/{v}/suspend */
-export async function suspendDefVersion(defId: number, version: number): Promise<void> {
+export async function suspendDefVersion(defId: number | string, version: number): Promise<void> {
   return request<void>({
     method: 'POST',
     url: `/workflow/defs/${defId}/versions/${version}/suspend`,
@@ -633,7 +647,7 @@ export async function suspendDefVersion(defId: number, version: number): Promise
 }
 
 /** POST /workflow/defs/{id}/versions/{v}/activate */
-export async function activateDefVersion(defId: number, version: number): Promise<void> {
+export async function activateDefVersion(defId: number | string, version: number): Promise<void> {
   return request<void>({
     method: 'POST',
     url: `/workflow/defs/${defId}/versions/${version}/activate`,
@@ -694,24 +708,83 @@ export async function withdrawInstance(
     data,
   })
 }
-export async function discardInstance(instanceId: string): Promise<void> {
+export async function discardInstance(
+  instanceId: string,
+  data: Partial<ApprovalActionRequest> = {},
+): Promise<void> {
   await request<void>({
     method: 'POST',
     url: `/workflow/instances/${instanceId}/discard`,
-    data: {},
+    data,
   })
 }
 export async function expressSign(
-  recordId: number,
+  recordId: number | string,
   data: Partial<ApprovalActionRequest>,
 ): Promise<void> {
   await request<void>({ method: 'POST', url: `/workflow/sign/${recordId}/express`, data })
 }
+export interface PendingSignItem {
+  recordId: number | string
+  taskId: string
+  processInstanceId: string
+  nodeKey: string | null
+  taskName?: string
+  processDefinitionKey?: string
+  signType: 'ADD_SIGN' | 'SUPPLEMENT_SIGN'
+  modeType: 'SERIAL' | 'PARALLEL'
+  seqNo: number
+  signPosition: 'BEFORE' | 'AFTER'
+  comment: string
+  serialBlocked: boolean
+}
+
+export async function queryPendingSigns(): Promise<PendingSignItem[]> {
+  return request<PendingSignItem[]>({ method: 'GET', url: '/workflow/sign/pending' })
+}
 export async function cancelSign(
-  recordId: number,
-  data: Partial<ApprovalActionRequest>,
+  recordId: number | string,
+  data: Partial<ApprovalActionRequest> = {},
 ): Promise<void> {
   await request<void>({ method: 'POST', url: `/workflow/sign/${recordId}/cancel`, data })
+}
+
+export interface ApprovalOpinionDraft {
+  taskId: string
+  processInstanceId: string
+  nodeKey: string | null
+  roundNo: number
+  assigneeId: string
+  opinionFormId?: string | null
+  opinionFormVersion?: string | null
+  comment?: string | null
+  opinionData: Record<string, unknown>
+  updateTime?: string | null
+}
+
+export async function getApprovalOpinionDraft(
+  taskId: string,
+): Promise<ApprovalOpinionDraft | null> {
+  return request<ApprovalOpinionDraft | null>({
+    method: 'GET',
+    url: `/workflow/tasks/${taskId}/opinion-draft`,
+  })
+}
+
+export async function saveApprovalOpinionDraft(
+  taskId: string,
+  data: {
+    opinionFormId?: string
+    opinionFormVersion?: string
+    comment: string
+    opinionData: Record<string, unknown>
+  },
+): Promise<ApprovalOpinionDraft> {
+  return request<ApprovalOpinionDraft>({
+    method: 'PUT',
+    url: `/workflow/tasks/${taskId}/opinion-draft`,
+    data,
+  })
 }
 export async function replyCommunication(
   communicationId: number,
@@ -723,20 +796,33 @@ export async function replyCommunication(
     data,
   })
 }
-export async function saveAuthorizeRule(data: Partial<ApprovalActionRequest>): Promise<number> {
-  return request<number>({ method: 'POST', url: '/workflow/authorize-rules', data })
-}
-export async function revokeAuthorizeRule(ruleId: number): Promise<void> {
+export async function revokeAuthorizeRule(ruleId: number | string): Promise<void> {
   await request<void>({ method: 'DELETE', url: `/workflow/authorize-rules/${ruleId}` })
 }
 export interface AuthorizeRule {
-  id: number
-  principalId: number
-  agentId: number
+  id: string
+  principalId: string
+  agentId: string
   scopeType: string
+  processDefKey?: string | null
+  nodeKey?: string | null
+  businessKey?: string | null
   startAt?: string
   endAt?: string
   status: string
+}
+export interface AuthorizeRuleInput {
+  /** 受托人；Long 用户 ID 保持字符串。授权人由当前登录账号确定。 */
+  targetUserId: string
+  scopeType: 'GLOBAL' | 'PROCESS' | 'NODE' | 'BUSINESS'
+  processDefKey?: string
+  nodeKey?: string
+  businessKey?: string
+  startAt?: string
+  endAt?: string
+}
+export async function createAuthorizeRule(data: AuthorizeRuleInput): Promise<string> {
+  return request<string>({ method: 'POST', url: '/workflow/authorize-rules', data })
 }
 export async function listAuthorizeRules(): Promise<AuthorizeRule[]> {
   return request<AuthorizeRule[]>({ method: 'GET', url: '/workflow/authorize-rules' })
@@ -759,5 +845,19 @@ export async function updateProcessDefThemeRule(
     method: 'PUT',
     url: `/workflow/defs/${id}/theme-rule`,
     data: { themeRule },
+  })
+}
+
+/** 意见附件受控下载：服务端核验记录/字段/文件引用后才返回文件流。 */
+export async function downloadOpinionAttachment(
+  actionRecordId: string | number,
+  storageKey: string,
+  name?: string,
+): Promise<Blob> {
+  return request<Blob>({
+    method: 'GET',
+    url: `/workflow/attachments/opinion/${encodeURIComponent(String(actionRecordId))}/download`,
+    params: { storageKey, ...(name ? { name } : {}) },
+    responseType: 'blob',
   })
 }

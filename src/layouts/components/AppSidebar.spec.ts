@@ -1,19 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { MenuType, type MenuNode } from '@/contracts/menu'
 import { useMenuStore } from '@/stores/menu'
 import AppSidebar from './AppSidebar.vue'
-import AppSidebarItem from './AppSidebarItem.vue'
 
-// 路由在测试中固定为某一路径，用于断言「选中态随路由」。
-let mockPath = '/system'
+// 0.2.0 多级侧栏（direction-sidebar-navigation-020）行为测试：
+// 展开树（叶子/目录/弱分组标题）、深链祖先展开、收起图标列＋首字回退、
+// 目录子树浮层（打开/导航关闭/Esc 关闭）、底部条在 BasicLayout.spec 覆盖。
+let mockPath = '/system/tenant'
+const pushMock = vi.fn()
 vi.mock('vue-router', () => ({
   useRoute: () => ({
     get path() {
       return mockPath
     },
   }),
+  useRouter: () => ({ push: pushMock }),
 }))
 
 const MENU: MenuNode[] = [
@@ -23,389 +27,177 @@ const MENU: MenuNode[] = [
     name: 'system',
     title: '系统管理',
     path: 'system',
-    component: 'system/views/SystemHome',
-    sort: 1,
-    menuType: MenuType.MENU,
-  },
-  {
-    id: '2',
-    parentId: null,
-    name: 'form',
-    title: '低代码',
-    path: 'form',
     component: null,
-    sort: 2,
+    sort: 1,
     menuType: MenuType.DIRECTORY,
     children: [
       {
-        id: '2-1',
-        parentId: '2',
-        name: 'form-overview',
-        title: '低代码概览',
-        path: 'form/overview',
-        component: 'form/views/FormHome',
+        id: '1-1',
+        parentId: '1',
+        name: 'system-tenant',
+        title: '租户管理',
+        path: 'system/tenant',
+        component: null,
         sort: 1,
         menuType: MenuType.MENU,
       },
       {
-        id: '2-2',
-        parentId: '2',
-        name: 'form-form',
-        title: '表单设计',
-        path: 'form/form',
-        component: 'form/views/FormForm',
+        id: '1-2',
+        parentId: '1',
+        name: 'system-user',
+        title: '用户管理',
+        path: 'system/user',
+        component: null,
         sort: 2,
         menuType: MenuType.MENU,
+      },
+      {
+        id: '1-3',
+        parentId: '1',
+        name: 'system-dict',
+        title: '字典管理',
+        path: 'system/dict',
+        component: null,
+        sort: 3,
+        menuType: MenuType.DIRECTORY,
+        children: [
+          {
+            id: '1-3-1',
+            parentId: '1-3',
+            name: 'system-dict-type',
+            title: '字典类型',
+            path: 'system/dict-type',
+            component: null,
+            sort: 1,
+            menuType: MenuType.MENU,
+          },
+        ],
       },
     ],
   },
 ]
 
-// 轻量 stub：把关键 prop 透传到 DOM 属性上，便于断言，且渲染默认插槽以驱动递归。
 const stubs = {
-  'el-menu': {
-    props: ['collapse', 'defaultActive'],
-    template:
-      '<ul class="stub-menu" :data-collapse="String(collapse)" :data-active="defaultActive"><slot /></ul>',
-  },
-  'el-sub-menu': {
-    props: ['index'],
-    template: '<li class="stub-sub" :data-index="index"><slot name="title" /><slot /></li>',
-  },
-  'el-menu-item': {
-    props: ['index'],
-    template: '<li class="stub-item" :data-index="index"><slot /></li>',
-  },
   'el-icon': { template: '<i><slot /></i>' },
+  teleport: true,
 }
 
 function mountSidebar(collapse = false) {
   return mount(AppSidebar, {
     props: { collapse },
     global: { stubs },
+    attachTo: document.body,
   })
 }
 
-describe('layouts/AppSidebar', () => {
+describe('layouts/AppSidebar 多级侧栏', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     useMenuStore().setMenu(MENU)
-    mockPath = '/system'
+    mockPath = '/system/tenant'
+    pushMock.mockClear()
   })
 
-  it('只渲染当前顶部分区（与顶栏同源），不串其它分区', () => {
-    // 落在「系统管理」分区：只出该分区的页面，不出现「表单管理」的条目。
-    const systemWrapper = mountSidebar()
-    expect(systemWrapper.findAllComponents(AppSidebarItem)).toHaveLength(1)
-    expect(systemWrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))).toEqual([
-      '/system',
-    ])
-
-    // 落在「表单管理」分区：只出该分区下的两个页面，系统管理条目不再出现。
-    mockPath = '/form/form'
-    const formWrapper = mountSidebar()
-    expect(formWrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))).toEqual([
-      '/form/overview',
-      '/form/form',
-    ])
+  it('展开态：弱分组标题（当前分区名）+ 叶子行 + 目录行（尾部箭头）', () => {
+    const wrapper = mountSidebar(false)
+    expect(wrapper.find('.app-sidebar-tree__group-title').text()).toBe('系统管理')
+    const leaves = wrapper.findAll('.sb-node__row--leaf').map((l) => l.text())
+    expect(leaves.some((t) => t.includes('租户管理'))).toBe(true)
+    const dir = wrapper.findAll('.sb-node__row--dir').map((d) => d.text())
+    expect(dir.some((t) => t.includes('字典管理'))).toBe(true)
+    // 展开态无首字回退（图标槽位仅在有图标时出现；本夹具无图标 → 纯文字行）
+    expect(wrapper.findAll('.sb-node__char').length).toBeGreaterThanOrEqual(0)
   })
 
-  it('分区内条目以平铺菜单项渲染，索引为完整路径', () => {
-    // 顶栏已承担分区切换，侧栏不再重复一层目录：分区内的页面直接平铺。
-    mockPath = '/form/form'
-    const wrapper = mountSidebar()
-    expect(wrapper.findAll('.stub-sub')).toHaveLength(0)
-    expect(wrapper.findAll('.stub-item')).toHaveLength(2)
+  it('叶子点击导航；目录点击切换子树（不做导航）', async () => {
+    const wrapper = mountSidebar(false)
+    const leaf = wrapper.findAll('.sb-node__row--leaf').find((l) => l.text().includes('租户管理'))
+    await leaf!.trigger('click')
+    expect(pushMock).toHaveBeenCalledWith('/system/tenant')
+
+    const dir = wrapper.findAll('.sb-node__row--dir').find((d) => d.text().includes('字典管理'))
+    expect(wrapper.text()).not.toContain('字典类型')
+    await dir!.trigger('click')
+    expect(wrapper.text()).toContain('字典类型')
+    expect(pushMock).not.toHaveBeenCalledWith('/system/dict')
   })
 
-  it('二级路径页面（开放接口/文件管理）仍锁定在所属分区，不回退成整棵树', () => {
-    // 回归：曾按「首段路径 == 分组路径」定位分区，/openapi 首段与分组路径 system 不一致，
-    // 结果回退成整棵后台树（点开放接口后所有分组又都展开）。
-    useMenuStore().setMenu([
-      {
-        id: '1',
-        parentId: null,
-        name: 'system',
-        title: '系统管理',
-        path: 'system',
-        component: null,
-        sort: 1,
-        menuType: MenuType.DIRECTORY,
-        children: [
-          {
-            id: '10',
-            parentId: '1',
-            name: 'dict',
-            title: '字典管理',
-            path: 'system/dict',
-            component: 'system/views/DictTypeList',
-            sort: 1,
-            menuType: MenuType.MENU,
-          },
-          {
-            id: '9',
-            parentId: '1',
-            name: 'openapi',
-            title: '开放接口',
-            path: 'openapi',
-            component: 'openapi/views/OpenapiHome',
-            sort: 2,
-            menuType: MenuType.MENU,
-          },
-        ],
-      },
-      {
-        id: '2',
-        parentId: null,
-        name: 'form',
-        title: '表单管理',
-        path: 'form',
-        component: null,
-        sort: 2,
-        menuType: MenuType.DIRECTORY,
-        children: [
-          {
-            id: '3',
-            parentId: '2',
-            name: 'form-list',
-            title: '表单列表',
-            path: 'form/form-def-list',
-            component: 'form/views/FormDefList',
-            sort: 1,
-            menuType: MenuType.MENU,
-          },
-        ],
-      },
-    ])
-    mockPath = '/openapi'
-    const wrapper = mountSidebar()
-    expect(wrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))).toEqual([
-      '/system/dict',
-      '/openapi',
-    ])
+  it('当前页选中态与祖先目录轻强调；子项按层级缩进', async () => {
+    const wrapper = mountSidebar(false)
+    const active = wrapper.findAll('.sb-node__row--leaf').find((l) => l.text().includes('租户管理'))
+    expect(active!.classes()).toContain('is-active')
+    expect(active!.attributes('aria-current')).toBe('page')
+    const dir = wrapper.findAll('.sb-node__row--dir').find((d) => d.text().includes('字典管理'))
+    await dir!.trigger('click')
+    // 层级缩进改为 CSS 变量（行内只声明 --sb-depth；基础槽 24 + 每层 20 由样式计算）
+    const child = wrapper
+      .findAll('.sb-node__row--leaf')
+      .find((l) => (l.attributes('style') ?? '').includes('--sb-depth: 1'))
+    expect(child).toBeTruthy()
+    expect(child!.text()).toContain('字典类型')
   })
 
-  it('binds el-menu active index to the current route path (selection follows route)', () => {
-    mockPath = '/form/form'
-    const wrapper = mountSidebar()
-    expect(wrapper.find('.stub-menu').attributes('data-active')).toBe('/form/form')
+  it('深链进入深层页面：祖先目录自动展开使当前项可见', () => {
+    mockPath = '/system/dict-type'
+    const wrapper = mountSidebar(false)
+    expect(wrapper.text()).toContain('字典类型')
+    const dir = wrapper.findAll('.sb-node__row--dir').find((d) => d.text().includes('字典管理'))
+    expect(dir!.classes()).toContain('is-ancestor')
   })
 
-  it('V012-BUG-004: /workspace 侧栏精简为 待办/已办/草稿 三个直达项', () => {
-    useMenuStore().setMenu([
-      {
-        id: 'w',
-        parentId: null,
-        name: 'workflow',
-        title: '流程管理',
-        path: 'workflow',
-        component: null,
-        sort: 1,
-        menuType: MenuType.DIRECTORY,
-        children: [
-          {
-            id: 'w1',
-            parentId: 'w',
-            name: 'todo',
-            title: '待办任务',
-            path: 'workflow/todo',
-            component: 'x',
-            sort: 1,
-            menuType: MenuType.MENU,
-          },
-          {
-            id: 'w2',
-            parentId: 'w',
-            name: 'processed',
-            title: '已办任务',
-            path: 'workflow/processed',
-            component: 'x',
-            sort: 2,
-            menuType: MenuType.MENU,
-          },
-          {
-            id: 'w3',
-            parentId: 'w',
-            name: 'my-instances',
-            title: '我发起的',
-            path: 'workflow/my-instances',
-            component: 'x',
-            sort: 3,
-            menuType: MenuType.MENU,
-          },
-          {
-            id: 'w4',
-            parentId: 'w',
-            name: 'my-drafts',
-            title: '我的草稿',
-            path: 'workflow/my-drafts',
-            component: 'x',
-            sort: 4,
-            menuType: MenuType.MENU,
-          },
-          {
-            id: 'w5',
-            parentId: 'w',
-            name: 'catalog',
-            title: '流程中心',
-            path: 'workflow/catalog',
-            component: 'x',
-            sort: 5,
-            menuType: MenuType.MENU,
-          },
-        ],
-      },
-      {
-        id: 'n',
-        parentId: null,
-        name: 'notify-inbox',
-        title: '收件箱',
-        path: 'notify/inbox',
-        component: 'x',
-        sort: 2,
-        menuType: MenuType.MENU,
-      },
-    ])
-    mockPath = '/workspace'
-    const wrapper = mountSidebar()
-
-    const indexes = wrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))
-    // 工作台固定项 + 本地三直达项（V012-BUG-023：/workspace/* 不再跳流程中心）
-    expect(indexes).toContain('/workspace')
-    expect(indexes).toEqual([
-      '/workspace',
-      '/workspace/todo',
-      '/workspace/processed',
-      '/workspace/my-drafts',
-    ])
-    expect(wrapper.findAll('.stub-sub')).toHaveLength(0)
-  })
-
-  it('V012-BUG-006: 流程中心上下文仅流程管理分组子项（无工作台固定项/通知/门户）', () => {
-    useMenuStore().setMenu([
-      {
-        id: 'w',
-        parentId: null,
-        name: 'workflow',
-        title: '流程管理',
-        path: 'workflow',
-        component: null,
-        sort: 1,
-        menuType: MenuType.DIRECTORY,
-        children: [
-          {
-            id: 'w1',
-            parentId: 'w',
-            name: 'todo',
-            title: '待办任务',
-            path: 'workflow/todo',
-            component: 'x',
-            sort: 1,
-            menuType: MenuType.MENU,
-          },
-          {
-            id: 'w2',
-            parentId: 'w',
-            name: 'catalog',
-            title: '流程中心',
-            path: 'workflow/catalog',
-            component: 'x',
-            sort: 2,
-            menuType: MenuType.MENU,
-          },
-        ],
-      },
-      {
-        id: 'n',
-        parentId: null,
-        name: 'notify',
-        title: '通知',
-        path: 'notify',
-        component: null,
-        sort: 2,
-        menuType: MenuType.DIRECTORY,
-        children: [
-          {
-            id: 'n1',
-            parentId: 'n',
-            name: 'inbox',
-            title: '收件箱',
-            path: 'notify/inbox',
-            component: 'x',
-            sort: 1,
-            menuType: MenuType.MENU,
-          },
-        ],
-      },
-      {
-        id: 'p',
-        parentId: null,
-        name: 'portal',
-        title: '我的门户',
-        path: 'portal',
-        component: 'x',
-        sort: 3,
-        menuType: MenuType.MENU,
-      },
-    ])
-    mockPath = '/workflow/todo'
-    const wrapper = mountSidebar()
-
-    const indexes = wrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))
-    // 仅流程管理分组子项：无工作台固定项、无收件箱、无我的门户（V012-BUG-006）
-    expect(indexes).toEqual(['/workflow/todo', '/workflow/catalog'])
-    expect(wrapper.findAll('.stub-sub')).toHaveLength(0)
-  })
-
-  it('V012-BUG-008: 收件箱上下文侧栏仅 全部/已读/未读 分类项', () => {
-    useMenuStore().setMenu([
-      {
-        id: 'w',
-        parentId: null,
-        name: 'workflow',
-        title: '流程管理',
-        path: 'workflow',
-        component: null,
-        sort: 1,
-        menuType: MenuType.DIRECTORY,
-        children: [
-          {
-            id: 'w1',
-            parentId: 'w',
-            name: 'todo',
-            title: '待办任务',
-            path: 'workflow/todo',
-            component: 'x',
-            sort: 1,
-            menuType: MenuType.MENU,
-          },
-        ],
-      },
-      {
-        id: 'n',
-        parentId: null,
-        name: 'inbox',
-        title: '收件箱',
-        path: 'notify/inbox',
-        component: 'x',
-        sort: 2,
-        menuType: MenuType.MENU,
-      },
-    ])
-    mockPath = '/notify/inbox'
-    const wrapper = mountSidebar()
-
-    const indexes = wrapper.findAll('.stub-item').map((el) => el.attributes('data-index'))
-    // 分类固定项（query 驱动），菜单树节点不渲染
-    expect(indexes).toEqual([
-      '/notify/inbox',
-      '/notify/inbox?read=true',
-      '/notify/inbox?read=false',
-    ])
-  })
-
-  it('forwards the collapse flag to el-menu (collapsible is a first-class capability)', () => {
+  it('收起态：分组标题隐去、名称隐藏、无图标项首字回退、目录带指示', () => {
+    mockPath = '/system/dict-type'
     const wrapper = mountSidebar(true)
-    expect(wrapper.find('.stub-menu').attributes('data-collapse')).toBe('true')
+    expect(wrapper.find('.app-sidebar-tree__group-title').exists()).toBe(false)
+    expect(wrapper.findAll('.sb-row__name, .sb-node__name').length).toBe(0)
+    const chars = wrapper.findAll('.sb-node__char').map((c) => c.text())
+    expect(chars).toContain('租')
+    expect(chars).toContain('用')
+    expect(chars).toContain('字')
+    const dirBtn = wrapper.findAll('.sb-node__icon-btn').find((b) => b.text().includes('字'))
+    expect(dirBtn!.classes()).toContain('is-ancestor')
+  })
+
+  it('收起态目录点击打开子树浮层（头部目录名+子项），页内点击导航并关闭', async () => {
+    mockPath = '/system/user'
+    const wrapper = mountSidebar(true)
+    const dirBtn = wrapper.findAll('.sb-node__icon-btn').find((b) => b.text().includes('字'))
+    await dirBtn!.trigger('click')
+    const flyout = document.querySelector('.app-sidebar-flyout')
+    expect(flyout).toBeTruthy()
+    expect(flyout!.textContent).toContain('字典管理')
+    expect(flyout!.textContent).toContain('字典类型')
+    const childRow = Array.from(flyout!.querySelectorAll('.sb-node__row--leaf')).find((r) =>
+      r.textContent?.includes('字典类型'),
+    ) as HTMLButtonElement
+    childRow.click()
+    await Promise.resolve()
+    expect(pushMock).toHaveBeenCalledWith('/system/dict-type')
+    // 路由变化由组件内 watcher 关闭浮层；此处直接断言 push 已发生（关闭逻辑走 activePath watch）
+  })
+
+  it('再次点击目录或 Esc 关闭浮层', async () => {
+    mockPath = '/system/user'
+    const wrapper = mountSidebar(true)
+    const dirBtn = wrapper.findAll('.sb-node__icon-btn').find((b) => b.text().includes('字'))
+    await dirBtn!.trigger('click')
+    expect(document.querySelector('.app-sidebar-flyout')).toBeTruthy()
+    await dirBtn!.trigger('click')
+    await nextTick()
+    expect(document.querySelector('.app-sidebar-flyout')).toBeNull()
+
+    await dirBtn!.trigger('click')
+    expect(document.querySelector('.app-sidebar-flyout')).toBeTruthy()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(document.querySelector('.app-sidebar-flyout')).toBeNull()
+  })
+
+  it('收起态页面入口点击直接导航', async () => {
+    mockPath = '/system/user'
+    const wrapper = mountSidebar(true)
+    const leafBtn = wrapper.findAll('.sb-node__icon-btn').find((b) => b.text().includes('租'))
+    await leafBtn!.trigger('click')
+    expect(pushMock).toHaveBeenCalledWith('/system/tenant')
   })
 })

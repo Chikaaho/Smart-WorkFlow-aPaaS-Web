@@ -9,9 +9,11 @@ import {
   detectParticipantShape,
   emptyParticipantFormDraft,
   getDesignableNodeCapabilities,
+  NODE_ALLOWED_ACTION_VALUES,
   normalizeParticipantConfig,
   NodeCapabilityContractError,
   parseBpmNodeCapabilities,
+  resolveNodeAllowedActions,
   resolveWorkflowMiddleNodeType,
   validateDynamicParallelConfigErrors,
   validateNodeConfigSemantics,
@@ -508,5 +510,28 @@ describe('P63 mock capability list (new node types)', () => {
       ],
     }
     expect(validateProcessGraphCapabilities(fork, capabilities, ['START', 'END'])).toEqual([])
+  })
+
+  it('projects node allowedActions with legacy default and explicit deny-all semantics', () => {
+    expect(resolveNodeAllowedActions(undefined)).toEqual([...NODE_ALLOWED_ACTION_VALUES])
+    expect(resolveNodeAllowedActions([])).toEqual([])
+    expect(resolveNodeAllowedActions(['APPROVE', 'RETURN'])).toEqual(['APPROVE', 'RETURN'])
+    expect(resolveNodeAllowedActions(undefined, ['APPROVE', 'REJECT'])).toEqual([
+      'APPROVE',
+      'REJECT',
+    ])
+  })
+
+  it('exposes approval allowedActions from the existing capability fixture as an array config', () => {
+    const approval = MOCK_WORKFLOW_NODE_CAPABILITIES.find((item) => item.type === 'APPROVAL')
+    const field = approval?.configFields.find((item) => item.key === 'allowedActions')
+
+    expect(field).toMatchObject({
+      key: 'allowedActions',
+      label: '允许操作',
+      type: 'ARRAY',
+      required: false,
+    })
+    expect(field?.validation?.values).toEqual([...NODE_ALLOWED_ACTION_VALUES])
   })
 })

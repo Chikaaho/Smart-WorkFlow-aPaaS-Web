@@ -135,7 +135,7 @@ describe('ProcessDefList.vue', () => {
     await nextTick()
 
     expect(pageProcessDefs).toHaveBeenCalledTimes(1)
-    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 })
+    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 }, undefined, undefined)
   })
 
   // ─── 2. 列表数据渲染 ───

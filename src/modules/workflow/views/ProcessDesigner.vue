@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import ApproverCandidatesDialog from './ApproverCandidatesDialog.vue'
+import WorkspaceFieldPickerDialog from '../components/WorkspaceFieldPickerDialog.vue'
 import HintTip from '@/components/HintTip.vue'
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
-/* global HTMLElement,
+/* global HTMLElement, AbortSignal,
   ResizeObserver,
   SVGElement,
   SVGSVGElement,
@@ -26,7 +27,7 @@ const { t } = useI18n()
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft, Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
 import {
   getProcessDefDefinition,
   getDefVersionGraph,
@@ -38,6 +39,8 @@ import {
   publishedFormDefinition,
   pageProcessDefs,
   previewProcessScript,
+  suspendDefVersion,
+  activateDefVersion,
 } from '@/modules/workflow/api'
 import { pageFormDefs } from '@/adapters/form-catalog'
 import ScriptDialog from '@/components/ScriptDialog.vue'
@@ -47,11 +50,14 @@ import type {
   GraphValidationError,
   ApproverCandidate,
   ProcessDefVersionInfo,
+  ProcessNotificationConfigPayload,
 } from '@/modules/workflow/api'
+import { buildDesignerGraphPayload } from '@/modules/workflow/utils/graph-payload'
+// 节点图标字形与面板分组投影：与表单工作台空状态节点库共用同一份展示层定义（Q56 抽取共享）
+import { groupPaletteCapabilities, nodeIconPaths } from '@/modules/workflow/utils/designer-palette'
 import type { ProcessDef } from '@/contracts/bpm'
 import type {
   BpmNodeCapability,
-  BpmNodeCategory,
   BpmNodeConfigField,
   ParticipantStrategy,
 } from '@/contracts/bpm-node'
@@ -62,6 +68,8 @@ import {
   buildParticipantConfig,
   buildParticipantFormDraft,
   emptyParticipantFormDraft,
+  NODE_ALLOWED_ACTION_VALUES,
+  resolveNodeAllowedActions,
   validateNodeConfigSemantics,
 } from '@/modules/workflow/utils/node-capabilities'
 import type {
@@ -96,6 +104,8 @@ import type {
   PositionedNode,
 } from '@/adapters/process-graph'
 import FormSelectDialog from './FormSelectDialog.vue'
+import ThemeRuleDialog from './ThemeRuleDialog.vue'
+import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import type { BpmVariableDef, TriggerConfig } from '@/contracts/p64'
 import {
   buildTriggerConfig,
@@ -111,6 +121,10 @@ import {
   CHILD_WAIT_POLICIES,
   DEFAULT_MAX_DISPATCH,
   compatibleVariableTypes,
+  BPM_AGGREGATIONS,
+  BPM_SYSTEM_FIELDS,
+  BPM_VARIABLE_SOURCES,
+  BPM_VARIABLE_TYPES,
 } from '@/modules/workflow/utils/p64-orchestration'
 import type { TriggerDraft, VariableDraft } from '@/modules/workflow/utils/p64-orchestration'
 
@@ -142,6 +156,8 @@ type DesignerGraph = ProcessGraphDocument & {
   /** P64 阶段Ⅰ：BPM 变量与触发器（文档级；随图保存/发布冻结）。 */
   variables?: BpmVariableDef[]
   triggers?: TriggerConfig[]
+  /** 50:88 结束通知：设计器不编辑，但保存/发布必须原样保留。 */
+  notification?: ProcessNotificationConfigPayload | null
 }
 const graph = ref<DesignerGraph | null>(null)
 /** 表单工作台上下文：提供三类页签，画布与表单页签共享同一顶部切换。 */
@@ -157,54 +173,29 @@ const previewVersion = ref<number | null>(null)
 const isVersionPreview = computed(() => previewVersion.value != null)
 const versionHistory = ref<ProcessDefVersionInfo[]>([])
 const versionsLoading = ref(false)
+const processPreviewVisible = ref(false)
+const themeRuleVisible = ref(false)
+/** 编号设置弹窗只读取定义身份；编辑与保存继续由既有共用弹窗承接。 */
+const themeRuleDef = computed<ProcessDef | null>(() => {
+  if (!graph.value || !Number.isFinite(Number(defId.value))) return null
+  return {
+    id: Number(defId.value),
+    processKey: graph.value.processKey,
+    name: graph.value.name,
+    formKey: graph.value.formKey,
+    defVersion: graph.value.version ?? 0,
+    status: 'DRAFT',
+    createTime: '',
+    updateTime: '',
+  }
+})
 
 const SNAP_X = 20
 const SNAP_Y = 20
 
-/** P53 设计稿专用节点几何；其它流程图继续使用适配器默认尺寸。 */
-const P53_NODE_WIDTH = 160
-const P53_NODE_HEIGHT = 50
-
-/**
- * 节点图标字形（20×20 坐标系，与左侧选择器同源）：画布与选择器共用同一份路径，
- * 避免拖入后统一退化成通用文档图标。网关在画布上以菱形呈现，不使用字形。
- */
-const NODE_ICON_PATHS: Record<string, readonly string[]> = {
-  START: ['M6.667 3.333L16.667 10L6.667 16.667V3.333Z'],
-  DRAFT: [
-    'M11.667 2.5H3.333V17.5H16.667V7.5H11.667V2.5ZM9.167 13.333L15.833 6.667L17.5 8.333L10.833 15L8.333 15.833L9.167 13.333Z',
-  ],
-  APPROVAL: [
-    'M17.5 11.667C18.881 11.667 20 10.547 20 9.167C20 7.786 18.881 6.667 17.5 6.667C16.119 6.667 15 7.786 15 9.167C15 10.547 16.119 11.667 17.5 11.667Z',
-    'M10.833 18.333C10.833 17.228 11.272 16.168 12.054 15.387C12.835 14.606 13.895 14.167 15 14.167C16.105 14.167 17.165 14.606 17.946 15.387C18.728 16.168 19.167 17.228 19.167 18.333',
-  ],
-  CONSENSUS: [
-    'M12.5 9.167C14.341 9.167 15.833 7.674 15.833 5.833C15.833 3.992 14.341 2.5 12.5 2.5C10.659 2.5 9.167 3.992 9.167 5.833C9.167 7.674 10.659 9.167 12.5 9.167Z',
-    'M3.333 17.5C3.333 15.732 4.036 14.036 5.286 12.786C6.536 11.536 8.232 10.833 10 10.833C11.768 10.833 13.464 11.536 14.714 12.786C15.964 14.036 16.667 15.732 16.667 17.5',
-  ],
-  CONDITION: ['M12 1.667L20.333 10L12 18.333L3.667 10L12 1.667Z'],
-  PARALLEL_GATEWAY: [
-    'M10 1.667L18.333 10L10 18.333L1.667 10L10 1.667Z',
-    'M10 6.667V13.333M6.667 10H13.333',
-  ],
-  NOTIFICATION: ['M11.667 1.667H4.167V18.333H15.833V5.833L11.667 1.667V1.667Z'],
-  IOT_COMMAND: [
-    'M13.333 5H6.667C5.746 5 5 5.746 5 6.667V13.333C5 14.254 5.746 15 6.667 15H13.333C14.254 15 15 14.254 15 13.333V6.667C15 5.746 14.254 5 13.333 5Z',
-    'M7.5 1.667V5M12.5 1.667V5M7.5 15V18.333M12.5 15V18.333M1.667 7.5H5M1.667 12.5H5M15 7.5H18.333M15 12.5H18.333',
-  ],
-  AGENT: [
-    'M15 4.167H5C3.619 4.167 2.5 5.286 2.5 6.667V14.167C2.5 15.547 3.619 16.667 5 16.667H15C16.381 16.667 17.5 15.547 17.5 14.167V6.667C17.5 5.286 16.381 4.167 15 4.167Z',
-    'M10 1.667V4.167M6.667 8.333H6.75M13.333 8.333H13.417M6.667 12.5H13.333',
-  ],
-  DEFAULT: [
-    'M15 3.333H5C4.079 3.333 3.333 4.08 3.333 5V15.833C3.333 16.754 4.079 17.5 5 17.5H15C15.92 17.5 16.667 16.754 16.667 15.833V5C16.667 4.08 15.92 3.333 15 3.333Z',
-    'M6.667 10L9.167 12.5L13.333 7.5M7.5 1.667H12.5V5H7.5V1.667Z',
-  ],
-}
-
-function nodeIconPaths(type: string): readonly string[] {
-  return NODE_ICON_PATHS[type] ?? NODE_ICON_PATHS.DEFAULT!
-}
+/** P53 设计稿专用节点几何；其它流程图继续使用适配器默认尺寸。0.2.0 G08：普通节点 230×44。 */
+const P53_NODE_WIDTH = 230
+const P53_NODE_HEIGHT = 44
 
 /** 节点类型灰色说明（与选择器同一能力清单的 displayName，缺省回退通用文案）。 */
 const NODE_TYPE_LABEL_KEYS: Record<string, string> = {
@@ -225,7 +216,10 @@ function nodeTypeHint(type: string): string {
     ? t('workflow.nodeTypeGeneric', { name: capability.displayName })
     : t('workflow.nodeTypeUnknown')
 }
-const P53_GATEWAY_RADIUS = 18
+const P53_GATEWAY_RADIUS = 14
+/** 09/42:5 事件节点：128×44 胶囊，图标与标签内联。 */
+const P53_EVENT_WIDTH = 128
+const P53_EVENT_HEIGHT = 44
 
 /**
  * 网关类节点（菱形渲染）：GATEWAY 为既有口径；P63 将 CONDITION 与
@@ -241,19 +235,9 @@ function snapshot() {
 
 /* ─────────── 0.1.7 重构：节点面板分组 / 整理布局（上下） / 画布框 ─────────── */
 
-/** 节点面板分组（能力契约 category → 面板分组标题）。 */
-const PALETTE_GROUP_KEYS: ReadonlyArray<readonly [BpmNodeCategory, string]> = [
-  ['EVENT', 'workflow.nodeCategoryEvent'],
-  ['TASK', 'workflow.nodeCategoryTask'],
-  ['GATEWAY', 'workflow.nodeCategoryGateway'],
-  ['OTHER', 'workflow.nodeCategoryOther'],
-]
+/** 节点面板分组：服务端能力契约 → 设计稿分组的纯投影（共享模块，画布与空状态节点库同源）。 */
 const paletteGroups = computed(() =>
-  PALETTE_GROUP_KEYS.map(([category, labelKey]) => ({
-    category,
-    label: t(labelKey),
-    items: capabilities.value.filter((cap) => cap.category === category),
-  })).filter((group) => group.items.length > 0),
+  groupPaletteCapabilities(capabilities.value, (labelKey) => t(labelKey)),
 )
 
 /** 撤销可用性（version 每次画布变更自增，用于驱动按钮态）。 */
@@ -385,20 +369,47 @@ function beforeUnloadGuard(event: { preventDefault(): void; returnValue: string 
   event.preventDefault()
   event.returnValue = ''
 }
+/** 未保存离开确认（设计 272:1575）：600 宽三选一——取消/不保存/保存。 */
+const leaveConfirmVisible = ref(false)
+let leaveConfirmResolver: ((proceed: boolean) => void) | null = null
+
+function settleLeaveConfirm(proceed: boolean): void {
+  const resolve = leaveConfirmResolver
+  leaveConfirmResolver = null
+  leaveConfirmVisible.value = false
+  resolve?.(proceed)
+}
+
+function askLeaveConfirmation(): Promise<boolean> {
+  // 同一时刻只挂一个确认；重复触发按“继续编辑”处理，避免并发导航双弹窗。
+  if (leaveConfirmResolver) return Promise.resolve(false)
+  return new Promise<boolean>((resolve) => {
+    leaveConfirmResolver = resolve
+    leaveConfirmVisible.value = true
+  })
+}
+
 async function confirmLeaveIfDirty(): Promise<boolean> {
   if (!dirty.value) return true
-  try {
-    await ElMessageBox.confirm('您还有未保存的内容，是否退出', '提示', {
-      confirmButtonText: '退出',
-      cancelButtonText: '继续编辑',
-      type: 'warning',
-    })
-    dirty.value = false
-    return true
-  } catch {
-    return false
-  }
+  const proceed = await askLeaveConfirmation()
+  if (!proceed) return false
+  dirty.value = false
+  return true
 }
+
+/** 关闭按钮 / Esc / 点击遮罩：继续编辑。 */
+function onLeaveConfirmClosed(): void {
+  settleLeaveConfirm(false)
+}
+
+/** 保存成功后离开；保存失败留在编辑器（错误沿用既有保存提示）。 */
+function saveAndLeave(): void {
+  void (async () => {
+    const saved = await save()
+    settleLeaveConfirm(saved)
+  })()
+}
+
 onBeforeRouteLeave(() => confirmLeaveIfDirty())
 
 /** 高级配置元数据（定义 payload 的 advancedConfig 扩展；缺省展示占位符）。 */
@@ -535,12 +546,39 @@ watch(
 /* ── BF20261013-013：节点「字段属性」页签（必填/编辑/隐藏三态） ── */
 
 /** 节点属性面板页签；切换节点时回到「基础属性」。 */
-const nodePropsTab = ref<'basic' | 'fields'>('basic')
+const nodePropsTab = ref<'basic' | 'fields' | 'advanced'>('basic')
 
 /** 字段属性仅对非结束节点开放（Owner：流程图除结束的所有节点）。 */
 const fieldConfigCapable = computed(
   () => selectedNode.value != null && selectedNode.value.type !== 'END',
 )
+
+/** 高级页签承载节点脚本、子流程、审批意见表单与 allowedActions 操作设置。 */
+const allowedActionsField = computed(
+  () =>
+    selectedCapability.value?.configFields?.find((field) => field.key === 'allowedActions') ?? null,
+)
+const advancedConfigCapable = computed(
+  () =>
+    selectedNode.value != null &&
+    selectedNode.value.type !== 'END' &&
+    (nodeTriggerCapable.value ||
+      nodeFormCapable.value ||
+      selectedNode.value.type === 'APPROVAL' ||
+      !!allowedActionsField.value),
+)
+
+/* 审查23 D08-F：字段页签顶部字段搜索（仅过滤列表，不改变权限绑定） */
+const fieldPermKeyword = ref('')
+
+const fieldPermVisibleFields = computed(() => {
+  const keyword = fieldPermKeyword.value.trim().toLowerCase()
+  if (!keyword) return mainFormFields.value
+  return mainFormFields.value.filter(
+    (f) =>
+      f.name.toLowerCase().includes(keyword) || (f.label || '').toLowerCase().includes(keyword),
+  )
+})
 
 const nodeFieldStates = computed<NodeFieldStates>(() => {
   const config = (selectedNode.value?.config ?? {}) as { fieldStates?: NodeFieldStates }
@@ -706,6 +744,63 @@ function removeVariable(index: number) {
   onModelChanged()
 }
 
+/* P64 变量创建：来源/字段/类型/聚合必须与校验器同口径，不能只填标识和名称。 */
+const VARIABLE_TYPE_LABELS: Record<string, string> = {
+  NUMBER: '数字',
+  STRING: '文本',
+  BOOLEAN: '布尔',
+  USER: '用户',
+  DEPT: '部门',
+  USER_SET: '用户集合',
+  DEPT_SET: '部门集合',
+  ROWS: '明细行',
+}
+const VARIABLE_SOURCE_LABELS: Record<string, string> = {
+  MAIN_FORM: '主表字段',
+  NODE_FORM: '节点表单',
+  SYSTEM: '系统字段',
+}
+const VARIABLE_AGGREGATION_LABELS: Record<string, string> = {
+  NONE: '不聚合',
+  UNION: '并集去重',
+  CONCAT: '拼接',
+}
+
+const variableSourceFormKey = computed(() => {
+  const nodeKey = variableDraft.value.sourceNodeKey
+  return nodeFormBindings.value.find((item) => item.nodeKey === nodeKey)?.formKey ?? ''
+})
+
+function onVariableSourceFieldChange(fieldName: string) {
+  const field = mainFormFields.value.find((item) => item.name === fieldName)
+  if (!field) return
+  const type = compatibleVariableTypes(field.type, Boolean(field.multiple))[0]
+  if (type) variableDraft.value.type = type
+  if (!variableDraft.value.name.trim()) variableDraft.value.name = field.label || field.name
+}
+
+function onVariableSourceChange() {
+  variableDraft.value.sourceField = ''
+  variableDraft.value.sourceNodeKey = ''
+  variableDraft.value.sourceFormField = ''
+}
+
+function onVariableSourceNodeChange(nodeKey: string) {
+  variableDraft.value.sourceFormField = ''
+  const binding = nodeFormBindings.value.find((item) => item.nodeKey === nodeKey)
+  if (binding) void ensureFormFields(binding.formKey)
+}
+
+function onVariableNodeFieldChange(fieldName: string) {
+  const field = formFieldOptions(variableSourceFormKey.value).find(
+    (item) => item.name === fieldName,
+  )
+  if (!field) return
+  const type = compatibleVariableTypes(field.type, false)[0]
+  if (type) variableDraft.value.type = type
+  if (!variableDraft.value.name.trim()) variableDraft.value.name = field.label || field.name
+}
+
 /* ─── BF20261013-018：P64 配置面板业务化文案（枚举值不变，仅展示中文化） ─── */
 
 /** 触发时机展示名。 */
@@ -857,6 +952,16 @@ function saveTrigger() {
 function removeTrigger(index: number) {
   const list = [...(graph.value?.triggers ?? [])]
   list.splice(index, 1)
+  graph.value = { ...(graph.value ?? {}), triggers: list } as DesignerGraph
+  onModelChanged()
+}
+
+function moveTrigger(index: number, offset: number) {
+  const list = [...(graph.value?.triggers ?? [])]
+  const target = index + offset
+  if (target < 0 || target >= list.length) return
+  const [item] = list.splice(index, 1)
+  list.splice(target, 0, item)
   graph.value = { ...(graph.value ?? {}), triggers: list } as DesignerGraph
   onModelChanged()
 }
@@ -1157,17 +1262,25 @@ function onNodePointerUp(event: PointerEvent, node: PositionedNode) {
   void event
 }
 
+/** 节点四向端口半距：事件胶囊/网关菱形与卡片盒不同。 */
+function nodePortHalf(node: PositionedNode) {
+  if (isEventShape(node.type)) return { w: P53_EVENT_WIDTH / 2, h: P53_EVENT_HEIGHT / 2 }
+  if (isGatewayShape(node.type)) return { w: P53_GATEWAY_RADIUS, h: P53_GATEWAY_RADIUS }
+  return { w: P53_NODE_WIDTH / 2, h: P53_NODE_HEIGHT / 2 }
+}
+
 /** 节点四向锚点坐标（V011-BUG-023）：上下左右缘中点。 */
 function sidePoint(node: PositionedNode, side: 'left' | 'right' | 'top' | 'bottom') {
+  const half = nodePortHalf(node)
   switch (side) {
     case 'left':
-      return { x: node.x - P53_NODE_WIDTH / 2, y: node.y }
+      return { x: node.x - half.w, y: node.y }
     case 'right':
-      return { x: node.x + P53_NODE_WIDTH / 2, y: node.y }
+      return { x: node.x + half.w, y: node.y }
     case 'top':
-      return { x: node.x, y: node.y - P53_NODE_HEIGHT / 2 }
+      return { x: node.x, y: node.y - half.h }
     default:
-      return { x: node.x, y: node.y + P53_NODE_HEIGHT / 2 }
+      return { x: node.x, y: node.y + half.h }
   }
 }
 
@@ -1394,13 +1507,12 @@ function nearestPortSide(
   point: PathPoint,
   node: PositionedNode,
 ): 'left' | 'right' | 'top' | 'bottom' {
-  const halfWidth = P53_NODE_WIDTH / 2
-  const halfHeight = P53_NODE_HEIGHT / 2
+  const half = nodePortHalf(node)
   const distances = {
-    left: Math.abs(point.x - (node.x - halfWidth)),
-    right: Math.abs(point.x - (node.x + halfWidth)),
-    top: Math.abs(point.y - (node.y - halfHeight)),
-    bottom: Math.abs(point.y - (node.y + halfHeight)),
+    left: Math.abs(point.x - (node.x - half.w)),
+    right: Math.abs(point.x - (node.x + half.w)),
+    top: Math.abs(point.y - (node.y - half.h)),
+    bottom: Math.abs(point.y - (node.y + half.h)),
   }
   let best: 'left' | 'right' | 'top' | 'bottom' = 'left'
   for (const side of ['right', 'top', 'bottom'] as const) {
@@ -1645,12 +1757,12 @@ function assertNodeSemantics(): boolean {
   return false
 }
 
-/** 保存载荷：serialize() 只含画布契约字段，文档级 P64 配置（变量/触发器）在此合并。 */
+/** 保存载荷：serialize() 只含画布契约字段，文档级 P64/通知配置在此合并。 */
 function buildGraphPayload(): Record<string, unknown> {
-  const payload = { ...(model?.serialize() ?? {}) } as Record<string, unknown>
-  payload.variables = graph.value?.variables ?? []
-  payload.triggers = graph.value?.triggers ?? []
-  return payload
+  return buildDesignerGraphPayload(
+    (model?.serialize() ?? {}) as Record<string, unknown>,
+    graph.value,
+  )
 }
 
 /** 保存草稿；返回是否真实保存成功（发布前依赖该结果避免“发布旧图”）。 */
@@ -1688,7 +1800,11 @@ async function validate() {
     markSaved()
     validationErrors.value = await validateProcessDefGraph(defId.value)
     if (validationErrors.value.length === 0) {
-      ElMessage.success(t('workflow.validationPassedNoErrors'))
+      ElMessage.success({
+        message: t('workflow.validationPassedNoErrors'),
+        customClass: 'designer-feedback-toast',
+        offset: 84,
+      })
     }
   } catch (err) {
     errorMsg.value = (err as { msg?: string }).msg ?? t('workflow.graphValidationFailed')
@@ -1725,7 +1841,11 @@ async function publish() {
       if (!saved) return
     }
     await publishProcessDef(defId.value)
-    ElMessage.success(t('workflow.publishSucceeded'))
+    ElMessage.success({
+      message: t('workflow.publishSucceeded'),
+      customClass: 'designer-feedback-toast',
+      offset: 84,
+    })
     await load()
   } catch (err) {
     ElMessage.error((err as { msg?: string }).msg ?? t('workflow.publishFailedZeroDeploy'))
@@ -1766,21 +1886,30 @@ const selectedCapability = computed(() => {
 /** 参与人结构化面板覆盖的节点类型；其余节点保持既有 approver/object 渲染路径。 */
 const PARTICIPANT_PANEL_NODE_TYPES = ['APPROVAL', 'CONSENSUS']
 
-/** 参与人策略展示名（本批改动文件域不含 locale 资源，文案先落在设计器，后续可迁 locale 键）。 */
+/** 参与人策略展示名（本批改动文件域不含 locale 资源，文案先落在设计器，后续可迁 locale 键）。
+ *  审查28 D08-B：主分段前两项按设计原图命名（指定人员/表单组件）；
+ *  表达式与 JS 脚本是两种真实来源，独立表达式不得冒充 JS，第三主分段保留真实名「表达式」。 */
 const PARTICIPANT_STRATEGY_LABELS: Record<ParticipantStrategy, string> = {
-  FIXED_USER: '选择人员',
+  FIXED_USER: '指定人员',
   ROLE: '选择角色',
   DEPT_LEADER: '选择部门',
   POST: '选择岗位',
   DEPT_POST: '部门岗位',
   EXPRESSION: '表达式',
   ADAPTER: '外部适配器',
-  FORM_FIELD: '表单字段',
+  FORM_FIELD: '表单组件',
   NODE_FORM_AGGREGATE: '节点表单聚合',
 }
 
-/** BF20261013-022④：参与人策略收敛为五项（其余仅作旧数据回显，不再提供新选）。 */
-const ALLOWED_PARTICIPANT_STRATEGIES = ['FIXED_USER', 'DEPT_LEADER', 'ROLE', 'POST', 'EXPRESSION']
+/** 设计 42:4：提供选择人员/表单字段/表达式等业务策略；旧数据仍可回显其他策略。 */
+const ALLOWED_PARTICIPANT_STRATEGIES = [
+  'FIXED_USER',
+  'DEPT_LEADER',
+  'ROLE',
+  'POST',
+  'FORM_FIELD',
+  'EXPRESSION',
+]
 
 /** 参与人字段：真实契约的 participant、mock APPROVAL 的 approver，或带 approverTypes 的兼容 object 字段。 */
 const participantField = computed<BpmNodeConfigField | null>(() => {
@@ -1825,6 +1954,89 @@ function tableColumnOptionsFor(tableField: string, objectType: string): FormSche
   const table = formSchemaFields.value.find((f) => f.name === tableField)
   return (table?.subFields ?? []).filter((sf) => sf.type === objectType)
 }
+
+/* 提示32 Q17（574:27788）：主字段改 680 分组选择窗——主表 + 各明细表；
+   候选仍按当前对象类型过滤，选择明细列时同步表/列绑定，不扩大候选业务。 */
+const participantFieldPickerVisible = ref(false)
+
+function toPickerField(field: FormSchemaField) {
+  return { name: field.name, label: field.label || field.name || '未命名字段', type: field.type }
+}
+
+const participantFieldPickerGroups = computed(() => {
+  const objectType = participantForm.value.formField.objectType
+  const groups = [
+    {
+      key: 'MAIN',
+      label: '主表',
+      tag: undefined as string | undefined,
+      fields: mainFieldOptionsFor(objectType).map(toPickerField),
+    },
+  ]
+  for (const table of tableFieldOptions.value) {
+    groups.push({
+      key: table.name,
+      label: table.label || table.name || '未命名明细表',
+      tag: '明细表',
+      fields: (table.subFields ?? [])
+        .filter((subField) => subField.type === objectType)
+        .map((subField) =>
+          toPickerField({ name: subField.name, label: subField.label, type: subField.type }),
+        ),
+    })
+  }
+  return groups
+})
+
+const participantFieldDisplay = computed(() => {
+  const formField = participantForm.value.formField
+  if (formField.scope === 'TABLE' && formField.tableField) {
+    const table = formSchemaFields.value.find((f) => f.name === formField.tableField)
+    const column = (table?.subFields ?? []).find((sf) => sf.name === formField.column)
+    const tableLabel = table?.label || formField.tableField
+    const columnLabel = column?.label || formField.column
+    return columnLabel ? `${tableLabel} / ${columnLabel}` : tableLabel
+  }
+  const field = formSchemaFields.value.find((f) => f.name === formField.field)
+  return field?.label || formField.field || ''
+})
+
+const participantFieldHint = computed(() =>
+  participantForm.value.formField.objectType === 'DEPT'
+    ? '使用该组件中填写的部门，按部门负责人审批。'
+    : '使用该组件中填写的人员作为审批人。',
+)
+
+function openParticipantFieldPicker(): void {
+  if (isVersionPreview.value) return
+  participantFieldPickerVisible.value = true
+}
+
+function onParticipantFieldPicked(fieldName: string, groupKey: string): void {
+  const formField = participantForm.value.formField
+  if (groupKey === 'MAIN') {
+    formField.field = fieldName
+  } else {
+    // 明细列：值对象按 TABLE 口径携带表格与列，field 同步为列名
+    formField.field = fieldName
+    formField.scope = 'TABLE'
+    formField.tableField = groupKey
+    formField.column = fieldName
+  }
+  applyParticipant()
+}
+
+/* 提示32 Q54（572:26514）：EXPRESSION 基本面板 288×32 只读摘要/状态槽，
+   读取实际已存表达式；未配置如实显示，不伪造示例代码。 */
+const participantExpressionConfigured = computed(
+  () => participantForm.value.genericValue.trim().length > 0,
+)
+
+const participantExpressionSummary = computed(() => {
+  if (!participantExpressionConfigured.value) return '未配置'
+  const text = participantForm.value.genericValue.replace(/\s+/g, ' ').trim()
+  return text.length > 42 ? `${text.slice(0, 42)}…` : text
+})
 watch(
   () => graph.value?.formKey,
   (key) => {
@@ -1834,6 +2046,58 @@ watch(
 )
 /** 打开节点时检测到的参与人数据形态（旧数据兼容展示提示的依据）。 */
 const participantShape = ref<ParticipantShapeKind>('empty')
+
+/* 审查28 D08-B：主行收为设计原图三项主分段（指定人员/表单组件/表达式），单行 32 高；
+ * 角色/部门/岗位等额外合法策略整体移入次级切换，展开后仍可达（32 高），
+ * 来源策略契约本身零改动——仅展示分组。 */
+const PARTICIPANT_SOURCE_SEGMENT_ORDER = ['FIXED_USER', 'FORM_FIELD', 'EXPRESSION']
+const participantSourceSegments = computed(() => {
+  const options = participantStrategyOptions.value
+  const head = PARTICIPANT_SOURCE_SEGMENT_ORDER.map((value) =>
+    options.find((option) => option.value === value),
+  ).filter((option): option is { value: string; label: string } => Boolean(option))
+  const tail = options.filter((option) => !PARTICIPANT_SOURCE_SEGMENT_ORDER.includes(option.value))
+  return [...head, ...tail]
+})
+/** 主分段：严格按主行顺序取前三（缺省策略未下发时自动缺项，不补假项）。 */
+const participantMainSourceSegments = computed(() =>
+  participantSourceSegments.value.filter((option) =>
+    PARTICIPANT_SOURCE_SEGMENT_ORDER.includes(option.value),
+  ),
+)
+/** 次级分段：主分段之外的额外合法策略（保持服务端下发的相对顺序）。 */
+const participantExtraSourceSegments = computed(() =>
+  participantSourceSegments.value.filter(
+    (option) => !PARTICIPANT_SOURCE_SEGMENT_ORDER.includes(option.value),
+  ),
+)
+/** 次级来源切换：当前策略命中次级时自动展开（保证已选来源回显可达），其余默认收起。 */
+const participantExtraSourcesOpen = ref(false)
+function syncParticipantExtraSourcesOpen(strategy: string) {
+  participantExtraSourcesOpen.value =
+    strategy !== '' && !PARTICIPANT_SOURCE_SEGMENT_ORDER.includes(strategy)
+}
+watch(
+  () => participantForm.value.strategy,
+  (strategy) => syncParticipantExtraSourcesOpen(strategy),
+  { immediate: true },
+)
+
+const CONSENSUS_MODE_SEGMENT_ORDER = ['ALL', 'RATIO', 'COUNT'] as const
+type ConsensusModeOption = { label: string; value: string }
+const consensusModeSegments = computed<ConsensusModeOption[]>(() => {
+  const all: ConsensusModeOption[] = CONSENSUS_MODE_OPTIONS.map((option) => ({
+    label: option.label,
+    value: option.value,
+  }))
+  const head = CONSENSUS_MODE_SEGMENT_ORDER.map((value) =>
+    all.find((option) => option.value === value),
+  ).filter((option): option is ConsensusModeOption => Boolean(option))
+  const tail = all.filter(
+    (option) => !(CONSENSUS_MODE_SEGMENT_ORDER as readonly string[]).includes(option.value),
+  )
+  return [...head, ...tail]
+})
 
 const participantStrategyOptions = computed(() => {
   // 策略全集以服务端 validation.strategies 优先；未下发时回退契约常量（含 P63 FORM_FIELD）
@@ -1908,6 +2172,10 @@ function applyDynamicParallel() {
   })
 }
 
+/* ── Q11（273:1332）：动态并行 820 设置面状态（先声明，供候选弹窗回写草稿）。 ── */
+const dpSettingsVisible = ref(false)
+const dpDraft = ref<DynamicParallelFormDraft>(buildDynamicParallelFormDraft(null))
+
 /* 动态并行「固定值」直接选择：复用审批人候选弹窗（人员多选/部门树），保存稳定对象 ID。 */
 const dynamicUserPickerVisible = ref(false)
 const dynamicDeptPickerVisible = ref(false)
@@ -1927,19 +2195,73 @@ function openDynamicDeptPicker() {
   dynamicDeptPickerVisible.value = true
 }
 function onDynamicUsersPicked(candidates: ApproverCandidate[]) {
-  dynamicParallelForm.value.sourceValue = candidates
-    .map((candidate) => String(candidate.id))
-    .join(',')
+  const joined = candidates.map((candidate) => String(candidate.id)).join(',')
+  // Q11（273:1332）：820 设置面打开时，候选结果写本地草稿，不落节点配置
+  if (dpSettingsVisible.value) {
+    dpDraft.value.sourceValue = joined
+    return
+  }
+  dynamicParallelForm.value.sourceValue = joined
   applyDynamicParallel()
 }
 function onDynamicDeptsPicked(depts: Array<{ id: string; name: string }>) {
-  dynamicParallelForm.value.sourceValue = depts.map((dept) => dept.id).join(',')
+  const joined = depts.map((dept) => dept.id).join(',')
+  if (dpSettingsVisible.value) {
+    dpDraft.value.sourceValue = joined
+    return
+  }
+  dynamicParallelForm.value.sourceValue = joined
   applyDynamicParallel()
 }
 /** 对象类型切换：人员/部门 ID 命名空间不同，清空旧取值避免把人员 ID 当部门 ID 保存。 */
 function onDynamicObjectTypeChange() {
   dynamicParallelForm.value.sourceValue = ''
   applyDynamicParallel()
+}
+
+/* ── Q11（273:1332）：动态并行 820 设置面。复用 Q12 node-op-dialog 图样：
+     面板只回显真实配置摘要；编辑在弹窗内写本地草稿，取消丢弃、确定写回面板并落节点配置。 ── */
+/** 面板回显摘要：真实分支来源 / 完成模式 / 取值范围。 */
+const dynamicParallelSummary = computed(() => {
+  const form = dynamicParallelForm.value
+  const sourceTypeLabels: Record<string, string> = {
+    FORM_FIELD: '表单字段',
+    VARIABLE: '流程变量',
+    FIXED: '固定值',
+  }
+  const modeLabels: Record<string, string> = {
+    ALL: '全部通过',
+    ANY: '任一通过',
+    RATIO: '按比例通过',
+    VETO: '一票否决',
+  }
+  const scopeLabel = form.scope === 'TABLE' ? '表格字段' : '主表字段'
+  return `${sourceTypeLabels[form.sourceType] ?? form.sourceType} · ${
+    modeLabels[form.mode] ?? form.mode
+  } · ${scopeLabel}`
+})
+
+function openDpSettings(): void {
+  if (!dynamicParallelActive.value || isVersionPreview.value) return
+  dpDraft.value = { ...dynamicParallelForm.value }
+  dpSettingsVisible.value = true
+}
+
+function confirmDpSettings(): void {
+  dynamicParallelForm.value = { ...dpDraft.value }
+  dpSettingsVisible.value = false
+  applyDynamicParallel()
+}
+
+/* 草稿内的联动（与面板同语义，但只改草稿）：换表格字段清列、选列回填来源、切对象类型清取值。 */
+function onDpDraftTableFieldChange(): void {
+  dpDraft.value.column = ''
+}
+function onDpDraftColumnChange(): void {
+  dpDraft.value.sourceValue = dpDraft.value.column
+}
+function onDpDraftObjectTypeChange(): void {
+  dpDraft.value.sourceValue = ''
 }
 
 /* ─────────── P64 BF20261013-019 / BF20261013-027：审批节点发起子流程（三步向导） ─────────── */
@@ -1974,7 +2296,7 @@ interface SubflowFormDraft {
   targetProcessDefKey: string
   targetFormKey: string
   /** 触发方式：写脚本 / 选字段（字段值为真即发起）。 */
-  triggerMode: 'SCRIPT' | 'FIELD'
+  triggerMode: 'SCRIPT' | 'FIELD' | 'ALWAYS'
   triggerField: string
   script: string
   mappings: SubflowMappingDraft[]
@@ -1984,6 +2306,17 @@ interface SubflowFormDraft {
    */
   aggregate: 'SINGLE' | 'EACH' | 'GROUPED'
   groupBy: string
+  /** 278:1719：编排方式/等待策略/结果回写，写回同一 TriggerAction。 */
+  orchestration: 'CHILD' | 'INDEPENDENT'
+  waitPolicy: 'ALL' | 'ANY' | 'COUNT' | 'NONE'
+  waitCount: number
+  wbEnabled: boolean
+  wbResultNodeKey: string
+  wbTableField: string
+  wbRowKeyField: string
+  wbParentTableField: string
+  wbFields: Array<{ fromField: string; toField: string }>
+  wbMainFields: Array<{ fromField: string; toField: string }>
 }
 
 function emptySubflowForm(): SubflowFormDraft {
@@ -1997,10 +2330,29 @@ function emptySubflowForm(): SubflowFormDraft {
     mappings: [],
     aggregate: 'SINGLE',
     groupBy: '',
+    orchestration: 'CHILD',
+    waitPolicy: 'ALL',
+    waitCount: 1,
+    wbEnabled: false,
+    wbResultNodeKey: '',
+    wbTableField: '',
+    wbRowKeyField: '',
+    wbParentTableField: '',
+    wbFields: [],
+    wbMainFields: [],
   }
 }
 
 const subflowForm = ref<SubflowFormDraft>(emptySubflowForm())
+
+/** 回写映射回显：只接受对象行，空行保留给用户继续填写。 */
+function normalizeSubflowWbRows(value: unknown): Array<{ fromField: string; toField: string }> {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => {
+    const row = (entry ?? {}) as Record<string, unknown>
+    return { fromField: String(row.fromField ?? ''), toField: String(row.toField ?? '') }
+  })
+}
 
 /** 节点配置 → 面板草稿（兼容 BF022⑧ 旧形状：mode/sourceVariable/取变量值/自由填写）。 */
 function buildSubflowFormDraft(raw: Record<string, unknown> | undefined): SubflowFormDraft {
@@ -2009,7 +2361,8 @@ function buildSubflowFormDraft(raw: Record<string, unknown> | undefined): Subflo
   draft.enabled = Boolean(raw.enabled)
   draft.targetProcessDefKey = String(raw.targetProcessDefKey ?? '')
   draft.targetFormKey = String(raw.targetFormKey ?? '')
-  draft.triggerMode = raw.triggerMode === 'FIELD' ? 'FIELD' : 'SCRIPT'
+  draft.triggerMode =
+    raw.triggerMode === 'FIELD' ? 'FIELD' : raw.triggerMode === 'ALWAYS' ? 'ALWAYS' : 'SCRIPT'
   draft.triggerField = String(raw.triggerField ?? '')
   draft.script = String(raw.script ?? '')
   const legacyMode = String(raw.mode ?? '')
@@ -2020,6 +2373,18 @@ function buildSubflowFormDraft(raw: Record<string, unknown> | undefined): Subflo
         ? 'EACH'
         : 'SINGLE'
   draft.groupBy = String(raw.groupBy ?? '')
+  draft.orchestration = raw.orchestration === 'INDEPENDENT' ? 'INDEPENDENT' : 'CHILD'
+  const waitPolicy = String(raw.waitPolicy ?? 'ALL')
+  draft.waitPolicy =
+    waitPolicy === 'ANY' || waitPolicy === 'COUNT' || waitPolicy === 'NONE' ? waitPolicy : 'ALL'
+  draft.waitCount = Math.max(1, Number(raw.waitCount ?? 1) || 1)
+  draft.wbEnabled = Boolean(raw.wbEnabled)
+  draft.wbResultNodeKey = String(raw.wbResultNodeKey ?? '')
+  draft.wbTableField = String(raw.wbTableField ?? '')
+  draft.wbRowKeyField = String(raw.wbRowKeyField ?? '')
+  draft.wbParentTableField = String(raw.wbParentTableField ?? '')
+  draft.wbFields = normalizeSubflowWbRows(raw.wbFields)
+  draft.wbMainFields = normalizeSubflowWbRows(raw.wbMainFields)
   const mappings = Array.isArray(raw.mappings) ? raw.mappings : []
   draft.mappings = mappings.map((entry) => {
     const mapping = (entry ?? {}) as Record<string, unknown>
@@ -2081,12 +2446,12 @@ function openProcessScriptDialog(title: string, code: string, target: ScriptDial
  * 流程脚本模拟运行：交给服务端脚本引擎（与运行期同一 GraalJS + # 语法糖），
  * 变量按图定义声明传给服务端，由其按类型生成示例值并加载真实组织目录。
  */
-async function simulateProcessScript(code: string) {
+async function simulateProcessScript(code: string, signal?: AbortSignal) {
   const variables = (graph.value?.variables ?? []).map((item) => ({
     name: item.varId,
     type: item.type,
   }))
-  const result = await previewProcessScript(code, variables)
+  const result = await previewProcessScript(code, variables, signal)
   if (result.kind === 'OK') {
     return { ok: true, value: result.value, log: [] }
   }
@@ -2182,6 +2547,8 @@ function openExpressionScriptDialog() {
 
 const subflowWizardVisible = ref(false)
 const subflowWizardStep = ref(0)
+/** 三步共用表头（34 高）：与既有步骤状态一一对应，不改向导流程。 */
+const subflowStepTitles = ['触发方式', '子流程', '初始值'] as const
 /** 目标子流程绑定表单字段（第③步「子流程表单字段」候选）。 */
 const subflowTargetFields = ref<Array<{ name: string; type: string; label?: string }>>([])
 
@@ -2323,6 +2690,17 @@ function removeSubflowMapping(index: number) {
   subflowForm.value.mappings.splice(index, 1)
 }
 
+/** 278:1719 结果回写映射行（行级/主记录共用）。 */
+function addSubflowWbRow(kind: 'row' | 'main') {
+  const target = kind === 'row' ? subflowForm.value.wbFields : subflowForm.value.wbMainFields
+  target.push({ fromField: '', toField: '' })
+}
+
+function removeSubflowWbRow(kind: 'row' | 'main', index: number) {
+  const target = kind === 'row' ? subflowForm.value.wbFields : subflowForm.value.wbMainFields
+  target.splice(index, 1)
+}
+
 /** 第③步 取值方式切换：清掉其他来源，避免多源并存。 */
 function onSubflowMappingSourceChange(mapping: SubflowMappingDraft) {
   mapping.sourceVarId = ''
@@ -2355,10 +2733,11 @@ function onSubflowTargetChange(defKey: string) {
   void loadSubflowTargetFields(defKey)
 }
 
-/** 向导步骤校验：①触发方式（脚本或字段）②子流程 ③初始值可空。 */
+/** 向导步骤校验：①触发方式（始终/脚本/字段）②子流程 ③初始值可空。 */
 const subflowStepReady = computed(() => {
   const form = subflowForm.value
   if (subflowWizardStep.value === 0) {
+    if (form.triggerMode === 'ALWAYS') return true
     return form.triggerMode === 'FIELD' ? Boolean(form.triggerField) : Boolean(form.script.trim())
   }
   if (subflowWizardStep.value === 1) return Boolean(form.targetProcessDefKey)
@@ -2416,6 +2795,16 @@ function applySubflow() {
       script: form.script,
       aggregate,
       groupBy,
+      orchestration: form.orchestration,
+      waitPolicy: form.waitPolicy,
+      waitCount: form.waitPolicy === 'COUNT' ? Math.max(1, form.waitCount) : 1,
+      wbEnabled: form.orchestration === 'CHILD' && form.wbEnabled,
+      wbResultNodeKey: form.wbResultNodeKey,
+      wbTableField: form.wbTableField,
+      wbRowKeyField: form.wbRowKeyField,
+      wbParentTableField: form.wbParentTableField,
+      wbFields: form.wbFields.map((row) => ({ ...row })),
+      wbMainFields: form.wbMainFields.map((row) => ({ ...row })),
       mappings: form.mappings.map((m) => ({ ...m })),
     },
   })
@@ -2426,9 +2815,10 @@ function applySubflow() {
     const draft: TriggerDraft = {
       triggerId,
       name: `子流程发起·${node.label || node.id}`,
+      enabled: true,
       event: 'TASK_SUBMITTED',
       nodeKey: node.id,
-      script: form.script.trim() || 'return 1;',
+      script: form.triggerMode === 'ALWAYS' ? 'return 1;' : form.script.trim() || 'return 1;',
       // BF20261013-027：触发脚本变量授权=全部已定义变量（与节点触发器同口径，免手工勾选）
       variables: (graph.value.variables ?? []).map((item) => item.varId),
       branches: [
@@ -2461,16 +2851,16 @@ function applySubflow() {
                   literal: m.source === 'LITERAL' ? m.literal : '',
                   script: m.source === 'SCRIPT' ? m.script : '',
                 })),
-              orchestration: 'CHILD',
-              waitPolicy: 'ALL',
-              waitCount: 1,
-              wbEnabled: false,
-              wbResultNodeKey: '',
-              wbTableField: '',
-              wbRowKeyField: '',
-              wbParentTableField: '',
-              wbFields: [],
-              wbMainFields: [],
+              orchestration: form.orchestration === 'INDEPENDENT' ? '' : 'CHILD',
+              waitPolicy: form.waitPolicy,
+              waitCount: form.waitPolicy === 'COUNT' ? Math.max(1, form.waitCount) : 1,
+              wbEnabled: form.orchestration === 'CHILD' && form.wbEnabled,
+              wbResultNodeKey: form.wbResultNodeKey,
+              wbTableField: form.wbTableField,
+              wbRowKeyField: form.wbRowKeyField,
+              wbParentTableField: form.wbParentTableField,
+              wbFields: form.wbFields.map((row) => ({ ...row })),
+              wbMainFields: form.wbMainFields.map((row) => ({ ...row })),
             },
           ],
         },
@@ -2489,19 +2879,33 @@ function syncSubflowWaitNode(node: { id: string; x: number; y: number }, enabled
   if (!model) return
   const state = model.state()
   const waitId = subflowWaitNodeId(node.id)
-  const existing = state.nodes.find((n) => n.id === waitId)
+  const actionId = subflowActionId(node.id)
+  // 不能只按预期 id 找：insertNodeOnEdge 实际生成 node_N；重复应用会插入多个等待块。
+  const existing = state.nodes.filter((item) => {
+    if (item.id === waitId) return true
+    if (item.type !== 'SUBFLOW_WAIT') return false
+    const config = item.config as Record<string, unknown> | undefined
+    return Array.isArray(config?.waitActionIds) && config.waitActionIds.includes(actionId)
+  })
   if (!enabled) {
-    if (existing) {
-      const nextId = state.edges.find((edge) => edge.sourceId === waitId)?.targetId
-      model.select(waitId)
-      model.removeSelection()
+    if (existing.length > 0) {
+      const first = existing[0]
+      const nextId = state.edges.find((edge) => edge.sourceId === first.id)?.targetId
+      for (const item of existing) {
+        model.select(item.id)
+        model.removeSelection()
+      }
       if (nextId) model.connect(node.id, nextId)
     }
     return
   }
-  const actionId = subflowActionId(node.id)
-  if (existing) {
-    model.updateNodeConfig(waitId, { name: '子流程', waitActionIds: [actionId] })
+  if (existing.length > 0) {
+    const [keep, ...extras] = existing
+    for (const extra of extras) {
+      model.select(extra.id)
+      model.removeSelection()
+    }
+    model.updateNodeConfig(keep.id, { name: '子流程', waitActionIds: [actionId] })
     return
   }
   const edge = state.edges.find((item) => item.sourceId === node.id)
@@ -2542,6 +2946,13 @@ watch(selectedNode, (node, prev) => {
         ? JSON.stringify(value)
         : value
   }
+  const allowedActionsField = fields.find((field) => field.key === 'allowedActions')
+  if (allowedActionsField && !('allowedActions' in (node.config ?? {}))) {
+    draft.allowedActions = resolveNodeAllowedActions(
+      undefined,
+      configArrayValues(allowedActionsField),
+    )
+  }
   // 会签：旧图缺 mode 时按后端 ALL 缺省回显；人数模式缺人数时给合法缺省
   if (node.type === 'CONSENSUS') {
     if (draft.mode == null) draft.mode = 'ALL'
@@ -2557,6 +2968,8 @@ watch(selectedNode, (node, prev) => {
     const built = buildParticipantFormDraft(raw)
     participantForm.value = built.draft
     participantShape.value = built.shape
+    // 审查28 D08-B：换节点后按新策略重置次级来源展开态（同策略不触发 watch，需显式同步）
+    syncParticipantExtraSourcesOpen(participantForm.value.strategy)
   } else {
     participantShape.value = 'empty'
   }
@@ -2602,6 +3015,97 @@ function onReturnTargetsChange(value: string[]) {
   applyProps()
 }
 
+function isArrayConfigField(field: BpmNodeConfigField): boolean {
+  const type = field.type.toLowerCase()
+  return field.key === 'allowedActions' || type === 'array' || type === 'multiselect'
+}
+
+function configArrayValues(field: BpmNodeConfigField): unknown {
+  return (
+    field.validation?.['values'] ??
+    field.validation?.['options'] ??
+    field.validation?.['allowedActions']
+  )
+}
+
+function configArrayOptions(field: BpmNodeConfigField): Array<{ value: string; label: string }> {
+  const declared = configArrayValues(field)
+  const values =
+    Array.isArray(declared) && declared.length > 0
+      ? declared.map((item) => String(item))
+      : field.key === 'allowedActions'
+        ? [...NODE_ALLOWED_ACTION_VALUES]
+        : []
+  return values.map((value) => ({
+    value,
+    label: field.key === 'allowedActions' ? allowedActionLabel(value) : value,
+  }))
+}
+
+function allowedActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    APPROVE: t('common.approve'),
+    DISAPPROVE: t('workflow.disapprove'),
+    REJECT: t('common.reject'),
+    RETURN: t('common.returnBack'),
+    TRANSFER: t('workflow.transferOwnTask'),
+    DELEGATE: t('workflow.delegateAction'),
+    COMMUNICATE: t('workflow.consultTask'),
+    ADD_SIGN: t('workflow.addSign'),
+  }
+  return labels[action] ?? action
+}
+
+function configArrayValue(fieldKey: string): string[] {
+  const raw = propForm.value[fieldKey]
+  if (Array.isArray(raw)) return raw.map((item) => String(item))
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
+function onConfigArrayChange(fieldKey: string, value: unknown): void {
+  propForm.value = {
+    ...propForm.value,
+    [fieldKey]: Array.isArray(value) ? value.map((item) => String(item)) : [],
+  }
+  applyProps()
+}
+
+/* ── Q12（278:1567）：节点操作 820 设置面，弹窗内只维护本地草稿 ── */
+const opSettingsVisible = ref(false)
+const opDraft = ref<string[]>([])
+const opOpenValue = ref<string[]>([])
+const opOptions = computed<Array<{ value: string; label: string }>>(() =>
+  allowedActionsField.value ? configArrayOptions(allowedActionsField.value) : [],
+)
+/** 高级面板回显：真实选中项或未设置（空集合不冒充默认值）。 */
+const allowedActionSummary = computed(() => {
+  const values = configArrayValue('allowedActions')
+  if (!values.length) return '未设置'
+  return `允许${values.map((value) => allowedActionLabel(value)).join('、')}`
+})
+
+function openOpSettings(): void {
+  if (!allowedActionsField.value || isVersionPreview.value) return
+  opOpenValue.value = [...configArrayValue('allowedActions')]
+  opDraft.value = [...opOpenValue.value]
+  opSettingsVisible.value = true
+}
+
+function confirmOpSettings(): void {
+  const next = [...opDraft.value]
+  const opened = opOpenValue.value
+  const changed = next.length !== opened.length || next.some((value) => !opened.includes(value))
+  opSettingsVisible.value = false
+  // 未改动时不写回，保留既有“未设置沿用现有操作”的配置语义
+  if (changed) onConfigArrayChange('allowedActions', next)
+}
+
 /** 通用字段渲染清单：name 由顶部承载；参与人字段由结构化面板承载；动态并行整表由专属面板承载；
  * nodeForm 由 P64 节点业务表单选择器承载；waitActionIds 不再手工配置（BF20261013-019，由设计器自动接线）。 */
 const genericConfigFields = computed(() => {
@@ -2614,6 +3118,7 @@ const genericConfigFields = computed(() => {
       field.key !== participantKey &&
       field.key !== 'nodeForm' &&
       field.key !== 'waitActionIds' &&
+      field.key !== 'allowedActions' &&
       // BF20261013-022③④：object 型 JSON 文本配置与「审批人（兼容）」不再渲染
       field.type !== 'object' &&
       !isApproverSelectionField(field),
@@ -2645,7 +3150,12 @@ async function load() {
       formDefId: (definition as { formDefId?: string }).formDefId,
       advancedConfig: (definition as { advancedConfig?: GraphAdvancedConfig }).advancedConfig,
       variables: (definition as { variables?: BpmVariableDef[] }).variables ?? [],
-      triggers: (definition as { triggers?: TriggerConfig[] }).triggers ?? [],
+      triggers: ((definition as { triggers?: TriggerConfig[] }).triggers ?? []).map((trigger) => ({
+        ...trigger,
+        enabled: trigger.enabled !== false,
+      })),
+      notification: (definition as { notification?: ProcessNotificationConfigPayload })
+        .notification,
       elements: (definition.elements ??
         []) as import('@/contracts/process-graph').ProcessGraphElement[],
       canvas: definition.canvas ?? {},
@@ -2709,6 +3219,39 @@ async function loadVersionHistory() {
     ElMessage.error((err as { msg?: string }).msg ?? t('workflow.versionHistoryLoadFailed'))
   } finally {
     versionsLoading.value = false
+  }
+}
+
+const changingVersionId = ref<number | string | null>(null)
+
+async function toggleVersionAvailability(item: ProcessDefVersionInfo) {
+  if (!defId.value || changingVersionId.value !== null) return
+  const suspending = item.status === 'PUBLISHED'
+  try {
+    await ElMessageBox.confirm(
+      t(suspending ? 'workflow.suspendVersionConfirm' : 'workflow.activateVersionConfirm', {
+        version: item.graphVersion,
+      }),
+      t(suspending ? 'workflow.suspendVersion' : 'workflow.activateVersion'),
+      {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+  changingVersionId.value = item.id
+  try {
+    if (suspending) await suspendDefVersion(defId.value, item.graphVersion)
+    else await activateDefVersion(defId.value, item.graphVersion)
+    ElMessage.success(t('workflow.versionAvailabilityChanged'))
+    await loadVersionHistory()
+  } catch (error) {
+    ElMessage.error((error as { msg?: string }).msg ?? t('workflow.versionAvailabilityFailed'))
+  } finally {
+    changingVersionId.value = null
   }
 }
 
@@ -2841,6 +3384,14 @@ function nodeLabelLines(label: string) {
             : ''
       }}</span>
       <div class="toolbar-actions">
+        <el-button
+          v-if="workbenchFormId"
+          size="small"
+          class="toolbar-number"
+          @click="themeRuleVisible = true"
+        >
+          {{ t('workflow.designerNumberShort') }}
+        </el-button>
         <el-dropdown
           trigger="click"
           placement="bottom-end"
@@ -2849,7 +3400,9 @@ function nodeLabelLines(label: string) {
           @visible-change="onVersionMenuVisible"
         >
           <el-button size="small" class="toolbar-versions">
-            {{ t('workflow.versionHistory') }}
+            {{
+              workbenchFormId ? t('workflow.designerVersionShort') : t('workflow.versionHistory')
+            }}
           </el-button>
           <template #dropdown>
             <el-dropdown-menu class="version-menu">
@@ -2874,6 +3427,22 @@ function nodeLabelLines(label: string) {
                       formatVersionTime(item.publishedAt || item.updateTime)
                     }}</span>
                     <span class="version-entry__author">{{ item.publisherName || '—' }}</span>
+                    <el-tag v-if="item.status === 'SUSPENDED'" type="warning" size="small">{{
+                      t('workflow.versionSuspended')
+                    }}</el-tag>
+                    <el-button
+                      link
+                      :loading="changingVersionId === item.id"
+                      @click.stop="toggleVersionAvailability(item)"
+                    >
+                      {{
+                        t(
+                          item.status === 'PUBLISHED'
+                            ? 'workflow.suspendVersion'
+                            : 'workflow.activateVersion',
+                        )
+                      }}
+                    </el-button>
                   </span>
                 </el-dropdown-item>
               </template>
@@ -2886,6 +3455,14 @@ function nodeLabelLines(label: string) {
           </el-button>
         </template>
         <template v-else>
+          <el-button
+            v-if="workbenchFormId"
+            size="small"
+            :disabled="!graph || loading"
+            @click="processPreviewVisible = true"
+          >
+            {{ t('common.preview') }}
+          </el-button>
           <el-button size="small" :loading="saving" @click="save">{{ t('common.save') }}</el-button>
           <el-button size="small" type="primary" :loading="publishing" @click="publish">{{
             t('common.publish')
@@ -2912,17 +3489,33 @@ function nodeLabelLines(label: string) {
       <span class="spacer" />
       <el-button size="small" class="workbar-advance" @click="openVariables">变量</el-button>
       <el-button size="small" class="workbar-advance" @click="openTriggers">触发器</el-button>
-      <el-button size="small" class="workbar-advance" @click="advancedConfigVisible = true">{{
-        t('workflow.advancedConfig')
-      }}</el-button>
-      <el-button size="small" class="workbar-verify" :loading="validating" @click="validate">{{
-        t('workflow.validateFlow')
-      }}</el-button>
+      <el-button
+        size="small"
+        class="workbar-advance"
+        @click="router.push(`/workflow/defs/${defId}/settings`)"
+        >{{ t('workflow.processSettings') }}</el-button
+      >
+      <el-button
+        size="small"
+        class="workbar-advance"
+        :aria-label="t('workflow.advancedConfig')"
+        @click="advancedConfigVisible = true"
+        >{{ t('workflow.designerAdvancedShort') }}</el-button
+      >
+      <el-button
+        size="small"
+        class="workbar-verify"
+        :loading="validating"
+        :aria-label="t('workflow.validateFlow')"
+        @click="validate"
+        >{{ t('workflow.designerValidateShort') }}</el-button
+      >
     </div>
 
     <div class="designer-main">
       <!-- 0.1.7 重构：节点面板移到左侧竖栏（分组 + 图标块，拖拽/点击添加） -->
       <aside v-if="!isVersionPreview" class="designer-palette">
+        <h3 class="palette-title">{{ t('workflow.nodePalette') }}</h3>
         <section v-for="group in paletteGroups" :key="group.category" class="palette-group">
           <h4 class="palette-group__title">{{ group.label }}</h4>
           <div class="palette-group__grid">
@@ -2932,6 +3525,7 @@ function nodeLabelLines(label: string) {
               type="button"
               class="palette-item"
               :class="{ 'palette-item--disabled': !cap.supports.design }"
+              :data-node-type="cap.type"
               :draggable="cap.supports.design"
               @dragstart="onPaletteDragStart($event, cap)"
               @click="onWorkbarClick(cap)"
@@ -3065,26 +3659,29 @@ function nodeLabelLines(label: string) {
                 rx="8"
                 class="designer-node-rect"
               />
-              <!-- 0.1.7：开始/结束为小圆形图标节点，名称置于图标下方 -->
-              <circle
+              <!-- 42:5：开始/结束为 128×44 胶囊，图标与标签内联 -->
+              <rect
                 v-else-if="isEventShape(node.type)"
-                :cx="P53_NODE_WIDTH / 2"
-                :cy="P53_NODE_HEIGHT / 2"
-                r="18"
+                :x="(P53_NODE_WIDTH - P53_EVENT_WIDTH) / 2"
+                :y="(P53_NODE_HEIGHT - P53_EVENT_HEIGHT) / 2"
+                :width="P53_EVENT_WIDTH"
+                :height="P53_EVENT_HEIGHT"
+                rx="22"
                 class="designer-node-rect designer-node-event"
               />
-              <!-- 网关为小菱形（+号），名称置于菱形下方 -->
+              <!-- 网关为 28×28 外框内的 26×26 菱形（+号），名称置于菱形下方 -->
               <template v-else>
+                <rect x="0" y="0" width="28" height="28" class="designer-node-gateway-frame" />
                 <polygon
-                  points="18,0 36,18 18,36 0,18"
+                  points="14,1 27,14 14,27 1,14"
                   class="designer-node-rect designer-node-gateway"
                 />
-                <path d="M18 9 V27 M9 18 H27" class="designer-node-gateway-plus" />
+                <path d="M14 7 V21 M7 14 H21" class="designer-node-gateway-plus" />
               </template>
               <!-- V011-BUG-023：四向锚点（上下左右缘中点）均可拖拽/点选拉线（ProcessOn 口径） -->
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
-                :cx="isEventShape(node.type) ? P53_NODE_WIDTH / 2 - 18 : 0"
+                :cx="isEventShape(node.type) ? (P53_NODE_WIDTH - P53_EVENT_WIDTH) / 2 : 0"
                 :cy="P53_NODE_HEIGHT / 2"
                 r="3"
                 class="designer-node-port"
@@ -3092,7 +3689,11 @@ function nodeLabelLines(label: string) {
               />
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
-                :cx="isEventShape(node.type) ? P53_NODE_WIDTH / 2 + 18 : P53_NODE_WIDTH"
+                :cx="
+                  isEventShape(node.type)
+                    ? P53_NODE_WIDTH - (P53_NODE_WIDTH - P53_EVENT_WIDTH) / 2
+                    : P53_NODE_WIDTH
+                "
                 :cy="P53_NODE_HEIGHT / 2"
                 r="3"
                 class="designer-node-port"
@@ -3101,7 +3702,7 @@ function nodeLabelLines(label: string) {
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="P53_NODE_WIDTH / 2"
-                :cy="isEventShape(node.type) ? P53_NODE_HEIGHT / 2 - 18 : 0"
+                :cy="isEventShape(node.type) ? (P53_NODE_HEIGHT - P53_EVENT_HEIGHT) / 2 : 0"
                 r="3"
                 class="designer-node-port"
                 @pointerdown.stop="startConnect($event, node, 'top')"
@@ -3109,7 +3710,11 @@ function nodeLabelLines(label: string) {
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="P53_NODE_WIDTH / 2"
-                :cy="isEventShape(node.type) ? P53_NODE_HEIGHT / 2 + 18 : P53_NODE_HEIGHT"
+                :cy="
+                  isEventShape(node.type)
+                    ? P53_NODE_HEIGHT - (P53_NODE_HEIGHT - P53_EVENT_HEIGHT) / 2
+                    : P53_NODE_HEIGHT
+                "
                 r="3"
                 class="designer-node-port"
                 @pointerdown.stop="startConnect($event, node, 'bottom')"
@@ -3119,9 +3724,7 @@ function nodeLabelLines(label: string) {
                 v-if="!isGatewayShape(node.type)"
                 class="designer-node-icon"
                 :transform="
-                  isEventShape(node.type)
-                    ? `translate(${P53_NODE_WIDTH / 2 - 11} ${P53_NODE_HEIGHT / 2 - 11})`
-                    : 'translate(12 14)'
+                  isEventShape(node.type) ? 'translate(24 17) scale(0.7273)' : 'translate(12 11)'
                 "
               >
                 <template v-if="node.type === 'START'">
@@ -3144,10 +3747,10 @@ function nodeLabelLines(label: string) {
               </g>
               <text
                 v-if="isEventShape(node.type)"
-                :x="P53_NODE_WIDTH / 2"
-                :y="P53_NODE_HEIGHT / 2 + 40"
-                text-anchor="middle"
-                class="designer-node-label"
+                x="71"
+                y="30"
+                text-anchor="start"
+                class="designer-node-label designer-node-label--event"
               >
                 {{ node.label }}
               </text>
@@ -3169,7 +3772,7 @@ function nodeLabelLines(label: string) {
               </text>
               <text
                 v-else
-                x="18"
+                x="14"
                 y="52"
                 text-anchor="middle"
                 class="designer-node-label designer-node-label--gateway"
@@ -3243,14 +3846,104 @@ function nodeLabelLines(label: string) {
               >
                 {{ t('workflow.fieldPropsTab') }}
               </button>
+              <button
+                v-if="advancedConfigCapable"
+                type="button"
+                class="props-tab"
+                :class="{ 'is-active': nodePropsTab === 'advanced' }"
+                @click="nodePropsTab = 'advanced'"
+              >
+                {{ t('workflow.advancedPropsTab') }}
+              </button>
             </div>
+
+            <template v-if="nodePropsTab === 'advanced' && advancedConfigCapable">
+              <el-form label-position="top" :inert="isVersionPreview">
+                <template v-if="nodeTriggerCapable">
+                  <div class="props-section props-section--advanced">
+                    {{ t('workflow.nodeScriptSection') }}
+                  </div>
+                  <el-form-item :label="t('workflow.nodeScriptBefore')">
+                    <div class="participant-picker-row">
+                      <el-button @click="openNodeTriggerScriptDialog('NODE_ENTERING')">
+                        {{
+                          nodeTriggerOf('NODE_ENTERING')?.script?.trim()
+                            ? t('form.scriptEdit')
+                            : t('form.scriptWrite')
+                        }}
+                      </el-button>
+                      <small class="participant-hint">{{
+                        nodeTriggerSummary('NODE_ENTERING')
+                      }}</small>
+                    </div>
+                  </el-form-item>
+                  <el-form-item :label="t('workflow.nodeScriptAfter')">
+                    <div class="participant-picker-row">
+                      <el-button @click="openNodeTriggerScriptDialog('NODE_ROUND_COMPLETED')">
+                        {{
+                          nodeTriggerOf('NODE_ROUND_COMPLETED')?.script?.trim()
+                            ? t('form.scriptEdit')
+                            : t('form.scriptWrite')
+                        }}
+                      </el-button>
+                      <small class="participant-hint">{{
+                        nodeTriggerSummary('NODE_ROUND_COMPLETED')
+                      }}</small>
+                    </div>
+                  </el-form-item>
+                </template>
+
+                <template v-if="selectedNode?.type === 'APPROVAL'">
+                  <div class="props-section props-section--advanced">
+                    {{ t('workflow.subflowSection') }}
+                  </div>
+                  <el-form-item :label="t('workflow.startSubflow')">
+                    <div class="participant-picker-row">
+                      <el-switch v-model="subflowForm.enabled" @change="onSubflowSwitch" />
+                      <el-button v-if="subflowForm.enabled" @click="openSubflowWizard">
+                        {{ subflowForm.targetProcessDefKey ? '修改配置' : '配置子流程' }}
+                      </el-button>
+                      <small v-if="subflowSummary" class="participant-hint">{{
+                        subflowSummary
+                      }}</small>
+                    </div>
+                  </el-form-item>
+                </template>
+
+                <div class="props-section props-section--advanced">
+                  {{ t('workflow.nodeOperationSection') }}
+                </div>
+                <el-form-item v-if="nodeFormCapable" :label="t('workflow.approvalOpinionForm')">
+                  <div class="nodeform-row">
+                    <el-input :model-value="selectedNodeFormName" disabled />
+                    <el-button @click="nodeFormSelectVisible = true">
+                      {{ selectedNodeFormKey ? '更换' : '设置' }}
+                    </el-button>
+                    <el-button v-if="selectedNodeFormKey" @click="clearNodeForm">清除</el-button>
+                  </div>
+                </el-form-item>
+                <el-form-item v-if="allowedActionsField" :label="t('workflow.operationSettings')">
+                  <!-- 0.2.0 Q12（278:1567）：操作设置改由 820 设置面承载；此处只回显真实选中/空值 -->
+                  <div class="node-op-row">
+                    <el-input
+                      :model-value="allowedActionSummary"
+                      readonly
+                      data-testid="node-op-summary"
+                      @click="openOpSettings"
+                    />
+                    <el-button data-testid="node-op-open" @click="openOpSettings">设置</el-button>
+                  </div>
+                  <small class="config-array-hint">{{ t('workflow.allowedActionsHint') }}</small>
+                </el-form-item>
+              </el-form>
+            </template>
 
             <template v-if="nodePropsTab === 'basic' || !fieldConfigCapable">
               <div v-if="!fieldConfigCapable" class="props-section">
                 {{ t('workflow.basicPropsSection') }}
               </div>
               <!-- 0.1.7 #36（Owner）：面板内不再混用 small 尺寸——输入框/选择器/按钮统一 32px 高 -->
-              <el-form label-position="top" :inert="isVersionPreview">
+              <el-form class="designer-props__basic" label-position="top" :inert="isVersionPreview">
                 <div v-if="selectedNode" class="props-node-type">
                   {{ nodeTypeHint(selectedNode.type) }}
                 </div>
@@ -3269,15 +3962,62 @@ function nodeLabelLines(label: string) {
                 </el-form-item>
                 <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
                 <template v-if="participantField">
-                  <el-form-item label="审批人策略">
-                    <el-select v-model="participantForm.strategy" @change="applyParticipant">
-                      <el-option
-                        v-for="option in participantStrategyOptions"
-                        :key="option.value"
-                        :label="option.label"
-                        :value="option.value"
-                      />
-                    </el-select>
+                  <!-- 审查28 D08-B：来源主行按原图收为三项主分段（32 高单行、间隔与原图一致）；
+                       角色/部门/岗位等额外合法策略移入次级切换，展开后仍可达（32 高）。 -->
+                  <el-form-item label="审批人来源">
+                    <div class="participant-source-area">
+                      <el-radio-group
+                        v-model="participantForm.strategy"
+                        class="participant-source-seg participant-source-seg--split"
+                        @change="() => applyParticipant()"
+                      >
+                        <el-radio-button
+                          v-for="option in participantMainSourceSegments"
+                          :key="option.value"
+                          :value="option.value"
+                        >
+                          {{ option.label }}
+                        </el-radio-button>
+                      </el-radio-group>
+                      <div
+                        v-if="participantExtraSourceSegments.length > 0"
+                        class="participant-source-extra"
+                      >
+                        <el-radio-group
+                          v-show="participantExtraSourcesOpen"
+                          v-model="participantForm.strategy"
+                          class="participant-source-seg participant-source-seg--split"
+                          @change="() => applyParticipant()"
+                        >
+                          <el-radio-button
+                            v-for="option in participantExtraSourceSegments"
+                            :key="option.value"
+                            :value="option.value"
+                          >
+                            {{ option.label }}
+                          </el-radio-button>
+                        </el-radio-group>
+                        <button
+                          type="button"
+                          class="participant-source-extra__toggle"
+                          @click="participantExtraSourcesOpen = !participantExtraSourcesOpen"
+                        >
+                          {{
+                            participantExtraSourcesOpen
+                              ? '收起其他来源'
+                              : `其他来源（${participantExtraSourceSegments
+                                  .map((option) => option.label)
+                                  .join('/')}）`
+                          }}
+                          <el-icon
+                            class="participant-source-extra__arrow"
+                            :class="{ 'is-open': participantExtraSourcesOpen }"
+                          >
+                            <ArrowDown />
+                          </el-icon>
+                        </button>
+                      </div>
+                    </div>
                   </el-form-item>
                   <!-- FIXED_USER：人员多选（复用审批人候选弹窗人员页签；id 数组保持精度） -->
                   <el-form-item v-if="participantForm.strategy === 'FIXED_USER'" label="指定人员">
@@ -3328,21 +4068,32 @@ function nodeLabelLines(label: string) {
                       </el-radio-group>
                     </el-form-item>
                     <el-form-item label="主字段">
-                      <el-select
-                        v-model="participantForm.formField.field"
-                        filterable
-                        placeholder="选择主表字段"
-                        @change="applyParticipant"
+                      <!-- 提示32 Q17（574:27788）：主字段改 680 分组选择窗入口，真实候选与选中回显 -->
+                      <button
+                        type="button"
+                        class="participant-field-trigger"
+                        data-testid="participant-field-trigger"
+                        @click="openParticipantFieldPicker"
                       >
-                        <el-option
-                          v-for="option in mainFieldOptionsFor(
-                            participantForm.formField.objectType,
-                          )"
-                          :key="option.name"
-                          :label="option.label || '未命名字段'"
-                          :value="option.name"
-                        />
-                      </el-select>
+                        <span class="participant-field-trigger__name">
+                          {{
+                            participantFieldDisplay ||
+                            (participantForm.formField.scope === 'TABLE'
+                              ? '选择表格字段'
+                              : '选择主表字段')
+                          }}
+                        </span>
+                        <span class="participant-field-trigger__action">选择</span>
+                      </button>
+                      <WorkspaceFieldPickerDialog
+                        v-model="participantFieldPickerVisible"
+                        :groups="participantFieldPickerGroups"
+                        compact
+                        :hint="participantFieldHint"
+                        :current-field="participantForm.formField.field || null"
+                        title="选择表单组件"
+                        @select-group="onParticipantFieldPicked"
+                      />
                     </el-form-item>
                     <template v-if="participantForm.formField.scope === 'TABLE'">
                       <el-form-item label="表格字段">
@@ -3433,13 +4184,26 @@ function nodeLabelLines(label: string) {
                     v-else-if="participantForm.strategy === 'EXPRESSION'"
                     label="表达式（脚本）"
                   >
-                    <div class="participant-picker-row">
-                      <el-button @click="openExpressionScriptDialog">
-                        {{ participantForm.genericValue ? '编辑脚本' : '编写脚本' }}
-                      </el-button>
-                      <small v-if="participantForm.genericValue" class="participant-hint">
-                        已配置
-                      </small>
+                    <!-- 提示32 Q54（572:26514）：288×32 只读摘要/状态槽 + 既有编写脚本入口 -->
+                    <div class="participant-script">
+                      <el-input
+                        class="participant-script__summary"
+                        :model-value="participantExpressionSummary"
+                        readonly
+                        data-testid="participant-script-summary"
+                      />
+                      <div class="participant-script__status-row">
+                        <small class="participant-hint" data-testid="participant-script-status">
+                          {{ participantExpressionConfigured ? '已配置' : '未配置' }}
+                        </small>
+                        <el-button
+                          class="participant-script__edit"
+                          data-testid="participant-script-edit"
+                          @click="openExpressionScriptDialog"
+                        >
+                          {{ participantExpressionConfigured ? '编辑脚本' : '编写脚本' }}
+                        </el-button>
+                      </div>
                     </div>
                   </el-form-item>
                   <el-form-item v-else label="取值">
@@ -3458,63 +4222,22 @@ function nodeLabelLines(label: string) {
                     class="participant-legacy-note"
                   />
                 </template>
-                <!-- ═══ P64 阶段Ⅰ：节点业务表单绑定（APPROVAL/CONSENSUS/DYNAMIC_PARALLEL）；
-                   BF20261013-020：节点绑定的是审批意见表单（独立类型，流程管理单独维护） ═══ -->
-                <el-form-item v-if="nodeFormCapable" label="审批意见表单">
-                  <div class="nodeform-row">
-                    <el-input :model-value="selectedNodeFormName" disabled />
-                    <el-button @click="nodeFormSelectVisible = true">
-                      {{ selectedNodeFormKey ? '更换' : '选择表单' }}
-                    </el-button>
-                    <el-button v-if="selectedNodeFormKey" @click="clearNodeForm">清除</el-button>
-                  </div>
-                </el-form-item>
-                <!-- ═══ BF20261013-022①：节点触发器（开始前 / 结束），脚本经统一弹窗编写 ═══ -->
-                <template v-if="nodeTriggerCapable">
-                  <div class="props-section props-section--advanced">节点触发器</div>
-                  <el-form-item label="节点开始前">
-                    <div class="participant-picker-row">
-                      <el-button @click="openNodeTriggerScriptDialog('NODE_ENTERING')">
-                        {{
-                          nodeTriggerOf('NODE_ENTERING')?.script?.trim() ? '编辑脚本' : '编写脚本'
-                        }}
-                      </el-button>
-                      <small class="participant-hint">{{
-                        nodeTriggerSummary('NODE_ENTERING')
-                      }}</small>
-                    </div>
-                  </el-form-item>
-                  <el-form-item label="节点结束">
-                    <div class="participant-picker-row">
-                      <el-button @click="openNodeTriggerScriptDialog('NODE_ROUND_COMPLETED')">
-                        {{
-                          nodeTriggerOf('NODE_ROUND_COMPLETED')?.script?.trim()
-                            ? '编辑脚本'
-                            : '编写脚本'
-                        }}
-                      </el-button>
-                      <small class="participant-hint">{{
-                        nodeTriggerSummary('NODE_ROUND_COMPLETED')
-                      }}</small>
-                    </div>
-                  </el-form-item>
-                </template>
-                <!-- ═══ BF20261013-019/027：发起子流程（开关 + 向导弹窗；等待块由设计器自动生成） ═══ -->
-                <template v-if="selectedNode.type === 'APPROVAL'">
-                  <el-form-item label="发起子流程">
-                    <div class="participant-picker-row">
-                      <el-switch v-model="subflowForm.enabled" @change="onSubflowSwitch" />
-                      <el-button v-if="subflowForm.enabled" @click="openSubflowWizard">
-                        {{ subflowForm.targetProcessDefKey ? '修改配置' : '配置子流程' }}
-                      </el-button>
-                      <small v-if="subflowSummary" class="participant-hint">{{
-                        subflowSummary
-                      }}</small>
-                    </div>
-                  </el-form-item>
-                </template>
                 <!-- ═══ P63 动态并行专属面板（semanticVersion 开关 = 新语义按对象分支） ═══ -->
                 <template v-if="dynamicParallelActive">
+                  <!-- Q11（273:1332）：并行分支配置入口——面板回显摘要，编辑走 820 设置面 -->
+                  <el-form-item label="并行分支配置">
+                    <div class="node-op-row">
+                      <el-input
+                        :model-value="dynamicParallelSummary"
+                        readonly
+                        data-testid="dp-config-summary"
+                        @click="openDpSettings"
+                      />
+                      <el-button data-testid="dp-config-open" @click="openDpSettings"
+                        >设置</el-button
+                      >
+                    </div>
+                  </el-form-item>
                   <el-form-item label="分支来源类型">
                     <el-select
                       v-model="dynamicParallelForm.sourceType"
@@ -3580,7 +4303,7 @@ function nodeLabelLines(label: string) {
                       />
                     </el-select>
                   </el-form-item>
-                  <!-- 对象类型仅新语义（按对象分支）下有意义，随 semanticVersion 开关显示 -->
+                  <!-- 对象类型仅按对象分支时使用，随 semanticVersion 开关显示 -->
                   <el-form-item v-if="dynamicParallelForm.objectSemantic" label="对象类型">
                     <el-radio-group
                       v-model="dynamicParallelForm.objectType"
@@ -3691,7 +4414,7 @@ function nodeLabelLines(label: string) {
                         v-model="dynamicParallelForm.objectSemantic"
                         @change="applyDynamicParallel"
                       >
-                        新语义（按对象分支）
+                        {{ t('workflow.branchPerObject') }}
                       </el-checkbox>
                     </div>
                   </el-form-item>
@@ -3722,17 +4445,23 @@ function nodeLabelLines(label: string) {
                     v-else-if="field.key === 'mode' && selectedNode?.type === 'CONSENSUS'"
                     :label="field.label"
                   >
-                    <el-select
+                    <!-- 审查23 D08-B：通过条件按原图分段（全员/比例/人数在前，额外合法条件保留） -->
+                    <el-radio-group
+                      class="participant-source-seg"
                       :model-value="String(propForm.mode ?? 'ALL')"
-                      @change="onConsensusModeChange"
+                      @change="
+                        (value: string | number | boolean | undefined) =>
+                          onConsensusModeChange(String(value))
+                      "
                     >
-                      <el-option
-                        v-for="option in CONSENSUS_MODE_OPTIONS"
+                      <el-radio-button
+                        v-for="option in consensusModeSegments"
                         :key="option.value"
-                        :label="option.label"
                         :value="option.value"
-                      />
-                    </el-select>
+                      >
+                        {{ option.label }}
+                      </el-radio-button>
+                    </el-radio-group>
                   </el-form-item>
                   <template v-else-if="field.key === 'ratio' && selectedNode?.type === 'CONSENSUS'">
                     <el-form-item
@@ -3747,6 +4476,28 @@ function nodeLabelLines(label: string) {
                       />
                     </el-form-item>
                   </template>
+                  <el-form-item v-else-if="isArrayConfigField(field)" :label="field.label">
+                    <el-select
+                      :model-value="configArrayValue(field.key)"
+                      multiple
+                      filterable
+                      clearable
+                      style="width: 100%"
+                      @update:model-value="
+                        (value: unknown) => onConfigArrayChange(field.key, value)
+                      "
+                    >
+                      <el-option
+                        v-for="option in configArrayOptions(field)"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      />
+                    </el-select>
+                    <small v-if="field.key === 'allowedActions'" class="config-array-hint">
+                      {{ t('workflow.allowedActionsHint') }}
+                    </small>
+                  </el-form-item>
                   <el-form-item v-else-if="field.type === 'string'" :label="field.label">
                     <el-input
                       v-model="propForm[field.key] as string"
@@ -3806,8 +4557,15 @@ function nodeLabelLines(label: string) {
 
             <!-- BF20261013-013：字段属性——该节点对每个表单字段的必填/编辑/隐藏三态 -->
             <template v-else>
+              <el-input
+                v-model="fieldPermKeyword"
+                class="field-states__search"
+                :placeholder="t('workflow.fieldStatesSearchPlaceholder')"
+                clearable
+                :inert="isVersionPreview"
+              />
               <table
-                v-if="mainFormFields.length"
+                v-if="fieldPermVisibleFields.length"
                 class="field-states__table"
                 :inert="isVersionPreview"
               >
@@ -3820,7 +4578,7 @@ function nodeLabelLines(label: string) {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="f in mainFormFields" :key="f.name">
+                  <tr v-for="f in fieldPermVisibleFields" :key="f.name">
                     <td class="field-states__name">{{ f.label || f.name }}</td>
                     <td>
                       <el-checkbox
@@ -3962,25 +4720,31 @@ function nodeLabelLines(label: string) {
       @save="onScriptDialogSave"
     />
 
-    <!-- ═══ BF20261013-027：发起子流程向导（触发方式 → 子流程 → 初始值） ═══ -->
+    <!-- ═══ BF20261013-027：发起子流程向导（触发方式 → 子流程 → 初始值）。
+         0.2.0 Q12（278:1634/1669/1719）：三步共用外壳 1000 宽，控件 32 高、映射表头 34 高。 ═══ -->
     <el-dialog
       v-model="subflowWizardVisible"
       title="发起子流程"
-      width="min(780px, 94vw)"
-      class="p64-dialog"
+      width="min(1000px, 94vw)"
+      class="p64-dialog subflow-wizard"
       append-to-body
       @close="onSubflowWizardClose"
     >
-      <el-steps :active="subflowWizardStep" simple style="margin-bottom: 16px">
-        <el-step title="触发方式" />
-        <el-step title="子流程" />
-        <el-step title="初始值" />
-      </el-steps>
+      <div class="subflow-steps" data-testid="subflow-steps">
+        <span
+          v-for="(stepTitle, stepIndex) in subflowStepTitles"
+          :key="stepTitle"
+          class="subflow-step"
+          :class="{ 'is-active': subflowWizardStep === stepIndex }"
+          >{{ stepIndex + 1 }} {{ stepTitle }}</span
+        >
+      </div>
 
-      <!-- 第①步：触发方式（写脚本 / 选字段） -->
-      <el-form v-show="subflowWizardStep === 0" label-position="top" size="small">
+      <!-- 第①步：触发方式（始终发起 / 写脚本 / 选字段） -->
+      <el-form v-show="subflowWizardStep === 0" label-position="top">
         <el-form-item label="触发方式">
           <el-radio-group v-model="subflowForm.triggerMode">
+            <el-radio value="ALWAYS">始终发起</el-radio>
             <el-radio value="SCRIPT">写脚本</el-radio>
             <el-radio value="FIELD">选字段</el-radio>
           </el-radio-group>
@@ -3997,7 +4761,10 @@ function nodeLabelLines(label: string) {
             <small v-if="subflowForm.script?.trim()" class="participant-hint"> 已配置 </small>
           </div>
         </el-form-item>
-        <el-form-item v-else label="触发字段（字段值为真即发起）">
+        <el-form-item
+          v-else-if="subflowForm.triggerMode === 'FIELD'"
+          label="触发字段（字段值为真即发起）"
+        >
           <el-select
             v-model="subflowForm.triggerField"
             filterable
@@ -4016,7 +4783,7 @@ function nodeLabelLines(label: string) {
       </el-form>
 
       <!-- 第②步：选择子流程 -->
-      <el-form v-show="subflowWizardStep === 1" label-position="top" size="small">
+      <el-form v-show="subflowWizardStep === 1" label-position="top">
         <el-form-item label="子流程">
           <el-select
             v-model="subflowForm.targetProcessDefKey"
@@ -4039,15 +4806,27 @@ function nodeLabelLines(label: string) {
       <div v-show="subflowWizardStep === 2">
         <div class="p64-toolbar">
           <span class="p64-subtitle">初始值（带入子流程表单）</span>
-          <el-button size="small" @click="addSubflowMapping">添加一行</el-button>
+          <el-button @click="addSubflowMapping">添加一行</el-button>
         </div>
-        <div
-          v-for="(mapping, mappingIndex) in subflowForm.mappings"
-          :key="mappingIndex"
-          class="subflow-mapping-row"
-        >
-          <el-form-item label="子流程表单字段" size="small">
-            <el-select v-model="mapping.targetField" filterable placeholder="选择字段">
+        <!-- Q12（278:1669）：初始值映射为 34 高表头 + 32 高控件行 -->
+        <div class="subflow-map">
+          <div class="subflow-map__head" data-testid="subflow-map-head">
+            <span>子流程表单字段</span>
+            <span>取值方式</span>
+            <span>取值</span>
+            <span class="subflow-map__op">操作</span>
+          </div>
+          <div
+            v-for="(mapping, mappingIndex) in subflowForm.mappings"
+            :key="mappingIndex"
+            class="subflow-map__row"
+          >
+            <el-select
+              v-model="mapping.targetField"
+              class="subflow-map__control"
+              filterable
+              placeholder="选择字段"
+            >
               <el-option
                 v-for="field in subflowTargetFields"
                 :key="field.name"
@@ -4055,18 +4834,19 @@ function nodeLabelLines(label: string) {
                 :value="field.name"
               />
             </el-select>
-          </el-form-item>
-          <el-form-item label="取值方式" size="small">
-            <el-select v-model="mapping.source" @change="onSubflowMappingSourceChange(mapping)">
+            <el-select
+              v-model="mapping.source"
+              class="subflow-map__control"
+              @change="onSubflowMappingSourceChange(mapping)"
+            >
               <el-option label="选字段" value="FIELD" />
               <el-option label="自由填写" value="LITERAL" />
               <el-option label="脚本" value="SCRIPT" />
             </el-select>
-          </el-form-item>
-          <el-form-item label="取值" size="small">
             <el-select
               v-if="mapping.source === 'FIELD'"
               :model-value="subflowMappingSourceValue(mapping)"
+              class="subflow-map__control"
               filterable
               placeholder="选择来源字段"
               @change="(value: string) => onSubflowMappingFieldChange(mapping, value)"
@@ -4095,9 +4875,10 @@ function nodeLabelLines(label: string) {
             <el-input
               v-else-if="mapping.source === 'LITERAL'"
               v-model="mapping.literal"
+              class="subflow-map__control"
               placeholder="自由填写"
             />
-            <div v-else class="participant-picker-row">
+            <div v-else class="participant-picker-row subflow-map__control">
               <el-button
                 @click="
                   openProcessScriptDialog('初始值脚本', mapping.script, {
@@ -4109,8 +4890,10 @@ function nodeLabelLines(label: string) {
                 {{ mapping.script.trim() ? '编辑脚本' : '编写脚本' }}
               </el-button>
             </div>
-          </el-form-item>
-          <el-button link type="danger" @click="removeSubflowMapping(mappingIndex)">删除</el-button>
+            <el-button link type="danger" @click="removeSubflowMapping(mappingIndex)"
+              >删除</el-button
+            >
+          </div>
         </div>
         <el-form-item v-if="subflowHasRowSource" label="派发粒度">
           <el-radio-group v-model="subflowForm.aggregate">
@@ -4118,6 +4901,121 @@ function nodeLabelLines(label: string) {
             <el-radio value="GROUPED">汇总（相同值合并一条）</el-radio>
           </el-radio-group>
         </el-form-item>
+        <el-divider />
+        <div class="p64-grid">
+          <el-form-item label="编排方式">
+            <el-radio-group v-model="subflowForm.orchestration">
+              <el-radio value="CHILD">主子流程</el-radio>
+              <el-radio value="INDEPENDENT">独立关联</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item v-if="subflowForm.orchestration === 'CHILD'" label="等待策略">
+            <el-select v-model="subflowForm.waitPolicy">
+              <el-option label="全部完成" value="ALL" />
+              <el-option label="任一完成" value="ANY" />
+              <el-option label="达到数量" value="COUNT" />
+              <el-option label="不等待" value="NONE" />
+            </el-select>
+          </el-form-item>
+          <el-form-item
+            v-if="subflowForm.orchestration === 'CHILD' && subflowForm.waitPolicy === 'COUNT'"
+            label="等待数量"
+          >
+            <el-input-number v-model="subflowForm.waitCount" :min="1" :max="200" />
+          </el-form-item>
+          <el-form-item v-if="subflowForm.orchestration === 'CHILD'" label="结果回写">
+            <el-switch v-model="subflowForm.wbEnabled" />
+          </el-form-item>
+        </div>
+        <template v-if="subflowForm.orchestration === 'CHILD' && subflowForm.wbEnabled">
+          <div class="p64-grid">
+            <el-form-item label="结果节点">
+              <el-input
+                v-model="subflowForm.wbResultNodeKey"
+                placeholder="子流程中产出结果的节点（如 node_result）"
+              />
+            </el-form-item>
+            <el-form-item label="子表单结果表">
+              <el-input
+                v-model="subflowForm.wbTableField"
+                placeholder="行级回写时填写（子表单里的表格字段）"
+              />
+            </el-form-item>
+            <el-form-item label="来源行标识列">
+              <el-input v-model="subflowForm.wbRowKeyField" placeholder="记录来源行标识的列名" />
+            </el-form-item>
+            <el-form-item label="本表单的来源表">
+              <el-select v-model="subflowForm.wbParentTableField" filterable clearable>
+                <el-option
+                  v-for="table in tableFieldOptions"
+                  :key="table.name"
+                  :label="table.label || table.name"
+                  :value="table.name"
+                />
+              </el-select>
+            </el-form-item>
+          </div>
+          <div class="p64-toolbar">
+            <span class="p64-subtitle">行级回写</span>
+            <el-button @click="addSubflowWbRow('row')">添加一行</el-button>
+          </div>
+          <div class="subflow-map subflow-map--wb">
+            <div class="subflow-map__head" data-testid="subflow-wb-row-head">
+              <span>子流程字段</span>
+              <span>本表单字段</span>
+              <span class="subflow-map__op">操作</span>
+            </div>
+            <div
+              v-for="(row, rowIndex) in subflowForm.wbFields"
+              :key="`wb-row-${rowIndex}`"
+              class="subflow-map__row"
+            >
+              <el-input
+                v-model="row.fromField"
+                class="subflow-map__control"
+                placeholder="子流程结果字段/列"
+              />
+              <el-input
+                v-model="row.toField"
+                class="subflow-map__control"
+                placeholder="本表单回写字段/列"
+              />
+              <el-button link type="danger" @click="removeSubflowWbRow('row', rowIndex)"
+                >删除</el-button
+              >
+            </div>
+          </div>
+          <div class="p64-toolbar">
+            <span class="p64-subtitle">主记录回写</span>
+            <el-button @click="addSubflowWbRow('main')">添加一行</el-button>
+          </div>
+          <div class="subflow-map subflow-map--wb">
+            <div class="subflow-map__head" data-testid="subflow-wb-main-head">
+              <span>子流程字段</span>
+              <span>本表单字段</span>
+              <span class="subflow-map__op">操作</span>
+            </div>
+            <div
+              v-for="(row, rowIndex) in subflowForm.wbMainFields"
+              :key="`wb-main-${rowIndex}`"
+              class="subflow-map__row"
+            >
+              <el-input
+                v-model="row.fromField"
+                class="subflow-map__control"
+                placeholder="子流程结果字段"
+              />
+              <el-input
+                v-model="row.toField"
+                class="subflow-map__control"
+                placeholder="本表单字段"
+              />
+              <el-button link type="danger" @click="removeSubflowWbRow('main', rowIndex)"
+                >删除</el-button
+              >
+            </div>
+          </div>
+        </template>
       </div>
 
       <template #footer>
@@ -4134,11 +5032,182 @@ function nodeLabelLines(label: string) {
       </template>
     </el-dialog>
 
+    <!-- ═══ 0.2.0 Q12（278:1567）：节点操作 820 设置面。8 个真实选项；
+         取消只丢本地草稿，不改空集合默认含义、可用操作策略或保存契约。 ═══ -->
+    <el-dialog
+      v-model="opSettingsVisible"
+      :title="t('workflow.operationSettings')"
+      width="820px"
+      class="node-op-dialog"
+      append-to-body
+    >
+      <div class="node-op-dialog__body">
+        <div class="node-op-dialog__label">节点操作</div>
+        <el-checkbox-group v-model="opDraft" class="node-op-grid">
+          <el-checkbox-button
+            v-for="option in opOptions"
+            :key="option.value"
+            :value="option.value"
+            :data-testid="`node-op-option-${option.value}`"
+          >
+            {{ option.label }}
+          </el-checkbox-button>
+        </el-checkbox-group>
+        <small class="node-op-dialog__hint">{{ t('workflow.allowedActionsHint') }}</small>
+      </div>
+      <template #footer>
+        <el-button @click="opSettingsVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmOpSettings">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ═══ Q11（273:1332）：动态并行 820 设置面。复用 node-op-dialog 几何（820 宽、
+         32 高控件、原底栏 80×32）；编辑只写本地草稿，取消丢弃，确定写回面板并落节点配置。 ═══ -->
+    <el-dialog
+      v-model="dpSettingsVisible"
+      title="并行分支设置"
+      width="820px"
+      class="node-op-dialog dynamic-parallel-dialog"
+      append-to-body
+    >
+      <div class="node-op-dialog__body dynamic-parallel-dialog__body">
+        <el-form label-position="top" class="dynamic-parallel-dialog__form">
+          <el-form-item label="分支来源类型">
+            <el-select v-model="dpDraft.sourceType" data-testid="dp-dialog-source-type">
+              <el-option label="表单字段" value="FORM_FIELD" />
+              <el-option label="流程变量" value="VARIABLE" />
+              <el-option label="固定值" value="FIXED" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="dpDraft.sourceType === 'FIXED'" label="固定值">
+            <div v-if="dpDraft.objectSemantic" class="participant-picker-row">
+              <el-button v-if="dpDraft.objectType === 'USER'" @click="openDynamicUserPicker">
+                {{
+                  dpDraft.sourceValue
+                    ? `已选 ${dpDraft.sourceValue.split(',').filter(Boolean).length} 人（点击修改）`
+                    : '选择人员'
+                }}
+              </el-button>
+              <el-button v-else @click="openDynamicDeptPicker">
+                {{
+                  dpDraft.sourceValue
+                    ? `已选 ${dpDraft.sourceValue.split(',').filter(Boolean).length} 个部门（点击修改）`
+                    : '选择部门'
+                }}
+              </el-button>
+            </div>
+            <el-input v-else v-model="dpDraft.sourceValue" placeholder="多个取值用英文逗号分隔" />
+          </el-form-item>
+          <el-form-item v-else-if="dpDraft.sourceType === 'VARIABLE'" label="变量名">
+            <el-input v-model="dpDraft.sourceValue" placeholder="请输入变量名" />
+          </el-form-item>
+          <el-form-item v-else-if="dpDraft.scope === 'MAIN'" label="主字段">
+            <el-select v-model="dpDraft.sourceValue" filterable placeholder="选择主表字段">
+              <el-option
+                v-for="option in mainFieldOptionsFor(dpDraft.objectType)"
+                :key="option.name"
+                :label="option.label || '未命名字段'"
+                :value="option.name"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="dpDraft.objectSemantic" label="对象类型">
+            <el-radio-group v-model="dpDraft.objectType" @change="onDpDraftObjectTypeChange">
+              <el-radio value="USER">人员（逐人分支）</el-radio>
+              <el-radio value="DEPT">部门（逐部门分支）</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="取值范围">
+            <el-radio-group v-model="dpDraft.scope">
+              <el-radio value="MAIN">主表字段</el-radio>
+              <el-radio value="TABLE">表格字段</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <template v-if="dpDraft.scope === 'TABLE'">
+            <el-form-item label="表格字段">
+              <el-select
+                v-model="dpDraft.tableField"
+                filterable
+                placeholder="选择表格字段"
+                data-testid="dp-dialog-table-field"
+                @change="onDpDraftTableFieldChange"
+              >
+                <el-option
+                  v-for="option in tableFieldOptions"
+                  :key="option.name"
+                  :label="option.label || '未命名字段'"
+                  :value="option.name"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="表格列">
+              <el-select
+                v-model="dpDraft.column"
+                filterable
+                placeholder="选择表格列"
+                data-testid="dp-dialog-table-column"
+                @change="onDpDraftColumnChange"
+              >
+                <el-option
+                  v-for="option in tableColumnOptionsFor(dpDraft.tableField, dpDraft.objectType)"
+                  :key="option.name"
+                  :label="option.label || '未命名字段'"
+                  :value="option.name"
+                />
+              </el-select>
+            </el-form-item>
+          </template>
+          <el-form-item label="完成模式">
+            <el-select v-model="dpDraft.mode" data-testid="dp-dialog-mode">
+              <el-option label="全部通过" value="ALL" />
+              <el-option label="任一通过" value="ANY" />
+              <el-option label="按比例通过" value="RATIO" />
+              <el-option label="一票否决" value="VETO" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="dpDraft.mode === 'RATIO'" label="通过比例">
+            <el-input-number v-model="dpDraft.ratio" :min="1" :max="100" />
+          </el-form-item>
+          <el-form-item label="最大分支数">
+            <el-input-number v-model="dpDraft.maxBranches" :min="1" />
+          </el-form-item>
+          <el-form-item label="空来源处置">
+            <el-select v-model="dpDraft.emptyStrategy">
+              <el-option label="阻断" value="BLOCK" />
+              <el-option label="放行" value="PROCEED" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="无效值处置">
+            <el-select v-model="dpDraft.invalidStrategy">
+              <el-option label="阻断" value="BLOCK" />
+              <el-option label="跳过" value="SKIP" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="分支语义">
+            <div class="participant-picker-row">
+              <el-checkbox v-model="dpDraft.objectSemantic">
+                {{ t('workflow.branchPerObject') }}
+              </el-checkbox>
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button data-testid="dp-dialog-cancel" @click="dpSettingsVisible = false"
+          >取消</el-button
+        >
+        <el-button type="primary" data-testid="dp-dialog-confirm" @click="confirmDpSettings">
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- ═══ P64 阶段Ⅰ：流程变量配置弹窗 ═══ -->
+    <!-- 审查28 Q10：窗口 960 宽；表头底色带 42 高、行内输入 32 高（样式见文件尾 p64-dialog 全局块） -->
     <el-dialog
       v-model="variablesVisible"
       title="流程变量"
-      width="min(860px, 94vw)"
+      width="min(960px, 94vw)"
       class="p64-dialog"
       append-to-body
     >
@@ -4159,7 +5228,8 @@ function nodeLabelLines(label: string) {
         </el-table-column>
       </el-table>
       <el-divider />
-      <el-form label-position="top" size="small">
+      <!-- 审查28 Q10：去掉 small 尺寸（输入框/选择器统一 32 高），配置能力原样保留 -->
+      <el-form label-position="top">
         <div class="p64-grid">
           <el-form-item label="变量标识">
             <el-input
@@ -4170,6 +5240,89 @@ function nodeLabelLines(label: string) {
           </el-form-item>
           <el-form-item label="变量名称">
             <el-input v-model="variableDraft.name" />
+          </el-form-item>
+          <el-form-item label="变量类型">
+            <el-select v-model="variableDraft.type">
+              <el-option
+                v-for="type in BPM_VARIABLE_TYPES"
+                :key="type"
+                :label="VARIABLE_TYPE_LABELS[type] ?? type"
+                :value="type"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="数据来源">
+            <el-select v-model="variableDraft.source" @change="onVariableSourceChange">
+              <el-option
+                v-for="source in BPM_VARIABLE_SOURCES"
+                :key="source"
+                :label="VARIABLE_SOURCE_LABELS[source] ?? source"
+                :value="source"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="variableDraft.source === 'MAIN_FORM'" label="主表字段">
+            <el-select
+              v-model="variableDraft.sourceField"
+              filterable
+              @change="onVariableSourceFieldChange"
+            >
+              <el-option
+                v-for="field in mainFormFields"
+                :key="field.name"
+                :label="`${field.label || field.name}（${field.name}）`"
+                :value="field.name"
+              />
+            </el-select>
+          </el-form-item>
+          <template v-else-if="variableDraft.source === 'NODE_FORM'">
+            <el-form-item label="来源节点">
+              <el-select v-model="variableDraft.sourceNodeKey" @change="onVariableSourceNodeChange">
+                <el-option
+                  v-for="binding in nodeFormBindings"
+                  :key="binding.nodeKey"
+                  :label="`${binding.nodeName}（${binding.nodeKey}）`"
+                  :value="binding.nodeKey"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="节点表单字段">
+              <el-select
+                v-model="variableDraft.sourceFormField"
+                filterable
+                @change="onVariableNodeFieldChange"
+              >
+                <el-option
+                  v-for="field in formFieldOptions(variableSourceFormKey)"
+                  :key="field.name"
+                  :label="`${field.label || field.name}（${field.name}）`"
+                  :value="field.name"
+                />
+              </el-select>
+            </el-form-item>
+          </template>
+          <el-form-item v-else label="系统字段">
+            <el-select v-model="variableDraft.sourceField" filterable>
+              <el-option
+                v-for="field in BPM_SYSTEM_FIELDS"
+                :key="field"
+                :label="field"
+                :value="field"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="聚合方式">
+            <el-select v-model="variableDraft.aggregation">
+              <el-option
+                v-for="item in BPM_AGGREGATIONS"
+                :key="item"
+                :label="VARIABLE_AGGREGATION_LABELS[item] ?? item"
+                :value="item"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="允许空值">
+            <el-switch v-model="variableDraft.nullable" />
           </el-form-item>
         </div>
         <div v-if="variableErrors.length" class="p64-errors">
@@ -4182,21 +5335,30 @@ function nodeLabelLines(label: string) {
     </el-dialog>
 
     <!-- ═══ P64 阶段Ⅰ：触发规则配置弹窗 ═══ -->
+    <!-- 审查28 Q10：设计器工具栏「触发器」调用方——1120 宽、标题「流程触发器」；
+         表头底色带 42 高、字段 32 高，编辑区按原图「触发时机 → 判断脚本 → 结果分区」排布。
+         流程设置页的事件监听（ProcessSettings）是另一消费者，本批不改。 -->
     <el-dialog
       v-model="triggersVisible"
-      title="触发器"
-      width="min(980px, 94vw)"
+      title="流程触发器"
+      width="min(1120px, 94vw)"
       class="p64-dialog"
       append-to-body
     >
       <div class="p64-toolbar">
-        <el-button size="small" type="primary" @click="resetTriggerDraft">新增触发器</el-button>
-        <HintTip
-          content="流程发起和流程结束时自动执行；节点的开始前/结束触发器在节点属性中配置。"
-        />
+        <el-button size="small" type="primary" @click="resetTriggerDraft">新增监听</el-button>
+        <HintTip :content="t('workflow.listenerTimingHelp')" />
       </div>
       <el-table :data="graph?.triggers ?? []" size="small" class="p64-table">
+        <el-table-column label="顺序" width="60">
+          <template #default="{ $index }">{{ $index + 1 }}</template>
+        </el-table-column>
         <el-table-column prop="name" label="名称" width="150" />
+        <el-table-column label="启用" width="80">
+          <template #default="{ row }">
+            <el-switch v-model="row.enabled" :active-value="true" :inactive-value="false" />
+          </template>
+        </el-table-column>
         <el-table-column label="触发时机" width="190">
           <template #default="{ row }">{{ labelOf(TRIGGER_EVENT_LABELS, row.event) }}</template>
         </el-table-column>
@@ -4215,8 +5377,18 @@ function nodeLabelLines(label: string) {
             }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140">
+        <el-table-column label="操作" width="220">
           <template #default="{ $index }">
+            <el-button size="small" link :disabled="$index === 0" @click="moveTrigger($index, -1)"
+              >上移</el-button
+            >
+            <el-button
+              size="small"
+              link
+              :disabled="$index === (graph?.triggers?.length ?? 0) - 1"
+              @click="moveTrigger($index, 1)"
+              >下移</el-button
+            >
             <el-button size="small" link type="primary" @click="editTrigger($index)"
               >编辑</el-button
             >
@@ -4227,18 +5399,10 @@ function nodeLabelLines(label: string) {
         </el-table-column>
       </el-table>
       <el-divider />
-      <el-form label-position="top" size="small">
+      <!-- 审查28 Q10：去掉 small 尺寸（字段统一 32 高）；
+           分区按原图排布——触发时机（+可读取变量）在前，规则标识等次之，随后判断脚本与结果分支。 -->
+      <el-form label-position="top">
         <div class="p64-grid">
-          <el-form-item label="规则标识">
-            <el-input
-              v-model="triggerDraft.triggerId"
-              :disabled="triggerEditIndex !== null"
-              placeholder="trg_example"
-            />
-          </el-form-item>
-          <el-form-item label="名称">
-            <el-input v-model="triggerDraft.name" />
-          </el-form-item>
           <el-form-item label="触发时机">
             <el-select v-model="triggerDraft.event">
               <el-option
@@ -4258,6 +5422,21 @@ function nodeLabelLines(label: string) {
                 :value="item.varId"
               />
             </el-select>
+          </el-form-item>
+        </div>
+        <div class="p64-grid">
+          <el-form-item label="规则标识">
+            <el-input
+              v-model="triggerDraft.triggerId"
+              :disabled="triggerEditIndex !== null"
+              placeholder="trg_example"
+            />
+          </el-form-item>
+          <el-form-item label="名称">
+            <el-input v-model="triggerDraft.name" />
+          </el-form-item>
+          <el-form-item label="启用">
+            <el-switch v-model="triggerDraft.enabled" />
           </el-form-item>
         </div>
         <el-form-item label="判断脚本">
@@ -4598,13 +5777,47 @@ function nodeLabelLines(label: string) {
         </el-button>
       </div>
     </el-card>
+
+    <el-dialog
+      v-model="processPreviewVisible"
+      :title="t('workflow.designerPreviewTitle')"
+      width="1440px"
+      class="process-preview-dialog"
+    >
+      <ProcessGraphView v-if="graph" :graph="graph" :height="640" />
+    </el-dialog>
+
+    <!-- 0.2.0 Q55（设计 272:1575）：未保存离开确认，保存成功后才离开。 -->
+    <el-dialog
+      v-model="leaveConfirmVisible"
+      class="designer-leave-confirm"
+      align-center
+      width="600px"
+      append-to-body
+      :title="t('workflow.designerSaveChangesTitle')"
+      @closed="onLeaveConfirmClosed"
+    >
+      <template #footer>
+        <el-button :disabled="saving" @click="settleLeaveConfirm(false)">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button :disabled="saving" @click="settleLeaveConfirm(true)">
+          {{ t('workflow.designerDiscardChanges') }}
+        </el-button>
+        <el-button type="primary" :loading="saving" @click="saveAndLeave">
+          {{ t('common.save') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <ThemeRuleDialog v-model:visible="themeRuleVisible" :def="themeRuleDef" @saved="load" />
   </div>
 </template>
 
 <style scoped>
 /* ==================================================================
    P53 节点09/12/13 设计还原（按 P53 设计包几何移植；
-   色值原样搬运：#6F2DFF/#8393B5/#A4ADBE/#E8EDF6/#F8FAFE 等）。
+   品牌相关表面、选中态、连线与动态并行图标引用全局主题 token）。
    ================================================================== */
 .designer-page {
   display: flex;
@@ -4618,17 +5831,17 @@ function nodeLabelLines(label: string) {
   font-size: 14px;
 }
 
-/* ── 顶栏（fixture workbar：56px 白底 + 紧凑操作组） ── */
+/* ── 上下文栏（设计 42:4：48px 白底 + 居中工作区页签） ── */
 .designer-toolbar {
   position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 20px;
-  flex: 0 0 56px;
+  padding: 0 16px;
+  flex: 0 0 48px;
   box-sizing: border-box;
   background: #fff;
-  border-bottom: 1px solid #dde3ef;
+  box-shadow: inset 0 -1px 0 #dde3ef;
   color: #8b98af;
   font-size: 12px;
 }
@@ -4638,7 +5851,7 @@ function nodeLabelLines(label: string) {
   color: #7e89a1;
 }
 .designer-saved--readonly {
-  color: #6f2dff;
+  color: var(--sw-color-primary);
 }
 /* R5/G6b：窄视口面包屑单行省略，不逐字竖排挤压工具栏；为居中页签预留中部空间 */
 .designer-crumb {
@@ -4652,39 +5865,49 @@ function nodeLabelLines(label: string) {
 .designer-workbench-tabs {
   position: absolute;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: 0;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  height: 56px;
-  gap: 24px;
+  height: 48px;
+  gap: 0;
 }
 .designer-workbench-tab {
-  height: 56px;
-  padding: 0 44px;
+  position: relative;
+  width: 120px;
+  height: 48px;
+  padding: 0;
   border: 0;
   background: transparent;
   font-size: 14px;
   line-height: 20px;
   color: #8a96ad;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
 }
 .designer-workbench-tab:hover {
   color: var(--sw-color-primary);
 }
 .designer-workbench-tab.is-active {
   color: var(--sw-color-primary);
-  border-bottom-color: var(--sw-color-primary);
+}
+.designer-workbench-tab.is-active::after {
+  position: absolute;
+  bottom: 0;
+  left: 20px;
+  width: 80px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--sw-color-primary);
+  content: '';
 }
 .toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 .toolbar-actions :deep(.el-button) {
   width: 64px;
-  height: 28px;
+  height: 32px;
   padding: 0 8px;
   line-height: 16px;
 }
@@ -4692,7 +5915,10 @@ function nodeLabelLines(label: string) {
   margin-left: 0;
 }
 .toolbar-actions :deep(.toolbar-versions) {
-  width: 88px;
+  width: 64px;
+}
+.toolbar-actions :deep(.toolbar-number) {
+  width: 56px;
 }
 :global(.version-history-popper .el-dropdown-menu) {
   min-width: 360px;
@@ -4702,8 +5928,8 @@ function nodeLabelLines(label: string) {
   padding: 8px 12px;
 }
 :global(.version-history-popper .el-dropdown-menu__item.is-current) {
-  color: #6f2dff;
-  background: #f4efff;
+  color: var(--sw-color-primary);
+  background: var(--sw-color-primary-soft);
 }
 :global(.version-history-popper .version-entry) {
   display: grid;
@@ -4740,8 +5966,8 @@ function nodeLabelLines(label: string) {
   font-size: 12px;
 }
 .designer-version.el-tag {
-  background: #f0eaff;
-  color: #6f2dff;
+  background: var(--sw-color-primary-soft);
+  color: var(--sw-color-primary);
   border-color: transparent;
   border-radius: 6px;
   font-size: 11px;
@@ -4755,7 +5981,7 @@ function nodeLabelLines(label: string) {
   padding: 0;
 }
 .designer-toolbar :deep(.el-button) {
-  height: 28px;
+  height: 32px;
   padding: 0 12px;
   border: 1px solid #cbd6e8;
   border-radius: 6px;
@@ -4768,14 +5994,14 @@ function nodeLabelLines(label: string) {
   padding: 0 16px;
 }
 .designer-toolbar :deep(.el-button--primary) {
-  background: #6f2dff;
-  border-color: #6f2dff;
+  background: var(--sw-color-primary);
+  border-color: var(--sw-color-primary);
   color: #fff;
 }
 .designer-toolbar :deep(.el-button--primary:hover),
 .designer-toolbar :deep(.el-button--primary:focus) {
-  background: #5f24e0;
-  border-color: #5f24e0;
+  background: var(--sw-color-primary-dark);
+  border-color: var(--sw-color-primary-dark);
   color: #fff;
 }
 .spacer {
@@ -4796,13 +6022,15 @@ function nodeLabelLines(label: string) {
   display: flex;
   align-items: center;
   gap: 8px;
+  height: 40px;
   box-sizing: border-box;
-  padding: 8px 18px;
+  flex: 0 0 40px;
+  padding: 4px 16px;
   background: #fff;
-  border-bottom: 1px solid #e1e5ef;
+  box-shadow: inset 0 -1px 0 #e1e5ef;
 }
 .designer-toolbar2 :deep(.el-button--small) {
-  height: 30px;
+  height: 32px;
   padding: 0 12px;
   border: 1px solid #cbd6e8;
   border-radius: 6px;
@@ -4811,13 +6039,14 @@ function nodeLabelLines(label: string) {
   font-size: 12px;
 }
 .designer-toolbar2 :deep(.workbar-advance) {
-  min-width: 76px;
+  min-width: 72px;
 }
 .designer-toolbar2 :deep(.el-button.workbar-verify) {
-  margin-left: 4px;
+  min-width: 56px;
+  margin-left: 0;
 }
 
-/* ── 0.1.7 重构：左栏节点面板（分组 + 双列图标块） ── */
+/* ── 设计 42:4：224px 节点库（画布内框从 x236 起），分组内单列 188×34 节点入口 ── */
 .designer-main {
   display: flex;
   flex: 1;
@@ -4825,38 +6054,48 @@ function nodeLabelLines(label: string) {
 }
 .designer-palette {
   box-sizing: border-box;
-  flex: 0 0 196px;
-  width: 196px;
-  padding: 12px 10px 20px;
+  flex: 0 0 224px;
+  width: 224px;
+  padding: 16px;
   overflow-y: auto;
   background: #fff;
   border-right: 1px solid #e1e5ef;
 }
+.palette-title {
+  margin: 0 0 12px;
+  color: #1f2a44;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+}
 .palette-group + .palette-group {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 .palette-group__title {
-  margin: 0 0 8px 4px;
+  margin: 0 0 12px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
+  line-height: 18px;
   color: #7e89a1;
 }
 .palette-group__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.palette-item {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+.palette-item {
+  --palette-accent: var(--sw-color-primary);
+  display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  justify-content: flex-start;
+  gap: 10px;
   box-sizing: border-box;
-  min-height: 62px;
-  padding: 8px 4px;
+  width: 188px;
+  height: 34px;
+  padding: 0 8px;
   border: 1px solid #e0e6f2;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #fbfcff;
   color: #344164;
   font-size: 12px;
@@ -4864,8 +6103,8 @@ function nodeLabelLines(label: string) {
   cursor: grab;
 }
 .palette-item:hover {
-  border-color: #b9a4ff;
-  background: #f7f4ff;
+  border-color: var(--sw-color-primary-light);
+  background: var(--sw-color-primary-soft);
 }
 .palette-item:active {
   cursor: grabbing;
@@ -4875,7 +6114,9 @@ function nodeLabelLines(label: string) {
   opacity: 0.55;
 }
 .palette-item__name {
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
   white-space: nowrap;
 }
 .palette-item .workbar-icon {
@@ -4884,23 +6125,58 @@ function nodeLabelLines(label: string) {
 }
 .palette-item .workbar-icon path {
   fill: none;
-  stroke: #6f2dff;
+  stroke: var(--palette-accent);
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.palette-item[data-node-type='START'] {
+  --palette-accent: #12805c;
+}
+.palette-item[data-node-type='END'] {
+  --palette-accent: #c2303a;
+}
+.palette-item[data-node-type='CONDITION'],
+.palette-item[data-node-type='PARALLEL_GATEWAY'] {
+  --palette-accent: #d98c10;
+}
+.palette-item[data-node-type='CONSENSUS'] {
+  --palette-accent: var(--sw-process-consensus);
+}
+.palette-item[data-node-type='DYNAMIC_PARALLEL'] {
+  --palette-accent: var(--sw-process-dynamic-parallel);
+}
+.palette-item[data-node-type='NOTIFICATION'],
+.palette-item[data-node-type='IOT_COMMAND'] {
+  --palette-accent: var(--sw-process-consensus);
 }
 
 /* 0.1.7：开始/结束小圆形图标节点（无卡片盒） */
 .designer-node-event {
   stroke-width: 1.6;
 }
+/* 42:5：事件节点 128×44 胶囊（x/y/宽高覆盖卡片通用几何） */
+.designer-node-event.designer-node-rect {
+  x: 16px;
+  y: 3px;
+  width: 128px;
+  height: 44px;
+  rx: 22px;
+}
+.designer-node-label--event {
+  font-size: 14px;
+}
 
-/* ── 画布（24px 网格 + 缩放控件 + 底部提示条） ── */
+/* ── 画布（24px 网格 + 缩放控件 + 底部提示条）
+   G08（42:4）：圆角内框 x236→x1568（左距 224+12、右距 1584-16），网格自内框 16px 内距起铺 */
 .designer-canvas-wrap {
   position: relative;
   flex: 1;
   min-width: 0;
+  margin: 16px 16px 16px 12px;
+  padding: 16px;
   overflow: hidden;
+  border-radius: 12px;
   /* P53 节点09：画布底 #F8FAFE + 24px 网格线 #E8EDF6 */
   background: #f8fafe;
 }
@@ -4909,15 +6185,16 @@ function nodeLabelLines(label: string) {
 }
 .canvas-zoom {
   position: absolute;
-  right: 24px;
-  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  top: auto;
   display: flex;
   align-items: center;
   gap: 16px;
-  width: 225px;
-  height: 44px;
+  width: 300px;
+  height: 36px;
   box-sizing: border-box;
-  padding: 0 15px;
+  padding: 0 12px;
   background: #fff;
   border: 1px solid #d8e0ee;
   border-radius: 8px;
@@ -4949,7 +6226,7 @@ function nodeLabelLines(label: string) {
 }
 .zoom-btn:hover,
 .zoom-fit:hover {
-  color: #6f2dff;
+  color: var(--sw-color-primary);
 }
 .canvas-hint {
   position: absolute;
@@ -4966,15 +6243,16 @@ function nodeLabelLines(label: string) {
   line-height: 16px;
 }
 
-/* ── 节点卡片（fixture 终版几何：158.8×48.8 / 胶囊 24.4 / 选中 #F7F2FF+#6F2DFF） ── */
+/* ── 节点卡片（fixture 终版几何：158.8×48.8 / 胶囊 24.4 / 选中态跟随品牌主题） ── */
 .designer-node {
   cursor: move;
 }
+/* G08（42:4）：普通节点 230×44（0.6px 内缩保持描边落在盒内） */
 .designer-node-rect {
   x: 0.6px;
   y: 0.6px;
-  width: 158.8px;
-  height: 48.8px;
+  width: 228.8px;
+  height: 42.8px;
   rx: 8px;
   fill: #fff;
   stroke: #d7dfec;
@@ -5000,8 +6278,8 @@ function nodeLabelLines(label: string) {
   stroke: #7e8799;
 }
 .designer-node-selected .designer-node-rect {
-  fill: #f7f2ff;
-  stroke: #6f2dff;
+  fill: var(--sw-color-primary-softer);
+  stroke: var(--sw-color-primary);
   stroke-width: 2;
 }
 .designer-node-error .designer-node-rect {
@@ -5038,6 +6316,12 @@ function nodeLabelLines(label: string) {
   stroke: #e79a1f;
   stroke-width: 1.4;
 }
+/* 28×28 节点外框（矢量菱形 26×26，不含描边外缘） */
+.designer-node-gateway-frame {
+  fill: none;
+  stroke: none;
+  pointer-events: none;
+}
 .designer-node-gateway-plus {
   fill: none;
   stroke: #fff;
@@ -5050,24 +6334,24 @@ function nodeLabelLines(label: string) {
   pointer-events: none;
 }
 .designer-node-selected .designer-node-label {
-  fill: #6f2dff;
+  fill: var(--sw-color-primary);
 }
 .designer-node-port {
   fill: #a4adbe;
-  stroke: #6f2dff;
+  stroke: var(--sw-color-primary);
   stroke-width: 1.5;
   cursor: crosshair;
 }
 /* BF20261013-030：内段中点手柄——实心方块（方向光标由拖动轴内联给出） */
 .designer-edge-segment-handle {
-  fill: #6f2dff;
+  fill: var(--sw-color-primary);
   stroke: #fff;
   stroke-width: 1.5;
   pointer-events: all;
 }
 .designer-edge-endpoint {
-  fill: #f7f2ff;
-  stroke: #6f2dff;
+  fill: var(--sw-color-primary-softer);
+  stroke: var(--sw-color-primary);
   stroke-width: 2;
   pointer-events: all;
   cursor: grab;
@@ -5092,22 +6376,22 @@ function nodeLabelLines(label: string) {
   stroke: transparent;
 }
 .designer-edge-visual {
-  stroke: #c3ccdb;
-  stroke-width: 1.4;
+  stroke: #8996ab;
+  stroke-width: 2;
   marker-end: url(#designer-edge-arrow);
   pointer-events: none;
 }
 .designer-edge-visual.designer-edge-selected {
-  stroke: #6f2dff;
+  stroke: var(--sw-color-primary);
   stroke-width: 2;
   marker-end: url(#designer-edge-arrow-selected);
 }
 .designer-edge-arrow {
-  fill: #c3ccdb;
+  fill: #8996ab;
   stroke: none;
 }
 .designer-edge-arrow-selected {
-  fill: #6f2dff;
+  fill: var(--sw-color-primary);
   stroke: none;
 }
 .designer-edge-pending {
@@ -5158,7 +6442,7 @@ function nodeLabelLines(label: string) {
 
 .listener-row__phase--before {
   color: var(--sw-color-primary);
-  background: #f0eaff;
+  background: var(--sw-color-primary-soft);
 }
 
 .listener-row__phase--after {
@@ -5240,14 +6524,29 @@ function nodeLabelLines(label: string) {
   border-left: 1px solid #e3e8f4;
 }
 .props-tab.is-active {
-  background: var(--el-color-primary-light-9, #ece9ff);
+  background: var(--sw-color-primary-soft);
   color: var(--sw-color-primary);
   font-weight: 500;
+}
+.field-states__search {
+  margin-bottom: 8px;
+}
+.field-states__search :deep(.el-input__wrapper) {
+  box-sizing: border-box;
+  height: 32px;
 }
 .field-states__table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+}
+.field-states__table :deep(.el-checkbox__inner) {
+  width: 18px !important;
+  height: 18px !important;
+}
+.field-states__table :deep(.el-checkbox__inner::after) {
+  left: 6px;
+  top: 2px;
 }
 .field-states__table th,
 .field-states__table td {
@@ -5280,6 +6579,85 @@ function nodeLabelLines(label: string) {
   padding-bottom: 4px;
   margin-bottom: 4px;
 }
+/* 审查23 D08-B：基础分支标签 14/22 */
+.designer-props__basic :deep(.el-form-item__label) {
+  font-size: 14px !important;
+  line-height: 22px;
+}
+
+/* 审查23 D08-B：来源/通过条件分段通栏、32 高（通过条件等共用分段保持连体样式） */
+.participant-source-seg {
+  display: flex;
+  width: 100%;
+}
+.participant-source-seg .el-radio-button {
+  flex: 1 1 0;
+}
+.participant-source-seg :deep(.el-radio-button__inner) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 6px;
+  line-height: 30px;
+}
+/* 审查28 D08-B：来源主行按原图拆为三枚独立分段（等宽 + 8px 间隔），32 高单行；
+ * 仅修饰来源分段（--split），不改变共用 participant-source-seg（通过条件）的连体几何。 */
+.participant-source-area {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.participant-source-seg--split {
+  gap: 8px;
+}
+.participant-source-seg--split :deep(.el-radio-button) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.participant-source-seg--split :deep(.el-radio-button__inner) {
+  border-radius: 6px;
+  border: 1px solid #cbd6e8;
+  box-shadow: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.participant-source-seg--split :deep(.el-radio-button__original:checked + .el-radio-button__inner) {
+  background: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+  box-shadow: none;
+}
+/* 次级来源切换：展开后与主行同构（32 高），收起时仅留一行低键量切换入口 */
+.participant-source-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.participant-source-extra__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--sw-text-secondary);
+  cursor: pointer;
+}
+.participant-source-extra__toggle:hover {
+  color: var(--sw-color-primary);
+}
+.participant-source-extra__arrow {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+.participant-source-extra__arrow.is-open {
+  transform: rotate(180deg);
+}
 .designer-props :deep(.el-input.is-disabled .el-input__inner) {
   color: #19233b;
   -webkit-text-fill-color: #19233b;
@@ -5301,9 +6679,41 @@ function nodeLabelLines(label: string) {
   gap: 8px;
   width: 100%;
 }
+/* 提示32 Q17：主字段入口与 32 高控件同形，点击打开 680 分组选择窗 */
+.participant-field-trigger {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #cbd6e8;
+  border-radius: 6px;
+  background: #fbfcff;
+  cursor: pointer;
+}
+.participant-field-trigger:hover {
+  border-color: var(--sw-color-primary);
+}
+.participant-field-trigger__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #19233b;
+  font-size: 13px;
+  text-align: left;
+}
+.participant-field-trigger__action {
+  flex: 0 0 auto;
+  color: var(--sw-color-primary);
+  font-size: 12px;
+}
 .participant-picker-row :deep(.el-button) {
   border-color: #cbd6e8;
-  color: #6f2dff;
+  color: var(--sw-color-primary);
   background: #fff;
 }
 .participant-hint {
@@ -5313,6 +6723,42 @@ function nodeLabelLines(label: string) {
   line-height: 16px;
   color: #99a5bb;
   white-space: normal;
+}
+
+/* 提示32 Q54：EXPRESSION 脚本摘要 288×32，状态行左侧状态/右侧 88×32 编辑入口 */
+.participant-script {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.participant-script__summary {
+  width: 288px;
+  max-width: 100%;
+}
+.participant-script__status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.participant-script__status-row .participant-hint {
+  margin-top: 0;
+}
+.participant-script__edit {
+  width: 88px;
+  height: 32px;
+  padding: 0;
+  border-color: #cbd6e8;
+  color: var(--sw-color-primary);
+  background: #fff;
+}
+
+.config-array-hint {
+  display: block;
+  margin-top: 5px;
+  color: var(--sw-text-secondary);
+  font-size: 11px;
+  line-height: 17px;
 }
 .participant-legacy-note {
   margin-bottom: 15px;
@@ -5448,7 +6894,7 @@ function nodeLabelLines(label: string) {
   padding: 2px 9px;
   font-size: 12px;
   color: var(--sw-color-primary);
-  background: #f0eaff;
+  background: var(--sw-color-primary-soft);
   border-radius: 6px;
   position: relative;
   left: 3px;
@@ -5518,7 +6964,7 @@ function nodeLabelLines(label: string) {
   text-align: left;
   font-size: 12px;
   color: var(--sw-color-primary);
-  background: #f0eaff;
+  background: var(--sw-color-primary-soft);
   border-radius: 5px;
 }
 
@@ -5658,33 +7104,40 @@ function nodeLabelLines(label: string) {
   }
 }
 
-/* ── P53 节点12：审批人候选弹窗（容器层几何覆盖，不改组件 script） ── */
+/* ── P53 节点12：审批人候选弹窗（审查24 D08-P 收口：980/标题16/24/按钮80×32） ── */
 .approver-dialog-host :deep(.el-dialog) {
-  --el-dialog-width: min(1018px, calc(100vw - 40px)) !important;
+  --el-dialog-width: min(980px, calc(100vw - 40px)) !important;
   padding: 0;
   border: 1px solid #dde3ef;
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 12px 32px rgba(19, 31, 58, 0.18);
   overflow: hidden;
   color: #19233b;
 }
 .approver-dialog-host :deep(.el-dialog__header) {
   box-sizing: border-box;
-  min-height: 94px;
-  padding: 24px 28px 18px;
+  padding: 20px 24px 12px;
   border-bottom: 1px solid #dde3ef;
 }
 .approver-dialog-host :deep(.el-dialog__title) {
-  font-size: 22px;
+  font-size: 16px;
+  line-height: 24px;
   color: #19233b;
 }
 .approver-dialog-host :deep(.el-dialog__headerbtn) {
-  top: 24px;
-  right: 28px;
+  top: 20px;
+  right: 24px;
   font-size: 20px;
 }
 .approver-dialog-host :deep(.el-dialog__body) {
-  padding: 16px 28px 24px;
+  padding: 16px 24px 24px;
+}
+.approver-dialog-host :deep(.el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
 }
 /* 搜索框：设计 36px 高 / #FBFCFF 底 / #CBD6E8 描边 */
 .approver-dialog-host :deep(.el-input__wrapper) {
@@ -5711,14 +7164,14 @@ function nodeLabelLines(label: string) {
   color: #344164;
 }
 .approver-dialog-host :deep(.el-table .el-button.is-link) {
-  color: #6f2dff;
+  color: var(--sw-color-primary);
 }
 .approver-dialog-host :deep(.approver-picker__empty),
 .approver-dialog-host :deep(.approver-picker__note) {
   color: #8393b5;
 }
 .approver-dialog-host :deep(.approver-picker__picked) {
-  color: #6f2dff;
+  color: var(--sw-color-primary);
 }
 
 /*
@@ -5726,31 +7179,35 @@ function nodeLabelLines(label: string) {
  * 覆盖传送后的根节点。节点 12 的结构尺寸必须直接落在实际弹窗上。
  */
 :global(.el-dialog.approver-dialog) {
-  width: 1020px !important;
+  /* 审查24/27 D08-P：980 外框、三栏 200/404/294、56 行、80×32 底栏 */
+  width: 980px !important;
   height: 732px !important;
   margin-top: 146px !important;
   box-sizing: border-box;
   padding: 0 !important;
   border: 1px solid #dde3ef;
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 12px 32px rgba(19, 31, 58, 0.18);
   overflow: hidden;
   color: #19233b;
 }
 :global(.el-dialog.approver-dialog .el-dialog__header) {
   box-sizing: border-box;
-  height: 96px;
-  min-height: 96px;
-  padding: 22px 27px 18px;
+  padding: 20px 24px 12px;
   border-bottom: 1px solid #dde3ef;
 }
+:global(.el-dialog.approver-dialog .el-dialog__title) {
+  font-size: 16px;
+  line-height: 24px;
+  color: #19233b;
+}
 :global(.el-dialog.approver-dialog .el-dialog__headerbtn) {
-  top: 24px;
-  right: 28px;
+  top: 20px;
+  right: 24px;
   font-size: 20px;
 }
 :global(.el-dialog.approver-dialog .el-dialog__body) {
-  padding: 16px 27px 16px;
+  padding: 16px 24px 16px;
 }
 :global(.el-dialog.approver-dialog .el-dialog__footer) {
   box-sizing: border-box;
@@ -5777,11 +7234,11 @@ function nodeLabelLines(label: string) {
   left: -2px;
 }
 :global(.el-dialog.approver-dialog .approver-dialog__panes) {
-  grid-template-columns: 236px 406px 290px;
+  grid-template-columns: 200px 404px 294px;
   gap: 16px;
 }
 :global(.el-dialog.approver-dialog .approver-pane) {
-  padding: 17px 15px 14px;
+  padding: 14px;
 }
 :global(.el-dialog.approver-dialog .approver-pane__workspace) {
   top: 8px;
@@ -5816,9 +7273,8 @@ function nodeLabelLines(label: string) {
   padding-left: 12px !important;
 }
 :global(.el-dialog.approver-dialog .approver-user) {
-  height: 60px;
+  height: 56px;
   box-sizing: border-box;
-  margin-bottom: 8px;
   gap: 12px;
 }
 :global(.el-dialog.approver-dialog .approver-user__avatar) {
@@ -5846,11 +7302,11 @@ function nodeLabelLines(label: string) {
   margin-bottom: 24px;
 }
 :global(.el-dialog.approver-dialog .approver-dialog__footer > .el-button:first-child) {
-  width: 88px;
+  width: 80px;
 }
 :global(.el-dialog.approver-dialog .approver-dialog__confirm) {
-  width: 108px;
-  min-width: 108px;
+  width: 80px;
+  min-width: 80px;
 }
 :global(.el-dialog.approver-dialog .approver-dialog__confirm > span) {
   white-space: nowrap;
@@ -5878,6 +7334,24 @@ function nodeLabelLines(label: string) {
   flex: none;
   margin: 0;
 }
+/* Q12（278:1567）：操作设置回显行与审批意见表单同构（值框占满、设置按钮靠右） */
+.node-op-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.node-op-row :deep(.el-input) {
+  flex: 1;
+  min-width: 0;
+}
+.node-op-row :deep(.el-input__wrapper) {
+  box-sizing: border-box;
+  height: 32px;
+}
+.node-op-row :deep(.el-button) {
+  flex: none;
+  margin: 0;
+}
 .p64-toolbar {
   display: flex;
   align-items: center;
@@ -5894,15 +7368,15 @@ function nodeLabelLines(label: string) {
 .p64-subtitle {
   font-size: 13px;
   font-weight: 600;
-  color: #7e306b;
+  color: var(--sw-color-primary);
 }
 /* BF20261013-021：脚本内置函数参考（触发器判断脚本下方） */
 .script-help {
   margin: -6px 0 10px;
   padding: 8px 10px;
   border-radius: 6px;
-  background: #f6f4fb;
-  border: 1px solid #e8e3f5;
+  background: var(--sw-color-primary-softer);
+  border: 1px solid var(--sw-color-primary-light);
 }
 .script-help__title {
   margin: 0 0 4px;
@@ -5927,13 +7401,6 @@ function nodeLabelLines(label: string) {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   column-gap: 16px;
 }
-/* BF20261013-027：子流程向导初始值行（字段/取值方式/取值/删除 一行三列） */
-.subflow-mapping-row {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) 130px minmax(200px, 1.2fr) 44px;
-  column-gap: 12px;
-  align-items: start;
-}
 .p64-branch-card,
 .p64-action-card {
   border: 1px solid var(--el-border-color-lighter, #e4e7ed);
@@ -5953,6 +7420,127 @@ function nodeLabelLines(label: string) {
 
 <!-- P64 弹窗可达性全局规则：append-to-body 传送后不带 scoped 属性，需全局选择器。 -->
 <style>
+/* ═══ 0.2.0 Q12（278:1567）：节点操作 820 设置面——820 宽、32 高选项控件、原底栏 80×32。 ═══ */
+.el-dialog.node-op-dialog {
+  --el-dialog-padding-primary: 0px;
+  box-sizing: border-box;
+  width: 820px;
+  max-width: calc(100vw - 32px);
+  padding: 0;
+  border: 1px solid var(--sw-border-light, #e4e7ed);
+  border-radius: 12px;
+}
+.el-dialog.node-op-dialog .el-dialog__header,
+.el-dialog.node-op-dialog .el-dialog__header.show-close {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 24px 56px 0 24px;
+}
+.el-dialog.node-op-dialog .el-dialog__title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--sw-text-primary, #172033);
+}
+.el-dialog.node-op-dialog .el-dialog__headerbtn {
+  top: 24px;
+  right: 24px;
+  width: 24px;
+  height: 24px;
+}
+.el-dialog.node-op-dialog .el-dialog__body {
+  padding: 16px 24px 0;
+}
+.el-dialog.node-op-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 20px 24px 24px;
+}
+.el-dialog.node-op-dialog .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+}
+.node-op-dialog__label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--sw-text-regular, #606266);
+}
+.node-op-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+.node-op-grid .el-checkbox-button {
+  display: block;
+  margin: 0;
+}
+.node-op-grid .el-checkbox-button__inner {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  line-height: 30px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.node-op-dialog__hint {
+  display: block;
+  margin-top: 12px;
+  color: var(--sw-text-secondary, #8c9ab1);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+/* ═══ Q11（273:1332）：动态并行 820 设置面——复用 node-op-dialog 几何；
+     表单纵向可自然增长滚动，控件统一 32 高。 ═══ */
+.el-dialog.dynamic-parallel-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+  margin-top: 6vh;
+  margin-bottom: 6vh;
+}
+.el-dialog.dynamic-parallel-dialog .el-dialog__body {
+  overflow: auto;
+}
+.dynamic-parallel-dialog__form .el-form-item {
+  margin-bottom: 16px;
+}
+.dynamic-parallel-dialog__form .el-form-item__label {
+  margin-bottom: 4px;
+  line-height: 22px;
+}
+.dynamic-parallel-dialog__form .el-select,
+.dynamic-parallel-dialog__form .el-input,
+.dynamic-parallel-dialog__form .el-input-number,
+.dynamic-parallel-dialog__form .el-radio-group {
+  width: 100%;
+}
+.dynamic-parallel-dialog__form .el-select__wrapper,
+.dynamic-parallel-dialog__form .el-input__wrapper {
+  min-height: 32px;
+}
+.dynamic-parallel-dialog__form .el-input__inner {
+  height: 32px;
+  line-height: 32px;
+}
+.dynamic-parallel-dialog__form .el-input-number {
+  height: 32px;
+}
+.dynamic-parallel-dialog__form .el-input-number .el-input__inner {
+  text-align: left;
+}
+
 .el-dialog.p64-dialog {
   display: flex;
   flex-direction: column;
@@ -5964,5 +7552,166 @@ function nodeLabelLines(label: string) {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+}
+/* ═══ 审查28 Q10：变量/触发器弹窗表格表头底色带 42 高（设计原图 #f4f6fb 色带）；
+   table-cell 高度必须 box-sizing:border-box。仅作用于本文件两个 p64 弹窗，
+   不影响流程设置页（ProcessSettings）的事件监听表格。 ═══ */
+.el-dialog.p64-dialog .p64-table {
+  --el-table-header-bg-color: #f4f6fb;
+  --el-table-header-text-color: #7c8390;
+}
+.el-dialog.p64-dialog .p64-table th.el-table__cell {
+  box-sizing: border-box;
+  height: 42px;
+  padding: 4px 0;
+  font-weight: 400;
+}
+
+/* ═══ 0.2.0 Q12（278:1634/1669/1719）：子流程三步共用窗——1000 宽、控件 32 高、表头 34 高。
+   三步仍为既有触发方式/子流程/初始值，只调整共用外壳尺寸。 ═══ */
+.el-dialog.subflow-wizard .subflow-steps {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 34px;
+  margin-bottom: 16px;
+}
+.subflow-step {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 34px;
+  color: var(--sw-color-primary, #2563eb);
+}
+.subflow-step.is-active {
+  background: var(--sw-color-primary, #2563eb);
+  color: #fff;
+}
+.subflow-wizard .el-input__wrapper,
+.subflow-wizard .el-select__wrapper,
+.subflow-wizard .el-textarea__inner {
+  box-sizing: border-box;
+  min-height: 32px;
+  height: 32px;
+}
+.subflow-wizard .el-input-number {
+  box-sizing: border-box;
+  height: 32px;
+}
+.subflow-wizard .el-form-item {
+  margin-bottom: 16px;
+}
+.subflow-map {
+  margin-bottom: 8px;
+  border: 1px solid var(--el-border-color-lighter, #e4e7ed);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.subflow-map__head,
+.subflow-map__row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 160px minmax(220px, 1.2fr) 60px;
+  column-gap: 12px;
+  align-items: center;
+}
+.subflow-map--wb .subflow-map__head,
+.subflow-map--wb .subflow-map__row {
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) 60px;
+}
+.subflow-map__head {
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 12px;
+  background: #f4f6fb;
+  font-size: 13px;
+  line-height: 34px;
+  color: #7c8390;
+}
+.subflow-map__row {
+  padding: 8px 12px;
+  border-top: 1px solid #eef1f7;
+}
+.subflow-map__control {
+  width: 100%;
+}
+.subflow-map__op {
+  color: #7c8390;
+}
+
+/* ═══ 0.2.0 Q55（设计 272:1575）：未保存离开确认——600 宽、标题 16/24、
+   取消/不保存/保存 三按钮各 80×32，右下对齐。 ═══ */
+.el-dialog.designer-leave-confirm {
+  --el-dialog-padding-primary: 0px;
+  box-sizing: border-box;
+  width: 600px;
+  max-width: calc(100vw - 32px);
+  padding: 0;
+  border: 1px solid var(--sw-border-light);
+  border-radius: 12px;
+}
+.designer-leave-confirm .el-dialog__header,
+.designer-leave-confirm .el-dialog__header.show-close {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 27px 56px 0 24px;
+}
+.designer-leave-confirm .el-dialog__title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--sw-text-primary);
+}
+.designer-leave-confirm .el-dialog__headerbtn {
+  top: 27px;
+  right: 24px;
+  width: 24px;
+  height: 24px;
+}
+.designer-leave-confirm .el-dialog__body {
+  padding: 0;
+}
+.designer-leave-confirm .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 23px 24px 26px;
+}
+.designer-leave-confirm .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+}
+
+/* ═══ Q18（272:1814 / 273:2049）：校验通过与发布成功轻提示——280×48、顶部 84、
+   水平居中、浅绿成功表面。仅本文件两处成功反馈传入该专用类，全局 .el-message 不变。 ═══ */
+.el-message.designer-feedback-toast {
+  box-sizing: border-box;
+  width: 280px;
+  min-width: 280px;
+  height: 48px;
+  padding: 0;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: var(--sw-success-bg, #eafbf7);
+  color: var(--sw-success-text, #12805c);
+}
+
+.el-message.designer-feedback-toast .el-message__content {
+  color: var(--sw-success-text, #12805c);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* 原表面为纯文字提示，无状态图标。 */
+.el-message.designer-feedback-toast .el-message__icon {
+  display: none;
 }
 </style>

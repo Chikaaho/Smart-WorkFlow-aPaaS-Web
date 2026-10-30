@@ -19,23 +19,35 @@ const { t } = useI18n()
  * - REFERENCE 显示名：resolveReferenceDisplay → referenceLabels[name]
  *   显示名单独注入 DynamicField 的 referenceLabel prop，不污染 v-model
  */
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { ArrowLeft } from '@element-plus/icons-vue'
-import type { SubTableRowAction, SubTableRowActionType } from '@/modules/form/api/form'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowLeft, Close } from '@element-plus/icons-vue'
 import {
   getFormDefinition,
+  getFormDefinitionVersion,
+  invokeFormIntegration,
   submitForm,
   getFormData,
   updateFormData,
   normalizeSubmitData,
+  type FormIntegrationPhase,
+  type SubTableRowAction,
+  type SubTableRowActionType,
 } from '@/modules/form/api/form'
+import { loadScriptOrgContext } from '@/modules/form/api/i2-choices'
 import { ApiError, getErrorMessage } from '@/foundation/request'
 import DynamicField from '@/components/DynamicField.vue'
+import DetailDialog from '@/components/DetailDialog.vue'
+import { normalizeFormDateFields } from '@/contracts/form-date'
+import { normalizeFormFieldValue } from '@/contracts/form-value'
+import { richTextVisibleText } from '@/modules/form/rich-text'
 import { resolveReferenceDisplay } from '@/modules/form/utils/resolve-reference-display'
 import { parseVisibilityRules, hiddenFieldNames } from '@/modules/form/utils/visibility-rules'
 import { createFieldScripts } from '@/modules/form/utils/field-scripts'
+import { createFormEvents } from '@/modules/form/utils/form-events'
+import type { ScriptOrgContext } from '@/modules/form/utils/script-hosts'
+import { useUserStore } from '@/stores/user'
 import { getFormFieldColSpan } from '@/modules/form/utils/form-layout'
 import { InstanceFlowPanel } from '@/adapters/instance-flow'
 import {
@@ -44,6 +56,8 @@ import {
   type InstanceRelation,
 } from '@/adapters/instance-relation'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
+import type { BpmDraft } from '@/adapters/process-draft'
+import type { CommandAcceptResp } from '@/contracts/bpm'
 
 /* ── 路由参数 ── */
 
@@ -108,12 +122,44 @@ const mode = route.query.mode === 'edit' ? 'edit' : 'view'
 /** 草稿填报模式：route.query.mode === 'draft'（可选 draftId 打开已有草稿） */
 const isDraftMode = ref(route.query.mode === 'draft')
 const draftId = route.query.draftId ? String(route.query.draftId) : ''
+/** 草稿元数据预取：先按草稿创建时的 formVersion 装载冻结定义，再回填 payload。 */
+const prefetchedDraft = ref<BpmDraft | null>(null)
+/** 运行期绑定的表单发布版本；缺省由服务端按当前发布版本解析。 */
+const formVersion = ref<number | null>(null)
+/** 表单事件调用阶段；字段脚本固定按提交前阶段处理。 */
+const integrationPhase = ref<FormIntegrationPhase>('BEFORE_SUBMIT')
+
+/**
+ * 受控集成调用：客户端只传稳定标识、绑定版本/记录与结构化输入。
+ * 服务端按版本快照允许清单、能力登记状态与当前身份/记录权限取交集。
+ */
+async function callFormIntegration(
+  capabilityId: string,
+  input: Record<string, unknown>,
+  phase: FormIntegrationPhase,
+): Promise<unknown> {
+  const boundRecordId = phase === 'AFTER_SUBMIT' ? lastSubmittedId.value || recordId : recordId
+  const response = await invokeFormIntegration({
+    formKey,
+    ...(formVersion.value ? { formVersion: formVersion.value } : {}),
+    ...(boundRecordId ? { recordId: boundRecordId } : {}),
+    phase,
+    capabilityId,
+    ...(phase === 'AFTER_SUBMIT' && boundRecordId ? { requestKey: boundRecordId } : {}),
+    input,
+  })
+  return response.result
+}
 
 /* ── 状态 ── */
 
 const schema = ref<FormSchema | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
+const submissionFinalized = ref(false)
+const postSubmitEventError = ref('')
+const lastSubmittedId = ref('')
+const postEventRetrying = ref(false)
 const errorMsg = ref('')
 const formData = reactive<Record<string, unknown>>({})
 /** 客户端提交校验提示：与字段同处网格单元，提示出现时自然撑高当前行。 */
@@ -124,14 +170,78 @@ const referenceLabels = reactive<Record<string, string>>({})
 const hiddenFields = computed(() =>
   schema.value ? hiddenFieldNames(parseVisibilityRules(schema.value), formData) : new Set<string>(),
 )
+/** 组织目录快照：只读查询复用选择器的同一授权接口，供脚本组织函数同步使用。 */
+const scriptOrgContext = ref<ScriptOrgContext | null>(null)
+
 /** BF20261013-021：字段脚本运行时（值变更触发字段脚本；onLoad 脚本在数据装载后执行）。 */
 const fieldScripts = createFieldScripts({
   getSchema: () => schema.value,
   model: formData,
   // 只读查看态不执行脚本（不产生任何写入/状态变化）
-  enabled: () => !isViewMode.value,
+  enabled: () => !isViewMode.value && !submissionFinalized.value,
+  processContext: () => ({
+    status: relation.value?.instance?.status ?? '',
+    taskId: relation.value?.pendingTaskId ?? '',
+  }),
+  formContext: () => ({
+    formKey,
+    version: formVersion.value,
+    submissionId: lastSubmittedId.value,
+  }),
+  allowedIntegrations: () => schema.value?.allowedIntegrations ?? [],
+  // 字段脚本在加载/编辑期运行，只允许查询类能力，不传递提交后幂等标识。
+  callIntegration: (key: string) => callFormIntegration(key, {}, 'BEFORE_SUBMIT'),
+  orgContext: () => scriptOrgContext.value,
 })
 onUnmounted(() => fieldScripts.dispose())
+let userStore: ReturnType<typeof useUserStore> | null = null
+try {
+  userStore = useUserStore()
+} catch {
+  // 组件单测与独立预览无 Pinia；身份函数按无登录态处理。
+}
+const formEvents = createFormEvents({
+  getSchema: () => schema.value,
+  model: formData,
+  controls: fieldScripts.overrides,
+  writable: () => !isViewMode.value && !submissionFinalized.value,
+  sideEffectsAllowed: () => !isViewMode.value,
+  identity: () =>
+    userStore?.user
+      ? {
+          userId: userStore.user.id,
+          userName: userStore.user.displayName,
+          deptId: userStore.user.deptId,
+          tenantId: userStore.user.tenantId,
+          roles: Array.from(userStore.roles ?? []),
+        }
+      : null,
+  processContext: () => ({
+    status: relation.value?.instance?.status ?? '',
+    taskId: relation.value?.pendingTaskId ?? '',
+  }),
+  formContext: () => ({
+    formKey,
+    version: formVersion.value,
+    submissionId: lastSubmittedId.value,
+  }),
+  allowedIntegrations: () => schema.value?.allowedIntegrations ?? [],
+  callIntegration: (key, input) => callFormIntegration(key, input, integrationPhase.value),
+  orgContext: () => scriptOrgContext.value,
+  confirm: async (message) => {
+    try {
+      await ElMessageBox.confirm(message, t('form.fillDraftTitle'), {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      })
+      return true
+    } catch {
+      return false
+    }
+  },
+  notify: (kind, message) => ElMessage({ type: kind, message }),
+})
 /** 脚本隐藏与声明式隐藏合并：脚本 true 加隐藏、false 显式放行（提交与渲染同口径）。 */
 const hiddenAll = computed(() => {
   const merged = new Set(hiddenFields.value)
@@ -141,16 +251,46 @@ const hiddenAll = computed(() => {
   }
   return merged
 })
-/** 渲染列表：过滤隐藏字段（LABEL 说明文字照常渲染）。 */
+/**
+ * A09 字段查看权限：设计配置的 view 主体（user:/role:/dept:）在渲染层一致执行；
+ * 空/缺省=不设限。服务端数据查询与提交校验仍是权威（此过滤只影响界面呈现）。
+ */
+const viewDeniedFields = computed<Set<string>>(() => {
+  const perms = schema.value?.fieldPermissions
+  if (!perms || Object.keys(perms).length === 0) return new Set()
+  const mine = new Set<string>()
+  const user = userStore?.user
+  if (user && userStore) {
+    mine.add('user:' + String(user.id))
+    userStore.roles.forEach((code) => mine.add('role:' + code))
+    if (user.deptId != null) mine.add('dept:' + String(user.deptId))
+  }
+  const denied = new Set<string>()
+  for (const [name, rule] of Object.entries(perms)) {
+    const subjects = rule?.view
+    if (!subjects || subjects.length === 0) continue
+    if (!subjects.some((subject) => mine.has(subject))) denied.add(name)
+  }
+  return denied
+})
+/** 渲染列表：过滤隐藏字段与无查看权字段（LABEL 说明文字照常渲染）。 */
 const visibleSchemaFields = computed(() =>
-  schema.value ? schema.value.fields.filter((f) => !hiddenAll.value.has(f.name)) : [],
+  schema.value
+    ? schema.value.fields.filter(
+        (f) => !hiddenAll.value.has(f.name) && !viewDeniedFields.value.has(f.name),
+      )
+    : [],
 )
 /** 有效必填 / 有效只读（脚本覆盖优先，静态配置兜底）。 */
 function fieldRequired(field: FormSchemaField): boolean {
   return fieldScripts.overrides.required[field.name] ?? field.required ?? false
 }
 function fieldReadonly(field: FormSchemaField): boolean {
-  return isViewMode.value || (fieldScripts.overrides.readonly[field.name] ?? false)
+  return (
+    isViewMode.value ||
+    submissionFinalized.value ||
+    (fieldScripts.overrides.readonly[field.name] ?? false)
+  )
 }
 /** 渲染用字段（必填覆盖写回字段对象，供 DynamicField 星标与校验同源）。 */
 const renderFields = computed(() =>
@@ -175,9 +315,18 @@ const pageTitle = computed(() => {
   if (isDraftMode.value) return t('form.fillDraftTitle')
   if (isViewMode.value) return t('common.detail')
   if (recordId) return t('form.editDataTitle')
-  if (route.query.process) return t('form.startProcessTitle')
+  if (route.query.process) return t('form.fillTitle')
   return t('form.createDataTitle')
 })
+
+/**
+ * 0.2.0 参考节点 101:2（流程发起填写态）：顶部「填写」+关闭入口，暂存/提交在
+ * 底部固定操作栏，白卡 1440 居中、表单名居中标题。仅影响经流程中心发起的场景；
+ * 应用内新增/编辑/查看/草稿保持既有版式与语义。
+ */
+const isStartFillMode = computed(
+  () => !!route.query.process && !recordId && !isDraftMode.value && !isViewMode.value,
+)
 
 // ── 0.1.7 #16：提交成功 → 居中确认弹窗（用户点击确认后再离开） ──
 const submitDialogVisible = ref(false)
@@ -187,7 +336,7 @@ const submitDialogGotoInstances = ref(false)
 function confirmSubmitDialog() {
   submitDialogVisible.value = false
   if (submitDialogGotoInstances.value) {
-    void router.push('/workflow/my-instances')
+    void router.push('/workspace/my-instances')
   } else {
     goBack()
   }
@@ -252,11 +401,57 @@ function tryParseJSON(str: string, fallback: unknown): unknown {
 
 /* ── schema 加载 + 记录加载 ── */
 
+/**
+ * 仅当表单含字段/事件脚本时装载组织目录快照；
+ * 装载失败不阻断表单：脚本里的组织函数会明确报「未装载」，不静默返回错误数据。
+ */
+async function ensureScriptOrgContext(): Promise<void> {
+  const hasFieldScript = (schema.value?.fields ?? []).some((f) => !!f.script?.code)
+  const events = schema.value?.events
+  const hasEventScript =
+    !!events &&
+    Object.values(events).some(
+      (list) =>
+        Array.isArray(list) &&
+        list.some((item) => !!item && typeof item === 'object' && 'script' in item),
+    )
+  if (!hasFieldScript && !hasEventScript) return
+  try {
+    scriptOrgContext.value = await loadScriptOrgContext()
+  } catch {
+    scriptOrgContext.value = null
+  }
+}
+
 async function loadSchema() {
   loading.value = true
   errorMsg.value = ''
+  formVersion.value = null
   try {
-    schema.value = await getFormDefinition(formKey)
+    // A12：旧草稿按创建时的 formVersion 回放冻结定义，新填报才取最新发布版本。
+    let draftVersion: number | null = null
+    if (isDraftMode.value && draftId) {
+      try {
+        const { getDraft } = await getProcessDraftApi()
+        prefetchedDraft.value = await getDraft(draftId)
+        const parsed = Number(prefetchedDraft.value.formVersion)
+        if (Number.isFinite(parsed) && parsed > 0) draftVersion = parsed
+      } catch {
+        prefetchedDraft.value = null
+      }
+    }
+    try {
+      const loaded = draftVersion
+        ? await getFormDefinitionVersion(formKey, draftVersion)
+        : await getFormDefinition(formKey)
+      schema.value = draftVersion && loaded ? { ...loaded, schemaVersion: draftVersion } : loaded
+      formVersion.value = draftVersion
+    } catch (err) {
+      // 仅旧版本快照缺失时回退最新定义；普通最新定义加载失败保持原错误提示。
+      if (!draftVersion) throw err
+      formVersion.value = null
+      schema.value = await getFormDefinition(formKey)
+    }
     if (!schema.value) return
 
     if (isDraftMode.value) {
@@ -274,8 +469,15 @@ async function loadSchema() {
     } else {
       for (const field of schema.value.fields) initField(field)
     }
+    // 组织目录快照先于 onLoad 脚本装载：组织查询函数同步读取已授权快照
+    await ensureScriptOrgContext()
     // BF20261013-021：数据装载完成后执行 onLoad 字段脚本（新建/草稿/回显三态同口径）
-    fieldScripts.runOnLoad()
+    await fieldScripts.runOnLoad()
+    fieldScripts.resetBaseline()
+    const eventResult = await formEvents.runOnLoad()
+    if (!eventResult.ok) {
+      ElMessage.warning(`表单已加载，加载事件未完成：${eventResult.error ?? '未知错误'}`)
+    }
   } catch {
     errorMsg.value = t('form.definitionLoadFailed')
   } finally {
@@ -307,7 +509,10 @@ async function loadRecord(schema: FormSchema): Promise<boolean> {
           const arr: unknown = typeof raw === 'string' ? tryParseJSON(raw, []) : (raw ?? [])
           formData[field.name] = Array.isArray(arr)
             ? arr.map((row: unknown) => {
-                const r = row as Record<string, unknown>
+                const r = { ...(row as Record<string, unknown>) }
+                for (const sub of field.subFields) {
+                  if (sub.name in r) r[sub.name] = normalizeFormFieldValue(sub, r[sub.name])
+                }
                 return {
                   ...r,
                   _rowAction: 'UNCHANGED' as const,
@@ -334,7 +539,7 @@ async function loadRecord(schema: FormSchema): Promise<boolean> {
         }
         default: {
           const val = record[field.name]
-          formData[field.name] = val !== null && val !== undefined ? val : ''
+          formData[field.name] = normalizeFormFieldValue(field, val ?? '')
         }
       }
     }
@@ -405,7 +610,7 @@ function buildUpdatePayload(): {
         const entry: SubTableRowAction = { action }
         if (_rowId) entry.id = String(_rowId)
         if (action !== 'DELETE') {
-          entry.data = businessData as Record<string, unknown>
+          entry.data = normalizeFormDateFields(businessData, field.subFields)
         }
         return entry
       })
@@ -422,9 +627,18 @@ function buildUpdatePayload(): {
   }
 }
 
-function isEmptyRequiredValue(value: unknown): boolean {
+/** RICH_TEXT 按用户可见文本判断；旧纯文本原样返回，不按 HTML 解释。 */
+function fieldVisibleText(field: { type: string }, value: unknown): string {
+  return field.type === 'RICH_TEXT' ? richTextVisibleText(value) : String(value ?? '')
+}
+
+function isEmptyRequiredValue(value: unknown, fieldType?: string): boolean {
   if (value === null || value === undefined) return true
-  if (typeof value === 'string') return value.trim() === ''
+  if (typeof value === 'string') {
+    return fieldType === 'RICH_TEXT'
+      ? richTextVisibleText(value).trim() === ''
+      : value.trim() === ''
+  }
   if (Array.isArray(value)) return value.length === 0
   return false
 }
@@ -441,8 +655,36 @@ function validateRequiredFields(): boolean {
   for (const field of schema.value.fields) {
     // BF021：脚本隐藏字段与声明式隐藏同口径，不参与本次必填校验
     if (hiddenAll.value.has(field.name)) continue
-    if (fieldRequired(field) && isEmptyRequiredValue(formData[field.name])) {
+    if (fieldRequired(field) && isEmptyRequiredValue(formData[field.name], field.type)) {
       validationErrors[field.name] = t('form.fieldRequired')
+      continue
+    }
+    if (
+      (field.type === 'TEXT' || field.type === 'RICH_TEXT') &&
+      !isEmptyRequiredValue(formData[field.name], field.type)
+    ) {
+      const text = fieldVisibleText(field, formData[field.name])
+      const codePoints = Array.from(text).length
+      if (field.minLength && field.minLength > 0 && codePoints < field.minLength) {
+        validationErrors[field.name] = t('form.fieldMinLength', { count: field.minLength })
+        continue
+      }
+      if (field.length && field.length > 0 && codePoints > field.length) {
+        validationErrors[field.name] = t('form.fieldMaxLength', { count: field.length })
+        continue
+      }
+      if (field.pattern?.trim()) {
+        let matches: boolean
+        try {
+          matches = new RegExp(`^(?:${field.pattern})$`, 'u').test(text)
+        } catch {
+          matches = false
+        }
+        if (!matches) {
+          validationErrors[field.name] =
+            field.patternMessage?.trim() || t('form.fieldPatternInvalid')
+        }
+      }
     }
   }
 
@@ -451,12 +693,82 @@ function validateRequiredFields(): boolean {
 
 /* ── 提交 / 保存 ── */
 
+/**
+ * 提交前的统一时序：先结清已有字段联动，再执行提交前事件及其联动，
+ * 最后交给调用方做最终校验。草稿保存不经过此入口。
+ */
+async function settleBeforeSubmitEvents(): Promise<boolean> {
+  try {
+    await nextTick()
+    integrationPhase.value = 'BEFORE_SUBMIT'
+    fieldScripts.resetBaseline()
+    const before = await formEvents.runBeforeSubmit()
+    if (!before.ok) {
+      errorMsg.value = before.cancelled
+        ? `提交已取消：${before.error ?? ''}`
+        : `提交前处理失败：${before.error ?? '未知错误'}`
+      return false
+    }
+    fieldScripts.resetBaseline()
+    await nextTick()
+    return true
+  } catch (err) {
+    errorMsg.value = `提交前处理失败：${err instanceof Error ? err.message : String(err)}`
+    return false
+  }
+}
+
+/**
+ * 提交后事件统一以 AFTER_SUBMIT 阶段执行受控集成；结束后恢复提交前阶段，
+ * 避免后续普通交互误用写副作用能力。
+ */
+async function runAfterSubmitEvents(submissionId: string, retryFailedOnly = false) {
+  integrationPhase.value = 'AFTER_SUBMIT'
+  try {
+    return await formEvents.runAfterSubmit(submissionId, retryFailedOnly)
+  } finally {
+    integrationPhase.value = 'BEFORE_SUBMIT'
+  }
+}
+
+/** 命令结果在不同后端版本中可能是对象或 JSON 字符串；只在确有稳定记录 ID 时返回。 */
+function readRecordIdFromCommandResult(result: unknown): string {
+  let parsed = result
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed)
+    } catch {
+      return ''
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return ''
+  const recordId = (parsed as Record<string, unknown>).recordId
+  if (typeof recordId === 'string') return recordId.trim()
+  if (typeof recordId === 'number' && Number.isFinite(recordId)) return String(recordId)
+  return ''
+}
+
+/** 草稿提交完成后，命令结果或草稿回读的 resultRecordId 是提交后动作的稳定业务标识。 */
+async function resolveDraftSubmissionId(commandResult: unknown): Promise<string> {
+  const fromCommand = readRecordIdFromCommandResult(commandResult)
+  if (fromCommand) return fromCommand
+  const { getDraft } = await getProcessDraftApi()
+  const draft = await getDraft(draftId)
+  return draft.resultRecordId?.trim() ?? ''
+}
+
 async function handleSubmit() {
   submitting.value = true
   errorMsg.value = ''
 
+  // 提交前事件先结清已有字段联动，再执行脚本及其联动，最后做最终客户端校验。
+  if (!(await settleBeforeSubmitEvents())) {
+    submitting.value = false
+    return
+  }
+
   if (!validateRequiredFields()) {
-    errorMsg.value = t('form.completeRequired')
+    // Q74（300:1692）：本地必填失败由字段红边+就近错误表达，不再弹全宽汇总条（原errorMsg汇总与就近提示重复且遮挡填写头栏）
     submitting.value = false
     return
   }
@@ -466,6 +778,14 @@ async function handleSubmit() {
     try {
       const payload = buildUpdatePayload()
       await updateFormData(formKey, recordId, payload)
+      postSubmitEventError.value = ''
+      lastSubmittedId.value = recordId
+      const after = await runAfterSubmitEvents(recordId)
+      submissionFinalized.value = true
+      if (!after.ok) {
+        postSubmitEventError.value = after.error ?? '提交后动作失败'
+        ElMessage.warning(`已保存，后续处理失败：${postSubmitEventError.value}`)
+      }
       ElMessage.success(t('common.saveSuccess'))
       // 保存成功后重新加载记录（版本号已变，拉取最新数据）
       if (schema.value) await loadRecord(schema.value)
@@ -508,6 +828,15 @@ async function handleSubmit() {
     }
     const id = await submitForm(formKey, submitData, schema.value?.fields)
 
+    postSubmitEventError.value = ''
+    lastSubmittedId.value = id
+    const after = await runAfterSubmitEvents(id)
+    submissionFinalized.value = true
+    if (!after.ok) {
+      postSubmitEventError.value = after.error ?? '提交后动作失败'
+      ElMessage.warning(`已提交，后续处理失败：${postSubmitEventError.value}`)
+    }
+
     // 探测实例是否真实创建（决定确认后的去向）；提示文案统一为「提交成功」。
     // 实例由表单提交事件在事务提交后异步创建，短暂轮询等待其可见（最多约 5s）。
     const started = await waitForInstanceByBusinessKey(formKey, id)
@@ -522,6 +851,32 @@ async function handleSubmit() {
     }
   } finally {
     submitting.value = false
+  }
+}
+
+async function retryPostSubmitEvents() {
+  if (postEventRetrying.value) return
+  postEventRetrying.value = true
+  try {
+    // 草稿命令已完成但首次未取到稳定记录标识时，重试先回读草稿，不重发业务提交。
+    if (!lastSubmittedId.value && isDraftMode.value && draftId) {
+      lastSubmittedId.value = await resolveDraftSubmissionId(null)
+    }
+    if (!lastSubmittedId.value) {
+      postSubmitEventError.value = '尚未取得稳定记录标识，后续处理未执行'
+      return
+    }
+    const result = await runAfterSubmitEvents(lastSubmittedId.value, true)
+    if (result.ok) {
+      postSubmitEventError.value = ''
+      ElMessage.success('后续处理已完成')
+    } else {
+      postSubmitEventError.value = result.error ?? '提交后动作失败'
+    }
+  } catch (err) {
+    postSubmitEventError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    postEventRetrying.value = false
   }
 }
 
@@ -550,7 +905,7 @@ async function waitForInstanceByBusinessKey(formKey: string, recordId: string): 
 async function loadDraftPayload(schema: FormSchema) {
   const { getDraft } = await getProcessDraftApi()
   try {
-    const draft = await getDraft(draftId)
+    const draft = prefetchedDraft.value ?? (await getDraft(draftId))
     draftTitle.value = draft.title ?? ''
     let values: Record<string, unknown> = {}
     try {
@@ -640,27 +995,92 @@ async function handleSaveDraft() {
 /** 提交草稿：先保存控件值（updateDraft），再受理提交并轮询命令终态 */
 async function handleSubmitDraft() {
   if (!schema.value) return
-  if (!validateRequiredFields()) {
-    errorMsg.value = t('form.completeRequired')
-    return
-  }
   draftSaving.value = true
   errorMsg.value = ''
   try {
-    const { updateDraft, submitDraft, pollCommandStatus } = await getProcessDraftApi()
+    // 草稿转正式提交复用正式提交语义；保存草稿本身不经过这里。
+    if (!(await settleBeforeSubmitEvents())) return
+    if (!validateRequiredFields()) {
+      // Q74（300:1692）：同上，仅保留就近错误与提交拦截
+      return
+    }
+    const { updateDraft, submitDraft, pollCommandStatus, getDraft } = await getProcessDraftApi()
     await updateDraft(draftId, {
       title: draftTitle.value.trim() || null,
       payload: JSON.stringify(buildDraftPayloadObject()),
       refreshFormVersion: draftRefreshVersion.value || undefined,
     })
-    const accept = await submitDraft(draftId)
+    // A11-Q3：受理请求以草稿原号（draftId → 服务端稳定提交键 DRAFT_SUBMIT:<id>:<seq>）
+    // 提交；响应未知（网络中断/超时）时不重发业务提交，按原号查询草稿状态消解。
+    const acceptSubmit = async (): Promise<CommandAcceptResp> => {
+      try {
+        return await submitDraft(draftId)
+      } catch (acceptErr) {
+        let draftAfterError: BpmDraft | null = null
+        try {
+          draftAfterError = await getDraft(draftId)
+        } catch {
+          // 状态查询也失败：保持未知
+        }
+        if (
+          draftAfterError &&
+          (draftAfterError.status === 'SUBMITTING' || draftAfterError.status === 'SUBMITTED') &&
+          draftAfterError.commandId
+        ) {
+          // 已有受理：沿原命令句柄轮询终态，不重复受理业务提交
+          ElMessage.warning(t('common.submitResultUnknown'))
+          return {
+            commandId: draftAfterError.commandId,
+            commandKey: '',
+            commandType: 'DRAFT_SUBMIT',
+            channel: 'NORMAL',
+            status: 'ACCEPTED',
+            duplicated: true,
+          }
+        }
+        if (
+          draftAfterError &&
+          (draftAfterError.status === 'EDITING' || draftAfterError.status === 'FAILED')
+        ) {
+          // 确认未受理成功：按普通失败提示，可安全重试
+          throw acceptErr
+        }
+        // 未查清：明确保持未知，不伪装成功、不再提交业务
+        throw new ApiError(0, t('common.submitResultUnknown'))
+      }
+    }
+    const accept = await acceptSubmit()
     const finalStatus = await pollCommandStatus(accept.commandId)
     if (finalStatus?.status === 'COMPLETED') {
+      postSubmitEventError.value = ''
+      let afterOk = false
+      try {
+        const submissionId = await resolveDraftSubmissionId(finalStatus.result)
+        if (!submissionId) {
+          postSubmitEventError.value = '尚未取得稳定记录标识，后续处理未执行'
+        } else {
+          lastSubmittedId.value = submissionId
+          const after = await runAfterSubmitEvents(submissionId)
+          afterOk = after.ok
+          if (!after.ok) {
+            postSubmitEventError.value = after.error ?? '提交后动作失败'
+            ElMessage.warning(`已提交，后续处理失败：${postSubmitEventError.value}`)
+          }
+        }
+      } catch (err) {
+        postSubmitEventError.value = err instanceof Error ? err.message : String(err)
+        ElMessage.warning(`已提交，后续处理失败：${postSubmitEventError.value}`)
+      } finally {
+        submissionFinalized.value = true
+      }
       ElMessage.success(t('common.submitSuccess'))
-      // eslint-disable-next-line no-undef
-      window.setTimeout(() => {
-        void router.push('/workflow/my-drafts')
-      }, 1200)
+      // 后续处理失败时留在本页，使用原稳定标识显式重试；不重发业务提交。
+      if (afterOk) {
+        // eslint-disable-next-line no-undef
+        window.setTimeout(() => {
+          void router.push('/workflow/my-drafts')
+        }, 1200)
+      }
     } else if (finalStatus?.status === 'FAILED') {
       errorMsg.value = finalStatus.failureReason ?? t('common.submitFailed')
     } else {
@@ -712,14 +1132,37 @@ onMounted(() => {
         :closable="false"
         class="form-render-page__alert"
       />
+      <el-alert
+        v-if="postSubmitEventError"
+        type="warning"
+        :title="`业务数据已提交，后续处理失败：${postSubmitEventError}`"
+        :closable="false"
+        show-icon
+        class="form-render-page__alert"
+      >
+        <template #default>
+          <el-button
+            link
+            type="primary"
+            :loading="postEventRetrying"
+            @click="retryPostSubmitEvents"
+          >
+            重试后续处理
+          </el-button>
+        </template>
+      </el-alert>
 
       <el-empty v-if="!schema && !errorMsg" :description="t('form.notFoundOrLoadFailed')" />
 
       <template v-else-if="schema">
         <!-- 0.1.7 #13：整个 top 导航栏——左上圆角返回，右上圆角保存草稿/提交；无表单名/流程名噪音 -->
-        <header class="form-render-page__top">
+        <header
+          class="form-render-page__top"
+          :class="{ 'form-render-page__top--fill': isStartFillMode }"
+        >
           <div class="form-render-page__heading">
             <button
+              v-if="!isStartFillMode"
               class="form-render-page__back"
               type="button"
               data-testid="form-render-back"
@@ -730,7 +1173,7 @@ onMounted(() => {
             </button>
             <span class="form-render-page__title">{{ pageTitle }}</span>
           </div>
-          <div v-if="!isViewMode" class="form-render-page__top-actions">
+          <div v-if="!isViewMode && !isStartFillMode" class="form-render-page__top-actions">
             <template v-if="isDraftMode">
               <el-input
                 v-model="draftTitle"
@@ -776,12 +1219,32 @@ onMounted(() => {
               </el-button>
             </template>
           </div>
+          <!-- 0.2.0 参考节点 101:2：发起填写态关闭入口固定在标题栏右侧 -->
+          <button
+            v-else-if="isStartFillMode"
+            class="form-render-page__close"
+            type="button"
+            data-testid="form-render-close"
+            :title="t('common.close')"
+            @click="goBack"
+          >
+            <el-icon><Close /></el-icon>
+          </button>
         </header>
 
         <!-- 0.1.7 #13/#18：画布——设计器里有什么就展示什么（24 栅格直出），无其它信息 -->
-        <div class="form-render-page__canvas">
-          <div class="form-render-page__main">
-            <h4 class="form-render-page__section">
+        <div
+          class="form-render-page__canvas"
+          :class="{ 'form-render-page__canvas--fill': isStartFillMode }"
+        >
+          <div
+            class="form-render-page__main"
+            :class="{ 'form-render-page__main--fill': isStartFillMode }"
+          >
+            <h4 v-if="isStartFillMode" class="form-render-page__form-title">
+              {{ schema.title }}
+            </h4>
+            <h4 v-else class="form-render-page__section">
               {{ t('workflow.formDataReadonlySnapshot') }}
             </h4>
             <div class="form-render-page__sheet">
@@ -790,6 +1253,7 @@ onMounted(() => {
                   v-for="field in renderFields"
                   :key="field.name"
                   class="form-render-page__field"
+                  :class="{ 'form-render-page__field--error': validationErrors[field.name] }"
                   :style="{ gridColumn: `span ${getFormFieldColSpan(field)}` }"
                   :data-col-span="getFormFieldColSpan(field)"
                   :data-grid-field-type="field.type"
@@ -800,6 +1264,8 @@ onMounted(() => {
                     :model-value="formData[field.name]"
                     :readonly="fieldReadonly(field)"
                     :reference-label="referenceLabels[field.name] ?? ''"
+                    :form-key="formKey"
+                    :record-id="recordId"
                     @update:model-value="formData[field.name] = $event"
                   />
                   <p
@@ -856,29 +1322,50 @@ onMounted(() => {
             </template>
           </div>
         </div>
+
+        <!-- 0.2.0 参考节点 101:2：发起填写态底部固定操作栏，按钮对齐 1440 白卡右缘 -->
+        <footer v-if="isStartFillMode" class="form-render-page__fill-footer">
+          <div class="form-render-page__fill-footer-inner">
+            <el-button
+              :loading="draftSaving"
+              data-testid="form-render-save-draft"
+              @click="handleSaveDraft"
+            >
+              {{ t('form.fillSaveTemporary') }}
+            </el-button>
+            <el-button
+              type="primary"
+              :loading="submitting"
+              data-testid="form-render-submit"
+              @click="handleSubmit"
+            >
+              {{ t('common.submit') }}
+            </el-button>
+          </div>
+        </footer>
       </template>
     </template>
 
-    <!-- 0.1.7 #16：提交成功居中确认弹窗（需用户点击确认） -->
-    <el-dialog
+    <!-- 0.1.7 #16 / 0.2.0 P3/272:1784：提交成功确认窗，复用 DetailDialog 结果窗面
+         （520×172@(700,454)，appearance=design；证据 u020-32-geometry-r99）。
+         确认条件/去向策略不变：已发起 → 我发起的（/workspace/my-instances），仅存数据 → 返回来源页。 -->
+    <DetailDialog
       v-model="submitDialogVisible"
-      width="360px"
-      align-center
+      title="申请已提交"
+      width="520px"
+      appearance="design"
       :close-on-click-modal="false"
       class="form-render-page__submit-dialog"
     >
-      <el-result icon="success" title="提交成功" />
+      <p data-testid="submit-success-message">
+        {{ submitDialogGotoInstances ? '可前往「我发起的」查看审批进度。' : '提交成功。' }}
+      </p>
       <template #footer>
-        <el-button
-          round
-          type="primary"
-          data-testid="submit-dialog-confirm"
-          @click="confirmSubmitDialog"
-        >
-          {{ t('common.confirm') }}
+        <el-button type="primary" data-testid="submit-dialog-confirm" @click="confirmSubmitDialog">
+          查看
         </el-button>
       </template>
-    </el-dialog>
+    </DetailDialog>
   </div>
 </template>
 
@@ -896,6 +1383,7 @@ onMounted(() => {
   box-sizing: border-box;
   max-width: none !important;
   width: 100%;
+  overflow-x: hidden;
   padding: 0;
   background: var(--sw-surface-page, #f5f7fa);
 }
@@ -913,6 +1401,38 @@ onMounted(() => {
   padding: 8px 16px;
   background: #fff;
   border-bottom: 1px solid var(--sw-border-light, #ebeef5);
+}
+/* 0.2.0 参考节点 101:2：填写态标题栏高 48、标题左 24、关闭居右。 */
+.form-render-page__top--fill {
+  /* 参考 101:2：关闭填写 32×32 @(1864,8) → 右缘 24px、上缘 8px */
+  min-height: 48px;
+  padding: 8px 24px 8px 24px;
+}
+.form-render-page__top--fill .form-render-page__title {
+  font-size: 15px;
+}
+.form-render-page__top--fill .form-render-page__heading {
+  gap: 0;
+}
+.form-render-page__close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  /* 参考 101:2 关闭填写入口 32×32 */
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 16px;
+  color: #5c6370;
+  cursor: pointer;
+}
+.form-render-page__close:hover {
+  background: #f4f6fb;
+  color: var(--sw-text-primary);
 }
 
 .form-render-page__heading {
@@ -990,6 +1510,73 @@ onMounted(() => {
   font-weight: 600;
 }
 
+/* ── 0.2.0 参考节点 101:2：发起填写态（顶部填写+关闭、底部固定操作栏、白卡 1440 居中） ── */
+.form-render-page__canvas--fill {
+  padding: 12px 0 88px;
+}
+.form-render-page__main--fill {
+  width: min(1440px, calc(100vw - 240px));
+  margin: 0 auto;
+  max-width: none;
+  box-sizing: border-box;
+  padding: 18px 16px 24px;
+  background: var(--sw-surface-card, #ffffff);
+  border: 1px solid #dde3ef;
+  border-radius: 0;
+  gap: 0;
+}
+.form-render-page__form-title {
+  margin: 0 0 20px;
+  font-size: 20px;
+  /* 参考 101:2 标题 Bold / 行高 32 */
+  font-weight: 700;
+  line-height: 32px;
+  color: var(--sw-text-primary);
+  text-align: center;
+}
+.form-render-page__main--fill .form-render-page__sheet {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+.form-render-page__fill-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  /* 参考 101:2 底部操作栏 h64 @y1016 */
+  height: 64px;
+  box-sizing: border-box;
+  padding: 0 24px;
+  background: var(--sw-surface-card, #ffffff);
+  border-top: 1px solid #dde3ef;
+}
+.form-render-page__fill-footer-inner {
+  display: flex;
+  justify-content: flex-end;
+  /* 参考 101:2 暂存→提交间距 8 */
+  gap: 8px;
+  width: min(1440px, calc(100vw - 240px));
+  margin: 0 auto;
+}
+.form-render-page__fill-footer :deep(.el-button) {
+  /* 参考 101:2 暂存/提交按钮宽 72 */
+  width: 72px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.form-render-page__fill-footer :deep(.el-button--primary) {
+  width: 72px;
+}
+
 .form-render-page__section:first-child {
   margin-top: 0;
 }
@@ -1003,8 +1590,16 @@ onMounted(() => {
   border-radius: var(--sw-radius-card, 8px);
 }
 
+/* 设计 300:1692（Q74）：错误反馈改为顶部浮层呈现——不再占据文档流，
+   避免顶部整条错误提示把填写标题/内容/底栏挤下移；就近字段提示仍在字段下方。 */
 .form-render-page__alert {
-  margin: 12px 24px 0;
+  position: fixed;
+  top: 12px;
+  right: 24px;
+  left: 24px;
+  z-index: 3000;
+  margin: 0;
+  box-shadow: 0 4px 16px rgba(19, 31, 58, 0.12);
 }
 
 /* 0.1.7 #30：外挂流程信息面板 / 审批动作卡——与画布同宽居中、紧贴表单 */
@@ -1039,6 +1634,13 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
+/* 101:2（执行提示20）：日期控件随所属半列伸展（不硬编码列宽），高度保持 32 */
+.form-render-page__field[data-grid-field-type='DATE'] :deep(.el-date-editor) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+}
+
 .form-render-page__field-error {
   margin: var(--sw-space-4) 0 0;
   color: var(--sw-danger);
@@ -1046,13 +1648,50 @@ onMounted(() => {
   line-height: 1.5;
 }
 
+/* 设计 300:1692（Q74）：本地必填未过时字段边框转 danger 红边（就近提示文字保持不变） */
+.form-render-page__field--error :deep(.el-input__wrapper),
+.form-render-page__field--error :deep(.el-select__wrapper),
+.form-render-page__field--error :deep(.el-textarea__inner),
+.form-render-page__field--error :deep(.el-input-number__wrapper) {
+  box-shadow: 0 0 0 1px var(--sw-danger, #f56c6c) inset;
+}
+
 /* 窄屏：画布与顶栏收紧 */
 @media (max-width: 767px) {
+  .form-render-page__main {
+    max-width: 100%;
+    min-width: 0;
+  }
   .form-render-page__canvas {
     padding: 12px;
   }
+  /* 填写态白卡在窄屏改为满宽（原 100vw-240px 会把卡片压到 135px） */
+  .form-render-page__canvas--fill {
+    padding: 12px 12px 88px;
+  }
+  .form-render-page__main--fill {
+    width: 100%;
+  }
+  .form-render-page__fill-footer {
+    padding: 0 12px;
+  }
+  .form-render-page__fill-footer-inner {
+    width: 100%;
+  }
   .form-render-page__sheet {
     padding: 16px 12px;
+  }
+  .form-render-page__group {
+    column-gap: 0;
+  }
+  /* 24 栅格在 375px 下按单列呈现，字段权限与字段顺序不变。 */
+  .form-render-page__field {
+    grid-column: 1 / -1 !important;
+  }
+  .form-render-page__flowpanel,
+  .form-render-page__actioncard {
+    max-width: 100%;
+    overflow-x: auto;
   }
 }
 
@@ -1064,5 +1703,20 @@ onMounted(() => {
   background: #f3f4f8;
   color: #909399;
   cursor: not-allowed;
+}
+/* 参考 101:2：填写页输入框/选择器统一 32 高（默认渲染为 34：wrapper content-box + 上下 1px） */
+.form-render-page :deep(.el-input__wrapper),
+.form-render-page :deep(.el-select__wrapper) {
+  box-sizing: border-box;
+  min-height: 32px;
+  height: 32px;
+}
+.form-render-page :deep(.el-input__inner) {
+  height: 30px;
+}
+/* Q74（272:1784）：成功正文段落清零 UA 默认外边距并明确 22px 行盒（原 172 结构），窗口稳定 520×172 */
+.form-render-page :deep(.form-render-page__submit-dialog .el-dialog__body p) {
+  margin: 0;
+  line-height: 22px;
 }
 </style>

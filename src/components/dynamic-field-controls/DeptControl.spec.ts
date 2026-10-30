@@ -79,6 +79,17 @@ describe('DeptControl 弹窗选择', () => {
     expect(wrapper.find('.dept-picker__table').exists()).toBe(false)
   })
 
+  it('只读空值使用实际本地化提示', async () => {
+    const wrapper = mount(DeptControl, {
+      ...mountOptions,
+      props: { ...mountOptions.props, modelValue: null, readonly: true },
+    })
+    await nextTick()
+    await nextTick()
+    expect(wrapper.find('.dept-readonly').text()).toBe('未选择')
+    expect(wrapper.text()).not.toContain('common.notSelected')
+  })
+
   it('readonly 无组织目录权限时按业务数量兜底，不暴露内部 ID', async () => {
     vi.mocked(loadDeptChoices).mockRejectedValueOnce(new Error('forbidden'))
     const wrapper = mount(DeptControl, {

@@ -31,5 +31,9 @@
   "新建外部工具": {
     "key": "agent.newExternalTool",
     "en": "New external HTTP tool"
+  },
+  "提交结果未知：请稍后在「我的草稿」确认，请勿重复提交": {
+    "key": "common.submitResultUnknown",
+    "en": "Submission result unknown. Check \"My drafts\" later and do not submit again."
   }
 }

@@ -303,7 +303,7 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
 .node-item.expanded {
   border-color: var(--sw-color-primary);
   background: var(--sw-color-primary-soft);
-  box-shadow: 0 2px 8px rgba(111, 45, 255, 0.15);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--sw-color-primary) 15%, transparent);
 }
 
 /* 状态样式覆盖 */

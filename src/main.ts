@@ -5,6 +5,8 @@ import 'element-plus/dist/index.css'
 import './styles/tokens.css'
 // 表格表头与行数据统一居中，须在 Element Plus 样式之后导入。
 import './styles/tables.css'
+// 管理端编辑弹窗（446 系列）共享几何：760/1000 两列、右下 80×32 页脚。
+import './styles/edit-dialogs.css'
 
 import App from './App.vue'
 import { pinia } from './stores'
@@ -13,8 +15,10 @@ import { refreshDocumentTitle, syncDocumentTitle } from './router/page-title'
 import { i18n } from './locales'
 import { permissionDirective } from './foundation/permission'
 import { installCompositionEscapeGuard } from './foundation/keyboard/composition-escape-guard'
+import { applyTheme, readTheme } from './foundation/theme'
 
 async function bootstrap(): Promise<void> {
+  applyTheme(readTheme(), false)
   // 仅开发构建按显式环境变量动态载入，生产构建不生成该入口或 debug 模块。
   if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_AUTH_ENABLED === 'true') {
     const { initializeDevDebugAuth } = await import('./foundation/auth/dev-debug')

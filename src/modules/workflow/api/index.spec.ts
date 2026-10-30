@@ -298,4 +298,65 @@ describe('modules/workflow/api', () => {
     })
     expect(result[0]?.type).toBe('START')
   })
+
+  it('keeps a 19-digit process definition id exact for suspend and activate', async () => {
+    const defId = '2100424929376403458'
+    mockRequest.mockResolvedValue(undefined)
+
+    await workflowApi.suspendDefVersion(defId, 3)
+    await workflowApi.activateDefVersion(defId, 3)
+
+    expect(mockRequest).toHaveBeenNthCalledWith(1, {
+      method: 'POST',
+      url: `/workflow/defs/${defId}/versions/3/suspend`,
+    })
+    expect(mockRequest).toHaveBeenNthCalledWith(2, {
+      method: 'POST',
+      url: `/workflow/defs/${defId}/versions/3/activate`,
+    })
+  })
+
+  it('keeps long pending-sign ids exact when cancelling', async () => {
+    mockRequest.mockResolvedValueOnce(undefined)
+    const recordId = '2100424929376403458'
+
+    await workflowApi.cancelSign(recordId)
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'POST',
+      url: `/workflow/sign/${recordId}/cancel`,
+      data: {},
+    })
+  })
+
+  it('creates and revokes authorization rules with long ids as strings', async () => {
+    const ruleId = '2100424929376403602'
+    mockRequest.mockResolvedValueOnce(ruleId)
+
+    await workflowApi.createAuthorizeRule({
+      targetUserId: '2100424929376403458',
+      scopeType: 'PROCESS',
+      processDefKey: 'leave_approval',
+      startAt: '2026-10-24T09:00:00',
+      endAt: '2026-11-24T18:00:00',
+    })
+    expect(mockRequest).toHaveBeenNthCalledWith(1, {
+      method: 'POST',
+      url: '/workflow/authorize-rules',
+      data: {
+        targetUserId: '2100424929376403458',
+        scopeType: 'PROCESS',
+        processDefKey: 'leave_approval',
+        startAt: '2026-10-24T09:00:00',
+        endAt: '2026-11-24T18:00:00',
+      },
+    })
+
+    mockRequest.mockResolvedValueOnce(undefined)
+    await workflowApi.revokeAuthorizeRule(ruleId)
+    expect(mockRequest).toHaveBeenNthCalledWith(2, {
+      method: 'DELETE',
+      url: `/workflow/authorize-rules/${ruleId}`,
+    })
+  })
 })

@@ -29,7 +29,7 @@ import TableControl from './dynamic-field-controls/TableControl.vue'
 import MultiSelectControl from './dynamic-field-controls/MultiSelectControl.vue'
 import AttachmentControl from './dynamic-field-controls/AttachmentControl.vue'
 import LabelControl from './dynamic-field-controls/LabelControl.vue'
-import PlaceholderControl from './dynamic-field-controls/PlaceholderControl.vue'
+import { registerSubFieldComponent } from './dynamic-field-subfield'
 import TimeControl from './dynamic-field-controls/TimeControl.vue'
 import UserControl from './dynamic-field-controls/UserControl.vue'
 import DeptControl from './dynamic-field-controls/DeptControl.vue'
@@ -54,6 +54,11 @@ export interface DynamicFieldControlProps {
   subField?: boolean
   /** REFERENCE 回显标签（仅影响显示，底层 v-model 仍为 id）。 */
   referenceLabel?: string
+  /** 已保存记录的附件访问上下文；只作定位，服务端重新检查对象和字段权限。 */
+  formKey?: string
+  recordId?: string
+  /** 画布设计态预览：真表格外观但无行操作、空数据渲染示例空行（不产生数据）。 */
+  design?: boolean
 }
 
 export interface DynamicFieldDescriptor {
@@ -90,15 +95,20 @@ export const DYNAMIC_FIELD_REGISTRY: DynamicFieldDescriptor[] = [
   { type: 'DATASOURCE', component: DatasourceControl, subFieldComponent: DatasourceControl },
 ]
 
+// 子表解析映射独立存放：控件组件只依赖该映射，避免注册表与控件互相 import 成环。
+for (const descriptor of DYNAMIC_FIELD_REGISTRY) {
+  registerSubFieldComponent(descriptor.type, descriptor.subFieldComponent)
+}
+
 /** 按 type 取描述符；取不到返回 undefined（主渲染链不渲染 = 消费方兜底）。 */
 export function getDynamicFieldDescriptor(type: string): DynamicFieldDescriptor | undefined {
   return DYNAMIC_FIELD_REGISTRY.find((d) => d.type === type)
 }
 
-/** 子表单元格组件：按 type 查表，缺失 / 显式 null → 降级占位输入框。 */
-export function getSubFieldComponent(type: string): Component {
-  return getDynamicFieldDescriptor(type)?.subFieldComponent ?? PlaceholderControl
-}
+/** 子表单元格组件解析保持在独立模块（无环），此处仅转出以维持公共 API。 */
+export { getSubFieldComponent } from './dynamic-field-subfield'
+/** ID 列表归一化保持在独立工具模块（控件可直接引用而不回依赖注册表）。 */
+export { normalizeIdList } from './dynamic-field-utils'
 
 /**
  * 注册新控件（编译期静态注册位；同 type 覆盖式注册，幂等）。
@@ -109,29 +119,5 @@ export function registerDynamicFieldDescriptor(descriptor: DynamicFieldDescripto
   const idx = DYNAMIC_FIELD_REGISTRY.findIndex((d) => d.type === descriptor.type)
   if (idx >= 0) DYNAMIC_FIELD_REGISTRY.splice(idx, 1, descriptor)
   else DYNAMIC_FIELD_REGISTRY.push(descriptor)
-}
-
-/**
- * 多选 ID 列表归一化（P63 回显兼容）。
- * USER/DEPT multiple 字段的读取值可能是 JSON 数组串（'["5","6"]'，落库形态）或已解析
- * 数组；渲染层统一归一为 ID 字符串数组，**只影响渲染，不回写存储**。
- * 宽容兼容：历史单个 ID（串/数字）按单元素列表展示；非法 JSON 串按原始串兜底，
- * 与单选回显「不在候选保留原始 ID」同一语义（不伪造、不丢值）。
- */
-export function normalizeIdList(value: unknown): string[] {
-  if (value === null || value === undefined) return []
-  if (Array.isArray(value)) return value.map((v) => String(v))
-  if (typeof value === 'string') {
-    const text = value.trim()
-    if (text.startsWith('[')) {
-      try {
-        const parsed: unknown = JSON.parse(text)
-        if (Array.isArray(parsed)) return parsed.map((v) => String(v))
-      } catch {
-        // 非法 JSON 串：按原始串兜底（保留服务端语义），渲染层不抛错
-      }
-    }
-    return text ? [text] : []
-  }
-  return [String(value)]
+  registerSubFieldComponent(descriptor.type, descriptor.subFieldComponent)
 }

@@ -34,9 +34,7 @@ function adaptPage<T>(raw: BackendPageResult<T>): PageResult<T> {
 
 // ═══════════════════════════════════════
 
-/** POST /system/user/page?pageNum=&pageSize= + body 筛选
- *  NOTE: 后端 SysUserService.page(PageParam) 当前不支持 query 筛选，
- *  body 参数后端接受但不使用（已知限制，后续增强） */
+/** POST /system/user/page：查询条件与明确租户范围交由服务端授权过滤。 */
 export async function pageUsers(page: PageQuery, filter: UserFilter): Promise<PageResult<SysUser>> {
   const raw = await request<BackendPageResult<SysUser>>({
     method: 'POST',
@@ -50,6 +48,7 @@ export async function pageUsers(page: PageQuery, filter: UserFilter): Promise<Pa
       deptId: filter.deptId,
       postId: filter.postId,
       roleId: filter.roleId,
+      tenantId: filter.tenantId,
     },
   })
   return adaptPage(raw)
@@ -122,15 +121,16 @@ export async function getUserPosts(id: string): Promise<PostAssociation[]> {
 /** PUT /system/user/{id}/posts：整量替换任职；deptId 缺省后端回落用户主部门 */
 export async function updateUserPosts(id: string, posts: PostAssociation[]): Promise<void> {
   const body = posts.map((item) => ({
-    postId: Number(item.postId),
-    ...(item.deptId === undefined ? {} : { deptId: Number(item.deptId) }),
+    postId: item.postId,
+    ...(item.deptId === undefined ? {} : { deptId: item.deptId }),
   }))
   return request<void>({ method: 'PUT', url: `/system/user/${id}/posts`, data: body })
 }
 
 /** 用户候选选项（V012-BUG-019 选择器数据源）：最小展示字段，租户内启用用户。 */
 export interface UserOption {
-  id: number
+  /** 后端以字符串承载 64 位用户 ID，禁止转 Number 以免精度丢失。 */
+  id: string
   username: string
   realName: string | null
 }

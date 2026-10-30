@@ -32,6 +32,10 @@ import { buildMockXlsxBlob } from './mock-xlsx'
 import { getAccessToken } from '@/foundation/auth/token'
 import type { MockHandler, MockMethod } from './index'
 import { MOCK_WORKFLOW_NODE_CAPABILITIES } from './workflow-node-capabilities'
+import { tenantMockRegistrations, mockTenantView } from './tenant-handlers'
+import { appManagementMockRegistrations } from './app-management-handlers'
+import { f020DatasourceMockRegistrations } from './f020-datasource-mocks'
+import { w020AuthorizeMockRegistrations } from './w020-authorize-mocks'
 import {
   MOCK_CATEGORIES,
   MOCK_CATALOG_ITEMS,
@@ -1429,6 +1433,10 @@ const MOCK_IOT_RESERVATIONS: {
 ]
 
 export const mockRegistrations: MockRegistration[] = [
+  ...(f020DatasourceMockRegistrations as MockRegistration[]),
+  ...(w020AuthorizeMockRegistrations as MockRegistration[]),
+  ...tenantMockRegistrations,
+  ...appManagementMockRegistrations,
   // POST /api/workflow/txn-batch — 后台批量受理（P62 S5 mock，临时）
   // 同批次键幂等重放返回原批次（replay=true）；受理后转 PROCESSING，首次回查完成逐项结算。
   {
@@ -2537,6 +2545,10 @@ export const mockRegistrations: MockRegistration[] = [
           sortNo: app.sortNo,
           visibleScopeType: app.visibleScopeType,
           visibleUserIds: app.visibleUserIds,
+          visibleDeptIds: app.visibleDeptIds,
+          visibleRoleCodes: app.visibleRoleCodes,
+          visiblePostIds: app.visiblePostIds,
+          visibleTenantIds: app.visibleTenantIds,
           status: app.status,
           source: app.source,
           legacyCategoryId: app.legacyCategoryId ?? null,
@@ -2571,6 +2583,10 @@ export const mockRegistrations: MockRegistration[] = [
             sortNo: app.sortNo,
             visibleScopeType: app.visibleScopeType,
             visibleUserIds: app.visibleUserIds,
+            visibleDeptIds: app.visibleDeptIds,
+            visibleRoleCodes: app.visibleRoleCodes,
+            visiblePostIds: app.visiblePostIds,
+            visibleTenantIds: app.visibleTenantIds,
             status: app.status,
             source: app.source,
             formCount:
@@ -3749,9 +3765,10 @@ export const mockRegistrations: MockRegistration[] = [
     handler: (_params, query, body) => {
       const pageNum = Number(query.pageNum ?? 1)
       const pageSize = Number(query.pageSize ?? 10)
-      let list = [...MOCK_USERS_LIST]
+      let list = MOCK_USERS_LIST.map((row) => mockTenantView(row))
       if (body && typeof body === 'object') {
         const f = body as Record<string, unknown>
+        if (f.tenantId != null) list = list.filter((row) => row.tenantId === String(f.tenantId))
         const keyword = String(f.keyword ?? f.username ?? f.realName ?? '')
         if (keyword)
           list = list.filter((u) => u.username.includes(keyword) || u.realName.includes(keyword))
@@ -3789,7 +3806,7 @@ export const mockRegistrations: MockRegistration[] = [
       const id = (params as Record<string, string>).id
       const user = MOCK_USERS_LIST.find((u) => u.id === id)
       if (!user) return { code: 404, message: '用户不存在', data: null }
-      return { code: 0, message: 'ok', data: { ...user } }
+      return { code: 0, message: 'ok', data: mockTenantView(user) }
     },
   },
   {
@@ -3800,6 +3817,7 @@ export const mockRegistrations: MockRegistration[] = [
       const id = String(Date.now())
       const newUser = {
         id,
+        tenantId: String(data.tenantId ?? '1'),
         username: String(data.username ?? ''),
         realName: String(data.realName ?? ''),
         email: String(data.email ?? ''),
@@ -4117,9 +4135,12 @@ export const mockRegistrations: MockRegistration[] = [
     handler: (_params, query, body) => {
       const pageNum = Number(query.pageNum ?? 1)
       const pageSize = Number(query.pageSize ?? 10)
-      let list = [...MOCK_ROLES_LIST]
+      let list = MOCK_ROLES_LIST.map((row) =>
+        mockTenantView(row, row.code === 'superadmin' ? '0' : '1'),
+      )
       if (body && typeof body === 'object') {
         const f = body as Record<string, unknown>
+        if (f.tenantId != null) list = list.filter((row) => row.tenantId === String(f.tenantId))
         if (f.name) list = list.filter((r) => r.name.includes(String(f.name)))
         if (f.code) list = list.filter((r) => r.code.includes(String(f.code)))
         if (f.status !== undefined && f.status !== null && f.status !== '')
@@ -4275,7 +4296,10 @@ export const mockRegistrations: MockRegistration[] = [
         return { code: 400, message: '非法部门状态参数', data: null }
       }
 
-      let hits = [...MOCK_DEPTS_LIST]
+      const owned = MOCK_DEPTS_LIST.map((row) => mockTenantView(row)).filter(
+        (row) => query.tenantId == null || row.tenantId === query.tenantId,
+      )
+      let hits = [...owned]
       if (name) hits = hits.filter((d) => d.name.includes(name))
       if (hasStatus) hits = hits.filter((d) => d.status === Number(statusRaw))
 
@@ -4285,7 +4309,7 @@ export const mockRegistrations: MockRegistration[] = [
       }
 
       // 祖先补全：沿 parentId 上溯（断链即停），Map 去重保证无重复节点
-      const byId = new Map(MOCK_DEPTS_LIST.map((d) => [d.id, d]))
+      const byId = new Map(owned.map((d) => [d.id, d]))
       const result = new Map<string, (typeof MOCK_DEPTS_LIST)[number]>()
       for (const hit of hits) {
         let cur: (typeof MOCK_DEPTS_LIST)[number] | undefined = hit
@@ -4310,7 +4334,7 @@ export const mockRegistrations: MockRegistration[] = [
       const id = (params as Record<string, string>).id
       const dept = MOCK_DEPTS_LIST.find((d) => d.id === id)
       if (!dept) return { code: 404, message: '部门不存在', data: null }
-      return { code: 0, message: 'ok', data: { ...dept } }
+      return { code: 0, message: 'ok', data: mockTenantView(dept) }
     },
   },
   {
@@ -4321,6 +4345,7 @@ export const mockRegistrations: MockRegistration[] = [
       const id = String(Date.now())
       const newDept = {
         id,
+        tenantId: String(data.tenantId ?? '1'),
         parentId: String(data.parentId ?? '0'),
         name: String(data.name ?? ''),
         code: String(data.code ?? ''),
@@ -4379,9 +4404,10 @@ export const mockRegistrations: MockRegistration[] = [
     handler: (_params, query, body) => {
       const pageNum = Number(query.pageNum ?? 1)
       const pageSize = Number(query.pageSize ?? 10)
-      let list = [...MOCK_POSTS_LIST]
+      let list = MOCK_POSTS_LIST.map((row) => mockTenantView(row))
       if (body && typeof body === 'object') {
         const f = body as Record<string, unknown>
+        if (f.tenantId != null) list = list.filter((row) => row.tenantId === String(f.tenantId))
         if (f.code) list = list.filter((p) => p.code.includes(String(f.code)))
         if (f.name) list = list.filter((p) => p.name.includes(String(f.name)))
         if (f.status !== undefined && f.status !== null && f.status !== '')

@@ -132,7 +132,7 @@ describe('DictControl 数据来源（BF20261013-009）', () => {
     expect(wrapper.findComponent({ name: 'ElSelect' }).props('placeholder')).toBe('请配置数据')
   })
 
-  it('只读回看（下拉）：按选择项展示选中状态，不渲染输入框', async () => {
+  it('只读回看只展示已选业务名称，不渲染可编辑选择器', async () => {
     const wrapper = mountControl(
       dictField({
         source: 'custom',
@@ -146,9 +146,14 @@ describe('DictControl 数据来源（BF20261013-009）', () => {
     )
     await nextTick()
     expect(wrapper.findComponent({ name: 'ElSelect' }).exists()).toBe(false)
-    const options = wrapper.findAll('.readonly-option')
-    expect(options.map((item) => item.text().replace('✓', '').trim())).toEqual(['餐饮', '交通'])
-    expect(options[0].classes()).toContain('is-selected')
-    expect(options[1].classes()).not.toContain('is-selected')
+    expect(wrapper.find('.readonly-options').text()).toBe('餐饮')
+    expect(wrapper.text()).not.toContain('交通')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('已失效选项显示不可用反馈，空值仍显示未选择', () => {
+    const field = dictField({ source: 'custom', options: [{ key: 'a', value: '甲' }] })
+    expect(mountControl(field, 'missing-internal-key', true).text()).toBe('选项暂不可用')
+    expect(mountControl(field, '', true).text()).toBe('未选择')
   })
 })

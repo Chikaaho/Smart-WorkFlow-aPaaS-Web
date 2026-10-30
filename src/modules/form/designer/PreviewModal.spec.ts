@@ -77,4 +77,13 @@ describe('PreviewModal', () => {
     expect(wrapper.find('.preview-modal__empty').exists()).toBe(true)
     expect(wrapper.find('[data-testid="fc"]').exists()).toBe(false)
   })
+
+  it('renders the form description above fields', () => {
+    const wrapper = mountModal({
+      title: 't',
+      description: '请填写演练信息',
+      fields: [f('reason')],
+    })
+    expect(wrapper.find('.preview-modal__description').text()).toBe('请填写演练信息')
+  })
 })

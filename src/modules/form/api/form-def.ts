@@ -97,7 +97,7 @@ export interface FormSnapshotDTO {
   /** 可选的产品版本标签；历史列表未提供时回退数字版本。 */
   versionLabel?: string | null
   createTime: string
-  /** 快照状态（P53 草稿历史）：PUBLISHED=已发布版本；DRAFT=草稿版本。缺省视为历史草稿。 */
+  /** 快照状态：服务端发布历史的缺省值表示已发布；DRAFT 仅用于兼容显式草稿快照。 */
   status?: 'PUBLISHED' | 'DRAFT'
   /** 快照作者展示名（演示元数据；服务端未下发时缺省）。 */
   author?: string
@@ -226,7 +226,10 @@ export async function pageFormDefs(
 }
 
 /** PUT /api/form/def/{id}/visibility → void；空 userIds 表示当前租户内全部用户。 */
-export async function updateFormVisibility(id: string, userIds: number[]): Promise<void> {
+export async function updateFormVisibility(
+  id: string,
+  userIds: Array<number | string>,
+): Promise<void> {
   return request<void>({
     method: 'PUT',
     url: `/form/def/${id}/visibility`,

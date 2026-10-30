@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from '@/locales'
+import HintTip from '@/components/HintTip.vue'
 
 const { t } = useI18n()
 /**
@@ -36,7 +37,10 @@ function onExpression(value: string) {
   />
 
   <div class="row">
-    <label class="row__label">{{ t('form.formulaExpression') }}</label>
+    <label class="row__label"
+      >{{ t('form.formulaExpression') }}
+      <HintTip :content="t('form.formulaHelp', { field: '${name}' })"
+    /></label>
     <el-input
       :model-value="expressionValue()"
       type="textarea"
@@ -44,7 +48,6 @@ function onExpression(value: string) {
       :placeholder="t('form.formulaPlaceholder')"
       @update:model-value="onExpression"
     />
-    <p class="row__hint">字段用 ${name} 引用；正式提交由服务端按发布版本重算，客户端值不消费。</p>
   </div>
 </template>
 
@@ -58,10 +61,5 @@ function onExpression(value: string) {
   font-size: var(--sw-font-emphasis);
   font-weight: var(--sw-font-weight-emphasis);
   color: var(--sw-text-regular);
-}
-.row__hint {
-  margin-top: var(--sw-space-4);
-  font-size: var(--sw-font-caption);
-  color: var(--sw-text-secondary);
 }
 </style>

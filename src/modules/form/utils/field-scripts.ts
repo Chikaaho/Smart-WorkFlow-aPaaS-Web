@@ -14,8 +14,21 @@ import { reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { transpileScriptSugar } from './script-sugar'
 import { checkScriptSyntax, parseScript, runScript, type ScriptProgram } from './script-interpreter'
+import {
+  createSupplementalHostFunctions,
+  type ScriptOrgContext,
+  type ScriptSchemaFieldLike,
+} from './script-hosts'
 import { useUserStore } from '@/stores/user'
-import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
+import type { FormSchema, FormSchemaField, TableField } from '@/contracts/form-schema'
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof (value as { then?: unknown }).then === 'function'
+  )
+}
 
 /** 脚本引发的字段状态覆盖（与声明式规则/静态属性并存，由渲染侧合并）。 */
 export interface FieldScriptOverrides {
@@ -34,12 +47,29 @@ export interface FieldScriptsOptions {
   model: Record<string, unknown> | (() => Record<string, unknown>)
   /** 是否可写（缺省 true；只读查看态传 () => false 停用脚本）。 */
   enabled?: () => boolean
+  /** 当前办理上下文的只读流程变量/状态；无流程时返回空对象。 */
+  processContext?: () => Record<string, unknown>
+  /** 当前表单标识、定义版本、最近提交标识等上下文。 */
+  formContext?: () => {
+    formKey?: string
+    version?: number | null
+    submissionId?: string
+  }
+  /** 已由服务端授权、当前宿主允许的稳定集成标识集合。 */
+  allowedIntegrations?: () => string[]
+  /** 受控集成执行器；未提供时调用会明确报“执行器不可用”。 */
+  callIntegration?: (key: string) => unknown
+  /**
+   * 已授权组织目录快照（当前租户启用用户 + 部门树）。
+   * 页面在脚本执行前装载；未装载时组织查询函数明确报错，不越权直查。
+   */
+  orgContext?: () => ScriptOrgContext | null
 }
 
 export interface FieldScriptsRuntime {
   overrides: FieldScriptOverrides
-  /** 表单加载/回显完成后调用：执行 onLoad = true 的字段脚本。 */
-  runOnLoad: () => void
+  /** 表单加载/回显完成后调用：执行 onLoad = true 的字段脚本，并等待受控集成结果回填。 */
+  runOnLoad: () => Promise<void>
   /** 模型整体替换（装载/回显）后调用：把当前值记为基线，避免装载本身被当作“值变更”触发脚本。 */
   resetBaseline: () => void
   /** 停止侦听。 */
@@ -56,6 +86,18 @@ export const FIELD_SCRIPT_FUNCTION_NAMES = [
   'getFieldValue',
   '设置字段值',
   'setFieldValue',
+  '批量设置字段值',
+  'setFieldValues',
+  '清空字段',
+  'clearField',
+  '获取字段类型',
+  'getFieldType',
+  '获取字段标题',
+  'getFieldLabel',
+  '获取字段选项',
+  'getFieldOptions',
+  '获取字段列表',
+  'getFieldNames',
   '设置必填',
   'setRequired',
   '设置隐藏',
@@ -70,6 +112,72 @@ export const FIELD_SCRIPT_FUNCTION_NAMES = [
   'currentUserName',
   '获取当前部门',
   'currentDept',
+  '获取当前租户',
+  'currentTenant',
+  '获取当前用户角色',
+  'currentRoles',
+  '获取子表字段值',
+  'getTableRowValue',
+  '设置子表字段值',
+  'setTableRowValue',
+  '获取子表行数',
+  'getTableRowCount',
+  '获取子表行标识',
+  'getTableRowId',
+  '新增子表行',
+  'addTableRow',
+  '删除子表行',
+  'removeTableRow',
+  '批量设置子表字段值',
+  'setTableColumnValue',
+  '汇总子表列',
+  'sumTableColumn',
+  '获取流程变量',
+  'getProcessVariable',
+  '获取流程状态',
+  'getProcessStatus',
+  '获取表单标识',
+  'getFormKey',
+  '获取表单版本',
+  'getFormVersion',
+  '获取当前提交结果',
+  'getSubmissionResult',
+  '文本转大写',
+  'toUpper',
+  '文本转小写',
+  'toLower',
+  '去除首尾空格',
+  'trim',
+  '文本转数字',
+  'toNumber',
+  '调用集成',
+  'callIntegration',
+  '获取用户信息',
+  'getUserInfo',
+  '获取用户姓名',
+  'getUserName',
+  '查询用户',
+  'searchUsers',
+  '获取部门信息',
+  'getDeptInfo',
+  '获取上级部门',
+  'getParentDept',
+  '获取部门列表',
+  'getDeptIdList',
+  '获取部门名称',
+  'getDeptName',
+  '获取部门成员',
+  'getDeptMembers',
+  '当前日期',
+  'getToday',
+  '当前时间',
+  'getNow',
+  '日期加减',
+  'addDays',
+  '日期差',
+  'dateDiff',
+  '获取子表字段选项',
+  'getTableColumnOptions',
 ] as const
 
 /** 语法校验：编译（不执行）。返回 null = 通过；否则为可读错误。 */
@@ -86,6 +194,11 @@ export function validateFieldScript(code: string): string | null {
 export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRuntime {
   const overrides = reactive<FieldScriptOverrides>({ required: {}, hidden: {}, readonly: {} })
   let lastErrorText = ''
+  /**
+   * 受控集成返回 Promise；脚本解释器是同步的，因此把 Promise 记为待结算项，
+   * onLoad 统一等待；值变更脚本异步回填结果，错误记录到 lastError。
+   */
+  const pendingIntegrations: Promise<unknown>[] = []
   let cascadeCount = 0
   let cascadeResetTimer: ReturnType<typeof setTimeout> | null = null
   let warnedCascade = false
@@ -98,7 +211,13 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
    * 组件挂载/单测环境未装 pinia 不应让脚本运行时整体不可用）。
    */
   let userStoreCache: ReturnType<typeof useUserStore> | null | undefined
-  function currentUser(): { id: string; displayName: string; deptId: string | null } | null {
+  function currentUser(): {
+    id: string
+    displayName: string
+    deptId: string | null
+    tenantId: string | null
+    roles: string[]
+  } | null {
     if (userStoreCache === undefined) {
       try {
         userStoreCache = useUserStore()
@@ -111,6 +230,8 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
           id: userStoreCache.user.id,
           displayName: userStoreCache.user.displayName,
           deptId: userStoreCache.user.deptId,
+          tenantId: userStoreCache.user.tenantId,
+          roles: Array.from(userStoreCache.roles ?? []),
         }
       : null
   }
@@ -127,15 +248,158 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     return name
   }
 
+  const assertWritable = (): void => {
+    if (options.enabled && !options.enabled()) {
+      throw new Error('只读查看状态不允许修改字段、子表或控件')
+    }
+  }
+
+  function requireTable(fieldName: unknown, fn: string): TableField {
+    const name = requireField(fieldName, fn)
+    const table = fieldByName(name)
+    if (!table || table.type !== 'TABLE') {
+      throw new Error(`${fn}: 字段「${name}」不是子表`)
+    }
+    return table
+  }
+
+  function requireSubField(table: TableField, subName: unknown, fn: string): string {
+    const name = String(subName ?? '')
+    if (!table.subFields?.some((sub) => sub.name === name)) {
+      throw new Error(`${fn}: 子表「${table.name}」不存在列「${name}」`)
+    }
+    return name
+  }
+
+  function rowsOf(tableName: unknown, fn: string): Array<Record<string, unknown>> {
+    const table = requireTable(tableName, fn)
+    const rows = getModel()[table.name]
+    if (!Array.isArray(rows)) {
+      throw new Error(`${fn}: 子表「${table.name}」当前不是数组`)
+    }
+    return rows as Array<Record<string, unknown>>
+  }
+
+  function rowAt(
+    tableName: unknown,
+    index: unknown,
+    fn: string,
+  ): {
+    table: TableField
+    rows: Array<Record<string, unknown>>
+    row: Record<string, unknown>
+    position: number
+  } {
+    const table = requireTable(tableName, fn)
+    const rows = rowsOf(table.name, fn)
+    const position = Number(index)
+    if (!Number.isInteger(position) || position < 0 || position >= rows.length) {
+      throw new Error(`${fn}: 子表「${table.name}」第 ${String(index)} 行不存在`)
+    }
+    return { table, rows, row: rows[position], position }
+  }
+
+  function emptyValueFor(field: { type: string }): unknown {
+    switch (field.type) {
+      case 'TABLE':
+      case 'MULTISELECT':
+      case 'ATTACHMENT':
+      case 'IMAGE':
+        return []
+      case 'BOOL':
+        return false
+      case 'NUMBER':
+        return null
+      default:
+        return ''
+    }
+  }
+
+  function emptySubRow(table: TableField): Record<string, unknown> {
+    const row: Record<string, unknown> = {}
+    for (const sub of table.subFields ?? []) {
+      row[sub.name] = emptyValueFor(sub)
+    }
+    return row
+  }
+
+  /** 字段赋值：Promise（受控集成结果）在解析后再写入，避免把 Promise 对象落进表单值。 */
+  function assignFieldValue(fieldName: unknown, value: unknown, fn: string): void {
+    const name = requireField(fieldName, fn)
+    if (isThenable(value)) {
+      pendingIntegrations.push(
+        Promise.resolve(value).then((resolved) => {
+          getModel()[name] = resolved
+        }),
+      )
+      return
+    }
+    getModel()[name] = value
+  }
+
+  function applyFieldPairs(fn: string, args: unknown[]): void {
+    if (args.length % 2 !== 0) {
+      throw new Error(`${fn}: 参数必须成对（字段名, 值）`)
+    }
+    assertWritable()
+    for (let index = 0; index < args.length; index += 2) {
+      assignFieldValue(args[index], args[index + 1], fn)
+    }
+  }
+
+  const trackIntegration = (value: unknown): unknown => {
+    if (!isThenable(value)) return value
+    const tracked = Promise.resolve(value).catch((error: unknown) => {
+      lastErrorText = error instanceof Error ? error.message : String(error)
+      ElMessage.error(`字段脚本集成调用失败：${lastErrorText}`)
+      throw error
+    })
+    pendingIntegrations.push(tracked)
+    // 值变更脚本没有等待者；挂一个空 catch 防止未处理拒绝，同时保留原 Promise 供 onLoad 结算。
+    void tracked.catch(() => undefined)
+    return tracked
+  }
+
+  async function settlePendingIntegrations(): Promise<void> {
+    while (pendingIntegrations.length) {
+      const batch = pendingIntegrations.splice(0)
+      const results = await Promise.allSettled(batch)
+      const rejected = results.find((item) => item.status === 'rejected')
+      if (rejected && rejected.status === 'rejected') throw rejected.reason
+    }
+  }
+
+  function applySubFieldPairs(
+    table: TableField,
+    row: Record<string, unknown>,
+    fn: string,
+    args: unknown[],
+  ): void {
+    if (args.length % 2 !== 0) {
+      throw new Error(`${fn}: 参数必须成对（列名, 值）`)
+    }
+    assertWritable()
+    for (let index = 0; index < args.length; index += 2) {
+      row[requireSubField(table, args[index], fn)] = args[index + 1]
+    }
+  }
+
+  const processContext = (): Record<string, unknown> => options.processContext?.() ?? {}
+  const formContext = () => options.formContext?.() ?? {}
+
   const hostFunctions: Record<string, (...args: unknown[]) => unknown> = {
+    ...createSupplementalHostFunctions(
+      () => (options.getSchema() ?? null) as { fields: ScriptSchemaFieldLike[] } | null,
+      options.orgContext,
+    ),
     获取字段值: (fieldName) => getModel()[requireField(fieldName, '获取字段值')],
     getFieldValue: (fieldName) => getModel()[requireField(fieldName, '获取字段值')],
     设置字段值: (fieldName, value) => {
-      getModel()[requireField(fieldName, '设置字段值')] = value
+      assignFieldValue(fieldName, value, '设置字段值')
       return undefined
     },
     setFieldValue: (fieldName, value) => {
-      getModel()[requireField(fieldName, '设置字段值')] = value
+      assignFieldValue(fieldName, value, '设置字段值')
       return undefined
     },
     设置必填: (fieldName, flag) => {
@@ -176,6 +440,200 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     currentUserName: () => currentUser()?.displayName ?? null,
     获取当前部门: () => currentUser()?.deptId ?? null,
     currentDept: () => currentUser()?.deptId ?? null,
+    获取当前租户: () => currentUser()?.tenantId ?? null,
+    currentTenant: () => currentUser()?.tenantId ?? null,
+    获取当前用户角色: () => currentUser()?.roles ?? [],
+    currentRoles: () => currentUser()?.roles ?? [],
+
+    // ── 主表批量/清空与字段元信息 ──
+    批量设置字段值: (...args) => {
+      applyFieldPairs('批量设置字段值', args)
+      return undefined
+    },
+    setFieldValues: (...args) => {
+      applyFieldPairs('批量设置字段值', args)
+      return undefined
+    },
+    清空字段: (fieldName) => {
+      assertWritable()
+      const name = requireField(fieldName, '清空字段')
+      const field = fieldByName(name)
+      if (field) getModel()[name] = emptyValueFor(field)
+      return undefined
+    },
+    clearField: (fieldName) => {
+      assertWritable()
+      const name = requireField(fieldName, '清空字段')
+      const field = fieldByName(name)
+      if (field) getModel()[name] = emptyValueFor(field)
+      return undefined
+    },
+    获取字段类型: (fieldName) => fieldByName(requireField(fieldName, '获取字段类型'))?.type ?? '',
+    getFieldType: (fieldName) => fieldByName(requireField(fieldName, '获取字段类型'))?.type ?? '',
+    获取字段标题: (fieldName) => {
+      const field = fieldByName(requireField(fieldName, '获取字段标题'))
+      return field?.label ?? field?.name ?? ''
+    },
+    getFieldLabel: (fieldName) => {
+      const field = fieldByName(requireField(fieldName, '获取字段标题'))
+      return field?.label ?? field?.name ?? ''
+    },
+    获取字段选项: (fieldName) => {
+      const field = fieldByName(requireField(fieldName, '获取字段选项'))
+      const options = field && 'options' in field ? field.options : undefined
+      return (options ?? []).map((option) => option.value || option.key)
+    },
+    getFieldOptions: (fieldName) => {
+      const field = fieldByName(requireField(fieldName, '获取字段选项'))
+      const options = field && 'options' in field ? field.options : undefined
+      return (options ?? []).map((option) => option.value || option.key)
+    },
+    获取字段列表: () => (options.getSchema()?.fields ?? []).map((field) => field.name),
+    getFieldNames: () => (options.getSchema()?.fields ?? []).map((field) => field.name),
+
+    // ── 明细：行级读写、增删、批量、汇总 ──
+    获取子表行数: (table) => rowsOf(table, '获取子表行数').length,
+    getTableRowCount: (table) => rowsOf(table, '获取子表行数').length,
+    获取子表字段值: (table, index, subName) => {
+      const { table: tableField, row } = rowAt(table, index, '获取子表字段值')
+      return row[requireSubField(tableField, subName, '获取子表字段值')]
+    },
+    getTableRowValue: (table, index, subName) => {
+      const { table: tableField, row } = rowAt(table, index, '获取子表字段值')
+      return row[requireSubField(tableField, subName, '获取子表字段值')]
+    },
+    设置子表字段值: (table, index, subName, value) => {
+      const { table: tableField, row } = rowAt(table, index, '设置子表字段值')
+      assertWritable()
+      row[requireSubField(tableField, subName, '设置子表字段值')] = value
+      return undefined
+    },
+    setTableRowValue: (table, index, subName, value) => {
+      const { table: tableField, row } = rowAt(table, index, '设置子表字段值')
+      assertWritable()
+      row[requireSubField(tableField, subName, '设置子表字段值')] = value
+      return undefined
+    },
+    获取子表行标识: (table, index) => {
+      const { row, position } = rowAt(table, index, '获取子表行标识')
+      return row.id ?? row._rowId ?? position
+    },
+    getTableRowId: (table, index) => {
+      const { row, position } = rowAt(table, index, '获取子表行标识')
+      return row.id ?? row._rowId ?? position
+    },
+    新增子表行: (table, ...pairs) => {
+      assertWritable()
+      const tableField = requireTable(table, '新增子表行')
+      const rows = rowsOf(tableField.name, '新增子表行')
+      const row = emptySubRow(tableField)
+      applySubFieldPairs(tableField, row, '新增子表行', pairs)
+      rows.push(row)
+      return rows.length - 1
+    },
+    addTableRow: (table, ...pairs) => {
+      assertWritable()
+      const tableField = requireTable(table, '新增子表行')
+      const rows = rowsOf(tableField.name, '新增子表行')
+      const row = emptySubRow(tableField)
+      applySubFieldPairs(tableField, row, '新增子表行', pairs)
+      rows.push(row)
+      return rows.length - 1
+    },
+    删除子表行: (table, index) => {
+      assertWritable()
+      const { rows, position } = rowAt(table, index, '删除子表行')
+      rows.splice(position, 1)
+      return undefined
+    },
+    removeTableRow: (table, index) => {
+      assertWritable()
+      const { rows, position } = rowAt(table, index, '删除子表行')
+      rows.splice(position, 1)
+      return undefined
+    },
+    批量设置子表字段值: (table, subName, value) => {
+      assertWritable()
+      const tableField = requireTable(table, '批量设置子表字段值')
+      const name = requireSubField(tableField, subName, '批量设置子表字段值')
+      for (const row of rowsOf(tableField.name, '批量设置子表字段值')) {
+        row[name] = value
+      }
+      return undefined
+    },
+    setTableColumnValue: (table, subName, value) => {
+      assertWritable()
+      const tableField = requireTable(table, '批量设置子表字段值')
+      const name = requireSubField(tableField, subName, '批量设置子表字段值')
+      for (const row of rowsOf(tableField.name, '批量设置子表字段值')) {
+        row[name] = value
+      }
+      return undefined
+    },
+    汇总子表列: (table, subName) => {
+      const tableField = requireTable(table, '汇总子表列')
+      const name = requireSubField(tableField, subName, '汇总子表列')
+      let total = 0
+      for (const row of rowsOf(tableField.name, '汇总子表列')) {
+        const value = Number(row[name])
+        if (Number.isFinite(value)) total += value
+      }
+      return total
+    },
+    sumTableColumn: (table, subName) => {
+      const tableField = requireTable(table, '汇总子表列')
+      const name = requireSubField(tableField, subName, '汇总子表列')
+      let total = 0
+      for (const row of rowsOf(tableField.name, '汇总子表列')) {
+        const value = Number(row[name])
+        if (Number.isFinite(value)) total += value
+      }
+      return total
+    },
+
+    // ── 流程与表单上下文（无流程时返回有类型的空值） ──
+    获取流程变量: (name) => processContext()[String(name ?? '')] ?? null,
+    getProcessVariable: (name) => processContext()[String(name ?? '')] ?? null,
+    获取流程状态: () => String(processContext().status ?? ''),
+    getProcessStatus: () => String(processContext().status ?? ''),
+    获取表单标识: () => String(formContext().formKey ?? ''),
+    getFormKey: () => String(formContext().formKey ?? ''),
+    获取表单版本: () => formContext().version ?? null,
+    getFormVersion: () => formContext().version ?? null,
+    获取当前提交结果: () => String(formContext().submissionId ?? ''),
+    getSubmissionResult: () => String(formContext().submissionId ?? ''),
+
+    // ── 通用转换 ──
+    文本转大写: (value) => String(value ?? '').toUpperCase(),
+    toUpper: (value) => String(value ?? '').toUpperCase(),
+    文本转小写: (value) => String(value ?? '').toLowerCase(),
+    toLower: (value) => String(value ?? '').toLowerCase(),
+    去除首尾空格: (value) => String(value ?? '').trim(),
+    trim: (value) => String(value ?? '').trim(),
+    文本转数字: (value) => Number(value),
+    toNumber: (value) => Number(value),
+
+    // ── 受控集成：只允许已授权稳定标识；无执行器明确报错 ──
+    调用集成: (key) => {
+      const identity = String(key ?? '')
+      if (!(options.allowedIntegrations?.() ?? []).includes(identity)) {
+        throw new Error(`集成能力未授权「${identity}」`)
+      }
+      if (!options.callIntegration) {
+        throw new Error('集成执行器不可用')
+      }
+      return trackIntegration(options.callIntegration(identity))
+    },
+    callIntegration: (key) => {
+      const identity = String(key ?? '')
+      if (!(options.allowedIntegrations?.() ?? []).includes(identity)) {
+        throw new Error(`集成能力未授权「${identity}」`)
+      }
+      if (!options.callIntegration) {
+        throw new Error('集成执行器不可用')
+      }
+      return trackIntegration(options.callIntegration(identity))
+    },
   }
 
   const compiledCache = new Map<string, ScriptProgram>()
@@ -279,7 +737,7 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
     { deep: true },
   )
 
-  function runOnLoad(): void {
+  async function runOnLoad(): Promise<void> {
     if (options.enabled && !options.enabled()) {
       return
     }
@@ -290,6 +748,11 @@ export function createFieldScripts(options: FieldScriptsOptions): FieldScriptsRu
           runScriptFor(field)
         }
       }
+      await settlePendingIntegrations()
+    } catch (e) {
+      lastErrorText = e instanceof Error ? e.message : String(e)
+      console.warn(`[表单脚本] onLoad 集成调用出错: ${lastErrorText}`)
+      ElMessage.error(`字段脚本出错：${lastErrorText}`)
     } finally {
       running = false
       prev = snapshot()

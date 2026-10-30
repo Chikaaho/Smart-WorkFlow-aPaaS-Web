@@ -10,6 +10,7 @@ import { parseDefinition } from '@/adapters/form-designer'
 import {
   getFormDef,
   getFormDefinition,
+  getFormDefinitionVersion,
   submitForm,
   listSubmissions,
   getFormData,
@@ -47,6 +48,22 @@ describe('modules/form/api/form', () => {
     )
     expect(parseDefinition).toHaveBeenCalledWith(rawJson)
     expect(schema).toEqual(expectedSchema)
+  })
+
+  it('getFormDefinitionVersion reads frozen snapshot by form version', async () => {
+    const rawJson = '{"title":"V1","fields":[]}'
+    vi.mocked(request).mockResolvedValueOnce(rawJson)
+    vi.mocked(parseDefinition).mockReturnValueOnce({ title: 'V1', fields: [] })
+
+    await getFormDefinitionVersion('test-key', 1)
+
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        url: '/form/def/by-key/test-key/versions/1/definition',
+      }),
+    )
+    expect(parseDefinition).toHaveBeenCalledWith(rawJson)
   })
 
   it('submitForm (seam) posts to correct URL and propagates rejection', async () => {
@@ -146,6 +163,25 @@ describe('modules/form/api/form', () => {
 /* ── normalizeSubmitData ──────────────────────────────────── */
 
 describe('normalizeSubmitData', () => {
+  it('查询时间戳再次保存时保持原本地钟面值，主表与子表一致', () => {
+    vi.stubEnv('TZ', 'Asia/Shanghai')
+    try {
+      const data = {
+        when: '2026-10-25T01:00:00.000+00:00',
+        lines: [{ day: '2026-10-24T16:00:00Z', _rowAction: 'ADD' }],
+      }
+      expect(
+        normalizeSubmitData(data, [
+          { name: 'when', type: 'DATE', format: 'datetime' },
+          { name: 'lines', type: 'TABLE', subFields: [{ name: 'day', type: 'DATE' }] },
+        ]),
+      ).toEqual({ when: '2026-10-25 09:00:00', lines: [{ day: '2026-10-25' }] })
+      expect(data.when).toBe('2026-10-25T01:00:00.000+00:00')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('converts BOOL true → 1 and false → 0', () => {
     const fields = [
       { name: 'active', type: 'BOOL' as const },

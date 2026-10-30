@@ -98,6 +98,15 @@ describe('workspace-canvas 相对几何（V011-BUG-003 分辨率自适应）', (
     })
   })
 
+  it('toAbsoluteRect 把 x+w>1 的分数几何收回画布（自定义布局跨宽度保存）', () => {
+    expect(toAbsoluteRect({ x: 0.65, y: 120, w: 0.36, h: 208 }, 1656)).toEqual({
+      x: 1060,
+      y: 120,
+      w: 596,
+      h: 208,
+    })
+  })
+
   it('toAbsoluteRect 按 BUG-002 旧像素几何承接并钳制进当前画布（w>1 判别）', () => {
     expect(toAbsoluteRect({ x: 24, y: 0, w: 640, h: 360 }, 800)).toEqual({
       x: 24,

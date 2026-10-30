@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 
 vi.mock('@/modules/workflow/api', () => ({
@@ -14,7 +14,12 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ params: {} }),
 }))
 
+vi.mock('@/adapters/org-tenant', () => ({
+  pageTenants: vi.fn().mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 200 }),
+}))
+
 import { pageProcessDefs } from '@/modules/workflow/api'
+import { useUserStore } from '@/stores/user'
 import type { ProcessDef } from '@/contracts/bpm'
 import ProcessDefList from './ProcessDefList.vue'
 
@@ -89,7 +94,7 @@ describe('ProcessDefList.vue', () => {
     mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     expect(pageProcessDefs).toHaveBeenCalledOnce()
-    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 })
+    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 }, undefined, undefined)
   })
 
   it('re-fetches on pageNum change', async () => {
@@ -114,7 +119,7 @@ describe('ProcessDefList.vue', () => {
     await vm.handlePageNumChange(2)
     await nextTick()
 
-    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 2, pageSize: 10 })
+    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 2, pageSize: 10 }, undefined, undefined)
   })
 
   it('resets to page 1 on pageSize change', async () => {
@@ -139,7 +144,7 @@ describe('ProcessDefList.vue', () => {
     await vm.handlePageSizeChange(20)
     await nextTick()
 
-    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 20 })
+    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 20 }, undefined, undefined)
   })
 
   it('shows fallback error message when API fails with non-ApiError', async () => {
@@ -153,8 +158,8 @@ describe('ProcessDefList.vue', () => {
     )
   })
 
-  // BF20261013-037：列口径回归——状态居中、更新人与更新时间分列、操作列四格宽度
-  it('renders 状态 centered / 更新人+更新时间 split / 操作列 240', async () => {
+  // 6:2 参考列口径：状态居中、更新人与时间合并为单列、操作列 170
+  it('renders 状态居中 / 更新人+时间合并列 / 操作列 170', async () => {
     vi.mocked(pageProcessDefs).mockResolvedValueOnce({
       list: mockDefs,
       total: 2,
@@ -168,10 +173,10 @@ describe('ProcessDefList.vue', () => {
       cols.find((col) => col.attributes('data-label') === label) ?? null
 
     expect(labelOf('状态')?.attributes('data-align')).toBe('center')
-    expect(labelOf('更新人')).not.toBeNull()
-    expect(labelOf('更新时间')).not.toBeNull()
-    expect(cols.map((col) => col.attributes('data-label'))).not.toContain('更新人 / 时间')
-    expect(labelOf('操作')?.attributes('data-width')).toBe('240')
+    expect(labelOf('更新人 / 时间')).not.toBeNull()
+    expect(labelOf('更新人')).toBeNull()
+    expect(labelOf('更新时间')).toBeNull()
+    expect(labelOf('操作')?.attributes('data-width')).toBe('170')
   })
 
   // BF20261013-041/042：流程编号编辑器（ThemeRuleDialog）——变量在输入框内以灰底标识展示，
@@ -218,6 +223,60 @@ describe('ProcessDefList.vue', () => {
     // 模拟编号：规则文本 → 演示值（发起时间补足 14 位、序号补零到 3 位）
     const preview = wrapper.find('[data-testid="theme-preview"]').text()
     expect(preview).toMatch(/\d{14}_001/)
+  })
+
+  // Q69（459:14712）：超管租户筛选为筛选行第一项、租户列为表格第一列
+  it('超管：租户筛选为筛选行第一项、租户列为表格第一列', async () => {
+    vi.mocked(pageProcessDefs).mockResolvedValueOnce({
+      list: mockDefs,
+      total: 2,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore().superAdmin = true
+    const wrapper = mount(ProcessDefList, { global: { stubs, plugins: [pinia] } })
+    await nextTick()
+    await nextTick()
+
+    const filterLabels = wrapper
+      .findAll('.p53-admin-defs__filters > span.defs-filter__label')
+      .map((label) => label.text())
+    expect(filterLabels[0]).toBe('租户')
+
+    const cols = wrapper.findAll('.col')
+    expect(cols[0].attributes('data-label')).toBe('租户')
+    // 其他列相对顺序不变
+    expect(cols.slice(1).map((col) => col.attributes('data-label'))).toEqual([
+      '流程名称',
+      '分类',
+      '版本',
+      '状态',
+      '流程编号',
+      '实例数',
+      '更新人 / 时间',
+      '操作',
+    ])
+  })
+
+  // Q69：普通租户不带租户筛选与租户列，默认查询条件不变
+  it('普通租户：无租户筛选、无租户列，默认查询不变', async () => {
+    vi.mocked(pageProcessDefs).mockResolvedValueOnce({
+      list: mockDefs,
+      total: 2,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const wrapper = mount(ProcessDefList, { global: globalOpts() })
+    await nextTick()
+
+    const filterLabels = wrapper
+      .findAll('.p53-admin-defs__filters > span.defs-filter__label')
+      .map((label) => label.text())
+    expect(filterLabels).not.toContain('租户')
+    expect(wrapper.findAll('.col')[0].attributes('data-label')).toBe('流程名称')
+    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 }, undefined, undefined)
   })
 
   it('displays empty state when list is empty', async () => {

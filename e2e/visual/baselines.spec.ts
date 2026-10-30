@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAs } from './auth.js'
+import { loginAs, pinTheme } from './auth.js'
 import { desktopRegions, expectRegionMatches, REGION_THRESHOLDS } from './regions.js'
 
 /**
@@ -13,6 +13,7 @@ import { desktopRegions, expectRegionMatches, REGION_THRESHOLDS } from './region
 test.describe('P53 视觉基线', () => {
   test('节点 06 登录页整页基线', async ({ page }) => {
     await page.addInitScript(() => window.localStorage.setItem('sw.locale', 'zh-CN'))
+    await pinTheme(page, 'purple')
     await page.goto('/login')
     await expect(page.locator('form.login-page__form button[type="submit"]')).toBeVisible()
     // 图形验证码内容为随机动态位图，基线中受控隐藏（布局由占位框承载，与实际渲染一致）

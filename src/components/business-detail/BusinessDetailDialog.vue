@@ -29,7 +29,7 @@ const props = withDefaults(
   }>(),
   {
     title: '',
-    width: '980px',
+    width: '100vw',
     formKey: '',
     recordId: '',
     record: null,
@@ -112,7 +112,7 @@ watch(
     :model-value="modelValue"
     :title="title || t('common.detail')"
     :width="width"
-    top="6vh"
+    top="0"
     class="business-detail-dialog"
     @update:model-value="emit('update:modelValue', $event)"
   >
@@ -122,10 +122,12 @@ watch(
       <template v-else>
         <el-alert v-if="errorMsg" :title="errorMsg" type="warning" :closable="false" show-icon />
 
-        <h4 class="business-detail-dialog__section">
-          {{ t('workflow.formDataReadonlySnapshot') }}
-        </h4>
-        <BusinessFormReadonly v-if="formKey" :form-key="formKey" :record="effectiveRecord" />
+        <BusinessFormReadonly
+          v-if="formKey"
+          :form-key="formKey"
+          :record-id="recordId"
+          :record="effectiveRecord"
+        />
         <el-alert
           v-else
           :title="t('workflow.noFormData')"
@@ -135,7 +137,6 @@ watch(
         />
 
         <template v-if="hasFlow">
-          <h4 class="business-detail-dialog__section">{{ t('workflow.approvalProgress') }}</h4>
           <InstanceFlowPanel
             :approval-history="history"
             :process-definition-key="processKey"
@@ -148,21 +149,56 @@ watch(
 </template>
 
 <style scoped>
-/* 详情正文单独滚动；el-dialog 经 Teleport 渲染，需用 :global 穿透作用域。 */
+:global(.business-detail-dialog.el-dialog) {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 100vw;
+  margin: 0 !important;
+  padding: 0;
+  border-radius: 0;
+}
+:global(.business-detail-dialog .el-dialog__header) {
+  box-sizing: border-box;
+  flex: 0 0 48px;
+  height: 48px;
+  margin: 0;
+  padding: 12px 68px 12px 24px;
+  border: 0;
+}
+:global(.business-detail-dialog .el-dialog__title) {
+  color: var(--sw-text-primary);
+  font-size: 16px;
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: 24px;
+}
+:global(.business-detail-dialog .el-dialog__headerbtn) {
+  top: 8px;
+  right: 24px;
+  width: 32px;
+  height: 32px;
+}
 :global(.business-detail-dialog .el-dialog__body) {
-  max-height: 72vh;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
   overflow-y: auto;
+  background: var(--sw-fill-base);
 }
 .business-detail-dialog__body {
+  box-sizing: border-box;
   min-height: 120px;
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 12px 20px 24px;
 }
-.business-detail-dialog__section {
-  margin: 16px 0 8px;
-  color: var(--sw-color-primary);
-  font-size: 13px;
-  font-weight: 600;
+.business-detail-dialog__body > :deep(.instance-flow-panel) {
+  margin-top: 12px;
 }
-.business-detail-dialog__section:first-of-type {
-  margin-top: 0;
+@media (max-width: 767px) {
+  .business-detail-dialog__body {
+    padding: 12px;
+  }
 }
 </style>

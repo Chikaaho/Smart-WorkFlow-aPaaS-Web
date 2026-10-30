@@ -88,6 +88,8 @@ const designerStubs = {
   SubFieldDesigner: { template: '<div class="stub-subfield" />' },
   PreviewModal: { template: '<div class="stub-preview" />' },
   HistoryVersionsDialog: { template: '<div class="stub-history" />' },
+  FormAccessPanel: { template: '<div class="stub-access" />' },
+  FormEventsPanel: { template: '<div class="stub-events" />' },
   // 0.1.7 #25 回归：面板经 defineExpose 暴露编号设置入口、并上报流程数量
   RelatedProcessesPanel: {
     emits: ['enter-process', 'update:process-count'],
@@ -130,8 +132,9 @@ describe('FormDesigner 工作台（P52）', () => {
     expect(mockGetFormDefinitionById).toHaveBeenCalledWith('uuid-1')
     // V011-BUG-006：formKey 不再入画布；身份见面包屑表单名
     expect(wrapper.text()).toContain('请假申请单')
-    // 工作台头部重构后：保存状态以『草稿已保存 HH:mm』呈现
-    expect(wrapper.text()).toContain('草稿已保存')
+    // 打开已有定义不会伪造保存时刻，也不会触发一次保存。
+    expect(wrapper.find('.designer__save-state').text()).toBe('已保存')
+    expect(mockSaveDraftDefinition).not.toHaveBeenCalled()
   })
 
   it('身份加载失败（不存在/无权）→ 拒绝态，不回退其他表单', async () => {
@@ -156,21 +159,47 @@ describe('FormDesigner 工作台（P52）', () => {
     expect(wrapper.findAll('button').some((b) => b.text() === '发布')).toBe(false)
   })
 
-  // 0.1.7 #39（Owner）：字段清单入口从「设置」下拉上收为居中页签，顺序=字段清单 / 表单设计 / 流程设计
-  it('工作区页签：三页签整组居中，字段清单在最左；「设置」下拉已去除', async () => {
+  it('三个主工作区保持居中，字段清单在最左，配置入口可达', async () => {
     const wrapper = await mountDesigner()
 
     const tabs = wrapper.findAll('.designer__tab')
     expect(tabs.map((tab) => tab.text())).toEqual(['字段清单', '表单设计', '流程设计'])
-    // 三页签同处居中页签组（几何由浏览器自验，见台账 #39）
+    // 页签同处居中页签组（几何由浏览器自验，见台账 #39）
     expect(
       wrapper.findAll('.designer__tab').every((tab) => tab.element.closest('.designer__tabs')),
     ).toBe(true)
-    // 「设置」入口不再存在
-    expect(wrapper.findAll('button').some((b) => b.text() === '设置')).toBe(false)
+    expect(wrapper.find('.designer__settings').text()).toBe('设置')
     // 默认在表单设计页签
     expect(tabs[1]!.classes()).toContain('is-active')
     expect(wrapper.find('.stub-canvas').exists()).toBe(true)
+  })
+
+  it('配置菜单切换权限和事件，同步已有路由工作区', async () => {
+    const wrapper = await mountDesigner()
+    const dropdown = wrapper.findComponent({ name: 'ElDropdown' })
+    dropdown.vm.$emit('command', 'permissions')
+    await flushPromises()
+    expect(wrapper.find('.stub-access').exists()).toBe(true)
+    expect(mockRouterReplace).toHaveBeenLastCalledWith({ query: { tab: 'permissions' } })
+    expect(wrapper.find('.designer__settings').attributes('aria-current')).toBe('page')
+    dropdown.vm.$emit('command', 'events')
+    await flushPromises()
+    expect(wrapper.find('.stub-events').exists()).toBe(true)
+    expect(mockRouterReplace).toHaveBeenLastCalledWith({ query: { tab: 'events' } })
+    expect(wrapper.find('.designer__settings').text()).toBe('事件')
+  })
+
+  it('配置切换仍经过未保存保护，取消不改路由或丢弃设计', async () => {
+    const wrapper = await mountDesigner()
+    await wrapper.find('.stub-palette-add').trigger('click')
+    mockConfirm.mockRejectedValueOnce('close')
+    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'events')
+    await flushPromises()
+    expect(mockConfirm).toHaveBeenCalled()
+    expect(wrapper.find('.stub-canvas').exists()).toBe(true)
+    expect(wrapper.find('.stub-events').exists()).toBe(false)
+    expect(mockRouterReplace).not.toHaveBeenCalled()
+    expect(mockSaveDraftDefinition).not.toHaveBeenCalled()
   })
 
   it('点「字段清单」页签 → 切到字段清单工作区（画布卸载、清单渲染）', async () => {

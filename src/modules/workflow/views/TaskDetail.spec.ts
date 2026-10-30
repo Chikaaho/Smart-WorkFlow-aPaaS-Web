@@ -17,6 +17,18 @@ vi.mock('@/modules/workflow/api', () => ({
   queryTaskDetail: vi.fn(),
   acceptTaskAction: vi.fn(),
   pollCommandStatus: vi.fn(),
+  latestTaskCommand: vi.fn(),
+  transferTask: vi.fn(),
+  delegateTask: vi.fn(),
+  communicateTask: vi.fn(),
+  addSignTask: vi.fn(),
+  getApprovalOpinionDraft: vi.fn(),
+  saveApprovalOpinionDraft: vi.fn(),
+  myInstances: vi.fn(),
+}))
+
+vi.mock('@/modules/workflow/api/oa', () => ({
+  urgeMyInstance: vi.fn(),
 }))
 
 // P64 节点业务表单：办理页读取绑定与数据（默认未绑定，用例内按需 stub）
@@ -48,7 +60,20 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
-import { queryTaskDetail, acceptTaskAction, pollCommandStatus } from '@/modules/workflow/api'
+import {
+  queryTaskDetail,
+  acceptTaskAction,
+  pollCommandStatus,
+  latestTaskCommand,
+  transferTask,
+  delegateTask,
+  communicateTask,
+  addSignTask,
+  getApprovalOpinionDraft,
+  saveApprovalOpinionDraft,
+  myInstances,
+} from '@/modules/workflow/api'
+import { urgeMyInstance } from '@/modules/workflow/api/oa'
 import { getTaskNodeForm } from '@/modules/workflow/api/p64'
 import { listReservationsByInstance, cancelReservation } from '@/adapters/iot-reservation'
 import { permissionDirective } from '@/foundation/permission'
@@ -90,11 +115,43 @@ const stubs = {
     template: '<button @click="$emit(\'click\')"><slot/></button>',
     emits: ['click'],
   },
+  'el-dropdown': {
+    props: ['disabled', 'trigger'],
+    emits: ['command'],
+    template:
+      '<div class="stub-dropdown"><slot/><div class="stub-dropdown-menu"><slot name="dropdown"/></div></div>',
+  },
+  'el-dropdown-menu': { template: '<div><slot/></div>' },
+  'el-dropdown-item': {
+    props: ['command', 'divided', 'disabled'],
+    template: '<div class="stub-dropdown-item" :data-command="command"><slot/></div>',
+  },
+  'el-icon': { template: '<span><slot/></span>' },
+}
+
+interface ApprovalActionVm {
+  canAct: boolean
+  canUrge: boolean
+  approvalMoreActions: Array<{ command: string; label: string; divided?: boolean }>
+  lifecycleDialog: {
+    kind: 'TRANSFER' | 'DELEGATE' | 'COMMUNICATE' | 'ADD_SIGN'
+    targetUserId?: string
+    message?: string
+    receivers?: string
+    participants?: string
+    mode?: 'SERIAL' | 'PARALLEL'
+    signPosition?: 'BEFORE' | 'AFTER'
+  } | null
+  opinionComment: string
+  handleApprovalMore: (command: string) => void
+  submitLifecycle: () => Promise<void>
 }
 
 const mockDetail: TaskDetail = {
   taskId: 'task-001',
   taskName: '审批',
+  taskStatus: 'RUNNING',
+  canHandle: true,
   processInstanceId: 'pi-001',
   processDefinitionKey: 'skeleton_approval',
   processName: '单节点审批',
@@ -120,7 +177,55 @@ describe('TaskDetail.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockRoute.query = {}
+    vi.mocked(getTaskNodeForm).mockResolvedValue({ bound: false } as never)
+    vi.mocked(getApprovalOpinionDraft).mockResolvedValue(null as never)
+    vi.mocked(latestTaskCommand).mockResolvedValue(null)
+    vi.mocked(transferTask).mockResolvedValue(undefined)
+    vi.mocked(delegateTask).mockResolvedValue(undefined)
+    vi.mocked(communicateTask).mockResolvedValue(undefined)
+    vi.mocked(addSignTask).mockResolvedValue(undefined)
+    vi.mocked(myInstances).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 100 })
   })
+
+  const allLifecyclePermissions = [
+    'workflow:task:transfer',
+    'workflow:task:delegate',
+    'workflow:task:communicate',
+    'workflow:task:add-sign',
+  ]
+
+  async function mountActionable(
+    overrides: Partial<TaskDetail> & { allowedActions?: string[] } = {},
+    permissionCodes = allLifecyclePermissions,
+  ) {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '2',
+        username: 'approver',
+        displayName: '审批人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set(permissionCodes),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      canHandle: true,
+      taskStatus: 'RUNNING',
+      instanceStatus: 'RUNNING',
+      ...overrides,
+    })
+    const wrapper = mount(TaskDetailView, {
+      global: { plugins: [i18n, pinia], stubs },
+    })
+    await nextTick()
+    await flushPromises()
+    return wrapper
+  }
 
   it('calls queryTaskDetail with taskId on mount', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
@@ -198,7 +303,12 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await nextTick()
 
-    await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
+    const approveVm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      confirmAgree: () => Promise<void>
+    }
+    await approveVm.handleApprove()
+    await approveVm.confirmAgree()
     await nextTick()
 
     expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'complete', undefined)
@@ -232,7 +342,12 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await flushPromises()
 
-    await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
+    const approveVm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      confirmAgree: () => Promise<void>
+    }
+    await approveVm.handleApprove()
+    await approveVm.confirmAgree()
     await nextTick()
 
     // 无 opinionForm 且无 comment：payload 不得因此丢掉 nodeFormData（服务端同事务提交依赖它）
@@ -292,10 +407,24 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await nextTick()
 
-    await (wrapper.vm as unknown as { handleReject: () => Promise<void> }).handleReject()
+    // 设计 272:1746：驳回走专用弹窗（原因可选），确认后跳过内建 confirm 直提
+    const vm = wrapper.vm as unknown as {
+      handleReject: () => void
+      rejectDialogVisible: boolean
+      rejectReason: string
+      confirmReject: () => Promise<void>
+    }
+    vm.handleReject()
+    expect(vm.rejectDialogVisible).toBe(true)
+    vm.rejectReason = '材料不足'
+    await vm.confirmReject()
     await nextTick()
 
-    expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'reject', undefined)
+    expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'reject', {
+      action: 'REJECT',
+      comment: '材料不足',
+      opinionData: { comment: '材料不足' },
+    })
     expect(pollCommandStatus).toHaveBeenCalledWith('cmd-1')
     expect(ElMessage.success).toHaveBeenCalledWith('已驳回')
     expect(mockPush).toHaveBeenCalledWith({ name: 'workspace-todo' })
@@ -315,7 +444,12 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await nextTick()
 
-    await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
+    const approveVm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      confirmAgree: () => Promise<void>
+    }
+    await approveVm.handleApprove()
+    await approveVm.confirmAgree()
     await nextTick()
 
     expect(ElMessage.error).toHaveBeenCalledWith('任务已被他人办理')
@@ -334,7 +468,12 @@ describe('TaskDetail.vue', () => {
     await nextTick()
     await nextTick()
 
-    await (wrapper.vm as unknown as { handleApprove: () => Promise<void> }).handleApprove()
+    const approveVm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      confirmAgree: () => Promise<void>
+    }
+    await approveVm.handleApprove()
+    await approveVm.confirmAgree()
 
     expect(ElMessage.success).toHaveBeenCalledWith(i18n.global.t('common.statusApproved'))
     expect(ElMessage.error).not.toHaveBeenCalled()
@@ -396,7 +535,7 @@ describe('TaskDetail.vue', () => {
         deptId: null,
         tenantId: null,
       },
-      permissions: new Set<string>(),
+      permissions: new Set(['workflow:urge']),
       roles: new Set<string>(),
       superAdmin: false,
     })
@@ -419,7 +558,39 @@ describe('TaskDetail.vue', () => {
     expect(wrapper.text()).not.toContain(i18n.global.t('taskDetailUi.urgeAction'))
   })
 
-  it('running task still shows urge to the initiator', async () => {
+  it('running task shows urge only to the initiator with workflow:urge', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '1',
+        username: 'initiator',
+        displayName: '发起人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set(['workflow:urge']),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      taskStatus: 'RUNNING',
+      instanceStatus: 'RUNNING',
+      canHandle: false,
+    })
+    const wrapper = mount(TaskDetailView, {
+      global: { plugins: [i18n, pinia], stubs },
+    })
+    await nextTick()
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as { canUrge: boolean }
+    expect(vm.canUrge).toBe(true)
+    expect(wrapper.text()).toContain(i18n.global.t('taskDetailUi.urgeAction'))
+  })
+
+  it('hides urge when the initiator lacks workflow:urge', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     useUserStore(pinia).setSession({
@@ -447,8 +618,75 @@ describe('TaskDetail.vue', () => {
     await flushPromises()
 
     const vm = wrapper.vm as unknown as { canUrge: boolean }
-    expect(vm.canUrge).toBe(true)
-    expect(wrapper.text()).toContain(i18n.global.t('taskDetailUi.urgeAction'))
+    expect(vm.canUrge).toBe(false)
+    expect(wrapper.text()).not.toContain(i18n.global.t('taskDetailUi.urgeAction'))
+  })
+
+  it('resolves the stable BPM instance id before urging a Flowable string id', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '1',
+        username: 'initiator',
+        displayName: '发起人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set(['workflow:urge']),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      taskStatus: 'RUNNING',
+      instanceStatus: 'RUNNING',
+      canHandle: false,
+    })
+    vi.mocked(myInstances).mockResolvedValueOnce({
+      list: [
+        {
+          id: 42,
+          processInstanceId: 'pi-001',
+          processDefKey: 'skeleton_approval',
+          processName: '单节点审批',
+          businessKey: 'fd_001',
+          formKey: 'leave-request',
+          initiatorId: 1,
+          status: 'RUNNING',
+          createTime: '2026-07-17T09:00:00',
+        },
+      ],
+      total: 1,
+      pageNum: 1,
+      pageSize: 100,
+    })
+    vi.mocked(urgeMyInstance).mockResolvedValueOnce({
+      result: 'ACCEPTED',
+      detail: '已催办',
+      recordId: '2100424929376403601',
+    })
+    const wrapper = mount(TaskDetailView, {
+      global: { plugins: [i18n, pinia], stubs },
+    })
+    await nextTick()
+    await flushPromises()
+
+    // 设计 273:2025：催办留言（可空）随请求带给服务端
+    const vm = wrapper.vm as unknown as {
+      openUrgeDialog: () => void
+      urgeDialogVisible: boolean
+      urgeMessage: string
+      confirmUrge: () => Promise<void>
+    }
+    vm.openUrgeDialog()
+    expect(vm.urgeDialogVisible).toBe(true)
+    vm.urgeMessage = '请尽快处理报销单'
+    await vm.confirmUrge()
+
+    expect(myInstances).toHaveBeenCalledWith({ pageNum: 1, pageSize: 100 }, { keyword: 'fd_001' })
+    expect(urgeMyInstance).toHaveBeenCalledWith(42, '请尽快处理报销单', undefined)
+    expect(ElMessage.success).toHaveBeenCalledWith('已催办')
   })
 
   it('V012-BUG-001: running task without handle permission hides approval actions', async () => {
@@ -479,6 +717,215 @@ describe('TaskDetail.vue', () => {
     const vm = wrapper.vm as unknown as { canAct: boolean }
     expect(vm.canAct).toBe(true)
     expect(wrapper.findAll('.detail-card--actions')).toHaveLength(1)
+  })
+
+  it('does not label a freshly saved opinion draft as restored', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({ ...mockDetail, canHandle: true })
+    vi.mocked(saveApprovalOpinionDraft).mockResolvedValueOnce({} as never)
+    const wrapper = mount(TaskDetailView, {
+      global: { plugins: [i18n, createPinia()], stubs },
+    })
+    await nextTick()
+    await flushPromises()
+
+    await (wrapper.vm as unknown as { saveOpinionDraft: () => Promise<void> }).saveOpinionDraft()
+    await flushPromises()
+
+    expect(saveApprovalOpinionDraft).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.opinion-draft-actions').text()).not.toContain(
+      i18n.global.t('workflow.opinionDraftRestored'),
+    )
+  })
+
+  it('W020: secondary approval actions are grouped under More while primary actions and opinion draft stay visible', async () => {
+    const wrapper = await mountActionable()
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+
+    expect(vm.approvalMoreActions.map((action) => action.command)).toEqual([
+      'TRANSFER',
+      'DELEGATE',
+      'COMMUNICATE',
+      'ADD_SIGN',
+    ])
+    const actionBar = wrapper.find('.detail-actions__btns')
+    expect(actionBar.find('[data-testid="approval-more-trigger"]').exists()).toBe(true)
+    const directButtons = actionBar.findAll('button').map((button) => button.text())
+    expect(directButtons).toEqual(
+      expect.arrayContaining([
+        i18n.global.t('common.moreActions'),
+        i18n.global.t('common.reject'),
+        i18n.global.t('workflow.approveTask'),
+      ]),
+    )
+    for (const label of [
+      i18n.global.t('workflow.transferOwnTask'),
+      i18n.global.t('workflow.delegateAction'),
+      i18n.global.t('workflow.consultTask'),
+      i18n.global.t('workflow.addSign'),
+    ]) {
+      expect(directButtons).not.toContain(label)
+      expect(wrapper.text()).toContain(label)
+    }
+    expect(wrapper.find('.opinion-draft-actions').text()).toContain(
+      i18n.global.t('workflow.saveOpinionDraft'),
+    )
+  })
+
+  it('W020: every More command opens its existing lifecycle flow', async () => {
+    const wrapper = await mountActionable()
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+
+    for (const command of ['TRANSFER', 'DELEGATE', 'COMMUNICATE', 'ADD_SIGN'] as const) {
+      vm.handleApprovalMore(command)
+      expect(vm.lifecycleDialog?.kind).toBe(command)
+    }
+  })
+
+  it('W020: transfer and delegate preserve a 64-bit user ID as an exact string', async () => {
+    const wrapper = await mountActionable()
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+    const largeUserId = '2113516346351312898'
+
+    vm.handleApprovalMore('TRANSFER')
+    vm.lifecycleDialog!.targetUserId = largeUserId
+    vm.opinionComment = '保留原任务责任'
+    await vm.submitLifecycle()
+    expect(transferTask).toHaveBeenCalledWith('task-001', {
+      targetUserId: largeUserId,
+      reason: '保留原任务责任',
+    })
+
+    vm.handleApprovalMore('DELEGATE')
+    vm.lifecycleDialog!.targetUserId = largeUserId
+    vm.opinionComment = '授权办理'
+    await vm.submitLifecycle()
+    expect(delegateTask).toHaveBeenCalledWith('task-001', {
+      targetUserId: largeUserId,
+      reason: '授权办理',
+    })
+  })
+
+  it('W020: communication and add-sign submit exact ID strings and semantic fields', async () => {
+    const wrapper = await mountActionable()
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+    const firstId = '2113516346351312898'
+    const secondId = '2113516346351312899'
+
+    vm.handleApprovalMore('COMMUNICATE')
+    vm.lifecycleDialog!.receivers = `${firstId},${secondId}`
+    vm.lifecycleDialog!.message = '协同确认'
+    await vm.submitLifecycle()
+    expect(communicateTask).toHaveBeenCalledWith('task-001', {
+      receivers: [firstId, secondId],
+      message: '协同确认',
+    })
+
+    vm.opinionComment = ''
+    vm.handleApprovalMore('ADD_SIGN')
+    vm.lifecycleDialog!.participants = `${firstId},${secondId}`
+    vm.lifecycleDialog!.mode = 'SERIAL'
+    vm.lifecycleDialog!.signPosition = 'AFTER'
+    await vm.submitLifecycle()
+    expect(addSignTask).toHaveBeenCalledWith('task-001', {
+      action: 'ADD_SIGN',
+      participants: [firstId, secondId],
+      mode: 'SERIAL',
+      signPosition: 'AFTER',
+    })
+  })
+
+  it('W020: lifecycle menu intersects permissions and server node allowedActions', async () => {
+    const wrapper = await mountActionable({ allowedActions: ['TRANSFER', 'ADD_SIGN'] }, [
+      'workflow:task:transfer',
+      'workflow:task:delegate',
+      'workflow:task:communicate',
+    ])
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+
+    expect(vm.approvalMoreActions.map((action) => action.command)).toEqual(['TRANSFER'])
+  })
+
+  it('W020: explicit empty allowedActions rejects every secondary action and supplement is not an active-task action', async () => {
+    const wrapper = await mountActionable({ allowedActions: [] })
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+
+    expect(vm.approvalMoreActions).toEqual([])
+    expect(wrapper.find('[data-testid="approval-more-trigger"]').exists()).toBe(false)
+    expect(wrapper.find('.detail-actions__btns').text()).not.toContain(
+      i18n.global.t('common.approve'),
+    )
+    expect(wrapper.find('.detail-actions__btns').text()).not.toContain(
+      i18n.global.t('common.reject'),
+    )
+    vm.handleApprovalMore('ADD_SIGN')
+    expect(vm.lifecycleDialog).toBeNull()
+  })
+
+  it('W020: initiator without handle permission gets only Urge under More', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '1',
+        username: 'initiator',
+        displayName: '发起人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set(['workflow:urge']),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      taskStatus: 'RUNNING',
+      instanceStatus: 'RUNNING',
+      canHandle: false,
+    })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, pinia], stubs } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as ApprovalActionVm
+
+    expect(vm.canAct).toBe(false)
+    expect(vm.canUrge).toBe(true)
+    expect(vm.approvalMoreActions).toEqual([
+      expect.objectContaining({ command: 'URGE', divided: false }),
+    ])
+    expect(wrapper.find('[data-testid="approval-more-trigger"]').exists()).toBe(true)
+    const directButtons = wrapper
+      .find('.detail-actions__btns')
+      .findAll('button')
+      .map((button) => button.text())
+    expect(directButtons).toEqual([i18n.global.t('common.moreActions')])
+    expect(wrapper.text()).toContain(i18n.global.t('taskDetailUi.urgeAction'))
+  })
+
+  it('273:2001 退回弹窗的退回说明随 RETURN 命令提交', async () => {
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
+    const wrapper = await mountActionable({
+      allowedActions: ['RETURN'],
+      approvalHistory: [{ ...mockDetail.approvalHistory[0], nodeKey: 'node_prev' }] as never,
+    })
+    const vm = wrapper.vm as unknown as {
+      returnTargetNodeId: string
+      returnComment: string
+      confirmReturn: () => Promise<void>
+    }
+    vm.returnTargetNodeId = 'node_prev'
+    vm.returnComment = '请补充材料'
+    await vm.confirmReturn()
+
+    expect(acceptTaskAction).toHaveBeenCalledWith(
+      'task-001',
+      'return',
+      expect.objectContaining({
+        action: 'RETURN',
+        returnTargetNodeId: 'node_prev',
+        comment: '请补充材料',
+        opinionData: expect.objectContaining({ comment: '请补充材料' }),
+      }),
+    )
   })
 })
 
@@ -650,5 +1097,216 @@ describe('TaskDetail P63 IoT 预约区块', () => {
 
     expect(cancelReservation).not.toHaveBeenCalled()
     expect(ElMessage.warning).toHaveBeenCalledWith('请填写取消原因')
+  })
+})
+
+describe('TaskDetail 校验提示弹窗（设计 300:1808）', () => {
+  it('意见必填缺失：提交打开校验弹窗列出清单，不进入提交链', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      opinionForm: {
+        formId: 'f-opinion',
+        version: '1',
+        fields: [
+          { key: 'comment', label: '审批意见', type: 'TEXTAREA', required: true },
+          { key: 'note', label: '备注', type: 'TEXT', required: false },
+        ],
+      },
+    })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      validationDialogVisible: boolean
+      validationItems: string[]
+      opinionFieldInvalid: (key: string) => boolean
+      opinionData: Record<string, unknown>
+    }
+    await vm.handleApprove()
+
+    expect(vm.validationDialogVisible).toBe(true)
+    expect(vm.validationItems).toEqual(['请填写审批意见'])
+    expect(vm.opinionFieldInvalid('comment')).toBe(true)
+    vm.opinionData = { comment: '已补充' }
+    await nextTick()
+    expect(vm.opinionFieldInvalid('comment')).toBe(false)
+    expect(acceptTaskAction).not.toHaveBeenCalled()
+  })
+
+  it('补齐必填后：弹窗不出现，提交链正常进入', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      opinionForm: {
+        formId: 'f-opinion',
+        version: '1',
+        fields: [{ key: 'comment', label: '审批意见', type: 'TEXTAREA', required: true }],
+      },
+    })
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      confirmAgree: () => Promise<void>
+      opinionData: Record<string, unknown>
+      validationDialogVisible: boolean
+    }
+    vm.opinionData = { comment: '同意' }
+    await vm.handleApprove()
+    await vm.confirmAgree()
+    await nextTick()
+
+    expect(vm.validationDialogVisible).toBe(false)
+    expect(acceptTaskAction).toHaveBeenCalled()
+  })
+})
+
+describe('TaskDetail 单任务 DISAPPROVE 路由（W020）', () => {
+  it('节点仅允许 APPROVE/DISAPPROVE：负向按钮为「不通过」，提交走 disapprove 段', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      allowedActions: ['APPROVE', 'DISAPPROVE'],
+    })
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
+
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      handleReject: () => void
+      rejectDialogVisible: boolean
+      confirmReject: () => Promise<void>
+      negativeAction: string | null
+    }
+    expect(vm.negativeAction).toBe('DISAPPROVE')
+    vm.handleReject()
+    expect(vm.rejectDialogVisible).toBe(true)
+    await vm.confirmReject()
+    await nextTick()
+
+    expect(acceptTaskAction).toHaveBeenCalledWith('task-001', 'disapprove', undefined)
+    expect(ElMessage.success).toHaveBeenCalledWith('已提交不通过意见')
+  })
+
+  it('未配置节点策略（旧定义）：负向按钮保持 REJECT 流程级语义不变', async () => {
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce(mockDetail)
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as { negativeAction: string | null }
+    expect(vm.negativeAction).toBe('REJECT')
+  })
+})
+
+describe('TaskDetail 意见人员字段（direction-ui-completion-020）', () => {
+  it('USER 必填缺失拦截；填写稳定 ID 后随意见数据提交', async () => {
+    vi.mocked(acceptTaskAction).mockClear()
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      opinionForm: {
+        formId: 'f-opinion',
+        version: '1',
+        fields: [{ key: 'assignee', label: '协办人', type: 'USER', required: true }],
+      },
+    })
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, createPinia()], stubs } })
+    await nextTick()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      handleApprove: () => Promise<void>
+      validationDialogVisible: boolean
+      validationItems: string[]
+      opinionData: Record<string, unknown>
+    }
+    await vm.handleApprove()
+    expect(vm.validationDialogVisible).toBe(true)
+    expect(vm.validationItems).toEqual(['请填写协办人'])
+    expect(acceptTaskAction).not.toHaveBeenCalled()
+
+    vi.mocked(acceptTaskAction).mockResolvedValueOnce(acceptResp)
+    vi.mocked(pollCommandStatus).mockResolvedValueOnce(completedStatus)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+    vm.opinionData = { assignee: '1001' }
+    await vm.handleApprove()
+    await (vm as unknown as { confirmAgree: () => Promise<void> }).confirmAgree()
+    await nextTick()
+
+    const call = vi.mocked(acceptTaskAction).mock.calls.at(-1)
+    expect(call?.[0]).toBe('task-001')
+    const payload = call?.[2] as { opinionData?: { assignee?: string } } | undefined
+    expect(payload?.opinionData?.assignee).toBe('1001')
+  })
+})
+
+describe('TaskDetail 催办参与人与接收人（direction-ui-completion-020）', () => {
+  it('当前待办参与人可见催办，可限定合法接收人并携带实例标识提交', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useUserStore(pinia).setSession({
+      user: {
+        id: '2',
+        username: 'approver',
+        displayName: '审批人',
+        deptId: null,
+        tenantId: null,
+      },
+      permissions: new Set(['workflow:urge']),
+      roles: new Set<string>(),
+      superAdmin: false,
+    })
+    vi.mocked(queryTaskDetail).mockResolvedValueOnce({
+      ...mockDetail,
+      instanceId: 55,
+      assignee: '2',
+      canHandle: true,
+      taskStatus: 'RUNNING',
+      instanceStatus: 'RUNNING',
+      approvalHistory: [
+        ...(mockDetail.approvalHistory ?? []),
+        {
+          taskId: 'active-002',
+          taskName: '会签',
+          assignee: '3',
+          assigneeName: '李四',
+          createTime: '2026-07-17T10:10:00',
+          endTime: null,
+          approvalResult: null,
+        },
+      ],
+    })
+    vi.mocked(urgeMyInstance).mockResolvedValueOnce({ result: 'ACCEPTED', detail: '' } as never)
+
+    const wrapper = mount(TaskDetailView, { global: { plugins: [i18n, pinia], stubs } })
+    await nextTick()
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as {
+      canUrge: boolean
+      urgeRecipientOptions: Array<{ id: string; name: string }>
+      urgeRecipientIds: string[]
+      openUrgeDialog: () => void
+      confirmUrge: () => Promise<void>
+    }
+    expect(vm.canUrge).toBe(true)
+    vm.openUrgeDialog()
+    await nextTick()
+    // 自己不作为可选接收人；活动参与人可选
+    expect(vm.urgeRecipientOptions).toEqual([{ id: '3', name: '李四' }])
+    vm.urgeRecipientIds = ['3']
+    await vm.confirmUrge()
+    await flushPromises()
+
+    expect(urgeMyInstance).toHaveBeenCalledWith(55, '', ['3'])
   })
 })

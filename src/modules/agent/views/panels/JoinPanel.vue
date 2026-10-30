@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from '@/locales'
+import HintTip from '@/components/HintTip.vue'
 
 const { t } = useI18n()
 /**
@@ -11,5 +12,12 @@ defineProps<NodePanelProps>()
 </script>
 
 <template>
-  <el-alert :title="t('agent.joinNodeHint')" type="info" :closable="false" show-icon />
+  <div class="panel-help"><HintTip :content="t('agent.joinNodeHint')" /></div>
 </template>
+
+<style scoped>
+.panel-help {
+  display: flex;
+  justify-content: flex-end;
+}
+</style>

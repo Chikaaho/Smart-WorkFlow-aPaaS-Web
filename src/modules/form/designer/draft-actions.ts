@@ -19,6 +19,14 @@ export interface SaveDraftResult {
   status: FormDefStatus
 }
 
+/** 保存成功提示的呈现参数：仅调用方显式传入时生效，其他入口保持默认提示。 */
+export interface SaveDraftSuccessToast {
+  /** 专用样式类（落真实 .el-message 根）。 */
+  className?: string
+  /** 距视口顶部距离（px）。 */
+  offset?: number
+}
+
 /**
  * 保存草稿：当前设计若还没有 id（新建态）→ 先建草稿再存 definition；
  * 已有 id（编辑态）→ 直接存 definition。
@@ -31,6 +39,8 @@ export async function saveDraftDefinition(
   formKey: string,
   /** 首次创建时携带的归属（0.1.7 回归01b：应用内新建，未保存不建记录） */
   createExtras?: { appId?: string | null; dirId?: string | null },
+  /** 保存成功轻提示的专用外观（仅 FormDesigner 工作台传入）。 */
+  successToast?: SaveDraftSuccessToast,
 ): Promise<SaveDraftResult> {
   try {
     let id = existingId
@@ -50,7 +60,16 @@ export async function saveDraftDefinition(
     const definitionJson = JSON.stringify(definition)
     await saveFormConfig(id, definitionJson)
 
-    ElMessage.success(i18n.global.t('common.draftSaved'))
+    const successText = i18n.global.t('common.draftSaved')
+    if (successToast) {
+      ElMessage.success({
+        message: successText,
+        customClass: successToast.className,
+        offset: successToast.offset,
+      })
+    } else {
+      ElMessage.success(successText)
+    }
     return { id, status: 'DRAFT' }
   } catch (err) {
     handleError(err, i18n.global.t('common.saveDraftFailed'))

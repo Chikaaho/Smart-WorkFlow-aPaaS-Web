@@ -32,13 +32,13 @@ import type { SysDept } from '@/modules/system/types/dept'
 import type { PageQuery } from '@/contracts/common'
 import { hasPerm } from '@/foundation/permission'
 import { updateUserRoles, pageUsers, getUserRoles } from '@/modules/system/api/user'
+import { pageTenants } from '@/modules/system/api/tenant'
+import type { SysTenant } from '@/modules/system/types/tenant'
+import { useUserStore } from '@/stores/user'
 import type { SysUser } from '@/modules/system/types/user'
 import {
   ListFilterItem,
   StandardListTemplate,
-  StandardFormTemplate,
-  FormSection,
-  FormGrid,
   ListActionsColumn,
   ListPagination,
 } from '@/components/page-layout'
@@ -53,10 +53,32 @@ const pageSize = ref(10)
 const loading = ref(false)
 const errorMsg = ref('')
 
+// ─── 超管租户筛选/归属列（459:13364） ───
+// 后端 SysRole（BaseEntity）行携带 tenantId，/system/role/page 支持 tenantId 等值过滤；
+// 租户候选沿既有 /system/tenant/page，仅超管加载，普通角色视图不变。
+const userStore = useUserStore()
+const isSuperAdmin = computed(() => userStore.superAdmin)
+const tenantOptions = ref<SysTenant[]>([])
+const tenantNameById = computed(() => {
+  const map = new Map<string, string>()
+  for (const tenant of tenantOptions.value) map.set(String(tenant.id), tenant.name)
+  return map
+})
+
+async function loadTenantOptions() {
+  try {
+    const result = await pageTenants({ pageNum: 1, pageSize: 200 }, {})
+    tenantOptions.value = result.list
+  } catch {
+    tenantOptions.value = []
+  }
+}
+
 const filter = reactive<RoleFilter>({
   name: '',
   code: '',
   status: undefined,
+  tenantId: undefined,
 })
 
 const currentFilter = reactive<RoleFilter>({ ...filter })
@@ -85,6 +107,7 @@ function handleQuery() {
     name: filter.name || undefined,
     code: filter.code || undefined,
     status: filter.status,
+    tenantId: isSuperAdmin.value ? filter.tenantId || undefined : undefined,
   })
   pageNum.value = 1
   void loadList()
@@ -94,9 +117,11 @@ function handleReset() {
   filter.name = ''
   filter.code = ''
   filter.status = undefined
+  filter.tenantId = undefined
   currentFilter.name = undefined
   currentFilter.code = undefined
   currentFilter.status = undefined
+  currentFilter.tenantId = undefined
   pageNum.value = 1
   void loadList()
 }
@@ -157,6 +182,30 @@ const deptTree = ref<SysDept[]>([])
 const deptTreeError = ref('')
 const deptTreeRef = ref<TreeInstance | null>(null)
 const permissionTreeRef = ref<TreeInstance | null>(null)
+
+/* 446:14465：权限树搜索/展开收起工具条（复用既有树操作，不改变勾选语义）。 */
+const permissionFilter = ref('')
+const permissionTreeExpanded = ref(true)
+
+function filterPermissionTree() {
+  permissionTreeRef.value?.filter(permissionFilter.value.trim())
+}
+
+function filterPermissionNode(value: string, data: { title?: string }): boolean {
+  if (!value) return true
+  return (data.title ?? '').toLowerCase().includes(String(value).toLowerCase())
+}
+
+function setPermissionTreeExpanded(expanded: boolean) {
+  const checked = [
+    ...(permissionTreeRef.value?.getCheckedKeys() ?? []),
+    ...(permissionTreeRef.value?.getHalfCheckedKeys() ?? []),
+  ] as Array<string | number>
+  permissionTreeExpanded.value = expanded
+  void nextTick(() => {
+    permissionTreeRef.value?.setCheckedKeys(checked)
+  })
+}
 const permissionTreeRaw = ref<MenuNode[]>([])
 /** 授权树绑定用：标题按当前语言解析（服务端标题作回退）。 */
 const permissionTree = useLocalizedMenuTree(permissionTreeRaw)
@@ -203,7 +252,7 @@ function handleDeptTreeCheck() {
 
 // ─── 弹窗状态 ───
 
-// ─── 成员维护弹窗（I1：角色成员反向视图） ───
+// ─── 成员维护弹窗（I1：角色成员反向视图；446:16226 执行提示28：暂存语义，保存才生效） ───
 
 const membersDialogVisible = ref(false)
 const membersRole = ref<SysRole | null>(null)
@@ -216,9 +265,47 @@ const membersError = ref('')
 const candidateUser = ref('')
 const candidateOptions = ref<SysUser[]>([])
 
+/** 待提交变更（仅前端暂存）：新增成员 / 待移除成员 id；保存才写回，取消不写入 */
+const pendingAddUsers = ref<SysUser[]>([])
+const pendingRemoveIds = ref<string[]>([])
+const membersSaving = ref(false)
+
+type MemberRowState = 'pending-add' | 'effective' | 'pending-remove'
+interface MemberRow {
+  user: SysUser
+  state: MemberRowState
+}
+
+/** 展示行 = 待提交新增（置顶）+ 已生效成员（服务端当前页，待移除者标记） */
+const memberRows = computed<MemberRow[]>(() => {
+  const rows: MemberRow[] = pendingAddUsers.value.map((user) => ({
+    user,
+    state: 'pending-add' as const,
+  }))
+  for (const user of members.value) {
+    const id = String(user.id ?? '')
+    rows.push({
+      user,
+      state: pendingRemoveIds.value.includes(id) ? 'pending-remove' : 'effective',
+    })
+  }
+  return rows
+})
+
+const hasMembersPending = computed(
+  () => pendingAddUsers.value.length > 0 || pendingRemoveIds.value.length > 0,
+)
+
+function resetMembersStaging() {
+  pendingAddUsers.value = []
+  pendingRemoveIds.value = []
+  membersSaving.value = false
+}
+
 function openMembers(row: SysRole) {
   membersRole.value = row
   membersPageNum.value = 1
+  resetMembersStaging()
   membersDialogVisible.value = true
   void loadMembers()
   void loadCandidates()
@@ -256,7 +343,14 @@ async function loadMembers() {
 
 async function loadCandidates(keyword = '') {
   try {
-    const result = await pageUsers({ pageNum: 1, pageSize: 50 }, { username: keyword, status: 0 })
+    const result = await pageUsers(
+      { pageNum: 1, pageSize: 50 },
+      {
+        username: keyword,
+        status: 0,
+        ...(membersRole.value?.tenantId ? { tenantId: membersRole.value.tenantId } : {}),
+      },
+    )
     candidateOptions.value = result.list
   } catch {
     ElMessage.error(t('common.loadFailed'))
@@ -265,60 +359,76 @@ async function loadCandidates(keyword = '') {
   }
 }
 
-/** 添加成员：读取用户现有角色，追加本角色后整量写回 */
+/** 添加成员 → 暂存为「待提交」（复用既有 getUserRoles 查重，只读不写） */
 async function addMember(user: SysUser) {
   if (!membersRole.value?.id || !user.id) return
+  if (pendingAddUsers.value.some((item) => item.id === user.id)) return
   try {
     const existing = await getUserRoles(user.id)
     if (existing.includes(membersRole.value.id)) {
       ElMessage.info(t('system.userAlreadyRoleMember'))
       return
     }
-    await updateUserRoles(user.id, [...existing, membersRole.value.id])
-    ElMessage.success(t('system.memberAdded'))
+    pendingAddUsers.value = [...pendingAddUsers.value, user]
     candidateUser.value = ''
-    await loadMembers()
   } catch (err) {
     ElMessage.error(err instanceof ApiError ? err.msg : t('system.memberAddFailed'))
   }
 }
 
-/** 移除成员：读取用户现有角色，剔除本角色后整量写回 */
-async function removeMember(user: SysUser) {
-  if (!membersRole.value?.id || !user.id) return
+/** 移除已生效成员 → 暂存为「待移除」（不写库；保存时统一写回） */
+function removeMember(user: SysUser) {
+  const id = String(user.id ?? '')
+  if (!id || pendingRemoveIds.value.includes(id)) return
+  pendingRemoveIds.value = [...pendingRemoveIds.value, id]
+}
+
+/** 撤销「待移除」标记（成员保持已生效） */
+function undoRemoveMember(user: SysUser) {
+  pendingRemoveIds.value = pendingRemoveIds.value.filter((id) => id !== String(user.id ?? ''))
+}
+
+/** 撤销「待提交」新增 */
+function unstageAddMember(user: SysUser) {
+  pendingAddUsers.value = pendingAddUsers.value.filter((item) => item.id !== user.id)
+}
+
+/** 保存：按暂存集整量写回每个用户的角色列表（既有 updateUserRoles 能力），成功后清空暂存 */
+async function saveMembers() {
+  if (!membersRole.value?.id || membersSaving.value || !hasMembersPending.value) return
+  const roleId = membersRole.value.id
+  membersSaving.value = true
   try {
-    await ElMessageBox.confirm(
-      t('system.confirmRemoveRoleMember', { name: membersRole.value.name }),
-      t('system.removeConfirmTitle'),
-      {
-        get confirmButtonText() {
-          return t('common.confirm')
-        },
-        get cancelButtonText() {
-          return t('common.cancel')
-        },
-        type: 'warning',
-      },
-    )
-  } catch {
-    return
-  }
-  try {
-    const existing = await getUserRoles(user.id)
-    await updateUserRoles(
-      user.id,
-      existing.filter((id) => id !== membersRole.value!.id),
-    )
-    ElMessage.success(t('system.memberRemoved'))
+    for (const user of pendingAddUsers.value) {
+      const existing = await getUserRoles(user.id!)
+      if (existing.includes(roleId)) continue
+      await updateUserRoles(user.id!, [...existing, roleId])
+    }
+    for (const id of pendingRemoveIds.value) {
+      const existing = await getUserRoles(id)
+      await updateUserRoles(
+        id,
+        existing.filter((item) => item !== roleId),
+      )
+    }
+    ElMessage.success(t('system.roleMembersSaved'))
+    resetMembersStaging()
+    membersPageNum.value = 1
     await loadMembers()
   } catch (err) {
-    ElMessage.error(err instanceof ApiError ? err.msg : t('system.memberRemoveFailed'))
+    ElMessage.error(err instanceof ApiError ? err.msg : t('system.roleMembersSaveFailed'))
+  } finally {
+    membersSaving.value = false
   }
 }
 
-// el-table row slot 的 DefaultRow 类型不与 SysUser 兼容，通过包装函数桥接。
-function removeMemberRow(r: unknown) {
-  removeMember(r as SysUser)
+// el-table row slot 的 DefaultRow 类型不与 MemberRow 兼容，通过包装函数桥接：
+// 待提交新增 → 撤销暂存；待移除 → 恢复；已生效 → 暂存移除。
+function memberRowAction(r: unknown) {
+  const row = r as MemberRow
+  if (row.state === 'pending-add') unstageAddMember(row.user)
+  else if (row.state === 'pending-remove') undoRemoveMember(row.user)
+  else removeMember(row.user)
 }
 
 const dialogVisible = ref(false)
@@ -515,12 +625,14 @@ function rowActions(r: unknown): ListAction[] {
     {
       key: 'edit',
       label: t('common.edit'),
+      visible: hasPerm('system:role:update'),
       disabled: !canEditRole(row),
       onClick: () => openEdit(row),
     },
     {
       key: 'delete',
       label: t('common.delete'),
+      visible: hasPerm('system:role:delete'),
       type: 'danger',
       disabled: !canEditRole(row),
       onClick: () => handleDelete(row),
@@ -528,11 +640,17 @@ function rowActions(r: unknown): ListAction[] {
   ]
 }
 
-onMounted(loadList)
+onMounted(() => {
+  void loadList()
+  // 租户筛选候选仅超管加载（普通角色不渲染、不请求）
+  if (isSuperAdmin.value) void loadTenantOptions()
+})
 </script>
 
 <template>
   <StandardListTemplate
+    appearance="design"
+    :title="t('system.roleManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -549,6 +667,17 @@ onMounted(loadList)
 
     <!-- 筛选区 -->
     <template #filter>
+      <!-- 459:13364：租户筛选仅超管渲染（候选沿 /system/tenant/page）；普通角色视图不变 -->
+      <ListFilterItem v-if="isSuperAdmin" :label="t('system.tenantShort')">
+        <el-select v-model="filter.tenantId" :placeholder="t('tenantContext.all')" clearable>
+          <el-option
+            v-for="tenant in tenantOptions"
+            :key="tenant.id"
+            :label="tenant.name"
+            :value="String(tenant.id)"
+          />
+        </el-select>
+      </ListFilterItem>
       <ListFilterItem :label="t('system.roleName')">
         <el-input
           v-model="filter.name"
@@ -586,15 +715,20 @@ onMounted(loadList)
       show-icon
       style="margin-bottom: 12px"
     />
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="list">
+      <el-table-column v-if="isSuperAdmin" :label="t('system.tenantShort')" width="110">
+        <template #default="{ row }">{{
+          tenantNameById.get(String((row as SysRole).tenantId ?? '')) || '—'
+        }}</template>
+      </el-table-column>
       <el-table-column prop="name" :label="t('system.roleName')" min-width="140" />
       <el-table-column prop="code" :label="t('system.roleCode')" min-width="120" />
       <el-table-column prop="sort" :label="t('common.sort')" width="70" />
       <el-table-column prop="status" :label="t('common.status')" width="80">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
-            {{ row.status === 1 ? t('common.statusNormal') : t('common.disable') }}
-          </el-tag>
+          <span class="sys-status-text">{{
+            row.status === 1 ? t('common.statusNormal') : t('common.disable')
+          }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="builtIn" :label="t('system.builtIn')" width="70">
@@ -618,39 +752,46 @@ onMounted(loadList)
   <!-- 新建/编辑弹窗 -->
   <el-dialog
     v-model="dialogVisible"
+    class="sw-edit-dialog role-editor"
+    align-center
     :title="dialogTitle"
     :close-on-click-modal="false"
     destroy-on-close
-    width="680px"
+    width="1000px"
     @closed="resetForm"
   >
-    <StandardFormTemplate embedded>
-      <template v-if="formError" #alert>
-        <el-alert :title="formError" type="error" :closable="false" show-icon />
-      </template>
-
-      <FormSection :title="t('common.basicInfo')">
-        <FormGrid :columns="2">
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('system.roleName') }}</label>
-            <el-input
-              v-model="form.name"
-              :placeholder="t('system.roleNamePlaceholder')"
-              maxlength="64"
-              show-word-limit
-            />
-          </div>
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('system.roleCode') }}</label>
-            <el-input
-              v-model="form.code"
-              :placeholder="t('system.roleCodePlaceholder')"
-              :disabled="!!editingId || isProtectedRole"
-              maxlength="64"
-              show-word-limit
-            />
-          </div>
-          <div class="form-field">
+    <el-alert
+      v-if="formError"
+      :title="formError"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    />
+    <div class="role-edit">
+      <div class="role-edit__fields">
+        <div class="form-field form-field--required">
+          <label class="form-field__label">{{ t('system.roleName') }}</label>
+          <el-input
+            v-model="form.name"
+            :placeholder="t('system.roleNamePlaceholder')"
+            maxlength="64"
+            show-word-limit
+          />
+        </div>
+        <div class="form-field form-field--required">
+          <label class="form-field__label">{{ t('system.roleCode') }}</label>
+          <el-input
+            v-model="form.code"
+            :placeholder="t('system.roleCodePlaceholder')"
+            :disabled="!!editingId || isProtectedRole"
+            maxlength="64"
+            show-word-limit
+          />
+        </div>
+        <!-- 446:14465：排序/状态同排（排序 150 + 状态占满余量），数据范围在备注之前 -->
+        <div class="role-edit__pair">
+          <div class="form-field role-edit__pair-sort">
             <label class="form-field__label">{{ t('common.sort') }}</label>
             <el-input-number v-model="form.sort" :min="0" :max="9999" style="width: 100%" />
           </div>
@@ -661,87 +802,103 @@ onMounted(loadList)
               <el-option :label="t('common.disable')" :value="0" />
             </el-select>
           </div>
-        </FormGrid>
-        <FormGrid :columns="1" style="margin-top: 0">
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.remark') }}</label>
-            <el-input
-              v-model="form.description"
-              type="textarea"
-              :rows="3"
-              :placeholder="t('common.remarkPlaceholder')"
-              maxlength="256"
-              show-word-limit
+        </div>
+        <div class="form-field">
+          <label class="form-field__label">{{ t('system.dataScopeField') }}</label>
+          <el-select v-model="form.dataScope" style="width: 100%" :disabled="isProtectedRole">
+            <el-option
+              v-for="opt in DATA_SCOPE_OPTIONS"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </div>
+        <div v-if="form.dataScope === DATA_SCOPE_CUSTOM" class="form-field">
+          <label class="form-field__label">{{ t('system.dataScopeCustom') }}</label>
+          <div v-if="deptTreeError" class="dept-tree-box dept-tree-box--tip">
+            {{ deptTreeError }}
+          </div>
+          <div v-else-if="deptTree.length" class="dept-tree-box">
+            <el-tree
+              ref="deptTreeRef"
+              :data="deptTree"
+              node-key="id"
+              show-checkbox
+              check-strictly
+              default-expand-all
+              :props="{ label: 'name', children: 'children' }"
+              @check="handleDeptTreeCheck"
             />
           </div>
-        </FormGrid>
-      </FormSection>
+          <div v-else class="dept-tree-box dept-tree-box--tip">{{ t('system.noDeptData') }}</div>
+        </div>
+        <div class="form-field">
+          <label class="form-field__label">{{ t('common.remark') }}</label>
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="2"
+            class="role-edit__remark"
+            :placeholder="t('common.remarkPlaceholder')"
+            maxlength="256"
+            show-word-limit
+          />
+        </div>
+      </div>
+      <div class="role-edit__tree">
+        <div class="role-edit__tree-title">{{ t('system.menuPermissions') }}</div>
+        <!-- 446:14465：搜索 248×32 + 展开/收起各 88×32 工具条，复用既有树操作 -->
+        <div class="role-edit__tree-tools">
+          <el-input
+            v-model="permissionFilter"
+            class="role-edit__tree-search"
+            :placeholder="t('system.menuSearchPlaceholder')"
+            clearable
+            @input="filterPermissionTree"
+          />
+          <el-button class="role-edit__tree-tool" @click="setPermissionTreeExpanded(true)">{{
+            t('system.expandAllNodes')
+          }}</el-button>
+          <el-button class="role-edit__tree-tool" @click="setPermissionTreeExpanded(false)">{{
+            t('system.collapseAllNodes')
+          }}</el-button>
+        </div>
+        <div class="role-edit__tree-body">
+          <el-tree
+            ref="permissionTreeRef"
+            :key="permissionTreeExpanded ? 'perm-expand' : 'perm-collapse'"
+            :data="permissionTree"
+            node-key="id"
+            show-checkbox
+            :default-expand-all="permissionTreeExpanded"
+            :filter-node-method="filterPermissionNode"
+            :props="{ label: 'title', children: 'children' }"
+            :disabled="isProtectedRole"
+            @check="handlePermissionCheck"
+          />
+        </div>
+      </div>
+    </div>
 
-      <FormSection :title="t('system.dataScope')">
-        <FormGrid :columns="1">
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.dataScopeField') }}</label>
-            <el-select v-model="form.dataScope" style="width: 100%" :disabled="isProtectedRole">
-              <el-option
-                v-for="opt in DATA_SCOPE_OPTIONS"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
-            </el-select>
-          </div>
-          <div v-if="form.dataScope === DATA_SCOPE_CUSTOM" class="form-field">
-            <label class="form-field__label">{{ t('system.dataScopeCustom') }}</label>
-            <div v-if="deptTreeError" class="dept-tree-box dept-tree-box--tip">
-              {{ deptTreeError }}
-            </div>
-            <div v-else-if="deptTree.length" class="dept-tree-box">
-              <el-tree
-                ref="deptTreeRef"
-                :data="deptTree"
-                node-key="id"
-                show-checkbox
-                check-strictly
-                default-expand-all
-                :props="{ label: 'name', children: 'children' }"
-                @check="handleDeptTreeCheck"
-              />
-            </div>
-            <div v-else class="dept-tree-box dept-tree-box--tip">{{ t('system.noDeptData') }}</div>
-          </div>
-        </FormGrid>
-      </FormSection>
-
-      <FormSection :title="t('system.menuPermissions')">
-        <el-tree
-          ref="permissionTreeRef"
-          :data="permissionTree"
-          node-key="id"
-          show-checkbox
-          default-expand-all
-          :props="{ label: 'title', children: 'children' }"
-          :disabled="isProtectedRole"
-          @check="handlePermissionCheck"
-        />
-      </FormSection>
-
-      <template #actions>
-        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
-        <el-button
-          v-if="!isProtectedRole"
-          type="primary"
-          :loading="submitting"
-          @click="handleSubmit"
-          >{{ t('common.save') }}</el-button
-        >
-      </template>
-    </StandardFormTemplate>
+    <template #footer>
+      <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+      <el-button
+        v-if="!isProtectedRole"
+        type="primary"
+        :loading="submitting"
+        @click="handleSubmit"
+        >{{ t('common.save') }}</el-button
+      >
+    </template>
   </el-dialog>
-  <!-- 成员维护弹窗（I1） -->
+  <!-- 成员维护弹窗（I1；446:16226：860 宽，44 表头/53 行，底部保存/取消，暂存语义） -->
   <el-dialog
     v-model="membersDialogVisible"
+    class="role-members-dialog"
     :title="t('system.roleMembersDialogTitle', { name: membersRole?.name ?? '' })"
-    width="640px"
+    width="860px"
+    @closed="resetMembersStaging"
   >
     <el-alert
       v-if="membersError"
@@ -779,14 +936,52 @@ onMounted(loadList)
         >{{ t('common.add') }}</el-button
       >
     </div>
-    <el-table v-loading="membersLoading" :data="members" stripe size="small">
-      <el-table-column prop="username" :label="t('common.username')" min-width="120" />
-      <el-table-column prop="realName" :label="t('system.fullName')" min-width="100" />
-      <el-table-column :label="t('common.actions')" width="90">
+    <!-- 待提交变更摘要：保存才生效，取消不写入 -->
+    <div v-if="hasMembersPending" class="role-members__pending" data-testid="role-members-pending">
+      {{
+        t('system.roleMembersPendingSummary', {
+          adds: pendingAddUsers.length,
+          removes: pendingRemoveIds.length,
+        })
+      }}
+    </div>
+    <el-table v-loading="membersLoading" :data="memberRows">
+      <el-table-column prop="username" :label="t('common.username')" min-width="200">
         <template #default="{ row }">
-          <el-button size="small" link type="danger" @click="removeMemberRow(row)">{{
-            t('common.remove')
-          }}</el-button>
+          <span>{{ (row as MemberRow).user.username }}</span>
+          <el-tag
+            v-if="(row as MemberRow).state === 'pending-add'"
+            class="role-members__mark"
+            size="small"
+            type="warning"
+            >{{ t('system.roleMembersPendingAdd') }}</el-tag
+          >
+          <el-tag
+            v-else-if="(row as MemberRow).state === 'pending-remove'"
+            class="role-members__mark"
+            size="small"
+            type="danger"
+            >{{ t('system.roleMembersPendingRemove') }}</el-tag
+          >
+        </template>
+      </el-table-column>
+      <el-table-column min-width="180">
+        <template #header>{{ t('system.fullName') }}</template>
+        <template #default="{ row }">{{ (row as MemberRow).user.realName }}</template>
+      </el-table-column>
+      <el-table-column :label="t('common.actions')" width="100">
+        <template #default="{ row }">
+          <el-button
+            size="small"
+            link
+            :type="(row as MemberRow).state === 'pending-remove' ? 'primary' : 'danger'"
+            @click="memberRowAction(row)"
+            >{{
+              (row as MemberRow).state === 'pending-remove'
+                ? t('system.roleMembersUndoRemove')
+                : t('common.remove')
+            }}</el-button
+          >
         </template>
       </el-table-column>
     </el-table>
@@ -798,37 +993,169 @@ onMounted(loadList)
       @update:page-num="handleMembersPageChange"
       @update:page-size="handleMembersPageSizeChange"
     />
+    <template #footer>
+      <el-button @click="membersDialogVisible = false">{{ t('common.cancel') }}</el-button>
+      <el-button
+        type="primary"
+        :loading="membersSaving"
+        :disabled="!hasMembersPending"
+        @click="saveMembers"
+        >{{ t('common.save') }}</el-button
+      >
+    </template>
   </el-dialog>
 </template>
 
 <style scoped>
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sw-space-8);
-}
-
-.form-field__label {
-  font-size: var(--sw-font-body);
-  font-weight: var(--sw-font-weight-emphasis);
-  color: var(--sw-text-primary);
-}
-
-.form-field--required .form-field__label::before {
-  content: '* ';
-  color: var(--sw-danger);
-}
-
+/* 弹窗几何规则集中在下方非 scoped 块：el-dialog 走 Teleport，弹窗内容元素不带本组件作用域属性。 */
 .dept-tree-box {
-  max-height: 240px;
+  max-height: 200px;
   overflow-y: auto;
-  border: 1px solid var(--sw-border-base);
+  border: 1px solid #dde3ef;
   border-radius: var(--sw-radius-card);
   padding: var(--sw-space-8);
 }
 
 .dept-tree-box--tip {
   font-size: var(--sw-font-body);
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
+}
+</style>
+
+<style>
+/* 446:14465（G26）：1000×596，左字段区/右权限树并排，树独立滚动、18px 勾选；
+   Teleport 弹窗内容不带组件作用域属性，本块使用全局类名（role-editor/role-edit 系列为本页专用）。 */
+.role-edit {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  min-height: 0;
+}
+.role-edit__fields {
+  display: flex;
+  flex: 0 0 390px;
+  width: 390px;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.role-edit__tree {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+}
+.role-edit__tree-title {
+  margin-bottom: 6px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--sw-text-regular);
+}
+.role-edit__tree-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.role-edit__tree-search {
+  flex: 0 0 248px;
+  width: 248px;
+  --el-input-height: 32px;
+}
+.role-edit__tree-tool {
+  flex: 0 0 88px;
+  width: 88px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  color: var(--sw-color-primary, #2563eb);
+  font-size: 14px;
+  line-height: 22px;
+}
+.role-edit__pair {
+  display: flex;
+  gap: 10px;
+}
+.role-edit__pair-sort {
+  flex: 0 0 150px;
+  width: 150px;
+}
+.role-edit__pair .form-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.role-edit__remark .el-textarea__inner {
+  min-height: 80px;
+  height: 80px;
+}
+.role-edit__tree-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid #dde3ef;
+  border-radius: 6px;
+}
+.role-edit__tree-body .el-checkbox__inner {
+  /* G26：权限树 18px 勾选，覆盖 tokens.css 全局 28px（!important 同强按后序/特异性取胜） */
+  width: 18px !important;
+  height: 18px !important;
+}
+.role-edit__tree-body .el-checkbox__inner::after {
+  height: 9px !important;
+  left: 6px !important;
+  top: 2px !important;
+  width: 4px !important;
+  border-right-width: 2px !important;
+  border-bottom-width: 2px !important;
+}
+.role-editor.el-dialog {
+  height: 596px;
+  display: flex;
+  flex-direction: column;
+}
+.role-editor .el-dialog__header {
+  flex: 0 0 auto;
+}
+.role-editor .el-dialog__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.role-editor .el-dialog__footer {
+  flex: 0 0 auto;
+}
+
+/* 446:16226（执行提示28）：角色成员弹窗 860 宽，44 表头/53 数据行，底部 80×32 保存/取消靠右。 */
+.role-members-dialog .el-table__header-wrapper th.el-table__cell {
+  box-sizing: border-box;
+  height: var(--sw-list-design-header-height);
+  background: var(--sw-surface-page);
+  font-weight: var(--sw-font-weight-body);
+}
+.role-members-dialog .el-table__body-wrapper .el-table__row {
+  height: var(--sw-list-design-row-height);
+}
+.role-members-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.role-members-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+.role-members__pending {
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--sw-text-secondary);
+}
+.role-members__mark {
+  margin-left: 8px;
 }
 </style>

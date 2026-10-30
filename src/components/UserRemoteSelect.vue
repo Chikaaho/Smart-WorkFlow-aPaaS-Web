@@ -12,7 +12,7 @@ import { useI18n } from '@/locales'
  */
 const props = withDefaults(
   defineProps<{
-    modelValue: number | number[] | null | undefined
+    modelValue: string | number | Array<string | number> | null | undefined
     multiple?: boolean
     placeholder?: string
     disabled?: boolean
@@ -21,7 +21,7 @@ const props = withDefaults(
   { multiple: false, placeholder: '', disabled: false, clearable: true },
 )
 
-const emit = defineEmits<{ 'update:modelValue': [value: number | number[] | null] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: string | string[] | null] }>()
 
 const { t } = useI18n()
 
@@ -30,18 +30,18 @@ const keyword = ref('')
 const options = ref<UserOption[]>([])
 const loading = ref(false)
 /** 弹窗内暂存选择，确认后才上抛 */
-const pendingIds = ref<number[]>([])
+const pendingIds = ref<string[]>([])
 
-const selectedIds = computed<number[]>(() => {
+const selectedIds = computed<string[]>(() => {
   const value = props.modelValue
   if (value == null) return []
-  return Array.isArray(value) ? value.map(Number) : [Number(value)]
+  return (Array.isArray(value) ? value : [value]).map(String)
 })
 
 const displayLabel = computed(() => {
   if (selectedIds.value.length === 0) return ''
   const labels = selectedIds.value
-    .map((id) => options.value.find((o) => Number(o.id) === id))
+    .map((id) => options.value.find((o) => o.id === id))
     .filter((o): o is UserOption => !!o)
     .map(labelOf)
   // 已选但展示名未加载完成时保持空显，待 loadEcho 回填
@@ -52,27 +52,25 @@ const displayLabel = computed(() => {
 async function loadOptions(kw: string): Promise<void> {
   loading.value = true
   try {
-    options.value = await searchUserOptions(kw, 50)
+    options.value = (await searchUserOptions(kw, 50)).map(normalizeOption)
   } finally {
     loading.value = false
   }
 }
 
-async function loadEcho(ids: number[]): Promise<void> {
+async function loadEcho(ids: string[]): Promise<void> {
   if (ids.length === 0) return
-  const known = new Set(options.value.map((o) => Number(o.id)))
+  const known = new Set(options.value.map((o) => o.id))
   const missing = ids.filter((id) => !known.has(id))
   if (missing.length === 0) return
   try {
-    const hits = await searchUserOptions(undefined, 200)
-    const byId = new Map(hits.map((h) => [Number(h.id), h]))
+    const hits = (await searchUserOptions(undefined, 200)).map(normalizeOption)
+    const byId = new Map(hits.map((h) => [h.id, h]))
     options.value = [
       ...options.value,
       ...missing
         .map((id) => byId.get(id))
-        .filter(
-          (h): h is UserOption => !!h && !options.value.some((o) => Number(o.id) === Number(h.id)),
-        ),
+        .filter((h): h is UserOption => !!h && !options.value.some((o) => o.id === h.id)),
     ]
   } catch {
     // 回显失败不阻塞页面；已选值仍保留（显示为空由提交链校验兜底）
@@ -83,10 +81,14 @@ watch(
   () => props.modelValue,
   (value) => {
     const ids = value == null ? [] : Array.isArray(value) ? value : [value]
-    void loadEcho(ids.map(Number))
+    void loadEcho(ids.map(String))
   },
   { immediate: true },
 )
+
+function normalizeOption(option: UserOption): UserOption {
+  return { ...option, id: String(option.id) }
+}
 
 function labelOf(o: UserOption): string {
   return o.realName ? `${o.realName}（${o.username}）` : o.username
@@ -110,11 +112,11 @@ function onSearch(): void {
 }
 
 function isPending(o: UserOption): boolean {
-  return pendingIds.value.includes(Number(o.id))
+  return pendingIds.value.includes(o.id)
 }
 
 function toggleRow(o: UserOption): void {
-  const id = Number(o.id)
+  const id = o.id
   if (props.multiple) {
     pendingIds.value = isPending(o)
       ? pendingIds.value.filter((v) => v !== id)

@@ -9,6 +9,8 @@
  */
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import HintTip from '@/components/HintTip.vue'
+import { useI18n } from '@/locales'
 import { ApiError } from '@/foundation/request'
 import { hasPerm } from '@/foundation/permission'
 import { StandardFormTemplate, ListActionsColumn } from '@/components/page-layout'
@@ -22,6 +24,8 @@ import {
   checkResourcePolicy,
   type ResourcePolicy,
 } from '@/modules/workflow/api/resource-ops'
+
+const { t } = useI18n()
 
 const VIEW_PERM = 'workflow:resource:view'
 const MANAGE_PERM = 'workflow:resource:manage'
@@ -204,17 +208,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <StandardFormTemplate
-    title="资源策略"
-    subtitle="版本化额度与并发预算：新策略默认关闭；启用只影响新受理，在途对象按受理冻结版本结算"
-  >
+  <StandardFormTemplate title="资源策略">
     <template #alert>
-      <el-alert
-        type="info"
-        :closable="false"
-        show-icon
-        title="保留份额口径：生产保留 + 普通 OA 保留 + 共享 = 全局上限；启用前进行保留份额、消费者可用性与预算相容性检查，失败明确拒绝"
-      />
+      <div class="configuration-help"><HintTip :content="t('workflow.resourcePolicyHelp')" /></div>
     </template>
 
     <!-- 新版本创建 -->
@@ -317,6 +313,11 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.configuration-help {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .policy-section {
   margin-bottom: 24px;
 }

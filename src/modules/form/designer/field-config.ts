@@ -16,6 +16,9 @@ export interface FieldPatch {
   name?: string
   required?: boolean
   length?: number
+  minLength?: number
+  pattern?: string
+  patternMessage?: string
   /** 字段描述（0.1.7 #38 契约已落 BaseField.description）：字段清单里可直接维护的说明。 */
   description?: string
   /** 占位提示（P53 契约已落 BaseField.placeholder）。 */
@@ -50,6 +53,8 @@ export interface FieldPatch {
   multiple?: boolean
   /** DATE 日期时间格式（P63 契约已落 DateField.format）。 */
   format?: string
+  /** TEXT 多行纯文本（契约已落 TextField.multiline）：textarea 填写，存储族/API 不变。 */
+  multiline?: boolean
   /** 高级编辑脚本（BF20261013-021 契约已落 BaseField.script）：值变更时执行，onLoad 时装载后也执行。 */
   script?: import('@/contracts/form-schema').FieldScript
 }

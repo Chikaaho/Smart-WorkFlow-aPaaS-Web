@@ -1,0 +1,820 @@
+<script setup lang="ts">
+/* global crypto */
+/**
+ * TenantList — 租户管理列表页（0.2.0 T020 / 设计节点 458:12660、458:12871、458:12943）。
+ *
+ * 只对租户 0 的系统超级管理员开放写操作（服务端二次校验）；
+ * 租户 0 为保留对象，只提供查看。新建租户一次完成租户、根部门与首任管理员初始化，
+ * 初始密码只在提交时使用，不在列表、详情或回执中回显。
+ */
+import { useI18n } from '@/locales'
+import { ref, reactive, onMounted, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ApiError } from '@/foundation/request'
+import { useUserStore } from '@/stores/user'
+import {
+  pageTenants,
+  createTenant,
+  renameTenant,
+  updateTenantStatus,
+  queryTenantAdministrators,
+  assignTenantAdministrator,
+  createTenantAdministrator,
+} from '@/modules/system/api/tenant'
+import type { SysTenant, TenantFilter, TenantAdminCandidate } from '@/modules/system/types/tenant'
+import type { PageQuery } from '@/contracts/common'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
+import DetailDialog from '@/components/DetailDialog.vue'
+
+const { t } = useI18n()
+const userStore = useUserStore()
+const canManage = computed(() => userStore.superAdmin)
+
+// ─── 列表状态 ───
+
+const list = ref<SysTenant[]>([])
+const total = ref(0)
+const pageNum = ref(1)
+const pageSize = ref(10)
+const loading = ref(false)
+const errorMsg = ref('')
+
+const filter = reactive<TenantFilter>({ name: '', status: undefined })
+const currentFilter = reactive<TenantFilter>({ ...filter })
+
+async function loadList() {
+  errorMsg.value = ''
+  // 租户维护是租户0系统超管专属能力；普通租户管理员不发起越权查询，
+  // 直接给出可定位的权限说明，避免把服务端 403 误显为“请求参数有误”。
+  if (!canManage.value) {
+    list.value = []
+    total.value = 0
+    loading.value = false
+    errorMsg.value = t('system.tenantSuperAdminOnly')
+    return
+  }
+  loading.value = true
+  try {
+    const pageQuery: PageQuery = { pageNum: pageNum.value, pageSize: pageSize.value }
+    const result = await pageTenants(pageQuery, currentFilter)
+    list.value = result.list
+    total.value = result.total
+  } catch (err) {
+    errorMsg.value = err instanceof ApiError ? err.msg : t('system.tenantListLoadFailed')
+  } finally {
+    loading.value = false
+  }
+}
+
+function handleQuery() {
+  Object.assign(currentFilter, {
+    name: filter.name || undefined,
+    status: filter.status,
+  })
+  pageNum.value = 1
+  void loadList()
+}
+
+function handleReset() {
+  filter.name = ''
+  filter.status = undefined
+  currentFilter.name = undefined
+  currentFilter.status = undefined
+  pageNum.value = 1
+  void loadList()
+}
+
+function handlePageNumChange(p: number) {
+  pageNum.value = p
+  void loadList()
+}
+
+function handlePageSizeChange(s: number) {
+  pageSize.value = s
+  pageNum.value = 1
+  void loadList()
+}
+
+const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
+
+// ─── 弹窗状态 ───
+
+const dialogVisible = ref(false)
+const editingId = ref<string | null>(null)
+const submitting = ref(false)
+const formError = ref('')
+const creationRequestId = ref('')
+
+const dialogTitle = computed(() =>
+  editingId.value ? t('system.editTenant') : t('system.newTenant'),
+)
+
+const form = reactive({
+  name: '',
+  adminUsername: '',
+  adminPassword: '',
+  status: 0,
+})
+
+/** 编辑子态的原状态：仅当用户在弹窗内改状态时才走既有启停链。 */
+const originalStatus = ref(0)
+
+function resetForm() {
+  form.name = ''
+  form.adminUsername = ''
+  form.adminPassword = ''
+  form.status = 0
+  originalStatus.value = 0
+  editingId.value = null
+  formError.value = ''
+}
+
+function openCreate() {
+  resetForm()
+  creationRequestId.value = crypto.randomUUID()
+  dialogVisible.value = true
+}
+
+function openEdit(row: SysTenant) {
+  resetForm()
+  editingId.value = row.id ?? null
+  form.name = row.name
+  form.status = row.status ?? 0
+  originalStatus.value = row.status ?? 0
+  dialogVisible.value = true
+}
+
+const detailVisible = ref(false)
+const detailRow = ref<SysTenant | null>(null)
+
+function openDetail(row: SysTenant) {
+  detailRow.value = row
+  detailVisible.value = true
+}
+
+function closeDialog() {
+  if (submitting.value) return
+  dialogVisible.value = false
+}
+
+async function handleSubmit() {
+  if (submitting.value) return
+  if (!form.name.trim()) {
+    const message = t('system.tenantNameRequired')
+    if (editingId.value) ElMessage.warning(message)
+    else formError.value = message
+    return
+  }
+  if (!editingId.value) {
+    if (!form.adminUsername.trim()) {
+      formError.value = t('system.tenantAdminRequired')
+      return
+    }
+    if (!form.adminPassword) {
+      formError.value = t('system.tenantPasswordRequired')
+      return
+    }
+  }
+
+  // 编辑租户的状态承接既有启停语义：变化时先取原因，取消原因则整单不应用。
+  let statusReason = ''
+  if (editingId.value && form.status !== originalStatus.value) {
+    const action = form.status === 0 ? t('system.enableTenant') : t('system.disableTenant')
+    try {
+      const result = await ElMessageBox.prompt(
+        t('system.tenantStatusChangeConfirm', { action, name: form.name.trim() }),
+        t('common.confirm'),
+        {
+          get confirmButtonText() {
+            return t('common.confirm')
+          },
+          get cancelButtonText() {
+            return t('common.cancel')
+          },
+          type: 'warning',
+          inputPlaceholder: t('system.tenantStatusReasonPlaceholder'),
+          inputValidator: (value: string) =>
+            Boolean(value?.trim()) || t('system.tenantStatusReasonRequired'),
+        },
+      )
+      statusReason = result.value.trim()
+    } catch {
+      return
+    }
+  }
+
+  submitting.value = true
+  formError.value = ''
+  try {
+    if (editingId.value) {
+      const tenantId = editingId.value
+      if (form.status !== originalStatus.value) {
+        await updateTenantStatus(tenantId, form.status, statusReason)
+        originalStatus.value = form.status
+      }
+      await renameTenant(tenantId, form.name.trim())
+      ElMessage.success(t('common.updateSuccess'))
+    } else {
+      await createTenant({
+        name: form.name.trim(),
+        adminUsername: form.adminUsername.trim(),
+        adminPassword: form.adminPassword,
+        requestId: creationRequestId.value,
+      })
+      ElMessage.success(t('common.createSuccess'))
+    }
+    dialogVisible.value = false
+    void loadList()
+  } catch (err) {
+    const message = err instanceof ApiError ? err.msg : t('common.saveFailed')
+    if (editingId.value) ElMessage.error(message)
+    else formError.value = message
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function toggleStatus(row: SysTenant) {
+  const next = row.status === 0 ? 1 : 0
+  const action = next === 0 ? t('system.enableTenant') : t('system.disableTenant')
+  let reason: string
+  try {
+    const result = await ElMessageBox.prompt(
+      t('system.tenantStatusChangeConfirm', { action, name: row.name }),
+      t('common.confirm'),
+      {
+        get confirmButtonText() {
+          return t('common.confirm')
+        },
+        get cancelButtonText() {
+          return t('common.cancel')
+        },
+        type: 'warning',
+        inputPlaceholder: t('system.tenantStatusReasonPlaceholder'),
+        inputValidator: (value: string) =>
+          Boolean(value?.trim()) || t('system.tenantStatusReasonRequired'),
+      },
+    )
+    reason = result.value.trim()
+  } catch {
+    return
+  }
+  try {
+    await updateTenantStatus(row.id!, next, reason)
+    ElMessage.success(t('common.updateSuccess'))
+    void loadList()
+  } catch (err) {
+    ElMessage.error(err instanceof ApiError ? err.msg : t('common.saveFailed'))
+  }
+}
+
+function isRootTenant(row: SysTenant) {
+  return row.id === '0'
+}
+
+const adminDialogVisible = ref(false)
+const adminTenant = ref<SysTenant | null>(null)
+const adminCandidates = ref<TenantAdminCandidate[]>([])
+const adminLoading = ref(false)
+const adminSubmitting = ref(false)
+const adminError = ref('')
+const adminMode = ref<'existing' | 'create'>('existing')
+const administrator = reactive({ id: '', username: '', password: '' })
+let adminLoadGeneration = 0
+
+function resetAdminForm() {
+  adminLoadGeneration++
+  administrator.id = ''
+  administrator.username = ''
+  administrator.password = ''
+  adminCandidates.value = []
+  adminTenant.value = null
+  adminError.value = ''
+}
+
+async function openAdministrator(row: SysTenant) {
+  if (!canManage.value || isRootTenant(row)) return
+  resetAdminForm()
+  adminTenant.value = row
+  administrator.id = row.adminUserId ?? ''
+  adminMode.value = 'existing'
+  adminDialogVisible.value = true
+  adminLoading.value = true
+  const generation = ++adminLoadGeneration
+  try {
+    const candidates = await queryTenantAdministrators(row.id!)
+    if (generation !== adminLoadGeneration) return
+    adminCandidates.value = candidates
+    if (administrator.id && !candidates.some((candidate) => candidate.id === administrator.id)) {
+      administrator.id = ''
+    }
+    if (!row.adminUserId && !candidates.length) adminMode.value = 'create'
+  } catch (err) {
+    if (generation === adminLoadGeneration) {
+      adminError.value = err instanceof ApiError ? err.msg : t('tenantAdmin.loadFailed')
+    }
+  } finally {
+    if (generation === adminLoadGeneration) adminLoading.value = false
+  }
+}
+
+async function saveAdministrator() {
+  if (adminSubmitting.value || adminLoading.value || !adminTenant.value?.id) return
+  const tenantId = adminTenant.value.id
+  if (adminMode.value === 'existing' && !administrator.id) {
+    adminError.value = t('tenantAdmin.chooseRequired')
+    return
+  }
+  if (adminMode.value === 'create' && (!administrator.username.trim() || !administrator.password)) {
+    adminError.value = t('tenantAdmin.credentialsRequired')
+    return
+  }
+  adminSubmitting.value = true
+  adminError.value = ''
+  try {
+    if (adminMode.value === 'existing') {
+      await assignTenantAdministrator(tenantId, administrator.id)
+    } else {
+      await createTenantAdministrator(
+        tenantId,
+        administrator.username.trim(),
+        administrator.password,
+      )
+    }
+    adminDialogVisible.value = false
+    ElMessage.success(t('common.updateSuccess'))
+    void loadList()
+  } catch (err) {
+    adminError.value = err instanceof ApiError ? err.msg : t('common.saveFailed')
+  } finally {
+    adminSubmitting.value = false
+  }
+}
+
+/** 操作列：租户 0 只读；其余提供编辑与启停。 */
+function rowActions(r: unknown): ListAction[] {
+  const row = r as SysTenant
+  if (isRootTenant(row)) {
+    return [{ key: 'view', label: t('common.view'), onClick: () => openDetail(row) }]
+  }
+  return [
+    {
+      key: 'administrator',
+      label: t('tenantAdmin.manage'),
+      visible: canManage.value,
+      onClick: () => void openAdministrator(row),
+    },
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      visible: canManage.value,
+      onClick: () => openEdit(row),
+    },
+    {
+      key: 'status',
+      label: row.status === 0 ? t('system.disableTenant') : t('system.enableTenant'),
+      visible: canManage.value,
+      type: row.status === 0 ? 'danger' : undefined,
+      onClick: () => void toggleStatus(row),
+    },
+  ]
+}
+
+function statusLabel(status?: number) {
+  return status === 0 ? t('common.statusNormal') : t('system.tenantStatusDisabled')
+}
+
+function displayTime(value?: string) {
+  return value ? value.replace('T', ' ').slice(0, 19) : '—'
+}
+
+onMounted(loadList)
+</script>
+
+<template>
+  <StandardListTemplate
+    class="tenant-list"
+    appearance="design"
+    filter-layout="inline"
+    :title="t('system.tenantList')"
+    :total="total"
+    :page-num="pageNum"
+    :page-size="pageSize"
+    :empty="isEmpty"
+    @update:page-num="handlePageNumChange"
+    @update:page-size="handlePageSizeChange"
+  >
+    <template #filter>
+      <ListFilterItem class="tenant-list__name-filter" :label="t('system.tenantName')">
+        <el-input
+          v-model="filter.name"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
+        />
+      </ListFilterItem>
+      <ListFilterItem class="tenant-list__status-filter" :label="t('common.status')">
+        <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
+          <el-option :label="t('common.statusNormal')" :value="0" />
+          <el-option :label="t('system.tenantStatusDisabled')" :value="1" />
+        </el-select>
+      </ListFilterItem>
+    </template>
+    <template #filter-actions>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+      <el-button v-if="canManage" type="primary" @click="openCreate">{{
+        t('system.addTenant')
+      }}</el-button>
+    </template>
+
+    <el-alert
+      v-if="errorMsg"
+      :title="errorMsg"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    />
+    <el-table v-loading="loading" :data="list">
+      <el-table-column prop="code" :label="t('system.tenantCode')" width="166" />
+      <el-table-column prop="name" :label="t('system.tenantName')" width="356" />
+      <el-table-column :label="t('system.tenantAdmin')" width="276">
+        <template #default="{ row }">
+          {{ row.adminUsername || t('system.tenantAdminUnset') }}
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('common.status')" width="176">
+        <template #default="{ row }">
+          {{ statusLabel(row.status) }}
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('common.createTime')" width="296">
+        <template #default="{ row }">{{ displayTime(row.createTime) }}</template>
+      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="372" />
+    </el-table>
+
+    <template #empty-action>
+      <el-button v-if="canManage" type="primary" @click="openCreate">{{
+        t('system.newTenant')
+      }}</el-button>
+    </template>
+  </StandardListTemplate>
+
+  <DetailDialog
+    v-model="dialogVisible"
+    :class="['tenant-dialog', { 'tenant-edit-dialog': Boolean(editingId) }]"
+    appearance="design"
+    :title="dialogTitle"
+    :width="editingId ? '600px' : '760px'"
+    :error="editingId ? '' : formError"
+    :show-close="!submitting"
+    :close-on-press-escape="!submitting"
+    :close-on-click-modal="false"
+    @closed="resetForm"
+  >
+    <el-form label-position="top">
+      <el-form-item :label="t('system.tenantName')" required>
+        <el-input v-model="form.name" :placeholder="t('common.pleaseInput')" maxlength="64" />
+      </el-form-item>
+      <el-form-item v-if="editingId" :label="t('common.status')">
+        <el-select v-model="form.status" style="width: 100%">
+          <el-option :label="t('common.statusNormal')" :value="0" />
+          <el-option :label="t('system.tenantStatusDisabled')" :value="1" />
+        </el-select>
+      </el-form-item>
+      <el-row v-if="!editingId" :gutter="20">
+        <el-col :span="12">
+          <el-form-item :label="t('system.tenantAdminAccount')" required>
+            <el-input
+              v-model="form.adminUsername"
+              :placeholder="t('common.pleaseInput')"
+              maxlength="50"
+            />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item :label="t('system.tenantPassword')" required>
+            <el-input
+              v-model="form.adminPassword"
+              type="password"
+              show-password
+              :placeholder="t('common.pleaseInput')"
+              maxlength="64"
+            />
+          </el-form-item>
+        </el-col>
+      </el-row>
+    </el-form>
+    <template #footer>
+      <el-button :disabled="submitting" @click="closeDialog">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+        t('common.save')
+      }}</el-button>
+    </template>
+  </DetailDialog>
+
+  <DetailDialog
+    v-model="adminDialogVisible"
+    class="tenant-dialog"
+    appearance="design"
+    :title="t('tenantAdmin.manage')"
+    width="760px"
+    :error="adminError"
+    :loading="adminLoading"
+    :show-close="!adminSubmitting"
+    :close-on-press-escape="!adminSubmitting"
+    :close-on-click-modal="false"
+    @closed="resetAdminForm"
+  >
+    <el-form label-position="top">
+      <el-form-item :label="t('system.tenantName')"
+        ><el-input :model-value="adminTenant?.name ?? ''" readonly
+      /></el-form-item>
+      <el-form-item :label="t('tenantAdmin.mode')">
+        <el-radio-group v-model="adminMode" :disabled="adminSubmitting">
+          <el-radio-button value="existing">{{ t('tenantAdmin.existing') }}</el-radio-button>
+          <el-radio-button value="create" :disabled="!!adminTenant?.adminUserId">{{
+            t('tenantAdmin.create')
+          }}</el-radio-button>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item v-if="adminMode === 'existing'" :label="t('system.tenantAdmin')" required>
+        <el-select
+          v-model="administrator.id"
+          filterable
+          :placeholder="t('tenantAdmin.chooseRequired')"
+          :no-data-text="t('tenantAdmin.none')"
+          :disabled="adminSubmitting"
+        >
+          <el-option
+            v-for="candidate in adminCandidates"
+            :key="candidate.id"
+            :value="candidate.id"
+            :label="
+              candidate.realName && candidate.realName !== candidate.username
+                ? `${candidate.realName} (${candidate.username})`
+                : candidate.username
+            "
+          />
+        </el-select>
+      </el-form-item>
+      <el-row v-else :gutter="20">
+        <el-col :span="12"
+          ><el-form-item :label="t('system.tenantAdminAccount')" required>
+            <el-input
+              v-model="administrator.username"
+              maxlength="50"
+              :disabled="adminSubmitting"
+            /> </el-form-item
+        ></el-col>
+        <el-col :span="12"
+          ><el-form-item :label="t('system.tenantPassword')" required>
+            <el-input
+              v-model="administrator.password"
+              type="password"
+              show-password
+              maxlength="64"
+              :disabled="adminSubmitting"
+            /> </el-form-item
+        ></el-col>
+      </el-row>
+    </el-form>
+    <template #footer>
+      <el-button :disabled="adminSubmitting" @click="adminDialogVisible = false">{{
+        t('common.cancel')
+      }}</el-button>
+      <el-button
+        type="primary"
+        :loading="adminSubmitting"
+        :disabled="adminLoading"
+        @click="saveAdministrator"
+        >{{ t('common.save') }}</el-button
+      >
+    </template>
+  </DetailDialog>
+
+  <!-- 458:13000（执行提示18）：只读浮层 600×354 居中、三项只读表面 550×32；附加信息收进次级详情 -->
+  <DetailDialog
+    v-model="detailVisible"
+    appearance="design"
+    class="sw-tenant-detail"
+    :title="detailRow?.name || t('system.tenantDetail')"
+    width="600px"
+  >
+    <div v-if="detailRow" class="sw-tenant-detail__fields">
+      <div class="sw-tenant-detail__field">
+        <label class="sw-tenant-detail__label">{{ t('system.tenantCode') }}</label>
+        <el-input class="sw-tenant-detail__input" :model-value="detailRow.code ?? ''" readonly />
+      </div>
+      <div class="sw-tenant-detail__field">
+        <label class="sw-tenant-detail__label">{{ t('system.tenantName') }}</label>
+        <el-input class="sw-tenant-detail__input" :model-value="detailRow.name" readonly />
+      </div>
+      <div class="sw-tenant-detail__field">
+        <label class="sw-tenant-detail__label">{{ t('system.dataScopeField') }}</label>
+        <el-input
+          class="sw-tenant-detail__input"
+          :model-value="t('system.tenantDataScopeAll')"
+          readonly
+        />
+      </div>
+    </div>
+    <template #footer>
+      <div class="sw-tenant-detail__footer">
+        <el-popover placement="top-start" :width="320" trigger="click">
+          <template #reference>
+            <el-button link type="primary" class="sw-tenant-detail__more">
+              {{ t('system.tenantMoreInfo') }}
+            </el-button>
+          </template>
+          <el-descriptions v-if="detailRow" :column="1" border size="small">
+            <el-descriptions-item :label="t('system.tenantAdmin')">
+              {{ detailRow.adminUsername || t('system.tenantAdminUnset') }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('common.status')">
+              {{ statusLabel(detailRow.status) }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('common.createTime')">
+              {{ displayTime(detailRow.createTime) }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </el-popover>
+        <el-button class="sw-tenant-detail__close" @click="detailVisible = false">{{
+          t('common.close')
+        }}</el-button>
+      </div>
+    </template>
+  </DetailDialog>
+</template>
+
+<style scoped>
+.tenant-list :deep(.list-filter-bar__fields) {
+  flex-wrap: nowrap;
+  gap: var(--sw-space-8);
+}
+.tenant-list :deep(.list-filter-bar__actions) {
+  margin-left: auto;
+}
+.tenant-list :deep(.list-filter-bar__actions .el-button) {
+  width: 72px;
+}
+.tenant-list :deep(.list-filter-item) {
+  display: flex;
+  flex: 0 0 auto;
+}
+.tenant-list :deep(.list-filter-item__label) {
+  color: var(--sw-text-regular);
+  font-size: var(--sw-font-body);
+  line-height: 22px;
+}
+.tenant-list :deep(.tenant-list__name-filter) {
+  width: 310px;
+}
+.tenant-list :deep(.tenant-list__name-filter .list-filter-item__control) {
+  width: 220px;
+}
+.tenant-list :deep(.tenant-list__status-filter .list-filter-item__control) {
+  width: 100px;
+}
+.tenant-list :deep(.list-actions) {
+  justify-content: flex-start;
+}
+@media (max-width: 1100px) {
+  .tenant-list :deep(.list-filter-bar__fields) {
+    flex-wrap: wrap;
+  }
+}
+.tenant-create-hint {
+  margin-top: 4px;
+  padding-left: 96px;
+  color: var(--sw-text-secondary);
+  font-size: var(--sw-font-caption);
+  line-height: 20px;
+}
+</style>
+
+<style>
+.tenant-dialog.el-dialog {
+  box-sizing: border-box;
+  max-width: calc(100vw - var(--sw-space-32));
+  padding: var(--sw-space-24);
+  border: 1px solid var(--sw-border-light);
+}
+/* 设计节点 458:12943：编辑租户固定 600×282，名称/状态两行，右下按钮。 */
+.tenant-edit-dialog.el-dialog {
+  display: flex;
+  height: 282px;
+  flex-direction: column;
+  /* 本编辑弹窗作用域默认细边框，不覆盖焦点/危险/禁用 */
+  --el-border-color: #dde3ef;
+  --el-input-border-color: #dde3ef;
+}
+.tenant-edit-dialog .el-dialog__header {
+  flex: 0 0 auto;
+}
+.tenant-edit-dialog .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.tenant-dialog .el-dialog__header {
+  box-sizing: border-box;
+  height: 32px;
+  padding: 4px 32px 4px 0;
+  margin: 0 0 var(--sw-space-16);
+}
+.tenant-dialog .el-dialog__title {
+  font-size: var(--sw-font-h2);
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: var(--sw-space-24);
+}
+.tenant-dialog .el-dialog__headerbtn {
+  top: var(--sw-space-24);
+  right: var(--sw-space-24);
+  width: 32px;
+  height: 32px;
+}
+.tenant-dialog .el-dialog__body {
+  padding: 0;
+  overflow-x: hidden;
+}
+.tenant-dialog .el-form-item {
+  margin-bottom: var(--sw-space-12);
+}
+.tenant-dialog .el-form > .el-form-item:last-child,
+.tenant-dialog .el-row .el-form-item {
+  margin-bottom: 0;
+}
+.tenant-dialog .el-form-item__label {
+  height: 22px;
+  line-height: 22px;
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--sw-text-regular);
+}
+.tenant-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sw-space-8);
+  height: 36px;
+  margin-top: var(--sw-space-16);
+  padding: 0;
+}
+.tenant-dialog .el-dialog__footer .el-button {
+  width: 80px;
+  margin: 0;
+}
+
+/* 458:13000（执行提示18）：600×354 只读浮层；三只读表面 550×32、y 步长 72；关闭 80×32 */
+.sw-tenant-detail.el-dialog {
+  border-radius: 12px;
+  padding-bottom: 26px;
+}
+.sw-tenant-detail .el-dialog__header {
+  margin-bottom: 15px;
+}
+.sw-tenant-detail__field + .sw-tenant-detail__field {
+  margin-top: 11px;
+}
+.sw-tenant-detail__label {
+  display: block;
+  height: 22px;
+  margin-bottom: 7px;
+  color: var(--sw-text-regular, #606266);
+  font-size: 13px;
+  line-height: 22px;
+}
+.sw-tenant-detail__input .el-input__wrapper {
+  box-sizing: border-box;
+  height: 32px;
+  background: #f4f6fb;
+  box-shadow: 0 0 0 1px #dde3ef inset;
+}
+.sw-tenant-detail__input .el-input__inner {
+  color: var(--sw-text-primary, #303133);
+}
+.sw-tenant-detail .el-dialog__footer {
+  height: 32px;
+  margin-top: 18px;
+  padding: 0;
+}
+.sw-tenant-detail__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+.sw-tenant-detail__more {
+  margin-right: auto;
+  font-size: 13px;
+}
+.sw-tenant-detail__close {
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+</style>

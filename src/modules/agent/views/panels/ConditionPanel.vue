@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from '@/locales'
+import HintTip from '@/components/HintTip.vue'
 
 const { t } = useI18n()
 /**
@@ -19,8 +20,9 @@ defineEmits<{
 
 <template>
   <div class="field-row">
-    <div class="field-label">{{ t('agent.outgoingKeywords') }}</div>
-    <el-alert :title="t('agent.outgoingKeywordsHint')" type="info" :closable="false" show-icon />
+    <div class="field-label">
+      {{ t('agent.outgoingKeywords') }}<HintTip :content="t('agent.outgoingKeywordsHint')" />
+    </div>
     <div v-for="edge in conditionOutEdges" :key="edge.id" class="edge-row">
       <div class="edge-name">{{ edgeDisplayName(edge) }}</div>
       <el-input

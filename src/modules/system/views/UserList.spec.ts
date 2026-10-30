@@ -26,8 +26,11 @@ vi.mock('@/modules/system/api/dept', () => ({
   listDeptTree: vi.fn(),
 }))
 
-vi.mock('@/stores/user', () => ({
-  useUserStore: () => ({ user: { tenantId: '0' }, superAdmin: true }),
+const tenantStore = vi.hoisted(() => ({ user: { tenantId: '0' }, superAdmin: false }))
+vi.mock('@/stores/user', () => ({ useUserStore: () => tenantStore }))
+vi.mock('@/modules/system/api/tenant-context', () => ({
+  currentTenantContext: vi.fn(),
+  tenantContextOptions: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -52,6 +55,7 @@ import {
   getUserRoles,
   getUserPosts,
 } from '@/modules/system/api/user'
+import { currentTenantContext, tenantContextOptions } from '@/modules/system/api/tenant-context'
 import { pageRoles } from '@/modules/system/api/role'
 import { pagePosts } from '@/modules/system/api/post'
 import { listDeptTree } from '@/modules/system/api/dept'
@@ -66,6 +70,16 @@ function stubPageResult() {
 describe('UserList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    tenantStore.superAdmin = false
+    vi.mocked(currentTenantContext).mockResolvedValue({
+      id: '0',
+      name: '当前租户',
+      code: 'tenant-0',
+      writable: true,
+    })
+    vi.mocked(tenantContextOptions).mockResolvedValue([
+      { id: '0', name: '当前租户', code: 'tenant-0', writable: true },
+    ])
     vi.mocked(pageUsers).mockResolvedValue(stubPageResult())
     vi.mocked(pageRoles).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 200 })
     vi.mocked(pagePosts).mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 200 })
@@ -84,7 +98,10 @@ describe('UserList', () => {
     'el-button': { template: '<button @click="$emit(\'click\')"><slot/></button>' },
     'el-table': { template: '<div><slot/></div>' },
     'el-table-column': { template: '<div/>' },
-    'el-dialog': { template: '<div v-if="modelValue"><slot/></div>', props: ['modelValue'] },
+    'el-dialog': {
+      template: '<div v-if="modelValue"><slot/><slot name="footer"/></div>',
+      props: ['modelValue'],
+    },
     'el-input': { template: '<input/>', props: ['modelValue', 'placeholder'] },
     'el-select': { template: '<select/>', props: ['modelValue'] },
     'el-option': { template: '<option/>' },
@@ -166,6 +183,8 @@ describe('UserList', () => {
     vi.mocked(getUser).mockResolvedValue({
       id: '1',
       username: 'admin',
+      tenantId: '0',
+      tenantName: '当前租户',
       realName: '管理员',
       status: 1,
     } as SysUser)
@@ -181,6 +200,8 @@ describe('UserList', () => {
     vi.mocked(getUser).mockResolvedValue({
       id: '1',
       username: 'admin',
+      tenantId: '0',
+      tenantName: '当前租户',
       realName: '管理员',
       status: 2,
     } as SysUser)
@@ -199,7 +220,9 @@ describe('UserList', () => {
     const vm = wrapper.vm as unknown as {
       form: UserFormRequest
       handleSubmit: () => Promise<void>
+      openCreate: () => Promise<void>
     }
+    await vm.openCreate()
     vm.form.username = 'testuser'
     vm.form.status = 1
     await vm.handleSubmit()
@@ -215,7 +238,9 @@ describe('UserList', () => {
     const vm = wrapper.vm as unknown as {
       form: UserFormRequest
       handleSubmit: () => Promise<void>
+      openCreate: () => Promise<void>
     }
+    await vm.openCreate()
     vm.form.username = 'testuser'
     vm.form.status = 0
     await vm.handleSubmit()
@@ -282,8 +307,15 @@ describe('UserList', () => {
   it('新建用户时内置超管不可勾选，全选只纳入可分配角色', async () => {
     vi.mocked(pageRoles).mockResolvedValue({
       list: [
-        { id: '1', name: '超级管理员', code: 'superadmin', builtIn: true, status: 1 },
-        { id: '2', name: '管理员', code: 'admin', status: 1 },
+        {
+          id: '1',
+          name: '超级管理员',
+          code: 'superadmin',
+          tenantId: '0',
+          builtIn: true,
+          status: 1,
+        },
+        { id: '2', name: '管理员', code: 'admin', tenantId: '0', status: 1 },
       ],
       total: 2,
       pageNum: 1,
@@ -305,10 +337,118 @@ describe('UserList', () => {
     expect(vm.isRoleLocked({ id: '1', name: '超级管理员', code: 'superadmin', status: 1 })).toBe(
       true,
     )
-    expect(vm.isRoleLocked({ id: '2', name: '管理员', code: 'admin', status: 1 })).toBe(false)
+    expect(
+      vm.isRoleLocked({ id: '2', name: '管理员', code: 'admin', tenantId: '0', status: 1 }),
+    ).toBe(false)
 
     vm.openRoleDialog()
     vm.selectAllRoles()
     expect(vm.roleDraft).toEqual(['2'])
+  })
+  it('超管全部租户新增先选目标，选择后一次提交用户及关联且保持 Long 字符串', async () => {
+    tenantStore.superAdmin = true
+    const wrapper = mount(UserList, { global: { stubs: minimalStubs } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      openCreate: () => Promise<void>
+      selectTarget: (target: object) => void
+      pickerVisible: boolean
+      dialogVisible: boolean
+      targetTenantId: string
+      form: UserFormRequest
+      roleIds: string[]
+      postIds: string[]
+      postDeptMap: Record<string, string>
+      handleSubmit: () => Promise<void>
+    }
+    const opening = vm.openCreate()
+    await flushPromises()
+    expect(vm.pickerVisible).toBe(true)
+    expect(vm.dialogVisible).toBe(false)
+    expect(pageRoles).not.toHaveBeenCalled()
+    vm.selectTarget({ id: '2113285377233043457', name: '明确目标', code: 'target', writable: true })
+    await opening
+    expect(vm.targetTenantId).toBe('2113285377233043457')
+    expect(pageRoles).toHaveBeenCalledWith(
+      { pageNum: 1, pageSize: 200 },
+      { tenantId: '2113285377233043457' },
+    )
+    expect(listDeptTree).toHaveBeenCalledWith({ tenantId: '2113285377233043457' })
+    vm.form.username = 'target_user'
+    vm.roleIds = ['2113285377233043458']
+    vm.postIds = ['2113285377233043459']
+    vm.postDeptMap['2113285377233043459'] = '2113285377233043460'
+    vi.mocked(createUser).mockResolvedValue('2113285377233043461')
+    await vm.handleSubmit()
+    expect(createUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: '2113285377233043457',
+        roleIds: ['2113285377233043458'],
+        posts: [{ postId: '2113285377233043459', deptId: '2113285377233043460' }],
+      }),
+    )
+  })
+
+  it('单一租户查询后新增继承该目标，弹窗名称只读；编辑取对象归属', async () => {
+    tenantStore.superAdmin = true
+    const wrapper = mount(UserList, { global: { stubs: minimalStubs } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      filterTenant: object
+      handleQuery: () => void
+      openCreate: () => Promise<void>
+      pickerVisible: boolean
+      targetTenantId: string
+      openEdit: (row: SysUser) => Promise<void>
+    }
+    vm.filterTenant = { id: '9001', name: '租户甲', code: 'a', writable: true }
+    vm.handleQuery()
+    await vm.openCreate()
+    expect(vm.pickerVisible).toBe(false)
+    expect(vm.targetTenantId).toBe('9001')
+    const tenantInput = wrapper.find('input[aria-label="所属租户"]')
+    expect(tenantInput.attributes('readonly')).toBeDefined()
+    vi.mocked(getUser).mockResolvedValue({
+      id: '2',
+      username: 'owner',
+      tenantId: '9002',
+      tenantName: '租户乙',
+    })
+    await vm.openEdit({ id: '2', username: 'owner' })
+    expect(vm.targetTenantId).toBe('9002')
+  })
+
+  it('取消目标选择不打开新建窗口，不静默采用租户 0', async () => {
+    tenantStore.superAdmin = true
+    const wrapper = mount(UserList, { global: { stubs: minimalStubs } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      openCreate: () => Promise<void>
+      closePicker: (value: boolean) => void
+      dialogVisible: boolean
+    }
+    const opening = vm.openCreate()
+    await flushPromises()
+    vm.closePicker(false)
+    await opening
+    expect(vm.dialogVisible).toBe(false)
+    expect(createUser).not.toHaveBeenCalled()
+  })
+  it('保留的系统超级管理员行仅提供查看', async () => {
+    const wrapper = mount(UserList, { global: { stubs: minimalStubs } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      rowActions: (row: SysUser) => { key: string; onClick: () => void }[]
+      protectedDetailsVisible: boolean
+    }
+    const actions = vm.rowActions({
+      id: '1',
+      username: 'admin',
+      tenantId: '0',
+      protectedAccount: true,
+    })
+    expect(actions.map((action) => action.key)).toEqual(['view'])
+    actions[0].onClick()
+    expect(vm.protectedDetailsVisible).toBe(true)
   })
 })

@@ -212,7 +212,7 @@ function goTaskRecords() {
   font-size: 12px;
   line-height: 15px;
   color: var(--sw-color-primary);
-  background: var(--sw-color-primary-soft, #ece9ff);
+  background: var(--sw-color-primary-soft);
   border-radius: 6px;
 }
 
@@ -243,7 +243,7 @@ function goTaskRecords() {
 .graph-tab.is-active {
   color: var(--sw-color-primary);
   border-color: var(--sw-color-primary);
-  background: var(--sw-color-primary-soft, #ece9ff);
+  background: var(--sw-color-primary-soft);
   font-weight: 600;
 }
 
@@ -378,7 +378,7 @@ function goTaskRecords() {
 
 .graph-chip--running {
   color: var(--sw-color-primary);
-  background: #f0eaff;
+  background: var(--sw-color-primary-soft);
 }
 
 .graph-chip--pending {

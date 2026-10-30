@@ -20,9 +20,7 @@ import {
   updateUser,
   deleteUser,
   getUserRoles,
-  updateUserRoles,
   getUserPosts,
-  updateUserPosts,
 } from '@/modules/system/api/user'
 import { pageRoles } from '@/modules/system/api/role'
 import { listDeptTree } from '@/modules/system/api/dept'
@@ -38,23 +36,32 @@ import type {
 } from '@/modules/system/types/user'
 import type { PageQuery } from '@/contracts/common'
 import { hasPerm } from '@/foundation/permission'
-import {
-  SYS_USER_STATUS,
-  userStatusOptions,
-  userStatusTagType,
-  userStatusLabel,
-} from '@/modules/system/constants'
-import {
-  ListFilterItem,
-  StandardListTemplate,
-  StandardFormTemplate,
-  FormSection,
-  FormGrid,
-  ListActionsColumn,
-} from '@/components/page-layout'
+import { SYS_USER_STATUS, userStatusOptions, userStatusLabel } from '@/modules/system/constants'
+import { ListFilterItem, StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { useUserStore } from '@/stores/user'
 import { InfoFilled, Plus, Search } from '@element-plus/icons-vue'
+
+import DetailDialog from '@/components/DetailDialog.vue'
+import TenantSelect from '@/modules/system/components/TenantSelect.vue'
+import TenantTargetDialog from '@/modules/system/components/TenantTargetDialog.vue'
+import { useManagementTenant } from '@/modules/system/composables/useManagementTenant'
+
+const {
+  filterTenant,
+  appliedTenant,
+  targetTenant,
+  pickerVisible,
+  choosing,
+  chooseForCreate,
+  selectTarget,
+  closePicker,
+  useObjectTarget,
+  applyFilter,
+  resetFilter,
+} = useManagementTenant()
+let editorGeneration = 0
+let optionsGeneration = 0
 
 // ─── 列表状态 ───
 
@@ -92,15 +99,19 @@ async function loadList() {
 }
 
 function handleQuery() {
+  applyFilter()
   Object.assign(currentFilter, {
     username: filter.username || undefined,
     status: filter.status,
+    tenantId: appliedTenant.value?.id,
   })
   pageNum.value = 1
   void loadList()
 }
 
 function handleReset() {
+  resetFilter()
+  currentFilter.tenantId = undefined
   filter.username = ''
   filter.status = undefined
   currentFilter.username = undefined
@@ -125,9 +136,8 @@ const userStore = useUserStore()
 const roleOptions = ref<SysRole[]>([])
 const roleOptionsLoading = ref(false)
 const roleIds = ref<string[]>([])
-/** 本次配置角色所属租户：编辑取用户详情，新建取当前登录租户 */
+/** 本次配置角色所属租户：编辑取用户详情，新建取明确目标租户 */
 const targetTenantId = ref<string | null>(null)
-const roleOptionsTenantId = ref<string | null>(null)
 const roleDialogVisible = ref(false)
 const roleDraft = ref<string[]>([])
 const roleKeyword = ref('')
@@ -175,39 +185,37 @@ function toPostPayload(): PostAssociation[] {
 }
 
 async function loadRoleOptions(tenantId: string | null) {
-  if (roleOptionsTenantId.value !== tenantId) {
-    roleOptions.value = []
-    roleOptionsTenantId.value = tenantId
-  }
+  const generation = ++optionsGeneration
+  roleOptions.value = []
+  postOptions.value = []
+  deptOptions.value = []
+  if (!tenantId) return
   roleOptionsLoading.value = true
-  try {
-    const filter: RoleFilter = tenantId ? { tenantId } : {}
-    const result = await pageRoles({ pageNum: 1, pageSize: 200 }, filter)
-    roleOptions.value = result.list
-  } catch {
-    ElMessage.error(t('system.roleLoadFailed'))
-    // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
-    roleOptions.value = []
-  } finally {
-    roleOptionsLoading.value = false
-  }
-  try {
-    const result = await pagePosts({ pageNum: 1, pageSize: 200 }, {})
-    postOptions.value = result.list.filter((item) => item.status === undefined || item.status === 1)
-  } catch {
+  const results = await Promise.allSettled([
+    pageRoles({ pageNum: 1, pageSize: 200 }, { tenantId } satisfies RoleFilter),
+    pagePosts({ pageNum: 1, pageSize: 200 }, { tenantId }),
+    listDeptTree({ tenantId }),
+  ])
+  if (generation !== optionsGeneration) return
+  const [roles, posts, departments] = results
+  if (roles.status === 'fulfilled')
+    roleOptions.value = roles.value.list.filter((item) => String(item.tenantId) === tenantId)
+  if (posts.status === 'fulfilled')
+    postOptions.value = posts.value.list.filter(
+      (item) =>
+        String(item.tenantId) === tenantId && (item.status === undefined || item.status === 1),
+    )
+  if (departments.status === 'fulfilled')
+    deptOptions.value = departments.value.filter((item) => String(item.tenantId) === tenantId)
+  if (results.some((result) => result.status === 'rejected'))
     ElMessage.error(t('common.loadFailed'))
-    postOptions.value = []
-  }
-  try {
-    deptOptions.value = await listDeptTree()
-  } catch {
-    ElMessage.error(t('common.loadFailed'))
-    deptOptions.value = []
-  }
+  roleOptionsLoading.value = false
 }
 
 // ─── 弹窗状态 ───
 
+const protectedDetailsVisible = ref(false)
+const protectedDetails = ref<SysUser | null>(null)
 const dialogVisible = ref(false)
 const dialogTitle = computed(() => (editingId.value ? t('system.editUser') : t('system.newUser')))
 const editingId = ref<string | null>(null)
@@ -229,6 +237,11 @@ const form = reactive<UserFormRequest>({
 })
 
 function resetForm() {
+  editorGeneration++
+  optionsGeneration++
+  roleOptionsLoading.value = false
+  targetTenant.value = null
+  form.tenantId = undefined
   form.username = ''
   form.realName = ''
   form.email = ''
@@ -248,18 +261,30 @@ function resetForm() {
   Object.keys(postDeptMap).forEach((key) => delete postDeptMap[key])
 }
 
-function openCreate() {
+async function openCreate() {
+  if (submitting.value || choosing.value) return
   resetForm()
-  targetTenantId.value = userStore.user?.tenantId ?? null
-  void loadRoleOptions(targetTenantId.value)
+  const target = await chooseForCreate()
+  if (!target) return
+  targetTenantId.value = target.id
+  form.tenantId = target.id
   dialogVisible.value = true
+  await loadRoleOptions(target.id)
 }
 
 async function openEdit(row: SysUser) {
+  if (submitting.value) return
   resetForm()
+  const generation = editorGeneration
   editingId.value = row.id ?? null
   try {
-    const detail = await getUser(row.id!)
+    const [detail, roles, associations] = await Promise.all([
+      getUser(row.id!),
+      getUserRoles(row.id!),
+      getUserPosts(row.id!),
+    ])
+    if (generation !== editorGeneration) return
+    useObjectTarget(detail)
     form.username = detail.username
     form.realName = detail.realName ?? ''
     form.email = detail.email ?? ''
@@ -267,24 +292,22 @@ async function openEdit(row: SysUser) {
     form.sex = detail.sex ?? 0
     form.status = detail.status
     form.deptId = detail.deptId ?? ''
-    targetTenantId.value =
-      detail.tenantId != null ? String(detail.tenantId) : (userStore.user?.tenantId ?? null)
-    roleIds.value = await getUserRoles(row.id!)
-    const associations = await getUserPosts(row.id!)
+    form.tenantId = targetTenant.value!.id
+    targetTenantId.value = targetTenant.value!.id
+    roleIds.value = roles
     postIds.value = associations.map((item) => item.postId)
     associations.forEach((item) => {
       if (item.deptId) postDeptMap[item.postId] = item.deptId
     })
-    // 编辑模式不设置 plainPassword
+    dialogVisible.value = true
+    await loadRoleOptions(targetTenantId.value)
   } catch {
-    formError.value = t('system.userDetailLoadFailed')
-    return
+    if (generation === editorGeneration) ElMessage.error(t('system.userDetailLoadFailed'))
   }
-  dialogVisible.value = true
-  await loadRoleOptions(targetTenantId.value)
 }
 
 function closeDialog() {
+  if (submitting.value) return
   dialogVisible.value = false
 }
 
@@ -324,6 +347,11 @@ function confirmRoleDialog() {
 }
 
 async function handleSubmit() {
+  if (submitting.value || roleOptionsLoading.value) return
+  if (!targetTenant.value) {
+    formError.value = t('tenantContext.choose')
+    return
+  }
   if (!form.username.trim()) {
     formError.value = t('system.usernameRequired')
     return
@@ -336,17 +364,24 @@ async function handleSubmit() {
       // 编辑模式不传 plainPassword
       const { plainPassword: _, ...updateData } = form
       void _
-      await updateUser({ ...updateData, id: editingId.value })
-      await updateUserRoles(editingId.value, roleIds.value)
-      await updateUserPosts(editingId.value, toPostPayload())
+      await updateUser({
+        ...updateData,
+        id: editingId.value,
+        tenantId: targetTenant.value.id,
+        roleIds: roleIds.value,
+        posts: toPostPayload(),
+      })
       ElMessage.success(t('common.updateSuccess'))
     } else {
-      const id = await createUser({ ...form })
-      await updateUserRoles(id, roleIds.value)
-      await updateUserPosts(id, toPostPayload())
+      await createUser({
+        ...form,
+        tenantId: targetTenant.value.id,
+        roleIds: roleIds.value,
+        posts: toPostPayload(),
+      })
       ElMessage.success(t('common.createSuccess'))
     }
-    closeDialog()
+    dialogVisible.value = false
     void loadList()
   } catch (err) {
     if (err instanceof ApiError) {
@@ -400,6 +435,17 @@ function deleteRow(r: unknown) {
 
 /** 统一操作列（V012-BUG-002）：编辑/删除显隐由权限决定（服务端仍是最终权威） */
 function rowActions(r: unknown): ListAction[] {
+  if ((r as SysUser).protectedAccount)
+    return [
+      {
+        key: 'view',
+        label: t('common.view'),
+        onClick: () => {
+          protectedDetails.value = r as SysUser
+          protectedDetailsVisible.value = true
+        },
+      },
+    ]
   return [
     {
       key: 'edit',
@@ -422,6 +468,8 @@ onMounted(loadList)
 
 <template>
   <StandardListTemplate
+    appearance="design"
+    :title="t('system.userManagement')"
     :total="total"
     :page-num="pageNum"
     :page-size="pageSize"
@@ -438,7 +486,11 @@ onMounted(loadList)
 
     <!-- 筛选区 -->
     <template #filter>
-      <ListFilterItem :label="t('common.username')">
+      <ListFilterItem v-if="userStore.superAdmin" :label="t('tenantContext.label')">
+        <TenantSelect v-model="filterTenant" />
+      </ListFilterItem>
+      <!-- 446:13479：原标签为「账号」，自然标签排布下首框锚 x309 依赖 2 字标签宽 -->
+      <ListFilterItem :label="t('system.account')">
         <el-input
           v-model="filter.username"
           :placeholder="t('common.pleaseInput')"
@@ -471,7 +523,13 @@ onMounted(loadList)
       show-icon
       style="margin-bottom: 12px"
     />
-    <el-table v-loading="loading" :data="list" stripe>
+    <el-table v-loading="loading" :data="list">
+      <el-table-column
+        v-if="userStore.superAdmin"
+        prop="tenantName"
+        :label="t('tenantContext.label')"
+        min-width="140"
+      />
       <el-table-column prop="username" :label="t('common.username')" min-width="120" />
       <el-table-column prop="realName" :label="t('system.fullName')" min-width="100" />
       <el-table-column
@@ -494,9 +552,7 @@ onMounted(loadList)
       </el-table-column>
       <el-table-column prop="status" :label="t('common.status')" width="80">
         <template #default="{ row }">
-          <el-tag :type="userStatusTagType(row.status)" size="small">
-            {{ userStatusLabel(row.status) }}
-          </el-tag>
+          <span class="sys-status-text">{{ userStatusLabel(row.status) }}</span>
         </template>
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="120" />
@@ -513,77 +569,104 @@ onMounted(loadList)
   <!-- 新建/编辑弹窗 -->
   <el-dialog
     v-model="dialogVisible"
+    class="system-user-editor sw-edit-dialog"
+    align-center
     :title="dialogTitle"
     :close-on-click-modal="false"
+    :close-on-press-escape="!submitting"
+    :show-close="!submitting"
     destroy-on-close
-    width="680px"
+    width="760px"
     @closed="resetForm"
   >
-    <StandardFormTemplate embedded>
-      <template v-if="formError" #alert>
-        <el-alert :title="formError" type="error" :closable="false" show-icon />
-      </template>
-
-      <FormSection :title="t('common.basicInfo')">
-        <FormGrid :columns="2">
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('common.username') }}</label>
-            <el-input
-              v-model="form.username"
-              :placeholder="t('system.usernamePlaceholder')"
-              maxlength="64"
-              show-word-limit
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.fullName') }}</label>
-            <el-input
-              v-model="form.realName"
-              :placeholder="t('system.fullNamePlaceholder')"
-              maxlength="32"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.email') }}</label>
-            <el-input
-              v-model="form.email"
-              :placeholder="t('system.emailPlaceholder')"
-              maxlength="128"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.phone') }}</label>
-            <el-input
-              v-model="form.phone"
-              :placeholder="t('system.phonePlaceholder')"
-              maxlength="20"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.gender') }}</label>
-            <el-select v-model="form.sex" style="width: 100%">
-              <el-option :label="t('common.unknown')" :value="0" />
-              <el-option :label="t('common.male')" :value="1" />
-              <el-option :label="t('common.female')" :value="2" />
-            </el-select>
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.status') }}</label>
-            <el-select v-model="form.status" style="width: 100%">
-              <el-option
-                v-for="opt in userStatusOptions"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
-            </el-select>
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.department') }}</label>
+    <el-alert
+      v-if="formError"
+      :title="formError"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    />
+    <div class="sw-edit-grid">
+      <div class="form-field tenant-owner-field">
+        <label class="form-field__label">{{ t('tenantContext.label') }}</label>
+        <el-input
+          :model-value="targetTenant?.name ?? ''"
+          :aria-label="t('tenantContext.label')"
+          readonly
+        />
+      </div>
+      <div class="form-field form-field--required">
+        <label class="form-field__label">{{ t('common.username') }}</label>
+        <el-input
+          v-model="form.username"
+          :placeholder="t('system.usernamePlaceholder')"
+          maxlength="64"
+          show-word-limit
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.fullName') }}</label>
+        <el-input
+          v-model="form.realName"
+          :placeholder="t('system.fullNamePlaceholder')"
+          maxlength="32"
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.email') }}</label>
+        <el-input
+          v-model="form.email"
+          :placeholder="t('system.emailPlaceholder')"
+          maxlength="128"
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.phone') }}</label>
+        <el-input v-model="form.phone" :placeholder="t('system.phonePlaceholder')" maxlength="20" />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.gender') }}</label>
+        <el-select v-model="form.sex" style="width: 100%">
+          <el-option :label="t('common.unknown')" :value="0" />
+          <el-option :label="t('common.male')" :value="1" />
+          <el-option :label="t('common.female')" :value="2" />
+        </el-select>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('common.status') }}</label>
+        <el-select v-model="form.status" style="width: 100%">
+          <el-option
+            v-for="opt in userStatusOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.department') }}</label>
+        <el-select v-model="form.deptId" :placeholder="t('system.selectDept')" style="width: 100%">
+          <el-option
+            v-for="dept in deptOptions"
+            :key="dept.id"
+            :label="dept.name"
+            :value="dept.id ?? ''"
+          />
+        </el-select>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('system.postDeptShort') }}</label>
+        <el-checkbox-group v-model="postIds">
+          <div v-for="post in postOptions" :key="post.id" class="post-row">
+            <el-checkbox :value="post.id">{{ post.name }}</el-checkbox>
             <el-select
-              v-model="form.deptId"
-              :placeholder="t('system.selectDept')"
-              style="width: 100%"
+              v-if="postIds.includes(post.id!)"
+              v-model="postDeptMap[post.id!]"
+              :placeholder="t('system.postDept')"
+              clearable
+              size="small"
+              style="width: 200px"
             >
               <el-option
                 v-for="dept in deptOptions"
@@ -593,79 +676,55 @@ onMounted(loadList)
               />
             </el-select>
           </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('system.postDeptShort') }}</label>
-            <el-checkbox-group v-model="postIds">
-              <div v-for="post in postOptions" :key="post.id" class="post-row">
-                <el-checkbox :value="post.id">{{ post.name }}</el-checkbox>
-                <el-select
-                  v-if="postIds.includes(post.id!)"
-                  v-model="postDeptMap[post.id!]"
-                  :placeholder="t('system.postDept')"
-                  clearable
-                  size="small"
-                  style="width: 200px"
-                >
-                  <el-option
-                    v-for="dept in deptOptions"
-                    :key="dept.id"
-                    :label="dept.name"
-                    :value="dept.id ?? ''"
-                  />
-                </el-select>
-              </div>
-            </el-checkbox-group>
-          </div>
-          <div class="form-field">
-            <label class="form-field__label">{{ t('common.role') }}</label>
-            <button
-              v-if="roleIds.length === 0"
-              type="button"
-              class="role-picker role-picker--empty"
-              @click="openRoleDialog"
-            >
-              <el-icon><Plus /></el-icon>
-              <span>{{ t('system.configureRoles') }}</span>
-            </button>
-            <div v-else class="role-picker">
-              <el-tag
-                v-for="role in selectedRoles"
-                :key="role.id"
-                size="small"
-                closable
-                @close="removeRole(role.id!)"
-              >
-                {{ role.name }}
-              </el-tag>
-              <span v-if="selectedRoles.length < roleIds.length" class="role-picker__more">
-                +{{ roleIds.length - selectedRoles.length }}
-              </span>
-              <button type="button" class="role-picker__add" @click="openRoleDialog">
-                <el-icon><Plus /></el-icon>
-                <span>{{ t('system.configureRoles') }}</span>
-              </button>
-            </div>
-          </div>
-          <div v-if="!editingId" class="form-field">
-            <label class="form-field__label">{{ t('common.password') }}</label>
-            <el-input
-              v-model="form.plainPassword"
-              type="password"
-              :placeholder="t('system.passwordPlaceholder')"
-              maxlength="64"
-              show-password
-            />
-          </div>
-        </FormGrid>
-      </FormSection>
-
-      <template #actions>
-        <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
-          t('common.save')
-        }}</el-button>
-      </template>
-    </StandardFormTemplate>
+        </el-checkbox-group>
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">{{ t('common.role') }}</label>
+        <button
+          v-if="roleIds.length === 0"
+          type="button"
+          class="role-picker role-picker--empty"
+          @click="openRoleDialog"
+        >
+          <el-icon><Plus /></el-icon>
+          <span>{{ t('system.configureRoles') }}</span>
+        </button>
+        <div v-else class="role-picker">
+          <el-tag
+            v-for="role in selectedRoles"
+            :key="role.id"
+            size="small"
+            closable
+            @close="removeRole(role.id!)"
+          >
+            {{ role.name }}
+          </el-tag>
+          <span v-if="selectedRoles.length < roleIds.length" class="role-picker__more">
+            +{{ roleIds.length - selectedRoles.length }}
+          </span>
+          <button type="button" class="role-picker__add" @click="openRoleDialog">
+            <el-icon><Plus /></el-icon>
+            <span>{{ t('system.configureRoles') }}</span>
+          </button>
+        </div>
+      </div>
+      <div v-if="!editingId" class="form-field">
+        <label class="form-field__label">{{ t('common.password') }}</label>
+        <el-input
+          v-model="form.plainPassword"
+          type="password"
+          :placeholder="t('system.passwordPlaceholder')"
+          maxlength="64"
+          show-password
+        />
+      </div>
+    </div>
+    <template #footer>
+      <el-button @click="closeDialog">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="submitting" @click="handleSubmit">{{
+        t('common.save')
+      }}</el-button>
+    </template>
   </el-dialog>
 
   <!-- 配置角色：只展示目标用户所属租户下的角色 -->
@@ -759,19 +818,52 @@ onMounted(loadList)
       </div>
     </template>
   </el-dialog>
+  <TenantTargetDialog
+    :model-value="pickerVisible"
+    @update:model-value="closePicker"
+    @selected="selectTarget"
+  />
+  <DetailDialog
+    v-model="protectedDetailsVisible"
+    :title="t('tenantContext.userDetails')"
+    appearance="design"
+    width="760px"
+  >
+    <el-descriptions v-if="protectedDetails" :column="1" border>
+      <el-descriptions-item :label="t('tenantContext.label')">{{
+        protectedDetails.tenantName
+      }}</el-descriptions-item>
+      <el-descriptions-item :label="t('common.username')">{{
+        protectedDetails.username
+      }}</el-descriptions-item>
+      <el-descriptions-item :label="t('system.fullName')">{{
+        protectedDetails.realName
+      }}</el-descriptions-item>
+      <el-descriptions-item :label="t('system.email')">{{
+        protectedDetails.email || '—'
+      }}</el-descriptions-item>
+      <el-descriptions-item :label="t('system.phone')">{{
+        protectedDetails.phone || '—'
+      }}</el-descriptions-item>
+      <el-descriptions-item :label="t('common.status')">{{
+        userStatusLabel(protectedDetails.status)
+      }}</el-descriptions-item>
+    </el-descriptions>
+  </DetailDialog>
 </template>
 
 <style scoped>
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: var(--sw-space-8);
+  gap: 6px;
 }
 
 .form-field__label {
-  font-size: var(--sw-font-body);
+  font-size: 14px;
   font-weight: var(--sw-font-weight-emphasis);
-  color: var(--sw-text-primary);
+  line-height: 22px;
+  color: var(--sw-text-regular);
 }
 
 .form-field--required .form-field__label::before {
@@ -785,10 +877,10 @@ onMounted(loadList)
   align-items: center;
   gap: 6px;
   width: 100%;
-  min-height: 36px;
+  min-height: var(--sw-control-height);
   padding: 5px 8px;
-  border: 1px solid var(--el-border-color);
-  border-radius: var(--el-border-radius-base);
+  border: 1px solid var(--sw-border-base);
+  border-radius: var(--sw-radius-base);
   box-sizing: border-box;
   background: var(--el-fill-color-blank);
   transition: border-color 0.2s;
@@ -802,7 +894,7 @@ onMounted(loadList)
   justify-content: flex-start;
   gap: 6px;
   border-style: dashed;
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
   font: inherit;
   font-size: var(--sw-font-body);
   cursor: pointer;
@@ -819,7 +911,7 @@ onMounted(loadList)
 
 .role-picker__more {
   font-size: 12px;
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
 }
 
 .role-picker__add {
@@ -851,8 +943,8 @@ onMounted(loadList)
   align-items: center;
   gap: 8px;
   padding: 9px 12px;
-  border-radius: 8px;
-  background: #f6f8fc;
+  border-radius: var(--sw-radius-base);
+  background: var(--sw-fill-base);
   color: var(--sw-text-secondary);
   font-size: 13px;
   line-height: 18px;
@@ -873,7 +965,7 @@ onMounted(loadList)
 
 .role-assign__count {
   font-size: 13px;
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
 }
 
 .role-assign__search {
@@ -910,8 +1002,8 @@ onMounted(loadList)
   height: auto;
   margin: 0;
   padding: 9px 12px;
-  border: 1px solid #e6eaf2;
-  border-radius: 8px;
+  border: 1px solid var(--sw-border-lighter);
+  border-radius: var(--sw-radius-base);
   box-sizing: border-box;
   white-space: normal;
   transition:
@@ -921,16 +1013,16 @@ onMounted(loadList)
 
 .role-row:hover {
   border-color: var(--el-color-primary-light-7);
-  background: #faf9ff;
+  background: var(--sw-fill-base);
 }
 
 .role-row.is-checked {
   border-color: var(--el-color-primary-light-5);
-  background: #f6f3ff;
+  background: var(--sw-color-primary-softer);
 }
 
 .role-row.is-disabled {
-  background: #fafafa;
+  background: var(--sw-fill-base);
 }
 
 .role-row :deep(.el-checkbox__input) {
@@ -979,7 +1071,7 @@ onMounted(loadList)
 }
 
 .role-row__code {
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
   font-size: 12px;
   line-height: 16px;
 }
@@ -999,7 +1091,7 @@ onMounted(loadList)
 }
 
 .role-assign__selected {
-  color: var(--sw-text-tertiary);
+  color: var(--sw-text-secondary);
   font-size: 13px;
 }
 
@@ -1010,5 +1102,21 @@ onMounted(loadList)
 
 .role-assign__footer-actions .el-button + .el-button {
   margin-left: 0;
+}
+</style>
+
+<style scoped>
+.tenant-owner-field {
+  grid-column: 1 / -1;
+}
+</style>
+
+<style scoped>
+:global(.system-user-editor.el-dialog) {
+  max-width: calc(100vw - 32px);
+}
+:global(.system-user-editor .el-dialog__body) {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
 }
 </style>

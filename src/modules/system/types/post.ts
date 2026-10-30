@@ -4,6 +4,7 @@
 
 /** 岗位实体（镜像 SysPost） */
 export interface SysPost {
+  tenantId?: string
   id?: string
   code: string
   name: string
@@ -17,6 +18,7 @@ export interface SysPost {
 
 /** 岗位分页筛选 */
 export interface PostFilter {
+  tenantId?: string
   code?: string
   name?: string
   status?: number

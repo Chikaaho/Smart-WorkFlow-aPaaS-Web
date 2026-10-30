@@ -19,8 +19,10 @@ const props = withDefaults(
     placeholder?: string
     /** 内置函数目录（#函数名 语法糖高亮与自动补齐候选）。 */
     functions?: EditorFunction[]
+    appearance?: 'default' | 'workspace'
+    languageMode?: 'javascript' | 'bounded'
   }>(),
-  { placeholder: '', functions: () => [] },
+  { placeholder: '', functions: () => [], appearance: 'default', languageMode: 'javascript' },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
@@ -92,6 +94,22 @@ const BUILTINS = [
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const preRef = ref<HTMLElement | null>(null)
+const gutterRef = ref<HTMLElement | null>(null)
+const lineNumbers = computed(() => (props.modelValue ?? '').split('\n').map((_, i) => i + 1))
+
+function insertAtCaret(text: string) {
+  const ta = textareaRef.value
+  const start = ta?.selectionStart ?? props.modelValue.length
+  const end = ta?.selectionEnd ?? start
+  emit('update:modelValue', props.modelValue.slice(0, start) + text + props.modelValue.slice(end))
+  suggestionOpen.value = false
+  void nextTick(() => {
+    ta?.focus()
+    ta?.setSelectionRange(start + text.length, start + text.length)
+  })
+}
+
+defineExpose({ insertAtCaret })
 
 /** 自动配对表（BF20261013-029）：左括号/引号 → 右半。 */
 const PAIRS: Record<string, string> = {
@@ -192,6 +210,7 @@ function syncScroll() {
   if (!ta || !pre) return
   pre.scrollTop = ta.scrollTop
   pre.scrollLeft = ta.scrollLeft
+  if (gutterRef.value) gutterRef.value.scrollTop = ta.scrollTop
 }
 
 /** 光标处的词前缀（#开头则只补函数名）。 */
@@ -254,9 +273,12 @@ function refreshSuggestions() {
     return
   }
   const fnNames = props.functions.map((item) => item.name)
+  const keywords =
+    props.languageMode === 'bounded' ? ['var', 'let', 'const', 'if', 'else', 'return'] : KEYWORDS
+  const builtins = props.languageMode === 'bounded' ? ['String', 'Number', 'Boolean'] : BUILTINS
   const pool = word.startsWith('#')
-    ? fnNames.map((name) => `#${name}`)
-    : [...fnNames, ...KEYWORDS, ...LITERALS, ...BUILTINS]
+    ? fnNames.filter((name) => name.startsWith('#'))
+    : [...fnNames, ...keywords, ...LITERALS, ...builtins]
   const lower = word.toLowerCase()
   const matched = pool.filter((item) => item.toLowerCase().startsWith(lower) && item !== word)
   suggestions.value = matched.slice(0, 12)
@@ -375,7 +397,15 @@ watch(
 </script>
 
 <template>
-  <div class="js-editor">
+  <div class="js-editor" :class="{ 'js-editor--workspace': appearance === 'workspace' }">
+    <div
+      v-if="appearance === 'workspace'"
+      ref="gutterRef"
+      class="js-editor__gutter"
+      aria-hidden="true"
+    >
+      <div v-for="line in lineNumbers" :key="line">{{ line }}</div>
+    </div>
     <pre ref="preRef" class="js-editor__pre" aria-hidden="true"><code><span
           v-for="(token, index) in tokens"
           :key="index"
@@ -420,6 +450,7 @@ watch(
 }
 .js-editor__pre,
 .js-editor__input {
+  box-sizing: border-box;
   margin: 0;
   padding: 8px 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
@@ -435,6 +466,9 @@ watch(
   overflow: hidden;
   pointer-events: none;
   color: #1f2a44;
+}
+.js-editor__pre code {
+  font: inherit;
 }
 .js-editor__input {
   position: relative;
@@ -498,5 +532,51 @@ watch(
 }
 .js-editor__suggest li.is-active {
   background: #e8f0fe;
+}
+.js-editor--workspace {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+.js-editor--workspace .js-editor__pre,
+.js-editor--workspace .js-editor__input {
+  padding: 0;
+  font-family: var(--sw-font-family);
+  font-size: 14px;
+  line-height: 26px;
+  white-space: pre;
+  word-wrap: normal;
+}
+.js-editor--workspace .js-editor__input {
+  margin-left: 24px;
+  width: calc(100% - 24px);
+  height: 100%;
+  min-height: 0;
+  resize: none;
+  caret-color: var(--sw-text-primary);
+}
+.js-editor--workspace .js-editor__pre {
+  left: 24px;
+  color: var(--sw-text-primary);
+}
+.js-editor--workspace .js-editor__gutter {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 20px;
+  overflow: hidden;
+  color: var(--sw-text-placeholder);
+  font-size: 14px;
+  line-height: 26px;
+  background: var(--sw-surface-card);
+}
+.js-editor--workspace :deep(.tok-keyword),
+.js-editor--workspace :deep(.tok-fn) {
+  color: var(--sw-color-primary);
+  font-weight: 400;
+}
+.js-editor--workspace :deep(.tok-literal),
+.js-editor--workspace :deep(.tok-string) {
+  color: var(--sw-success-text);
 }
 </style>
