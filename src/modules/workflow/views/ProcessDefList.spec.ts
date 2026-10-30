@@ -89,7 +89,7 @@ describe('ProcessDefList.vue', () => {
     mount(ProcessDefList, { global: globalOpts() })
     await nextTick()
     expect(pageProcessDefs).toHaveBeenCalledOnce()
-    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 })
+    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 }, undefined, undefined)
   })
 
   it('re-fetches on pageNum change', async () => {
@@ -114,7 +114,7 @@ describe('ProcessDefList.vue', () => {
     await vm.handlePageNumChange(2)
     await nextTick()
 
-    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 2, pageSize: 10 })
+    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 2, pageSize: 10 }, undefined, undefined)
   })
 
   it('resets to page 1 on pageSize change', async () => {
@@ -139,7 +139,7 @@ describe('ProcessDefList.vue', () => {
     await vm.handlePageSizeChange(20)
     await nextTick()
 
-    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 20 })
+    expect(pageProcessDefs).toHaveBeenCalledWith({ pageNum: 1, pageSize: 20 }, undefined, undefined)
   })
 
   it('shows fallback error message when API fails with non-ApiError', async () => {

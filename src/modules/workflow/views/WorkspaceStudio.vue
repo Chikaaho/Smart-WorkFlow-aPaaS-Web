@@ -590,7 +590,8 @@ async function refreshMatchCount(filters: WorkspaceFilter[]): Promise<void> {
   const seq = ++matchSeq
   try {
     const resp = await queryWorkspaceRows({ formKey, filters, pageNum: 1, pageSize: 1 })
-    if (seq === matchSeq) matchCount.value = resp.total
+    // Q01（645:28736）：后端全局 Long→String 序列化令 total 为 JSON 字符串，这里统一转数字，类型守卫才能命中
+    if (seq === matchSeq) matchCount.value = Number(resp.total)
   } catch {
     if (seq === matchSeq) matchCount.value = undefined
   }

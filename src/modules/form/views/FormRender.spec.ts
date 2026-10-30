@@ -429,7 +429,8 @@ describe('FormRender', () => {
     expect(wrapper.find('[data-validation-error-for="required_name"]').text()).toBe(
       '此字段为必填项',
     )
-    expect(wrapper.text()).toContain('请完善必填项后再提交')
+    // Q74（300:1692）：本地必填失败不再弹全宽汇总条，仅保留字段红边+就近错误并拦截提交
+    expect(wrapper.text()).not.toContain('请完善必填项后再提交')
     expect(submitForm).not.toHaveBeenCalled()
   })
 

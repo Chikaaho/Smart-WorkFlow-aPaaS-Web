@@ -109,6 +109,10 @@ export interface ProcessDef {
   versionLabel?: string | null
   /** 主题生成规则（V012-BUG-010；列表行随实体下发，历史响应可能缺省） */
   themeRule?: string | null
+  /** 真实归属租户 ID（实体租户列；历史响应可能缺省；owner-20261030-u020-q69-def-tenant） */
+  tenantId?: number | null
+  /** 租户展示名（列表响应回填，非表列；历史响应可能缺省） */
+  tenantName?: string | null
   p53Stats?: { total: number; published: number; draft: number; disabled: number }
 }
 

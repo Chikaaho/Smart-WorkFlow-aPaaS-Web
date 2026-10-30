@@ -256,6 +256,7 @@ onMounted(() => {
             :disabled="!treeCollapsed"
             placement="right"
             :show-after="150"
+            popper-class="catalog-tree-tip"
           >
             <button
               type="button"
@@ -1015,5 +1016,16 @@ onMounted(() => {
   .catalog-table {
     min-width: 720px;
   }
+}
+</style>
+
+<style>
+/* Q73（726:45573）：折叠分类单条 tooltip——文字 20 行高保持，外壳 34 高（上下 padding 7px，较默认各 +1px） */
+.catalog-tree-tip.el-popper {
+  box-sizing: border-box;
+  height: 34px;
+  padding: 6px 11px;
+  font-size: 12px;
+  line-height: 20px;
 }
 </style>

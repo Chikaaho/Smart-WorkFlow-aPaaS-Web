@@ -767,7 +767,7 @@ async function handleSubmit() {
   }
 
   if (!validateRequiredFields()) {
-    errorMsg.value = t('form.completeRequired')
+    // Q74（300:1692）：本地必填失败由字段红边+就近错误表达，不再弹全宽汇总条（原errorMsg汇总与就近提示重复且遮挡填写头栏）
     submitting.value = false
     return
   }
@@ -1000,7 +1000,7 @@ async function handleSubmitDraft() {
     // 草稿转正式提交复用正式提交语义；保存草稿本身不经过这里。
     if (!(await settleBeforeSubmitEvents())) return
     if (!validateRequiredFields()) {
-      errorMsg.value = t('form.completeRequired')
+      // Q74（300:1692）：同上，仅保留就近错误与提交拦截
       return
     }
     const { updateDraft, submitDraft, pollCommandStatus, getDraft } = await getProcessDraftApi()

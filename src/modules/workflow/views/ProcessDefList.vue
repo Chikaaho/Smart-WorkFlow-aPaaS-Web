@@ -17,6 +17,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { ListActionsColumn, ListEmpty, ListPagination } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import { pageProcessDefs, getProcessDefDefinition, publishProcessDef } from '@/modules/workflow/api'
+import { pageTenants } from '@/adapters/org-tenant'
+import type { SysTenant } from '@/adapters/org-tenant'
+import { useUserStore } from '@/stores/user'
 import type { ProcessDef } from '@/contracts/bpm'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
@@ -45,6 +48,21 @@ function getStatusClass(status: ProcessDef['status']): 'is-published' | 'is-draf
 }
 
 // ─── 列表状态 ───
+
+const userStore = useUserStore()
+// Q69（459:14712）：超管可见「租户」筛选与列；普通租户不带该参数，隔离由既有租户拦截器保证
+const isSuperAdmin = computed(() => userStore.superAdmin)
+const tenantFilter = ref<string | undefined>(undefined)
+const tenantOptions = ref<SysTenant[]>([])
+
+async function loadTenantOptions() {
+  try {
+    const result = await pageTenants({ pageNum: 1, pageSize: 200 }, {})
+    tenantOptions.value = result.list
+  } catch {
+    tenantOptions.value = []
+  }
+}
 
 const list = ref<ProcessDef[]>([])
 const total = ref(0)
@@ -134,7 +152,11 @@ async function loadList() {
   errorMsg.value = ''
   try {
     const pageQuery: PageQuery = { pageNum: pageNum.value, pageSize: pageSize.value }
-    const result = await pageProcessDefs(pageQuery)
+    const result = await pageProcessDefs(
+      pageQuery,
+      undefined,
+      isSuperAdmin.value ? tenantFilter.value || undefined : undefined,
+    )
     list.value = result.list
     total.value = result.total
   } catch (err) {
@@ -211,6 +233,7 @@ function resetFilters() {
   keyword.value = ''
   categoryFilter.value = ''
   statusFilter.value = ''
+  tenantFilter.value = undefined
 }
 
 // ─── 查看流程图 ───
@@ -272,7 +295,10 @@ async function handlePublish(row: ProcessDef) {
   }
 }
 
-onMounted(loadList)
+onMounted(() => {
+  void loadList()
+  if (isSuperAdmin.value) void loadTenantOptions()
+})
 </script>
 
 <template>
@@ -316,6 +342,24 @@ onMounted(loadList)
         <el-option label="草稿" value="DRAFT" />
         <el-option label="停用" value="DISABLED" />
       </el-select>
+      <template v-if="isSuperAdmin">
+        <span class="defs-filter__label defs-filter__label--inline">{{
+          t('system.tenantShort')
+        }}</span>
+        <el-select
+          v-model="tenantFilter"
+          class="defs-filter__tenant"
+          :placeholder="t('common.all')"
+          clearable
+        >
+          <el-option
+            v-for="tenant in tenantOptions"
+            :key="tenant.id"
+            :label="tenant.name"
+            :value="String(tenant.id)"
+          />
+        </el-select>
+      </template>
       <span class="defs-filter__spacer" aria-hidden="true" />
       <el-button v-if="returnFormId" link class="defs-filter__link" @click="backToWorkbench">{{
         t('workflow.backToFormWorkbench')
@@ -351,6 +395,9 @@ onMounted(loadList)
             width="362"
             class-name="defs-table__col-name"
           />
+          <el-table-column v-if="isSuperAdmin" :label="t('system.tenantShort')" width="132">
+            <template #default="{ row }">{{ statusRow(row).tenantName || '—' }}</template>
+          </el-table-column>
           <el-table-column :label="t('workflow.categoryName')" width="234">
             <template #default="{ row }">{{ statusRow(row).categoryName || '—' }}</template>
           </el-table-column>
@@ -559,7 +606,8 @@ onMounted(loadList)
   padding-left: 11px;
 }
 .defs-filter__category,
-.defs-filter__status {
+.defs-filter__status,
+.defs-filter__tenant {
   width: 144px;
   margin-left: 0;
 }

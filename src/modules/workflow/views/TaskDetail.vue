@@ -2304,10 +2304,13 @@ onMounted(loadDetail)
   min-height: 32px;
   height: 32px;
 }
+/* Q61（273:1925）/Q65（273:2025）：沟通内容/催办留言视觉外框 32 高，长文本在框内滚动不丢值 */
 .task-detail :deep(.action-dialog .el-textarea__inner) {
   box-sizing: border-box;
+  height: 32px;
   min-height: 32px;
   padding: 5px 11px;
+  overflow-y: auto;
 }
 .task-detail :deep(.action-dialog .el-dialog__footer .el-button) {
   box-sizing: border-box;

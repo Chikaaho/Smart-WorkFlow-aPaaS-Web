@@ -229,9 +229,12 @@ export async function createProcessDef(
 export async function pageProcessDefs(
   page: PageQuery,
   formKey?: string,
+  tenantId?: number | string,
 ): Promise<PageResult<ProcessDef>> {
   const params: Record<string, unknown> = { ...page }
   if (formKey) params.formKey = formKey
+  // Q69（459:14712）：租户过滤仅超管传参（调用方门控），普通租户不带此参数
+  if (tenantId !== undefined && tenantId !== null && tenantId !== '') params.tenantId = tenantId
   const raw = await request<BackendPageResult<ProcessDef>>({
     method: 'GET',
     url: '/workflow/defs',

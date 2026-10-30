@@ -163,11 +163,12 @@ watch(
     :close-on-click-modal="false"
     destroy-on-close
     align-center
-    width="640px"
+    :width="formType === 'BUSINESS' ? '640px' : '960px'"
     @update:model-value="emit('update:visible', $event)"
   >
-    <div class="form-select">
-      <!-- 搜索栏（472:16071 执行提示18：名称左锚 + 410 输入，无按钮） -->
+    <div class="form-select" :class="{ 'form-select--wide': formType !== 'BUSINESS' }">
+      <!-- 搜索栏（472:16071 执行提示18：名称左锚 + 410 输入，无按钮）；
+           Q11（273:1257）审批意见场景 960 宽，搜索输入伸展到可用区域 -->
       <div class="form-select__search">
         <span class="form-select__label">{{ t('common.formName') }}</span>
         <el-input
@@ -256,6 +257,11 @@ watch(
 }
 .form-select__search-input {
   width: 410px;
+}
+/* Q11（273:1257）：意见表单选择 960 宽时搜索输入占据余量 */
+.form-select--wide .form-select__search-input {
+  flex: 1;
+  width: auto;
 }
 .form-select__search-input :deep(.el-input__wrapper) {
   box-sizing: border-box;

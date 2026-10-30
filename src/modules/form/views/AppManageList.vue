@@ -415,6 +415,14 @@ onMounted(() => {
    teleport 弹层样式落真实弹窗根（append-to-body → 全局块）。 */
 .app-delete-dialog.el-dialog {
   border-radius: 12px;
+  /* Q39（471:17256）原目标高 172（±1），内容自然高度不足时锁定外壳高度 */
+  height: 172px;
+  display: flex;
+  flex-direction: column;
+}
+.app-delete-dialog .el-dialog__body {
+  flex: 1;
+  overflow: auto;
 }
 .app-delete-dialog .el-dialog__footer {
   display: flex;
