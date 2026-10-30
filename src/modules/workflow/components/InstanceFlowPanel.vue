@@ -598,7 +598,7 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
             <span class="sign-group__link">{{ t('taskDetailUi.viewAllSignRecords') }}</span>
           </button>
         </div>
-        <el-table class="detail-flow-table" :data="peopleRows" stripe>
+        <el-table class="detail-flow-table detail-approval-table" :data="peopleRows" stripe>
           <el-table-column prop="taskName" :label="t('workflow.approvalNode')" min-width="260" />
           <el-table-column :label="t('workflow.approver')" width="120">
             <template #default="{ row }">
@@ -882,6 +882,13 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
 .instance-flow-panel :deep(.detail-flow-table .el-table__body-wrapper td) {
   height: 39px;
   padding: 0;
+}
+/* 90:311：审批详情表独立几何——表头 34、行 53；流转记录与会签记录沿用上面的共用值。 */
+.instance-flow-panel :deep(.detail-approval-table .el-table__header-wrapper th) {
+  height: 34px;
+}
+.instance-flow-panel :deep(.detail-approval-table .el-table__body-wrapper td) {
+  height: 53px;
 }
 .instance-flow-panel :deep(.detail-flow-table .cell) {
   padding: 0 16px;

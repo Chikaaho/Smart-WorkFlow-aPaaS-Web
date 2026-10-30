@@ -197,3 +197,62 @@ describe('FieldConfigPanel 控件尺寸口径（0.1.7 #36）', () => {
     expect(wrapper.text()).not.toContain('其他信息')
   })
 })
+
+// Q52（490:16919 / 490:16934）：静态文字的字号浮层首屏档位与颜色浮层 430×286 的样式钩子
+describe('FieldConfigPanel 静态文字字号/颜色浮层', () => {
+  function mountLabel(fontSize?: number) {
+    return mount(FieldConfigPanel, {
+      props: {
+        field: {
+          id: 'f1',
+          field: {
+            name: 'field_note',
+            type: 'LABEL',
+            label: '文字',
+            colSpan: 24,
+            ...(fontSize === undefined ? {} : { fontSize }),
+          },
+        },
+        otherNames: [],
+      },
+      global: { stubs: { RulesEditor: { template: '<div />' } } },
+    })
+  }
+
+  function numericOptionValues(wrapper: ReturnType<typeof mountLabel>) {
+    return wrapper
+      .findAllComponents({ name: 'ElOption' })
+      .map((option) => option.props('value'))
+      .filter((value): value is number => typeof value === 'number')
+  }
+
+  it('字号首屏顺序为 14/16/18/20/24/28，既有 12/32/36/48 仍在候选中', () => {
+    const wrapper = mountLabel()
+    expect(numericOptionValues(wrapper).slice(0, 10)).toEqual([
+      14, 16, 18, 20, 24, 28, 12, 32, 36, 48,
+    ])
+    const fontSelect = wrapper
+      .findAllComponents({ name: 'ElSelect' })
+      .find((select) => select.props('popperClass') === 'label-font-size-popper')
+    expect(fontSelect).toBeTruthy()
+  })
+
+  it('历史自定义字号保留在候选末尾，不回落默认 14', () => {
+    const wrapper = mountLabel(13)
+    expect(numericOptionValues(wrapper).slice(0, 11)).toEqual([
+      14, 16, 18, 20, 24, 28, 12, 32, 36, 48, 13,
+    ])
+    const fontSelect = wrapper
+      .findAllComponents({ name: 'ElSelect' })
+      .find((select) => select.props('popperClass') === 'label-font-size-popper')
+    expect(fontSelect!.props('modelValue')).toBe(13)
+  })
+
+  it('颜色浮层沿用原取色器并挂 430×286 样式钩子', () => {
+    const wrapper = mountLabel()
+    const picker = wrapper.findComponent({ name: 'ElColorPicker' })
+    expect(picker.exists()).toBe(true)
+    expect(picker.props('popperClass')).toBe('label-color-popover')
+    expect(picker.props('predefine')).toHaveLength(8)
+  })
+})

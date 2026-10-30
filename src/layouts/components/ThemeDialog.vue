@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* global window, HTMLElement, PointerEvent */
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from '@/locales'
 import DetailDialog from '@/components/DetailDialog.vue'
@@ -6,9 +7,9 @@ import {
   applyTheme,
   DEFAULT_THEME,
   isReadableThemeColor,
+  previewThemeCssVariables,
   readTheme,
   resetTheme,
-  themeCssVariables,
   type ThemeName,
 } from '@/foundation/theme'
 import blueIcon from '@/assets/theme/blue.svg'
@@ -34,15 +35,135 @@ watch(
     if (!open) return
     Object.assign(draft, readTheme())
     colorInput.value = draft.customColor
+    syncHsvFrom(draft.customColor)
     error.value = ''
     resetPending.value = false
   },
 )
-const previewStyle = computed(() => themeCssVariables(draft))
+const previewStyle = computed(() => previewThemeCssVariables(draft))
+
+/* ── 自定义展开（355:6575）：渐变面/色相条只做本地取色 ── */
+const gradientRef = ref<HTMLElement | null>(null)
+const hueRef = ref<HTMLElement | null>(null)
+const hsv = reactive({ h: 220, s: 90, v: 90 })
+const isCustom = computed(() => draft.name === 'custom')
+
+function hexToHsv(hex: string): { h: number; s: number; v: number } | null {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return null
+  const r = Number.parseInt(hex.slice(1, 3), 16) / 255
+  const g = Number.parseInt(hex.slice(3, 5), 16) / 255
+  const b = Number.parseInt(hex.slice(5, 7), 16) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const delta = max - min
+  let h = 0
+  if (delta > 0) {
+    if (max === r) h = ((g - b) / delta) % 6
+    else if (max === g) h = (b - r) / delta + 2
+    else h = (r - g) / delta + 4
+    h = Math.round(h * 60)
+    if (h < 0) h += 360
+  }
+  return { h, s: max === 0 ? 0 : Math.round((delta / max) * 100), v: Math.round(max * 100) }
+}
+
+function hsvToHex(h: number, s: number, v: number): string {
+  const sat = s / 100
+  const val = v / 100
+  const channel = (n: number): number => {
+    const k = (n + h / 60) % 6
+    return val - val * sat * Math.max(0, Math.min(k, 4 - k, 1))
+  }
+  return `#${[channel(5), channel(3), channel(1)]
+    .map((part) =>
+      Math.round(part * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')
+    .toUpperCase()}`
+}
+
+function syncHsvFrom(hex: string) {
+  const parsed = hexToHsv(hex)
+  if (parsed) Object.assign(hsv, parsed)
+}
+
+const hueColor = computed(() => hsvToHex(hsv.h, 100, 100))
+const gradientBackground = computed(
+  () =>
+    `linear-gradient(to top, #000, rgba(0, 0, 0, 0)), linear-gradient(to right, #fff, ${hueColor.value})`,
+)
+const gradientCursorStyle = computed(() => ({
+  left: `${hsv.s}%`,
+  top: `${100 - hsv.v}%`,
+}))
+const hueCursorStyle = computed(() => ({ left: `${(hsv.h / 359.9) * 100}%` }))
+
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, value))
+}
+
+function startAreaDrag(
+  event: PointerEvent,
+  area: HTMLElement | null,
+  apply: (xPercent: number, yPercent: number) => void,
+) {
+  if (!area) return
+  event.preventDefault()
+  const rect = area.getBoundingClientRect()
+  if (!rect.width || !rect.height) return
+  const move = (pointer: PointerEvent) => {
+    apply(
+      clampPercent(((pointer.clientX - rect.left) / rect.width) * 100),
+      clampPercent(((pointer.clientY - rect.top) / rect.height) * 100),
+    )
+  }
+  move(event)
+  const stop = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', stop)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', stop)
+}
+
+function updateCustomFromHsv() {
+  const hex = hsvToHex(hsv.h, hsv.s, hsv.v).toLowerCase()
+  draft.customColor = hex
+  colorInput.value = hex
+}
+
+function onGradientPointerDown(event: PointerEvent) {
+  startAreaDrag(event, gradientRef.value, (x, y) => {
+    hsv.s = Math.round(x)
+    hsv.v = Math.round(100 - y)
+    updateCustomFromHsv()
+  })
+}
+
+function onHuePointerDown(event: PointerEvent) {
+  startAreaDrag(event, hueRef.value, (x) => {
+    hsv.h = Math.round(clampPercent(x) * 3.599)
+    updateCustomFromHsv()
+  })
+}
+
+watch(colorInput, (value) => {
+  if (!isCustom.value || !/^#[0-9a-f]{6}$/i.test(value)) return
+  draft.customColor = value.toLowerCase()
+  syncHsvFrom(value)
+})
+
 function selectPreset(name: ThemeName) {
   draft.name = name
   error.value = ''
   resetPending.value = false
+  if (name === 'custom') {
+    const hex = /^#[0-9a-f]{6}$/i.test(colorInput.value) ? colorInput.value : draft.customColor
+    colorInput.value = hex
+    syncHsvFrom(hex)
+  }
 }
 function changeCustom() {
   if (!/^#[0-9a-f]{6}$/i.test(colorInput.value)) {
@@ -98,7 +219,29 @@ function reset() {
           }}
         </button>
       </div>
-      <div class="theme-dialog__custom">
+      <div v-if="isCustom" class="theme-dialog__custom-panel">
+        <div
+          ref="gradientRef"
+          class="theme-dialog__gradient"
+          :style="{ background: gradientBackground }"
+          :aria-label="t('appearance.custom')"
+          @pointerdown="onGradientPointerDown"
+        >
+          <span class="theme-dialog__cursor" :style="gradientCursorStyle" />
+        </div>
+        <div ref="hueRef" class="theme-dialog__hue" @pointerdown="onHuePointerDown">
+          <span class="theme-dialog__cursor theme-dialog__cursor--hue" :style="hueCursorStyle" />
+        </div>
+        <label class="theme-dialog__hex-label" for="theme-custom-color">HEX</label>
+        <el-input
+          id="theme-custom-color"
+          v-model="colorInput"
+          class="theme-dialog__hex-input"
+          maxlength="7"
+          @keyup.enter="changeCustom"
+        />
+      </div>
+      <div v-else class="theme-dialog__custom">
         <label for="theme-custom-color">{{ t('appearance.custom') }}</label>
         <el-input
           id="theme-custom-color"
@@ -230,6 +373,59 @@ function reset() {
 .theme-dialog__custom .el-button {
   width: 80px;
   margin: 0;
+}
+/* 自定义展开（355:6575）：渐变面 512×180、色相条 512×16、HEX 输入 510×32，
+   面板内部间距 16，弹窗总高随内容自然增至约 706。 */
+.theme-dialog__custom-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sw-space-16);
+}
+.theme-dialog__gradient {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  border-radius: 2px;
+  cursor: crosshair;
+}
+.theme-dialog__hue {
+  position: relative;
+  width: 100%;
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(
+    to right,
+    #f00 0%,
+    #ff0 17%,
+    #0f0 33%,
+    #0ff 50%,
+    #00f 67%,
+    #f0f 83%,
+    #f00 100%
+  );
+  cursor: pointer;
+}
+.theme-dialog__cursor {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 2px rgb(0 0 0 / 45%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.theme-dialog__cursor--hue {
+  top: 50%;
+  width: 10px;
+  height: 10px;
+}
+.theme-dialog__hex-label {
+  line-height: 20px;
+}
+.theme-dialog__hex-input {
+  width: 510px;
+  max-width: 100%;
 }
 .theme-dialog__preview {
   box-sizing: border-box;

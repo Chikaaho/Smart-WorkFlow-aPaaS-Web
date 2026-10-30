@@ -126,8 +126,11 @@ function onWidthChange(cols: number | undefined) {
 /* ── 文字（LABEL）专用排列（490:16184） ── */
 
 const DEFAULT_LABEL_FONT_SIZE = 14
-/** 字号选项：常用档位 + 当前值兜底（历史自定义字号不丢显）。 */
-const LABEL_FONT_SIZE_STEPS = [12, 14, 16, 18, 20, 24, 28, 32, 36, 48]
+/**
+ * 字号选项（490:16919）：首屏六项常用档 14/16/18/20/24/28 各 36 行；
+ * 既有 12/32/36/48 保留在后续滚动区，历史自定义字号追加末尾不丢显。
+ */
+const LABEL_FONT_SIZE_STEPS = [14, 16, 18, 20, 24, 28, 12, 32, 36, 48]
 
 function labelText(): string {
   return ((props.field?.field as LabelField | undefined)?.text ?? '') as string
@@ -154,7 +157,7 @@ const labelFontSizeOptions = computed(() => {
   const current = labelFontSize()
   return LABEL_FONT_SIZE_STEPS.includes(current)
     ? LABEL_FONT_SIZE_STEPS
-    : [...LABEL_FONT_SIZE_STEPS, current].sort((a, b) => a - b)
+    : [...LABEL_FONT_SIZE_STEPS, current]
 })
 
 function onLabelFontSize(value: number | undefined) {
@@ -269,6 +272,7 @@ function onFieldKeySuffix(raw: string) {
         <div class="config__row">
           <label class="config__label">{{ t('form.labelFontSize') }}</label>
           <el-select
+            popper-class="label-font-size-popper"
             :model-value="labelFontSize()"
             :disabled="readonly"
             @update:model-value="onLabelFontSize"
@@ -304,6 +308,7 @@ function onFieldKeySuffix(raw: string) {
           <el-icon class="config__color-arrow"><ArrowDown /></el-icon>
           <el-color-picker
             class="config__color-picker"
+            popper-class="label-color-popover"
             :model-value="labelColor()"
             :predefine="[
               '#172033',
@@ -849,5 +854,74 @@ aside.config.config--label .config__color-picker :deep(.el-color-picker__trigger
   color: var(--sw-text-placeholder);
   font-size: var(--sw-font-secondary);
   text-align: center;
+}
+</style>
+
+<style>
+/* Q52（490:16919）：静态文字字号浮层 140×228，首屏 6 行×36（14/16/18/20/24/28），
+   其余既有档位在滚动区可访问。弹层 teleport 到 body，用专属 popper-class 限定作用域。 */
+.label-font-size-popper {
+  box-sizing: border-box;
+  width: 140px;
+  height: 228px;
+}
+.label-font-size-popper .el-select-dropdown {
+  box-sizing: border-box;
+  height: 226px;
+  max-height: none;
+  padding: 5px 0;
+  overflow: hidden;
+}
+.label-font-size-popper .el-scrollbar__wrap {
+  height: 216px;
+  max-height: none;
+  overflow-y: auto;
+}
+.label-font-size-popper .el-select-dropdown__list {
+  max-height: none;
+  padding: 0;
+}
+.label-font-size-popper .el-select-dropdown__item {
+  box-sizing: border-box;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 13px;
+  font-weight: 400;
+}
+.label-font-size-popper .el-select-dropdown__item.is-hovering,
+.label-font-size-popper .el-select-dropdown__item:hover {
+  background-color: #eff6ff;
+}
+.label-font-size-popper .el-select-dropdown__item.is-selected {
+  color: var(--sw-color-primary, #2563eb);
+  background-color: #eff6ff;
+  font-weight: 400;
+}
+
+/* Q52（490:16934）：静态文字颜色浮层 430×286，保留原渐变/色相/HEX/预设与清空确认。
+   面板内容 404×260：饱和度面 384×196，色相条同高；底部原 HEX 输入与清空/确定不变。 */
+.label-color-popover.el-color-picker__panel {
+  box-sizing: border-box;
+  width: 430px;
+  height: 286px;
+}
+.label-color-popover .el-color-picker-panel {
+  box-sizing: content-box;
+  width: 404px;
+  height: 260px;
+  padding: 12px;
+}
+.label-color-popover .el-color-svpanel {
+  width: 384px;
+  height: 196px;
+}
+.label-color-popover .el-color-hue-slider.is-vertical {
+  height: 196px;
+}
+.label-color-popover .el-color-predefine {
+  width: 384px;
+}
+.label-color-popover .el-color-picker-panel__footer .el-input {
+  width: 280px;
 }
 </style>

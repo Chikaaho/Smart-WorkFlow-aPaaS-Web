@@ -14,6 +14,7 @@ import {
   type WorkspaceMetricConfig,
 } from '../utils/workspace-data'
 import WorkspaceColorDialog from './WorkspaceColorDialog.vue'
+import WorkspaceFieldPickerDialog from './WorkspaceFieldPickerDialog.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -39,6 +40,9 @@ const axisLeftMax = ref(0)
 const axisRightMax = ref(0)
 const colorIndex = ref<number | null>(null)
 const colorVisible = ref(false)
+/* 提示32 Q04（653:31852）：指标字段走 680 字段选择窗，1120 外窗与统计方式不变。 */
+const metricFieldIndex = ref<number | null>(null)
+const metricFieldVisible = ref(false)
 
 const isCartesian = computed(() =>
   ['bar', 'hbar', 'line', 'area', 'combo'].includes(props.chartType),
@@ -118,6 +122,34 @@ function onAggChange(metric: WorkspaceMetricConfig): void {
   ) {
     metric.field = numericFields.value[0]?.name ?? ''
   }
+}
+
+/** COUNT 未绑定字段按真实记录数展示；其余显示当前字段名。 */
+function metricFieldLabel(metric: WorkspaceMetricConfig): string {
+  const field = props.fields.find((item) => item.name === metric.field)
+  return field?.label || metric.field || t('workspace.inspector.recordCount')
+}
+
+const metricFieldOptions = computed(() => {
+  const index = metricFieldIndex.value
+  const metric = index == null ? null : metrics.value[index]
+  return metric ? fieldOptions(metric) : []
+})
+
+const metricFieldCurrent = computed(() => {
+  const index = metricFieldIndex.value
+  return index == null ? null : (metrics.value[index]?.field ?? null)
+})
+
+function openMetricField(index: number): void {
+  metricFieldIndex.value = index
+  metricFieldVisible.value = true
+}
+
+function applyMetricField(fieldName: string): void {
+  const index = metricFieldIndex.value
+  if (index == null || !metrics.value[index]) return
+  metrics.value[index].field = fieldName
 }
 
 function confirm(): void {
@@ -238,14 +270,11 @@ const colorValue = computed(() => {
             <span />
           </div>
           <div v-for="(metric, index) in metrics" :key="index" class="wmetrics__row">
-            <el-select v-model="metric.field" clearable>
-              <el-option
-                v-for="field in fieldOptions(metric)"
-                :key="field.name"
-                :label="field.label"
-                :value="field.name"
-              />
-            </el-select>
+            <!-- 提示32 Q04：1120 内统计字段改为 680 字段选择窗入口，统计方式与候选类型约束保留 -->
+            <button type="button" class="wmetrics__field-trigger" @click="openMetricField(index)">
+              <span class="wmetrics__field-name">{{ metricFieldLabel(metric) }}</span>
+              <span class="wmetrics__field-action">{{ t('workspace.inspector.choose') }}</span>
+            </button>
             <el-select v-model="metric.agg" @change="onAggChange(metric)">
               <el-option label="COUNT" value="COUNT" />
               <el-option label="SUM" value="SUM" />
@@ -298,6 +327,14 @@ const colorValue = computed(() => {
       <el-button type="primary" @click="confirm">{{ t('common.confirm') }}</el-button>
     </template>
   </el-dialog>
+
+  <WorkspaceFieldPickerDialog
+    v-model="metricFieldVisible"
+    :fields="metricFieldOptions"
+    :current-field="metricFieldCurrent"
+    title-key="workspace.fieldPicker.metricTitle"
+    @select="applyMetricField"
+  />
 
   <WorkspaceColorDialog
     v-model="colorVisible"
@@ -368,6 +405,42 @@ const colorValue = computed(() => {
   border-radius: 4px;
   background: #fff;
   cursor: pointer;
+}
+
+/* 提示32 Q04：字段单元格与 32 高选择器同形，点击打开 680 选择窗 */
+.wmetrics__field-trigger {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--sw-border-base, #dcdfe6);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.wmetrics__field-trigger:hover {
+  border-color: var(--sw-color-primary, #2563eb);
+}
+
+.wmetrics__field-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sw-text-primary);
+  font-size: 13px;
+  text-align: left;
+}
+
+.wmetrics__field-action {
+  flex: 0 0 auto;
+  color: var(--sw-color-primary, #2563eb);
+  font-size: 12px;
 }
 
 .wmetrics__bounds {

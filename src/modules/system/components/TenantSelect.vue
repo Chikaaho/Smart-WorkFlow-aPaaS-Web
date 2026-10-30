@@ -68,6 +68,7 @@ onBeforeUnmount(() => {
       remote
       :remote-method="search"
       :loading="loading"
+      popper-class="tenant-select-popper"
       @update:model-value="select"
     >
       <el-option v-if="allowAll" value="" :label="t('tenantContext.all')" />
@@ -93,5 +94,15 @@ onBeforeUnmount(() => {
   margin-top: var(--sw-space-4);
   color: var(--sw-danger);
   font-size: var(--sw-font-caption);
+}
+</style>
+
+<style>
+/* Q41（460:14918）：仅超管用户页租户选择器的候选行 34→32；wrapper 32、候选来源与过滤不变。
+   弹层 teleport 到 body，用本组件专属 popper-class 限定作用域，不改全局 select。 */
+.tenant-select-popper .el-select-dropdown__item {
+  box-sizing: border-box;
+  height: 32px;
+  line-height: 32px;
 }
 </style>

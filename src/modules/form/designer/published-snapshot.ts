@@ -496,3 +496,269 @@ function dedupeScripts(rows: SnapshotScriptView[]): SnapshotScriptView[] {
     return true
   })
 }
+
+/* ── 冻结节点配置只读投影（Q31/Q25/Q26/Q20）──
+ * 只读取冻结版本里的节点 config 与流程 triggers，不补演示值、不把全局监听当作节点钩子。
+ * 空值统一返回空结果，由查看层显示「未配置」。 */
+
+export interface SnapshotParticipantView {
+  /** 参与人策略原值（FIXED_USER/EXPRESSION 等），未声明时为空串。 */
+  strategy: string
+  /** 真实参与人值（标量/数组/表单字段对象/节点聚合对象）。 */
+  value: unknown
+  adapterId: string
+}
+
+export interface SnapshotOpinionFormView {
+  formId: string
+  version: string
+  fields: Array<{ key: string; label: string; type: string; required: boolean }>
+}
+
+export interface SnapshotNodeFormView {
+  formKey: string
+  formVersion: string
+}
+
+export interface SnapshotNodeFieldStateView {
+  field: string
+  required: boolean
+  editable: boolean
+  hidden: boolean
+}
+
+export interface SnapshotNodeFieldPermissionView {
+  field: string
+  view: string[]
+  edit: string[]
+}
+
+export interface SnapshotNodeScriptEntry {
+  key: string
+  code: string
+}
+
+export interface SnapshotNodeTriggerBinding {
+  triggerId: string
+  name: string
+  event: string
+  script: string
+}
+
+export interface SnapshotNodeOperationView {
+  allowedActions: string[]
+  returnTargets: string[]
+}
+
+export interface SnapshotNodeAdvancedEntry {
+  key: string
+  value: unknown
+}
+
+function stringArray(value: unknown): string[] {
+  return asArray(value)
+    .map((item) => (typeof item === 'string' || typeof item === 'number' ? String(item) : ''))
+    .filter((item) => item.trim() !== '')
+}
+
+/** 参与人来源：participant 优先，旧数据回退 approver；只按真实字段读取。 */
+export function snapshotParticipantOf(
+  config: Record<string, unknown>,
+): SnapshotParticipantView | null {
+  const raw = parseObject(config.participant) ?? parseObject(config.approver)
+  if (!raw) {
+    const legacy = config.participant ?? config.approver
+    if (typeof legacy === 'string' && legacy.trim()) {
+      return { strategy: '', value: legacy, adapterId: '' }
+    }
+    return null
+  }
+  const strategy = text(raw.strategy ?? raw.type)
+    .trim()
+    .toUpperCase()
+  const adapterId = text(raw.adapterId)
+  const value = raw.value ?? raw.values ?? raw.adapterId
+  return { strategy, value, adapterId }
+}
+
+/** 节点条件：只认冻结 config 里的真实条件键，任一非空即原样可读。 */
+export function snapshotNodeConditionText(config: Record<string, unknown>): string {
+  for (const key of ['condition', 'conditionExpression', 'expression', 'expr', 'conditionScript']) {
+    const value = config[key]
+    if (value == null) continue
+    const rendered = snapshotValueText(value)
+    if (rendered) return rendered
+  }
+  return ''
+}
+
+/** 冻结值 → 可读文本；对象保持真实键值，不替换成占位说明。 */
+export function snapshotValueText(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => snapshotValueText(item))
+      .filter((item) => item !== '')
+      .join('、')
+  }
+  if (isRecord(value)) {
+    const entries = Object.entries(value).filter(([, item]) => item != null && item !== '')
+    if (entries.length === 0) return ''
+    if (entries.length <= 6) {
+      return entries.map(([key, item]) => `${key}=${snapshotValueText(item)}`).join(' · ')
+    }
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return ''
+    }
+  }
+  return String(value)
+}
+
+export function snapshotOpinionFormOf(
+  config: Record<string, unknown>,
+): SnapshotOpinionFormView | null {
+  const raw = parseObject(config.opinionForm)
+  if (!raw) return null
+  const fields = asArray(raw.fields).flatMap((entry) => {
+    if (!isRecord(entry)) return []
+    const key = text(entry.key).trim()
+    if (!key) return []
+    return [
+      {
+        key,
+        label: text(entry.label).trim() || key,
+        type: text(entry.type),
+        required: entry.required === true,
+      },
+    ]
+  })
+  return {
+    formId: snapshotValueText(raw.formId),
+    version: snapshotValueText(raw.version),
+    fields,
+  }
+}
+
+export function snapshotNodeFormOf(config: Record<string, unknown>): SnapshotNodeFormView | null {
+  const raw = parseObject(config.nodeForm)
+  if (!raw) return null
+  const formKey = snapshotValueText(raw.formKey)
+  if (!formKey) return null
+  return { formKey, formVersion: snapshotValueText(raw.formVersion) }
+}
+
+/** 节点字段权限：fieldStates=每字段必填/编辑/隐藏三态，fieldPermissions=查看/编辑主体。 */
+export function snapshotNodeFieldStates(
+  config: Record<string, unknown>,
+): SnapshotNodeFieldStateView[] {
+  const raw = parseObject(config.fieldStates)
+  if (!raw) return []
+  return Object.entries(raw).flatMap(([field, value]) => {
+    const state = parseObject(value)
+    if (!state) return []
+    return [
+      {
+        field,
+        required: state.required === true,
+        editable: state.editable === true,
+        hidden: state.hidden === true,
+      },
+    ]
+  })
+}
+
+export function snapshotNodeFieldPermissions(
+  config: Record<string, unknown>,
+): SnapshotNodeFieldPermissionView[] {
+  const raw = parseObject(config.fieldPermissions)
+  if (!raw) return []
+  return Object.entries(raw).flatMap(([field, value]) => {
+    const rule = parseObject(value)
+    if (!rule) return []
+    return [{ field, view: stringArray(rule.view), edit: stringArray(rule.edit) }]
+  })
+}
+
+/** 节点内联脚本：config 里以 script/expression 结尾的真实文本，含 listeners 条目。 */
+export function snapshotNodeInlineScripts(
+  config: Record<string, unknown>,
+): SnapshotNodeScriptEntry[] {
+  const rows: SnapshotNodeScriptEntry[] = []
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value !== 'string' || !value.trim()) continue
+    if (!/(script|expression)$/i.test(key)) continue
+    rows.push({ key, code: value })
+  }
+  asArray(config.listeners).forEach((entry, index) => {
+    const listener = parseObject(entry)
+    if (!listener) return
+    for (const [key, value] of Object.entries(listener)) {
+      if (typeof value !== 'string' || !value.trim()) continue
+      if (!/(script|expression)$/i.test(key)) continue
+      rows.push({ key: `listeners[${index}].${key}`, code: value })
+    }
+  })
+  return rows
+}
+
+/** 节点级「开始前」触发器：event=NODE_ENTERING/NODE_BEFORE 且 nodeKey/nodeId/target 指向该节点。 */
+export function snapshotNodeTriggerBindings(
+  graph: unknown,
+  nodeId: string,
+): SnapshotNodeTriggerBinding[] {
+  const parsed = parseObject(graph)
+  return asArray(parsed?.triggers).flatMap((entry) => {
+    if (!isRecord(entry)) return []
+    const event = text(entry.event).trim().toUpperCase()
+    if (event !== 'NODE_ENTERING' && event !== 'NODE_BEFORE') return []
+    const target = text(entry.nodeKey) || text(entry.nodeId) || text(entry.target)
+    if (target !== nodeId) return []
+    return [
+      {
+        triggerId: text(entry.triggerId),
+        name: text(entry.name) || text(entry.triggerId),
+        event,
+        script: text(entry.script),
+      },
+    ]
+  })
+}
+
+export function snapshotNodeOperations(config: Record<string, unknown>): SnapshotNodeOperationView {
+  return {
+    allowedActions: stringArray(config.allowedActions),
+    returnTargets: stringArray(config.returnTargets),
+  }
+}
+
+/** 高级/操作面里除基础字段外的真实配置项；空对象不产生行。 */
+export function snapshotNodeAdvancedEntries(
+  config: Record<string, unknown>,
+): SnapshotNodeAdvancedEntry[] {
+  const surfaced = new Set([
+    'name',
+    'participant',
+    'approver',
+    'fieldStates',
+    'fieldPermissions',
+    'opinionForm',
+    'allowedActions',
+    'returnTargets',
+    'condition',
+    'conditionExpression',
+    'expression',
+    'expr',
+    'conditionScript',
+  ])
+  return Object.entries(config)
+    .filter(([key, value]) => {
+      if (surfaced.has(key)) return false
+      if (typeof value === 'string' && /(script|expression)$/i.test(key)) return false
+      return value != null && snapshotValueText(value) !== ''
+    })
+    .map(([key, value]) => ({ key, value }))
+}

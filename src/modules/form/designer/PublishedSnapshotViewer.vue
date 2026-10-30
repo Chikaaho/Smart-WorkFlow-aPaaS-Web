@@ -30,6 +30,20 @@ import {
   extractSnapshotListConfig,
   flattenSnapshotFields,
   matchesSnapshotFormVersion,
+  snapshotNodeAdvancedEntries,
+  snapshotNodeConditionText,
+  snapshotNodeFieldPermissions,
+  snapshotNodeFieldStates,
+  snapshotNodeFormOf,
+  snapshotNodeInlineScripts,
+  snapshotNodeOperations,
+  snapshotNodeTriggerBindings,
+  snapshotOpinionFormOf,
+  snapshotParticipantOf,
+  snapshotValueText,
+  type SnapshotNodeView,
+  type SnapshotOpinionFormView,
+  type SnapshotParticipantView,
   type SnapshotProcessSource,
   type SnapshotScriptKind,
   type SnapshotScriptView,
@@ -132,6 +146,37 @@ const validationDetailRow = ref<SnapshotConstraintRow | null>(null)
    字段属性路径（openFrozenDetail）保留原 520 详情窗。 */
 const validationRuleVisible = ref(false)
 const validationRuleRow = ref<SnapshotConstraintRow | null>(null)
+
+/* Q24（509:18903）：冻结 TABLE 明细列——1100 宽只读窗，列/类型/宽度/必填全部取同一冻结 schema。 */
+const detailColumnsVisible = ref(false)
+const detailColumnsField = ref<FormSchema['fields'][number] | null>(null)
+const detailColumnRows = computed(() => {
+  const field = detailColumnsField.value
+  if (!field || field.type !== 'TABLE') return []
+  return field.subFields.map((sub) => {
+    const raw = sub as typeof sub & { colSpan?: number; width?: number }
+    let width = t('form.snapshotViewer.propNotConfigured')
+    if (typeof raw.colSpan === 'number' && raw.colSpan > 0) {
+      width = `${Math.round((raw.colSpan / 24) * 100)}%`
+    } else if (typeof raw.width === 'number' && raw.width > 0) {
+      width = `${raw.width}px`
+    }
+    return {
+      key: sub.name,
+      label: sub.label?.trim() || sub.name,
+      component: snapshotComponentLabel(sub),
+      name: sub.name,
+      width,
+      required: sub.required === true,
+    }
+  })
+})
+
+function openDetailColumns(field: FormSchema['fields'][number]): void {
+  if (field.type !== 'TABLE') return
+  detailColumnsField.value = field
+  detailColumnsVisible.value = true
+}
 
 function openValidationRule(row: SnapshotConstraintRow): void {
   validationRuleRow.value = row
@@ -461,7 +506,7 @@ function fieldVisibilityOf(name: string): VisibilityRule | null {
 type FrozenFieldPropRow = {
   label: string
   value: string
-  detail?: 'validation' | 'script' | 'visibility'
+  detail?: 'validation' | 'script' | 'visibility' | 'subfields'
 }
 
 function labelPositionText(field: FormSchema['fields'][number]): string {
@@ -469,6 +514,105 @@ function labelPositionText(field: FormSchema['fields'][number]): string {
   if (raw === 'left') return t('form.labelPositionLeft')
   if (raw === 'right') return t('form.labelPositionRight')
   return t('form.labelPositionTopLeft')
+}
+
+/** Q30（501:19847/20595/20958/22382）：默认值按冻结值原样展示，空值明确「未配置」。 */
+function frozenDefaultValueText(value: unknown): string {
+  if (value === null || value === undefined) return t('form.snapshotViewer.propNotConfigured')
+  if (typeof value === 'string') {
+    return value.trim() ? value : t('form.snapshotViewer.propNotConfigured')
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    const items = value
+      .map((item) => (item !== null && typeof item === 'object' ? prettyJson(item) : String(item)))
+      .filter((item) => item.trim())
+    return items.length ? items.join('、') : t('form.snapshotViewer.propNotConfigured')
+  }
+  const json = prettyJson(value)
+  return json && json !== '{}' ? json : t('form.snapshotViewer.propNotConfigured')
+}
+
+/**
+ * Q30 类型专属只读项：只按实际冻结 schema 投影，不为未配置项填入演示值。
+ * DICT → 选项来源/选项/选择方式/默认值；DATE → 日期格式/默认值；
+ * DEPT → 选择范围（部门 + 单多选）/默认值；ATTACHMENT → 文件类型/文件大小/数量上限。
+ */
+function buildFrozenTypePropRows(field: FormSchema['fields'][number]): FrozenFieldPropRow[] {
+  const notConfigured = t('form.snapshotViewer.propNotConfigured')
+  const single = t('form.snapshotViewer.modeSingle')
+  const multi = t('form.snapshotViewer.modeMulti')
+  const rows: FrozenFieldPropRow[] = []
+  if (field.type === 'DICT') {
+    const source = field.source ?? 'dict'
+    const dictType = field.dictType?.trim()
+    rows.push({
+      label: t('form.snapshotViewer.propOptionSource'),
+      value:
+        source === 'custom'
+          ? t('form.optionSourceCustom')
+          : `${t('form.snapshotViewer.dictSource')}${dictType ? ` · ${dictType}` : ''}`,
+    })
+    if (source === 'custom') {
+      const options = (field.options ?? [])
+        .map((option) => option.value?.trim() || option.key?.trim() || '')
+        .filter(Boolean)
+      rows.push({
+        label: t('form.snapshotViewer.propOptions'),
+        value: options.length ? options.join(' / ') : notConfigured,
+      })
+    } else {
+      rows.push({
+        label: t('form.snapshotViewer.propOptions'),
+        value: dictType || notConfigured,
+      })
+    }
+    rows.push({
+      label: t('form.snapshotViewer.propSelectMode'),
+      value: field.multiple ? multi : single,
+    })
+    rows.push({
+      label: t('form.snapshotViewer.propDefault'),
+      value: frozenDefaultValueText(field.defaultValue),
+    })
+  } else if (field.type === 'DATE') {
+    const format = field.format?.trim()
+    rows.push({
+      label: t('form.snapshotViewer.propDateFormat'),
+      value:
+        format === 'datetime'
+          ? t('form.snapshotViewer.dateFormatDatetime')
+          : format || t('form.snapshotViewer.dateFormatDate'),
+    })
+    rows.push({
+      label: t('form.snapshotViewer.propDefault'),
+      value: frozenDefaultValueText(field.defaultValue),
+    })
+  } else if (field.type === 'DEPT') {
+    rows.push({
+      label: t('form.snapshotViewer.propSelectRange'),
+      value: `${t('form.snapshotViewer.deptRange')}，${field.multiple ? multi : single}`,
+    })
+    rows.push({
+      label: t('form.snapshotViewer.propDefault'),
+      value: frozenDefaultValueText(field.defaultValue),
+    })
+  } else if (field.type === 'ATTACHMENT') {
+    // 冻结 ATTACHMENT 契约没有文件类型/大小/数量键；真实值缺省即明确未配置，不填演示值。
+    rows.push({
+      label: t('form.snapshotViewer.propFileType'),
+      value: notConfigured,
+    })
+    rows.push({
+      label: t('form.snapshotViewer.propFileSize'),
+      value: notConfigured,
+    })
+    rows.push({
+      label: t('form.snapshotViewer.propFileCount'),
+      value: notConfigured,
+    })
+  }
+  return rows
 }
 
 function buildFrozenFieldPropRows(field: FormSchema['fields'][number]): FrozenFieldPropRow[] {
@@ -520,7 +664,28 @@ function buildFrozenFieldPropRows(field: FormSchema['fields'][number]): FrozenFi
       detail: fieldVisibilityOf(field.name) ? 'visibility' : undefined,
     },
   ]
-  return [...basic, ...ruleRows]
+  /* Q24（509:18903）：冻结 TABLE 的既有只读属性直接给出「明细列」查看入口；
+     读取同一冻结 schema 的 subFields，不另造列。 */
+  const tableRows: FrozenFieldPropRow[] =
+    field.type === 'TABLE'
+      ? [
+          {
+            label: t('form.snapshotViewer.propDetailColumns'),
+            value: field.subFields.length
+              ? `${field.subFields.length} ${t('form.snapshotViewer.propColumnUnit')}`
+              : t('form.snapshotViewer.propNotConfigured'),
+            detail: 'subfields',
+          },
+        ]
+      : []
+  /* 类型专属项排在字段标识/类型/最大长度之后、校验规则之前，与冻结属性原顺序一致。 */
+  return [
+    ...basic,
+    ...ruleRows.slice(0, 3),
+    ...buildFrozenTypePropRows(field),
+    ...tableRows,
+    ...ruleRows.slice(3),
+  ]
 }
 
 const frozenFieldPropRows = computed<FrozenFieldPropRow[]>(() =>
@@ -549,6 +714,457 @@ const frozenNodePropRows = computed(() => {
     { label: t('form.snapshotViewer.nodeSize'), value: size },
   ]
 })
+
+/* ── Q31/Q25/Q26/Q20：冻结节点按真实 kind/config 的只读消费者 ──
+ * 共同五属性保持 295×32 只读框；以下配置行只投影冻结版本真实值，
+ * 缺值显示「未配置」，不补演示值、不把全局监听当作节点钩子。 */
+type FrozenNodeConfigRow = {
+  key: string
+  label: string
+  value: string
+  detail?: 'fieldPermissions' | 'advancedConfig' | 'beforeScript'
+}
+
+const KNOWN_NODE_TYPES = new Set([
+  'START',
+  'END',
+  'APPROVAL',
+  'CONSENSUS',
+  'CONDITION',
+  'COPY',
+  'NOTIFICATION',
+  'DYNAMIC_PARALLEL',
+  'PARALLEL_GATEWAY',
+  'SUBFLOW_WAIT',
+  'TXN_ACTION',
+])
+
+const nodeFieldStateRows = computed(() =>
+  selectedNode.value ? snapshotNodeFieldStates(selectedNode.value.config) : [],
+)
+const nodeFieldPermissionRows = computed(() =>
+  selectedNode.value ? snapshotNodeFieldPermissions(selectedNode.value.config) : [],
+)
+const nodeOpinionForm = computed<SnapshotOpinionFormView | null>(() =>
+  selectedNode.value ? snapshotOpinionFormOf(selectedNode.value.config) : null,
+)
+const nodeFormBinding = computed(() =>
+  selectedNode.value ? snapshotNodeFormOf(selectedNode.value.config) : null,
+)
+const nodeInlineScripts = computed(() =>
+  selectedNode.value ? snapshotNodeInlineScripts(selectedNode.value.config) : [],
+)
+const nodeBeforeBindings = computed(() =>
+  selectedNode.value && selectedProcess.value
+    ? snapshotNodeTriggerBindings(selectedProcess.value.graph, selectedNode.value.id)
+    : [],
+)
+const nodeOperations = computed(() =>
+  selectedNode.value
+    ? snapshotNodeOperations(selectedNode.value.config)
+    : { allowedActions: [], returnTargets: [] },
+)
+const nodeAdvancedEntries = computed(() =>
+  selectedNode.value ? snapshotNodeAdvancedEntries(selectedNode.value.config) : [],
+)
+const nodeListeners = computed<Record<string, unknown>[]>(() => {
+  const raw = selectedNode.value?.config.listeners
+  if (!Array.isArray(raw)) return []
+  return raw.map((entry) => asRecord(entry)).filter((entry) => entry !== null)
+})
+const nodeHasAdvancedConfig = computed(
+  () =>
+    nodeOperations.value.allowedActions.length > 0 ||
+    nodeOperations.value.returnTargets.length > 0 ||
+    nodeListeners.value.length > 0 ||
+    nodeAdvancedEntries.value.length > 0,
+)
+
+function participantStrategyLabel(strategy: string): string {
+  if (!strategy) return t('form.snapshotViewer.propConfigured')
+  return t(`form.snapshotViewer.participantStrategy.${strategy}`, strategy)
+}
+
+function participantValueText(participant: SnapshotParticipantView | null): string {
+  if (!participant) return t('form.snapshotViewer.propNotConfigured')
+  const value = participant.value
+  if (value == null || snapshotValueText(value) === '') {
+    return participant.adapterId || t('form.snapshotViewer.propNotConfigured')
+  }
+  const record = asRecord(value)
+  if (record && ('objectType' in record || 'field' in record || 'tableField' in record)) {
+    const parts: string[] = []
+    const objectType = String(record.objectType ?? '').toUpperCase()
+    if (objectType === 'USER') parts.push(t('form.snapshotViewer.nodeObjectTypeUser'))
+    if (objectType === 'DEPT') parts.push(t('form.snapshotViewer.nodeObjectTypeDept'))
+    const scope = String(record.scope ?? '').toUpperCase()
+    if (scope === 'MAIN') parts.push(t('form.snapshotViewer.nodeScopeMain'))
+    if (scope === 'TABLE') parts.push(t('form.snapshotViewer.nodeScopeTable'))
+    for (const key of ['field', 'tableField', 'column']) {
+      const textValue = snapshotValueText(record[key])
+      if (textValue) parts.push(textValue)
+    }
+    if (parts.length) return parts.join(' · ')
+  }
+  if (record && ('nodeKey' in record || 'formField' in record)) {
+    const parts = [
+      snapshotValueText(record.nodeKey),
+      snapshotValueText(record.formField),
+      String(record.round ?? '').toUpperCase() === 'PREVIOUS'
+        ? t('form.snapshotViewer.nodeRoundPrevious')
+        : t('form.snapshotViewer.nodeRoundCurrent'),
+    ].filter(Boolean)
+    if (parts.length) return parts.join(' · ')
+  }
+  return snapshotValueText(value)
+}
+
+function opinionFormText(form: SnapshotOpinionFormView | null): string {
+  if (!form) return t('form.snapshotViewer.propNotConfigured')
+  const head = [form.formId, form.version ? `v${form.version}` : ''].filter(Boolean).join(' · ')
+  const labels = form.fields.map((field) => field.label).filter(Boolean)
+  const fieldText = form.fields.length
+    ? `${form.fields.length} ${t('form.snapshotViewer.nodeFieldUnit')}${
+        labels.length > 0 && labels.length <= 6 ? `（${labels.join('、')}）` : ''
+      }`
+    : t('form.snapshotViewer.nodeFieldEmpty')
+  return [head, fieldText].filter(Boolean).join(' · ')
+}
+
+function nodeFormText(): string {
+  const form = nodeFormBinding.value
+  if (!form) return t('form.snapshotViewer.propNotConfigured')
+  return [form.formKey, form.formVersion ? `v${form.formVersion}` : ''].filter(Boolean).join(' · ')
+}
+
+function consensusModeLabel(mode: unknown): string {
+  const raw = String(mode ?? '').trim()
+  if (!raw) return t('form.snapshotViewer.propNotConfigured')
+  const labels: Record<string, string> = {
+    COUNT: t('form.snapshotViewer.nodeModeCount'),
+    RATIO: t('form.snapshotViewer.nodeModeRatio'),
+    ALL: t('form.snapshotViewer.nodeModeAll'),
+    VETO: t('form.snapshotViewer.nodeModeVeto'),
+    ANY: t('form.snapshotViewer.nodeModeAny'),
+  }
+  return labels[raw.toUpperCase()] ?? raw
+}
+
+function dynamicSourceText(source: unknown): string {
+  const record = asRecord(source)
+  if (!record) return snapshotValueText(source) || t('form.snapshotViewer.propNotConfigured')
+  const type = String(record.type ?? '').toUpperCase()
+  const typeLabels: Record<string, string> = {
+    FORM_FIELD: t('form.snapshotViewer.nodeSourceFormField'),
+    VARIABLE: t('form.snapshotViewer.nodeSourceVariable'),
+    FIXED: t('form.snapshotViewer.nodeSourceFixed'),
+  }
+  const parts = [typeLabels[type] ?? type, snapshotValueText(record.value)]
+  for (const key of ['objectType', 'scope', 'tableField', 'column']) {
+    const textValue = snapshotValueText(record[key])
+    if (textValue) parts.push(`${key}=${textValue}`)
+  }
+  return parts.filter(Boolean).join(' · ')
+}
+
+function strategyValueText(raw: unknown): string {
+  return snapshotValueText(raw) || t('form.snapshotViewer.propNotConfigured')
+}
+
+function enabledStrategyText(raw: unknown): string {
+  const value = String(raw ?? '').toUpperCase()
+  if (value === 'BLOCK') return t('form.snapshotViewer.nodeStrategyBlock')
+  if (value === 'PROCEED') return t('form.snapshotViewer.nodeStrategyProceed')
+  if (value === 'SKIP') return t('form.snapshotViewer.nodeStrategySkip')
+  return strategyValueText(raw)
+}
+
+function buildFrozenNodeConfigRows(node: SnapshotNodeView): FrozenNodeConfigRow[] {
+  const notConfigured = t('form.snapshotViewer.propNotConfigured')
+  const config = node.config
+  const type = node.type.trim().toUpperCase()
+  const participant = snapshotParticipantOf(config)
+  const rows: FrozenNodeConfigRow[] = []
+
+  if (type === 'APPROVAL' || type === 'CONSENSUS') {
+    rows.push({
+      key: 'participant-source',
+      label: t(
+        type === 'APPROVAL'
+          ? 'form.snapshotViewer.nodeApprovalSource'
+          : 'form.snapshotViewer.nodeParticipantSource',
+      ),
+      value: participant
+        ? `${participantStrategyLabel(participant.strategy)}${
+            participant.strategy ? `（${participant.strategy}）` : ''
+          }`
+        : notConfigured,
+    })
+    rows.push({
+      key: 'participant-value',
+      label: t(
+        type === 'APPROVAL'
+          ? 'form.snapshotViewer.nodeApprovers'
+          : 'form.snapshotViewer.nodeParticipants',
+      ),
+      value: participantValueText(participant),
+    })
+  }
+
+  if (type === 'APPROVAL' || type === 'CONSENSUS' || type === 'CONDITION') {
+    rows.push({
+      key: 'condition',
+      label: t('form.snapshotViewer.nodeCondition'),
+      value: snapshotNodeConditionText(config) || notConfigured,
+    })
+  } else if (snapshotNodeConditionText(config)) {
+    rows.push({
+      key: 'condition',
+      label: t('form.snapshotViewer.nodeCondition'),
+      value: snapshotNodeConditionText(config),
+    })
+  }
+
+  if (type === 'APPROVAL') {
+    rows.push({
+      key: 'opinion-form',
+      label: t('form.snapshotViewer.nodeOpinionForm'),
+      value: opinionFormText(nodeOpinionForm.value),
+    })
+    rows.push({
+      key: 'node-form',
+      label: t('form.snapshotViewer.nodeNodeForm'),
+      value: nodeFormText(),
+    })
+  }
+
+  if (type === 'CONSENSUS') {
+    rows.push({
+      key: 'mode',
+      label: t('form.snapshotViewer.nodeSettleMode'),
+      value: consensusModeLabel(config.mode),
+    })
+    rows.push({
+      key: 'ratio',
+      label: t('form.snapshotViewer.nodeRatio'),
+      value: strategyValueText(config.ratio),
+    })
+    rows.push({
+      key: 'node-form',
+      label: t('form.snapshotViewer.nodeNodeForm'),
+      value: nodeFormText(),
+    })
+  }
+
+  if (type === 'COPY' || type === 'NOTIFICATION') {
+    rows.push({
+      key: 'participant-source',
+      label: t('form.snapshotViewer.nodeParticipantSource'),
+      value: participant
+        ? `${participantStrategyLabel(participant.strategy)}${
+            participant.strategy ? `（${participant.strategy}）` : ''
+          }`
+        : notConfigured,
+    })
+    rows.push({
+      key: 'participant-value',
+      label: t('form.snapshotViewer.nodeParticipants'),
+      value: participantValueText(participant),
+    })
+    rows.push({
+      key: 'failure-strategy',
+      label: t('form.snapshotViewer.nodeFailureStrategy'),
+      value: strategyValueText(config.failureStrategy),
+    })
+  }
+
+  if (type === 'DYNAMIC_PARALLEL') {
+    rows.push({
+      key: 'source',
+      label: t('form.snapshotViewer.nodeBranchSource'),
+      value: dynamicSourceText(config.source),
+    })
+    rows.push({
+      key: 'mode',
+      label: t('form.snapshotViewer.nodeSettleMode'),
+      value: consensusModeLabel(config.mode),
+    })
+    rows.push({
+      key: 'ratio',
+      label: t('form.snapshotViewer.nodeRatio'),
+      value: strategyValueText(config.ratio),
+    })
+    rows.push({
+      key: 'max-branches',
+      label: t('form.snapshotViewer.nodeMaxBranches'),
+      value: strategyValueText(config.maxBranches),
+    })
+    rows.push({
+      key: 'empty-strategy',
+      label: t('form.snapshotViewer.nodeEmptyStrategy'),
+      value: enabledStrategyText(config.emptyStrategy),
+    })
+    rows.push({
+      key: 'invalid-strategy',
+      label: t('form.snapshotViewer.nodeInvalidStrategy'),
+      value: enabledStrategyText(config.invalidStrategy),
+    })
+    rows.push({
+      key: 'semantic-version',
+      label: t('form.snapshotViewer.nodeSemanticVersion'),
+      value: strategyValueText(config.semanticVersion),
+    })
+  }
+
+  if (type === 'SUBFLOW_WAIT') {
+    rows.push({
+      key: 'wait-actions',
+      label: t('form.snapshotViewer.nodeWaitActionIds'),
+      value: snapshotValueText(config.waitActionIds) || notConfigured,
+    })
+  }
+
+  if (type === 'TXN_ACTION') {
+    rows.push({
+      key: 'action-id',
+      label: t('form.snapshotViewer.nodeActionId'),
+      value: strategyValueText(config.actionId),
+    })
+    rows.push({
+      key: 'record-source',
+      label: t('form.snapshotViewer.nodeRecordIdSource'),
+      value: strategyValueText(config.recordIdSource),
+    })
+    rows.push({
+      key: 'quantity',
+      label: t('form.snapshotViewer.nodeQuantity'),
+      value: strategyValueText(config.quantity),
+    })
+    rows.push({
+      key: 'failure-strategy',
+      label: t('form.snapshotViewer.nodeFailureStrategy'),
+      value: strategyValueText(config.failureStrategy),
+    })
+  }
+
+  if (type === 'START' || type === 'END' || type === 'PARALLEL_GATEWAY') {
+    rows.push({
+      key: 'node-config',
+      label: t('form.snapshotViewer.nodeConfigContent'),
+      value: notConfigured,
+    })
+  }
+
+  if (type === 'APPROVAL' || type === 'CONSENSUS') {
+    const permissionCount = nodeFieldStateRows.value.length || nodeFieldPermissionRows.value.length
+    rows.push({
+      key: 'field-permissions',
+      label: t('form.snapshotViewer.nodeFieldPermissions'),
+      value: permissionCount
+        ? t('form.snapshotViewer.nodeFieldCount', { count: permissionCount })
+        : notConfigured,
+      detail: permissionCount ? 'fieldPermissions' : undefined,
+    })
+  } else if (nodeFieldStateRows.value.length || nodeFieldPermissionRows.value.length) {
+    rows.push({
+      key: 'field-permissions',
+      label: t('form.snapshotViewer.nodeFieldPermissions'),
+      value: t('form.snapshotViewer.nodeFieldCount', {
+        count: nodeFieldStateRows.value.length || nodeFieldPermissionRows.value.length,
+      }),
+      detail: 'fieldPermissions',
+    })
+  }
+
+  rows.push({
+    key: 'advanced-scripts',
+    label: t('form.snapshotViewer.nodeAdvancedScripts'),
+    value: nodeInlineScripts.value.length
+      ? t('form.snapshotViewer.nodeScriptCount', { count: nodeInlineScripts.value.length })
+      : notConfigured,
+  })
+  rows.push({
+    key: 'before-script',
+    label: t('form.snapshotViewer.nodeBeforeScript'),
+    value: nodeBeforeBindings.value.length
+      ? t('form.snapshotViewer.nodeBoundCount', { count: nodeBeforeBindings.value.length })
+      : notConfigured,
+    detail: nodeBeforeBindings.value.length ? 'beforeScript' : undefined,
+  })
+  rows.push({
+    key: 'advanced-config',
+    label: t('form.snapshotViewer.nodeAdvancedConfig'),
+    value: nodeHasAdvancedConfig.value
+      ? t('form.snapshotViewer.nodeConfiguredCount', {
+          count:
+            nodeOperations.value.allowedActions.length +
+            nodeOperations.value.returnTargets.length +
+            nodeListeners.value.length +
+            nodeAdvancedEntries.value.length,
+        })
+      : notConfigured,
+    detail: nodeHasAdvancedConfig.value ? 'advancedConfig' : undefined,
+  })
+
+  if (!KNOWN_NODE_TYPES.has(type)) {
+    for (const [key, value] of Object.entries(config)) {
+      if (key === 'name') continue
+      const textValue = snapshotValueText(value)
+      if (!textValue) continue
+      rows.push({ key: `config.${key}`, label: key, value: textValue })
+    }
+  }
+  return rows
+}
+
+const frozenNodeConfigRows = computed<FrozenNodeConfigRow[]>(() =>
+  selectedNode.value ? buildFrozenNodeConfigRows(selectedNode.value) : [],
+)
+
+const nodeFieldPermissionVisible = ref(false)
+const nodeAdvancedVisible = ref(false)
+
+function openNodeConfigDetail(row: FrozenNodeConfigRow): void {
+  if (!selectedNode.value) return
+  if (row.detail === 'fieldPermissions') {
+    nodeFieldPermissionVisible.value = true
+    return
+  }
+  if (row.detail === 'advancedConfig') {
+    nodeAdvancedVisible.value = true
+    return
+  }
+  if (row.detail === 'beforeScript') openNodeBeforeScript()
+}
+
+/** Q20：节点开始前绑定复用既有 1200 只读代码窗（行号 + 只读标识 + 关闭 80×32）。 */
+function openNodeBeforeScript(): void {
+  const node = selectedNode.value
+  if (!node || nodeBeforeBindings.value.length === 0) return
+  scriptDetailMode.value = 'code'
+  scriptDetailTitle.value = t('form.snapshotViewer.nodeBeforeScriptTitle')
+  scriptDetailCode.value = nodeBeforeBindings.value
+    .map((binding) => `// ${binding.name} · ${eventLabel(binding.event)}\n${binding.script || '—'}`)
+    .join('\n\n')
+  scriptDetailMeta.value = [node.name, t('form.snapshotViewer.nodeId'), node.id]
+    .filter(Boolean)
+    .join(' · ')
+  scriptDetailVisible.value = true
+}
+
+function actionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    APPROVE: t('common.approve'),
+    DISAPPROVE: t('workflow.disapprove'),
+    REJECT: t('common.reject'),
+    RETURN: t('common.returnBack'),
+    TRANSFER: t('workflow.transferOwnTask'),
+    DELEGATE: t('workflow.delegateAction'),
+    COMMUNICATE: t('workflow.consultTask'),
+    ADD_SIGN: t('workflow.addSign'),
+  }
+  return labels[action] ?? action
+}
 
 /* ── 流程设置页签（审查23 S14-E）：左200导航 通知/监听 + 变量/脚本额外分支 ── */
 type SettingsBranch = 'notification' | 'listeners' | 'variables' | 'approvalScripts'
@@ -579,25 +1195,8 @@ const notificationRows = computed(() => [
   },
 ])
 
-const listenerRows = computed(() => [
-  ...triggers.value.map((row) => ({
-    key: `${row.processKey}:${row.graphVersion}:${row.trigger.triggerId}`,
-    name: row.trigger.name || row.trigger.triggerId,
-    timing: eventLabel(row.trigger.event),
-    enabled:
-      row.trigger.enabled === false
-        ? t('form.snapshotViewer.disabled')
-        : t('form.snapshotViewer.enabled'),
-    view: () => {
-      openListenerScript({
-        name: row.trigger.name || row.trigger.triggerId,
-        timing: eventLabel(row.trigger.event),
-        code: row.trigger.script || '—',
-        meta: `${row.processName} · v${row.graphVersion}`,
-      })
-    },
-  })),
-  ...frozenFormEvents.value.flatMap((group) =>
+const listenerRows = computed(() =>
+  frozenFormEvents.value.flatMap((group) =>
     group.rows.map((row) => ({
       key: `${group.kind}:${row.id}`,
       name: row.name || row.id,
@@ -613,7 +1212,84 @@ const listenerRows = computed(() => [
       },
     })),
   ),
-])
+)
+
+/* Q28（509:19394）：冻结触发器独立投影——只取流程图 graph.triggers 的真实记录，
+   不把表单事件/节点生命周期监听混入触发器表；执行方式/判断脚本全部来自冻结值。 */
+type SnapshotTriggerRow = {
+  key: string
+  name: string
+  timing: string
+  nodeName: string
+  actionText: string
+  orchestrationText: string
+  script: string
+  meta: string
+  viewScript: () => void
+}
+
+const selectedTriggerKey = ref<string | null>(null)
+const triggerRows = computed<SnapshotTriggerRow[]>(() =>
+  triggers.value.map((row) => {
+    const processNodes = nodes.value.filter(
+      (node) => node.processKey === row.processKey && node.graphVersion === row.graphVersion,
+    )
+    const node = row.trigger.nodeKey
+      ? processNodes.find((candidate) => candidate.id === row.trigger.nodeKey)
+      : undefined
+    const actions = (row.trigger.branches ?? []).flatMap((branch) => branch.actions ?? [])
+    const actionText =
+      actions
+        .map((action) => action.name?.trim() || action.actionId)
+        .filter(Boolean)
+        .join('、') || t('form.snapshotViewer.propNotConfigured')
+    const orchestrations = [
+      ...new Set(
+        actions.map((action) =>
+          action.orchestration === 'CHILD'
+            ? t('form.snapshotViewer.orchestrationChild')
+            : t('form.snapshotViewer.orchestrationIndependent'),
+        ),
+      ),
+    ]
+    const timing = eventLabel(row.trigger.event)
+    const name = row.trigger.name || row.trigger.triggerId
+    const script = row.trigger.script?.trim() ?? ''
+    const meta = `${row.processName} · v${row.graphVersion}`
+    return {
+      key: `${row.processKey}:${row.graphVersion}:${row.trigger.triggerId}`,
+      name,
+      timing,
+      nodeName: node?.name || row.trigger.nodeKey || '—',
+      actionText,
+      orchestrationText: actions.length
+        ? orchestrations.join('、')
+        : t('form.snapshotViewer.propNotConfigured'),
+      script,
+      meta,
+      viewScript: () => {
+        openListenerScript({ name, timing, code: script || '—', meta })
+      },
+    }
+  }),
+)
+
+const selectedTriggerRow = computed<SnapshotTriggerRow | null>(
+  () =>
+    triggerRows.value.find((row) => row.key === selectedTriggerKey.value) ??
+    triggerRows.value[0] ??
+    null,
+)
+
+watch(
+  triggerRows,
+  (rows) => {
+    if (!rows.some((row) => row.key === selectedTriggerKey.value)) {
+      selectedTriggerKey.value = rows[0]?.key ?? null
+    }
+  },
+  { immediate: true },
+)
 
 const propsDialogVisible = ref(false)
 const propsDialogField = ref<FormSchema['fields'][number] | null>(null)
@@ -647,6 +1323,8 @@ function openFrozenDetail(row: FrozenFieldPropRow): void {
       scriptDetailMeta.value = rule.target
       scriptDetailVisible.value = true
     }
+  } else if (row.detail === 'subfields') {
+    openDetailColumns(field)
   }
 }
 
@@ -1421,6 +2099,33 @@ watch(
                   <input class="snapshot-props-surface__input" :value="row.value" readonly />
                 </div>
               </div>
+              <!-- Q31/Q25/Q26/Q20：按真实 kind/config 的只读节点配置；缺值显示未配置 -->
+              <h4 class="snapshot-node-props-subtitle">
+                {{ t('form.snapshotViewer.nodeConfigSection') }}
+              </h4>
+              <div class="snapshot-props-surface snapshot-props-surface--node-config">
+                <div
+                  v-for="row in frozenNodeConfigRows"
+                  :key="row.key"
+                  class="snapshot-props-surface__group"
+                  :data-testid="`node-config-${row.key}`"
+                >
+                  <div class="snapshot-props-surface__head">
+                    <label class="snapshot-props-surface__label">{{ row.label }}</label>
+                    <el-button
+                      v-if="row.detail"
+                      link
+                      type="primary"
+                      size="small"
+                      :data-testid="`node-config-view-${row.key}`"
+                      @click="openNodeConfigDetail(row)"
+                    >
+                      {{ t('common.view') }}
+                    </el-button>
+                  </div>
+                  <input class="snapshot-props-surface__input" :value="row.value" readonly />
+                </div>
+              </div>
               <details class="snapshot-raw snapshot-raw--card">
                 <summary>{{ t('form.snapshotViewer.rawConfig') }}</summary>
                 <pre>{{ prettyJson(selectedNode.config) }}</pre>
@@ -1489,43 +2194,123 @@ watch(
               </div>
             </section>
 
-            <section
-              v-else-if="settingsBranch === 'listeners'"
-              class="snapshot-section snapshot-settings__card"
-            >
-              <div class="snapshot-section__head">
-                <div>
-                  <h3>{{ sectionLabel('eventListeners') }}</h3>
+            <template v-else-if="settingsBranch === 'listeners'">
+              <!-- Q28（509:19394）：冻结触发器只读表 1100——仅真实 trigger 记录，含执行方式/判断脚本 -->
+              <section
+                class="snapshot-section snapshot-settings__card snapshot-settings__card--triggers"
+              >
+                <div class="snapshot-section__head">
+                  <div>
+                    <h3>{{ sectionLabel('triggers') }}</h3>
+                  </div>
                 </div>
-              </div>
-              <p v-if="listenerRows.length === 0" class="snapshot-empty">
-                {{ t('form.snapshotViewer.noData') }}
-              </p>
-              <table v-else class="snapshot-table snapshot-listener-table">
-                <thead>
-                  <tr>
-                    <th>{{ t('form.snapshotViewer.listenerName') }}</th>
-                    <th>{{ t('form.snapshotViewer.listenerTiming') }}</th>
-                    <th>{{ t('form.snapshotViewer.listenerStatus') }}</th>
-                    <th class="snapshot-listener-table__action">
-                      {{ t('form.snapshotViewer.listenerAction') }}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in listenerRows" :key="row.key">
-                    <td>{{ row.name }}</td>
-                    <td>{{ row.timing }}</td>
-                    <td>{{ row.enabled }}</td>
-                    <td class="snapshot-listener-table__action">
-                      <el-button link type="primary" size="small" @click="row.view()">
-                        {{ t('common.view') }}
-                      </el-button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
+                <p v-if="triggerRows.length === 0" class="snapshot-empty">
+                  {{ t('form.snapshotViewer.triggerMissing') }}
+                </p>
+                <template v-else>
+                  <table
+                    class="snapshot-table snapshot-trigger-table"
+                    data-testid="snapshot-trigger-table"
+                  >
+                    <thead>
+                      <tr>
+                        <th>{{ t('form.snapshotViewer.listenerName') }}</th>
+                        <th>{{ t('form.snapshotViewer.listenerTiming') }}</th>
+                        <th>{{ t('form.snapshotViewer.triggerNode') }}</th>
+                        <th>{{ t('form.snapshotViewer.triggerAction') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="row in triggerRows"
+                        :key="row.key"
+                        :class="{ 'is-selected': selectedTriggerRow?.key === row.key }"
+                        @click="selectedTriggerKey = row.key"
+                      >
+                        <td>{{ row.name }}</td>
+                        <td>{{ row.timing }}</td>
+                        <td>{{ row.nodeName }}</td>
+                        <td>{{ row.actionText }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div
+                    v-if="selectedTriggerRow"
+                    class="snapshot-trigger-detail"
+                    data-testid="snapshot-trigger-detail"
+                  >
+                    <div class="snapshot-trigger-detail__field">
+                      <span class="snapshot-trigger-detail__label">
+                        {{ t('form.snapshotViewer.triggerOrchestration') }}
+                      </span>
+                      <input
+                        class="snapshot-trigger-detail__input"
+                        :value="selectedTriggerRow.orchestrationText"
+                        readonly
+                      />
+                    </div>
+                    <div class="snapshot-trigger-detail__field">
+                      <span class="snapshot-trigger-detail__label">
+                        {{ t('form.snapshotViewer.triggerScript') }}
+                      </span>
+                      <div class="snapshot-trigger-detail__row">
+                        <input
+                          class="snapshot-trigger-detail__input"
+                          :value="
+                            selectedTriggerRow.script || t('form.snapshotViewer.propNotConfigured')
+                          "
+                          readonly
+                        />
+                        <el-button
+                          link
+                          type="primary"
+                          size="small"
+                          data-testid="snapshot-trigger-script-view"
+                          @click="selectedTriggerRow.viewScript()"
+                        >
+                          {{ t('common.view') }}
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </section>
+
+              <section class="snapshot-section snapshot-settings__card">
+                <div class="snapshot-section__head">
+                  <div>
+                    <h3>{{ sectionLabel('eventListeners') }}</h3>
+                  </div>
+                </div>
+                <p v-if="listenerRows.length === 0" class="snapshot-empty">
+                  {{ t('form.snapshotViewer.noData') }}
+                </p>
+                <table v-else class="snapshot-table snapshot-listener-table">
+                  <thead>
+                    <tr>
+                      <th>{{ t('form.snapshotViewer.listenerName') }}</th>
+                      <th>{{ t('form.snapshotViewer.listenerTiming') }}</th>
+                      <th>{{ t('form.snapshotViewer.listenerStatus') }}</th>
+                      <th class="snapshot-listener-table__action">
+                        {{ t('form.snapshotViewer.listenerAction') }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in listenerRows" :key="row.key">
+                      <td>{{ row.name }}</td>
+                      <td>{{ row.timing }}</td>
+                      <td>{{ row.enabled }}</td>
+                      <td class="snapshot-listener-table__action">
+                        <el-button link type="primary" size="small" @click="row.view()">
+                          {{ t('common.view') }}
+                        </el-button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </section>
+            </template>
 
             <section
               v-else-if="settingsBranch === 'variables'"
@@ -1701,6 +2486,215 @@ watch(
       </p>
       <div class="snapshot-validation-value" data-testid="snapshot-validation-value">
         {{ validationRuleRow?.value?.trim() || t('form.snapshotViewer.propNotConfigured') }}
+      </div>
+    </DetailDialog>
+
+    <!-- Q24（509:18903）：冻结 TABLE 明细列 1100 只读窗——列/组件/标识/宽度/必填取同一冻结 schema -->
+    <DetailDialog
+      v-model="detailColumnsVisible"
+      :title="t('form.snapshotViewer.detailColumnsTitle')"
+      width="1100px"
+      class="snapshot-detail-columns-dialog"
+      append-to-body
+    >
+      <p class="snapshot-dialog-meta snapshot-script-view__meta">
+        <span>{{ detailColumnsField?.label || detailColumnsField?.name }}</span>
+        <span class="snapshot-script-view__badge">
+          {{ t('form.snapshotViewer.readonlyBadge') }}
+        </span>
+      </p>
+      <p v-if="detailColumnRows.length === 0" class="snapshot-empty">
+        {{ t('form.snapshotViewer.propNotConfigured') }}
+      </p>
+      <table
+        v-else
+        class="snapshot-table snapshot-detail-columns-table"
+        data-testid="snapshot-detail-columns"
+      >
+        <thead>
+          <tr>
+            <th>{{ t('form.snapshotViewer.columnName') }}</th>
+            <th>{{ t('form.snapshotViewer.columnComponent') }}</th>
+            <th>{{ t('form.snapshotViewer.propFieldKey') }}</th>
+            <th>{{ t('form.snapshotViewer.width') }}</th>
+            <th>{{ t('form.snapshotViewer.required') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in detailColumnRows" :key="row.key">
+            <td>{{ row.label }}</td>
+            <td>{{ row.component }}</td>
+            <td>
+              <code>{{ row.name }}</code>
+            </td>
+            <td>{{ row.width }}</td>
+            <td>{{ row.required ? t('common.yes') : t('common.no') }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </DetailDialog>
+
+    <!-- Q25（509:19020）：选中冻结节点的字段权限 1100 只读面——优先节点字段三态，其次字段主体权限；无值不凑空表 -->
+    <DetailDialog
+      v-model="nodeFieldPermissionVisible"
+      :title="t('form.snapshotViewer.nodeFieldPermissionsTitle')"
+      width="1100px"
+      class="snapshot-node-permission-dialog"
+      append-to-body
+    >
+      <p class="snapshot-dialog-meta snapshot-script-view__meta">
+        <span>{{ selectedNode?.name }}</span>
+        <span class="snapshot-script-view__badge">
+          {{ t('form.snapshotViewer.readonlyBadge') }}
+        </span>
+      </p>
+      <table
+        v-if="nodeFieldStateRows.length"
+        class="snapshot-table snapshot-node-permission-table"
+        data-testid="snapshot-node-field-states"
+      >
+        <thead>
+          <tr>
+            <th>{{ t('form.snapshotViewer.propFieldName') }}</th>
+            <th>{{ t('form.snapshotViewer.fieldStateRequired') }}</th>
+            <th>{{ t('form.snapshotViewer.fieldStateEditable') }}</th>
+            <th>{{ t('form.snapshotViewer.fieldStateHidden') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in nodeFieldStateRows" :key="row.field">
+            <td>
+              <code>{{ row.field }}</code>
+            </td>
+            <td>{{ row.required ? t('common.yes') : t('common.no') }}</td>
+            <td>{{ row.editable ? t('common.yes') : t('common.no') }}</td>
+            <td>{{ row.hidden ? t('common.yes') : t('common.no') }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <table
+        v-else-if="nodeFieldPermissionRows.length"
+        class="snapshot-table snapshot-node-permission-table"
+        data-testid="snapshot-node-field-permissions"
+      >
+        <thead>
+          <tr>
+            <th>{{ t('form.snapshotViewer.propFieldName') }}</th>
+            <th>{{ t('form.snapshotViewer.viewPrincipals') }}</th>
+            <th>{{ t('form.snapshotViewer.editPrincipals') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in nodeFieldPermissionRows" :key="row.field">
+            <td>
+              <code>{{ row.field }}</code>
+            </td>
+            <td>{{ principalText(row.view) }}</td>
+            <td>{{ principalText(row.edit) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="snapshot-empty">
+        {{ t('form.snapshotViewer.propNotConfigured') }}
+      </p>
+    </DetailDialog>
+
+    <!-- Q26（509:19229）：选中冻结节点的高级/操作配置 1000 只读面——操作、监听器与其他冻结配置真实值 -->
+    <DetailDialog
+      v-model="nodeAdvancedVisible"
+      :title="t('form.snapshotViewer.nodeAdvancedConfigTitle')"
+      width="1000px"
+      class="snapshot-node-advanced-dialog"
+      append-to-body
+    >
+      <p class="snapshot-dialog-meta snapshot-script-view__meta">
+        <span>{{ selectedNode?.name }}</span>
+        <span class="snapshot-script-view__badge">
+          {{ t('form.snapshotViewer.readonlyBadge') }}
+        </span>
+      </p>
+      <div class="snapshot-node-advanced" data-testid="snapshot-node-advanced">
+        <section class="snapshot-node-advanced__section">
+          <h4>{{ t('form.snapshotViewer.nodeAdvancedOperations') }}</h4>
+          <dl class="snapshot-meta snapshot-meta--compact">
+            <div>
+              <dt>{{ t('form.snapshotViewer.nodeAllowedActions') }}</dt>
+              <dd>
+                {{
+                  nodeOperations.allowedActions.map((action) => actionLabel(action)).join('、') ||
+                  t('form.snapshotViewer.propNotConfigured')
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ t('form.snapshotViewer.nodeReturnTargets') }}</dt>
+              <dd>
+                {{
+                  nodeOperations.returnTargets.join('、') ||
+                  t('form.snapshotViewer.propNotConfigured')
+                }}
+              </dd>
+            </div>
+          </dl>
+        </section>
+        <section v-if="nodeListeners.length" class="snapshot-node-advanced__section">
+          <h4>{{ t('form.snapshotViewer.nodeListeners') }}</h4>
+          <table class="snapshot-table">
+            <thead>
+              <tr>
+                <th>{{ t('form.snapshotViewer.listenerName') }}</th>
+                <th>{{ t('form.snapshotViewer.listenerTiming') }}</th>
+                <th>{{ t('form.snapshotViewer.nodeListenerNote') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(listener, index) in nodeListeners" :key="index">
+                <td>
+                  {{
+                    snapshotValueText(listener.label) ||
+                    snapshotValueText(listener.bean) ||
+                    `#${index + 1}`
+                  }}
+                </td>
+                <td>
+                  {{
+                    String(listener.phase ?? '').toLowerCase() === 'after'
+                      ? t('form.snapshotViewer.nodeListenerAfter')
+                      : t('form.snapshotViewer.nodeListenerBefore')
+                  }}
+                </td>
+                <td>
+                  {{
+                    snapshotValueText(listener.note) ||
+                    snapshotValueText(listener.script) ||
+                    t('form.snapshotViewer.propNotConfigured')
+                  }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+        <section v-if="nodeAdvancedEntries.length" class="snapshot-node-advanced__section">
+          <h4>{{ t('form.snapshotViewer.nodeOtherConfig') }}</h4>
+          <table class="snapshot-table">
+            <thead>
+              <tr>
+                <th>{{ t('form.snapshotViewer.nodeConfigKey') }}</th>
+                <th>{{ t('form.snapshotViewer.value') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="entry in nodeAdvancedEntries" :key="entry.key">
+                <td>
+                  <code>{{ entry.key }}</code>
+                </td>
+                <td class="snapshot-node-advanced__value">
+                  {{ snapshotValueText(entry.value) || t('form.snapshotViewer.propNotConfigured') }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
       </div>
     </DetailDialog>
   </DetailDialog>
@@ -1890,6 +2884,15 @@ watch(
 .snapshot-tabbody--process .snapshot-side--props {
   flex: 0 0 336px;
   border-left: 1px solid var(--sw-border-light);
+}
+
+/* Q31：节点配置行增多后右栏需滚动；滚动条不占内容宽度，共同属性保持 295×32。 */
+.snapshot-tabbody--process .snapshot-side--props {
+  scrollbar-width: none;
+}
+
+.snapshot-tabbody--process .snapshot-side--props::-webkit-scrollbar {
+  display: none;
 }
 
 .snapshot-tabbody__main {
@@ -2175,6 +3178,82 @@ watch(
   width: 88px;
 }
 
+/* Q28（509:19394）：冻结触发器独立 1100 只读表；执行方式/判断脚本取冻结 trigger 记录。 */
+.snapshot-settings__card--triggers {
+  width: 1100px;
+  max-width: 100%;
+}
+
+.snapshot-trigger-table th {
+  box-sizing: border-box;
+  height: 36px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.snapshot-trigger-table td {
+  height: 46px;
+  cursor: pointer;
+}
+
+.snapshot-trigger-table tbody tr.is-selected {
+  background: var(--sw-color-primary-soft, #eff6ff);
+}
+
+.snapshot-trigger-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.snapshot-trigger-detail__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.snapshot-trigger-detail__label {
+  color: var(--sw-text-regular);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.snapshot-trigger-detail__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.snapshot-trigger-detail__input {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid #dde3ef;
+  border-radius: 4px;
+  background: #f7f8fa;
+  color: var(--sw-text-regular);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 30px;
+}
+
+/* Q24（509:18903）：明细列只读窗页脚「关闭」80×32（与既有只读窗同款）。 */
+:global(.snapshot-detail-columns-dialog .el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+}
+
+.snapshot-detail-columns-table th {
+  box-sizing: border-box;
+  height: 44px;
+}
+
 /* Q21（509:18714）：JS 监听脚本只读代码窗——行号列 + 等宽正文，不提供运行/应用入口。 */
 .snapshot-script-view__meta {
   display: flex;
@@ -2275,6 +3354,71 @@ watch(
   color: var(--sw-text-primary);
   font-size: 16px;
   line-height: 24px;
+}
+
+/* Q31/Q25/Q26/Q20：节点配置分区标题与行内「查看」入口；输入框仍保持 295×32 只读。 */
+.snapshot-side .snapshot-node-props-subtitle {
+  margin: 22px 0 0;
+  color: var(--sw-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.snapshot-props-surface--node-config {
+  margin-top: 12px;
+}
+
+.snapshot-props-surface__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.snapshot-props-surface__head .snapshot-props-surface__label {
+  min-width: 0;
+}
+
+.snapshot-props-surface__head .el-button {
+  flex: 0 0 auto;
+  margin-top: -2px;
+}
+
+/* Q25：节点字段权限 1100 只读表与 80×32 关闭页脚。 */
+.snapshot-node-permission-table th,
+.snapshot-node-permission-table td {
+  box-sizing: border-box;
+  height: 44px;
+}
+
+:global(.snapshot-node-permission-dialog .el-dialog__footer .el-button),
+:global(.snapshot-node-advanced-dialog .el-dialog__footer .el-button) {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+}
+
+/* Q26：节点高级/操作 1000 只读面分区。 */
+.snapshot-node-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.snapshot-node-advanced__section h4 {
+  margin: 0 0 10px;
+  color: var(--sw-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.snapshot-node-advanced__value {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .snapshot-side .snapshot-props-surface__rules-title {

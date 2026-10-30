@@ -4,6 +4,7 @@ import {
   DEFAULT_THEME,
   isReadableThemeColor,
   normalizeTheme,
+  previewThemeCssVariables,
   readTheme,
   resetTheme,
   THEME_STORAGE_KEY,
@@ -75,5 +76,16 @@ describe('theme preference', () => {
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBeNull()
     expect(document.documentElement.dataset.theme).toBe('blue')
     expect(document.documentElement.style.getPropertyValue('--sw-color-primary')).toBe('#2563eb')
+  })
+  it('keeps an unreadable custom color in local preview while strict variables still normalize', () => {
+    expect(
+      previewThemeCssVariables({ name: 'custom', customColor: '#FFFFFF' })['--sw-color-primary'],
+    ).toBe('#ffffff')
+    expect(
+      themeCssVariables({ name: 'custom', customColor: '#ffffff' })['--sw-color-primary'],
+    ).toBe('#2563eb')
+    expect(
+      themeCssVariables({ name: 'custom', customColor: '#123456' })['--sw-color-primary'],
+    ).toBe('#123456')
   })
 })

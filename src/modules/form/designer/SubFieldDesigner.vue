@@ -134,6 +134,13 @@ function moveField(index: number, offset: number): void {
   if (field) working.value.splice(next, 0, field)
 }
 
+/** 必填勾选：沿用字段已有的 required 语义，仅改本地工作副本。 */
+function toggleRequired(raw: unknown, value: boolean | string | number): void {
+  if (props.readonly) return
+  const field = raw as TableSubField
+  field.required = value === true
+}
+
 async function removeField(index: number): Promise<void> {
   if (props.readonly) return
   const field = working.value[index]
@@ -201,9 +208,14 @@ function cancel(): void {
         <template #default="{ row }">{{ typeLabelRow(row) }}</template>
       </el-table-column>
       <el-table-column :label="t('form.subFieldRequired')" min-width="130">
-        <template #default="{ row }">{{
-          row.required ? t('common.yes') : t('common.no')
-        }}</template>
+        <template #default="{ row }">
+          <el-checkbox
+            class="subfield-dialog__required"
+            :model-value="row.required === true"
+            :disabled="readonly"
+            @update:model-value="(value: boolean | string | number) => toggleRequired(row, value)"
+          />
+        </template>
       </el-table-column>
       <el-table-column :label="t('common.actions')" min-width="120">
         <template #default="{ $index }">
@@ -337,8 +349,10 @@ function cancel(): void {
 .subfield-dialog .el-dialog__body {
   padding: 0 25px 4px;
 }
+/* 273:1463：表头34、行48；必填列以18×18勾选呈现（全局 tokens 把 checkbox 放大到28，需此处覆盖）。 */
 .subfield-dialog .el-table th.el-table__cell {
-  height: 42px;
+  height: 34px;
+  padding: 0;
   background: #f5f7fb;
 }
 .subfield-dialog .el-table th.el-table__cell > .cell {
@@ -357,7 +371,24 @@ function cancel(): void {
   padding-left: 4px;
 }
 .subfield-dialog .el-table td.el-table__cell {
-  height: 45px;
+  height: 48px;
+}
+/* 必填列：18×18 勾选；tokens.css 的全局 28px 规则带 !important，这里用更高选择器优先级覆盖。 */
+.subfield-dialog .subfield-dialog__required {
+  height: 18px;
+  margin-right: 0;
+}
+.subfield-dialog .subfield-dialog__required .el-checkbox__inner {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 2px;
+}
+.subfield-dialog .subfield-dialog__required .el-checkbox__inner::after {
+  top: 2px;
+  left: 5px;
+  width: 4px;
+  height: 8px;
+  border-width: 2px;
 }
 .subfield-dialog .el-dialog__footer {
   display: flex;

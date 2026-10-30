@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ApproverCandidatesDialog from './ApproverCandidatesDialog.vue'
+import WorkspaceFieldPickerDialog from '../components/WorkspaceFieldPickerDialog.vue'
 import HintTip from '@/components/HintTip.vue'
 import { useI18n } from '@/locales'
 
@@ -1881,7 +1882,11 @@ async function validate() {
     markSaved()
     validationErrors.value = await validateProcessDefGraph(defId.value)
     if (validationErrors.value.length === 0) {
-      ElMessage.success(t('workflow.validationPassedNoErrors'))
+      ElMessage.success({
+        message: t('workflow.validationPassedNoErrors'),
+        customClass: 'designer-feedback-toast',
+        offset: 84,
+      })
     }
   } catch (err) {
     errorMsg.value = (err as { msg?: string }).msg ?? t('workflow.graphValidationFailed')
@@ -1918,7 +1923,11 @@ async function publish() {
       if (!saved) return
     }
     await publishProcessDef(defId.value)
-    ElMessage.success(t('workflow.publishSucceeded'))
+    ElMessage.success({
+      message: t('workflow.publishSucceeded'),
+      customClass: 'designer-feedback-toast',
+      offset: 84,
+    })
     await load()
   } catch (err) {
     ElMessage.error((err as { msg?: string }).msg ?? t('workflow.publishFailedZeroDeploy'))
@@ -2027,6 +2036,89 @@ function tableColumnOptionsFor(tableField: string, objectType: string): FormSche
   const table = formSchemaFields.value.find((f) => f.name === tableField)
   return (table?.subFields ?? []).filter((sf) => sf.type === objectType)
 }
+
+/* 提示32 Q17（574:27788）：主字段改 680 分组选择窗——主表 + 各明细表；
+   候选仍按当前对象类型过滤，选择明细列时同步表/列绑定，不扩大候选业务。 */
+const participantFieldPickerVisible = ref(false)
+
+function toPickerField(field: FormSchemaField) {
+  return { name: field.name, label: field.label || field.name || '未命名字段', type: field.type }
+}
+
+const participantFieldPickerGroups = computed(() => {
+  const objectType = participantForm.value.formField.objectType
+  const groups = [
+    {
+      key: 'MAIN',
+      label: '主表',
+      tag: undefined as string | undefined,
+      fields: mainFieldOptionsFor(objectType).map(toPickerField),
+    },
+  ]
+  for (const table of tableFieldOptions.value) {
+    groups.push({
+      key: table.name,
+      label: table.label || table.name || '未命名明细表',
+      tag: '明细表',
+      fields: (table.subFields ?? [])
+        .filter((subField) => subField.type === objectType)
+        .map((subField) =>
+          toPickerField({ name: subField.name, label: subField.label, type: subField.type }),
+        ),
+    })
+  }
+  return groups
+})
+
+const participantFieldDisplay = computed(() => {
+  const formField = participantForm.value.formField
+  if (formField.scope === 'TABLE' && formField.tableField) {
+    const table = formSchemaFields.value.find((f) => f.name === formField.tableField)
+    const column = (table?.subFields ?? []).find((sf) => sf.name === formField.column)
+    const tableLabel = table?.label || formField.tableField
+    const columnLabel = column?.label || formField.column
+    return columnLabel ? `${tableLabel} / ${columnLabel}` : tableLabel
+  }
+  const field = formSchemaFields.value.find((f) => f.name === formField.field)
+  return field?.label || formField.field || ''
+})
+
+const participantFieldHint = computed(() =>
+  participantForm.value.formField.objectType === 'DEPT'
+    ? '使用该组件中填写的部门，按部门负责人审批。'
+    : '使用该组件中填写的人员作为审批人。',
+)
+
+function openParticipantFieldPicker(): void {
+  if (isVersionPreview.value) return
+  participantFieldPickerVisible.value = true
+}
+
+function onParticipantFieldPicked(fieldName: string, groupKey: string): void {
+  const formField = participantForm.value.formField
+  if (groupKey === 'MAIN') {
+    formField.field = fieldName
+  } else {
+    // 明细列：值对象按 TABLE 口径携带表格与列，field 同步为列名
+    formField.field = fieldName
+    formField.scope = 'TABLE'
+    formField.tableField = groupKey
+    formField.column = fieldName
+  }
+  applyParticipant()
+}
+
+/* 提示32 Q54（572:26514）：EXPRESSION 基本面板 288×32 只读摘要/状态槽，
+   读取实际已存表达式；未配置如实显示，不伪造示例代码。 */
+const participantExpressionConfigured = computed(
+  () => participantForm.value.genericValue.trim().length > 0,
+)
+
+const participantExpressionSummary = computed(() => {
+  if (!participantExpressionConfigured.value) return '未配置'
+  const text = participantForm.value.genericValue.replace(/\s+/g, ' ').trim()
+  return text.length > 42 ? `${text.slice(0, 42)}…` : text
+})
 watch(
   () => graph.value?.formKey,
   (key) => {
@@ -2479,6 +2571,8 @@ function openExpressionScriptDialog() {
 
 const subflowWizardVisible = ref(false)
 const subflowWizardStep = ref(0)
+/** 三步共用表头（34 高）：与既有步骤状态一一对应，不改向导流程。 */
+const subflowStepTitles = ['触发方式', '子流程', '初始值'] as const
 /** 目标子流程绑定表单字段（第③步「子流程表单字段」候选）。 */
 const subflowTargetFields = ref<Array<{ name: string; type: string; label?: string }>>([])
 
@@ -3004,6 +3098,36 @@ function onConfigArrayChange(fieldKey: string, value: unknown): void {
     [fieldKey]: Array.isArray(value) ? value.map((item) => String(item)) : [],
   }
   applyProps()
+}
+
+/* ── Q12（278:1567）：节点操作 820 设置面，弹窗内只维护本地草稿 ── */
+const opSettingsVisible = ref(false)
+const opDraft = ref<string[]>([])
+const opOpenValue = ref<string[]>([])
+const opOptions = computed<Array<{ value: string; label: string }>>(() =>
+  allowedActionsField.value ? configArrayOptions(allowedActionsField.value) : [],
+)
+/** 高级面板回显：真实选中项或未设置（空集合不冒充默认值）。 */
+const allowedActionSummary = computed(() => {
+  const values = configArrayValue('allowedActions')
+  if (!values.length) return '未设置'
+  return `允许${values.map((value) => allowedActionLabel(value)).join('、')}`
+})
+
+function openOpSettings(): void {
+  if (!allowedActionsField.value || isVersionPreview.value) return
+  opOpenValue.value = [...configArrayValue('allowedActions')]
+  opDraft.value = [...opOpenValue.value]
+  opSettingsVisible.value = true
+}
+
+function confirmOpSettings(): void {
+  const next = [...opDraft.value]
+  const opened = opOpenValue.value
+  const changed = next.length !== opened.length || next.some((value) => !opened.includes(value))
+  opSettingsVisible.value = false
+  // 未改动时不写回，保留既有“未设置沿用现有操作”的配置语义
+  if (changed) onConfigArrayChange('allowedActions', next)
 }
 
 /** 通用字段渲染清单：name 由顶部承载；参与人字段由结构化面板承载；动态并行整表由专属面板承载；
@@ -3823,23 +3947,16 @@ function nodeLabelLines(label: string) {
                   </div>
                 </el-form-item>
                 <el-form-item v-if="allowedActionsField" :label="t('workflow.operationSettings')">
-                  <el-select
-                    :model-value="configArrayValue('allowedActions')"
-                    multiple
-                    filterable
-                    clearable
-                    style="width: 100%"
-                    @update:model-value="
-                      (value: unknown) => onConfigArrayChange('allowedActions', value)
-                    "
-                  >
-                    <el-option
-                      v-for="option in configArrayOptions(allowedActionsField)"
-                      :key="option.value"
-                      :label="option.label"
-                      :value="option.value"
+                  <!-- 0.2.0 Q12（278:1567）：操作设置改由 820 设置面承载；此处只回显真实选中/空值 -->
+                  <div class="node-op-row">
+                    <el-input
+                      :model-value="allowedActionSummary"
+                      readonly
+                      data-testid="node-op-summary"
+                      @click="openOpSettings"
                     />
-                  </el-select>
+                    <el-button data-testid="node-op-open" @click="openOpSettings">设置</el-button>
+                  </div>
                   <small class="config-array-hint">{{ t('workflow.allowedActionsHint') }}</small>
                 </el-form-item>
               </el-form>
@@ -3975,21 +4092,32 @@ function nodeLabelLines(label: string) {
                       </el-radio-group>
                     </el-form-item>
                     <el-form-item label="主字段">
-                      <el-select
-                        v-model="participantForm.formField.field"
-                        filterable
-                        placeholder="选择主表字段"
-                        @change="applyParticipant"
+                      <!-- 提示32 Q17（574:27788）：主字段改 680 分组选择窗入口，真实候选与选中回显 -->
+                      <button
+                        type="button"
+                        class="participant-field-trigger"
+                        data-testid="participant-field-trigger"
+                        @click="openParticipantFieldPicker"
                       >
-                        <el-option
-                          v-for="option in mainFieldOptionsFor(
-                            participantForm.formField.objectType,
-                          )"
-                          :key="option.name"
-                          :label="option.label || '未命名字段'"
-                          :value="option.name"
-                        />
-                      </el-select>
+                        <span class="participant-field-trigger__name">
+                          {{
+                            participantFieldDisplay ||
+                            (participantForm.formField.scope === 'TABLE'
+                              ? '选择表格字段'
+                              : '选择主表字段')
+                          }}
+                        </span>
+                        <span class="participant-field-trigger__action">选择</span>
+                      </button>
+                      <WorkspaceFieldPickerDialog
+                        v-model="participantFieldPickerVisible"
+                        :groups="participantFieldPickerGroups"
+                        compact
+                        :hint="participantFieldHint"
+                        :current-field="participantForm.formField.field || null"
+                        title="选择表单组件"
+                        @select-group="onParticipantFieldPicked"
+                      />
                     </el-form-item>
                     <template v-if="participantForm.formField.scope === 'TABLE'">
                       <el-form-item label="表格字段">
@@ -4080,13 +4208,26 @@ function nodeLabelLines(label: string) {
                     v-else-if="participantForm.strategy === 'EXPRESSION'"
                     label="表达式（脚本）"
                   >
-                    <div class="participant-picker-row">
-                      <el-button @click="openExpressionScriptDialog">
-                        {{ participantForm.genericValue ? '编辑脚本' : '编写脚本' }}
-                      </el-button>
-                      <small v-if="participantForm.genericValue" class="participant-hint">
-                        已配置
-                      </small>
+                    <!-- 提示32 Q54（572:26514）：288×32 只读摘要/状态槽 + 既有编写脚本入口 -->
+                    <div class="participant-script">
+                      <el-input
+                        class="participant-script__summary"
+                        :model-value="participantExpressionSummary"
+                        readonly
+                        data-testid="participant-script-summary"
+                      />
+                      <div class="participant-script__status-row">
+                        <small class="participant-hint" data-testid="participant-script-status">
+                          {{ participantExpressionConfigured ? '已配置' : '未配置' }}
+                        </small>
+                        <el-button
+                          class="participant-script__edit"
+                          data-testid="participant-script-edit"
+                          @click="openExpressionScriptDialog"
+                        >
+                          {{ participantExpressionConfigured ? '编辑脚本' : '编写脚本' }}
+                        </el-button>
+                      </div>
                     </div>
                   </el-form-item>
                   <el-form-item v-else label="取值">
@@ -4589,23 +4730,28 @@ function nodeLabelLines(label: string) {
       @save="onScriptDialogSave"
     />
 
-    <!-- ═══ BF20261013-027：发起子流程向导（触发方式 → 子流程 → 初始值） ═══ -->
+    <!-- ═══ BF20261013-027：发起子流程向导（触发方式 → 子流程 → 初始值）。
+         0.2.0 Q12（278:1634/1669/1719）：三步共用外壳 1000 宽，控件 32 高、映射表头 34 高。 ═══ -->
     <el-dialog
       v-model="subflowWizardVisible"
       title="发起子流程"
-      width="min(780px, 94vw)"
-      class="p64-dialog"
+      width="min(1000px, 94vw)"
+      class="p64-dialog subflow-wizard"
       append-to-body
       @close="onSubflowWizardClose"
     >
-      <el-steps :active="subflowWizardStep" simple style="margin-bottom: 16px">
-        <el-step title="触发方式" />
-        <el-step title="子流程" />
-        <el-step title="初始值" />
-      </el-steps>
+      <div class="subflow-steps" data-testid="subflow-steps">
+        <span
+          v-for="(stepTitle, stepIndex) in subflowStepTitles"
+          :key="stepTitle"
+          class="subflow-step"
+          :class="{ 'is-active': subflowWizardStep === stepIndex }"
+          >{{ stepIndex + 1 }} {{ stepTitle }}</span
+        >
+      </div>
 
       <!-- 第①步：触发方式（始终发起 / 写脚本 / 选字段） -->
-      <el-form v-show="subflowWizardStep === 0" label-position="top" size="small">
+      <el-form v-show="subflowWizardStep === 0" label-position="top">
         <el-form-item label="触发方式">
           <el-radio-group v-model="subflowForm.triggerMode">
             <el-radio value="ALWAYS">始终发起</el-radio>
@@ -4647,7 +4793,7 @@ function nodeLabelLines(label: string) {
       </el-form>
 
       <!-- 第②步：选择子流程 -->
-      <el-form v-show="subflowWizardStep === 1" label-position="top" size="small">
+      <el-form v-show="subflowWizardStep === 1" label-position="top">
         <el-form-item label="子流程">
           <el-select
             v-model="subflowForm.targetProcessDefKey"
@@ -4670,15 +4816,27 @@ function nodeLabelLines(label: string) {
       <div v-show="subflowWizardStep === 2">
         <div class="p64-toolbar">
           <span class="p64-subtitle">初始值（带入子流程表单）</span>
-          <el-button size="small" @click="addSubflowMapping">添加一行</el-button>
+          <el-button @click="addSubflowMapping">添加一行</el-button>
         </div>
-        <div
-          v-for="(mapping, mappingIndex) in subflowForm.mappings"
-          :key="mappingIndex"
-          class="subflow-mapping-row"
-        >
-          <el-form-item label="子流程表单字段" size="small">
-            <el-select v-model="mapping.targetField" filterable placeholder="选择字段">
+        <!-- Q12（278:1669）：初始值映射为 34 高表头 + 32 高控件行 -->
+        <div class="subflow-map">
+          <div class="subflow-map__head" data-testid="subflow-map-head">
+            <span>子流程表单字段</span>
+            <span>取值方式</span>
+            <span>取值</span>
+            <span class="subflow-map__op">操作</span>
+          </div>
+          <div
+            v-for="(mapping, mappingIndex) in subflowForm.mappings"
+            :key="mappingIndex"
+            class="subflow-map__row"
+          >
+            <el-select
+              v-model="mapping.targetField"
+              class="subflow-map__control"
+              filterable
+              placeholder="选择字段"
+            >
               <el-option
                 v-for="field in subflowTargetFields"
                 :key="field.name"
@@ -4686,18 +4844,19 @@ function nodeLabelLines(label: string) {
                 :value="field.name"
               />
             </el-select>
-          </el-form-item>
-          <el-form-item label="取值方式" size="small">
-            <el-select v-model="mapping.source" @change="onSubflowMappingSourceChange(mapping)">
+            <el-select
+              v-model="mapping.source"
+              class="subflow-map__control"
+              @change="onSubflowMappingSourceChange(mapping)"
+            >
               <el-option label="选字段" value="FIELD" />
               <el-option label="自由填写" value="LITERAL" />
               <el-option label="脚本" value="SCRIPT" />
             </el-select>
-          </el-form-item>
-          <el-form-item label="取值" size="small">
             <el-select
               v-if="mapping.source === 'FIELD'"
               :model-value="subflowMappingSourceValue(mapping)"
+              class="subflow-map__control"
               filterable
               placeholder="选择来源字段"
               @change="(value: string) => onSubflowMappingFieldChange(mapping, value)"
@@ -4726,9 +4885,10 @@ function nodeLabelLines(label: string) {
             <el-input
               v-else-if="mapping.source === 'LITERAL'"
               v-model="mapping.literal"
+              class="subflow-map__control"
               placeholder="自由填写"
             />
-            <div v-else class="participant-picker-row">
+            <div v-else class="participant-picker-row subflow-map__control">
               <el-button
                 @click="
                   openProcessScriptDialog('初始值脚本', mapping.script, {
@@ -4740,8 +4900,10 @@ function nodeLabelLines(label: string) {
                 {{ mapping.script.trim() ? '编辑脚本' : '编写脚本' }}
               </el-button>
             </div>
-          </el-form-item>
-          <el-button link type="danger" @click="removeSubflowMapping(mappingIndex)">删除</el-button>
+            <el-button link type="danger" @click="removeSubflowMapping(mappingIndex)"
+              >删除</el-button
+            >
+          </div>
         </div>
         <el-form-item v-if="subflowHasRowSource" label="派发粒度">
           <el-radio-group v-model="subflowForm.aggregate">
@@ -4805,41 +4967,63 @@ function nodeLabelLines(label: string) {
           </div>
           <div class="p64-toolbar">
             <span class="p64-subtitle">行级回写</span>
-            <el-button size="small" @click="addSubflowWbRow('row')">添加一行</el-button>
+            <el-button @click="addSubflowWbRow('row')">添加一行</el-button>
           </div>
-          <div
-            v-for="(row, rowIndex) in subflowForm.wbFields"
-            :key="`wb-row-${rowIndex}`"
-            class="subflow-mapping-row"
-          >
-            <el-form-item label="子流程字段" size="small">
-              <el-input v-model="row.fromField" placeholder="子流程结果字段/列" />
-            </el-form-item>
-            <el-form-item label="本表单字段" size="small">
-              <el-input v-model="row.toField" placeholder="本表单回写字段/列" />
-            </el-form-item>
-            <el-button link type="danger" @click="removeSubflowWbRow('row', rowIndex)"
-              >删除</el-button
+          <div class="subflow-map subflow-map--wb">
+            <div class="subflow-map__head" data-testid="subflow-wb-row-head">
+              <span>子流程字段</span>
+              <span>本表单字段</span>
+              <span class="subflow-map__op">操作</span>
+            </div>
+            <div
+              v-for="(row, rowIndex) in subflowForm.wbFields"
+              :key="`wb-row-${rowIndex}`"
+              class="subflow-map__row"
             >
+              <el-input
+                v-model="row.fromField"
+                class="subflow-map__control"
+                placeholder="子流程结果字段/列"
+              />
+              <el-input
+                v-model="row.toField"
+                class="subflow-map__control"
+                placeholder="本表单回写字段/列"
+              />
+              <el-button link type="danger" @click="removeSubflowWbRow('row', rowIndex)"
+                >删除</el-button
+              >
+            </div>
           </div>
           <div class="p64-toolbar">
             <span class="p64-subtitle">主记录回写</span>
-            <el-button size="small" @click="addSubflowWbRow('main')">添加一行</el-button>
+            <el-button @click="addSubflowWbRow('main')">添加一行</el-button>
           </div>
-          <div
-            v-for="(row, rowIndex) in subflowForm.wbMainFields"
-            :key="`wb-main-${rowIndex}`"
-            class="subflow-mapping-row"
-          >
-            <el-form-item label="子流程字段" size="small">
-              <el-input v-model="row.fromField" placeholder="子流程结果字段" />
-            </el-form-item>
-            <el-form-item label="本表单字段" size="small">
-              <el-input v-model="row.toField" placeholder="本表单字段" />
-            </el-form-item>
-            <el-button link type="danger" @click="removeSubflowWbRow('main', rowIndex)"
-              >删除</el-button
+          <div class="subflow-map subflow-map--wb">
+            <div class="subflow-map__head" data-testid="subflow-wb-main-head">
+              <span>子流程字段</span>
+              <span>本表单字段</span>
+              <span class="subflow-map__op">操作</span>
+            </div>
+            <div
+              v-for="(row, rowIndex) in subflowForm.wbMainFields"
+              :key="`wb-main-${rowIndex}`"
+              class="subflow-map__row"
             >
+              <el-input
+                v-model="row.fromField"
+                class="subflow-map__control"
+                placeholder="子流程结果字段"
+              />
+              <el-input
+                v-model="row.toField"
+                class="subflow-map__control"
+                placeholder="本表单字段"
+              />
+              <el-button link type="danger" @click="removeSubflowWbRow('main', rowIndex)"
+                >删除</el-button
+              >
+            </div>
           </div>
         </template>
       </div>
@@ -4855,6 +5039,35 @@ function nodeLabelLines(label: string) {
           >下一步</el-button
         >
         <el-button v-else type="primary" @click="finishSubflowWizard">完成</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ═══ 0.2.0 Q12（278:1567）：节点操作 820 设置面。8 个真实选项；
+         取消只丢本地草稿，不改空集合默认含义、可用操作策略或保存契约。 ═══ -->
+    <el-dialog
+      v-model="opSettingsVisible"
+      :title="t('workflow.operationSettings')"
+      width="820px"
+      class="node-op-dialog"
+      append-to-body
+    >
+      <div class="node-op-dialog__body">
+        <div class="node-op-dialog__label">节点操作</div>
+        <el-checkbox-group v-model="opDraft" class="node-op-grid">
+          <el-checkbox-button
+            v-for="option in opOptions"
+            :key="option.value"
+            :value="option.value"
+            :data-testid="`node-op-option-${option.value}`"
+          >
+            {{ option.label }}
+          </el-checkbox-button>
+        </el-checkbox-group>
+        <small class="node-op-dialog__hint">{{ t('workflow.allowedActionsHint') }}</small>
+      </div>
+      <template #footer>
+        <el-button @click="opSettingsVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmOpSettings">确定</el-button>
       </template>
     </el-dialog>
 
@@ -6335,6 +6548,38 @@ function nodeLabelLines(label: string) {
   gap: 8px;
   width: 100%;
 }
+/* 提示32 Q17：主字段入口与 32 高控件同形，点击打开 680 分组选择窗 */
+.participant-field-trigger {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #cbd6e8;
+  border-radius: 6px;
+  background: #fbfcff;
+  cursor: pointer;
+}
+.participant-field-trigger:hover {
+  border-color: var(--sw-color-primary);
+}
+.participant-field-trigger__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #19233b;
+  font-size: 13px;
+  text-align: left;
+}
+.participant-field-trigger__action {
+  flex: 0 0 auto;
+  color: var(--sw-color-primary);
+  font-size: 12px;
+}
 .participant-picker-row :deep(.el-button) {
   border-color: #cbd6e8;
   color: var(--sw-color-primary);
@@ -6347,6 +6592,34 @@ function nodeLabelLines(label: string) {
   line-height: 16px;
   color: #99a5bb;
   white-space: normal;
+}
+
+/* 提示32 Q54：EXPRESSION 脚本摘要 288×32，状态行左侧状态/右侧 88×32 编辑入口 */
+.participant-script {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.participant-script__summary {
+  width: 288px;
+  max-width: 100%;
+}
+.participant-script__status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.participant-script__status-row .participant-hint {
+  margin-top: 0;
+}
+.participant-script__edit {
+  width: 88px;
+  height: 32px;
+  padding: 0;
+  border-color: #cbd6e8;
+  color: var(--sw-color-primary);
+  background: #fff;
 }
 
 .config-array-hint {
@@ -6930,6 +7203,24 @@ function nodeLabelLines(label: string) {
   flex: none;
   margin: 0;
 }
+/* Q12（278:1567）：操作设置回显行与审批意见表单同构（值框占满、设置按钮靠右） */
+.node-op-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.node-op-row :deep(.el-input) {
+  flex: 1;
+  min-width: 0;
+}
+.node-op-row :deep(.el-input__wrapper) {
+  box-sizing: border-box;
+  height: 32px;
+}
+.node-op-row :deep(.el-button) {
+  flex: none;
+  margin: 0;
+}
 .p64-toolbar {
   display: flex;
   align-items: center;
@@ -6979,13 +7270,6 @@ function nodeLabelLines(label: string) {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   column-gap: 16px;
 }
-/* BF20261013-027：子流程向导初始值行（字段/取值方式/取值/删除 一行三列） */
-.subflow-mapping-row {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) 130px minmax(200px, 1.2fr) 44px;
-  column-gap: 12px;
-  align-items: start;
-}
 .p64-branch-card,
 .p64-action-card {
   border: 1px solid var(--el-border-color-lighter, #e4e7ed);
@@ -7005,6 +7289,87 @@ function nodeLabelLines(label: string) {
 
 <!-- P64 弹窗可达性全局规则：append-to-body 传送后不带 scoped 属性，需全局选择器。 -->
 <style>
+/* ═══ 0.2.0 Q12（278:1567）：节点操作 820 设置面——820 宽、32 高选项控件、原底栏 80×32。 ═══ */
+.el-dialog.node-op-dialog {
+  --el-dialog-padding-primary: 0px;
+  box-sizing: border-box;
+  width: 820px;
+  max-width: calc(100vw - 32px);
+  padding: 0;
+  border: 1px solid var(--sw-border-light, #e4e7ed);
+  border-radius: 12px;
+}
+.el-dialog.node-op-dialog .el-dialog__header,
+.el-dialog.node-op-dialog .el-dialog__header.show-close {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 24px 56px 0 24px;
+}
+.el-dialog.node-op-dialog .el-dialog__title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--sw-text-primary, #172033);
+}
+.el-dialog.node-op-dialog .el-dialog__headerbtn {
+  top: 24px;
+  right: 24px;
+  width: 24px;
+  height: 24px;
+}
+.el-dialog.node-op-dialog .el-dialog__body {
+  padding: 16px 24px 0;
+}
+.el-dialog.node-op-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 20px 24px 24px;
+}
+.el-dialog.node-op-dialog .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+}
+.node-op-dialog__label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--sw-text-regular, #606266);
+}
+.node-op-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+.node-op-grid .el-checkbox-button {
+  display: block;
+  margin: 0;
+}
+.node-op-grid .el-checkbox-button__inner {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  line-height: 30px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.node-op-dialog__hint {
+  display: block;
+  margin-top: 12px;
+  color: var(--sw-text-secondary, #8c9ab1);
+  font-size: 11px;
+  line-height: 17px;
+}
+
 .el-dialog.p64-dialog {
   display: flex;
   flex-direction: column;
@@ -7029,6 +7394,81 @@ function nodeLabelLines(label: string) {
   height: 42px;
   padding: 4px 0;
   font-weight: 400;
+}
+
+/* ═══ 0.2.0 Q12（278:1634/1669/1719）：子流程三步共用窗——1000 宽、控件 32 高、表头 34 高。
+   三步仍为既有触发方式/子流程/初始值，只调整共用外壳尺寸。 ═══ */
+.el-dialog.subflow-wizard .subflow-steps {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 34px;
+  margin-bottom: 16px;
+}
+.subflow-step {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 34px;
+  color: var(--sw-color-primary, #2563eb);
+}
+.subflow-step.is-active {
+  background: var(--sw-color-primary, #2563eb);
+  color: #fff;
+}
+.subflow-wizard .el-input__wrapper,
+.subflow-wizard .el-select__wrapper,
+.subflow-wizard .el-textarea__inner {
+  box-sizing: border-box;
+  min-height: 32px;
+  height: 32px;
+}
+.subflow-wizard .el-input-number {
+  box-sizing: border-box;
+  height: 32px;
+}
+.subflow-wizard .el-form-item {
+  margin-bottom: 16px;
+}
+.subflow-map {
+  margin-bottom: 8px;
+  border: 1px solid var(--el-border-color-lighter, #e4e7ed);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.subflow-map__head,
+.subflow-map__row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 160px minmax(220px, 1.2fr) 60px;
+  column-gap: 12px;
+  align-items: center;
+}
+.subflow-map--wb .subflow-map__head,
+.subflow-map--wb .subflow-map__row {
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) 60px;
+}
+.subflow-map__head {
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 12px;
+  background: #f4f6fb;
+  font-size: 13px;
+  line-height: 34px;
+  color: #7c8390;
+}
+.subflow-map__row {
+  padding: 8px 12px;
+  border-top: 1px solid #eef1f7;
+}
+.subflow-map__control {
+  width: 100%;
+}
+.subflow-map__op {
+  color: #7c8390;
 }
 
 /* ═══ 0.2.0 Q55（设计 272:1575）：未保存离开确认——600 宽、标题 16/24、
@@ -7076,5 +7516,31 @@ function nodeLabelLines(label: string) {
   height: 32px;
   margin: 0;
   padding: 0;
+}
+
+/* ═══ Q18（272:1814 / 273:2049）：校验通过与发布成功轻提示——280×48、顶部 84、
+   水平居中、浅绿成功表面。仅本文件两处成功反馈传入该专用类，全局 .el-message 不变。 ═══ */
+.el-message.designer-feedback-toast {
+  box-sizing: border-box;
+  width: 280px;
+  min-width: 280px;
+  height: 48px;
+  padding: 0;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: var(--sw-success-bg, #eafbf7);
+  color: var(--sw-success-text, #12805c);
+}
+
+.el-message.designer-feedback-toast .el-message__content {
+  color: var(--sw-success-text, #12805c);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* 原表面为纯文字提示，无状态图标。 */
+.el-message.designer-feedback-toast .el-message__icon {
+  display: none;
 }
 </style>

@@ -155,7 +155,7 @@ const processGraph = {
 }
 
 const detailDialogStub = {
-  props: ['modelValue', 'title', 'loading', 'error', 'showFooter'],
+  props: ['modelValue', 'title', 'loading', 'error', 'showFooter', 'width'],
   template:
     '<section class="detail-dialog-stub"><h1>{{ title }}</h1><p v-if="error" class="detail-error">{{ error }}</p><div v-if="!loading"><slot /></div></section>',
 }
@@ -347,11 +347,13 @@ describe('PublishedSnapshotViewer', () => {
     expect(wrapper.text()).toContain('return ["2"];')
 
     await openSection(wrapper, '流程设置')
-    // 审查23 S14-E：监听表脚本经「查看」呈现，审批人脚本在独立分支
+    // 审查23 S14-E：表单事件监听表与冻结触发器独立投影；触发器脚本经「查看」呈现
     await wrapper.findAll('.snapshot-settings__nav button')[1].trigger('click') // 监听
-    const viewButtons = wrapper.findAll('.snapshot-listener-table .el-button')
-    expect(viewButtons.length).toBeGreaterThan(0)
-    await viewButtons[0].trigger('click')
+    expect(wrapper.find('.snapshot-listener-table').text()).toContain('提交前检查')
+    expect(wrapper.find('.snapshot-listener-table').text()).not.toContain('节点开始前检查')
+    const triggerView = wrapper.find('[data-testid="snapshot-trigger-script-view"]')
+    expect(triggerView.exists()).toBe(true)
+    await triggerView.trigger('click')
     expect(wrapper.text()).toContain('return 1;')
     await wrapper.findAll('.snapshot-settings__nav button')[3].trigger('click') // 审批人脚本
     expect(wrapper.text()).toContain('return ["2"];')
@@ -374,6 +376,107 @@ describe('PublishedSnapshotViewer', () => {
     await navButtons[1].trigger('click') // 监听
     expect(wrapper.text()).toContain('节点开始前检查')
     expect(wrapper.text()).toContain('节点开始前')
+  })
+
+  it('Q24 冻结 TABLE 从现有只读属性进入 1100 明细列窗，列值取同一冻结 schema', async () => {
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '表单设计')
+    const cells = wrapper.findAll('.snapshot-design__cell')
+    await cells[1].trigger('click')
+
+    const props = wrapper.find('.snapshot-side--props')
+    const detailRow = props
+      .findAll('.snapshot-props-surface__rule')
+      .find((row) => row.text().includes('明细列'))
+    expect(detailRow).toBeTruthy()
+    expect(detailRow!.text()).toContain('1 列')
+
+    await detailRow!.find('button').trigger('click')
+    const table = wrapper.find('[data-testid="snapshot-detail-columns"]')
+    expect(table.exists()).toBe(true)
+    expect(table.text()).toContain('金额')
+    expect(table.text()).toContain('数字')
+    expect(table.text()).toContain('amount')
+    // 冻结子列没有宽度配置：明确未配置，不填充演示值
+    expect(table.text()).toContain('未配置')
+    expect(table.text()).toContain('是')
+    expect(table.text()).not.toContain('device_name')
+  })
+
+  it('Q28 冻结触发器只投影真实 trigger 记录，展示编排方式与判断脚本', async () => {
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '流程设置')
+    await wrapper.findAll('.snapshot-settings__nav button')[1].trigger('click')
+
+    const table = wrapper.find('[data-testid="snapshot-trigger-table"]')
+    expect(table.exists()).toBe(true)
+    expect(table.text()).toContain('节点开始前检查')
+    expect(table.text()).toContain('节点开始前')
+    expect(table.text()).toContain('部门审批')
+    // 表单事件监听不得混入触发器表
+    expect(table.text()).not.toContain('提交前检查')
+
+    const detail = wrapper.find('[data-testid="snapshot-trigger-detail"]')
+    expect(detail.exists()).toBe(true)
+    expect(detail.text()).toContain('编排方式')
+    expect(detail.text()).toContain('判断脚本')
+    const inputs = detail.findAll('input')
+    expect((inputs[0].element as HTMLInputElement).value).toBe('未配置')
+    expect((inputs[1].element as HTMLInputElement).value).toBe('return 1;')
+  })
+
+  it('Q30 下拉/日期/部门/上传只读专属项读取冻结值，未配置明确显示', async () => {
+    const typeDefinition = {
+      title: '类型专属属性',
+      fields: [
+        {
+          name: 'kind',
+          label: '类型',
+          type: 'DICT',
+          source: 'custom',
+          options: [
+            { key: 'desktop', value: '桌面演练' },
+            { key: 'live', value: '实战演练' },
+          ],
+        },
+        { name: 'when', label: '时间', type: 'DATE', format: 'datetime' },
+        { name: 'dept', label: '部门', type: 'DEPT' },
+        { name: 'files', label: '附件', type: 'ATTACHMENT' },
+      ],
+    }
+    mockGetFormSnapshotDefinition.mockResolvedValue({
+      ...snapshot,
+      definition: JSON.stringify(typeDefinition),
+    })
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '表单设计')
+
+    const cells = wrapper.findAll('.snapshot-design__cell')
+    const propRow = (label: string) =>
+      wrapper
+        .find('.snapshot-side--props')
+        .findAll('.snapshot-props-surface__rule')
+        .find((row) => row.find('.snapshot-props-surface__rule-label').text() === label)
+
+    await cells[0].trigger('click')
+    expect(propRow('选项来源')?.text()).toContain('自定义')
+    expect(propRow('选项')?.text()).toContain('桌面演练 / 实战演练')
+    expect(propRow('选择方式')?.text()).toContain('单选')
+    expect(propRow('默认值')?.text()).toContain('未配置')
+
+    await cells[1].trigger('click')
+    expect(propRow('日期格式')?.text()).toContain('YYYY-MM-DD HH:mm:ss')
+    expect(propRow('默认值')?.text()).toContain('未配置')
+
+    await cells[2].trigger('click')
+    expect(propRow('选择范围')?.text()).toContain('部门，单选')
+
+    await cells[3].trigger('click')
+    expect(propRow('文件类型')?.text()).toContain('未配置')
+    expect(propRow('文件大小')?.text()).toContain('未配置')
+    expect(propRow('数量上限')?.text()).toContain('未配置')
+    const propsText = wrapper.find('.snapshot-side--props').text()
+    expect(propsText).not.toMatch(/pdf|20\s?MB|20 ?MB/)
   })
 
   it('关联流程读取失败只形成可见警告，不丢弃已加载表单快照', async () => {
@@ -400,6 +503,232 @@ describe('PublishedSnapshotViewer', () => {
     // 流程空态在流程设计页签左列承接（同布局空态，不回退当前数据）
     await openSection(wrapper, '流程设计')
     expect(wrapper.text()).toContain('没有找到与该表单版本匹配的冻结流程版本')
+  })
+
+  it('Q31 冻结审批节点按真实 config 展示审批来源/审批人/条件/意见表单/字段权限/高级脚本', async () => {
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '流程设计')
+    const node = wrapper
+      .findAll('.snapshot-frozen-graph__node')
+      .find((candidate) => candidate.text().includes('部门审批'))
+    expect(node).toBeTruthy()
+    await node!.trigger('click')
+
+    const valueOf = (key: string) =>
+      (wrapper.find(`[data-testid="node-config-${key}"]`).find('input').element as HTMLInputElement)
+        .value
+    expect(valueOf('participant-source')).toBe('表达式（EXPRESSION）')
+    expect(valueOf('participant-value')).toBe('return ["2"];')
+    expect(valueOf('condition')).toBe('未配置')
+    expect(valueOf('opinion-form')).toBe('未配置')
+    expect(valueOf('node-form')).toBe('未配置')
+    expect(valueOf('field-permissions')).toBe('未配置')
+    expect(valueOf('advanced-scripts')).toBe('已配置 · 1 处')
+    expect(valueOf('before-script')).toBe('已绑定 · 1 条')
+    expect(valueOf('advanced-config')).toContain('已配置')
+    // 共同五属性仍取真实节点值，并按 295×32 只读框承接
+    const commonValues = wrapper
+      .findAll('.snapshot-props-surface__input')
+      .slice(0, 5)
+      .map((input) => (input.element as HTMLInputElement).value)
+    expect(commonValues.slice(0, 3)).toEqual(['部门审批', 'APPROVAL', 'approve'])
+    expect(
+      wrapper
+        .findAll('.snapshot-props-surface__input')
+        .every((input) => input.attributes('readonly') !== undefined),
+    ).toBe(true)
+  })
+
+  it('Q31 无节点配置的冻结事件节点明确显示未配置，不造审批属性', async () => {
+    mockLoadGraph.mockResolvedValue({
+      ...processGraph,
+      elements: [
+        ...processGraph.elements,
+        { id: 'end', kind: 'node', type: 'END', config: {}, x: 300, y: 360 },
+      ],
+    })
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '流程设计')
+    const end = wrapper
+      .findAll('.snapshot-frozen-graph__node')
+      .find((candidate) => candidate.text().includes('end'))
+    expect(end).toBeTruthy()
+    await end!.trigger('click')
+
+    expect(
+      (wrapper.find('[data-testid="node-config-node-config"] input').element as HTMLInputElement)
+        .value,
+    ).toBe('未配置')
+    expect(wrapper.find('[data-testid="node-config-participant-source"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="node-config-condition"]').exists()).toBe(false)
+  })
+
+  it('Q25 冻结节点字段三态进入 1100 只读权限面；无字段权限节点显示未配置且不凑空表', async () => {
+    mockLoadGraph.mockResolvedValue({
+      ...processGraph,
+      elements: processGraph.elements.map((element) =>
+        element.id === 'approve'
+          ? {
+              ...element,
+              config: {
+                ...element.config,
+                fieldStates: { title: { required: true, editable: false, hidden: false } },
+              },
+            }
+          : element,
+      ),
+    })
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '流程设计')
+    const node = wrapper
+      .findAll('.snapshot-frozen-graph__node')
+      .find((candidate) => candidate.text().includes('部门审批'))
+    await node!.trigger('click')
+
+    const row = wrapper.find('[data-testid="node-config-field-permissions"]')
+    expect((row.find('input').element as HTMLInputElement).value).toBe('1 个字段')
+    await row.find('button').trigger('click')
+
+    const dialogs = wrapper.findAllComponents(detailDialogStub)
+    const dialog = dialogs.find((candidate) => candidate.props('title') === '节点字段权限')
+    expect(dialog).toBeTruthy()
+    expect(dialog!.props('width')).toBe('1100px')
+    const table = wrapper.find('[data-testid="snapshot-node-field-states"]')
+    expect(table.exists()).toBe(true)
+    expect(table.text()).toContain('title')
+    expect(table.text()).toContain('是')
+    expect(table.text()).toContain('否')
+  })
+
+  it('Q25 无字段权限的冻结审批节点不显示查看入口，明确未配置', async () => {
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '流程设计')
+    const node = wrapper
+      .findAll('.snapshot-frozen-graph__node')
+      .find((candidate) => candidate.text().includes('部门审批'))
+    await node!.trigger('click')
+
+    const row = wrapper.find('[data-testid="node-config-field-permissions"]')
+    expect((row.find('input').element as HTMLInputElement).value).toBe('未配置')
+    expect(row.find('button').exists()).toBe(false)
+  })
+
+  it('Q26 冻结节点高级/操作配置进入 1000 只读面，操作与监听器取真实值', async () => {
+    mockLoadGraph.mockResolvedValue({
+      ...processGraph,
+      elements: processGraph.elements.map((element) =>
+        element.id === 'approve'
+          ? {
+              ...element,
+              config: {
+                ...element.config,
+                allowedActions: ['APPROVE', 'REJECT'],
+                returnTargets: ['start'],
+              },
+            }
+          : element,
+      ),
+    })
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '流程设计')
+    const node = wrapper
+      .findAll('.snapshot-frozen-graph__node')
+      .find((candidate) => candidate.text().includes('部门审批'))
+    await node!.trigger('click')
+
+    const row = wrapper.find('[data-testid="node-config-advanced-config"]')
+    expect((row.find('input').element as HTMLInputElement).value).toContain('已配置')
+    await row.find('button').trigger('click')
+
+    const dialogs = wrapper.findAllComponents(detailDialogStub)
+    const dialog = dialogs.find((candidate) => candidate.props('title') === '节点高级与操作配置')
+    expect(dialog).toBeTruthy()
+    expect(dialog!.props('width')).toBe('1000px')
+    const content = wrapper.find('[data-testid="snapshot-node-advanced"]')
+    expect(content.exists()).toBe(true)
+    expect(content.text()).toContain('通过')
+    expect(content.text()).toContain('驳回')
+    expect(content.text()).toContain('start')
+    expect(content.text()).toContain('审批完成监听')
+    expect(content.text()).toContain('approvalMode')
+  })
+
+  it('Q20 节点开始前绑定合并到既有 1200 只读代码窗；无节点绑定不拿全局监听冒充', async () => {
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '流程设计')
+    const node = wrapper
+      .findAll('.snapshot-frozen-graph__node')
+      .find((candidate) => candidate.text().includes('部门审批'))
+    await node!.trigger('click')
+
+    const row = wrapper.find('[data-testid="node-config-before-script"]')
+    expect((row.find('input').element as HTMLInputElement).value).toBe('已绑定 · 1 条')
+    await row.find('button').trigger('click')
+    const vm = wrapper.vm as unknown as {
+      scriptDetailMode: string
+      scriptDetailCode: string
+      scriptDetailVisible: boolean
+    }
+    expect(vm.scriptDetailVisible).toBe(true)
+    expect(vm.scriptDetailMode).toBe('code')
+    expect(vm.scriptDetailCode).toContain('return 1;')
+    expect(vm.scriptDetailCode).toContain('节点开始前')
+    const codeDialog = wrapper
+      .findAllComponents(detailDialogStub)
+      .find((candidate) => candidate.props('title') === '节点开始前脚本')
+    expect(codeDialog!.props('width')).toBe('1200px')
+
+    // 只有全局流程发起监听：该节点明确未配置，且没有查看入口
+    mockLoadGraph.mockResolvedValue({
+      ...processGraph,
+      triggers: [
+        {
+          triggerId: 'global_start',
+          name: '流程发起标记',
+          enabled: true,
+          event: 'PROCESS_START',
+          nodeKey: null,
+          script: '设置流程变量("x", 1)',
+        },
+      ],
+    })
+    const second = await mountViewer()
+    await openSection(second, '流程设计')
+    const secondNode = second
+      .findAll('.snapshot-frozen-graph__node')
+      .find((candidate) => candidate.text().includes('部门审批'))
+    await secondNode!.trigger('click')
+    const secondRow = second.find('[data-testid="node-config-before-script"]')
+    expect((secondRow.find('input').element as HTMLInputElement).value).toBe('未配置')
+    expect(secondRow.find('button').exists()).toBe(false)
+  })
+
+  it('Q20 冻结 NODE_BEFORE 记录同样按 nodeKey 绑定所选节点', async () => {
+    mockLoadGraph.mockResolvedValue({
+      ...processGraph,
+      triggers: [
+        {
+          triggerId: 'before_node',
+          name: '节点前置脚本',
+          enabled: true,
+          event: 'NODE_BEFORE',
+          nodeKey: 'approve',
+          script: 'return true;',
+        },
+      ],
+    })
+    const wrapper = await mountViewer()
+    await openSection(wrapper, '流程设计')
+    const node = wrapper
+      .findAll('.snapshot-frozen-graph__node')
+      .find((candidate) => candidate.text().includes('部门审批'))
+    await node!.trigger('click')
+
+    const row = wrapper.find('[data-testid="node-config-before-script"]')
+    expect((row.find('input').element as HTMLInputElement).value).toBe('已绑定 · 1 条')
+    await row.find('button').trigger('click')
+    const vm = wrapper.vm as unknown as { scriptDetailCode: string }
+    expect(vm.scriptDetailCode).toContain('return true;')
   })
 
   it('只读结构不引入保存、发布或恢复冻结定义的回写路径', async () => {

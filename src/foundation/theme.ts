@@ -79,10 +79,8 @@ export function themeColor(theme: ThemePreference): string {
   return theme.name === 'custom' ? normalizeTheme(theme).customColor : THEME_COLORS[theme.name]
 }
 
-/** 同一组语义变量同时供全局主题和弹窗局部预览使用。 */
-export function themeCssVariables(value: ThemePreference): Record<`--${string}`, string> {
-  const theme = normalizeTheme(value)
-  const color = themeColor(theme)
+function buildCssVariables(theme: ThemePreference): Record<`--${string}`, string> {
+  const color = theme.name === 'custom' ? theme.customColor : THEME_COLORS[theme.name]
   const isBlue = theme.name === 'blue'
   const light3 = `color-mix(in srgb, ${color} 70%, white)`
   const light5 = `color-mix(in srgb, ${color} 50%, white)`
@@ -119,6 +117,24 @@ export function themeCssVariables(value: ThemePreference): Record<`--${string}`,
     '--el-color-primary-light-9': light9,
     '--el-color-primary-dark-2': `color-mix(in srgb, ${color} 85%, black)`,
   }
+}
+
+/** 同一组语义变量同时供全局主题和弹窗局部预览使用。 */
+export function themeCssVariables(value: ThemePreference): Record<`--${string}`, string> {
+  return buildCssVariables(normalizeTheme(value))
+}
+
+/**
+ * 主题窗本地预览：取色面/HEX 尚未落到合法可读色时也按输入值展开变量，
+ * 让拖拽和输入即时反馈；点「完成」仍走 normalizeTheme/applyTheme 的严格校验。
+ */
+export function previewThemeCssVariables(value: ThemePreference): Record<`--${string}`, string> {
+  const name: ThemeName =
+    value.name === 'custom' ? 'custom' : value.name === 'teal' ? 'teal' : 'blue'
+  const customColor = VALID_COLOR.test(value.customColor)
+    ? value.customColor.toLowerCase()
+    : DEFAULT_THEME.customColor
+  return buildCssVariables({ name, customColor })
 }
 
 export function applyTheme(value: ThemePreference, persist = true): void {

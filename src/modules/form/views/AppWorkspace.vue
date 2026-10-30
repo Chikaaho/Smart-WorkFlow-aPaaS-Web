@@ -114,6 +114,12 @@ const dirDialogTitle = computed(() =>
   editingDirId.value ? t('form.appCenter.editDir') : t('form.appCenter.newDir'),
 )
 
+/**
+ * Q34（272:1722）：目录是应用内单层分类，保存契约只改名。
+ * 设置窗按真实数据只读回显当前父级：单层目录没有上级目录，显示「无」，不新增移动目录业务。
+ */
+const currentDirParentName = computed(() => t('form.appCenter.parentDirNone'))
+
 function openCreateDir() {
   editingDirId.value = null
   Object.assign(dirForm, { name: '', sortNo: 0, parentId: '' })
@@ -351,7 +357,7 @@ onMounted(() => {
 
     <!-- 目录新建/改名对话框（0.1.7 #4：修改只改名称）。
          Q34（272:1698）：新建态 540 宽，目录名称 + 上级目录两字段（上级目录只本地选择、默认无）；
-         改名态保持既有单名称表单。 -->
+         Q34（272:1722）：设置态同为 540，名称字段 490×32，并只读回显当前父级。 -->
     <el-dialog
       v-model="dirDialogVisible"
       :title="dirDialogTitle"
@@ -378,11 +384,19 @@ onMounted(() => {
           </el-select>
         </div>
       </template>
-      <el-form v-else label-width="80px">
-        <el-form-item :label="t('form.appCenter.fieldName')" required>
+      <template v-else>
+        <!-- Q34（272:1722）：设置窗目录名称 490×32；契约仅改名，当前父级只读回显，不提供迁移 -->
+        <div class="ws-dialog-field">
+          <label class="ws-dialog-field__label ws-dialog-field__label--required">{{
+            t('form.appCenter.dirNameLabel')
+          }}</label>
           <el-input v-model="dirForm.name" data-testid="dir-name-input" maxlength="100" />
-        </el-form-item>
-      </el-form>
+        </div>
+        <div class="ws-dialog-field">
+          <label class="ws-dialog-field__label">{{ t('form.appCenter.parentDirLabel') }}</label>
+          <el-input :model-value="currentDirParentName" data-testid="dir-parent-echo" readonly />
+        </div>
+      </template>
       <template #footer>
         <el-button @click="dirDialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="dirSaving" @click="handleSaveDir">
@@ -415,13 +429,19 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <!-- 表单改名对话框 -->
-    <el-dialog v-model="renameDialogVisible" :title="t('common.edit')" width="420px">
-      <el-form label-width="80px">
-        <el-form-item :label="t('form.appCenter.fieldName')" required>
-          <el-input v-model="renameTarget.name" maxlength="200" />
-        </el-form-item>
-      </el-form>
+    <!-- 表单改名对话框。Q35（527:24177）：440 宽、名称 390×32、底栏 80×32；仅该表单行重命名调用方 -->
+    <el-dialog
+      v-model="renameDialogVisible"
+      :title="t('common.edit')"
+      width="440px"
+      class="ws-rename-dialog"
+    >
+      <div class="ws-dialog-field ws-dialog-field--dialog440">
+        <label class="ws-dialog-field__label ws-dialog-field__label--required">{{
+          t('form.appCenter.fieldName')
+        }}</label>
+        <el-input v-model="renameTarget.name" data-testid="form-rename-input" maxlength="200" />
+      </div>
       <template #footer>
         <el-button @click="renameDialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="renameSaving" @click="handleRenameForm">
@@ -469,6 +489,18 @@ onMounted(() => {
   margin-top: 16px;
 }
 .ws-form-dialog .ws-dialog-field--dialog440 {
+  width: 390px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+/* Q35（527:24177）：表单重命名 440 宽、名称 390×32、底栏 80×32（仅该调用方）。 */
+.ws-rename-dialog .el-dialog__footer .el-button {
+  box-sizing: border-box;
+  width: 80px;
+  height: 32px;
+  margin: 0;
+}
+.ws-rename-dialog .ws-dialog-field--dialog440 {
   width: 390px;
   max-width: 100%;
   margin: 0 auto;

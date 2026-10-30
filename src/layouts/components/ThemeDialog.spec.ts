@@ -36,6 +36,28 @@ describe('theme dialog', () => {
     expect(readTheme().name).toBe('teal')
     expect(wrapper.emitted('update:modelValue')).toEqual([[false]])
   })
+  it('expands the gradient/hue/HEX controls only while 自定义 is selected', async () => {
+    const wrapper = open()
+    expect(wrapper.find('.theme-dialog__gradient').exists()).toBe(false)
+    await wrapper.findAll('.theme-dialog__presets button')[2]!.trigger('click')
+    expect(wrapper.find('.theme-dialog__gradient').exists()).toBe(true)
+    expect(wrapper.find('.theme-dialog__hue').exists()).toBe(true)
+    expect(wrapper.find('.theme-dialog__hex-input').exists()).toBe(true)
+
+    await wrapper.findAll('.theme-dialog__presets button')[1]!.trigger('click')
+    expect(wrapper.find('.theme-dialog__gradient').exists()).toBe(false)
+    expect(wrapper.find('.theme-dialog__hue').exists()).toBe(false)
+    expect(wrapper.find('.theme-dialog__custom').exists()).toBe(true)
+  })
+  it('previews the expanded HEX input locally without persisting', async () => {
+    const wrapper = open()
+    await wrapper.findAll('.theme-dialog__presets button')[2]!.trigger('click')
+    await wrapper.find('.theme-dialog__hex-input').setValue('#123456')
+    expect(wrapper.find('.theme-dialog__preview').attributes('style')).toContain('#123456')
+    expect(readTheme().name).toBe('blue')
+    await wrapper.find('.cancel').trigger('click')
+    expect(readTheme().name).toBe('blue')
+  })
   it('rejects invalid custom colors and keeps the dialog open', async () => {
     const wrapper = open()
     await wrapper.findAll('.theme-dialog__presets button')[2]!.trigger('click')

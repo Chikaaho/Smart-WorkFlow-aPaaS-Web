@@ -315,6 +315,24 @@ onMounted(() => {
 
     <!-- 筛选区与表格区（设计节点04：单行工具栏，统计卡收至监控入口） -->
     <div class="p53-admin-defs__filters">
+      <template v-if="isSuperAdmin">
+        <span class="defs-filter__label defs-filter__label--inline defs-filter__label--lead">{{
+          t('system.tenantShort')
+        }}</span>
+        <el-select
+          v-model="tenantFilter"
+          class="defs-filter__tenant"
+          :placeholder="t('common.all')"
+          clearable
+        >
+          <el-option
+            v-for="tenant in tenantOptions"
+            :key="tenant.id"
+            :label="tenant.name"
+            :value="String(tenant.id)"
+          />
+        </el-select>
+      </template>
       <span class="defs-filter__label">{{ t('common.processName') }}</span>
       <el-input v-model="keyword" class="defs-filter__keyword" placeholder="请输入" clearable />
       <span class="defs-filter__label defs-filter__label--inline">{{ t('common.category') }}</span>
@@ -342,24 +360,6 @@ onMounted(() => {
         <el-option label="草稿" value="DRAFT" />
         <el-option label="停用" value="DISABLED" />
       </el-select>
-      <template v-if="isSuperAdmin">
-        <span class="defs-filter__label defs-filter__label--inline">{{
-          t('system.tenantShort')
-        }}</span>
-        <el-select
-          v-model="tenantFilter"
-          class="defs-filter__tenant"
-          :placeholder="t('common.all')"
-          clearable
-        >
-          <el-option
-            v-for="tenant in tenantOptions"
-            :key="tenant.id"
-            :label="tenant.name"
-            :value="String(tenant.id)"
-          />
-        </el-select>
-      </template>
       <span class="defs-filter__spacer" aria-hidden="true" />
       <el-button v-if="returnFormId" link class="defs-filter__link" @click="backToWorkbench">{{
         t('workflow.backToFormWorkbench')
@@ -389,15 +389,15 @@ onMounted(() => {
       </ListEmpty>
       <template v-else>
         <el-table v-loading="loading" :data="visibleList" class="defs-table">
+          <el-table-column v-if="isSuperAdmin" :label="t('system.tenantShort')" width="132">
+            <template #default="{ row }">{{ statusRow(row).tenantName || '—' }}</template>
+          </el-table-column>
           <el-table-column
             prop="name"
             :label="t('common.processName')"
             width="362"
             class-name="defs-table__col-name"
           />
-          <el-table-column v-if="isSuperAdmin" :label="t('system.tenantShort')" width="132">
-            <template #default="{ row }">{{ statusRow(row).tenantName || '—' }}</template>
-          </el-table-column>
           <el-table-column :label="t('workflow.categoryName')" width="234">
             <template #default="{ row }">{{ statusRow(row).categoryName || '—' }}</template>
           </el-table-column>
@@ -598,6 +598,10 @@ onMounted(() => {
   width: 28px;
   margin-left: 8px;
   margin-right: 8px;
+}
+/* Q69：超管租户筛选为筛选行第一项，首项不再叠加行内左间距 */
+.defs-filter__label--lead {
+  margin-left: 0;
 }
 .defs-filter__keyword {
   width: 296px;
