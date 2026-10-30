@@ -1714,4 +1714,9 @@ onMounted(() => {
 .form-render-page :deep(.el-input__inner) {
   height: 30px;
 }
+/* Q74（272:1784）：成功正文段落清零 UA 默认外边距并明确 22px 行盒（原 172 结构），窗口稳定 520×172 */
+.form-render-page :deep(.form-render-page__submit-dialog .el-dialog__body p) {
+  margin: 0;
+  line-height: 22px;
+}
 </style>

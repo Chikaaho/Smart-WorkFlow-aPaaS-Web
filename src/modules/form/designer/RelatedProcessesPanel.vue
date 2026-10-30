@@ -50,6 +50,11 @@ let requestSeq = 0
 
 const hasFormKey = computed(() => props.formKey.trim().length > 0)
 
+/** Q56/P3/472:15663：零关联流程且不在加载中 → 原设计器工作区全幅空状态（无筛选栏/列表壳） */
+const showUnconfiguredBoard = computed(
+  () => hasFormKey.value && records.value.length === 0 && !loading.value,
+)
+
 async function load() {
   if (!hasFormKey.value) return
   const seq = ++requestSeq
@@ -195,10 +200,21 @@ defineExpose({ openNumberSettings })
 </script>
 
 <template>
-  <div class="related-processes">
+  <div
+    class="related-processes"
+    :class="{ 'related-processes--unconfigured': showUnconfiguredBoard }"
+  >
     <div v-if="!hasFormKey" class="related-processes__empty">
       {{ t('form.noFormKeyHint') }}
     </div>
+
+    <!-- Q56/P3/472:15663：零关联流程分支 = 原设计器工作区全幅空状态：
+         节点库 220px 自 x0/y152 起、白底空画布自 x220 起（16px 内距），
+         管理列表壳的筛选栏 / 48px 侧距 / 卡片边距在本分支整体去除；
+         「新建流程」入口由空画布承接，仍走既有命名弹窗链路，取消不创建任何流程定义 -->
+    <template v-else-if="showUnconfiguredBoard">
+      <UnconfiguredFlowBoard class="related-processes__board" @create="openCreate" />
+    </template>
 
     <template v-else>
       <!-- 0.1.7 #25 回归：左上角标题/描述/「共 N 个流程 · 启用 N 个」汇总计数为噪音，全部去除，
@@ -228,15 +244,7 @@ defineExpose({ openNumberSettings })
         </div>
       </div>
 
-      <!-- Q56：零关联流程分支展示未配置空画布 + 节点库（纯展示）+ 创建入口；
-           「新建流程」仍走既有命名弹窗链路，打开空状态/取消不创建任何流程定义 -->
-      <UnconfiguredFlowBoard
-        v-if="records.length === 0 && !loading"
-        class="related-processes__board"
-        @create="openCreate"
-      />
-
-      <section v-else class="related-processes__table-card" aria-label="关联流程列表">
+      <section class="related-processes__table-card" aria-label="关联流程列表">
         <!-- 列宽/对齐：名称列吸收剩余宽度，其余列固定宽并居中，保证表头与内容同一轴线 -->
         <el-table v-loading="loading" :data="records" class="related-processes__table">
           <el-table-column
@@ -411,6 +419,14 @@ defineExpose({ openNumberSettings })
 .related-processes__board {
   flex: 1;
   min-height: 420px;
+}
+
+/* Q56/P3/472:15663：零关联分支容器对齐原设计器工作区——面板顶在 y112（全局导航 64 +
+   设计器工具条 48），上内距 40px 使工作区自 y152 起；去掉管理列表壳的 48px 侧距与
+   32px 底距，工作区铺满至视口底（h928） */
+.related-processes--unconfigured {
+  padding: 40px 0 0;
+  overflow: hidden;
 }
 
 /* 0.1.7 #25 回归：标题/描述/汇总计数噪音已去除（见模板注释），筛选栏即页首；

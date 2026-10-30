@@ -94,22 +94,20 @@ const paletteGroups = computed(() =>
 </template>
 
 <style scoped>
-/* 几何对齐流程设计器（42:4）：224px 节点库 + 弹性网格画布 */
+/* 几何对齐流程设计器原工作区（Q56 P3/472:15663）：节点库 220px @x0，画布区自 x220 起；
+   宿主容器（related-processes--unconfigured）负责 y152 的顶部定位，本组件铺满剩余空间 */
 .unconfigured-flow {
   display: flex;
   flex: 1;
   min-height: 0;
-  margin-top: 23px;
   overflow: hidden;
-  border: 1px solid var(--sw-border-light, #e7ebf1);
-  border-radius: 8px;
   background: var(--sw-surface, #fff);
 }
 
 .unconfigured-flow__palette {
   box-sizing: border-box;
-  flex: 0 0 224px;
-  width: 224px;
+  flex: 0 0 220px;
+  width: 220px;
   padding: 16px;
   overflow-y: auto;
   border-right: 1px solid #e1e5ef;
@@ -199,12 +197,11 @@ const paletteGroups = computed(() =>
   position: relative;
   flex: 1;
   min-width: 0;
-  /* P53 节点09：画布底 #F8FAFE + 24px 网格线 */
-  background:
-    linear-gradient(to right, #e8edf6 1px, transparent 1px),
-    linear-gradient(to bottom, #e8edf6 1px, transparent 1px);
-  background-size: 24px 24px;
-  background-color: #f8fafe;
+  box-sizing: border-box;
+  /* 原设计（Q56 P3/472:15663）：白底空画布，四周 16px 内距
+     （画布本体 = 工作区内缩后 x236/y168/w1668/h896） */
+  padding: 16px;
+  background: var(--sw-surface, #fff);
 }
 
 .unconfigured-flow__empty {

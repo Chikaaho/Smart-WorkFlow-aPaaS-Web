@@ -1419,8 +1419,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   width: 100%;
-  /* 设计01：内容左右 20px、顶部 20px，统计卡顶边与设计 144px 对齐 */
-  padding: 20px 20px 24px;
+  /* P3/645:28703（Q08 存量视图全屏框）：查看态画布左右留白 24px（全屏消费方），
+     顶部仍 20px，统计卡顶边与设计 144px 对齐 */
+  padding: 20px 24px 24px;
   overflow-x: hidden;
 }
 @media (max-width: 767px) {
@@ -1441,7 +1442,8 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   height: 56px;
   flex: none;
-  margin: -20px -20px 0;
+  /* 645:28703：负边距抵消 .wsd 左右 24px 留白，工具栏全宽贴内容区两缘 */
+  margin: -20px -24px 0;
   padding: 0 24px;
   border-bottom: 1px solid var(--sw-border-light, #eef0f4);
   background: var(--sw-bg-surface, #fff);

@@ -44,6 +44,9 @@ const showAside = computed(
     !route.path.startsWith('/form/app-form/') &&
     !route.path.startsWith('/workflow/catalog') &&
     !route.path.startsWith('/workspace/config') &&
+    // P3/645:28703（Q08 存量视图全屏框）：/workspace 只读视图为全屏消费方，
+    // 退出 236 侧区占位；编辑壳走 /workspace/config，其余 /workspace/* 子路由不受影响
+    route.path !== '/workspace' &&
     !/^\/workflow\/defs\/[^/]+\/settings$/.test(route.path) &&
     !/^\/form\/app-manage\/[^/]+/.test(route.path),
 )

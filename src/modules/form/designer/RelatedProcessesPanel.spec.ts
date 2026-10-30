@@ -260,8 +260,12 @@ describe('RelatedProcessesPanel', () => {
     expect(wrapper.find('[data-node-type="APPROVAL"]').exists()).toBe(true)
     // 空分支不再渲染「暂无数据」表格卡片
     expect(wrapper.find('.related-processes__table-card').exists()).toBe(false)
-    // 既有创建入口仍在筛选栏
-    expect(wrapper.find('.related-processes__create').exists()).toBe(true)
+    // Q56 P3/472:15663：空分支脱离管理列表壳——筛选栏/列表卡片边距整体去除，
+    // 根节点切到原设计器工作区布局（节点库 220px + 白底空画布 16px 内距）
+    expect(wrapper.find('.related-processes__filter').exists()).toBe(false)
+    expect(wrapper.find('.related-processes--unconfigured').exists()).toBe(true)
+    // 创建入口由空画布承接（仍走既有命名弹窗链路）
+    expect(wrapper.find('[data-testid="unconfigured-flow-create"]').exists()).toBe(true)
   })
 
   it('零关联流程：空画布创建入口只打开命名弹窗，取消不发起创建请求', async () => {
