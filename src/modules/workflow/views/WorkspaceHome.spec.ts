@@ -19,9 +19,8 @@ vi.mock('@/modules/workflow/api', () => ({
 }))
 
 const mockPush = vi.fn()
-const mockBack = vi.fn()
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: mockPush, back: mockBack }),
+  useRouter: () => ({ push: mockPush }),
 }))
 
 import WorkspaceHome from './WorkspaceHome.vue'
@@ -145,22 +144,13 @@ describe('WorkspaceHome 布局与查询收敛（R4）', () => {
     expect(mockPush).toHaveBeenCalledWith('/form/form-render/f1')
   })
 
-  it('Q08（645:28703）：保存后查看态（有编排来源）恢复二级工具栏，返回回跳来源', async () => {
-    // 保存后查看态：/workspace/config 保存 → push('/workspace')，back 记录编排来源
-    window.history.replaceState({ back: '/workspace/config' }, '')
+  it('Q08（645:28703）：查看态二级工具栏保留标题与配置入口，问候行不再渲染', async () => {
     const wrapper = mount(WorkspaceHome, { global })
     await flushPromises()
     const bar = wrapper.find('[data-testid="workspace-view-toolbar"]')
     expect(bar.exists()).toBe(true)
     expect(wrapper.find('.wsd-hero').exists()).toBe(false)
     expect(bar.find('.wsd-viewbar__title').text()).toBe('我的工作台')
-    const back = bar.find('.wsd-viewbar__back')
-    expect(back.exists()).toBe(true)
-    mockBack.mockClear()
-    mockPush.mockClear()
-    await back.trigger('click')
-    expect(mockBack).toHaveBeenCalledTimes(1)
-    expect(mockPush).not.toHaveBeenCalled()
     // 配置工作台入口保留：进入全屏 /workspace/config
     mockPush.mockClear()
     const config = bar.find('.wsd-viewbar__config')
@@ -169,7 +159,9 @@ describe('WorkspaceHome 布局与查询收敛（R4）', () => {
     expect(mockPush).toHaveBeenCalledWith('/workspace/config')
   })
 
-  it('B021-001：直达首页（无编排来源）不渲染返回按钮，标题与配置入口保留', async () => {
+  it('B021-001：无论历史来源（含从配置页切回）首页都不渲染返回按钮', async () => {
+    // 回归：即使 history.state.back 指向配置页（顶栏切回的真实场景），顶层页也不提供返回
+    window.history.replaceState({ back: '/workspace/config' }, '')
     const wrapper = mount(WorkspaceHome, { global })
     await flushPromises()
     const bar = wrapper.find('[data-testid="workspace-view-toolbar"]')

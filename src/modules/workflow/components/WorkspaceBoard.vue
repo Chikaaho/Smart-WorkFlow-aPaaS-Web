@@ -653,23 +653,12 @@ function itemStyle(key: string) {
 }
 
 /**
- * Q08（645:28703）：保存后的查看态二级工具栏「返回」复用既有进入来源/回跳语义
- * （同 TaskDetail #20：vue-router 4 history.state.back 记录应用内来源）。
- * B021-001：返回按钮仅在存在工作台编排来源（/workspace/config|/workspace/edit
- * 回跳的保存后查看态）时渲染；直达首页、登录落地或顶栏切换的顶层页不渲染，
- * 避免无意义回跳。
+ * Q08（645:28703）原文的保存后查看态「返回」由配置工作台自身工具栏承担
+ * （/workspace/config 左上角返回即回首页）。
+ * B021-001（Owner 裁量）：工作台是顶层导航页，首页工具栏不提供返回按钮——
+ * history.state.back 无法区分"保存后回跳"与"从配置页经顶栏切回"，
+ * 任何来源推断都会让首页重新出现无意义返回，故整体移除。
  */
-const AUTHORING_BACK_PREFIXES = ['/workspace/config', '/workspace/edit']
-
-function hasAuthoringBackSource(): boolean {
-  const back = globalThis.history?.state?.back
-  if (typeof back !== 'string' || back === '') return false
-  return AUTHORING_BACK_PREFIXES.some((prefix) => back.startsWith(prefix))
-}
-
-function goBackFromView() {
-  router.back()
-}
 
 function openDraft(item: Record<string, unknown>) {
   const formKey = String(item.formKey ?? '')
@@ -1036,18 +1025,10 @@ onBeforeUnmount(() => {
 <template>
   <div v-loading="loading" class="wsd" :class="{ 'is-editing': editing }">
     <!-- Q08（645:28703）：查看态恢复全屏框架的二级工具栏（紧贴全局 64px 顶栏，
-         不叠压）：返回 + 「我的工作台」标题 + 右侧配置工作台入口；替换原问候行查看态。
-         B021-001：返回仅在有工作台编排来源（保存后查看态）时渲染。 -->
+         不叠压）：「我的工作台」标题 + 右侧配置工作台入口；替换原问候行查看态。
+         B021-001（Owner 裁量）：顶层页不提供返回，返回由配置工作台自身承担。 -->
     <header v-if="!editing" class="wsd-viewbar" data-testid="workspace-view-toolbar">
       <div class="wsd-viewbar__left">
-        <button
-          v-if="hasAuthoringBackSource()"
-          class="wsd-viewbar__back"
-          type="button"
-          @click="goBackFromView"
-        >
-          ← {{ t('common.backShort') }}
-        </button>
         <h2 class="wsd-viewbar__title">{{ t('workspace.studio.canvasTitle') }}</h2>
       </div>
       <button
