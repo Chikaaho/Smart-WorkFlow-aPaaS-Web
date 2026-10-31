@@ -17,6 +17,7 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Document } from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/user'
 import {
   getWorkspaceLayout,
   saveWorkspaceLayout,
@@ -106,6 +107,23 @@ const draftsExtra = ref<PageExtra>({})
 
 // ─── 流程效能（真实分析摘要；无权限/失败 → null → 空值呈现） ───
 const analytics = ref<Awaited<ReturnType<typeof queryAnalyticsSummary>> | null>(null)
+
+const userStore = useUserStore()
+const displayName = computed(() => userStore.user?.displayName ?? '')
+const greeting = computed(() => {
+  const hour = new Date().getHours()
+  if (hour < 12) return t('workspace.greetingMorning')
+  if (hour < 18) return t('workspace.greetingAfternoon')
+  return t('workspace.greetingEvening')
+})
+
+/** 统计卡图标（设计01：右上简洁文档图标；数值全部为真实 total） */
+const STAT_ICONS: Record<string, { icon: unknown; bg: string; color: string }> = {
+  todo: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
+  initiated: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
+  processed: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
+  drafts: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
+}
 
 const stats = computed(() => [
   {
@@ -1015,15 +1033,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-loading="loading" class="wsd" :class="{ 'is-editing': editing }">
-    <!-- Q08（645:28703）：查看态恢复全屏框架的二级工具栏（紧贴全局 64px 顶栏，
-         不叠压）：「我的工作台」标题 + 右侧配置工作台入口；替换原问候行查看态。
-         B021-001（Owner 裁量）：顶层页不提供返回，返回由配置工作台自身承担。 -->
-    <header v-if="!editing" class="wsd-viewbar" data-testid="workspace-view-toolbar">
-      <div class="wsd-viewbar__left">
-        <h2 class="wsd-viewbar__title">{{ t('workspace.studio.canvasTitle') }}</h2>
-      </div>
+    <!-- 设计01 工作台（B021-007 功能遗漏回补）：查看态头部为问候行+今日统计+右上配置入口；
+         顶层页不提供返回（B021-001）。 -->
+    <header v-if="!editing" class="wsd-hero" data-testid="workspace-hero">
+      <h2 class="wsd-hero__greeting">
+        {{ greeting }}{{ displayName ? '，' : '' }}{{ displayName }}
+      </h2>
+      <p class="wsd-hero__sub">
+        {{ t('workspace.todoSummary', { count: todoTotal, urgent: todoExtra.urgentTotal ?? 0 }) }}
+      </p>
       <button
-        class="wsd-viewbar__config"
+        class="wsd-hero__config"
         type="button"
         :title="t('workspace.configureWorkspace')"
         :aria-label="t('workspace.configureWorkspace')"
@@ -1158,15 +1178,17 @@ onBeforeUnmount(() => {
           </header>
 
           <div class="wsd-canvas-item__body">
-            <div
-              v-if="rendererKeyOf(component.key) === 'stats'"
-              class="wsd-stats"
-              :class="{ 'wsd-stats--as-card': !editing }"
-            >
-              <h3 v-if="!editing" class="wsd-stats__title">{{ componentTitle(component.key) }}</h3>
+            <div v-if="rendererKeyOf(component.key) === 'stats'" class="wsd-stats">
               <div v-for="s in stats" :key="s.key" class="wsd-stat">
                 <span class="wsd-stat__label">{{ s.label }}</span>
                 <span class="wsd-stat__value">{{ s.value }}</span>
+                <span v-if="s.helper" class="wsd-stat__badge">{{ s.helper }}</span>
+                <span
+                  class="wsd-stat__iconbg"
+                  :style="{ background: STAT_ICONS[s.key]?.bg, color: STAT_ICONS[s.key]?.color }"
+                >
+                  <el-icon :size="20"><component :is="STAT_ICONS[s.key]?.icon" /></el-icon>
+                </span>
               </div>
             </div>
 
@@ -1409,71 +1431,6 @@ onBeforeUnmount(() => {
 .wsd-hero {
   position: relative;
   height: 64px;
-}
-/* Q08（645:28703）保存后的查看态二级工具栏：全宽 56px（y64..120，不叠压全局顶栏），
-   几何对齐配置页工具栏——返回 72×32 @x24/y76（屏级），右侧配置工作台 @x≈1802/y76。 */
-.wsd-viewbar {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 56px;
-  flex: none;
-  /* 645:28703：负边距抵消 .wsd 左右 24px 留白，工具栏全宽贴内容区两缘 */
-  margin: -20px -24px 0;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--sw-border-light, #eef0f4);
-  background: var(--sw-bg-surface, #fff);
-}
-.wsd-viewbar__left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.wsd-viewbar__back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 72px;
-  height: 32px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--sw-text-secondary);
-  font-size: 13px;
-  cursor: pointer;
-}
-.wsd-viewbar__back:hover,
-.wsd-viewbar__back:focus-visible {
-  background: var(--sw-bg-muted, #f3f4f6);
-}
-.wsd-viewbar__title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 24px;
-  color: var(--sw-text-primary);
-}
-.wsd-viewbar__config {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--sw-border, #d9dde6);
-  border-radius: 6px;
-  background: var(--sw-bg-surface, #fff);
-  color: var(--sw-text-primary);
-  font-size: 13px;
-  cursor: pointer;
-}
-.wsd-viewbar__config:hover,
-.wsd-viewbar__config:focus-visible {
-  background: var(--sw-color-primary-softer);
-  color: var(--sw-color-primary);
 }
 .wsd-hero__greeting {
   margin: 0;
@@ -1842,51 +1799,48 @@ onBeforeUnmount(() => {
   gap: 16px;
   align-content: start;
 }
-/* B021-002：查看态统计与配置工作台画布同为一张“统计概览”整卡，
-   格子在卡内垂直居中填满槽位，不再留下透明空洞。
-   B021-003：槽位小于内容时（Owner 可任意缩小高度）按画布语义裁剪，
-   safe center 自动退化为顶对齐，绝不越界压住相邻卡片。 */
-.wsd-stats--as-card {
-  box-sizing: border-box;
-  overflow: hidden;
-  align-content: safe center;
-  background: #ffffff;
-  border: 1px solid var(--sw-border);
-  border-radius: 10px;
-  padding: 16px 20px;
-}
-.wsd-stats__title {
-  grid-column: 1 / -1;
-  margin: 0 0 4px;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 600;
-  color: var(--sw-text-primary);
-}
-/* B021-004（Owner 裁量）：统计指标与配置工作台画布同为扁平一行，
-   无格子卡样式、图标与徽标；容器整卡与裁剪语义不变。 */
 .wsd-stat {
   position: relative;
   box-sizing: border-box;
-  padding: 0;
+  min-height: 96px;
+  padding: 16px 48px 16px 20px;
+  background: #ffffff;
+  border: 1px solid var(--sw-border);
+  border-radius: 10px;
 }
-/* B021-005：数值/标签颜色字号与配置画布（WorkspaceSystemCard .wsys__stat）对齐——
-   数值主题色 28/700；标签 --sw-text-tertiary 未定义（画布实际继承 --sw-text-primary
-   #172033），按规范 token 显式声明。 */
 .wsd-stat__label {
   display: block;
   overflow-wrap: break-word;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--sw-text-primary, #172033);
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--sw-text-secondary);
 }
 .wsd-stat__value {
   display: block;
   margin-top: 2px;
-  font-size: 28px;
-  line-height: 36px;
-  font-weight: 700;
-  color: var(--sw-color-primary, #2563eb);
+  font-size: 30px;
+  line-height: 38px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+}
+.wsd-stat__badge {
+  position: absolute;
+  right: 20px;
+  bottom: 14px;
+  left: auto;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--sw-text-secondary);
+}
+.wsd-stat__iconbg {
+  position: absolute;
+  right: 20px;
+  top: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
 }
 .wsd-panel {
   box-sizing: border-box;
