@@ -310,7 +310,8 @@ async function load(): Promise<void> {
 }
 
 function defaultCards(): StudioCard[] {
-  // B021-007 批次5：设计01 默认布局——四张独立指标卡替代统计概览组合卡
+  // B021-007 批次5：设计01 默认布局——四张独立指标卡替代统计概览组合卡。
+  // 顺序即设计排布（统计行在最上），不能跟随目录 ID 序，否则统计行被流式排到末尾。
   const visible = [
     'statTodo',
     'statInitiated',
@@ -318,13 +319,14 @@ function defaultCards(): StudioCard[] {
     'statDrafts',
     'todo',
     'favoriteItems',
-    'activity',
     'efficiency',
+    'activity',
   ]
   // 默认几何对齐设计 3:2（DESIGN_PRESET_GEOMETRY 同源）：
   // 指标卡 112 / 待办 486 / 快捷 208 / 效能 262 / 动态 260。
-  return cardTypes.value
-    .filter((type) => visible.includes(type.typeCode))
+  return visible
+    .map((typeCode) => cardTypes.value.find((type) => type.typeCode === typeCode))
+    .filter((type): type is NonNullable<typeof type> => !!type)
     .map((type) => {
       const card = defaultCard(type.typeCode, type.displayName)
       const preset = DESIGN_PRESET_GEOMETRY[type.typeCode]
