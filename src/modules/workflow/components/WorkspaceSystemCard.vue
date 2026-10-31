@@ -88,16 +88,19 @@ const quickItems = computed(() => {
 const efficiency = computed(() => {
   const summary = analytics.value
   if (!summary) return null
-  const avgHours = summary.avgDurationMs == null ? null : summary.avgDurationMs / 3600000
-  const completion = summary.launched
-    ? Math.round((summary.completed / summary.launched) * 100)
-    : null
+  // B021-006：后端计数经 Long 序列化为字符串（实测 "launched":"0"），字符串 "0" 为真值
+  // 会令完成率算出 NaN%；先归一为数值再运算与判断。
+  const launched = Number(summary.launched)
+  const completed = Number(summary.completed)
+  const avgMs = summary.avgDurationMs == null ? null : Number(summary.avgDurationMs)
+  const avgHours = avgMs == null ? null : avgMs / 3600000
+  const completion = launched ? Math.round((completed / launched) * 100) : null
   return {
     avg: avgHours == null ? '—' : `${avgHours.toFixed(1)} ${t('workspace.hoursUnit')}`,
     completion: completion == null ? '—' : `${completion}%`,
-    launched: summary.launched,
-    completed: summary.completed,
-    running: summary.running,
+    launched,
+    completed,
+    running: Number(summary.running),
   }
 })
 
@@ -478,15 +481,19 @@ onMounted(async () => {
   gap: 6px;
 }
 
+/* B021-007 批次4：统计指标字色字号与设计01首页（.wsd-stat__label/__value）对齐——
+   标签 secondary 14/22，数值深色 30/38/600； tertiary token 未定义不再引用。 */
 .wsys__stat span {
-  color: var(--sw-text-tertiary);
-  font-size: 12px;
+  color: var(--sw-text-secondary);
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .wsys__stat strong {
-  color: var(--sw-color-primary, #2563eb);
-  font-size: 28px;
-  font-weight: 700;
+  color: var(--sw-text-primary);
+  font-size: 30px;
+  line-height: 38px;
+  font-weight: 600;
 }
 
 .wsys__metrics {
