@@ -107,15 +107,6 @@ const draftsExtra = ref<PageExtra>({})
 // ─── 流程效能（真实分析摘要；无权限/失败 → null → 空值呈现） ───
 const analytics = ref<Awaited<ReturnType<typeof queryAnalyticsSummary>> | null>(null)
 
-/** 统计卡图标（设计01：右上简洁小图标，无彩色底块；数值仍全部为真实 total） */
-const STAT_ICONS: Record<string, { icon: unknown; bg: string; color: string }> = {
-  // 0.2.0 参考 3:2：四张统计卡右上角为同一文档图标
-  todo: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
-  initiated: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
-  processed: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
-  drafts: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
-}
-
 const stats = computed(() => [
   {
     key: 'todo',
@@ -1176,13 +1167,6 @@ onBeforeUnmount(() => {
               <div v-for="s in stats" :key="s.key" class="wsd-stat">
                 <span class="wsd-stat__label">{{ s.label }}</span>
                 <span class="wsd-stat__value">{{ s.value }}</span>
-                <span v-if="s.helper" class="wsd-stat__badge">{{ s.helper }}</span>
-                <span
-                  class="wsd-stat__iconbg"
-                  :style="{ background: STAT_ICONS[s.key]?.bg, color: STAT_ICONS[s.key]?.color }"
-                >
-                  <el-icon :size="20"><component :is="STAT_ICONS[s.key]?.icon" /></el-icon>
-                </span>
               </div>
             </div>
 
@@ -1879,14 +1863,12 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: var(--sw-text-primary);
 }
+/* B021-004（Owner 裁量）：统计指标与配置工作台画布同为扁平一行，
+   无格子卡样式、图标与徽标；容器整卡与裁剪语义不变。 */
 .wsd-stat {
   position: relative;
   box-sizing: border-box;
-  min-height: 96px;
-  padding: 16px 48px 16px 20px;
-  background: #ffffff;
-  border: 1px solid var(--sw-border);
-  border-radius: 10px;
+  padding: 0;
 }
 .wsd-stat__label {
   display: block;
@@ -1902,25 +1884,6 @@ onBeforeUnmount(() => {
   line-height: 38px;
   font-weight: 600;
   color: var(--sw-text-primary);
-}
-.wsd-stat__badge {
-  position: absolute;
-  right: 20px;
-  bottom: 14px;
-  left: auto;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--sw-text-secondary);
-}
-.wsd-stat__iconbg {
-  position: absolute;
-  right: 20px;
-  top: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
 }
 .wsd-panel {
   box-sizing: border-box;
