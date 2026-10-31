@@ -14,9 +14,19 @@ const { t } = useI18n()
  * 编辑页）所见即所得：真实卡片 + 编辑 chrome（拖拽/缩放/对齐线），保存后主页一致。
  */
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Document } from '@element-plus/icons-vue'
+import {
+  Bell,
+  CircleCheck,
+  Clock,
+  Document,
+  EditPen,
+  Expand,
+  Fold,
+  Grid,
+  Tickets,
+} from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import {
   getWorkspaceLayout,
@@ -49,6 +59,18 @@ import type { WorkspaceDataConfig } from '@/modules/workflow/utils/workspace-dat
 import WorkspaceDataCard from './WorkspaceDataCard.vue'
 
 const router = useRouter()
+const route = useRoute()
+
+// ─── 设计01 批次2：左侧深色工作台侧栏（可折起为窄轨） ───
+const sidebarCollapsed = ref(false)
+const sidebarItems = computed(() => [
+  { label: t('common.workspace'), icon: Grid, path: '/workspace' },
+  { label: t('workflow.todoTasks'), icon: Tickets, path: '/workspace/todo' },
+  { label: t('common.startedByMe'), icon: Clock, path: '/workspace/my-instances' },
+  { label: t('workflow.processedTasks'), icon: CircleCheck, path: '/workspace/processed' },
+  { label: t('router.myCc'), icon: Bell, path: '/workspace/my-cc' },
+  { label: t('workflow.myDrafts'), icon: EditPen, path: '/workspace/my-drafts' },
+])
 
 // ─── 布局状态 ───
 const components = ref<WorkspaceComponent[]>([])
@@ -1032,7 +1054,46 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-loading="loading" class="wsd" :class="{ 'is-editing': editing }">
+  <div
+    v-loading="loading"
+    class="wsd"
+    :class="{
+      'is-editing': editing,
+      'has-sidebar': !editing && !sidebarCollapsed,
+      'has-sidebar-rail': !editing && sidebarCollapsed,
+    }"
+  >
+    <!-- 设计01 批次2（B021-007）：左侧深色工作台侧栏，可折起为窄轨；仅查看态。 -->
+    <aside
+      v-if="!editing"
+      class="wsd-sidebar"
+      :class="{ 'is-collapsed': sidebarCollapsed }"
+      data-testid="workspace-sidebar"
+    >
+      <nav class="wsd-sidebar__nav">
+        <button
+          v-for="item in sidebarItems"
+          :key="item.path"
+          type="button"
+          class="wsd-sidebar__item"
+          :class="{ 'is-active': route.path === item.path }"
+          :title="item.label"
+          @click="router.push(item.path)"
+        >
+          <el-icon :size="16"><component :is="item.icon" /></el-icon>
+          <span v-if="!sidebarCollapsed" class="wsd-sidebar__label">{{ item.label }}</span>
+        </button>
+      </nav>
+      <button
+        type="button"
+        class="wsd-sidebar__toggle"
+        :title="sidebarCollapsed ? t('workspace.sidebarExpand') : t('workspace.sidebarCollapse')"
+        @click="sidebarCollapsed = !sidebarCollapsed"
+      >
+        <el-icon :size="14"><component :is="sidebarCollapsed ? Expand : Fold" /></el-icon>
+        <span v-if="!sidebarCollapsed">{{ t('workspace.sidebarCollapse') }}</span>
+      </button>
+    </aside>
     <!-- 设计01 工作台（B021-007 功能遗漏回补）：查看态头部为问候行+今日统计+右上配置入口；
          顶层页不提供返回（B021-001）。 -->
     <header v-if="!editing" class="wsd-hero" data-testid="workspace-hero">
@@ -1427,6 +1488,91 @@ onBeforeUnmount(() => {
   .wsd {
     padding: 20px 16px 24px;
   }
+}
+/* B021-007 批次2：设计01 左侧深色工作台侧栏（可折起为窄轨），吸附视口左缘、顶栏下方；
+   查看态内容整体右移让出侧栏，编辑态无侧栏。 */
+.wsd-sidebar {
+  position: fixed;
+  z-index: 30;
+  top: 64px;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 200px;
+  padding: 16px 12px;
+  background: #172033;
+  transition: width 0.15s ease;
+}
+.wsd-sidebar.is-collapsed {
+  width: 64px;
+  padding: 16px 8px;
+}
+.wsd-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.wsd-sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(255 255 255 / 72%);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.wsd-sidebar__item:hover {
+  background: rgb(255 255 255 / 8%);
+  color: #fff;
+}
+.wsd-sidebar__item.is-active {
+  background: var(--sw-color-primary, #2563eb);
+  color: #fff;
+}
+.wsd-sidebar__label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wsd-sidebar.is-collapsed .wsd-sidebar__item {
+  justify-content: center;
+  padding: 0;
+}
+.wsd-sidebar__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(255 255 255 / 60%);
+  font-size: 12px;
+  cursor: pointer;
+}
+.wsd-sidebar__toggle:hover {
+  background: rgb(255 255 255 / 8%);
+  color: #fff;
+}
+.wsd-sidebar.is-collapsed .wsd-sidebar__toggle {
+  justify-content: center;
+  padding: 0;
+}
+.wsd.has-sidebar {
+  padding-left: 224px;
+}
+.wsd.has-sidebar-rail {
+  padding-left: 88px;
 }
 .wsd-hero {
   position: relative;

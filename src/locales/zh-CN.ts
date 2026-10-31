@@ -3401,6 +3401,8 @@ export default {
     greetingMorning: '早上好',
     greetingAfternoon: '下午好',
     greetingEvening: '晚上好',
+    sidebarCollapse: '折起',
+    sidebarExpand: '展开',
     todoSummary: '今天有 {count} 项待办，其中 {urgent} 项即将超时',
     statMyTodo: '待我处理',
     statInitiated: '我发起的',

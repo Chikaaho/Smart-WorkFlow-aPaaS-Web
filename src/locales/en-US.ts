@@ -3506,6 +3506,8 @@ export default {
     greetingMorning: 'Good morning',
     greetingAfternoon: 'Good afternoon',
     greetingEvening: 'Good evening',
+    sidebarCollapse: 'Collapse',
+    sidebarExpand: 'Expand',
     todoSummary: 'You have {count} tasks today, {urgent} nearing deadline',
     statMyTodo: 'Assigned to me',
     statInitiated: 'Started by me',

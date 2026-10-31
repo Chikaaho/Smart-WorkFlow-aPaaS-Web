@@ -21,6 +21,7 @@ vi.mock('@/modules/workflow/api', () => ({
 const mockPush = vi.fn()
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockPush }),
+  useRoute: () => ({ path: '/workspace' }),
 }))
 
 import WorkspaceHome from './WorkspaceHome.vue'
