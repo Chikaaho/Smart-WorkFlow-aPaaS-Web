@@ -22,7 +22,7 @@ import {
 import type { WorkspaceField } from '../api/workspace-analytics'
 
 export const GRID_COLUMNS = 12
-export const GRID_GAP = 16
+export const GRID_GAP = 24
 
 export interface StudioCard {
   id: string
@@ -52,14 +52,14 @@ export const DESIGN_PRESET_GEOMETRY: Record<
   { x: number; y: number; w: number; h: number }
 > = {
   stats: { x: 0, y: 0, w: 1, h: 96 },
-  statTodo: { x: 0, y: 0, w: 0.25, h: 112 },
-  statInitiated: { x: 0.25, y: 0, w: 0.25, h: 112 },
-  statProcessed: { x: 0.5, y: 0, w: 0.25, h: 112 },
-  statDrafts: { x: 0.75, y: 0, w: 0.25, h: 112 },
-  todo: { x: 0, y: 128, w: 0.632, h: 486 },
-  favoriteItems: { x: 0.644, y: 128, w: 0.356, h: 208 },
-  efficiency: { x: 0.644, y: 368, w: 0.356, h: 262 },
-  activity: { x: 0, y: 646, w: 1, h: 260 },
+  statTodo: { x: 0, y: 0, w: 0.235, h: 120 },
+  statInitiated: { x: 0.255, y: 0, w: 0.235, h: 120 },
+  statProcessed: { x: 0.51, y: 0, w: 0.235, h: 120 },
+  statDrafts: { x: 0.765, y: 0, w: 0.235, h: 120 },
+  todo: { x: 0, y: 144, w: 0.62, h: 486 },
+  favoriteItems: { x: 0.64, y: 144, w: 0.36, h: 208 },
+  efficiency: { x: 0.64, y: 376, w: 0.36, h: 254 },
+  activity: { x: 0, y: 654, w: 1, h: 260 },
 }
 
 export interface PackedRect {

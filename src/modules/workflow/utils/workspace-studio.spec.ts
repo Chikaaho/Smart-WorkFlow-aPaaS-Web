@@ -42,25 +42,25 @@ describe('workspace-studio 12 列布局', () => {
     expect(packed.positions[cards[0].id]).toMatchObject({ col: 0, y: 0, h: 112 })
     expect(packed.positions[cards[1].id]).toMatchObject({ col: 3, y: 0 })
     expect(packed.positions[cards[3].id]).toMatchObject({ col: 9, y: 0 })
-    expect(packed.positions[cards[4].id]).toMatchObject({ col: 0, y: 166 })
-    expect(packed.height).toBe(166 + 320)
+    expect(packed.positions[cards[4].id]).toMatchObject({ col: 0, y: 174 })
+    expect(packed.height).toBe(174 + 320)
   })
 
   it('保存几何折算为首页画布使用的 x/w 分数与 y/h 像素', () => {
     const cards = [card('chart_line', 6, 320), card('chart_pie', 6, 300)]
     const positions = pixelRects(cards, 1200)
     expect(positions[cards[0].id]).toMatchObject({ x: 0, y: 0, h: 320 })
-    expect(positions[cards[0].id].w).toBeCloseTo(592, 0)
-    expect(positions[cards[1].id].x).toBeCloseTo(608, 0)
+    expect(positions[cards[0].id].w).toBeCloseTo(588, 0)
+    expect(positions[cards[1].id].x).toBeCloseTo(612, 0)
     const payload = toWorkspaceCards(cards, positions, 1200)
     expect(payload[0].instanceId).toBe(cards[0].id)
     expect(payload[0].span).toBe(6)
     expect(payload[0].height).toBe(320)
     const geometry = payload[0].metadata?.geometry as { x: number; y: number; w: number; h: number }
     expect(geometry.x).toBe(0)
-    expect(geometry.w).toBeCloseTo(0.4933, 3)
+    expect(geometry.w).toBeCloseTo(0.49, 3)
     expect(geometry.h).toBe(320)
-    expect(payload[1].metadata?.geometry as { x: number }).toMatchObject({ x: 0.5067 })
+    expect(payload[1].metadata?.geometry as { x: number }).toMatchObject({ x: 0.51 })
   })
 
   it('旧布局卡片按既有 span/geometry 折算列宽，并保留标题与 dataConfig', () => {

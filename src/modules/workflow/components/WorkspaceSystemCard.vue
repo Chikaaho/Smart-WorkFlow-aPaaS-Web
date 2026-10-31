@@ -555,8 +555,8 @@ onMounted(async () => {
   line-height: 16px;
 }
 
-/* B021-007 批次4：统计指标字色字号与设计01首页（.wsd-stat__label/__value）对齐——
-   标签 secondary 14/22，数值深色 30/38/600； tertiary token 未定义不再引用。 */
+/* B021-005 裁定修订（Owner 2026-11-01）：两处设计稿本就不同——首页数值深色
+   （设计01），配置画布数值主题色（工作台配置设计稿）；各自对齐自己的设计。 */
 .wsys__stat span {
   color: var(--sw-text-secondary);
   font-size: 14px;
@@ -564,10 +564,10 @@ onMounted(async () => {
 }
 
 .wsys__stat strong {
-  color: var(--sw-text-primary);
-  font-size: 30px;
-  line-height: 38px;
-  font-weight: 600;
+  color: var(--sw-color-primary, #2563eb);
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 700;
 }
 
 .wsys__metrics {
