@@ -8,7 +8,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/locales'
-import { Document } from '@element-plus/icons-vue'
 import { queryTodoTasks, myProcessed, myInstances, myDrafts } from '../api'
 import { queryMyCopies, queryCatalogItems } from '../api/oa'
 import { queryAnalyticsSummary, type AnalyticsSummary } from '../api/i4'
@@ -218,7 +217,7 @@ async function loadEfficiency(): Promise<void> {
 onMounted(async () => {
   try {
     if (props.typeCode === 'todo') await loadTodo()
-    else if (props.typeCode === 'stats') await loadLegacyStats()
+    else if (props.typeCode.startsWith('stat')) await loadLegacyStats()
     else if (props.typeCode === 'favoriteItems') await loadQuick()
     else if (props.typeCode === 'activity') await loadActivity()
     else if (props.typeCode === 'efficiency') await loadEfficiency()
@@ -232,12 +231,11 @@ onMounted(async () => {
   <div class="wsys" :class="`wsys--${typeCode}`">
     <div v-if="loading" class="wsys__empty">{{ t('common.loading') }}</div>
 
-    <!-- B021-007 批次5：独立指标卡——数值+徽标+图标，形态与首页统计小卡一致 -->
+    <!-- B021-007 批次5：独立指标卡——标题在卡片头，正文仅数值+徽标（设计稿画布统计卡无图标） -->
     <template v-else-if="statMetric">
       <div class="wsys__stat wsys__stat--single">
         <strong>{{ statMetric.value }}</strong>
         <span v-if="statMetric.badge" class="wsys__stat-badge">{{ statMetric.badge }}</span>
-        <el-icon class="wsys__stat-icon" :size="20"><Document /></el-icon>
       </div>
     </template>
 
@@ -250,7 +248,6 @@ onMounted(async () => {
           <span v-if="legacyBadgeOf(item.key)" class="wsys__stat-badge">{{
             legacyBadgeOf(item.key)
           }}</span>
-          <el-icon class="wsys__stat-icon" :size="20"><Document /></el-icon>
         </div>
       </div>
     </template>
@@ -556,12 +553,6 @@ onMounted(async () => {
   color: var(--sw-text-secondary);
   font-size: 12px;
   line-height: 16px;
-}
-.wsys__stat .wsys__stat-icon {
-  position: absolute;
-  right: 0;
-  top: 14px;
-  color: var(--sw-color-primary, #2563eb);
 }
 
 /* B021-007 批次4：统计指标字色字号与设计01首页（.wsd-stat__label/__value）对齐——
