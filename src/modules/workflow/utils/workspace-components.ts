@@ -18,6 +18,34 @@ export interface BuiltinWorkspaceComponent {
 
 export const SYSTEM_LIBRARY: BuiltinWorkspaceComponent[] = [
   {
+    typeCode: 'statTodo',
+    rendererKey: 'statMetric',
+    labelKey: 'workspace.library.statTodo',
+    defaultSpan: 3,
+    defaultHeight: 112,
+  },
+  {
+    typeCode: 'statInitiated',
+    rendererKey: 'statMetric',
+    labelKey: 'workspace.library.statInitiated',
+    defaultSpan: 3,
+    defaultHeight: 112,
+  },
+  {
+    typeCode: 'statProcessed',
+    rendererKey: 'statMetric',
+    labelKey: 'workspace.library.statProcessed',
+    defaultSpan: 3,
+    defaultHeight: 112,
+  },
+  {
+    typeCode: 'statDrafts',
+    rendererKey: 'statMetric',
+    labelKey: 'workspace.library.statDrafts',
+    defaultSpan: 3,
+    defaultHeight: 112,
+  },
+  {
     typeCode: 'todo',
     rendererKey: 'todo',
     labelKey: 'workspace.library.todo',

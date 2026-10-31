@@ -41,9 +41,10 @@ export interface StudioCard {
 }
 
 /**
- * 设计 3:2 默认几何（WorkspaceBoard.DEFAULT_CARD_GEOMETRY 同源数值）：
- * 统计 96 / 待办(0,112,0.632,486) / 快捷(0.644,112,0.356,208) /
- * 效能(0.644,336,0.356,262) / 动态(0,614,1,260)。
+ * 设计 3:2 默认几何（B021-007 批次5：四张独立指标卡替代统计概览组合卡，
+ * WorkspaceBoard.DEFAULT_CARD_GEOMETRY 同源数值）：
+ * 指标卡 4×(0.25,0,?,112) / 待办(0,128,0.632,486) / 快捷(0.644,128,0.356,208) /
+ * 效能(0.644,368,0.356,262) / 动态(0,646,1,260)。
  * 右栏「快捷+效能」纵向堆叠无法由 12 列行模型表达，重置态按此绝对几何保存。
  */
 export const DESIGN_PRESET_GEOMETRY: Record<
@@ -51,10 +52,14 @@ export const DESIGN_PRESET_GEOMETRY: Record<
   { x: number; y: number; w: number; h: number }
 > = {
   stats: { x: 0, y: 0, w: 1, h: 96 },
-  todo: { x: 0, y: 112, w: 0.632, h: 486 },
-  favoriteItems: { x: 0.644, y: 112, w: 0.356, h: 208 },
-  efficiency: { x: 0.644, y: 336, w: 0.356, h: 262 },
-  activity: { x: 0, y: 614, w: 1, h: 260 },
+  statTodo: { x: 0, y: 0, w: 0.25, h: 112 },
+  statInitiated: { x: 0.25, y: 0, w: 0.25, h: 112 },
+  statProcessed: { x: 0.5, y: 0, w: 0.25, h: 112 },
+  statDrafts: { x: 0.75, y: 0, w: 0.25, h: 112 },
+  todo: { x: 0, y: 128, w: 0.632, h: 486 },
+  favoriteItems: { x: 0.644, y: 128, w: 0.356, h: 208 },
+  efficiency: { x: 0.644, y: 368, w: 0.356, h: 262 },
+  activity: { x: 0, y: 646, w: 1, h: 260 },
 }
 
 export interface PackedRect {

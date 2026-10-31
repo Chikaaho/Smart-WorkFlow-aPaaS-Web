@@ -3559,6 +3559,10 @@ export default {
     noEfficiency: 'No efficiency data',
     legacyCardHint: 'Legacy card, view it on the home page; re-add it to upgrade',
     library: {
+      statTodo: 'My to-dos',
+      statInitiated: 'Initiated by me',
+      statProcessed: 'Processed this week',
+      statDrafts: 'Drafts',
       todo: 'My to-dos',
       quickLaunch: 'Quick launch',
       activity: 'Activity',

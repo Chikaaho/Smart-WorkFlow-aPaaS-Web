@@ -150,7 +150,7 @@ describe('WorkspaceHome 布局与查询收敛（R4）', () => {
     await flushPromises()
     const hero = wrapper.find('[data-testid="workspace-hero"]')
     expect(hero.exists()).toBe(true)
-    expect(hero.find('.wsd-hero__greeting').text()).toMatch(/^(上午好|下午好|晚上好)/)
+    expect(hero.find('.wsd-hero__greeting').text()).toMatch(/^(早上好|上午好|下午好|晚上好)/)
     // Q08 二级工具栏已被设计01问候行取代；顶层页无返回（B021-001）
     expect(wrapper.find('[data-testid="workspace-view-toolbar"]').exists()).toBe(false)
     expect(wrapper.find('.wsd-viewbar__back').exists()).toBe(false)

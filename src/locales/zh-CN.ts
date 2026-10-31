@@ -3454,6 +3454,10 @@ export default {
     noEfficiency: '暂无效能数据',
     legacyCardHint: '旧版卡片，可在首页查看；重新添加可升级为新版组件',
     library: {
+      statTodo: '待我处理',
+      statInitiated: '我发起的',
+      statProcessed: '本周已办',
+      statDrafts: '草稿',
       todo: '我的待办',
       quickLaunch: '快捷发起',
       activity: '业务动态',

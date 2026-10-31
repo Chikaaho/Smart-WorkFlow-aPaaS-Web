@@ -9,7 +9,10 @@ const catalogItems = [
   { itemKey: 'opinion', name: 'U020 意见流转', formKey: 'form_opinion' },
 ]
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push }),
+  useRoute: () => ({ path: '/workspace' }),
+}))
 
 vi.mock('../api', () => ({
   queryTodoTasks: () => Promise.resolve({ list: [], total: 17 }),

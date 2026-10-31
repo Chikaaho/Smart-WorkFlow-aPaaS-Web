@@ -41,6 +41,7 @@ export type CategoryCounts = Record<string, number>
 /** 工作台内置渲染器键；后端只能配置这些安全注册器，不能下发组件路径。 */
 export type WorkspaceRendererKey =
   | 'stats'
+  | 'statMetric'
   | 'todo'
   | 'favorites'
   | 'activity'

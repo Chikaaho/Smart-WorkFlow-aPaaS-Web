@@ -310,16 +310,28 @@ async function load(): Promise<void> {
 }
 
 function defaultCards(): StudioCard[] {
-  const visible = ['stats', 'todo', 'favoriteItems', 'activity', 'efficiency']
-  // 默认几何对齐设计 3:2（WorkspaceBoard.DEFAULT_CARD_GEOMETRY 同源）：
-  // 统计 96 / 待办 486 / 快捷 208 / 效能 262 / 动态 260。
+  // B021-007 批次5：设计01 默认布局——四张独立指标卡替代统计概览组合卡
+  const visible = [
+    'statTodo',
+    'statInitiated',
+    'statProcessed',
+    'statDrafts',
+    'todo',
+    'favoriteItems',
+    'activity',
+    'efficiency',
+  ]
+  // 默认几何对齐设计 3:2（DESIGN_PRESET_GEOMETRY 同源）：
+  // 指标卡 112 / 待办 486 / 快捷 208 / 效能 262 / 动态 260。
   return cardTypes.value
     .filter((type) => visible.includes(type.typeCode))
     .map((type) => {
       const card = defaultCard(type.typeCode, type.displayName)
       const preset = DESIGN_PRESET_GEOMETRY[type.typeCode]
       const withPreset = preset ? { ...card, presetGeometry: { ...preset } } : card
-      if (type.typeCode === 'stats') return { ...withPreset, span: 12, height: preset?.h ?? 96 }
+      if (type.typeCode.startsWith('stat')) {
+        return { ...withPreset, span: 3, height: preset?.h ?? 112 }
+      }
       if (type.typeCode === 'todo') return { ...withPreset, span: 6, height: preset?.h ?? 486 }
       if (type.typeCode === 'favoriteItems')
         return { ...withPreset, span: 6, height: preset?.h ?? 208 }

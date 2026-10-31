@@ -147,6 +147,26 @@ const STAT_ICONS: Record<string, { icon: unknown; bg: string; color: string }> =
   drafts: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
 }
 
+// ─── B021-007 批次5：独立指标卡（设计01/工作台配置）──
+// typeCode → stats 计算属性指标键；画布/预览/首页共用同一形态。
+const STAT_METRIC_BY_TYPE: Record<string, string> = {
+  statTodo: 'todo',
+  statInitiated: 'initiated',
+  statProcessed: 'processed',
+  statDrafts: 'drafts',
+}
+
+const hasStatMetric = computed(() =>
+  components.value.some((c) => c.visible && !!STAT_METRIC_BY_TYPE[c.typeCode ?? '']),
+)
+
+function statMetricOf(key: string) {
+  const component = components.value.find((item) => item.key === key)
+  const metricKey = STAT_METRIC_BY_TYPE[component?.typeCode ?? '']
+  if (!metricKey) return null
+  return stats.value.find((s) => s.key === metricKey) ?? null
+}
+
 const stats = computed(() => [
   {
     key: 'todo',
@@ -524,7 +544,17 @@ async function loadAnalytics() {
 }
 
 /** 设计01 默认页面的五块；其余卡片类型只在自定义布局/编辑面板中启用。 */
-const DESIGN_DEFAULT_TYPES = new Set(['stats', 'todo', 'favoriteItems', 'activity', 'efficiency'])
+const DESIGN_DEFAULT_TYPES = new Set([
+  'stats',
+  'statTodo',
+  'statInitiated',
+  'statProcessed',
+  'statDrafts',
+  'todo',
+  'favoriteItems',
+  'activity',
+  'efficiency',
+])
 
 /**
  * 后端卡片类型变化后补默认卡片。
@@ -563,6 +593,7 @@ function defaultMetadata(type: WorkspaceCardType): Record<string, unknown> {
 /** 各渲染器的默认卡片高度；缺省 320 保证面板内容可见。 */
 const DEFAULT_CARD_HEIGHTS: Record<string, number> = {
   stats: 168,
+  statMetric: 112,
   todo: 360,
   favorites: 300,
   activity: 320,
@@ -699,12 +730,15 @@ function openDraft(item: Record<string, unknown>) {
 
 async function loadComponentData() {
   const tasks: Array<Promise<void>> = []
-  const needTodo = showTodoPanel.value || showStats.value
-  const needProcessed = showTodoPanel.value || showStats.value || showActivity.value
-  const needInitiated = showStats.value || showActivity.value
+  // B021-007 批次5：独立指标卡与统计概览需要同一批真实 total 数据
+  const needTodo = showTodoPanel.value || showStats.value || hasStatMetric.value
+  const needProcessed =
+    showTodoPanel.value || showStats.value || showActivity.value || hasStatMetric.value
+  const needInitiated = showStats.value || showActivity.value || hasStatMetric.value
   const needDrafts =
     showTodoPanel.value ||
     showStats.value ||
+    hasStatMetric.value ||
     components.value.some((c) => rendererKeyOf(c.key) === 'drafts' && c.visible)
   const needCc = showTodoPanel.value || showActivity.value
 
@@ -1239,7 +1273,26 @@ onBeforeUnmount(() => {
           </header>
 
           <div class="wsd-canvas-item__body">
-            <div v-if="rendererKeyOf(component.key) === 'stats'" class="wsd-stats">
+            <!-- B021-007 批次5：独立指标卡（statTodo/statInitiated/statProcessed/statDrafts） -->
+            <div v-if="statMetricOf(component.key)" class="wsd-stat wsd-stat--single">
+              <span class="wsd-stat__label">{{ statMetricOf(component.key)?.label }}</span>
+              <span class="wsd-stat__value">{{ statMetricOf(component.key)?.value }}</span>
+              <span v-if="statMetricOf(component.key)?.helper" class="wsd-stat__badge">{{
+                statMetricOf(component.key)?.helper
+              }}</span>
+              <span
+                class="wsd-stat__iconbg"
+                :style="{
+                  background: STAT_ICONS[statMetricOf(component.key)?.key ?? '']?.bg,
+                  color: STAT_ICONS[statMetricOf(component.key)?.key ?? '']?.color,
+                }"
+              >
+                <el-icon :size="20">
+                  <component :is="STAT_ICONS[statMetricOf(component.key)?.key ?? '']?.icon" />
+                </el-icon>
+              </span>
+            </div>
+            <div v-else-if="rendererKeyOf(component.key) === 'stats'" class="wsd-stats">
               <div v-for="s in stats" :key="s.key" class="wsd-stat">
                 <span class="wsd-stat__label">{{ s.label }}</span>
                 <span class="wsd-stat__value">{{ s.value }}</span>
@@ -1786,6 +1839,10 @@ onBeforeUnmount(() => {
   overflow: auto;
 }
 .wsd-canvas-item__body > .wsd-stats {
+  height: 100%;
+}
+/* B021-007 批次5：单张独立指标卡撑满其画布槽位 */
+.wsd-canvas-item__body > .wsd-stat--single {
   height: 100%;
 }
 .wsd-edge {
