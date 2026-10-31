@@ -1859,10 +1859,13 @@ onBeforeUnmount(() => {
   align-content: start;
 }
 /* B021-002：查看态统计与配置工作台画布同为一张“统计概览”整卡，
-   格子在卡内垂直居中填满槽位，不再留下透明空洞。 */
+   格子在卡内垂直居中填满槽位，不再留下透明空洞。
+   B021-003：槽位小于内容时（Owner 可任意缩小高度）按画布语义裁剪，
+   safe center 自动退化为顶对齐，绝不越界压住相邻卡片。 */
 .wsd-stats--as-card {
   box-sizing: border-box;
-  align-content: center;
+  overflow: hidden;
+  align-content: safe center;
   background: #ffffff;
   border: 1px solid var(--sw-border);
   border-radius: 10px;
