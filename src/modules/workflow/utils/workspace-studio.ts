@@ -158,12 +158,30 @@ export function fromWorkspaceCard(
   const chartType =
     (metadata.dataConfig as WorkspaceDataConfig | undefined)?.chartType ?? builtin?.chartType
   const legacyConfig = (metadata.dataConfig as WorkspaceDataConfig | undefined) ?? {}
+  // B021-007：保存的绝对几何（x/w 分数 ≤1、y/h 像素）回填 presetGeometry——
+  // 重载后画布按已保存位置渲染（与首页同源），不再整批退回流式排布造成空白与错位。
+  const gx = Number(geometry?.x)
+  const gy = Number(geometry?.y)
+  const gw = Number(geometry?.w)
+  const gh = Number(geometry?.h)
+  const restoredGeometry =
+    Number.isFinite(gx) &&
+    gx >= 0 &&
+    gx <= 1 &&
+    Number.isFinite(gw) &&
+    gw > 0 &&
+    gw <= 1 &&
+    Number.isFinite(gh) &&
+    gh >= 96
+      ? { x: gx, y: Number.isFinite(gy) ? gy : 0, w: gw, h: gh }
+      : undefined
   return {
     id: card.instanceId || `${typeCode}-${index}`,
     typeCode,
     title: String(metadata.title ?? label(typeCode)),
     span,
     height,
+    presetGeometry: restoredGeometry,
     config:
       kind === 'system'
         ? legacyConfig
@@ -202,34 +220,31 @@ export function packCards(cards: StudioCard[]): PackResult {
 
 /** 按实测画布宽度把列位置折算为像素；保存时再折算为 x/w 分数。 */
 export function pixelRects(cards: StudioCard[], canvasWidth: number): Record<string, PackedRect> {
-  // 重置后的未拖动卡片直接采用设计 3:2 预设几何（右栏堆叠等行模型外形态）。
-  if (cards.every((card) => card.presetGeometry)) {
-    const positions: Record<string, PackedRect> = {}
-    for (const card of cards) {
-      const preset = card.presetGeometry!
+  // B021-007：逐卡取用绝对几何（设计预设或已保存布局回填），其余卡片走 12 列流式
+  // 打包——重载后画布按已保存位置渲染（与首页同源），不再整批退回流式造成空白错位。
+  const packed = packCards(cards)
+  const positions = packed.positions
+  const usable = Math.max(320, canvasWidth)
+  const columnWidth = (usable - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS
+  for (const card of cards) {
+    const preset = card.presetGeometry
+    if (preset) {
       positions[card.id] = {
-        x: preset.x * canvasWidth,
+        x: preset.x * usable,
         y: preset.y,
-        w: preset.w * canvasWidth,
+        w: preset.w * usable,
         h: preset.h,
         col: 0,
         row: 0,
       }
+      continue
     }
-    const height = Math.max(...cards.map((card) => card.presetGeometry!.y + card.presetGeometry!.h))
-    void height
-    return positions
-  }
-  const packed = packCards(cards)
-  const usable = Math.max(320, canvasWidth)
-  const columnWidth = (usable - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS
-  for (const card of cards) {
-    const position = packed.positions[card.id]
+    const position = positions[card.id]
     if (!position) continue
     position.x = position.col * (columnWidth + GRID_GAP)
     position.w = card.span * columnWidth + (card.span - 1) * GRID_GAP
   }
-  return packed.positions
+  return positions
 }
 
 export function toWorkspaceCards(

@@ -39,7 +39,6 @@ import {
   defaultCard,
   fromWorkspaceCard,
   kindOf,
-  packCards,
   pixelRects,
   toWorkspaceCards,
   type PackedRect,
@@ -180,8 +179,10 @@ const positions = computed<Record<string, PackedRect>>(() =>
 )
 
 const canvasHeight = computed(() => {
-  const packed = packCards(cards.value)
-  return Math.max(520, packed.height + 32)
+  // B021-007：按实际渲染位置（预设/已保存几何或流式打包）取最低底部，避免固定高度裁切。
+  const rects = Object.values(positions.value)
+  const bottom = rects.reduce((max, r) => Math.max(max, r.y + r.h), 0)
+  return Math.max(520, Math.round(bottom) + 32)
 })
 
 const selectedCard = computed(
