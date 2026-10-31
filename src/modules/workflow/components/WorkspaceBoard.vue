@@ -1870,20 +1870,23 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   padding: 0;
 }
+/* B021-005：数值/标签颜色字号与配置画布（WorkspaceSystemCard .wsys__stat）对齐——
+   数值主题色 28/700；标签 --sw-text-tertiary 未定义（画布实际继承 --sw-text-primary
+   #172033），按规范 token 显式声明。 */
 .wsd-stat__label {
   display: block;
   overflow-wrap: break-word;
-  font-size: 14px;
-  line-height: 22px;
-  color: var(--sw-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--sw-text-primary, #172033);
 }
 .wsd-stat__value {
   display: block;
   margin-top: 2px;
-  font-size: 30px;
-  line-height: 38px;
-  font-weight: 600;
-  color: var(--sw-text-primary);
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 700;
+  color: var(--sw-color-primary, #2563eb);
 }
 .wsd-panel {
   box-sizing: border-box;
