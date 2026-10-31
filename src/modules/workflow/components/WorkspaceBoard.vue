@@ -1167,7 +1167,12 @@ onBeforeUnmount(() => {
           </header>
 
           <div class="wsd-canvas-item__body">
-            <div v-if="rendererKeyOf(component.key) === 'stats'" class="wsd-stats">
+            <div
+              v-if="rendererKeyOf(component.key) === 'stats'"
+              class="wsd-stats"
+              :class="{ 'wsd-stats--as-card': !editing }"
+            >
+              <h3 v-if="!editing" class="wsd-stats__title">{{ componentTitle(component.key) }}</h3>
               <div v-for="s in stats" :key="s.key" class="wsd-stat">
                 <span class="wsd-stat__label">{{ s.label }}</span>
                 <span class="wsd-stat__value">{{ s.value }}</span>
@@ -1852,6 +1857,24 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   align-content: start;
+}
+/* B021-002：查看态统计与配置工作台画布同为一张“统计概览”整卡，
+   格子在卡内垂直居中填满槽位，不再留下透明空洞。 */
+.wsd-stats--as-card {
+  box-sizing: border-box;
+  align-content: center;
+  background: #ffffff;
+  border: 1px solid var(--sw-border);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+.wsd-stats__title {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
 }
 .wsd-stat {
   position: relative;
