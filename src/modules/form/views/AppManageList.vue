@@ -33,6 +33,10 @@ const userStore = useUserStore()
 
 const apps = ref<FormApp[]>([])
 const keyword = ref('')
+/** B021-009：无数据/无匹配时给出空态文案（此前筛选条以下整片空白） */
+const emptyText = computed(() =>
+  keyword.value.trim() ? t('form.appCenter.searchAppEmpty') : t('form.appCenter.emptyApps'),
+)
 const loading = ref(false)
 const errorMsg = ref('')
 const loadError = ref<ApiError | null>(null)
@@ -295,7 +299,13 @@ onMounted(() => {
       @select="enterWorkspace"
       @command="onCardCommand"
       @create="openCreate"
-    />
+    >
+      <template #empty>
+        <div data-testid="app-manage-empty">
+          <p class="app-manage__empty-text">{{ emptyText }}</p>
+        </div>
+      </template>
+    </AppGrid>
 
     <DetailDialog
       :model-value="dialogVisible"
