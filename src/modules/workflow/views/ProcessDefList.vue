@@ -682,6 +682,13 @@ onMounted(() => {
   --el-table-header-bg-color: #f4f6fb;
   --el-table-header-text-color: #6b7280;
 }
+/* B021-008：全固定列在宽视口下不随卡片拉伸、右侧留白；不足时按列宽比例铺满，
+   超出时保持横向滚动。EP2 表体经 el-scrollbar 嵌套，view 须一并放开参照系。 */
+.defs-table :deep(.el-table__header-wrapper .el-table__header),
+.defs-table :deep(.el-table__body-wrapper .el-table__body),
+.defs-table :deep(.el-table__body-wrapper .el-scrollbar__view) {
+  min-width: 100%;
+}
 .defs-table :deep(th.el-table__cell) {
   height: 42px;
   font-size: 12px;

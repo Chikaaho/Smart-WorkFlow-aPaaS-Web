@@ -257,6 +257,20 @@ const emit = defineEmits<{
 .standard-list--design :deep(.el-table th .cell) {
   line-height: 18px;
 }
+/* B021-008：列宽总和按 1920 设计视口调定，更宽视口下内层表格不随卡片拉伸，
+   右侧留白随视口线性增大、分页远离表格。min-width:100% 使不足时按列宽比例
+   铺满卡片；列宽总和超出时由 min-width 不缩小，横向滚动形态不变。
+   header/body 各自限定在自身 wrapper 内（EP2 表体经 el-scrollbar 嵌套），
+   fixed 列覆盖层（el-table__fixed-*，位于两个 wrapper 之外）不受影响。 */
+.standard-list--design :deep(.el-table__header-wrapper .el-table__header),
+.standard-list--design :deep(.el-table__body-wrapper .el-table__body) {
+  min-width: 100%;
+}
+/* EP2 表体外层的 el-scrollbar__view 是 inline-block 收缩包裹，须一并放开，
+   否则表体 min-width:100% 的参照系随内容收缩而不生效；溢出时仍由内容宽度主导。 */
+.standard-list--design :deep(.el-table__body-wrapper .el-scrollbar__view) {
+  min-width: 100%;
+}
 .standard-list--design :deep(.el-table),
 .standard-list--design :deep(.el-table__inner-wrapper::before) {
   border-radius: 0;
