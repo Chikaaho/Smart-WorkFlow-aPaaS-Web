@@ -2147,6 +2147,7 @@ export default {
   },
   page: {
     placeholder: '占位页面',
+    underDevelopment: '开发中',
   },
   perm: {
     AgentModelManage: '模型新建/编辑/删除',

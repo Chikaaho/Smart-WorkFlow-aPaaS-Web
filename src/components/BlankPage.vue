@@ -28,7 +28,29 @@ const title = computed(() => {
 
 <template>
   <div class="blank-page">
-    <p>{{ title }}</p>
+    <p class="blank-page__title">{{ title }}</p>
+    <!-- B021-011：占位页给出「开发中」提示，避免菜单进入后只有标题、整页无声空白 -->
+    <p class="blank-page__hint">{{ t('page.underDevelopment') }}</p>
     <!-- TODO(skeleton): 业务内容待后续迭代实现 -->
   </div>
 </template>
+
+<style scoped>
+.blank-page {
+  box-sizing: border-box;
+  padding: var(--sw-space-20);
+}
+.blank-page__title {
+  margin: 0;
+  font-size: var(--sw-font-h2);
+  font-weight: var(--sw-font-weight-emphasis);
+  line-height: var(--sw-space-24);
+  color: var(--sw-text-primary);
+}
+.blank-page__hint {
+  margin: var(--sw-space-8) 0 0;
+  font-size: var(--sw-font-body);
+  line-height: 22px;
+  color: var(--sw-text-secondary);
+}
+</style>

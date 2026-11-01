@@ -2209,6 +2209,7 @@ export default {
   },
   page: {
     placeholder: 'Placeholder page',
+    underDevelopment: 'Under development',
   },
   perm: {
     AgentModelManage: 'Create/edit/delete models',
