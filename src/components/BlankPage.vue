@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from '@/locales'
 import { useRoute } from 'vue-router'
 import { useNodeTitle } from '@/layouts/menu-title'
+import { Box } from '@element-plus/icons-vue'
 
 /**
  * BlankPage — 尚未实现业务内容的占位页。
@@ -28,9 +29,12 @@ const title = computed(() => {
 
 <template>
   <div class="blank-page">
-    <p class="blank-page__title">{{ title }}</p>
-    <!-- B021-011：占位页给出「开发中」提示，避免菜单进入后只有标题、整页无声空白 -->
-    <p class="blank-page__hint">{{ t('page.underDevelopment') }}</p>
+    <div class="blank-page__hero" role="status">
+      <!-- B021-011：占位页居中给出图标 + 「开发中」提示，避免菜单进入后整页无声空白 -->
+      <el-icon class="blank-page__icon" :size="48"><Box /></el-icon>
+      <p class="blank-page__title">{{ title }}</p>
+      <p class="blank-page__hint">{{ t('page.underDevelopment') }}</p>
+    </div>
     <!-- TODO(skeleton): 业务内容待后续迭代实现 -->
   </div>
 </template>
@@ -38,17 +42,31 @@ const title = computed(() => {
 <style scoped>
 .blank-page {
   box-sizing: border-box;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: var(--sw-space-20);
 }
+.blank-page__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sw-space-8);
+  text-align: center;
+}
+.blank-page__icon {
+  color: var(--sw-border-strong, #dcdfe6);
+}
 .blank-page__title {
-  margin: 0;
+  margin: var(--sw-space-8) 0 0;
   font-size: var(--sw-font-h2);
   font-weight: var(--sw-font-weight-emphasis);
   line-height: var(--sw-space-24);
   color: var(--sw-text-primary);
 }
 .blank-page__hint {
-  margin: var(--sw-space-8) 0 0;
+  margin: 0;
   font-size: var(--sw-font-body);
   line-height: 22px;
   color: var(--sw-text-secondary);
