@@ -241,8 +241,10 @@ const emit = defineEmits<{
   padding: 0;
 }
 .standard-list--design :deep(.list-actions .el-button.is-link) {
-  min-width: 40px;
+  /* B021-012r2：min-width 40 是 372px 操作列时代的规格；160px 钳制列宽下
+     三按钮（40+40+40+间距）必溢出被裁。改按文字自然宽（height 32 保留点击高）。 */
   height: 32px;
+  padding-inline: 0;
   font-size: var(--sw-font-body);
   font-weight: var(--sw-font-weight-emphasis);
   line-height: 22px;

@@ -76,6 +76,7 @@ function onCommand(row: unknown, command: string | number | object) {
     :width="colWidth"
     fixed="right"
     column-key="actions"
+    class-name="list-actions-col"
   >
     <template #default="{ row }">
       <template v-if="visibleActions(row).length > 0">
@@ -128,10 +129,26 @@ function onCommand(row: unknown, command: string | number | object) {
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: 8px;
 }
 .list-actions :deep(.el-button.is-link) {
   border: none;
-  padding: 0 2px;
+  /* B021-012r2：按钮水平 margin/padding 归零（EP 相邻按钮自带 12px 左距与内距，
+     与 flex gap 叠加致 190px > 144px 可用宽、「停用」被固定列裁切）；
+     间距统一交给容器 gap: 8px，最长组合 设置管理员+编辑+停用 = 142px ≤ 144px。 */
+  padding-left: 0;
+  padding-right: 0;
+  margin-left: 0;
+  flex: 0 0 auto;
+}
+</style>
+
+<style>
+/* B021-012r2：操作列单元格内距 12→8（可用宽 136→144），配合上面的自然宽排布；
+   class-name 挂在 td/th 上，经 el-table 渲染进父级树，scoped 选择器不命中，须全局块。
+   仅命中 .list-actions-col，不影响其他列。 */
+.el-table .list-actions-col .cell {
+  padding-left: 8px;
+  padding-right: 8px;
 }
 </style>
