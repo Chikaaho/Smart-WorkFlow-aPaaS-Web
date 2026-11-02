@@ -498,7 +498,7 @@ onMounted(loadList)
           <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
         </el-table-column>
         <!-- 444：与其余列合计 1878，恢复原八列表头锚点；三直显按钮英文不裁尾 -->
-        <ListActionsColumn :actions="rowActions" :width="444" />
+        <ListActionsColumn :actions="rowActions" :width="160" />
       </el-table>
 
       <!-- 空态 -->

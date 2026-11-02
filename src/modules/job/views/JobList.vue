@@ -463,7 +463,7 @@ onMounted(loadList)
       <el-table-column prop="lastFireTime" :label="t('job.lastFireTime')" width="170" />
       <el-table-column prop="nextFireTime" :label="t('job.nextFireTime')" width="170" />
       <el-table-column prop="createTime" :label="t('common.createTime')" width="170" />
-      <ListActionsColumn :actions="rowActions" :width="170" />
+      <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
 
     <!-- 空态操作 -->

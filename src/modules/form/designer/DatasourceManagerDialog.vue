@@ -364,7 +364,7 @@ watch(visible, (open) => {
                 }}
               </template>
             </el-table-column>
-            <el-table-column :label="t('common.actions')" width="210">
+            <el-table-column :label="t('common.actions')" width="140">
               <template #default="{ row }">
                 <el-button link @click="openEdit(row)">{{ t('common.edit') }}</el-button>
                 <el-button link @click="openGrants(row)">授权</el-button>

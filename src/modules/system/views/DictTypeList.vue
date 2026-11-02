@@ -336,7 +336,7 @@ onMounted(loadList)
       </el-table-column>
       <!-- BF20261013-038 全局巡检：150 装不下「编辑/管理字典项/删除」三格（实测中文 166、英文 181），
            末格被裁 48px；按四格标准放宽到 200 -->
-      <ListActionsColumn :actions="rowActions" :width="200" />
+      <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
 
     <!-- 空态操作 -->

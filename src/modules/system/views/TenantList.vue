@@ -453,7 +453,7 @@ onMounted(loadList)
       <el-table-column :label="t('common.createTime')" width="296">
         <template #default="{ row }">{{ displayTime(row.createTime) }}</template>
       </el-table-column>
-      <ListActionsColumn :actions="rowActions" :width="372" />
+      <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
 
     <template #empty-action>

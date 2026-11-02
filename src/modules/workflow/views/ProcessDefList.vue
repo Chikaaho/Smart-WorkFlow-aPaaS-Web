@@ -430,7 +430,7 @@ onMounted(() => {
               {{ statusRow(row).updatedBy || '—' }} · {{ formatDefTime(row.updateTime) }}
             </template>
           </el-table-column>
-          <ListActionsColumn :actions="rowActions" :width="170" />
+          <ListActionsColumn :actions="rowActions" :width="160" />
         </el-table>
         <div class="p53-admin-defs__table-footer">
           <!-- 6:2 分页器与 4:2 同一设计形态：文字「上一页/下一页」+ 页码 + 页大小 + 跳页 -->

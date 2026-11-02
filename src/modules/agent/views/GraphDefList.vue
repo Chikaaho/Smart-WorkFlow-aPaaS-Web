@@ -319,7 +319,7 @@ onMounted(() => {
         </template>
       </el-table-column>
       <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
-      <ListActionsColumn :actions="rowActions" :width="170" />
+      <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
   </StandardListTemplate>
 </template>

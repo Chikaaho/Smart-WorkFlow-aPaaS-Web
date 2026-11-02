@@ -306,7 +306,7 @@ onMounted(() => {
             {{ row.realtimeGlobalConcurrency }} / {{ row.realtimeTenantConcurrency }}
           </template>
         </el-table-column>
-        <ListActionsColumn v-if="canManage" :actions="policyActions" :width="250" />
+        <ListActionsColumn v-if="canManage" :actions="policyActions" :width="160" />
       </el-table>
     </section>
   </StandardFormTemplate>

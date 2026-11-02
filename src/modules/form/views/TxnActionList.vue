@@ -633,7 +633,7 @@ onMounted(async () => {
         <el-table-column prop="updateTime" :label="t('common.updateTime')" width="160">
           <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
         </el-table-column>
-        <ListActionsColumn :actions="rowActions" :width="260" />
+        <ListActionsColumn :actions="rowActions" :width="160" />
       </el-table>
 
       <template #empty-action>

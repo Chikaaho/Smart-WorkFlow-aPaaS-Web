@@ -5377,7 +5377,8 @@ function nodeLabelLines(label: string) {
             }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220">
+        <el-table-column label="操作" width="140">
+          <!-- B021-012：操作列最多直显 3 个按钮，删除收进「更多」下拉 -->
           <template #default="{ $index }">
             <el-button size="small" link :disabled="$index === 0" @click="moveTrigger($index, -1)"
               >上移</el-button
@@ -5392,9 +5393,17 @@ function nodeLabelLines(label: string) {
             <el-button size="small" link type="primary" @click="editTrigger($index)"
               >编辑</el-button
             >
-            <el-button size="small" link type="danger" @click="removeTrigger($index)"
-              >删除</el-button
+            <el-dropdown
+              trigger="click"
+              @command="(cmd: string) => cmd === 'remove' && removeTrigger($index)"
             >
+              <el-button size="small" link type="primary">更多</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="remove">删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>

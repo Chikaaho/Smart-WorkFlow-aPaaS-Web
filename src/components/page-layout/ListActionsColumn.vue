@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
@@ -10,6 +11,9 @@ const { t } = useI18n()
  * 按钮 link 纯文字无底色（V012-BUG-015）。权限/状态显隐由页面在 actions
  * 工厂内以 visible 表达（如 hasPerm() 判定；服务端仍是最终权威），
  * visible=false 的项不渲染，不占用直接可见名额。
+ *
+ * B021-012：列宽全局钳制 ≤160px（约 10% 设计行宽 1642），历史页面传入的
+ * 超大宽度（372/444 等）在组件内收敛，防止「操作列占小半行」回归。
  */
 export interface ListAction {
   /** 稳定键：更多下拉的 command 与 v-for key */
@@ -37,6 +41,17 @@ const props = withDefaults(
   { width: 140, label: undefined, inlineLimit: 3 },
 )
 
+/** B021-012 全局操作列宽度上限：10% 设计行宽（1642×10%≈164，取 160） */
+const ACTIONS_WIDTH_CAP = 160
+
+const colWidth = computed(() => {
+  const n = Number(props.width)
+  // 数值宽度钳制到上限；非数值（百分比等）原样透传
+  return Number.isFinite(n) && String(props.width).trim() !== ''
+    ? Math.min(n, ACTIONS_WIDTH_CAP)
+    : props.width
+})
+
 function visibleActions(row: unknown): ListAction[] {
   return props.actions(row).filter((action) => action.visible !== false)
 }
@@ -58,7 +73,7 @@ function onCommand(row: unknown, command: string | number | object) {
 <template>
   <el-table-column
     :label="label ?? t('common.actions')"
-    :width="width"
+    :width="colWidth"
     fixed="right"
     column-key="actions"
   >

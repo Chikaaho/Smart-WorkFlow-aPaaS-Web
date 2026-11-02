@@ -20,7 +20,7 @@ export default {
   tenantAdmin: {
     loginCode: 'Tenant code',
     loginCodePlaceholder: 'Optional; required for duplicate account names',
-    manage: 'Manage administrator',
+    manage: 'Set administrator',
     mode: 'Method',
     existing: 'Choose an administrator',
     create: 'Create first administrator',
@@ -3435,7 +3435,7 @@ export default {
     transferOwnTask: 'Transfer',
     delegateAction: 'Delegate',
     consultTask: 'Consult',
-    copyCreateDefinition: 'Copy to create definition',
+    copyCreateDefinition: 'Copy',
     handle: 'Handle',
     categoryDialogTitle: "categoryEditing ? 'Edit category' : 'New category'",
     deleteCategoryConfirm:

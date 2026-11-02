@@ -365,7 +365,8 @@ onMounted(load)
               />
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.actions')" min-width="255">
+          <!-- B021-012：操作列钳制 160（≤10% 行宽）；上移/下移/编辑直显，删除收进「更多」 -->
+          <el-table-column :label="t('common.actions')" width="160">
             <template #default="{ row, $index }">
               <el-button
                 link
@@ -389,14 +390,21 @@ onMounted(load)
               >
                 {{ t('common.edit') }}
               </el-button>
-              <el-button
-                link
-                size="small"
-                type="danger"
-                @click="removeListener(row as TriggerConfig)"
+              <el-dropdown
+                trigger="click"
+                @command="(cmd: string) => cmd === 'remove' && removeListener(row as TriggerConfig)"
               >
-                {{ t('common.delete') }}
-              </el-button>
+                <el-button link size="small" type="primary">
+                  {{ t('common.moreActions') }}
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="remove">
+                      {{ t('common.delete') }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </template>
           </el-table-column>
         </el-table>

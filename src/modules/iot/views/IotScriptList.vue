@@ -304,7 +304,7 @@ function rowActions(r: unknown): ListAction[] {
           }}
         </template>
       </el-table-column>
-      <ListActionsColumn :actions="rowActions" :width="170" />
+      <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
 
     <template #empty-action>
