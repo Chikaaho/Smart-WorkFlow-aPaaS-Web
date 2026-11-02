@@ -97,6 +97,10 @@ describe('登录页企业名称与单点登录（B021-016）', () => {
     expect(wrapper.findAll('input[autocomplete="organization"]')).toHaveLength(1)
     const providers = wrapper.findAll('button.login-page__sso-provider')
     expect(providers).toHaveLength(3)
+    // 纯图标按钮：可见文本移除后，名称由 aria-label/title 承担
+    expect(await providers[0].attributes('aria-label')).toBe('企业微信')
+    expect(await providers[1].attributes('aria-label')).toBe('飞书')
+    expect(await providers[2].attributes('aria-label')).toBe('钉钉')
     await providers[0].trigger('click')
     await flushPromises()
     expect(startSsoLoginAuthorize).toHaveBeenCalledWith('WECOM', undefined, '/')

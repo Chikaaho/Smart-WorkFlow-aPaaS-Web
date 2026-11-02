@@ -249,14 +249,16 @@ function onSsoProviderSelect(key: SsoProvider): void {
             <span class="login-page__sso-rule" />{{ t('login.ssoDivider') }}
           </p>
           <!-- B021-016：SSO 免填企业（手填租户名称无意义）；服务端按 Provider 反查唯一
-               启用配置，多企业歧义后续由扫码选择所属企业承接。第2轮：按钮改官方品牌
-               图标引导（assets/brand/sso，官网 CDN 官方标），文字保留作可访问名称 -->
+               启用配置，多企业歧义后续由扫码选择所属企业承接。第2轮改官方品牌图标；
+               第3轮按 Owner 指示纯图标无文本，名称经 aria-label/title 承担 -->
           <div class="login-page__sso-row">
             <button
               v-for="provider in SSO_PROVIDERS"
               :key="provider.key"
               type="button"
               class="login-page__sso-provider"
+              :aria-label="provider.label"
+              :title="provider.label"
               :disabled="ssoBusy"
               @click="onSsoProviderSelect(provider.key)"
             >
@@ -266,7 +268,6 @@ function onSsoProviderSelect(key: SsoProvider): void {
                 alt=""
                 aria-hidden="true"
               />
-              {{ provider.label }}
             </button>
           </div>
           <p v-if="ssoError" class="login-page__error" role="alert">{{ ssoError }}</p>
@@ -614,29 +615,26 @@ img.login-page__captcha {
 }
 .login-page__sso-row {
   display: flex;
-  gap: 6px;
+  justify-content: center;
+  gap: 10px;
 }
 .login-page__sso-provider {
   display: inline-flex;
-  flex: 1 1 0;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  width: 40px;
   height: 34px;
-  padding: 0 8px;
+  padding: 0;
   border: 1px solid var(--sw-border-base);
   border-radius: var(--sw-radius-base);
   color: var(--sw-text-regular);
   background: var(--sw-surface-card);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 22px;
   cursor: pointer;
 }
 .login-page__sso-provider-icon {
   flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
 }
 .login-page__sso-provider:disabled {
@@ -654,25 +652,6 @@ img.login-page__captcha {
   font-size: 13px;
   color: var(--sw-text-primary);
   background: var(--sw-surface-card);
-}
-.login-page__sso-row button {
-  flex: 0 0 auto;
-  height: 34px;
-  padding: 0 14px;
-  border: none;
-  border-radius: var(--sw-radius-base);
-  background: var(--sw-color-primary-soft);
-  color: var(--sw-color-primary);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.login-page__sso-row button:hover {
-  background: var(--sw-color-primary-softer);
-}
-.login-page__sso-row button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 .login-page__sso-hint {
   margin: 0;
@@ -939,22 +918,23 @@ img.login-page__captcha {
   }
   .login-page__sso-row {
     margin-top: 18px;
-    gap: 8px;
+    justify-content: center;
+    gap: 12px;
   }
   .login-page__sso-row .login-page__sso-provider {
-    flex: 1 1 0;
+    width: 48px;
     height: 44px;
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 22px;
     border: 1px solid var(--sw-border-light);
     border-radius: 6px;
     background: #fff;
     color: var(--sw-text-regular);
   }
+  .login-page__sso-row .login-page__sso-provider:hover {
+    border-color: var(--sw-color-primary);
+  }
   .login-page__sso-row .login-page__sso-provider-icon {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
   }
   .login-page__legal {
     margin-top: 18px;
