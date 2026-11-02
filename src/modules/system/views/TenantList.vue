@@ -361,7 +361,8 @@ function rowActions(r: unknown): ListAction[] {
   return [
     {
       key: 'administrator',
-      label: t('tenantAdmin.manage'),
+      // B021-012r3：行内按公开案例规范用 2 字动词，完整动宾「设置管理员」在弹窗标题
+      label: t('tenantAdmin.assign'),
       visible: canManage.value,
       onClick: () => void openAdministrator(row),
     },

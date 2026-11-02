@@ -21,6 +21,7 @@ export default {
     loginCode: '租户编码',
     loginCodePlaceholder: '可选；同名账号需填写',
     manage: '设置管理员',
+    assign: '指派',
     mode: '设置方式',
     existing: '选择现有管理员',
     create: '创建首任管理员',

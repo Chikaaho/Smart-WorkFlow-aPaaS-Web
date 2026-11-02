@@ -231,7 +231,8 @@ const emit = defineEmits<{
   color: var(--sw-text-regular);
 }
 .standard-list--design :deep(.list-actions) {
-  gap: var(--sw-space-8);
+  /* B021-012r3：间距由 1px 分隔线承担（组件内 .list-actions__sep），gap 归零 */
+  gap: 0;
   height: 32px;
 }
 .standard-list--design :deep(.list-actions .el-button:not(.is-link)) {

@@ -21,6 +21,7 @@ export default {
     loginCode: 'Tenant code',
     loginCodePlaceholder: 'Optional; required for duplicate account names',
     manage: 'Set administrator',
+    assign: 'Assign',
     mode: 'Method',
     existing: 'Choose an administrator',
     create: 'Create first administrator',
