@@ -9,9 +9,17 @@ import { useI18n } from '@/locales'
 import { Lock, House, User, View, Hide } from '@element-plus/icons-vue'
 import LocaleSwitch from '@/components/LocaleSwitch.vue'
 
-// SSO 徽标字：label 经 i18n 解析，徽标按 provider key 固定映射（WECOM=企业微信）
-const SSO_MARKS: Record<SsoProvider, string> = { WECOM: '企', FEISHU: '飞', DINGTALK: '钉' }
+// B021-016 第2轮：SSO 按钮用官方品牌图标引导（各官网 CDN 官方标，存于 assets/brand/sso）
+import wecomIcon from '@/assets/brand/sso/wecom.png'
+import feishuIcon from '@/assets/brand/sso/feishu.svg'
+import dingtalkIcon from '@/assets/brand/sso/dingtalk.png'
 import logoUrl from '@/assets/brand/logo-mark.png'
+
+const PROVIDER_ICONS: Record<SsoProvider, string> = {
+  WECOM: wecomIcon,
+  FEISHU: feishuIcon,
+  DINGTALK: dingtalkIcon,
+}
 
 const { t } = useI18n()
 
@@ -241,20 +249,23 @@ function onSsoProviderSelect(key: SsoProvider): void {
             <span class="login-page__sso-rule" />{{ t('login.ssoDivider') }}
           </p>
           <!-- B021-016：SSO 免填企业（手填租户名称无意义）；服务端按 Provider 反查唯一
-               启用配置，多企业歧义后续由扫码选择所属企业承接 -->
+               启用配置，多企业歧义后续由扫码选择所属企业承接。第2轮：按钮改官方品牌
+               图标引导（assets/brand/sso，官网 CDN 官方标），文字保留作可访问名称 -->
           <div class="login-page__sso-row">
             <button
-              v-for="(provider, index) in SSO_PROVIDERS"
+              v-for="provider in SSO_PROVIDERS"
               :key="provider.key"
               type="button"
               class="login-page__sso-provider"
-              :class="`is-provider-${index + 1}`"
               :disabled="ssoBusy"
               @click="onSsoProviderSelect(provider.key)"
             >
-              <span class="login-page__sso-provider-mark" aria-hidden="true">{{
-                SSO_MARKS[provider.key]
-              }}</span>
+              <img
+                class="login-page__sso-provider-icon"
+                :src="PROVIDER_ICONS[provider.key]"
+                alt=""
+                aria-hidden="true"
+              />
               {{ provider.label }}
             </button>
           </div>
@@ -622,25 +633,11 @@ img.login-page__captcha {
   line-height: 22px;
   cursor: pointer;
 }
-.login-page__sso-provider-mark {
-  font-weight: 700;
-  color: var(--sw-color-primary);
-}
-.login-page__sso-provider-mark {
-  font-size: 0;
-}
-.login-page__sso-provider-mark::before {
-  content: '◉';
-  font-size: 15px;
-}
-.login-page__sso-provider.is-provider-1 .login-page__sso-provider-mark {
-  color: #07c160;
-}
-.login-page__sso-provider.is-provider-2 .login-page__sso-provider-mark {
-  color: #1677ff;
-}
-.login-page__sso-provider.is-provider-3 .login-page__sso-provider-mark {
-  color: #3370ff;
+.login-page__sso-provider-icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
 }
 .login-page__sso-provider:disabled {
   opacity: 0.6;
@@ -955,12 +952,9 @@ img.login-page__captcha {
     background: #fff;
     color: var(--sw-text-regular);
   }
-  /* 参考 32:2：第三个 SSO 文字中心比等分按钮中心左移 2px（仅文字对齐，不改外框） */
-  .login-page__sso-row .login-page__sso-provider.is-provider-3 {
-    padding-right: 16px;
-  }
-  .login-page__sso-provider-mark {
-    display: none;
+  .login-page__sso-row .login-page__sso-provider-icon {
+    width: 20px;
+    height: 20px;
   }
   .login-page__legal {
     margin-top: 18px;
