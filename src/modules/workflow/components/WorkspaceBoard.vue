@@ -1532,6 +1532,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   width: 100%;
+  /* B021-014：随 workspace-home（已铺满可视区）的生长空间撑满；空内容时
+     v-loading 遮罩才能盖满整屏内容区，内容更高时仍随内容增长。 */
+  flex: 1 0 auto;
   /* P3/645:28703（Q08 存量视图全屏框）：查看态画布左右留白 24px（全屏消费方），
      顶部仍 20px，统计卡顶边与设计 144px 对齐 */
   padding: 20px 24px 24px;
