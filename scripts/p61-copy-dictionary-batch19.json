@@ -112,7 +112,6 @@
   "转办": { "key": "workflow.transferOwnTask", "en": "Transfer" },
   "委托": { "key": "workflow.delegateAction", "en": "Delegate" },
   "沟通": { "key": "workflow.consultTask", "en": "Consult" },
-  "复制创建定义": { "key": "workflow.copyCreateDefinition", "en": "Copy to create definition" },
   "打开": { "key": "common.open", "en": "Open" },
   "办理": { "key": "workflow.handle", "en": "Handle" },
   "暂无常用事项，可在「配置」中从流程中心选择": {

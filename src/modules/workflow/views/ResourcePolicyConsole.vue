@@ -174,7 +174,8 @@ function policyActions(raw: unknown): ListAction[] {
     },
     {
       key: 'check',
-      label: '启用检查',
+      // B021-012：行内 2 字「检查」（生效中行「启用检查|停新受理|停用」162px 超出 160 列）
+      label: '检查',
       testId: `check-${row.policyVersion}`,
       loading: acting,
       onClick: () => precheck(row),

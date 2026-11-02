@@ -201,7 +201,8 @@ function rowActions(row: unknown): ListAction[] {
     },
     {
       key: 'viewDiagram',
-      label: t('workflow.viewDiagram'),
+      // B021-012：行内 2 字「预览」（「流程图」3 字 + 发布 + ⋯ 超出 160 列可用宽）
+      label: t('common.preview'),
       onClick: () => void openViewer(item),
     },
     {

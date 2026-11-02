@@ -4,6 +4,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '@/locales'
 import { usePermission } from '@/foundation/permission'
 import DetailDialog from '@/components/DetailDialog.vue'
+import { ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   createManagedDatasource,
   deleteManagedDatasource,
@@ -147,6 +149,15 @@ function resetForm() {
 function openCreate() {
   resetForm()
   formVisible.value = true
+}
+
+/** B021-012：数据源操作列复用统一组件（分隔线节奏）；编辑/授权/删除三项直显 */
+function datasourceActions(row: unknown): ListAction[] {
+  return [
+    { key: 'edit', label: t('common.edit'), onClick: () => openEdit(row) },
+    { key: 'grants', label: '授权', onClick: () => void openGrants(row) },
+    { key: 'remove', label: t('common.delete'), type: 'danger', onClick: () => void remove(row) },
+  ]
 }
 
 function openEdit(raw: unknown) {
@@ -364,15 +375,8 @@ watch(visible, (open) => {
                 }}
               </template>
             </el-table-column>
-            <el-table-column :label="t('common.actions')" width="140">
-              <template #default="{ row }">
-                <el-button link @click="openEdit(row)">{{ t('common.edit') }}</el-button>
-                <el-button link @click="openGrants(row)">授权</el-button>
-                <el-button link type="danger" @click="remove(row)">{{
-                  t('common.delete')
-                }}</el-button>
-              </template>
-            </el-table-column>
+            <!-- B021-012：操作列复用 ListActionsColumn（分隔线 + 宽度钳制） -->
+            <ListActionsColumn :actions="datasourceActions" :width="140" />
           </el-table>
         </el-tab-pane>
 

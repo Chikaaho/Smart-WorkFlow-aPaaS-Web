@@ -262,8 +262,9 @@
       "timeout": "预览超时，请重试"
     },
     "tenantAdmin": {
-      "manage": "管理员维护",
-      "mode": "维护方式",
+      "manage": "设置管理员",
+      "assign": "指派",
+      "mode": "设置方式",
       "existing": "选择现有管理员",
       "create": "创建首任管理员",
       "loadFailed": "管理员列表加载失败，请重试",
@@ -547,7 +548,8 @@
       "timeout": "Preview timed out. Try again."
     },
     "tenantAdmin": {
-      "manage": "Manage administrator",
+      "manage": "Set administrator",
+      "assign": "Assign",
       "mode": "Method",
       "existing": "Choose an administrator",
       "create": "Create first administrator",

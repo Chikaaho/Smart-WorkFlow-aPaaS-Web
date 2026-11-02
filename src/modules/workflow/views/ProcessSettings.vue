@@ -12,6 +12,8 @@ import { useI18n } from '@/locales'
 import UserRemoteSelect from '@/components/UserRemoteSelect.vue'
 import ScriptDialog from '@/components/ScriptDialog.vue'
 import { PROCESS_SCRIPT_FUNCTIONS } from '@/components/script-catalog'
+import { ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   getProcessDefDefinition,
   previewProcessScript,
@@ -174,6 +176,37 @@ function moveListener(trigger: TriggerConfig, offset: number): void {
   if (swap < 0) return
   ;[triggers[index], triggers[swap]] = [triggers[swap], triggers[index]]
   graph.value = { ...graph.value, triggers }
+}
+
+/** B021-012：监听器操作列复用统一组件（分隔线节奏 + ⋯ 收纳）；上移/下移/编辑直显，删除收进 ⋯ */
+function listenerActions(r: unknown): ListAction[] {
+  const row = r as TriggerConfig
+  const index = processListeners.value.findIndex((item) => item.triggerId === row.triggerId)
+  return [
+    {
+      key: 'up',
+      label: t('common.moveUp'),
+      disabled: index <= 0,
+      onClick: () => moveListener(row, -1),
+    },
+    {
+      key: 'down',
+      label: t('common.moveDown'),
+      disabled: index < 0 || index === processListeners.value.length - 1,
+      onClick: () => moveListener(row, 1),
+    },
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => openListenerEditor(row),
+    },
+    {
+      key: 'remove',
+      label: t('common.delete'),
+      type: 'danger',
+      onClick: () => removeListener(row),
+    },
+  ]
 }
 
 async function simulateListener(
@@ -365,48 +398,8 @@ onMounted(load)
               />
             </template>
           </el-table-column>
-          <!-- B021-012：操作列钳制 160（≤10% 行宽）；上移/下移/编辑直显，删除收进「更多」 -->
-          <el-table-column :label="t('common.actions')" width="160">
-            <template #default="{ row, $index }">
-              <el-button
-                link
-                size="small"
-                :disabled="$index === 0"
-                @click="moveListener(row as TriggerConfig, -1)"
-                >{{ t('common.moveUp') }}</el-button
-              >
-              <el-button
-                link
-                size="small"
-                :disabled="$index === processListeners.length - 1"
-                @click="moveListener(row as TriggerConfig, 1)"
-                >{{ t('common.moveDown') }}</el-button
-              >
-              <el-button
-                link
-                size="small"
-                type="primary"
-                @click="openListenerEditor(row as TriggerConfig)"
-              >
-                {{ t('common.edit') }}
-              </el-button>
-              <el-dropdown
-                trigger="click"
-                @command="(cmd: string) => cmd === 'remove' && removeListener(row as TriggerConfig)"
-              >
-                <el-button link size="small" type="primary">
-                  {{ t('common.moreActions') }}
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="remove">
-                      {{ t('common.delete') }}
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </template>
-          </el-table-column>
+          <!-- B021-012：操作列复用 ListActionsColumn（宽度钳制 ≤160、直显 ≤3、分隔线 + ⋯ 收纳） -->
+          <ListActionsColumn :actions="listenerActions" :width="160" />
         </el-table>
         <p class="ps-hint">{{ t('workflow.processSettingsListenersHint') }}</p>
         <p class="ps-hint">{{ t('workflow.processSettingsListenerSaveHint') }}</p>

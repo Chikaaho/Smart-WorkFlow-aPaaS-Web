@@ -177,7 +177,15 @@ const isFilterEmpty = computed(() => hasFilter.value && isEmpty.value)
 // ─── 弹窗状态 ───
 
 const dialogVisible = ref(false)
-const dialogTitle = computed(() => (editingId.value ? t('system.editDept') : t('system.newDept')))
+/** B021-012：行内只给 2 字「新建」，「新建子部门」完整动宾由弹窗标题承担（按打开时的父节点快照） */
+const creatingChild = ref(false)
+const dialogTitle = computed(() =>
+  editingId.value
+    ? t('system.editDept')
+    : creatingChild.value
+      ? t('system.newSubDept')
+      : t('system.newDept'),
+)
 const editingId = ref<string | null>(null)
 const submitting = ref(false)
 const formError = ref('')
@@ -255,6 +263,7 @@ async function loadFormOptions(tenantId: string) {
 async function openCreate(parentId?: string) {
   if (submitting.value || choosing.value) return
   resetForm()
+  creatingChild.value = !!parentId
   let preferred: TenantContextOption | null = appliedTenant.value
   if (parentId) {
     const parent = flatData.value.find((row) => row.id === parentId)
@@ -280,6 +289,7 @@ async function openCreate(parentId?: string) {
 async function openEdit(row: SysDept) {
   if (submitting.value) return
   resetForm()
+  creatingChild.value = false
   const generation = editorGeneration
   editingId.value = row.id ?? null
   try {
@@ -420,7 +430,8 @@ function rowActions(r: unknown): ListAction[] {
   return [
     {
       key: 'add-child',
-      label: t('system.newSubDept'),
+      // B021-012：行内 2 字「新建」（「新建子部门」5 字挤爆 160 列），弹窗标题给完整「新建子部门」
+      label: t('common.create'),
       visible: hasPerm('system:dept:create'),
       onClick: () => addChildRow(r),
     },

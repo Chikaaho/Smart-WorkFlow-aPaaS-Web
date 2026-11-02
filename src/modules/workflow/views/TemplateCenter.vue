@@ -108,7 +108,8 @@ function rowActions(row: unknown): ListAction[] {
   return [
     {
       key: 'copy',
-      label: t('workflow.copyCreateDefinition'),
+      // B021-012：行内 2 字动词「复制」，复制模板创建定义的完整语义由模板中心上下文承担
+      label: t('common.copy'),
       type: 'primary',
       disabled: item.status !== 'ENABLED',
       loading: copyingId.value === item.id,

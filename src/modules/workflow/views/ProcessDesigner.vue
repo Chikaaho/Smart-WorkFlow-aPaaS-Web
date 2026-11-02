@@ -28,6 +28,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, ArrowLeft, Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
+import { ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   getProcessDefDefinition,
   getDefVersionGraph,
@@ -964,6 +966,31 @@ function moveTrigger(index: number, offset: number) {
   list.splice(target, 0, item)
   graph.value = { ...(graph.value ?? {}), triggers: list } as DesignerGraph
   onModelChanged()
+}
+
+/** B021-012：变量/触发器操作列复用统一组件（分隔线节奏 + ⋯ 收纳）；行对象按同一数组定位索引 */
+function variableActions(row: unknown): ListAction[] {
+  const index = (graph.value?.variables ?? []).findIndex((item) => item === row)
+  return [
+    { key: 'edit', label: '编辑', onClick: () => editVariable(index) },
+    { key: 'remove', label: '删除', type: 'danger', onClick: () => removeVariable(index) },
+  ]
+}
+
+function triggerActions(row: unknown): ListAction[] {
+  const list = graph.value?.triggers ?? []
+  const index = list.findIndex((item) => item === row)
+  return [
+    { key: 'up', label: '上移', disabled: index <= 0, onClick: () => moveTrigger(index, -1) },
+    {
+      key: 'down',
+      label: '下移',
+      disabled: index < 0 || index === list.length - 1,
+      onClick: () => moveTrigger(index, 1),
+    },
+    { key: 'edit', label: '编辑', onClick: () => editTrigger(index) },
+    { key: 'remove', label: '删除', type: 'danger', onClick: () => removeTrigger(index) },
+  ]
 }
 
 /** JSON 批量导入（模板/批量配置场景）：解析后整体替换，发布校验仍为权威。 */
@@ -5216,16 +5243,8 @@ function nodeLabelLines(label: string) {
       </div>
       <el-table :data="graph?.variables ?? []" size="small" class="p64-table">
         <el-table-column prop="name" label="变量名称" min-width="200" />
-        <el-table-column label="操作" width="140">
-          <template #default="{ $index }">
-            <el-button size="small" link type="primary" @click="editVariable($index)"
-              >编辑</el-button
-            >
-            <el-button size="small" link type="danger" @click="removeVariable($index)"
-              >删除</el-button
-            >
-          </template>
-        </el-table-column>
+        <!-- B021-012：操作列复用 ListActionsColumn（分隔线 + ⋯ 收纳，宽度钳制） -->
+        <ListActionsColumn :actions="variableActions" :width="140" />
       </el-table>
       <el-divider />
       <!-- 审查28 Q10：去掉 small 尺寸（输入框/选择器统一 32 高），配置能力原样保留 -->
@@ -5377,35 +5396,8 @@ function nodeLabelLines(label: string) {
             }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140">
-          <!-- B021-012：操作列最多直显 3 个按钮，删除收进「更多」下拉 -->
-          <template #default="{ $index }">
-            <el-button size="small" link :disabled="$index === 0" @click="moveTrigger($index, -1)"
-              >上移</el-button
-            >
-            <el-button
-              size="small"
-              link
-              :disabled="$index === (graph?.triggers?.length ?? 0) - 1"
-              @click="moveTrigger($index, 1)"
-              >下移</el-button
-            >
-            <el-button size="small" link type="primary" @click="editTrigger($index)"
-              >编辑</el-button
-            >
-            <el-dropdown
-              trigger="click"
-              @command="(cmd: string) => cmd === 'remove' && removeTrigger($index)"
-            >
-              <el-button size="small" link type="primary">更多</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="remove">删除</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </template>
-        </el-table-column>
+        <!-- B021-012：操作列复用 ListActionsColumn——上移/下移/编辑直显，删除收进 ⋯ -->
+        <ListActionsColumn :actions="triggerActions" :width="140" />
       </el-table>
       <el-divider />
       <!-- 审查28 Q10：去掉 small 尺寸（字段统一 32 高）；

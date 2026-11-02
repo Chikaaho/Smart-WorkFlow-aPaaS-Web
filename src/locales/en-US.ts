@@ -681,6 +681,7 @@ export default {
     deleted: 'Deleted',
     address: 'Address',
     test: 'Test',
+    refresh: 'Refresh',
     condition: 'Condition',
     viewAll: 'View all',
     collapse: 'Collapse',
@@ -3436,7 +3437,6 @@ export default {
     transferOwnTask: 'Transfer',
     delegateAction: 'Delegate',
     consultTask: 'Consult',
-    copyCreateDefinition: 'Copy',
     handle: 'Handle',
     categoryDialogTitle: "categoryEditing ? 'Edit category' : 'New category'",
     deleteCategoryConfirm:

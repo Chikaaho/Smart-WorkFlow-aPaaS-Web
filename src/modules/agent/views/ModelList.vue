@@ -221,7 +221,8 @@ function rowActions(r: unknown): ListAction[] {
     },
     {
       key: 'test',
-      label: t('agent.connectivityTest'),
+      // B021-012：行内 2 字「测试」（「连通性测试」5 字挤爆 160 列），结果弹窗标题保留完整术语
+      label: t('common.test'),
       type: 'success',
       visible: canTest.value,
       loading: testingId.value === (r as AgentModelConfig).id,

@@ -264,12 +264,13 @@ function rowActions(r: unknown): ListAction[] {
     },
     {
       key: 'refresh',
-      label: t('iot.refreshStatus'),
+      // B021-012：行内 2 字动词（「刷新状态」4 字 + 命令 + 发布/停用挤满 160 列）
+      label: t('common.refresh'),
       onClick: () => void handleRefresh(row),
     },
     {
       key: 'commands',
-      label: '命令',
+      label: t('iot.commandsTab'),
       visible: !!row.productId && !!row.deviceName,
       onClick: () => void openCommands(row),
     },
