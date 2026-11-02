@@ -18,8 +18,6 @@ export default {
     missingOwner: '对象缺少所属租户，无法编辑',
   },
   tenantAdmin: {
-    loginCode: '租户编码',
-    loginCodePlaceholder: '可选；同名账号需填写',
     manage: '设置管理员',
     assign: '指派',
     mode: '设置方式',
@@ -390,9 +388,8 @@ export default {
     thirdParty: '第三方账号登录',
     goToAuthorize: '前往授权',
     redirecting: '跳转中...',
-    tenantName: '租户名称',
-    tenantNamePlaceholder: '请输入租户名称',
-    tenantNameRequired: '请输入租户名称',
+    tenantName: '企业名称',
+    tenantNamePlaceholder: '请输入企业名称',
     chooseProvider: '选择 Provider',
     signOut: '退出登录',
     accountBindings: '账号绑定',
@@ -1969,7 +1966,6 @@ export default {
     welcomeSub: '登录 CH-aPaaS，进入企业工作空间',
     secureBadge: '安全登录',
     ssoDivider: '单点登录',
-    tenantHint: 'SSO 授权需要租户标识；账号登录无需填写。',
   },
   menu: {
     workflow: '流程管理',

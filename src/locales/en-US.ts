@@ -18,8 +18,6 @@ export default {
     missingOwner: 'The object has no tenant identity and cannot be edited.',
   },
   tenantAdmin: {
-    loginCode: 'Tenant code',
-    loginCodePlaceholder: 'Optional; required for duplicate account names',
     manage: 'Set administrator',
     assign: 'Assign',
     mode: 'Method',
@@ -406,8 +404,7 @@ export default {
     goToAuthorize: 'Continue',
     redirecting: 'Redirecting...',
     tenantName: 'Organization name',
-    tenantNamePlaceholder: 'Enter the organization name',
-    tenantNameRequired: 'Organization name is required',
+    tenantNamePlaceholder: 'Enter your organization name',
     chooseProvider: 'Choose provider',
     signOut: 'Sign out',
     accountBindings: 'Linked accounts',
@@ -2024,7 +2021,6 @@ export default {
     welcomeSub: 'Sign in to CH-aPaaS, your enterprise workspace',
     secureBadge: 'Secure sign-in',
     ssoDivider: 'Single sign-on',
-    tenantHint: 'SSO authorization needs a tenant ID; password sign-in does not.',
   },
   menu: {
     workflow: 'Process management',

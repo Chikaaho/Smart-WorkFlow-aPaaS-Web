@@ -6,7 +6,7 @@ import type { LoginChallengeDTO } from '@/foundation/auth'
 import { SSO_PROVIDERS, startSsoLoginAuthorize } from '@/foundation/auth/sso'
 import type { SsoProvider } from '@/foundation/auth/sso'
 import { useI18n } from '@/locales'
-import { Lock, House, User, View, Hide, OfficeBuilding } from '@element-plus/icons-vue'
+import { Lock, House, User, View, Hide } from '@element-plus/icons-vue'
 import LocaleSwitch from '@/components/LocaleSwitch.vue'
 
 // SSO 徽标字：label 经 i18n 解析，徽标按 provider key 固定映射（WECOM=企业微信）
@@ -20,8 +20,9 @@ const router = useRouter()
 const { fetchChallenge, login } = useAuth()
 
 const username = ref('')
-const tenantCode = ref('')
-const tenantCodeVisible = ref(false)
+// B021-016：租户以名称人工输入并常驻显示在账号上方（可选；同名账号需填写），
+// 替代旧「租户编码」点击展开入口；服务端按名称精确解析唯一租户（歧义 fail closed）
+const tenantName = ref('')
 const password = ref('')
 const passwordVisible = ref(false)
 const captcha = ref('')
@@ -30,9 +31,8 @@ const challengeLoadFailed = ref(false)
 const submitting = ref(false)
 const errorMessage = ref('')
 
-// 第三方登录（登录前安全发起：显式租户，服务端校验后重定向到 Provider）
+// 第三方登录（登录前安全发起）：免填企业，服务端按 Provider 反查唯一启用配置
 const ssoProvider = ref<SsoProvider>('WECOM')
-const ssoTenantName = ref('')
 const ssoBusy = ref(false)
 const ssoError = ref('')
 
@@ -68,7 +68,7 @@ async function onSubmit(): Promise<void> {
   try {
     await login({
       username: username.value,
-      tenantCode: tenantCode.value || undefined,
+      tenantName: tenantName.value || undefined,
       password: password.value,
       captcha: captcha.value,
       challenge: challenge.value,
@@ -86,16 +86,12 @@ async function onSubmit(): Promise<void> {
 
 async function onSsoLogin(): Promise<void> {
   ssoError.value = ''
-  // V012-BUG-019：租户只按名称精确匹配，服务端解析唯一租户；不再手填数值 ID
-  const tenantName = ssoTenantName.value.trim()
-  if (!tenantName) {
-    ssoError.value = t('auth.tenantNameRequired')
-    return
-  }
   ssoBusy.value = true
   try {
     const redirect = safeRedirect(route.query.redirect)
-    const start = await startSsoLoginAuthorize(ssoProvider.value, tenantName, redirect)
+    // B021-016：登录页免填企业（手填租户名称对 SSO 无意义）；服务端按 Provider
+    // 反查唯一启用配置的企业（零/多命中 fail closed），后续由扫码选择所属企业承接
+    const start = await startSsoLoginAuthorize(ssoProvider.value, undefined, redirect)
     // 服务端重定向到 Provider 授权页；state 由服务端签发，前端不持久化
     globalThis.location.href = start.authorizeUrl
   } catch (error) {
@@ -154,20 +150,22 @@ function onSsoProviderSelect(key: SsoProvider): void {
           <LocaleSwitch class="login-page__locale" />
         </div>
         <p class="login-page__welcome-sub">{{ t('login.welcomeSub') }}</p>
-        <label for="login-account">
-          <span class="login-page__label-row">
-            <span id="login-account-label">账号</span>
-            <button
-              type="button"
-              class="login-page__tenant-toggle"
-              :aria-expanded="tenantCodeVisible"
-              aria-controls="login-tenant-code"
-              :aria-label="t('tenantAdmin.loginCode')"
-              @click="tenantCodeVisible = !tenantCodeVisible"
-            >
-              {{ t('tenantAdmin.loginCode') }}
-            </button>
+        <!-- B021-016：企业名称（= 租户名称的用户侧文案）常驻账号上方人工输入，
+             替代旧「租户编码」点击展开入口；提示语用普通占位文案 -->
+        <label>
+          <span>{{ t('auth.tenantName') }}</span>
+          <span class="login-page__input-wrap">
+            <el-icon class="login-page__input-icon"><House /></el-icon>
+            <input
+              v-model="tenantName"
+              type="text"
+              autocomplete="organization"
+              :placeholder="t('auth.tenantNamePlaceholder')"
+            />
           </span>
+        </label>
+        <label for="login-account">
+          <span id="login-account-label">账号</span>
           <span class="login-page__input-wrap">
             <el-icon class="login-page__input-icon"><User /></el-icon>
             <input
@@ -178,18 +176,6 @@ function onSsoProviderSelect(key: SsoProvider): void {
               autocomplete="username"
               placeholder="请输入账号"
               required
-            />
-          </span>
-        </label>
-        <label v-if="tenantCodeVisible" id="login-tenant-code">
-          {{ t('tenantAdmin.loginCode') }}
-          <span class="login-page__input-wrap">
-            <el-icon class="login-page__input-icon"><OfficeBuilding /></el-icon>
-            <input
-              v-model="tenantCode"
-              type="text"
-              autocomplete="organization"
-              :placeholder="t('tenantAdmin.loginCodePlaceholder')"
             />
           </span>
         </label>
@@ -254,19 +240,8 @@ function onSsoProviderSelect(key: SsoProvider): void {
           <p class="login-page__sso-title">
             <span class="login-page__sso-rule" />{{ t('login.ssoDivider') }}
           </p>
-          <!-- V012-BUG-019：租户以名称精确匹配，输入只服务于 SSO 授权；账号登录无需填写 -->
-          <label class="login-page__sso-tenant">
-            <span>{{ t('auth.tenantName') }}</span>
-            <span class="login-page__input-wrap">
-              <el-icon class="login-page__input-icon"><House /></el-icon>
-              <input
-                v-model="ssoTenantName"
-                type="text"
-                autocomplete="organization"
-                :placeholder="t('auth.tenantNamePlaceholder')"
-              />
-            </span>
-          </label>
+          <!-- B021-016：SSO 免填企业（手填租户名称无意义）；服务端按 Provider 反查唯一
+               启用配置，多企业歧义后续由扫码选择所属企业承接 -->
           <div class="login-page__sso-row">
             <button
               v-for="(provider, index) in SSO_PROVIDERS"
@@ -630,15 +605,6 @@ img.login-page__captcha {
   display: flex;
   gap: 6px;
 }
-.login-page__sso-tenant {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 22px;
-  color: var(--sw-text-regular);
-}
 .login-page__sso-provider {
   display: inline-flex;
   flex: 1 1 0;
@@ -759,24 +725,6 @@ img.login-page__captcha {
 .login-page input,
 .login-page button {
   font-family: inherit;
-}
-/* 桌面参考 1920×1080；较小桌面保持流式列宽和完整登录能力。 */
-.login-page__label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.login-page__tenant-toggle {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--sw-color-primary);
-  font: inherit;
-  cursor: pointer;
-}
-.login-page__tenant-toggle:focus-visible {
-  outline: 2px solid var(--sw-color-primary);
-  outline-offset: 2px;
 }
 @media (min-width: 1280px) {
   .login-page {
@@ -980,7 +928,8 @@ img.login-page__captcha {
     padding: 3px 0;
     text-align: center;
     gap: 12px;
-    max-width: 324px;
+    /* B021-016：去掉旧 324px 限宽（无 auto margin 落在左缘）——分隔线占满表单
+       内容宽，左右线等长对称，文字回到视觉正中 */
   }
   .login-page__sso-rule,
   .login-page__sso-title::after {
@@ -990,17 +939,6 @@ img.login-page__captcha {
   }
   .login-page__sso-title::after {
     content: '';
-  }
-  .login-page__sso-tenant {
-    margin-top: 18px;
-    line-height: 22px;
-    font-size: 14px;
-  }
-  .login-page__form label.login-page__sso-tenant {
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 22px;
-    color: var(--sw-text-regular);
   }
   .login-page__sso-row {
     margin-top: 18px;
