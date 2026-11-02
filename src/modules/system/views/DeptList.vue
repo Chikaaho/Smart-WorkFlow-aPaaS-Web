@@ -519,22 +519,27 @@ onMounted(() => {
         row-key="id"
         :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
       >
+        <!-- B021-015：数据列全部改弹性（min-width 为内容基线），EP 按 minWidth 权重分摊富余——
+             此前仅前三列弹性、负责人/排序/状态死固定 110/70/80，2560 视口富余全被「部门名称」
+             吞掉（815px 装 4 字名称），右四列钉死窄宽挤在右缘（Owner 红框：左宽右挤）。
+             全弹性后宽视口各列同步舒展（对齐已验收列表页全列随卡片拉伸的口径），
+             1280 视口最小和 890 ≤ 内容宽仍无横向滚动。操作列维持 150 固定（B021-012 钳制口径）。 -->
         <el-table-column prop="name" :label="t('system.deptName')" min-width="200" />
         <el-table-column
           v-if="userStore.superAdmin"
           :label="t('tenantContext.label')"
-          min-width="140"
+          min-width="150"
         >
           <template #default="{ row }">{{ row.tenantGroup ? '' : row.tenantName }}</template>
         </el-table-column>
-        <el-table-column prop="code" :label="t('system.deptCode')" min-width="120" />
-        <el-table-column :label="t('system.owner')" width="110">
+        <el-table-column prop="code" :label="t('system.deptCode')" min-width="130" />
+        <el-table-column :label="t('system.owner')" min-width="100">
           <template #default="{ row }">
             {{ row.leaderId ? row.leaderName || leaderName(row.leaderId) : '' }}
           </template>
         </el-table-column>
-        <el-table-column prop="sort" :label="t('common.sort')" width="70" />
-        <el-table-column prop="status" :label="t('common.status')" width="80">
+        <el-table-column prop="sort" :label="t('common.sort')" min-width="70" />
+        <el-table-column prop="status" :label="t('common.status')" min-width="90">
           <template #default="{ row }">
             <span v-if="!row.tenantGroup" class="sys-status-text">{{
               deptStatusLabel(row.status)
