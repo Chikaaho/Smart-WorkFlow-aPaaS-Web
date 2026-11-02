@@ -307,12 +307,7 @@ onMounted(loadList)
       <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
 
-    <!-- 空态操作 -->
-    <template #empty-action>
-      <el-button v-if="hasPerm('system:post:create')" type="primary" @click="openCreate">{{
-        t('system.newPost')
-      }}</el-button>
-    </template>
+    <!-- B021-017：移除空态「新建岗位」入口——与筛选栏工具位的新建岗位功能重复 -->
   </StandardListTemplate>
 
   <!-- 新建/编辑弹窗 -->

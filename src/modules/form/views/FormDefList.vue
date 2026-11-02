@@ -502,11 +502,6 @@ onMounted(loadList)
         <!-- 444：与其余列合计 1878，恢复原八列表头锚点；三直显按钮英文不裁尾 -->
         <ListActionsColumn :actions="rowActions" :width="160" />
       </el-table>
-
-      <!-- 空态 -->
-      <template #empty-action>
-        <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
-      </template>
     </StandardListTemplate>
 
     <!-- 分类次区：可收起，位于列表下方，不压缩主区/不遮新建 -->

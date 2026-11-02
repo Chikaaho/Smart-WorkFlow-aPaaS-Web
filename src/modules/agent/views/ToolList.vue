@@ -454,12 +454,6 @@ onMounted(() => {
       <el-table-column prop="updateTime" :label="t('common.updateTime')" width="180" />
       <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
-
-    <template #empty-action>
-      <el-button v-if="canManage" type="primary" @click="openCreate">
-        {{ t('common.create') }}
-      </el-button>
-    </template>
   </StandardListTemplate>
 
   <InternalToolFormDialog

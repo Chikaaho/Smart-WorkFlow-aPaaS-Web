@@ -438,13 +438,6 @@ onMounted(loadList)
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
-
-    <!-- 空态操作 -->
-    <template #empty-action>
-      <el-button v-if="canManage" type="primary" @click="openCreate">{{
-        t('common.create')
-      }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <!-- 新建/编辑弹窗 -->

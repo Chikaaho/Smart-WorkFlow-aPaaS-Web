@@ -557,13 +557,6 @@ onMounted(loadList)
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
-
-    <!-- 空态操作 -->
-    <template #empty-action>
-      <el-button v-perm="'system:user:create'" type="primary" @click="openCreate">{{
-        t('system.newUser')
-      }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <!-- 新建/编辑弹窗 -->

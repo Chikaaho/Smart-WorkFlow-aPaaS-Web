@@ -312,11 +312,6 @@ onMounted(loadList)
       <el-table-column prop="createTime" :label="t('storage.uploadTime')" width="170" />
       <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
-
-    <!-- 空态操作 -->
-    <template #empty-action>
-      <el-button type="primary" @click="openUpload">{{ t('common.uploadFile') }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <!-- 上传弹窗 -->

@@ -25,7 +25,7 @@ import type { SysUser } from '@/modules/system/types/user'
 import { pageUsers } from '@/modules/system/api/user'
 import { hasPerm } from '@/foundation/permission'
 import { SYS_DEPT_STATUS, deptStatusOptions, deptStatusLabel } from '@/modules/system/constants'
-import { ListToolbar, ListActionsColumn } from '@/components/page-layout'
+import { ListActionsColumn, ListFilterItem, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 
 import { useUserStore } from '@/stores/user'
@@ -459,46 +459,52 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="dept-list">
-    <!-- 筛选区：名称（Enter 触发查询）+ 状态（全部/正常/停用）+ 查询/重置 -->
-    <div class="dept-list__filter">
-      <TenantSelect
-        v-if="userStore.superAdmin"
-        v-model="filterTenant"
-        class="dept-list__tenant-filter"
-      />
-      <el-input
-        v-model="filter.name"
-        :placeholder="t('system.deptName')"
-        clearable
-        style="width: 200px"
-        @keyup.enter="handleQuery"
-      />
-      <el-select v-model="filter.status" style="width: 120px">
-        <el-option
-          v-for="opt in statusFilterOptions"
-          :key="String(opt.value)"
-          :label="opt.label"
-          :value="opt.value"
+  <!-- B021-017：整页迁入 StandardListTemplate design 口径——筛选 label+控件、
+       查询/重置/新建动作区、表题行（展开/收起）与表格卡片与其他列表页同一套实现 -->
+  <StandardListTemplate
+    appearance="design"
+    :total="treeData.length"
+    :page-num="1"
+    :page-size="10"
+    hide-pagination
+  >
+    <template #filter>
+      <ListFilterItem v-if="userStore.superAdmin" :label="t('tenantContext.label')">
+        <TenantSelect v-model="filterTenant" />
+      </ListFilterItem>
+      <ListFilterItem :label="t('system.deptName')">
+        <el-input
+          v-model="filter.name"
+          :placeholder="t('common.pleaseInput')"
+          clearable
+          @keyup.enter="handleQuery"
         />
-      </el-select>
-      <el-button class="dept-list__filter-btn" type="primary" @click="handleQuery">{{
-        t('common.query')
-      }}</el-button>
-      <el-button class="dept-list__filter-btn" @click="handleReset">{{
-        t('common.reset')
-      }}</el-button>
+      </ListFilterItem>
+      <ListFilterItem :label="t('common.status')">
+        <el-select v-model="filter.status">
+          <el-option
+            v-for="opt in statusFilterOptions"
+            :key="String(opt.value)"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+      </ListFilterItem>
+    </template>
+    <template #filter-actions>
+      <el-button type="primary" @click="handleQuery">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
       <el-button v-perm="'system:dept:create'" type="primary" @click="openCreate()">{{
         t('system.newDept')
       }}</el-button>
-    </div>
-
-    <ListToolbar :title="t('system.deptManagement')">
-      <template #actions>
+    </template>
+    <template #table-title>
+      <strong>{{ t('system.deptManagement') }}</strong>
+      <div class="table-tree-actions">
         <el-button @click="setAllExpanded(true)">{{ t('common.expand') }}</el-button>
         <el-button @click="setAllExpanded(false)">{{ t('common.collapse') }}</el-button>
-      </template>
-    </ListToolbar>
+      </div>
+    </template>
 
     <!-- 错误提示 -->
     <el-alert
@@ -510,58 +516,50 @@ onMounted(() => {
       style="margin-bottom: 12px"
     />
 
-    <!-- 表格区 -->
-    <div class="dept-list__table-card">
-      <el-table
-        ref="deptTable"
-        v-loading="loading"
-        :data="treeData"
-        row-key="id"
-        :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
-      >
-        <!-- B021-015：数据列全部改弹性（min-width 为内容基线），EP 按 minWidth 权重分摊富余——
+    <el-table
+      ref="deptTable"
+      v-loading="loading"
+      :data="treeData"
+      row-key="id"
+      :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
+    >
+      <!-- B021-015：数据列全部改弹性（min-width 为内容基线），EP 按 minWidth 权重分摊富余——
              此前仅前三列弹性、负责人/排序/状态死固定 110/70/80，2560 视口富余全被「部门名称」
              吞掉（815px 装 4 字名称），右四列钉死窄宽挤在右缘（Owner 红框：左宽右挤）。
              全弹性后宽视口各列同步舒展（对齐已验收列表页全列随卡片拉伸的口径），
              1280 视口最小和 890 ≤ 内容宽仍无横向滚动。操作列维持 150 固定（B021-012 钳制口径）。 -->
-        <el-table-column prop="name" :label="t('system.deptName')" min-width="200" />
-        <el-table-column
-          v-if="userStore.superAdmin"
-          :label="t('tenantContext.label')"
-          min-width="150"
-        >
-          <template #default="{ row }">{{ row.tenantGroup ? '' : row.tenantName }}</template>
-        </el-table-column>
-        <el-table-column prop="code" :label="t('system.deptCode')" min-width="130" />
-        <el-table-column :label="t('system.owner')" min-width="100">
-          <template #default="{ row }">
-            {{ row.leaderId ? row.leaderName || leaderName(row.leaderId) : '' }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="sort" :label="t('common.sort')" min-width="70" />
-        <el-table-column prop="status" :label="t('common.status')" min-width="90">
-          <template #default="{ row }">
-            <span v-if="!row.tenantGroup" class="sys-status-text">{{
-              deptStatusLabel(row.status)
-            }}</span>
-          </template>
-        </el-table-column>
-        <ListActionsColumn :actions="rowActions" :width="150" />
-      </el-table>
+      <el-table-column prop="name" :label="t('system.deptName')" min-width="200" />
+      <el-table-column
+        v-if="userStore.superAdmin"
+        :label="t('tenantContext.label')"
+        min-width="150"
+      >
+        <template #default="{ row }">{{ row.tenantGroup ? '' : row.tenantName }}</template>
+      </el-table-column>
+      <el-table-column prop="code" :label="t('system.deptCode')" min-width="130" />
+      <el-table-column :label="t('system.owner')" min-width="100">
+        <template #default="{ row }">
+          {{ row.leaderId ? row.leaderName || leaderName(row.leaderId) : '' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="sort" :label="t('common.sort')" min-width="70" />
+      <el-table-column prop="status" :label="t('common.status')" min-width="90">
+        <template #default="{ row }">
+          <span v-if="!row.tenantGroup" class="sys-status-text">{{
+            deptStatusLabel(row.status)
+          }}</span>
+        </template>
+      </el-table-column>
+      <ListActionsColumn :actions="rowActions" :width="150" />
+    </el-table>
 
-      <!-- 空态：筛选条件下无匹配（提示重置，不回退全量树、不显示新建入口） -->
-      <div v-if="isFilterEmpty" class="dept-list__empty">
-        <span class="dept-list__empty-text">{{ t('system.noMatchingDept') }}</span>
-        <el-button @click="handleReset">{{ t('common.resetFilters') }}</el-button>
-      </div>
-      <!-- 空态：无筛选条件且数据为空（新建部门入口） -->
-      <div v-else-if="isEmpty" class="dept-list__empty">
-        <el-button v-if="hasPerm('system:dept:create')" type="primary" @click="openCreate()">{{
-          t('system.newDept')
-        }}</el-button>
-      </div>
+    <!-- 空态：筛选条件下无匹配（提示重置，不回退全量树）；无筛选空态走 el-table
+           内建「暂无数据」，新建入口仅保留筛选栏工具位（B021-017 去重复入口） -->
+    <div v-if="isFilterEmpty" class="dept-list__empty">
+      <span class="dept-list__empty-text">{{ t('system.noMatchingDept') }}</span>
+      <el-button @click="handleReset">{{ t('common.resetFilters') }}</el-button>
     </div>
-  </div>
+  </StandardListTemplate>
 
   <!-- 新建/编辑弹窗 -->
   <el-dialog
@@ -676,72 +674,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.dept-list {
+/* B021-017：页面壳/筛选栏/表格卡片的旧自有样式随 StandardListTemplate 迁移删除，
+   仅保留树表空态（筛选无匹配提示重置）与表题行展开/收起按钮组样式。 */
+
+.table-tree-actions {
   display: flex;
-  flex-direction: column;
-  gap: var(--sw-space-16);
-  padding: var(--sw-space-20);
-}
-
-/* BF20261013-038 全局巡检：卡片不再包住表格留 16px 内距（表头灰底与行分隔线随卡片圆角铺满，
-   左右不留白）；空态自带内距，不贴卡片边缘。 */
-.dept-list__table-card {
-  background: var(--sw-surface-card);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-card);
-  box-shadow: none;
-  overflow: hidden;
-  padding: 0;
-}
-
-.dept-list__filter {
-  display: flex;
-  align-items: center;
-  gap: var(--sw-space-12);
-  margin: 0;
-  padding: calc(var(--sw-space-16) - 1px) var(--sw-space-16);
-  background: var(--sw-surface-card);
-  border: 1px solid var(--sw-border-light);
-  border-radius: var(--sw-radius-base);
-}
-
-/* 459:13104：查询/重置 72×32；动作按钮间距统一交给 flex gap */
-.dept-list__filter :deep(.el-button + .el-button) {
-  margin-left: 0;
-}
-.dept-list__filter-btn {
-  flex: 0 0 72px;
-  width: 72px;
-  height: 32px;
-  padding: 0;
-  justify-content: center;
-}
-
-/* 459:13104：标题行 28px（y164-192），展开/收起 72×28；表外沿落在 y208 */
-.dept-list :deep(.list-toolbar) {
-  margin-bottom: 0;
-  min-height: 28px;
-}
-.dept-list :deep(.list-toolbar .el-button) {
-  width: 72px;
-  height: 28px;
-  margin: 0;
-  padding: 0;
-}
-
-/* 459:13104：44 表头（灰底同页面背景）/53 数据行，与 StandardListTemplate design 基线一致 */
-.dept-list__table-card :deep(.el-table__header-wrapper th) {
-  box-sizing: border-box;
-  height: var(--sw-list-design-header-height);
-  background: var(--sw-surface-page);
-  font-weight: var(--sw-font-weight-body);
-  border-bottom-color: transparent;
-}
-.dept-list__table-card :deep(.el-table__body-wrapper .el-table__row) {
-  height: var(--sw-list-design-row-height);
-}
-.dept-list__table-card :deep(.el-table .cell) {
-  line-height: 22px;
+  gap: var(--sw-space-8);
 }
 
 .dept-list__empty {
@@ -777,9 +715,6 @@ onMounted(() => {
 <style scoped>
 .tenant-owner-field {
   grid-column: 1 / -1;
-}
-.dept-list__tenant-filter {
-  max-width: 240px;
 }
 </style>
 

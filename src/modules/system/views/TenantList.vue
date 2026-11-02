@@ -456,12 +456,6 @@ onMounted(loadList)
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
-
-    <template #empty-action>
-      <el-button v-if="canManage" type="primary" @click="openCreate">{{
-        t('system.newTenant')
-      }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <DetailDialog

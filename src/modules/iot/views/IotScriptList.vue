@@ -307,10 +307,6 @@ function rowActions(r: unknown): ListAction[] {
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
-
-    <template #empty-action>
-      <el-button type="primary" @click="openCreate">{{ t('iot.newScript') }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <el-dialog

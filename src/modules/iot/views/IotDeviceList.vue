@@ -366,10 +366,6 @@ function rowActions(r: unknown): ListAction[] {
       <el-table-column prop="lastReportTime" :label="t('iot.lastReported')" min-width="150" />
       <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
-
-    <template #empty-action>
-      <el-button type="primary" @click="openCreate">{{ t('iot.newDevice') }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <el-dialog v-model="dialogVisible" :title="t('iot.newDevice')" width="480px">

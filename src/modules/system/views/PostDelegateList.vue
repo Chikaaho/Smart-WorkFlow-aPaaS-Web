@@ -333,12 +333,6 @@ onMounted(async () => {
       <el-table-column prop="remark" :label="t('common.remark')" min-width="160" />
       <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
-
-    <template #empty-action>
-      <el-button v-if="hasPerm('system:postDelegate:create')" type="primary" @click="openCreate">{{
-        t('common.create')
-      }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <el-dialog

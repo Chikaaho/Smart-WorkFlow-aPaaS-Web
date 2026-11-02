@@ -413,7 +413,10 @@ onMounted(() => {
       class="ws-form-dialog"
     >
       <div class="ws-dialog-field ws-dialog-field--dialog440">
-        <label class="ws-dialog-field__label">{{ t('form.appCenter.formNameLabel') }}</label>
+        <!-- B021-017：表单名称必填（handleCreateForm 已有空名拦截，补必填标记与口径一致） -->
+        <label class="ws-dialog-field__label ws-dialog-field__label--required">{{
+          t('form.appCenter.formNameLabel')
+        }}</label>
         <el-input
           v-model="newForm.name"
           data-testid="form-name-input"
@@ -472,7 +475,17 @@ onMounted(() => {
 
 <style>
 /* Q34/Q35（272:1698 / 527:24216）：新建目录 540（字段 490×32）/ 新建表单 440（字段 390×32），
-   底栏统一 80×32；teleport 弹层样式落真实弹窗根（全局块）。 */
+   底栏统一 80×32；teleport 弹层样式落真实弹窗根（全局块）。
+   B021-017：页脚对齐全局弹窗口径（sw-edit-dialog）——flex+gap 7px；此前 margin:0
+   抵掉 EP 相邻按钮间距且无 flex 容器，取消/保存贴死。 */
+.ws-dir-dialog .el-dialog__footer,
+.ws-form-dialog .el-dialog__footer,
+.ws-rename-dialog .el-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
 .ws-dir-dialog .el-dialog__footer .el-button,
 .ws-form-dialog .el-dialog__footer .el-button {
   box-sizing: border-box;

@@ -156,15 +156,20 @@ const emit = defineEmits<{
   padding: calc(var(--sw-space-16) - 1px) var(--sw-space-16) calc(var(--sw-space-16) - 1px) 5px;
   box-shadow: none;
 }
-/* 446:13479（Y-S）：design 筛选自然标签排布——标签自然宽、控件 284，锚 309/627 */
+/* 446:13479（Y-S）：design 筛选自然标签排布——标签自然宽、控件 284，锚 309/627。
+   B021-017：行允许换行（row-gap 同栅格节奏）——此前单行 nowrap 且字段不可收缩，
+   窄视口/字段多时字段块被压扁、控件叠上相邻标签、按钮组竖向堆叠戳出卡片。 */
 .standard-list--design :deep(.list-filter-bar__fields) {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: var(--sw-space-12);
 }
 .standard-list--design :deep(.list-filter-bar__fields > *) {
   grid-column: auto;
 }
 .standard-list--design :deep(.list-filter-item) {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;

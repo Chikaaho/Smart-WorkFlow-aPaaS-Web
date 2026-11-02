@@ -465,11 +465,6 @@ onMounted(loadList)
       <el-table-column prop="createTime" :label="t('common.createTime')" width="170" />
       <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
-
-    <!-- 空态操作 -->
-    <template #empty-action>
-      <el-button type="primary" @click="openCreate">{{ t('common.newTask') }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <!-- 新建/编辑弹窗 -->
