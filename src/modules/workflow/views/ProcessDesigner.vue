@@ -3751,7 +3751,7 @@ function nodeLabelLines(label: string) {
                 v-if="!isGatewayShape(node.type)"
                 class="designer-node-icon"
                 :transform="
-                  isEventShape(node.type) ? 'translate(24 17) scale(0.7273)' : 'translate(12 11)'
+                  isEventShape(node.type) ? 'translate(59 17) scale(0.7273)' : 'translate(12 11)'
                 "
               >
                 <template v-if="node.type === 'START'">
@@ -3774,8 +3774,8 @@ function nodeLabelLines(label: string) {
               </g>
               <text
                 v-if="isEventShape(node.type)"
-                x="71"
-                y="30"
+                x="106"
+                y="27"
                 text-anchor="start"
                 class="designer-node-label designer-node-label--event"
               >
@@ -6156,10 +6156,11 @@ function nodeLabelLines(label: string) {
 .designer-node-event {
   stroke-width: 1.6;
 }
-/* 42:5：事件节点 128×44 胶囊（x/y/宽高覆盖卡片通用几何） */
+/* 42:5：事件节点 128×44 胶囊——x/y 对齐模板居中几何 ((230-128)/2, 0)，
+   B021-023：旧值 16px/3px 是 0.1.7 旧画布宽度的遗留，导致胶囊偏左 35px、连线不入节点中心 */
 .designer-node-event.designer-node-rect {
-  x: 16px;
-  y: 3px;
+  x: 51px;
+  y: 0px;
   width: 128px;
   height: 44px;
   rx: 22px;
