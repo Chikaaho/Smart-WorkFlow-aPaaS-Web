@@ -59,16 +59,16 @@ type PaletteEntry = {
   /** 唯一键（同类型多变体时 `type#variant`）。 */
   key: string
   type: string
-  /** 入口变体：DICT 下拉/单选，TEXT 多行纯文本；其余类型无变体。 */
-  variant?: 'dropdown' | 'radio' | 'multiline'
+  /** 入口变体：DICT 下拉/单选；其余类型无变体。 */
+  variant?: 'dropdown' | 'radio'
   label: string
   icon: string
   descriptor?: FieldTypeDescriptor
   disabled?: boolean
 }
 
-/** 控件库条目引用：字符串=注册表原样；对象=同类型显示变体（DICT 双入口 / TEXT 多行）。 */
-type PaletteTypeRef = string | { type: string; variant: 'dropdown' | 'radio' | 'multiline' }
+/** 控件库条目引用：字符串=注册表原样；对象=同类型显示变体（DICT 双入口）。 */
+type PaletteTypeRef = string | { type: string; variant: 'dropdown' | 'radio' }
 
 /**
  * BF20261013-010：库内名称一律取注册表 descriptor.label（单一名称源）——
@@ -107,7 +107,6 @@ const PALETTE_GROUPS: Array<{ key: string; types: PaletteTypeRef[] }> = [
     key: 'form.paletteGroupBasic',
     types: [
       'TEXT',
-      { type: 'TEXT', variant: 'multiline' },
       'NUMBER',
       { type: 'DICT', variant: 'dropdown' },
       { type: 'DICT', variant: 'radio' },
@@ -131,18 +130,13 @@ const paletteGrouped = computed(() => {
   const entries = (ref: PaletteTypeRef, _groupKey: string): PaletteEntry | null => {
     const type = typeof ref === 'string' ? ref : ref.type
     const variant = typeof ref === 'string' ? undefined : ref.variant
-    // 变体入口只属于主画布：子表白名单（allowedTypes）不提供多行/单选变体
+    // 变体入口只属于主画布：子表白名单（allowedTypes）不提供单选变体
     if (variant && props.allowedTypes) return null
     const descriptor = descriptorByType.value.get(type as FieldType)
     if (props.allowedTypes && (!descriptor || !props.allowedTypes.includes(descriptor.type)))
       return null
     // BF20261013-010：注册表内类型一律 descriptor.label；变体用入口名
-    const label =
-      variant === 'radio'
-        ? t('form.paletteRadio')
-        : variant === 'multiline'
-          ? t('form.paletteMultiline')
-          : (descriptor?.label ?? type)
+    const label = variant === 'radio' ? t('form.paletteRadio') : (descriptor?.label ?? type)
     const entryKey = variant ? `${type}#${variant}` : type
     if (
       keyword &&
@@ -184,10 +178,6 @@ function createItem(entry: PaletteEntry): DesignerItem {
   // BF20261013-009：DICT 单选框变体——数据来源/显示方式在配置面板继续可调
   if (entry.variant === 'radio' && field.type === 'DICT') {
     field.renderAs = 'radio'
-    field.label = entry.label
-  }
-  if (entry.variant === 'multiline' && field.type === 'TEXT') {
-    field.multiline = true
     field.label = entry.label
   }
   return { id: nextDesignerItemId(), field }

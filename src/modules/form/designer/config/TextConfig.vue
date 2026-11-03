@@ -23,8 +23,8 @@ const emit = defineEmits<{ update: [patch: FieldPatch] }>()
         class="row__control"
         @update:model-value="(v: string) => emit('update', { multiline: v === 'multiline' })"
       >
-        <el-option :label="t('form.fieldTypeText')" value="single" />
-        <el-option :label="t('form.paletteMultiline')" value="multiline" />
+        <el-option :label="t('form.fieldInputModeSingle')" value="single" />
+        <el-option :label="t('form.fieldInputModeMultiline')" value="multiline" />
       </el-select>
     </div>
     <div v-if="!props.hideLength" class="row">

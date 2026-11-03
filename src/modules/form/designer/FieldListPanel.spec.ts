@@ -119,7 +119,7 @@ describe('FieldListPanel（#38/#39 字段清单）', () => {
     ])
   })
 
-  it('控件类型反映输入方式：多行文本/单行文本/富文本分别准确，存储列不变', async () => {
+  it('控件类型：单行/多行 TEXT 同为「文本输入」（输入方式不另立控件），富文本独立，存储列不变', async () => {
     const wrapper = await mountPanel({
       items: [
         {
@@ -142,8 +142,9 @@ describe('FieldListPanel（#38/#39 字段清单）', () => {
       ],
     })
     const html = wrapper.find('.el-table').html()
-    expect(html).toContain('多行文本')
-    expect(html).toContain('单行文本')
+    expect(html).not.toContain('多行文本')
+    expect(html).not.toContain('单行文本')
+    expect(html).toContain('文本输入')
     expect(html).toContain('富文本')
     expect(html).toContain('VARCHAR')
     expect(html).toContain('存储类型')
@@ -154,7 +155,7 @@ describe('FieldListPanel（#38/#39 字段清单）', () => {
     const html = wrapper.find('.el-table').html()
 
     expect(html).toContain('amount')
-    expect(html).toContain('单行文本')
+    expect(html).toContain('文本输入')
     expect(html).toContain('VARCHAR')
     expect(html).toContain('必填')
     expect(html).toContain('字段编码')
