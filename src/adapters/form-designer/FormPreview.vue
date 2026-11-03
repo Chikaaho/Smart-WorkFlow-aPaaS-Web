@@ -179,14 +179,14 @@ onBeforeUnmount(() => {
   user-select: none;
 }
 
-/* 设计（节点07）：必填星号在标签文字后、深色（EP 默认为前置红色）。 */
+/* 必填星号在标签文字后（EP 默认前置），颜色沿用全局必填红 --sw-danger（B021-018）。 */
 .fc-host--design :deep(.el-form-item.is-required .el-form-item__label::before) {
   display: none;
 }
 .fc-host--design :deep(.el-form-item.is-required .el-form-item__label::after) {
   margin-left: 4px;
   content: '*';
-  color: #344164;
+  color: var(--sw-danger);
 }
 
 /* ── 字段标题位置（每字段独立，缺省上方左对齐）
