@@ -194,19 +194,20 @@ async function openExecs(row: IotScript) {
 
 onMounted(() => void load())
 
-/** 统一操作列（V012-BUG-002）：校验/试运行直显，其余按状态显隐并收进「更多」 */
+/** 统一操作列（V012-BUG-002）：编辑/校验/发布|停用直显，试运行/执行记录收进「更多」。
+ *  B021-012：直显三项均为 2 字动词（「试运行」3 字 + ⋯ 超出 160 列可用宽），编辑提到首位。 */
 function rowActions(r: unknown): ListAction[] {
   const row = r as IotScript
   return [
     {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => openEdit(row),
+    },
+    {
       key: 'validate',
       label: t('iot.validate'),
       onClick: () => void handleValidate(row),
-    },
-    {
-      key: 'dryRun',
-      label: t('iot.dryRun'),
-      onClick: () => void handleDryRun(row),
     },
     {
       key: 'publish',
@@ -223,14 +224,14 @@ function rowActions(r: unknown): ListAction[] {
       onClick: () => void handleDisable(row),
     },
     {
+      key: 'dryRun',
+      label: t('iot.dryRun'),
+      onClick: () => void handleDryRun(row),
+    },
+    {
       key: 'execs',
       label: t('iot.executionRecords'),
       onClick: () => void openExecs(row),
-    },
-    {
-      key: 'edit',
-      label: t('common.edit'),
-      onClick: () => openEdit(row),
     },
   ]
 }
@@ -304,12 +305,8 @@ function rowActions(r: unknown): ListAction[] {
           }}
         </template>
       </el-table-column>
-      <ListActionsColumn :actions="rowActions" :width="170" />
+      <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
-
-    <template #empty-action>
-      <el-button type="primary" @click="openCreate">{{ t('iot.newScript') }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <el-dialog

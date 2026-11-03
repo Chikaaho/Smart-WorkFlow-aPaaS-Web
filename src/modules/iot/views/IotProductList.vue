@@ -196,10 +196,6 @@ function rowActions(r: unknown): ListAction[] {
       />
       <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
-
-    <template #empty-action>
-      <el-button type="primary" @click="openCreate">{{ t('iot.newProduct') }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <el-dialog v-model="dialogVisible" :title="t('iot.newProduct')" width="480px">

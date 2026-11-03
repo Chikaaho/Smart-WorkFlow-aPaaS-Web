@@ -201,7 +201,8 @@ function rowActions(row: unknown): ListAction[] {
     },
     {
       key: 'viewDiagram',
-      label: t('workflow.viewDiagram'),
+      // B021-012：行内 2 字「预览」（「流程图」3 字 + 发布 + ⋯ 超出 160 列可用宽）
+      label: t('common.preview'),
       onClick: () => void openViewer(item),
     },
     {
@@ -430,7 +431,7 @@ onMounted(() => {
               {{ statusRow(row).updatedBy || '—' }} · {{ formatDefTime(row.updateTime) }}
             </template>
           </el-table-column>
-          <ListActionsColumn :actions="rowActions" :width="170" />
+          <ListActionsColumn :actions="rowActions" :width="160" />
         </el-table>
         <div class="p53-admin-defs__table-footer">
           <!-- 6:2 分页器与 4:2 同一设计形态：文字「上一页/下一页」+ 页码 + 页大小 + 跳页 -->
@@ -681,6 +682,13 @@ onMounted(() => {
   --el-table-border-color: #e9edf5; /* 参考行分隔线 */
   --el-table-header-bg-color: #f4f6fb;
   --el-table-header-text-color: #6b7280;
+}
+/* B021-008：全固定列在宽视口下不随卡片拉伸、右侧留白；不足时按列宽比例铺满，
+   超出时保持横向滚动。EP2 表体经 el-scrollbar 嵌套，view 须一并放开参照系。 */
+.defs-table :deep(.el-table__header-wrapper .el-table__header),
+.defs-table :deep(.el-table__body-wrapper .el-table__body),
+.defs-table :deep(.el-table__body-wrapper .el-scrollbar__view) {
+  min-width: 100%;
 }
 .defs-table :deep(th.el-table__cell) {
   height: 42px;

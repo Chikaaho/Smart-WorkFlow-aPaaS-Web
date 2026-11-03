@@ -158,8 +158,8 @@ describe('ProcessDefList.vue', () => {
     )
   })
 
-  // 6:2 参考列口径：状态居中、更新人与时间合并为单列、操作列 170
-  it('renders 状态居中 / 更新人+时间合并列 / 操作列 170', async () => {
+  // 6:2 参考列口径：状态居中、更新人与时间合并为单列；操作列 B021-012 钳制 ≤160
+  it('renders 状态居中 / 更新人+时间合并列 / 操作列 160', async () => {
     vi.mocked(pageProcessDefs).mockResolvedValueOnce({
       list: mockDefs,
       total: 2,
@@ -176,7 +176,7 @@ describe('ProcessDefList.vue', () => {
     expect(labelOf('更新人 / 时间')).not.toBeNull()
     expect(labelOf('更新人')).toBeNull()
     expect(labelOf('更新时间')).toBeNull()
-    expect(labelOf('操作')?.attributes('data-width')).toBe('170')
+    expect(labelOf('操作')?.attributes('data-width')).toBe('160')
   })
 
   // BF20261013-041/042：流程编号编辑器（ThemeRuleDialog）——变量在输入框内以灰底标识展示，

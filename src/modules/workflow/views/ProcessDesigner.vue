@@ -28,6 +28,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, ArrowLeft, Document, EditPen, Monitor, Setting } from '@element-plus/icons-vue'
+import { ListActionsColumn } from '@/components/page-layout'
+import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   getProcessDefDefinition,
   getDefVersionGraph,
@@ -218,8 +220,6 @@ function nodeTypeHint(type: string): string {
 }
 const P53_GATEWAY_RADIUS = 14
 /** 09/42:5 事件节点：128×44 胶囊，图标与标签内联。 */
-const P53_EVENT_WIDTH = 128
-const P53_EVENT_HEIGHT = 44
 
 /**
  * 网关类节点（菱形渲染）：GATEWAY 为既有口径；P63 将 CONDITION 与
@@ -259,11 +259,6 @@ function arrangeTopDown() {
   model.layoutTopDown()
   snapshot()
   fitViewport()
-}
-
-/** 事件型节点（开始/结束）：小图标呈现，不使用卡片盒。 */
-function isEventShape(type: string): boolean {
-  return type === 'START' || type === 'END'
 }
 
 /* ─────────── 画布视口 ─────────── */
@@ -966,6 +961,31 @@ function moveTrigger(index: number, offset: number) {
   onModelChanged()
 }
 
+/** B021-012：变量/触发器操作列复用统一组件（分隔线节奏 + ⋯ 收纳）；行对象按同一数组定位索引 */
+function variableActions(row: unknown): ListAction[] {
+  const index = (graph.value?.variables ?? []).findIndex((item) => item === row)
+  return [
+    { key: 'edit', label: '编辑', onClick: () => editVariable(index) },
+    { key: 'remove', label: '删除', type: 'danger', onClick: () => removeVariable(index) },
+  ]
+}
+
+function triggerActions(row: unknown): ListAction[] {
+  const list = graph.value?.triggers ?? []
+  const index = list.findIndex((item) => item === row)
+  return [
+    { key: 'up', label: '上移', disabled: index <= 0, onClick: () => moveTrigger(index, -1) },
+    {
+      key: 'down',
+      label: '下移',
+      disabled: index < 0 || index === list.length - 1,
+      onClick: () => moveTrigger(index, 1),
+    },
+    { key: 'edit', label: '编辑', onClick: () => editTrigger(index) },
+    { key: 'remove', label: '删除', type: 'danger', onClick: () => removeTrigger(index) },
+  ]
+}
+
 /** JSON 批量导入（模板/批量配置场景）：解析后整体替换，发布校验仍为权威。 */
 
 function addTriggerBranch() {
@@ -1264,7 +1284,6 @@ function onNodePointerUp(event: PointerEvent, node: PositionedNode) {
 
 /** 节点四向端口半距：事件胶囊/网关菱形与卡片盒不同。 */
 function nodePortHalf(node: PositionedNode) {
-  if (isEventShape(node.type)) return { w: P53_EVENT_WIDTH / 2, h: P53_EVENT_HEIGHT / 2 }
   if (isGatewayShape(node.type)) return { w: P53_GATEWAY_RADIUS, h: P53_GATEWAY_RADIUS }
   return { w: P53_NODE_WIDTH / 2, h: P53_NODE_HEIGHT / 2 }
 }
@@ -3569,8 +3588,8 @@ function nodeLabelLines(label: string) {
             @drop="onCanvasDrop"
           >
             <defs>
-              <pattern id="designer-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                <path d="M24 0H0V24" fill="none" stroke="#eef2f8" stroke-width="1" />
+              <pattern id="designer-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                <circle cx="1.5" cy="1.5" r="1" fill="#dde3ef" />
               </pattern>
               <marker
                 id="designer-edge-arrow"
@@ -3653,21 +3672,11 @@ function nodeLabelLines(label: string) {
               @pointerup="onNodePointerUp($event, node)"
             >
               <rect
-                v-if="!isGatewayShape(node.type) && !isEventShape(node.type)"
+                v-if="!isGatewayShape(node.type)"
                 :width="P53_NODE_WIDTH"
                 :height="P53_NODE_HEIGHT"
-                rx="8"
+                rx="4"
                 class="designer-node-rect"
-              />
-              <!-- 42:5：开始/结束为 128×44 胶囊，图标与标签内联 -->
-              <rect
-                v-else-if="isEventShape(node.type)"
-                :x="(P53_NODE_WIDTH - P53_EVENT_WIDTH) / 2"
-                :y="(P53_NODE_HEIGHT - P53_EVENT_HEIGHT) / 2"
-                :width="P53_EVENT_WIDTH"
-                :height="P53_EVENT_HEIGHT"
-                rx="22"
-                class="designer-node-rect designer-node-event"
               />
               <!-- 网关为 28×28 外框内的 26×26 菱形（+号），名称置于菱形下方 -->
               <template v-else>
@@ -3681,7 +3690,7 @@ function nodeLabelLines(label: string) {
               <!-- V011-BUG-023：四向锚点（上下左右缘中点）均可拖拽/点选拉线（ProcessOn 口径） -->
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
-                :cx="isEventShape(node.type) ? (P53_NODE_WIDTH - P53_EVENT_WIDTH) / 2 : 0"
+                :cx="0"
                 :cy="P53_NODE_HEIGHT / 2"
                 r="3"
                 class="designer-node-port"
@@ -3689,11 +3698,7 @@ function nodeLabelLines(label: string) {
               />
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
-                :cx="
-                  isEventShape(node.type)
-                    ? P53_NODE_WIDTH - (P53_NODE_WIDTH - P53_EVENT_WIDTH) / 2
-                    : P53_NODE_WIDTH
-                "
+                :cx="P53_NODE_WIDTH"
                 :cy="P53_NODE_HEIGHT / 2"
                 r="3"
                 class="designer-node-port"
@@ -3702,7 +3707,7 @@ function nodeLabelLines(label: string) {
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="P53_NODE_WIDTH / 2"
-                :cy="isEventShape(node.type) ? (P53_NODE_HEIGHT - P53_EVENT_HEIGHT) / 2 : 0"
+                :cy="0"
                 r="3"
                 class="designer-node-port"
                 @pointerdown.stop="startConnect($event, node, 'top')"
@@ -3710,11 +3715,7 @@ function nodeLabelLines(label: string) {
               <circle
                 v-if="!isVersionPreview && selectionId === node.id && !isGatewayShape(node.type)"
                 :cx="P53_NODE_WIDTH / 2"
-                :cy="
-                  isEventShape(node.type)
-                    ? P53_NODE_HEIGHT - (P53_NODE_HEIGHT - P53_EVENT_HEIGHT) / 2
-                    : P53_NODE_HEIGHT
-                "
+                :cy="P53_NODE_HEIGHT"
                 r="3"
                 class="designer-node-port"
                 @pointerdown.stop="startConnect($event, node, 'bottom')"
@@ -3723,39 +3724,43 @@ function nodeLabelLines(label: string) {
               <g
                 v-if="!isGatewayShape(node.type)"
                 class="designer-node-icon"
-                :transform="
-                  isEventShape(node.type) ? 'translate(24 17) scale(0.7273)' : 'translate(12 11)'
-                "
+                transform="translate(12 11)"
               >
-                <template v-if="node.type === 'START'">
-                  <path d="M7.333 3.667L18.333 11L7.333 18.333V3.667Z" />
-                </template>
-                <template v-else-if="node.type === 'END'">
-                  <path
-                    d="M16.5 3.667H5.5C4.488 3.667 3.667 4.488 3.667 5.5V17.417C3.667 18.429 4.488 19.25 5.5 19.25H16.5C17.513 19.25 18.333 18.429 18.333 17.417V5.5C18.333 4.488 17.513 3.667 16.5 3.667Z"
-                  />
-                  <path d="M7.333 11L10.083 13.75L14.667 8.25M8.25 1.833H13.75V5.5H8.25V1.833Z" />
-                </template>
-                <!-- 0.1.10：非事件节点与左侧选择器共用同一份 20×20 字形（平移到 22×22 图标域） -->
-                <g v-else transform="translate(1 1)">
-                  <path
-                    v-for="(pathData, pathIndex) in nodeIconPaths(node.type)"
-                    :key="pathIndex"
-                    :d="pathData"
-                  />
+                <!-- 开始/结束：圆形描边 + 内部图形（参考 UI 口径）；其余节点共用 20×20 字形 -->
+                <g transform="translate(1 1)">
+                  <template v-if="node.type === 'START'">
+                    <circle
+                      cx="10"
+                      cy="10"
+                      r="8.3"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.6"
+                    />
+                    <path d="M8.8 7 L13.2 10 L8.8 13 Z" fill="currentColor" />
+                  </template>
+                  <template v-else-if="node.type === 'END'">
+                    <circle
+                      cx="10"
+                      cy="10"
+                      r="8.3"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.6"
+                    />
+                    <rect x="7.6" y="7.6" width="4.8" height="4.8" rx="1" fill="currentColor" />
+                  </template>
+                  <template v-else>
+                    <path
+                      v-for="(pathData, pathIndex) in nodeIconPaths(node.type)"
+                      :key="pathIndex"
+                      :d="pathData"
+                    />
+                  </template>
                 </g>
               </g>
               <text
-                v-if="isEventShape(node.type)"
-                x="71"
-                y="30"
-                text-anchor="start"
-                class="designer-node-label designer-node-label--event"
-              >
-                {{ node.label }}
-              </text>
-              <text
-                v-else-if="!isGatewayShape(node.type)"
+                v-if="!isGatewayShape(node.type)"
                 :x="42"
                 :y="P53_NODE_HEIGHT / 2 + (nodeLabelLines(node.label).length > 1 ? -5 : 2)"
                 text-anchor="start"
@@ -5216,16 +5221,8 @@ function nodeLabelLines(label: string) {
       </div>
       <el-table :data="graph?.variables ?? []" size="small" class="p64-table">
         <el-table-column prop="name" label="变量名称" min-width="200" />
-        <el-table-column label="操作" width="140">
-          <template #default="{ $index }">
-            <el-button size="small" link type="primary" @click="editVariable($index)"
-              >编辑</el-button
-            >
-            <el-button size="small" link type="danger" @click="removeVariable($index)"
-              >删除</el-button
-            >
-          </template>
-        </el-table-column>
+        <!-- B021-012：操作列复用 ListActionsColumn（分隔线 + ⋯ 收纳，宽度钳制） -->
+        <ListActionsColumn :actions="variableActions" :width="140" />
       </el-table>
       <el-divider />
       <!-- 审查28 Q10：去掉 small 尺寸（输入框/选择器统一 32 高），配置能力原样保留 -->
@@ -5377,26 +5374,8 @@ function nodeLabelLines(label: string) {
             }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220">
-          <template #default="{ $index }">
-            <el-button size="small" link :disabled="$index === 0" @click="moveTrigger($index, -1)"
-              >上移</el-button
-            >
-            <el-button
-              size="small"
-              link
-              :disabled="$index === (graph?.triggers?.length ?? 0) - 1"
-              @click="moveTrigger($index, 1)"
-              >下移</el-button
-            >
-            <el-button size="small" link type="primary" @click="editTrigger($index)"
-              >编辑</el-button
-            >
-            <el-button size="small" link type="danger" @click="removeTrigger($index)"
-              >删除</el-button
-            >
-          </template>
-        </el-table-column>
+        <!-- B021-012：操作列复用 ListActionsColumn——上移/下移/编辑直显，删除收进 ⋯ -->
+        <ListActionsColumn :actions="triggerActions" :width="140" />
       </el-table>
       <el-divider />
       <!-- 审查28 Q10：去掉 small 尺寸（字段统一 32 高）；
@@ -5903,22 +5882,10 @@ function nodeLabelLines(label: string) {
 .toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-.toolbar-actions :deep(.el-button) {
-  width: 64px;
-  height: 32px;
-  padding: 0 8px;
-  line-height: 16px;
+  gap: 8px;
 }
 .toolbar-actions :deep(.el-button + .el-button) {
   margin-left: 0;
-}
-.toolbar-actions :deep(.toolbar-versions) {
-  width: 64px;
-}
-.toolbar-actions :deep(.toolbar-number) {
-  width: 56px;
 }
 :global(.version-history-popper .el-dropdown-menu) {
   min-width: 360px;
@@ -5980,17 +5947,18 @@ function nodeLabelLines(label: string) {
   width: 28px;
   padding: 0;
 }
+/* 参考 UI：第一行按钮统一 28 高、4px 圆角、浅灰描边 */
 .designer-toolbar :deep(.el-button) {
-  height: 32px;
+  height: 28px;
   padding: 0 12px;
-  border: 1px solid #cbd6e8;
-  border-radius: 6px;
+  border: 1px solid #d8e0ec;
+  border-radius: 4px;
   background: #fff;
-  color: #344164;
+  color: #4a5873;
   font-size: 12px;
 }
 .designer-toolbar :deep(.el-button.toolbar-back) {
-  height: 32px;
+  height: 28px;
   padding: 0 16px;
 }
 .designer-toolbar :deep(.el-button--primary) {
@@ -6029,20 +5997,25 @@ function nodeLabelLines(label: string) {
   background: #fff;
   box-shadow: inset 0 -1px 0 #e1e5ef;
 }
+/* 参考 UI：第二行为文字按钮（无边框），悬停浅底；间距统一由容器 gap 8px 承接 */
 .designer-toolbar2 :deep(.el-button--small) {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid #cbd6e8;
-  border-radius: 6px;
-  background: #fff;
-  color: #344164;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #4a5873;
   font-size: 12px;
 }
-.designer-toolbar2 :deep(.workbar-advance) {
-  min-width: 72px;
+.designer-toolbar2 :deep(.el-button--small:hover) {
+  background: #f2f5fb;
+  color: var(--sw-color-primary);
 }
-.designer-toolbar2 :deep(.el-button.workbar-verify) {
-  min-width: 56px;
+.designer-toolbar2 :deep(.el-button--small.is-disabled) {
+  background: transparent;
+  color: #b9c2d2;
+}
+.designer-toolbar2 :deep(.el-button + .el-button) {
   margin-left: 0;
 }
 
@@ -6070,9 +6043,11 @@ function nodeLabelLines(label: string) {
 }
 .palette-group + .palette-group {
   margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eef1f6;
 }
 .palette-group__title {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font-size: 12px;
   font-weight: 400;
   line-height: 18px;
@@ -6081,7 +6056,7 @@ function nodeLabelLines(label: string) {
 .palette-group__grid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 2px;
 }
 .palette-item {
   --palette-accent: var(--sw-color-primary);
@@ -6089,22 +6064,21 @@ function nodeLabelLines(label: string) {
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 8px;
   box-sizing: border-box;
-  width: 188px;
-  height: 34px;
+  width: 100%;
+  height: 32px;
   padding: 0 8px;
-  border: 1px solid #e0e6f2;
+  border: 0;
   border-radius: 6px;
-  background: #fbfcff;
+  background: transparent;
   color: #344164;
   font-size: 12px;
   line-height: 16px;
   cursor: grab;
 }
 .palette-item:hover {
-  border-color: var(--sw-color-primary-light);
-  background: var(--sw-color-primary-soft);
+  background: #f2f5fb;
 }
 .palette-item:active {
   cursor: grabbing;
@@ -6114,13 +6088,15 @@ function nodeLabelLines(label: string) {
   opacity: 0.55;
 }
 .palette-item__name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 400;
   line-height: 22px;
   white-space: nowrap;
 }
 .palette-item .workbar-icon {
-  flex: 0 0 20px;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
   display: block;
 }
 .palette-item .workbar-icon path {
@@ -6152,20 +6128,6 @@ function nodeLabelLines(label: string) {
 }
 
 /* 0.1.7：开始/结束小圆形图标节点（无卡片盒） */
-.designer-node-event {
-  stroke-width: 1.6;
-}
-/* 42:5：事件节点 128×44 胶囊（x/y/宽高覆盖卡片通用几何） */
-.designer-node-event.designer-node-rect {
-  x: 16px;
-  y: 3px;
-  width: 128px;
-  height: 44px;
-  rx: 22px;
-}
-.designer-node-label--event {
-  font-size: 14px;
-}
 
 /* ── 画布（24px 网格 + 缩放控件 + 底部提示条）
    G08（42:4）：圆角内框 x236→x1568（左距 224+12、右距 1584-16），网格自内框 16px 内距起铺 */
@@ -6173,12 +6135,13 @@ function nodeLabelLines(label: string) {
   position: relative;
   flex: 1;
   min-width: 0;
-  margin: 16px 16px 16px 12px;
+  margin: 16px;
   padding: 16px;
   overflow: hidden;
-  border-radius: 12px;
-  /* P53 节点09：画布底 #F8FAFE + 24px 网格线 #E8EDF6 */
-  background: #f8fafe;
+  border: 1px solid #e4e9f2;
+  border-radius: 8px;
+  /* 参考 UI：白底 + 20px 点阵 */
+  background: #fff;
 }
 .pg-bg {
   fill: url(#designer-grid);
@@ -6247,24 +6210,33 @@ function nodeLabelLines(label: string) {
 .designer-node {
   cursor: move;
 }
-/* G08（42:4）：普通节点 230×44（0.6px 内缩保持描边落在盒内） */
+/* G08（42:4）：节点卡片 230×44（0.6px 内缩保持描边落在盒内；参考 UI：白卡细灰边） */
 .designer-node-rect {
   x: 0.6px;
   y: 0.6px;
   width: 228.8px;
   height: 42.8px;
-  rx: 8px;
+  rx: 4px;
   fill: #fff;
-  stroke: #d7dfec;
-  stroke-width: 1.4;
+  stroke: #d5deec;
+  stroke-width: 1.2;
+}
+.designer-node-start .designer-node-rect,
+.designer-node-end .designer-node-rect {
+  fill: #fff;
+  stroke-width: 1.2;
 }
 .designer-node-start .designer-node-rect {
-  fill: #eefaf3;
   stroke: #16a77b;
 }
 .designer-node-end .designer-node-rect {
-  fill: #fdf0f1;
   stroke: #ef5d71;
+}
+.designer-node-start .designer-node-label {
+  fill: #12805c;
+}
+.designer-node-end .designer-node-label {
+  fill: #c2303a;
 }
 .designer-node-start .designer-node-icon {
   color: #16a77b;
@@ -6278,9 +6250,9 @@ function nodeLabelLines(label: string) {
   stroke: #7e8799;
 }
 .designer-node-selected .designer-node-rect {
-  fill: var(--sw-color-primary-softer);
+  fill: #f4f8ff;
   stroke: var(--sw-color-primary);
-  stroke-width: 2;
+  stroke-width: 1.6;
 }
 .designer-node-error .designer-node-rect {
   stroke: var(--el-color-danger);
@@ -6376,8 +6348,8 @@ function nodeLabelLines(label: string) {
   stroke: transparent;
 }
 .designer-edge-visual {
-  stroke: #8996ab;
-  stroke-width: 2;
+  stroke: #aeb9cb;
+  stroke-width: 1.5;
   marker-end: url(#designer-edge-arrow);
   pointer-events: none;
 }
@@ -7179,17 +7151,27 @@ function nodeLabelLines(label: string) {
  * 覆盖传送后的根节点。节点 12 的结构尺寸必须直接落在实际弹窗上。
  */
 :global(.el-dialog.approver-dialog) {
-  /* 审查24/27 D08-P：980 外框、三栏 200/404/294、56 行、80×32 底栏 */
+  /* 审查24/27 D08-P：980 外框、三栏 200/404/294、56 行、80×32 底栏。
+     B021-028：高度随视口收缩，弹窗内部纵向滚动，不再溢出窗口/看板。 */
   width: 980px !important;
-  height: 732px !important;
-  margin-top: 146px !important;
+  height: min(732px, calc(100vh - 32px)) !important;
+  /* 交还给 EP overlay 的 flex 居中，避免自算 margin 在矮视口下越界 */
+  margin: 0 auto !important;
   box-sizing: border-box;
   padding: 0 !important;
+  display: flex;
+  flex-direction: column;
   border: 1px solid #dde3ef;
   border-radius: 12px;
   box-shadow: 0 12px 32px rgba(19, 31, 58, 0.18);
   overflow: hidden;
   color: #19233b;
+}
+:global(.el-dialog.approver-dialog .el-dialog__header) {
+  flex: 0 0 auto;
+}
+:global(.el-dialog.approver-dialog .el-dialog__footer) {
+  flex: 0 0 auto;
 }
 :global(.el-dialog.approver-dialog .el-dialog__header) {
   box-sizing: border-box;
@@ -7207,6 +7189,11 @@ function nodeLabelLines(label: string) {
   font-size: 20px;
 }
 :global(.el-dialog.approver-dialog .el-dialog__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 16px 24px 16px;
 }
 :global(.el-dialog.approver-dialog .el-dialog__footer) {
@@ -7234,16 +7221,25 @@ function nodeLabelLines(label: string) {
   left: -2px;
 }
 :global(.el-dialog.approver-dialog .approver-dialog__panes) {
+  flex: 1 1 auto;
+  min-height: 0;
   grid-template-columns: 200px 404px 294px;
   gap: 16px;
 }
 :global(.el-dialog.approver-dialog .approver-pane) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   padding: 14px;
 }
 :global(.el-dialog.approver-dialog .approver-pane__workspace) {
   top: 8px;
 }
 :global(.el-dialog.approver-dialog .approver-pane--tree .el-tree) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   margin-top: 22.5px;
   margin-left: -8px;
 }
@@ -7251,6 +7247,10 @@ function nodeLabelLines(label: string) {
   height: 36px;
 }
 :global(.el-dialog.approver-dialog .approver-pane--list .approver-pane__rows) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   margin-top: 18px;
 }
 :global(.el-dialog.approver-dialog .approver-pane--list .approver-user) {

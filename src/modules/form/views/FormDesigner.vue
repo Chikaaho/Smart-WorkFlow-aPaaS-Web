@@ -127,6 +127,8 @@ watch(activeTab, (tab) => {
   if (current !== tab) {
     router.replace({ query: { ...route.query, tab: tab === 'design' ? undefined : tab } })
   }
+  // B021-022：进入流程设计页签一律先尝试直达画布（含页签点击/前进后退），表单仍在加载时由加载完成钩子补跳
+  if (tab === 'processes' && !loading.value) void enterProcessCanvasIfSingle()
 })
 
 // 外部导航（浏览器前进/后退）同步工作区
@@ -312,7 +314,11 @@ async function loadForm(id: string) {
       message: (err as Error).message,
     }
   } finally {
-    if (seq === loadSeq) loading.value = false
+    if (seq === loadSeq) {
+      loading.value = false
+      // B021-022：直链/刷新落在外部流程设计页签时同样直达画布，不再闪现列表
+      if (activeTab.value === 'processes') void enterProcessCanvasIfSingle()
+    }
   }
 }
 
@@ -438,13 +444,13 @@ async function guardUnsavedChanges(): Promise<'proceed' | 'abort'> {
   return saved ? 'proceed' : 'abort'
 }
 
-/** 单流程表单：切到流程设计页签时直接进入画布，不再停留只有一行的列表。 */
+/** 单流程表单：流程设计页签不落列表——有关联流程（契约 0/1，异常多流取首个）直接进画布，0 个由空态画布承接。 */
 async function enterProcessCanvasIfSingle(): Promise<boolean> {
   if (!formKey.value) return false
   try {
     const result = await pageProcessDefs({ pageNum: 1, pageSize: 10 }, formKey.value)
     const process = result.list[0]
-    if (Number(result.total) !== 1 || !process) return false
+    if (Number(result.total) < 1 || !process) return false
     await router.push(
       `/workflow/defs/${process.id}/design?from=form-workbench&formId=${formId.value ?? ''}&formKey=${formKey.value}`,
     )
@@ -462,7 +468,6 @@ async function onTabChange(tab: WorkbenchTab) {
   // 在回弹后按旧 URL 又把工作区翻回去（取消分支竞态）
   const verdict = await guardUnsavedChanges()
   if (verdict === 'abort') return
-  if (tab === 'processes' && (await enterProcessCanvasIfSingle())) return
   activeTab.value = tab
   if (parseWorkbenchTab(route.query.tab) !== tab) {
     router.replace({ query: { ...route.query, tab: tab === 'design' ? undefined : tab } })

@@ -253,10 +253,6 @@ function rowActions(r: unknown): ListAction[] {
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
-
-    <template #empty-action>
-      <el-button type="primary" @click="openCreate">{{ t('common.newRule') }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <el-dialog v-model="dialogVisible" :title="t('common.newRule')" width="640px">

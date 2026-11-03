@@ -195,15 +195,9 @@ const logicalTypeLabel = computed(() => {
   return descriptor.value?.label ?? props.field.field.type
 })
 
-/** 右上控件名：多行 TEXT 显示「多行文本」，避免仍标成单行文本。 */
+/** 右上控件名：取注册表 descriptor.label（TEXT 单行/多行只是输入方式，同一控件）。 */
 const controlLabel = computed(() => {
   if (!props.field) return ''
-  if (
-    props.field.field.type === 'TEXT' &&
-    (props.field.field as { multiline?: boolean }).multiline
-  ) {
-    return t('form.paletteMultiline')
-  }
   return descriptor.value?.label ?? props.field.field.type
 })
 

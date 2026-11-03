@@ -15,6 +15,12 @@ import WorkspaceBoard from '@/modules/workflow/components/WorkspaceBoard.vue'
 
 <style scoped>
 .workspace-home {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  /* B021-014：对齐 .standard-list（0.1.7 #10）的纵向铺满模式——至少撑满可视区，
+     使 .wsd 的 v-loading 遮罩盖满可视内容区，而非仅按空内容高（约 628px）遮半屏。 */
+  min-height: 100%;
 }
 </style>

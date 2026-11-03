@@ -626,7 +626,7 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
               {{ row.endTime ?? row.createTime }}
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.actions')" width="172" fixed="right">
+          <el-table-column :label="t('common.actions')" width="110" fixed="right">
             <template #default="{ row }">
               <el-button
                 v-if="row.approvalResult != null"

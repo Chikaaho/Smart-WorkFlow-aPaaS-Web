@@ -156,15 +156,20 @@ const emit = defineEmits<{
   padding: calc(var(--sw-space-16) - 1px) var(--sw-space-16) calc(var(--sw-space-16) - 1px) 5px;
   box-shadow: none;
 }
-/* 446:13479（Y-S）：design 筛选自然标签排布——标签自然宽、控件 284，锚 309/627 */
+/* 446:13479（Y-S）：design 筛选自然标签排布——标签自然宽、控件 284，锚 309/627。
+   B021-017：行允许换行（row-gap 同栅格节奏）——此前单行 nowrap 且字段不可收缩，
+   窄视口/字段多时字段块被压扁、控件叠上相邻标签、按钮组竖向堆叠戳出卡片。 */
 .standard-list--design :deep(.list-filter-bar__fields) {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: var(--sw-space-12);
 }
 .standard-list--design :deep(.list-filter-bar__fields > *) {
   grid-column: auto;
 }
 .standard-list--design :deep(.list-filter-item) {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -231,7 +236,8 @@ const emit = defineEmits<{
   color: var(--sw-text-regular);
 }
 .standard-list--design :deep(.list-actions) {
-  gap: var(--sw-space-8);
+  /* B021-012r3：间距由 1px 分隔线承担（组件内 .list-actions__sep），gap 归零 */
+  gap: 0;
   height: 32px;
 }
 .standard-list--design :deep(.list-actions .el-button:not(.is-link)) {
@@ -241,8 +247,10 @@ const emit = defineEmits<{
   padding: 0;
 }
 .standard-list--design :deep(.list-actions .el-button.is-link) {
-  min-width: 40px;
+  /* B021-012r2：min-width 40 是 372px 操作列时代的规格；160px 钳制列宽下
+     三按钮（40+40+40+间距）必溢出被裁。改按文字自然宽（height 32 保留点击高）。 */
   height: 32px;
+  padding-inline: 0;
   font-size: var(--sw-font-body);
   font-weight: var(--sw-font-weight-emphasis);
   line-height: 22px;
@@ -256,6 +264,20 @@ const emit = defineEmits<{
 }
 .standard-list--design :deep(.el-table th .cell) {
   line-height: 18px;
+}
+/* B021-008：列宽总和按 1920 设计视口调定，更宽视口下内层表格不随卡片拉伸，
+   右侧留白随视口线性增大、分页远离表格。min-width:100% 使不足时按列宽比例
+   铺满卡片；列宽总和超出时由 min-width 不缩小，横向滚动形态不变。
+   header/body 各自限定在自身 wrapper 内（EP2 表体经 el-scrollbar 嵌套），
+   fixed 列覆盖层（el-table__fixed-*，位于两个 wrapper 之外）不受影响。 */
+.standard-list--design :deep(.el-table__header-wrapper .el-table__header),
+.standard-list--design :deep(.el-table__body-wrapper .el-table__body) {
+  min-width: 100%;
+}
+/* EP2 表体外层的 el-scrollbar__view 是 inline-block 收缩包裹，须一并放开，
+   否则表体 min-width:100% 的参照系随内容收缩而不生效；溢出时仍由内容宽度主导。 */
+.standard-list--design :deep(.el-table__body-wrapper .el-scrollbar__view) {
+  min-width: 100%;
 }
 .standard-list--design :deep(.el-table),
 .standard-list--design :deep(.el-table__inner-wrapper::before) {

@@ -45,6 +45,12 @@ async function loadList() {
   }
 }
 
+/** B021-017：补全局一致的查询/重置——标题为客户端过滤（computed），查询刷新服务端
+ * 全量后按当前关键字重算；重置清空关键字（tree computed 即时生效）。 */
+function handleReset() {
+  keyword.value = ''
+}
+
 /** 目录 → 后代菜单的扁平展开；命中深层菜单时保留其祖先和必要路径。 */
 const tree = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
@@ -160,6 +166,11 @@ onMounted(loadList)
           @keyup.enter="loadList"
         />
       </ListFilterItem>
+    </template>
+    <!-- B021-017：筛选动作与其他列表页同一口径（此前仅标题筛选、无查询/重置按钮） -->
+    <template #filter-actions>
+      <el-button type="primary" @click="loadList">{{ t('common.query') }}</el-button>
+      <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
     </template>
 
     <el-alert

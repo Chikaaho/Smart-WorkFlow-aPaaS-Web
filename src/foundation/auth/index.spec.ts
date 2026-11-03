@@ -68,17 +68,17 @@ describe('auth operations', () => {
       expect(call.data.captcha).toBe('ab3d')
       expect(call.data.captchaId).toBe('uuid-1')
       expect(call.data.timestamp).toMatch(/^\d+$/)
-      expect(call.data).not.toHaveProperty('tenantCode')
+      expect(call.data).not.toHaveProperty('tenantName')
       expect(getAccessToken()).toBe('jwt-token')
       expect(getCurrentUsername()).toBe('admin')
       expect(getTokenExpiresAt()).toBeGreaterThan(Date.now())
     })
 
-    it('sends an explicit tenant code with the encrypted credentials for duplicate usernames', async () => {
+    it('sends an explicit tenant name with the encrypted credentials for duplicate usernames', async () => {
       mockRequest.mockResolvedValueOnce({ accessToken: 'tenant-jwt', expiresIn: 900 })
       await login({
         username: 'admin',
-        tenantCode: ' t_stable_code ',
+        tenantName: ' 演示企业 ',
         password: 'admin123',
         captcha: '1234',
         challenge: CHALLENGE,
@@ -89,7 +89,7 @@ describe('auth operations', () => {
           url: '/auth/login',
           data: expect.objectContaining({
             username: 'admin',
-            tenantCode: 't_stable_code',
+            tenantName: '演示企业',
             password: 'encrypted:admin123',
           }),
         }),

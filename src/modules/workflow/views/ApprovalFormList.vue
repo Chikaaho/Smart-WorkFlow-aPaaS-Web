@@ -235,10 +235,6 @@ onMounted(loadList)
         </el-table-column>
         <ListActionsColumn :actions="rowActions" :width="160" />
       </el-table>
-
-      <template #empty-action>
-        <el-button type="primary" @click="goCreate">{{ t('common.create') }}</el-button>
-      </template>
     </StandardListTemplate>
   </div>
 </template>

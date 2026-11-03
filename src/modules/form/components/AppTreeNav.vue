@@ -40,6 +40,8 @@ const props = withDefaults(
     backTitle?: string
     backTestId?: string
     nameTestId?: string
+    /** 是否渲染管理动作（编辑/新建/删除等）；用户端视图恒为 false，仅管理端工作台开启。 */
+    manageable?: boolean
   }>(),
   {
     appName: '',
@@ -48,6 +50,7 @@ const props = withDefaults(
     backTitle: '',
     backTestId: 'app-tree-back',
     nameTestId: 'app-tree-name',
+    manageable: false,
   },
 )
 
@@ -59,7 +62,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const canManage = computed(() => hasPerm('form:app:manage'))
+const canManage = computed(() => props.manageable && hasPerm('form:app:manage'))
 
 const collapsedDirIds = ref<string[]>([])
 

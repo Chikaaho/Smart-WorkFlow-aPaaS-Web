@@ -35,16 +35,18 @@ export const SSO_PROVIDERS: ReadonlyArray<{ key: SsoProvider; label: string }> =
 
 // ========== API ==========
 
-/** 登录前安全授权发起（免认证；V012-BUG-019：只提交租户名称，服务端精确解析唯一租户后签发 state） */
+/** 登录前安全授权发起（免认证；B021-016：登录页免填企业——tenantName 缺省时服务端按
+ * Provider 反查唯一启用配置的企业，零/多命中均 fail closed；多企业歧义后续由扫码选择所属企业承接） */
 export async function startSsoLoginAuthorize(
   provider: SsoProvider,
-  tenantName: string,
+  tenantName?: string,
   redirect?: string,
 ): Promise<SsoAuthorizeDTO> {
+  const name = tenantName?.trim()
   return request<SsoAuthorizeDTO>({
     method: 'GET',
     url: `/auth/sso/${provider}/authorize-login`,
-    params: { tenantName, ...(redirect ? { redirect } : {}) },
+    params: { ...(name ? { tenantName: name } : {}), ...(redirect ? { redirect } : {}) },
   })
 }
 

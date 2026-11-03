@@ -361,7 +361,8 @@ function rowActions(r: unknown): ListAction[] {
   return [
     {
       key: 'administrator',
-      label: t('tenantAdmin.manage'),
+      // B021-012r3：行内按公开案例规范用 2 字动词，完整动宾「设置管理员」在弹窗标题
+      label: t('tenantAdmin.assign'),
       visible: canManage.value,
       onClick: () => void openAdministrator(row),
     },
@@ -453,14 +454,8 @@ onMounted(loadList)
       <el-table-column :label="t('common.createTime')" width="296">
         <template #default="{ row }">{{ displayTime(row.createTime) }}</template>
       </el-table-column>
-      <ListActionsColumn :actions="rowActions" :width="372" />
+      <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
-
-    <template #empty-action>
-      <el-button v-if="canManage" type="primary" @click="openCreate">{{
-        t('system.newTenant')
-      }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <DetailDialog
@@ -670,15 +665,10 @@ onMounted(loadList)
   font-size: var(--sw-font-body);
   line-height: 22px;
 }
-.tenant-list :deep(.tenant-list__name-filter) {
-  width: 310px;
-}
-.tenant-list :deep(.tenant-list__name-filter .list-filter-item__control) {
-  width: 220px;
-}
-.tenant-list :deep(.tenant-list__status-filter .list-filter-item__control) {
-  width: 100px;
-}
+/* B021-013：删除旧像素规格的 310/220/100px 筛选宽度覆盖——与 design 外观
+   `.list-filter-item__control` 的 flex-basis:272px 叠加后，名称项 item 盒 310px
+   装不下 56+8+272=336px 内容，输入框溢出 18px 压住「状态」标签（任意视口可复现）。
+   现统一走 StandardListTemplate design 外观的 272px 控件宽。 */
 .tenant-list :deep(.list-actions) {
   justify-content: flex-start;
 }

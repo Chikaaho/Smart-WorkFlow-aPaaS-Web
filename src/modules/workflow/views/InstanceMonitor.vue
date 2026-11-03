@@ -287,7 +287,7 @@ onMounted(loadList)
       <el-table-column :label="t('common.startTimeShort')" min-width="160">
         <template #default="{ $index }">{{ list[$index]?.instance.createTime }}</template>
       </el-table-column>
-      <ListActionsColumn :actions="rowActions" :label="t('workflow.intervene')" :width="170" />
+      <ListActionsColumn :actions="rowActions" :label="t('workflow.intervene')" :width="160" />
       <template #empty>{{ t('workflow.noInstances') }}</template>
     </el-table>
 

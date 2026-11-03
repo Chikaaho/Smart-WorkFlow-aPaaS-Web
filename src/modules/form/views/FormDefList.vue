@@ -365,7 +365,7 @@ function openVisibility(row: FormDefListItem) {
   visibilityDialogVisible.value = true
 }
 
-/** 统一操作列（V012-BUG-002）：编辑/发起范围直显；停用/启用按状态互斥显隐 */
+/** 统一操作列（V012-BUG-002）：编辑/范围直显；停用/启用按状态互斥显隐 */
 function rowActions(r: unknown): ListAction[] {
   const row = r as FormDefListItem
   return [
@@ -376,7 +376,9 @@ function rowActions(r: unknown): ListAction[] {
     },
     {
       key: 'visibility',
-      label: t('form.initiationScope'),
+      // B021-012：行内 2 字「范围」（「发起范围」4 字 + 停用 + ⋯ 超出 160 列可用宽），
+      // 完整动宾留在弹窗标题 form.startVisibilityScope
+      label: t('workflow.scope'),
       onClick: () => openVisibility(row),
     },
     {
@@ -498,13 +500,8 @@ onMounted(loadList)
           <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
         </el-table-column>
         <!-- 444：与其余列合计 1878，恢复原八列表头锚点；三直显按钮英文不裁尾 -->
-        <ListActionsColumn :actions="rowActions" :width="444" />
+        <ListActionsColumn :actions="rowActions" :width="160" />
       </el-table>
-
-      <!-- 空态 -->
-      <template #empty-action>
-        <el-button type="primary" @click="goCreate">{{ t('form.newForm') }}</el-button>
-      </template>
     </StandardListTemplate>
 
     <!-- 分类次区：可收起，位于列表下方，不压缩主区/不遮新建 -->

@@ -186,16 +186,6 @@ function runCommand(command: string): void {
 
 <template>
   <div class="app-topbar" :class="`app-topbar--${currentArea}`">
-    <span
-      v-if="currentArea === 'admin' && userStore.user?.tenantId != null"
-      class="app-topbar__tenant"
-    >
-      {{
-        t(userStore.superAdmin ? 'nav.superTenant' : 'nav.tenant', {
-          tenant: userStore.user?.tenantId,
-        })
-      }}
-    </span>
     <button class="app-topbar__theme" type="button" @click="themeVisible = true">
       {{ t('common.theme') }}
     </button>
@@ -423,18 +413,6 @@ function runCommand(command: string): void {
   font-size: var(--sw-font-caption);
   cursor: pointer;
   flex-shrink: 0;
-  white-space: nowrap;
-}
-.app-topbar__tenant {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 88px;
-  height: 24px;
-  color: var(--sw-color-primary);
-  background: var(--sw-color-primary-soft);
-  border-radius: var(--sw-radius-base);
-  font-size: var(--sw-font-caption);
   white-space: nowrap;
 }
 .app-topbar--admin {
