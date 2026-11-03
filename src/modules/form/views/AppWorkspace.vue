@@ -315,6 +315,7 @@ onMounted(() => {
         :back-title="t('form.appCenter.backToList')"
         back-test-id="app-back"
         name-test-id="app-ws-name"
+        manageable
         @select="selectForm"
         @back="backToList"
         @dir-command="onDirCommand"
