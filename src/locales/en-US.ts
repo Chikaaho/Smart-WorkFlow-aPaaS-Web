@@ -391,6 +391,7 @@ export default {
     pick: 'Pick',
     picked: 'Written to the field',
     empty: 'No matching candidates',
+    selectDeptHint: 'Select a department on the left first',
   },
   auth: {
     signIn: 'Sign in',

@@ -73,6 +73,8 @@ function subText(candidate: ApproverCandidate): string {
 const selectedIds = computed(() => new Set(selected.value.map((c) => c.id)))
 
 const filteredCandidates = computed(() => {
+  // B021-029：先选部门再出人——未选部门时列表保持空（已选栏不受影响）
+  if (deptId.value == null) return []
   const kw = keyword.value.trim().toLowerCase()
   return candidates.value.filter((c) => {
     if (
@@ -171,7 +173,8 @@ watch(visible, (open) => {
     // 部门负责人多选模式固定停留在部门树页签
     activeTab.value = isDeptMode.value ? 'dept' : 'user'
     checkedDeptIds.value = isDeptMode.value ? [...props.initialDeptIds] : []
-    void load('')
+    // B021-029：未选部门不展示人员；仅在需要回显已选人员时静默取一次候选
+    if (props.initialIds.length) void load('')
     void loadDepts().then(() => syncDeptChecks())
     void loadRoles()
   }
@@ -266,7 +269,7 @@ const RULE_TYPES = [
           node-key="id"
           :props="{ label: 'name', children: 'children' }"
           :expand-on-click-node="false"
-          default-expand-all
+          :default-expanded-keys="[]"
           @node-click="onDeptNodeClick"
         />
       </div>
@@ -299,7 +302,7 @@ const RULE_TYPES = [
             />
           </button>
           <p v-if="!loading && filteredCandidates.length === 0" class="approver-pane__empty">
-            {{ t('approverPicker.empty') }}
+            {{ deptId == null ? t('approverPicker.selectDeptHint') : t('approverPicker.empty') }}
           </p>
         </div>
       </div>

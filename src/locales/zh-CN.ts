@@ -376,6 +376,7 @@ export default {
     pick: '选入',
     picked: '已选入输入框',
     empty: '无匹配候选',
+    selectDeptHint: '请先在左侧选择部门',
   },
   auth: {
     signIn: '登录',
