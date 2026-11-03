@@ -2040,8 +2040,6 @@ export default {
   },
   nav: {
     adminWorkflow: 'Workflows',
-    superTenant: 'Admin · {tenant}',
-    tenant: 'Tenant · {tenant}',
     operationManual: 'User guide',
     brandPortal: 'CH-aPaaS',
     brandAdmin: 'CH-aPaaS · Admin',

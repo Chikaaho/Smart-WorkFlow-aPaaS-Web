@@ -1985,8 +1985,6 @@ export default {
   },
   nav: {
     adminWorkflow: '流程管理',
-    superTenant: '超管 · {tenant}',
-    tenant: '租户 · {tenant}',
     operationManual: '操作手册',
     brandPortal: 'CH-aPaaS',
     brandAdmin: 'CH-aPaaS · 管理端',
