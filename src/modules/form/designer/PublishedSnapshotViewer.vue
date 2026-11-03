@@ -94,10 +94,7 @@ let requestGeneration = 0
 const fields = computed(() => (schema.value ? flattenSnapshotFields(schema.value) : []))
 
 /* 审查27 S14-F：主表列=名称/组件/字段标识/数据类型/宽度/必填/查看；序号/长度在查看详情 */
-function snapshotComponentLabel(field: { type: FieldType; multiline?: boolean }): string {
-  if (field.type === 'TEXT' && field.multiline === true) {
-    return t('form.paletteMultiline')
-  }
+function snapshotComponentLabel(field: { type: FieldType }): string {
   return getFieldTypeDescriptor(field.type)?.label ?? field.type
 }
 

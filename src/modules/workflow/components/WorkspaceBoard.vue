@@ -14,9 +14,20 @@ const { t } = useI18n()
  * 编辑页）所见即所得：真实卡片 + 编辑 chrome（拖拽/缩放/对齐线），保存后主页一致。
  */
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Document } from '@element-plus/icons-vue'
+import {
+  Bell,
+  CircleCheck,
+  Clock,
+  Document,
+  EditPen,
+  Expand,
+  Fold,
+  Grid,
+  Tickets,
+} from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/user'
 import {
   getWorkspaceLayout,
   saveWorkspaceLayout,
@@ -48,6 +59,18 @@ import type { WorkspaceDataConfig } from '@/modules/workflow/utils/workspace-dat
 import WorkspaceDataCard from './WorkspaceDataCard.vue'
 
 const router = useRouter()
+const route = useRoute()
+
+// ─── 设计01 批次2：左侧深色工作台侧栏（可折起为窄轨） ───
+const sidebarCollapsed = ref(false)
+const sidebarItems = computed(() => [
+  { label: t('common.workspace'), icon: Grid, path: '/workspace' },
+  { label: t('workflow.todoTasks'), icon: Tickets, path: '/workspace/todo' },
+  { label: t('common.startedByMe'), icon: Clock, path: '/workspace/my-instances' },
+  { label: t('workflow.processedTasks'), icon: CircleCheck, path: '/workspace/processed' },
+  { label: t('router.myCc'), icon: Bell, path: '/workspace/my-cc' },
+  { label: t('workflow.myDrafts'), icon: EditPen, path: '/workspace/my-drafts' },
+])
 
 // ─── 布局状态 ───
 const components = ref<WorkspaceComponent[]>([])
@@ -107,13 +130,41 @@ const draftsExtra = ref<PageExtra>({})
 // ─── 流程效能（真实分析摘要；无权限/失败 → null → 空值呈现） ───
 const analytics = ref<Awaited<ReturnType<typeof queryAnalyticsSummary>> | null>(null)
 
-/** 统计卡图标（设计01：右上简洁小图标，无彩色底块；数值仍全部为真实 total） */
+const userStore = useUserStore()
+const displayName = computed(() => userStore.user?.displayName ?? '')
+const greeting = computed(() => {
+  const hour = new Date().getHours()
+  if (hour < 12) return t('workspace.greetingMorning')
+  if (hour < 18) return t('workspace.greetingAfternoon')
+  return t('workspace.greetingEvening')
+})
+
+/** 统计卡图标（设计01：右上简洁文档图标；数值全部为真实 total） */
 const STAT_ICONS: Record<string, { icon: unknown; bg: string; color: string }> = {
-  // 0.2.0 参考 3:2：四张统计卡右上角为同一文档图标
   todo: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
   initiated: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
   processed: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
   drafts: { icon: Document, bg: 'transparent', color: 'var(--sw-color-primary)' },
+}
+
+// ─── B021-007 批次5：独立指标卡（设计01/工作台配置）──
+// typeCode → stats 计算属性指标键；画布/预览/首页共用同一形态。
+const STAT_METRIC_BY_TYPE: Record<string, string> = {
+  statTodo: 'todo',
+  statInitiated: 'initiated',
+  statProcessed: 'processed',
+  statDrafts: 'drafts',
+}
+
+const hasStatMetric = computed(() =>
+  components.value.some((c) => c.visible && !!STAT_METRIC_BY_TYPE[c.typeCode ?? '']),
+)
+
+function statMetricOf(key: string) {
+  const component = components.value.find((item) => item.key === key)
+  const metricKey = STAT_METRIC_BY_TYPE[component?.typeCode ?? '']
+  if (!metricKey) return null
+  return stats.value.find((s) => s.key === metricKey) ?? null
 }
 
 const stats = computed(() => [
@@ -493,7 +544,17 @@ async function loadAnalytics() {
 }
 
 /** 设计01 默认页面的五块；其余卡片类型只在自定义布局/编辑面板中启用。 */
-const DESIGN_DEFAULT_TYPES = new Set(['stats', 'todo', 'favoriteItems', 'activity', 'efficiency'])
+const DESIGN_DEFAULT_TYPES = new Set([
+  'stats',
+  'statTodo',
+  'statInitiated',
+  'statProcessed',
+  'statDrafts',
+  'todo',
+  'favoriteItems',
+  'activity',
+  'efficiency',
+])
 
 /**
  * 后端卡片类型变化后补默认卡片。
@@ -532,6 +593,7 @@ function defaultMetadata(type: WorkspaceCardType): Record<string, unknown> {
 /** 各渲染器的默认卡片高度；缺省 320 保证面板内容可见。 */
 const DEFAULT_CARD_HEIGHTS: Record<string, number> = {
   stats: 168,
+  statMetric: 112,
   todo: 360,
   favorites: 300,
   activity: 320,
@@ -653,22 +715,12 @@ function itemStyle(key: string) {
 }
 
 /**
- * Q08（645:28703）：保存后的查看态二级工具栏「返回」复用既有进入来源/回跳语义
- * （同 TaskDetail #20：vue-router 4 history.state.back 记录应用内来源；
- * 直达无历史时兜底回工作台，与配置页 goBack 同源）。
+ * Q08（645:28703）原文的保存后查看态「返回」由配置工作台自身工具栏承担
+ * （/workspace/config 左上角返回即回首页）。
+ * B021-001（Owner 裁量）：工作台是顶层导航页，首页工具栏不提供返回按钮——
+ * history.state.back 无法区分"保存后回跳"与"从配置页经顶栏切回"，
+ * 任何来源推断都会让首页重新出现无意义返回，故整体移除。
  */
-function hasInAppHistory(): boolean {
-  const back = globalThis.history?.state?.back
-  return typeof back === 'string' && back !== ''
-}
-
-function goBackFromView() {
-  if (hasInAppHistory()) {
-    router.back()
-    return
-  }
-  void router.push('/workspace')
-}
 
 function openDraft(item: Record<string, unknown>) {
   const formKey = String(item.formKey ?? '')
@@ -678,12 +730,15 @@ function openDraft(item: Record<string, unknown>) {
 
 async function loadComponentData() {
   const tasks: Array<Promise<void>> = []
-  const needTodo = showTodoPanel.value || showStats.value
-  const needProcessed = showTodoPanel.value || showStats.value || showActivity.value
-  const needInitiated = showStats.value || showActivity.value
+  // B021-007 批次5：独立指标卡与统计概览需要同一批真实 total 数据
+  const needTodo = showTodoPanel.value || showStats.value || hasStatMetric.value
+  const needProcessed =
+    showTodoPanel.value || showStats.value || showActivity.value || hasStatMetric.value
+  const needInitiated = showStats.value || showActivity.value || hasStatMetric.value
   const needDrafts =
     showTodoPanel.value ||
     showStats.value ||
+    hasStatMetric.value ||
     components.value.some((c) => rendererKeyOf(c.key) === 'drafts' && c.visible)
   const needCc = showTodoPanel.value || showActivity.value
 
@@ -1033,18 +1088,57 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-loading="loading" class="wsd" :class="{ 'is-editing': editing }">
-    <!-- Q08（645:28703）：查看态恢复全屏框架的二级工具栏（紧贴全局 64px 顶栏，
-         不叠压）：返回 + 「我的工作台」标题 + 右侧配置工作台入口；替换原问候行查看态。 -->
-    <header v-if="!editing" class="wsd-viewbar" data-testid="workspace-view-toolbar">
-      <div class="wsd-viewbar__left">
-        <button class="wsd-viewbar__back" type="button" @click="goBackFromView">
-          ← {{ t('common.backShort') }}
+  <div
+    v-loading="loading"
+    class="wsd"
+    :class="{
+      'is-editing': editing,
+      'has-sidebar': !editing && !sidebarCollapsed,
+      'has-sidebar-rail': !editing && sidebarCollapsed,
+    }"
+  >
+    <!-- 设计01 批次2（B021-007）：左侧深色工作台侧栏，可折起为窄轨；仅查看态。 -->
+    <aside
+      v-if="!editing"
+      class="wsd-sidebar"
+      :class="{ 'is-collapsed': sidebarCollapsed }"
+      data-testid="workspace-sidebar"
+    >
+      <nav class="wsd-sidebar__nav">
+        <button
+          v-for="item in sidebarItems"
+          :key="item.path"
+          type="button"
+          class="wsd-sidebar__item"
+          :class="{ 'is-active': route.path === item.path }"
+          :title="item.label"
+          @click="router.push(item.path)"
+        >
+          <el-icon :size="16"><component :is="item.icon" /></el-icon>
+          <span v-if="!sidebarCollapsed" class="wsd-sidebar__label">{{ item.label }}</span>
         </button>
-        <h2 class="wsd-viewbar__title">{{ t('workspace.studio.canvasTitle') }}</h2>
-      </div>
+      </nav>
       <button
-        class="wsd-viewbar__config"
+        type="button"
+        class="wsd-sidebar__toggle"
+        :title="sidebarCollapsed ? t('workspace.sidebarExpand') : t('workspace.sidebarCollapse')"
+        @click="sidebarCollapsed = !sidebarCollapsed"
+      >
+        <el-icon :size="14"><component :is="sidebarCollapsed ? Expand : Fold" /></el-icon>
+        <span v-if="!sidebarCollapsed">{{ t('workspace.sidebarCollapse') }}</span>
+      </button>
+    </aside>
+    <!-- 设计01 工作台（B021-007 功能遗漏回补）：查看态头部为问候行+今日统计+右上配置入口；
+         顶层页不提供返回（B021-001）。 -->
+    <header v-if="!editing" class="wsd-hero" data-testid="workspace-hero">
+      <h2 class="wsd-hero__greeting">
+        {{ greeting }}{{ displayName ? '，' : '' }}{{ displayName }}
+      </h2>
+      <p class="wsd-hero__sub">
+        {{ t('workspace.todoSummary', { count: todoTotal, urgent: todoExtra.urgentTotal ?? 0 }) }}
+      </p>
+      <button
+        class="wsd-hero__config"
         type="button"
         :title="t('workspace.configureWorkspace')"
         :aria-label="t('workspace.configureWorkspace')"
@@ -1179,7 +1273,26 @@ onBeforeUnmount(() => {
           </header>
 
           <div class="wsd-canvas-item__body">
-            <div v-if="rendererKeyOf(component.key) === 'stats'" class="wsd-stats">
+            <!-- B021-007 批次5：独立指标卡（statTodo/statInitiated/statProcessed/statDrafts） -->
+            <div v-if="statMetricOf(component.key)" class="wsd-stat wsd-stat--single">
+              <span class="wsd-stat__label">{{ statMetricOf(component.key)?.label }}</span>
+              <span class="wsd-stat__value">{{ statMetricOf(component.key)?.value }}</span>
+              <span v-if="statMetricOf(component.key)?.helper" class="wsd-stat__badge">{{
+                statMetricOf(component.key)?.helper
+              }}</span>
+              <span
+                class="wsd-stat__iconbg"
+                :style="{
+                  background: STAT_ICONS[statMetricOf(component.key)?.key ?? '']?.bg,
+                  color: STAT_ICONS[statMetricOf(component.key)?.key ?? '']?.color,
+                }"
+              >
+                <el-icon :size="20">
+                  <component :is="STAT_ICONS[statMetricOf(component.key)?.key ?? '']?.icon" />
+                </el-icon>
+              </span>
+            </div>
+            <div v-else-if="rendererKeyOf(component.key) === 'stats'" class="wsd-stats">
               <div v-for="s in stats" :key="s.key" class="wsd-stat">
                 <span class="wsd-stat__label">{{ s.label }}</span>
                 <span class="wsd-stat__value">{{ s.value }}</span>
@@ -1419,6 +1532,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   width: 100%;
+  /* B021-014：随 workspace-home（已铺满可视区）的生长空间撑满；空内容时
+     v-loading 遮罩才能盖满整屏内容区，内容更高时仍随内容增长。 */
+  flex: 1 0 auto;
   /* P3/645:28703（Q08 存量视图全屏框）：查看态画布左右留白 24px（全屏消费方），
      顶部仍 20px，统计卡顶边与设计 144px 对齐 */
   padding: 20px 24px 24px;
@@ -1429,74 +1545,94 @@ onBeforeUnmount(() => {
     padding: 20px 16px 24px;
   }
 }
+/* B021-007 批次2：设计01 左侧深色工作台侧栏（可折起为窄轨），吸附视口左缘、顶栏下方；
+   查看态内容整体右移让出侧栏，编辑态无侧栏。 */
+.wsd-sidebar {
+  position: fixed;
+  z-index: 30;
+  top: 64px;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 200px;
+  padding: 16px 12px;
+  background: #172033;
+  transition: width 0.15s ease;
+}
+.wsd-sidebar.is-collapsed {
+  width: 64px;
+  padding: 16px 8px;
+}
+.wsd-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.wsd-sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(255 255 255 / 72%);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.wsd-sidebar__item:hover {
+  background: rgb(255 255 255 / 8%);
+  color: #fff;
+}
+.wsd-sidebar__item.is-active {
+  background: var(--sw-color-primary, #2563eb);
+  color: #fff;
+}
+.wsd-sidebar__label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wsd-sidebar.is-collapsed .wsd-sidebar__item {
+  justify-content: center;
+  padding: 0;
+}
+.wsd-sidebar__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(255 255 255 / 60%);
+  font-size: 12px;
+  cursor: pointer;
+}
+.wsd-sidebar__toggle:hover {
+  background: rgb(255 255 255 / 8%);
+  color: #fff;
+}
+.wsd-sidebar.is-collapsed .wsd-sidebar__toggle {
+  justify-content: center;
+  padding: 0;
+}
+.wsd.has-sidebar {
+  padding-left: 224px;
+}
+.wsd.has-sidebar-rail {
+  padding-left: 88px;
+}
 .wsd-hero {
   position: relative;
   height: 64px;
-}
-/* Q08（645:28703）保存后的查看态二级工具栏：全宽 56px（y64..120，不叠压全局顶栏），
-   几何对齐配置页工具栏——返回 72×32 @x24/y76（屏级），右侧配置工作台 @x≈1802/y76。 */
-.wsd-viewbar {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 56px;
-  flex: none;
-  /* 645:28703：负边距抵消 .wsd 左右 24px 留白，工具栏全宽贴内容区两缘 */
-  margin: -20px -24px 0;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--sw-border-light, #eef0f4);
-  background: var(--sw-bg-surface, #fff);
-}
-.wsd-viewbar__left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.wsd-viewbar__back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 72px;
-  height: 32px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--sw-text-secondary);
-  font-size: 13px;
-  cursor: pointer;
-}
-.wsd-viewbar__back:hover,
-.wsd-viewbar__back:focus-visible {
-  background: var(--sw-bg-muted, #f3f4f6);
-}
-.wsd-viewbar__title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 24px;
-  color: var(--sw-text-primary);
-}
-.wsd-viewbar__config {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--sw-border, #d9dde6);
-  border-radius: 6px;
-  background: var(--sw-bg-surface, #fff);
-  color: var(--sw-text-primary);
-  font-size: 13px;
-  cursor: pointer;
-}
-.wsd-viewbar__config:hover,
-.wsd-viewbar__config:focus-visible {
-  background: var(--sw-color-primary-softer);
-  color: var(--sw-color-primary);
 }
 .wsd-hero__greeting {
   margin: 0;
@@ -1706,6 +1842,10 @@ onBeforeUnmount(() => {
   overflow: auto;
 }
 .wsd-canvas-item__body > .wsd-stats {
+  height: 100%;
+}
+/* B021-007 批次5：单张独立指标卡撑满其画布槽位 */
+.wsd-canvas-item__body > .wsd-stat--single {
   height: 100%;
 }
 .wsd-edge {

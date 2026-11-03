@@ -270,6 +270,7 @@ async function handleSubmit() {
   <el-dialog
     v-model="dialogModel"
     :title="modelId !== null ? t('agent.editModelConfig') : t('agent.newModelConfig')"
+    class="model-form-dialog"
     :close-on-click-modal="false"
     destroy-on-close
     width="720px"
@@ -493,5 +494,22 @@ async function handleSubmit() {
 .form-field__hint {
   font-size: var(--sw-font-caption);
   color: var(--sw-text-secondary);
+}
+</style>
+
+<style>
+/* B021-010：720 宽弹窗内容高约 1150，在 1080 视口下顶部 142 起即越过视口底，
+   页脚按钮需滚动整页才可见。限高为视口内并让正文区内部滚动，页脚常驻可见。
+   （仅本弹窗类作用域，不改其他固定尺寸弹窗的既有几何。） */
+.model-form-dialog.el-dialog {
+  display: flex;
+  flex-direction: column;
+  /* EP 默认 15vh 顶部间距需一并扣除，否则顶部起点+限高仍越过视口 */
+  max-height: calc(100vh - var(--el-dialog-margin-top, 15vh) - 24px);
+}
+.model-form-dialog .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 </style>

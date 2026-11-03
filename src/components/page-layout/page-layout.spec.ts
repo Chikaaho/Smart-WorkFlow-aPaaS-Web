@@ -550,7 +550,8 @@ describe('ListActionsColumn', () => {
     expect(btns).toHaveLength(4)
     expect(btns[0].text()).toBe('操作0')
     expect(btns[2].text()).toBe('操作2')
-    expect(btns[3].text()).toBe('更多')
+    // B021-012r3：「更多」改为 ⋯ 图标按钮（公开案例收纳形态），无文字，aria-label 承载语义
+    expect(btns[3].attributes('aria-label')).toBe('更多')
     // 收拢项渲染进下拉菜单
     const items = wrapper.findAll('.stub-item')
     expect(items.map((i) => i.text())).toEqual(['操作3', '操作4'])
@@ -602,7 +603,9 @@ describe('ListActionsColumn', () => {
         },
       },
     })
-    expect(wrapper.findAll('.stub-btn').map((b) => b.text())).toEqual(['查看', '更多'])
+    const moreBtns = wrapper.findAll('.stub-btn')
+    expect(moreBtns.map((b) => b.text())).toEqual(['查看', '']) // ⋯ 图标无文字
+    expect(moreBtns[1].attributes('aria-label')).toBe('更多')
     expect(wrapper.findAll('.stub-item').map((b) => b.text())).toEqual(['补签'])
     wrapper.findComponent({ name: 'ActionMenuStub' }).vm.$emit('command', 'supplement')
     await wrapper.vm.$nextTick()

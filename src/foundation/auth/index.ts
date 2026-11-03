@@ -18,8 +18,8 @@ let refreshPromise: Promise<void> | null = null
 
 export interface LoginPayload {
   username: string
-  /** 租户编码（可选）：同一账号名存在于多个租户时用于精确定位 */
-  tenantCode?: string
+  /** 租户名称（可选）：同一账号名存在于多个租户时用于精确定位；服务端按名称精确解析唯一租户 */
+  tenantName?: string
   /** RSA-OAEP 加密前的明文密码（仅在内存中存在，加密后提交） */
   password: string
   /** 用户输入的验证码内容 */
@@ -45,7 +45,7 @@ export async function login(payload: LoginPayload): Promise<void> {
     url: '/auth/login',
     data: {
       username: payload.username,
-      ...(payload.tenantCode?.trim() ? { tenantCode: payload.tenantCode.trim() } : {}),
+      ...(payload.tenantName?.trim() ? { tenantName: payload.tenantName.trim() } : {}),
       password: encryptedPassword,
       captcha: payload.captcha,
       captchaId: payload.challenge.captchaId,

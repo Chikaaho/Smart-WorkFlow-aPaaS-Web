@@ -73,9 +73,10 @@ function subText(candidate: ApproverCandidate): string {
 const selectedIds = computed(() => new Set(selected.value.map((c) => c.id)))
 
 const filteredCandidates = computed(() => {
+  // B021-029：先选部门再出人——未选部门时列表保持空（已选栏不受影响）
+  if (deptId.value == null) return []
   const kw = keyword.value.trim().toLowerCase()
   return candidates.value.filter((c) => {
-    if (deptId.value != null && String(c.id).startsWith('dept-')) return false
     if (
       kw &&
       !c.username.toLowerCase().includes(kw) &&
@@ -86,11 +87,21 @@ const filteredCandidates = computed(() => {
   })
 })
 
+/** 组织架构节点点击：切换部门筛选并重查候选（再点同一节点取消筛选）。 */
+function onDeptNodeClick(node: PickerDept) {
+  const next = String(node.id)
+  deptId.value = next === deptId.value ? null : next
+  void load(keyword.value)
+}
+
 async function load(keywordText = '') {
   loading.value = true
   errorMsg.value = ''
   try {
-    candidates.value = await queryApproverCandidates(keywordText.trim() || undefined)
+    candidates.value = await queryApproverCandidates(
+      keywordText.trim() || undefined,
+      deptId.value ?? undefined,
+    )
     // 回显：候选中命中已存 id 的自动预选（仅首次加载；搜索过滤不重置已选）
     if (props.initialIds.length && selected.value.length === 0) {
       selected.value = candidates.value.filter((c) => props.initialIds.includes(c.id))
@@ -162,7 +173,8 @@ watch(visible, (open) => {
     // 部门负责人多选模式固定停留在部门树页签
     activeTab.value = isDeptMode.value ? 'dept' : 'user'
     checkedDeptIds.value = isDeptMode.value ? [...props.initialDeptIds] : []
-    void load('')
+    // B021-029：未选部门不展示人员；仅在需要回显已选人员时静默取一次候选
+    if (props.initialIds.length) void load('')
     void loadDepts().then(() => syncDeptChecks())
     void loadRoles()
   }
@@ -257,10 +269,8 @@ const RULE_TYPES = [
           node-key="id"
           :props="{ label: 'name', children: 'children' }"
           :expand-on-click-node="false"
-          default-expand-all
-          @node-click="
-            (node: PickerDept) => (deptId = String(node.id) === deptId ? null : String(node.id))
-          "
+          :default-expanded-keys="[]"
+          @node-click="onDeptNodeClick"
         />
       </div>
 
@@ -292,7 +302,7 @@ const RULE_TYPES = [
             />
           </button>
           <p v-if="!loading && filteredCandidates.length === 0" class="approver-pane__empty">
-            {{ t('approverPicker.empty') }}
+            {{ deptId == null ? t('approverPicker.selectDeptHint') : t('approverPicker.empty') }}
           </p>
         </div>
       </div>
@@ -402,9 +412,9 @@ const RULE_TYPES = [
   display: grid;
   grid-template-columns: 200px 404px 294px;
   gap: 16px;
-  /* 设计（节点12）：三栏面板固定 450px，高度与底部分隔线对齐。 */
-  min-height: 450px;
-  height: 450px;
+  /* B021-028：高度跟随弹窗（body flex 剩余空间），三栏各自内部滚动，不再固定 450 溢出。 */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .approver-pane {
@@ -429,7 +439,10 @@ const RULE_TYPES = [
 
 .approver-pane__rows {
   margin-top: 10px;
-  min-height: 300px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .approver-pane__empty {
@@ -500,10 +513,12 @@ const RULE_TYPES = [
 }
 
 .approver-dialog__single {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   border: 1px solid #dde3ef;
   border-radius: 10px;
   padding: 14px;
-  min-height: 470px;
 }
 
 .approver-roles {

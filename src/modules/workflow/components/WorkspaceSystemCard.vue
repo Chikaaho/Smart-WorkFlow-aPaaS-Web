@@ -88,16 +88,19 @@ const quickItems = computed(() => {
 const efficiency = computed(() => {
   const summary = analytics.value
   if (!summary) return null
-  const avgHours = summary.avgDurationMs == null ? null : summary.avgDurationMs / 3600000
-  const completion = summary.launched
-    ? Math.round((summary.completed / summary.launched) * 100)
-    : null
+  // B021-006：后端计数经 Long 序列化为字符串（实测 "launched":"0"），字符串 "0" 为真值
+  // 会令完成率算出 NaN%；先归一为数值再运算与判断。
+  const launched = Number(summary.launched)
+  const completed = Number(summary.completed)
+  const avgMs = summary.avgDurationMs == null ? null : Number(summary.avgDurationMs)
+  const avgHours = avgMs == null ? null : avgMs / 3600000
+  const completion = launched ? Math.round((completed / launched) * 100) : null
   return {
     avg: avgHours == null ? '—' : `${avgHours.toFixed(1)} ${t('workspace.hoursUnit')}`,
     completion: completion == null ? '—' : `${completion}%`,
-    launched: summary.launched,
-    completed: summary.completed,
-    running: summary.running,
+    launched,
+    completed,
+    running: Number(summary.running),
   }
 })
 
@@ -141,6 +144,36 @@ const legacyStats = computed(() => [
   { key: 'drafts', label: t('workspace.statDrafts'), value: legacyTotals.value.drafts },
 ])
 
+// ─── B021-007 批次5：独立指标卡（statTodo/statInitiated/statProcessed/statDrafts）──
+// 数据与徽标口径与首页 stats computed 同源（真实分页 total + 附加字段）。
+type LegacyPageExtra = { badge?: string; urgentTotal?: number }
+const legacyExtras = ref<Record<string, LegacyPageExtra>>({})
+const STAT_METRIC_BY_TYPE: Record<string, string> = {
+  statTodo: 'todo',
+  statInitiated: 'initiated',
+  statProcessed: 'processed',
+  statDrafts: 'drafts',
+}
+const statMetric = computed(() => {
+  const metricKey = STAT_METRIC_BY_TYPE[props.typeCode]
+  if (!metricKey) return null
+  return { value: legacyValueOf(metricKey), badge: legacyBadgeOf(metricKey) }
+})
+
+function legacyValueOf(metricKey: string): number {
+  return legacyTotals.value[metricKey as keyof typeof legacyTotals.value] ?? 0
+}
+
+function legacyBadgeOf(metricKey: string): string {
+  const extra = legacyExtras.value[metricKey] ?? {}
+  if (metricKey === 'todo' && (extra.urgentTotal ?? 0) > 0) {
+    return t('workspace.urgentCount', { count: extra.urgentTotal ?? 0 })
+  }
+  if (metricKey === 'processed') return extra.badge ?? t('workspace.viewRecord')
+  if (metricKey === 'drafts') return extra.badge ?? t('workflow.continueEditing')
+  return extra.badge ?? ''
+}
+
 async function loadLegacyStats(): Promise<void> {
   const [todo, initiated, processed, drafts] = await Promise.allSettled([
     queryTodoTasks({ pageNum: 1, pageSize: 1 }),
@@ -153,6 +186,14 @@ async function loadLegacyStats(): Promise<void> {
     initiated: initiated.status === 'fulfilled' ? initiated.value.total : 0,
     processed: processed.status === 'fulfilled' ? processed.value.total : 0,
     drafts: drafts.status === 'fulfilled' ? drafts.value.total : 0,
+  }
+  legacyExtras.value = {
+    todo: todo.status === 'fulfilled' ? (todo.value as unknown as LegacyPageExtra) : {},
+    initiated:
+      initiated.status === 'fulfilled' ? (initiated.value as unknown as LegacyPageExtra) : {},
+    processed:
+      processed.status === 'fulfilled' ? (processed.value as unknown as LegacyPageExtra) : {},
+    drafts: drafts.status === 'fulfilled' ? (drafts.value as unknown as LegacyPageExtra) : {},
   }
 }
 
@@ -176,7 +217,7 @@ async function loadEfficiency(): Promise<void> {
 onMounted(async () => {
   try {
     if (props.typeCode === 'todo') await loadTodo()
-    else if (props.typeCode === 'stats') await loadLegacyStats()
+    else if (props.typeCode.startsWith('stat')) await loadLegacyStats()
     else if (props.typeCode === 'favoriteItems') await loadQuick()
     else if (props.typeCode === 'activity') await loadActivity()
     else if (props.typeCode === 'efficiency') await loadEfficiency()
@@ -190,11 +231,23 @@ onMounted(async () => {
   <div class="wsys" :class="`wsys--${typeCode}`">
     <div v-if="loading" class="wsys__empty">{{ t('common.loading') }}</div>
 
+    <!-- B021-007 批次5：独立指标卡——标题在卡片头，正文仅数值+徽标（设计稿画布统计卡无图标） -->
+    <template v-else-if="statMetric">
+      <div class="wsys__stat wsys__stat--single">
+        <strong>{{ statMetric.value }}</strong>
+        <span v-if="statMetric.badge" class="wsys__stat-badge">{{ statMetric.badge }}</span>
+      </div>
+    </template>
+
     <template v-else-if="typeCode === 'stats'">
+      <!-- B021-007 批次5：遗留统计概览按四联小卡打包呈现，与首页/独立指标卡同形态 -->
       <div class="wsys__stats">
         <div v-for="item in legacyStats" :key="item.key" class="wsys__stat">
           <span>{{ item.label }}</span>
           <strong>{{ item.value }}</strong>
+          <span v-if="legacyBadgeOf(item.key)" class="wsys__stat-badge">{{
+            legacyBadgeOf(item.key)
+          }}</span>
         </div>
       </div>
     </template>
@@ -468,8 +521,17 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
-  align-content: center;
+  align-content: start;
   height: 100%;
+}
+/* B021-007 批次5：遗留统计概览的四联小卡与首页统计小卡同形态 */
+.wsys__stats .wsys__stat {
+  position: relative;
+  box-sizing: border-box;
+  padding: 16px 48px 16px 20px;
+  background: #ffffff;
+  border: 1px solid var(--sw-border, #e1e5ef);
+  border-radius: 10px;
 }
 
 .wsys__stat {
@@ -477,15 +539,34 @@ onMounted(async () => {
   flex-direction: column;
   gap: 6px;
 }
-
-.wsys__stat span {
-  color: var(--sw-text-tertiary);
+/* B021-007 批次5：独立指标卡单卡撑满 wscard 内容区；徽标/图标绝对定位（设计01） */
+.wsys__stat--single {
+  position: relative;
+  box-sizing: border-box;
+  justify-content: center;
+  height: 100%;
+}
+.wsys__stat .wsys__stat-badge {
+  position: absolute;
+  right: 0;
+  bottom: 14px;
+  color: var(--sw-text-secondary);
   font-size: 12px;
+  line-height: 16px;
+}
+
+/* B021-005 裁定修订（Owner 2026-11-01）：两处设计稿本就不同——首页数值深色
+   （设计01），配置画布数值主题色（工作台配置设计稿）；各自对齐自己的设计。 */
+.wsys__stat span {
+  color: var(--sw-text-secondary);
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .wsys__stat strong {
   color: var(--sw-color-primary, #2563eb);
   font-size: 28px;
+  line-height: 36px;
   font-weight: 700;
 }
 

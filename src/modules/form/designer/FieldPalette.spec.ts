@@ -18,14 +18,14 @@ function itemEl(wrapper: ReturnType<typeof mountPalette>, type: string) {
 }
 
 describe('FieldPalette 原生拖拽', () => {
-  it('可用条目可拖拽；基础组含单行/多行文本，高级组富文本为真实入口', () => {
+  it('可用条目可拖拽；基础组文本输入为单一入口（单行/多行由输入方式切换），高级组富文本为真实入口', () => {
     const wrapper = mountPalette()
     expect(itemEl(wrapper, 'TEXT').attributes('draggable')).toBe('true')
     expect(itemEl(wrapper, 'TEXT').exists()).toBe(true)
-    // 基础组多行文本变体：独立入口、同 TEXT 类型
-    const multiline = wrapper.find('.palette__item[data-field-variant="multiline"]')
-    expect(multiline.exists()).toBe(true)
-    expect(multiline.attributes('draggable')).toBe('true')
+    expect(itemEl(wrapper, 'TEXT').text()).toContain('文本输入')
+    // B021-019：不再有多行文本独立入口
+    expect(wrapper.find('.palette__item[data-field-variant="multiline"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('多行文本')
     // 文字组件经本刀进入组件库
     expect(itemEl(wrapper, 'LABEL').exists()).toBe(true)
     expect(itemEl(wrapper, 'LABEL').attributes('draggable')).toBe('true')
@@ -46,17 +46,6 @@ describe('FieldPalette 原生拖拽', () => {
     expect(String(item.field.name).length).toBeGreaterThan(0)
     // BF20261013-003：新拖字段默认占满整行（不预设半行宽度）
     expect(item.field.colSpan).toBe(24)
-  })
-
-  it('多行文本变体产出带 multiline 的 TEXT 字段', async () => {
-    const wrapper = mountPalette()
-    const multiline = wrapper.find('.palette__item[data-field-variant="multiline"]')
-    await multiline.trigger('dragstart')
-    const emitted = wrapper.emitted('drag-start')
-    expect(emitted).toHaveLength(1)
-    const item = emitted![0][0] as { field: Record<string, unknown> }
-    expect(item.field).toMatchObject({ type: 'TEXT', multiline: true })
-    expect(item.field.label).toBe('多行文本')
   })
 
   it('dragend 通知宿主清预览', async () => {
@@ -126,10 +115,10 @@ describe('FieldPalette 选择类入口（BF20261013-009）', () => {
 describe('FieldPalette 名称一致性（BF20261013-010）', () => {
   const REGISTRY_TYPES = FIELD_TYPE_REGISTRY.map((descriptor) => descriptor.type)
 
-  it('全部已注册类型都有主入口；字典保留下拉/单选，文本保留单行/多行', () => {
+  it('全部已注册类型都有主入口；字典保留下拉/单选，文本单一入口', () => {
     const wrapper = mountPalette()
     for (const type of REGISTRY_TYPES) {
-      const variants = type === 'DICT' || type === 'TEXT' ? 2 : 1
+      const variants = type === 'DICT' ? 2 : 1
       expect(wrapper.findAll(`.palette__item[data-field-type="${type}"]`)).toHaveLength(variants)
     }
   })

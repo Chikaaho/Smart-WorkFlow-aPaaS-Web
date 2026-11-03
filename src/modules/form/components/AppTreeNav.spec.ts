@@ -3,7 +3,8 @@ import { mount } from '@vue/test-utils'
 import AppTreeNav from './AppTreeNav.vue'
 import type { FormAppDir, FormAppFormItem } from '@/contracts/app-center'
 
-vi.mock('@/foundation/permission', () => ({ hasPerm: () => false }))
+const hasPermMock = vi.hoisted(() => vi.fn(() => true))
+vi.mock('@/foundation/permission', () => ({ hasPerm: hasPermMock }))
 
 const form: FormAppFormItem = {
   formId: 'f1',
@@ -57,5 +58,33 @@ describe('AppTreeNav 整栏收起（设计 272:1296）', () => {
     await wrapper.find('[data-testid="app-tree-nav-expand"]').trigger('click')
     expect(wrapper.find('aside.app-tree-nav.is-collapsed').exists()).toBe(false)
     expect(wrapper.find('[data-testid="app-tree-dir"]').exists()).toBe(true)
+  })
+})
+
+describe('B021-021 管理动作门禁', () => {
+  it('用户端视图（缺省 manageable）：即便有管理权限也不渲染目录/表单管理菜单', () => {
+    const wrapper = mountNav()
+    expect(wrapper.find('[data-testid="dir-more-d1"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="form-more-form_key_1"]').exists()).toBe(false)
+  })
+
+  it('管理端工作台（manageable + form:app:manage）：管理菜单照常渲染', () => {
+    const wrapper = mount(AppTreeNav, {
+      props: {
+        dirs,
+        directForms: [],
+        selectedFormKey: 'form_key_1',
+        appName: 'CH 科技',
+        backTitle: '返回应用列表',
+        manageable: true,
+      },
+      global: {
+        stubs: {
+          'el-icon': { template: '<i><slot/></i>' },
+          AppIcon: { template: '<i/>', props: ['icon', 'color', 'size'] },
+        },
+      },
+    })
+    expect(wrapper.find('[data-testid="dir-more-d1"]').exists()).toBe(true)
   })
 })

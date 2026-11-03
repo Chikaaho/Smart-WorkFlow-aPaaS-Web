@@ -273,9 +273,10 @@ onMounted(loadList)
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <!-- 筛选区（446:14964 执行提示17）：名称 x337/w220、状态 x627/w300；编码筛选保留在剩余空间 -->
+    <!-- 筛选区（B021-017：删除 446:14964 像素残留 57/220、50/300 定宽与 nowrap——
+         全局 design 筛选口径接管，窄视口可换行，按钮不再溢出界面） -->
     <template #filter>
-      <ListFilterItem class="dict-list__name-filter" :label="t('system.dictName')">
+      <ListFilterItem :label="t('system.dictName')">
         <el-input
           v-model="filter.name"
           :placeholder="t('common.pleaseInput')"
@@ -283,7 +284,7 @@ onMounted(loadList)
           @keyup.enter="handleQuery"
         />
       </ListFilterItem>
-      <ListFilterItem class="dict-list__status-filter" :label="t('common.status')">
+      <ListFilterItem :label="t('common.status')">
         <el-select v-model="filter.status" :placeholder="t('common.all')" clearable>
           <el-option :label="t('common.statusNormal')" :value="0" />
           <el-option :label="t('common.disable')" :value="1" />
@@ -336,13 +337,8 @@ onMounted(loadList)
       </el-table-column>
       <!-- BF20261013-038 全局巡检：150 装不下「编辑/管理字典项/删除」三格（实测中文 166、英文 181），
            末格被裁 48px；按四格标准放宽到 200 -->
-      <ListActionsColumn :actions="rowActions" :width="200" />
+      <ListActionsColumn :actions="rowActions" :width="160" />
     </el-table>
-
-    <!-- 空态操作 -->
-    <template #empty-action>
-      <el-button type="primary" @click="openCreate">{{ t('common.create') }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <!-- 新建/编辑弹窗：统一 760 宽（447:13355 / 446:15178），编辑子态固定 330 高两列布局 -->
@@ -485,27 +481,6 @@ onMounted(loadList)
   box-sizing: border-box;
   height: 80px;
   min-height: 80px;
-}
-
-/* 446:14964（执行提示18）：名称框 x338/w220、状态框 x627/w300；编码筛选保留在剩余空间 */
-.dict-list :deep(.list-filter-bar__fields) {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 12px;
-}
-.dict-list :deep(.list-filter-bar__fields > *) {
-  flex: 0 0 auto;
-}
-.dict-list :deep(.list-filter-bar__actions) {
-  margin-left: auto;
-}
-.dict-list__name-filter {
-  grid-template-columns: 57px 220px !important;
-  width: max-content;
-}
-.dict-list__status-filter {
-  grid-template-columns: 50px 300px !important;
-  width: max-content;
 }
 </style>
 

@@ -116,6 +116,29 @@ const MOCK_IMPORT_EXPORT_HEADERS: string[][] = [
  * P32 导入导出身份/权限闸（对齐真实后端 401/403/放行 口径）：
  * 未登录（无 token 或未认证会话）→ 401；已登录缺对应权限 → 403；超管/持权 → 放行。
  */
+/** B021-027：部门子树 ID（含环保护），与后端 searchActiveUsersInDept 同口径。 */
+function mockDescendantDeptIds(deptId: string): string[] {
+  const children = new Map<string, string[]>()
+  for (const dept of MOCK_DEPTS_LIST) {
+    const parent = String((dept as { parentId?: string }).parentId ?? '')
+    if (!parent) continue
+    const list = children.get(parent) ?? []
+    list.push(String(dept.id))
+    children.set(parent, list)
+  }
+  const result: string[] = []
+  const visited = new Set<string>([deptId])
+  const stack = [...(children.get(deptId) ?? [])]
+  while (stack.length) {
+    const current = stack.pop()!
+    if (visited.has(current)) continue
+    visited.add(current)
+    result.push(current)
+    stack.push(...(children.get(current) ?? []))
+  }
+  return result
+}
+
 function p32AccessGate(required: string): { code: number; message: string; data: null } | null {
   if (!getAccessToken() || MOCK_CURRENT_SESSION.user.username === '') {
     return { code: 401, message: '未认证', data: null }
@@ -2849,19 +2872,23 @@ export const mockRegistrations: MockRegistration[] = [
         .trim()
         .toLowerCase()
       const candidates = [
-        { id: 2, username: 'admin', realName: '陈曦' },
-        { id: 103, username: 'wanghai', realName: '王海' },
-        { id: 104, username: 'linyue', realName: '林悦' },
-        { id: 105, username: 'zhaochen', realName: '赵辰' },
-        { id: 106, username: 'zhouming', realName: '周明' },
+        { id: 2, username: 'admin', realName: '陈曦', deptId: '1' },
+        { id: 103, username: 'wanghai', realName: '王海', deptId: '2' },
+        { id: 104, username: 'linyue', realName: '林悦', deptId: '2' },
+        { id: 105, username: 'zhaochen', realName: '赵辰', deptId: '3' },
+        { id: 106, username: 'zhouming', realName: '周明', deptId: '4' },
       ]
-      const filtered = keyword
-        ? candidates.filter(
-            (c) =>
-              c.username.toLowerCase().includes(keyword) ||
-              (c.realName ?? '').toLowerCase().includes(keyword),
-          )
-        : candidates
+      // B021-027：deptId 命中部门及子孙部门（与后端 searchActiveUsersInDept 同口径）
+      const deptId = String(query.deptId ?? '').trim()
+      const deptIds = deptId ? [deptId, ...mockDescendantDeptIds(deptId)] : null
+      const filtered = candidates.filter((c) => {
+        if (deptIds && !deptIds.includes(String(c.deptId))) return false
+        if (!keyword) return true
+        return (
+          c.username.toLowerCase().includes(keyword) ||
+          (c.realName ?? '').toLowerCase().includes(keyword)
+        )
+      })
       return { code: 0, message: 'ok', data: filtered }
     },
   },

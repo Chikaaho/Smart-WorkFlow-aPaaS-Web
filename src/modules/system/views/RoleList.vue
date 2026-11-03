@@ -740,13 +740,6 @@ onMounted(() => {
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="150" />
     </el-table>
-
-    <!-- 空态操作 -->
-    <template #empty-action>
-      <el-button v-perm="'system:role:create'" type="primary" @click="openCreate">{{
-        t('system.newRole')
-      }}</el-button>
-    </template>
   </StandardListTemplate>
 
   <!-- 新建/编辑弹窗 -->

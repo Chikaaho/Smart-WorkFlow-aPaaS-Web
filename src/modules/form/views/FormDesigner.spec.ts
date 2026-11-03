@@ -50,11 +50,12 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
+const routeQuery: Record<string, string> = {}
 const mockRouterReplace = vi.fn()
 const mockRouterPush = vi.fn()
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: 'uuid-1' }, query: {} }),
+  useRoute: () => ({ params: { id: 'uuid-1' }, query: { ...routeQuery } }),
   useRouter: () => ({ replace: mockRouterReplace, push: mockRouterPush }),
   onBeforeRouteLeave: vi.fn(),
   onBeforeRouteUpdate: vi.fn(),
@@ -119,7 +120,9 @@ describe('FormDesigner 工作台（P52）', () => {
     mockPageProcessDefs.mockResolvedValue({ list: [], total: 0, pageNum: 1, pageSize: 10 })
   })
 
-  async function mountDesigner() {
+  async function mountDesigner(opts?: { query?: Record<string, string> }) {
+    Object.keys(routeQuery).forEach((k) => delete routeQuery[k])
+    Object.assign(routeQuery, opts?.query ?? {})
     const wrapper = mount(FormDesigner, { global: { stubs: designerStubs } })
     await flushPromises()
     return wrapper
@@ -250,8 +253,33 @@ describe('FormDesigner 工作台（P52）', () => {
     expect(mockRouterPush).toHaveBeenCalledWith(
       expect.stringContaining('/workflow/defs/9/design?from=form-workbench'),
     )
-    expect(wrapper.find('.stub-processes').exists()).toBe(false)
-    expect(wrapper.findAll('button').some((b) => b.text().includes('编号设置'))).toBe(false)
+  })
+
+  it('B021-022：直链落在流程设计页签（?tab=processes）时同样直达画布，不先渲染列表', async () => {
+    mockPageProcessDefs.mockResolvedValue({
+      list: [{ id: 9, name: '灾备演练审批' }],
+      total: '1',
+      pageNum: 1,
+      pageSize: 10,
+    })
+    await mountDesigner({ query: { tab: 'processes' } })
+    await flushPromises()
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      expect.stringContaining('/workflow/defs/9/design?from=form-workbench'),
+    )
+  })
+
+  it('B021-022：零关联流程停留在页签内，由空态画布承接（不渲染列表壳）', async () => {
+    mockPageProcessDefs.mockResolvedValue({
+      list: [],
+      total: '0',
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const wrapper = await mountDesigner({ query: { tab: 'processes' } })
+    await flushPromises()
+    expect(mockRouterPush).not.toHaveBeenCalledWith(expect.stringContaining('/workflow/defs/'))
+    expect(wrapper.text()).not.toContain('流程名称')
   })
 
   it('保存成功 → 调用保存动作并显示「保存成功」', async () => {

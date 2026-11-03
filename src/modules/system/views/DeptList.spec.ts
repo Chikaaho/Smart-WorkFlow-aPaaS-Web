@@ -199,8 +199,8 @@ describe('DeptList', () => {
     const wrapper = mount(DeptList, { global: { stubs: minimalStubs } })
     await nextTick()
 
-    await wrapper.find('.dept-list__filter input').setValue('技术部')
-    await wrapper.find('.dept-list__filter input').trigger('keyup', { key: 'Enter' })
+    await wrapper.find('.list-filter-item input').setValue('技术部')
+    await wrapper.find('.list-filter-item input').trigger('keyup', { key: 'Enter' })
     await nextTick()
 
     expect(listDeptTree).toHaveBeenLastCalledWith({ name: '技术部' })
@@ -315,27 +315,25 @@ describe('DeptList', () => {
     expect(listDeptTree).toHaveBeenLastCalledWith({ name: '不存在的部门' })
   })
 
-  it('无筛选条件且数据为空 → 空态显示「新建部门」入口，无「无匹配部门」', async () => {
+  it('无筛选条件且数据为空 → 无自定义空态块（走表格内建暂无数据），新建入口仅工具位', async () => {
     vi.mocked(listDeptTree).mockResolvedValue([])
     const wrapper = mount(DeptList, { global: { stubs: minimalStubs } })
     await nextTick()
     await nextTick()
 
-    const emptyArea = wrapper.find('.dept-list__empty')
-    expect(emptyArea.text()).toContain('新建部门')
-    expect(emptyArea.text()).not.toContain('无匹配部门')
+    // B021-017：空态不再提供重复的新建部门入口（与筛选栏工具位功能重叠）
+    expect(wrapper.find('.dept-list__empty').exists()).toBe(false)
+    expect(wrapper.findAll('button').some((b) => b.text() === '新建部门')).toBe(true)
   })
 
-  it('无创建权限时，空态不展示新建部门入口', async () => {
+  it('无创建权限时同样不渲染自定义空态块（新建入口由工具位 v-perm 管控）', async () => {
     tenantStore.permissions = new Set(['system:dept:list'])
     vi.mocked(listDeptTree).mockResolvedValue([])
     const wrapper = mount(DeptList, { global: { stubs: minimalStubs } })
     await nextTick()
     await nextTick()
 
-    const emptyArea = wrapper.find('.dept-list__empty')
-    expect(emptyArea.exists()).toBe(true)
-    expect(emptyArea.text()).not.toContain('新建部门')
+    expect(wrapper.find('.dept-list__empty').exists()).toBe(false)
   })
 
   // ─── 加载态 ───
@@ -415,6 +413,7 @@ describe('DeptList', () => {
     expect(vm.treeData.map((row) => row.name)).toEqual(['租户甲', '租户乙'])
     expect(vm.treeData[0].children?.map((row) => row.id)).toEqual(['1'])
     expect(vm.rowActions(vm.treeData[0])).toEqual([])
-    expect(wrapper.findComponent({ name: 'ListToolbar' }).props('title')).toBe('部门管理')
+    // B021-017：标题改经 #table-title 渲染（页面迁入 StandardListTemplate，不再有独立 ListToolbar）
+    expect(wrapper.find('.standard-list__panel-head strong').text()).toBe('部门管理')
   })
 })

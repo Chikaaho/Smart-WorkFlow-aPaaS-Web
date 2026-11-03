@@ -113,11 +113,8 @@ const rows = computed<FieldRow[]>(() => {
   )
 })
 
-/** 控件类型（注册表中文名；TEXT 按 multiline 区分单行/多行；未知类型回落字段编码）。 */
+/** 控件类型（注册表中文名；单行/多行属 TEXT 的输入方式，不另立控件；未知类型回落字段编码）。 */
 function componentLabel(field: FormSchemaField): string {
-  if (field.type === 'TEXT' && (field as { multiline?: boolean }).multiline === true) {
-    return t('form.paletteMultiline')
-  }
   return getFieldTypeDescriptor(field.type)?.label ?? field.type
 }
 
