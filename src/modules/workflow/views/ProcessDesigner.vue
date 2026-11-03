@@ -3411,14 +3411,6 @@ function nodeLabelLines(label: string) {
             : ''
       }}</span>
       <div class="toolbar-actions">
-        <el-button
-          v-if="workbenchFormId"
-          size="small"
-          class="toolbar-number"
-          @click="themeRuleVisible = true"
-        >
-          {{ t('workflow.designerNumberShort') }}
-        </el-button>
         <el-dropdown
           trigger="click"
           placement="bottom-end"
@@ -3513,7 +3505,13 @@ function nodeLabelLines(label: string) {
         t('common.undo')
       }}</el-button>
       <el-button size="small" @click="arrangeTopDown">{{ t('workflow.arrangeTopDown') }}</el-button>
-      <span class="spacer" />
+      <el-button
+        v-if="workbenchFormId"
+        size="small"
+        class="workbar-advance"
+        @click="themeRuleVisible = true"
+        >{{ t('workflow.designerNumberShort') }}</el-button
+      >
       <el-button size="small" class="workbar-advance" @click="openVariables">变量</el-button>
       <el-button size="small" class="workbar-advance" @click="openTriggers">触发器</el-button>
       <el-button
@@ -6039,12 +6037,14 @@ function nodeLabelLines(label: string) {
   color: #344164;
   font-size: 12px;
 }
+.designer-toolbar2 :deep(.el-button + .el-button) {
+  margin-left: 0; /* 间距统一由容器 gap 8px 承接（B021-024），不吃 EP 相邻 12px 默认边距 */
+}
 .designer-toolbar2 :deep(.workbar-advance) {
   min-width: 72px;
 }
 .designer-toolbar2 :deep(.el-button.workbar-verify) {
   min-width: 56px;
-  margin-left: 0;
 }
 
 /* ── 设计 42:4：224px 节点库（画布内框从 x236 起），分组内单列 188×34 节点入口 ── */
