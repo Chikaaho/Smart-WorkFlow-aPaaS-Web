@@ -192,8 +192,20 @@ async function mountLoaded() {
 async function mountLoadedWith(graph: ProcessGraph) {
   vi.mocked(getGraphDef).mockResolvedValueOnce(graph)
   vi.mocked(listModelOptions).mockResolvedValueOnce([
-    { id: 1, name: 'OpenAI 主配置', modelName: 'gpt-4o', protocolType: 'openai', enabled: true },
-    { id: 2, name: 'Ollama 本地', modelName: 'qwen2.5', protocolType: 'ollama', enabled: true },
+    {
+      id: 1,
+      name: 'OpenAI 主配置',
+      modelName: 'gpt-4o',
+      providerApiFormat: 'OPENAI_CHAT',
+      enabled: true,
+    },
+    {
+      id: 2,
+      name: 'Ollama 本地',
+      modelName: 'qwen2.5',
+      providerApiFormat: 'ollama',
+      enabled: true,
+    },
   ])
   vi.mocked(listToolOptions).mockResolvedValueOnce([
     { toolName: 'http_echo', description: 'echo 工具', source: 'internal' },

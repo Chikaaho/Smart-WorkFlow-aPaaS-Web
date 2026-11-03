@@ -2,20 +2,16 @@
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
-/* global URL */
 /**
  * ModelFormDialog — 大模型配置新增/编辑弹窗（独立组件，仅被 ModelList 引用）。
  *
  * 高代码轨表单（el-dialog + StandardFormTemplate + FormSection/FormGrid 手写控件），
- * 覆盖 AgentModelSaveReq 全量契约字段：
- *   名称 / 协议类型(openai|ollama|other 三值，不自创) / API 地址(URL 校验) / 模型名称 /
- *   API Key(密码框) / temperature / maxTokens / topP / timeoutSeconds / retryCount /
+ * 覆盖 AgentModelSaveReq 全量契约字段（F1 D022-02 两级模型，密钥移至供应商侧）：
+ *   所属供应商(启用中下拉) / 名称 / 模型名称 / 能力标注(CHAT|EMBEDDING) /
+ *   temperature / maxTokens / topP / timeoutSeconds / retryCount /
  *   enabled / remark / groupKey / sort / quotaCooldownSeconds。
  *
- * 安全硬边界（M07-F01 风险 §5.1）：
- *   - 明文 Key 只存在于用户当次输入（form.apiKey），提交后不缓存、不回显；
- *   - 编辑时只显示后端返回的 apiKeyMasked 脱敏值（maskedApiKey）；
- *   - apiKey 留空提交 = 编辑保持旧密钥 / 新增不配置（请求体不含 apiKey 字段）。
+ * 安全硬边界：本表单不含任何 API Key 字段——密钥只在供应商（ProviderFormDialog）侧管理。
  *
  * lockedUntil 为系统运行态（只读）：编辑回填后仅作「冷却至 xx」信息条展示，
  * 无任何可写控件，提交请求体也不含该字段。
@@ -25,8 +21,8 @@ const { t } = useI18n()
 import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/foundation/request'
-import { createModel, getModel, updateModel } from '@/modules/agent/api'
-import type { AgentModelConfig, AgentModelSaveReq } from '@/contracts/agent'
+import { createModel, getModel, updateModel, listEnabledProviders } from '@/modules/agent/api'
+import type { AgentProvider, AgentModel, AgentModelSaveReq } from '@/contracts/agent'
 import { StandardFormTemplate, FormSection, FormGrid } from '@/components/page-layout'
 
 const props = defineProps<{
@@ -42,38 +38,46 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-// ─── 协议差异提示（三值契约，切换时给用户可理解的差异说明） ───
+// ─── 供应商选项（启用中的供应商下拉，F1 两级模型） ───
 
-const PROTOCOL_OPTIONS = [
+const providerOptions = ref<AgentProvider[]>([])
+const providersLoading = ref(false)
+
+async function loadProviders() {
+  providersLoading.value = true
+  try {
+    providerOptions.value = await listEnabledProviders()
+  } catch {
+    providerOptions.value = []
+  } finally {
+    providersLoading.value = false
+  }
+}
+
+// ─── 能力标注选项（CHAT / EMBEDDING；后端按含式匹配过滤） ───
+
+const CAPABILITY_OPTIONS = [
   {
     get label() {
-      return t('agent.protocolOpenAi')
+      return t('agent.capabilityChat')
     },
-    value: 'openai',
+    value: 'CHAT',
   },
   {
     get label() {
-      return t('agent.protocolOllama')
+      return t('agent.capabilityEmbedding')
     },
-    value: 'ollama',
-  },
-  {
-    get label() {
-      return t('common.other')
-    },
-    value: 'other',
+    value: 'EMBEDDING',
   },
 ] as const
 
 // ─── 表单状态（数值字段可被 el-input-number 清空为 null，提交时兜底默认值） ───
 
 const form = reactive({
+  providerId: null as number | null,
   name: '',
-  protocolType: 'openai',
-  baseUrl: '',
   modelName: '',
-  /** 明文 Key 仅存在于当次输入；提交后即被丢弃，不缓存 */
-  apiKey: '',
+  capabilities: 'CHAT',
   temperature: 0.7,
   maxTokens: 4096,
   topP: 1,
@@ -86,8 +90,6 @@ const form = reactive({
   quotaCooldownSeconds: 60,
 })
 
-/** 编辑回填的后端脱敏展示值（只展示，不加工） */
-const maskedApiKey = ref<string | null>(null)
 /** 编辑回填的 lockedUntil（只读展示） */
 const lockedUntil = ref<string | null>(null)
 
@@ -112,11 +114,10 @@ const dialogModel = computed({
 // ─── 表单生命周期 ───
 
 function resetForm() {
+  form.providerId = null
   form.name = ''
-  form.protocolType = 'openai'
-  form.baseUrl = ''
   form.modelName = ''
-  form.apiKey = ''
+  form.capabilities = 'CHAT'
   form.temperature = 0.7
   form.maxTokens = 4096
   form.topP = 1
@@ -127,17 +128,15 @@ function resetForm() {
   form.groupKey = ''
   form.sort = 0
   form.quotaCooldownSeconds = 60
-  maskedApiKey.value = null
   lockedUntil.value = null
   formError.value = ''
 }
 
-function fillForm(detail: AgentModelConfig) {
+function fillForm(detail: AgentModel) {
+  form.providerId = detail.providerId
   form.name = detail.name
-  form.protocolType = detail.protocolType
-  form.baseUrl = detail.baseUrl
   form.modelName = detail.modelName
-  // apiKey 输入框始终为空：只展示脱敏值，绝不回填明文
+  form.capabilities = detail.capabilities || 'CHAT'
   form.temperature = detail.temperature ?? 0.7
   form.maxTokens = detail.maxTokens ?? 4096
   form.topP = detail.topP ?? 1
@@ -148,12 +147,12 @@ function fillForm(detail: AgentModelConfig) {
   form.groupKey = detail.groupKey ?? ''
   form.sort = detail.sort
   form.quotaCooldownSeconds = detail.quotaCooldownSeconds
-  maskedApiKey.value = detail.apiKeyMasked
   lockedUntil.value = detail.lockedUntil
 }
 
 async function initForm() {
   resetForm()
+  void loadProviders()
   if (props.modelId === null) return
   loadingDetail.value = true
   try {
@@ -177,14 +176,8 @@ watch(
 // ─── 校验（必填/数值范围/URL；校验失败不提交） ───
 
 function validate(): string | null {
+  if (form.providerId == null) return t('agent.selectProvider')
   if (!form.name.trim()) return t('agent.configNameRequired')
-  if (!form.protocolType) return t('agent.selectProtocol')
-  if (!form.baseUrl.trim()) return t('agent.apiUrlRequired')
-  try {
-    new URL(form.baseUrl.trim())
-  } catch {
-    return t('agent.apiUrlInvalid')
-  }
   if (!form.modelName.trim()) return t('agent.modelNameRequired')
   if (form.temperature !== null && (form.temperature < 0 || form.temperature > 2)) {
     return t('agent.temperatureRange')
@@ -214,10 +207,10 @@ function validate(): string | null {
 
 function buildSaveReq(): AgentModelSaveReq {
   const req: AgentModelSaveReq = {
+    providerId: form.providerId as number,
     name: form.name.trim(),
-    protocolType: form.protocolType,
-    baseUrl: form.baseUrl.trim(),
     modelName: form.modelName.trim(),
+    capabilities: form.capabilities,
     temperature: form.temperature,
     maxTokens: form.maxTokens,
     topP: form.topP,
@@ -228,11 +221,6 @@ function buildSaveReq(): AgentModelSaveReq {
     groupKey: form.groupKey.trim() || null,
     sort: form.sort ?? 0,
     quotaCooldownSeconds: form.quotaCooldownSeconds ?? 60,
-  }
-  // 留空 = 保持旧密钥（编辑）/不配置（新增）：请求体不含 apiKey 字段
-  const key = form.apiKey.trim()
-  if (key) {
-    req.apiKey = key
   }
   return req
 }
@@ -259,8 +247,6 @@ async function handleSubmit() {
   } catch (err) {
     formError.value = err instanceof ApiError ? err.msg : t('common.saveFailed')
   } finally {
-    // 明文 Key 已随 req 离手，立即清除输入框状态，组件内不做任何保留
-    form.apiKey = ''
     submitting.value = false
   }
 }
@@ -291,30 +277,28 @@ async function handleSubmit() {
       <FormSection :title="t('common.basicInfo')">
         <FormGrid :columns="2">
           <div class="form-field form-field--required">
+            <label class="form-field__label">{{ t('agent.provider') }}</label>
+            <el-select
+              v-model="form.providerId"
+              :loading="providersLoading"
+              :placeholder="t('agent.selectProvider')"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="p in providerOptions"
+                :key="p.id"
+                :label="t('common.nameWithCode', { name: p.name, code: p.apiFormat })"
+                :value="p.id"
+              />
+            </el-select>
+            <div class="form-field__hint">{{ t('agent.providerManageHint') }}</div>
+          </div>
+          <div class="form-field form-field--required">
             <label class="form-field__label">{{ t('common.name') }}</label>
             <el-input
               v-model="form.name"
               :placeholder="t('agent.modelConfigNamePlaceholder')"
               maxlength="128"
-            />
-          </div>
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('agent.protocolType') }}</label>
-            <el-select v-model="form.protocolType" style="width: 100%">
-              <el-option
-                v-for="opt in PROTOCOL_OPTIONS"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
-            </el-select>
-          </div>
-          <div class="form-field form-field--required">
-            <label class="form-field__label">{{ t('agent.apiUrl') }}</label>
-            <el-input
-              v-model="form.baseUrl"
-              placeholder="https://api.openai.com/v1"
-              maxlength="512"
             />
           </div>
           <div class="form-field form-field--required">
@@ -326,20 +310,15 @@ async function handleSubmit() {
             />
           </div>
           <div class="form-field">
-            <label class="form-field__label">API Key</label>
-            <el-input
-              v-model="form.apiKey"
-              type="password"
-              show-password
-              :placeholder="t('agent.apiKeyKeepHint')"
-              maxlength="512"
-            />
-            <div class="form-field__hint">
-              <template v-if="maskedApiKey">{{
-                t('agent.maskedApiKeyLabel', { maskedApiKey })
-              }}</template>
-              <template v-else>{{ t('agent.apiKeyUnset') }}</template>
-            </div>
+            <label class="form-field__label">{{ t('agent.capabilities') }}</label>
+            <el-select v-model="form.capabilities" style="width: 100%">
+              <el-option
+                v-for="opt in CAPABILITY_OPTIONS"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
           </div>
           <div class="form-field">
             <label class="form-field__label">{{ t('common.toggle') }}</label>

@@ -162,9 +162,15 @@ function workflowNodeCapabilityAccessGate(): { code: number; message: string; da
   }
   return null
 }
-import type { AgentModelConfig, AgentModelSaveReq } from '@/contracts/agent'
+import type {
+  AgentModel,
+  AgentModelSaveReq,
+  AgentProvider,
+  AgentProviderSaveReq,
+} from '@/contracts/agent'
 import {
   MOCK_AGENT_MODELS,
+  MOCK_AGENT_PROVIDERS,
   MOCK_AGENT_GRAPH_EXECUTIONS,
   MOCK_CONVERSATIONS,
   MOCK_CONVERSATION_MESSAGES,
@@ -231,8 +237,26 @@ function maskApiKey(raw: string): string {
   return `${key.slice(0, 2)}****${key.slice(-2)}`
 }
 
-function findModel(id: number): AgentModelConfig | undefined {
+function findModel(id: number): AgentModel | undefined {
   return MOCK_AGENT_MODELS.find((m) => m.id === id)
+}
+
+function findProvider(id: number): AgentProvider | undefined {
+  return MOCK_AGENT_PROVIDERS.find((p) => p.id === id)
+}
+
+function nextProviderId(): number {
+  return MOCK_AGENT_PROVIDERS.reduce((max, p) => Math.max(max, p.id), 0) + 1
+}
+
+/** 模型出参统一补供应商名称/格式（后端 toDTO 同语义） */
+function modelWithProvider(m: AgentModel): AgentModel {
+  const provider = findProvider(m.providerId)
+  return {
+    ...m,
+    providerName: provider?.name ?? null,
+    providerApiFormat: provider?.apiFormat ?? null,
+  }
 }
 
 /** 取 MOCK_AGENT_MODELS 中已出现的最大 id，用于创建时分配新 id。 */
@@ -5277,12 +5301,126 @@ export const mockRegistrations: MockRegistration[] = [
   },
 
   // ═══════════════════════════════════════════════════
-  // ── 大模型管理（M07-F01，契约对齐 AgentModelConfigDTO / AgentModelSaveReqDTO） ──
+  // ── 供应商/模型两级管理（F1 D022-02，契约对齐 AgentProviderDTO / AgentModelDTO） ──
   // ═══════════════════════════════════════════════════
 
-  // GET /api/agent/models?pageNum=&pageSize=&nameKeyword=
-  // 分页 + 名称关键字过滤（name 包含匹配），响应 BackendPageResult<AgentModelConfig>。
-  // 列表数据与详情同源：均只含 apiKeyMasked 脱敏值，无明文、无 apiKeyCipher。
+  // GET /api/agent/providers?pageNum=&pageSize=&nameKeyword= — 分页（密钥脱敏）
+  {
+    method: 'GET',
+    pattern: '/api/agent/providers',
+    handler: (_params, query) => {
+      const pageNum = Number(query.pageNum ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      const keyword = String(query.nameKeyword ?? '').trim()
+      const filtered = keyword
+        ? MOCK_AGENT_PROVIDERS.filter((p) => p.name.includes(keyword))
+        : MOCK_AGENT_PROVIDERS
+      const total = filtered.length
+      const start = (pageNum - 1) * pageSize
+      return {
+        code: 0,
+        message: 'ok',
+        data: { records: filtered.slice(start, start + pageSize), total, pageNum, pageSize },
+      }
+    },
+  },
+
+  // GET /api/agent/providers/enabled — 启用中的供应商（模型编辑下拉）
+  {
+    method: 'GET',
+    pattern: '/api/agent/providers/enabled',
+    handler: () => ({
+      code: 0,
+      message: 'ok',
+      data: MOCK_AGENT_PROVIDERS.filter((p) => p.enabled),
+    }),
+  },
+
+  // GET /api/agent/providers/:id — 详情（不存在返回 404 业务码）
+  {
+    method: 'GET',
+    pattern: '/api/agent/providers/:id',
+    handler: (params) => {
+      const provider = findProvider(Number((params as Record<string, string>).id))
+      if (!provider) return { code: 404, message: '供应商不存在', data: null }
+      return { code: 0, message: 'ok', data: { ...provider } }
+    },
+  },
+
+  // POST /api/agent/providers — 创建（apiKey 非空才生成脱敏值；空=未配置密钥）
+  {
+    method: 'POST',
+    pattern: '/api/agent/providers',
+    handler: (_params, _query, body) => {
+      const req = (body ?? {}) as Partial<AgentProviderSaveReq>
+      const format = String(req.apiFormat ?? '')
+      if (!['OPENAI_CHAT', 'OPENAI_RESPONSES', 'ANTHROPIC'].includes(format)) {
+        return { code: 400, message: '不支持的 API 格式: ' + format, data: null }
+      }
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      const id = nextProviderId()
+      const newProvider: AgentProvider = {
+        id,
+        name: String(req.name ?? ''),
+        apiFormat: format,
+        baseUrl: String(req.baseUrl ?? ''),
+        apiKeyMasked: req.apiKey && req.apiKey.trim() ? maskApiKey(req.apiKey) : null,
+        enabled: req.enabled ?? true,
+        remark: req.remark !== undefined && req.remark !== null ? String(req.remark) : null,
+        createTime: now,
+        updateTime: now,
+      }
+      MOCK_AGENT_PROVIDERS.push(newProvider)
+      return { code: 0, message: 'ok', data: id }
+    },
+  },
+
+  // PUT /api/agent/providers/:id — 更新（apiKey 空=保留旧密钥；mock 密文侧只保留脱敏值）
+  {
+    method: 'PUT',
+    pattern: '/api/agent/providers/:id',
+    handler: (params, _query, body) => {
+      const id = Number((params as Record<string, string>).id)
+      const provider = findProvider(id)
+      if (!provider) return { code: 404, message: '供应商不存在', data: null }
+      const req = (body ?? {}) as Partial<AgentProviderSaveReq>
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      const apiKeyRaw = req.apiKey
+      const hasNewKey = apiKeyRaw !== undefined && apiKeyRaw !== null && apiKeyRaw.trim() !== ''
+      const apiKeyMasked = hasNewKey ? maskApiKey(apiKeyRaw) : provider.apiKeyMasked
+      const idx = MOCK_AGENT_PROVIDERS.findIndex((p) => p.id === id)
+      MOCK_AGENT_PROVIDERS[idx] = {
+        ...provider,
+        name: req.name !== undefined ? String(req.name) : provider.name,
+        apiFormat: req.apiFormat !== undefined ? String(req.apiFormat) : provider.apiFormat,
+        baseUrl: req.baseUrl !== undefined ? String(req.baseUrl) : provider.baseUrl,
+        apiKeyMasked,
+        enabled: req.enabled !== undefined ? Boolean(req.enabled) : provider.enabled,
+        remark:
+          req.remark !== undefined
+            ? req.remark === null
+              ? null
+              : String(req.remark)
+            : provider.remark,
+        updateTime: now,
+      }
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // DELETE /api/agent/providers/:id — 删除（幂等）
+  {
+    method: 'DELETE',
+    pattern: '/api/agent/providers/:id',
+    handler: (params) => {
+      const id = Number((params as Record<string, string>).id)
+      const idx = MOCK_AGENT_PROVIDERS.findIndex((p) => p.id === id)
+      if (idx !== -1) MOCK_AGENT_PROVIDERS.splice(idx, 1)
+      return { code: 0, message: 'ok', data: null }
+    },
+  },
+
+  // GET /api/agent/models?pageNum=&pageSize=&providerId=&nameKeyword= — 分页
   {
     method: 'GET',
     pattern: '/api/agent/models',
@@ -5290,12 +5428,13 @@ export const mockRegistrations: MockRegistration[] = [
       const pageNum = Number(query.pageNum ?? 1)
       const pageSize = Number(query.pageSize ?? 10)
       const keyword = String(query.nameKeyword ?? '').trim()
-      const filtered = keyword
-        ? MOCK_AGENT_MODELS.filter((m) => m.name.includes(keyword))
-        : MOCK_AGENT_MODELS
+      const providerId = query.providerId ? Number(query.providerId) : null
+      let filtered = [...MOCK_AGENT_MODELS]
+      if (keyword) filtered = filtered.filter((m) => m.name.includes(keyword))
+      if (providerId) filtered = filtered.filter((m) => m.providerId === providerId)
       const total = filtered.length
       const start = (pageNum - 1) * pageSize
-      const records = filtered.slice(start, start + pageSize)
+      const records = filtered.slice(start, start + pageSize).map(modelWithProvider)
       return {
         code: 0,
         message: 'ok',
@@ -5304,33 +5443,48 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
-  // GET /api/agent/models/:id — 详情（含 apiKeyMasked；不存在返回 404 业务码）
+  // GET /api/agent/models/enabled?capability= — 启用中的模型（设计器 LLM 节点下拉）
+  {
+    method: 'GET',
+    pattern: '/api/agent/models/enabled',
+    handler: (_params, query) => {
+      const capability = String(query.capability ?? '').trim()
+      const list = MOCK_AGENT_MODELS.filter(
+        (m) => m.enabled && (!capability || m.capabilities.includes(capability)),
+      ).map(modelWithProvider)
+      return { code: 0, message: 'ok', data: list }
+    },
+  },
+
+  // GET /api/agent/models/:id — 详情
   {
     method: 'GET',
     pattern: '/api/agent/models/:id',
     handler: (params) => {
       const model = findModel(Number((params as Record<string, string>).id))
-      if (!model) return { code: 404, message: '模型配置不存在', data: null }
-      return { code: 0, message: 'ok', data: { ...model } }
+      if (!model) return { code: 404, message: '模型不存在', data: null }
+      return { code: 0, message: 'ok', data: modelWithProvider(model) }
     },
   },
 
-  // POST /api/agent/models — 创建（apiKey 非空才生成脱敏值；空=未配置密钥），返回新 id
+  // POST /api/agent/models — 创建（密钥在供应商侧，本请求不含 Key）
   {
     method: 'POST',
     pattern: '/api/agent/models',
     handler: (_params, _query, body) => {
       const req = (body ?? {}) as Partial<AgentModelSaveReq>
+      const provider = req.providerId ? findProvider(Number(req.providerId)) : undefined
+      if (!provider) return { code: 404, message: '供应商不存在', data: null }
       const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
       const id = nextModelId()
-      const newModel: AgentModelConfig = {
+      const newModel: AgentModel = {
         id,
+        providerId: provider.id,
+        providerName: provider.name,
+        providerApiFormat: provider.apiFormat,
         name: String(req.name ?? ''),
-        protocolType: String(req.protocolType ?? 'openai'),
-        baseUrl: String(req.baseUrl ?? ''),
         modelName: String(req.modelName ?? ''),
-        // 明文仅存在于当次提交入参：只在本次计算脱敏展示值，不落存储
-        apiKeyMasked: req.apiKey && req.apiKey.trim() ? maskApiKey(req.apiKey) : null,
+        capabilities: req.capabilities ? String(req.capabilities) : 'CHAT',
         temperature:
           req.temperature === undefined || req.temperature === null
             ? null
@@ -5340,7 +5494,7 @@ export const mockRegistrations: MockRegistration[] = [
         topP: req.topP === undefined || req.topP === null ? null : Number(req.topP),
         timeoutSeconds:
           req.timeoutSeconds === undefined || req.timeoutSeconds === null
-            ? 60
+            ? 30
             : Number(req.timeoutSeconds),
         retryCount:
           req.retryCount === undefined || req.retryCount === null ? 0 : Number(req.retryCount),
@@ -5351,7 +5505,6 @@ export const mockRegistrations: MockRegistration[] = [
             ? String(req.groupKey)
             : null,
         sort: req.sort === undefined || req.sort === null ? 0 : Number(req.sort),
-        // 系统运行态字段（lockedUntil）不可写，新建恒为 null
         lockedUntil: null,
         quotaCooldownSeconds:
           req.quotaCooldownSeconds === undefined || req.quotaCooldownSeconds === null
@@ -5365,33 +5518,28 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
-  // PUT /api/agent/models/:id — 更新
-  // 语义对齐后端：apiKey 为空/未传 → 保留旧密钥（mock 内存中仅保留旧脱敏值）；
-  // apiKey 传新值 → 只生成新脱敏展示值（mock 内部不存明文）。
-  // 系统运行态字段 lockedUntil 不可写，更新保持原值。
+  // PUT /api/agent/models/:id — 更新（lockedUntil 运行态不可写，保持原值）
   {
     method: 'PUT',
     pattern: '/api/agent/models/:id',
     handler: (params, _query, body) => {
       const id = Number((params as Record<string, string>).id)
       const model = findModel(id)
-      if (!model) return { code: 404, message: '模型配置不存在', data: null }
+      if (!model) return { code: 404, message: '模型不存在', data: null }
       const req = (body ?? {}) as Partial<AgentModelSaveReq>
+      if (req.providerId !== undefined) {
+        const provider = findProvider(Number(req.providerId))
+        if (!provider) return { code: 404, message: '供应商不存在', data: null }
+      }
       const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
-      const apiKeyRaw = req.apiKey
-      const hasNewKey = apiKeyRaw !== undefined && apiKeyRaw !== null && apiKeyRaw.trim() !== ''
-      // 空 Key → 保持旧脱敏值；新 Key → 只生成新脱敏值，明文不落 mock 存储
-      const apiKeyMasked = hasNewKey ? maskApiKey(apiKeyRaw) : model.apiKeyMasked
       const idx = MOCK_AGENT_MODELS.findIndex((m) => m.id === id)
-      if (idx === -1) return { code: 404, message: '模型配置不存在', data: null }
-      MOCK_AGENT_MODELS[idx] = {
+      const merged: AgentModel = {
         ...model,
+        providerId: req.providerId !== undefined ? Number(req.providerId) : model.providerId,
         name: req.name !== undefined ? String(req.name) : model.name,
-        protocolType:
-          req.protocolType !== undefined ? String(req.protocolType) : model.protocolType,
-        baseUrl: req.baseUrl !== undefined ? String(req.baseUrl) : model.baseUrl,
         modelName: req.modelName !== undefined ? String(req.modelName) : model.modelName,
-        apiKeyMasked,
+        capabilities:
+          req.capabilities !== undefined ? String(req.capabilities) : model.capabilities,
         temperature:
           req.temperature === undefined
             ? model.temperature
@@ -5415,7 +5563,11 @@ export const mockRegistrations: MockRegistration[] = [
             : Number(req.retryCount),
         enabled: req.enabled !== undefined ? Boolean(req.enabled) : model.enabled,
         remark:
-          req.remark === undefined ? model.remark : req.remark === null ? null : String(req.remark),
+          req.remark !== undefined
+            ? req.remark === null
+              ? null
+              : String(req.remark)
+            : model.remark,
         groupKey:
           req.groupKey === undefined
             ? model.groupKey
@@ -5423,18 +5575,18 @@ export const mockRegistrations: MockRegistration[] = [
               ? null
               : String(req.groupKey),
         sort: req.sort === undefined || req.sort === null ? model.sort : Number(req.sort),
-        // lockedUntil 为系统运行态（只读），更新不触碰
         quotaCooldownSeconds:
           req.quotaCooldownSeconds === undefined || req.quotaCooldownSeconds === null
             ? model.quotaCooldownSeconds
             : Number(req.quotaCooldownSeconds),
         updateTime: now,
       }
+      MOCK_AGENT_MODELS[idx] = modelWithProvider(merged)
       return { code: 0, message: 'ok', data: null }
     },
   },
 
-  // DELETE /api/agent/models/:id — 删除（幂等：不存在也返回 code 0）
+  // DELETE /api/agent/models/:id — 删除（幂等）
   {
     method: 'DELETE',
     pattern: '/api/agent/models/:id',
@@ -5447,27 +5599,22 @@ export const mockRegistrations: MockRegistration[] = [
   },
 
   // POST /api/agent/models/:id/test-connection — 连通性测试
-  // 语义对齐后端 AgentModelTestConnectionRespDTO：{success,message,latencyMs}。
-  // 真实后端 AgentModelConfigServiceImpl.testConnection 是纯只读网络探测：
-  // 方法体内无 getEnabled()/getLockedUntil() 调用，不读取 enabled / lockedUntil；
-  // 2xx-4xx 一律 success=true（message「服务可达（HTTP xxx）」），仅网络层异常
-  // （ResourceAccessException）才 success=false；other 协议 GET baseUrl 根路径，
-  // 200/404 均可达。故连通性与启停/锁定无关——mock 保持一致：存在即返回 success=true，
-  // 不读取 enabled/lockedUntil；仅「配置不存在」以业务码 404 表达（NOT_FOUND，非连通性语义）。
+  // 语义对齐后端 F1 AgentModelManageServiceImpl.testConnection：真实最小调用
+  // （chat "ping" + maxOutputTokens=1），成功才 success=true；mock 恒成功。
+  // 不读取 enabled/lockedUntil；「配置不存在」以业务码 404 表达。
   {
     method: 'POST',
     pattern: '/api/agent/models/:id/test-connection',
     handler: (params) => {
       const id = Number((params as Record<string, string>).id)
       const model = findModel(id)
-      if (!model) return { code: 404, message: '模型配置不存在，无法发起连通性测试', data: null }
-      // 纯网络探测语义：不读取 enabled / lockedUntil（对照后端 testConnection 无 getEnabled()/getLockedUntil()）
+      if (!model) return { code: 404, message: '模型不存在，无法发起连通性测试', data: null }
       return {
         code: 0,
         message: 'ok',
         data: {
           success: true,
-          message: '服务可达（HTTP 200）',
+          message: '模型调用成功',
           latencyMs: 120 + (id % 5) * 30,
         },
       }

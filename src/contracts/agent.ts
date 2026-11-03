@@ -85,31 +85,59 @@ export interface AgentModelConfigOption {
   id: number
   name: string
   modelName: string
-  protocolType: string
+  /** 所属供应商 API 格式（F1 两级模型，替代旧 protocolType） */
+  providerApiFormat?: string
   enabled: boolean
 }
 
 /**
- * 大模型接入配置完整契约（对齐后端 AgentModelConfigDTO，M07-Step1/Step5 字段全量）。
+ * 供应商契约（对齐后端 AgentProviderDTO，F1 D022-02 两级模型）。
  * 安全约束：只含 apiKeyMasked（后端脱敏串，未配置时为 null），
- * 不含 apiKeyCipher（密文）也不含明文 Key——明文生命周期仅在当次提交请求内。
+ * 不含密文也不含明文 Key——明文生命周期仅在当次提交请求内。
  */
-export interface AgentModelConfig {
+export interface AgentProvider {
   id: number
   name: string
-  /** varchar 契约，前端不自创枚举（openai / ollama / other 由后端白名单校验） */
-  protocolType: 'openai' | 'ollama' | 'other' | string
+  /** API 格式三值契约：OPENAI_CHAT / OPENAI_RESPONSES / ANTHROPIC（后端白名单校验） */
+  apiFormat: 'OPENAI_CHAT' | 'OPENAI_RESPONSES' | 'ANTHROPIC' | string
   baseUrl: string
-  modelName: string
   /** 后端脱敏展示值（只显示后端返回的脱敏串，前端不回显/缓存明文） */
   apiKeyMasked: string | null
+  enabled: boolean
+  remark: string | null
+  createTime: string
+  updateTime: string
+}
+
+/** 供应商新增/编辑请求（对齐后端 AgentProviderSaveReqDTO）。apiKey 明文仅存在于当次提交。 */
+export interface AgentProviderSaveReq {
+  name: string
+  apiFormat: string
+  baseUrl: string
+  /** 明文仅存在于当次提交；空=保持旧密钥（编辑）/不配置（新增） */
+  apiKey?: string
+  enabled?: boolean
+  remark?: string
+}
+
+/**
+ * 模型契约（对齐后端 AgentModelDTO，挂在供应商下；密钥只在供应商侧）。
+ */
+export interface AgentModel {
+  id: number
+  providerId: number
+  providerName: string | null
+  providerApiFormat: string | null
+  name: string
+  modelName: string
+  /** 能力标注：CHAT / EMBEDDING（含式匹配，后端 capability 过滤） */
+  capabilities: string
   temperature: number | null
   maxTokens: number | null
   topP: number | null
   timeoutSeconds: number
   retryCount: number
   enabled: boolean
-  remark: string | null
   /** 多Key轮询候选分组标识，null=独立配置不参与轮询 */
   groupKey: string | null
   /** 组内优先级，数值越小优先级越高 */
@@ -118,22 +146,17 @@ export interface AgentModelConfig {
   lockedUntil: string | null
   /** 触发限流后的锁定冷却时长（秒） */
   quotaCooldownSeconds: number
+  remark: string | null
   createTime: string
   updateTime: string
 }
 
-/**
- * 大模型接入配置新增/编辑请求（对齐后端 AgentModelSaveReqDTO）。
- * apiKey 为明文，仅存在于当次提交：非空时后端加密落库；
- * 为空/未传时 create 场景存 null、update 场景保留旧密钥。
- */
+/** 模型新增/编辑请求（对齐后端 AgentModelSaveReqDTO；密钥在供应商侧，本请求不含 Key）。 */
 export interface AgentModelSaveReq {
+  providerId: number
   name: string
-  protocolType: string
-  baseUrl: string
   modelName: string
-  /** 明文仅存在于当次提交；空=保持旧密钥（编辑）/不配置（新增） */
-  apiKey?: string
+  capabilities?: string
   temperature?: number | null
   maxTokens?: number | null
   topP?: number | null

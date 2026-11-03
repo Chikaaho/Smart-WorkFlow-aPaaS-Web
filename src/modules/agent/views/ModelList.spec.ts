@@ -10,6 +10,12 @@ vi.mock('@/modules/agent/api', () => ({
   updateModel: vi.fn(),
   deleteModel: vi.fn(),
   testModelConnection: vi.fn(),
+  pageProviders: vi.fn(),
+  listEnabledProviders: vi.fn(),
+  getProvider: vi.fn(),
+  createProvider: vi.fn(),
+  updateProvider: vi.fn(),
+  deleteProvider: vi.fn(),
 }))
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }))
@@ -23,8 +29,14 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
-import { pageModels, deleteModel, testModelConnection } from '@/modules/agent/api'
-import type { AgentModelConfig, AgentModelTestConnectionResp } from '@/contracts/agent'
+import {
+  pageModels,
+  deleteModel,
+  testModelConnection,
+  pageProviders,
+  deleteProvider,
+} from '@/modules/agent/api'
+import type { AgentModel, AgentProvider, AgentModelTestConnectionResp } from '@/contracts/agent'
 import { useUserStore } from '@/stores/user'
 import ModelList from './ModelList.vue'
 
@@ -42,10 +54,28 @@ const stubs = {
     props: ['visible', 'modelId'],
     emits: ['update:visible', 'saved'],
   },
+  ProviderFormDialog: {
+    template: '<div class="provider-form-dialog-stub"/>',
+    props: ['visible', 'providerId'],
+    emits: ['update:visible', 'saved'],
+  },
+  ListActionsColumn: { template: '<div/>' },
+  ListFilterItem: {
+    template: '<div class="list-filter-item"><slot/></div>',
+    props: ['label'],
+  },
   'el-alert': { template: '<div class="el-alert">{{ title }}</div>', props: ['title', 'type'] },
   'el-table': { template: '<div><slot/></div>' },
   'el-table-column': { template: '<div/>' },
   'el-tag': { template: '<span class="el-tag"><slot/></span>' },
+  'el-tabs': {
+    template: '<div class="el-tabs"><slot/></div>',
+    props: ['modelValue'],
+    emits: ['tabChange'],
+  },
+  'el-tab-pane': { template: '<div><slot/></div>', props: ['label', 'name'] },
+  'el-select': { template: '<div/>' },
+  'el-input': { template: '<input/>' },
   'el-button': {
     template: '<button class="el-button" @click="$emit(\'click\')"><slot/></button>',
     props: ['type', 'size', 'link', 'loading', 'disabled'],
@@ -53,14 +83,40 @@ const stubs = {
   'el-dialog': { template: '<div v-if="modelValue"><slot/></div>', props: ['modelValue'] },
 }
 
-const mockModels: AgentModelConfig[] = [
+const mockProviders: AgentProvider[] = [
+  {
+    id: 101,
+    name: 'OpenAI 官方',
+    apiFormat: 'OPENAI_CHAT',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKeyMasked: 'sk****abcd',
+    enabled: true,
+    remark: null,
+    createTime: '2026-07-10 10:00:00',
+    updateTime: '2026-07-10 10:00:00',
+  },
+  {
+    id: 102,
+    name: 'Anthropic 官方',
+    apiFormat: 'ANTHROPIC',
+    baseUrl: 'https://api.anthropic.com',
+    apiKeyMasked: null,
+    enabled: false,
+    remark: null,
+    createTime: '2026-07-11 09:00:00',
+    updateTime: '2026-07-11 09:00:00',
+  },
+]
+
+const mockModels: AgentModel[] = [
   {
     id: 1,
+    providerId: 101,
+    providerName: 'OpenAI 官方',
+    providerApiFormat: 'OPENAI_CHAT',
     name: 'OpenAI GPT-4o 主模型',
-    protocolType: 'openai',
-    baseUrl: 'https://api.openai.com/v1',
     modelName: 'gpt-4o',
-    apiKeyMasked: 'sk****abcd',
+    capabilities: 'CHAT',
     temperature: 0.7,
     maxTokens: 4096,
     topP: 1,
@@ -77,11 +133,12 @@ const mockModels: AgentModelConfig[] = [
   },
   {
     id: 2,
+    providerId: 101,
+    providerName: 'OpenAI 官方',
+    providerApiFormat: 'OPENAI_CHAT',
     name: '多Key轮询-主Key',
-    protocolType: 'openai',
-    baseUrl: 'https://api.example.com/v1',
     modelName: 'gpt-4o',
-    apiKeyMasked: 'sk****1111',
+    capabilities: 'CHAT',
     temperature: 0.7,
     maxTokens: 4096,
     topP: 1,
@@ -96,45 +153,33 @@ const mockModels: AgentModelConfig[] = [
     createTime: '2026-07-14 10:00:00',
     updateTime: '2026-07-15 08:00:00',
   },
-  {
-    id: 3,
-    name: 'Ollama 本地 Llama3',
-    protocolType: 'ollama',
-    baseUrl: 'http://127.0.0.1:11434',
-    modelName: 'llama3',
-    apiKeyMasked: null,
-    temperature: 0.5,
-    maxTokens: 2048,
-    topP: 0.9,
-    timeoutSeconds: 30,
-    retryCount: 0,
-    enabled: true,
-    remark: null,
-    groupKey: null,
-    sort: 0,
-    lockedUntil: '2026-01-01T00:00:00',
-    quotaCooldownSeconds: 60,
-    createTime: '2026-07-11 09:00:00',
-    updateTime: '2026-07-11 09:00:00',
-  },
 ]
 
 const testSuccess: AgentModelTestConnectionResp = {
   success: true,
-  message: '服务可达，鉴权通过',
+  message: '模型调用成功',
   latencyMs: 320,
 }
 
 const testFail: AgentModelTestConnectionResp = {
   success: false,
-  message: '连接被拒绝：网络不可达',
+  message: '网络不可达：请检查服务地址',
   latencyMs: 1500,
 }
 
-function stubPage(models: AgentModelConfig[] = mockModels) {
+function stubPage(models: AgentModel[] = mockModels) {
   vi.mocked(pageModels).mockResolvedValue({
     list: models,
     total: models.length,
+    pageNum: 1,
+    pageSize: 10,
+  })
+}
+
+function stubProviders(providers: AgentProvider[] = mockProviders) {
+  vi.mocked(pageProviders).mockResolvedValue({
+    list: providers,
+    total: providers.length,
     pageNum: 1,
     pageSize: 10,
   })
@@ -150,21 +195,22 @@ describe('ModelList.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    stubProviders()
   })
 
-  it('mount 时以 pageNum=1 pageSize=10 调用 pageModels 并渲染分页数据', async () => {
+  it('mount 时以 pageNum=1 pageSize=10 调用 pageModels（默认无供应商过滤）并渲染分页数据', async () => {
     stubPage()
     const wrapper = mountList()
     await nextTick()
     expect(pageModels).toHaveBeenCalledOnce()
-    expect(pageModels).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 }, '')
+    expect(pageModels).toHaveBeenCalledWith({ pageNum: 1, pageSize: 10 }, undefined, '')
     const vm = wrapper.vm as unknown as {
       total: number
-      list: AgentModelConfig[]
+      list: AgentModel[]
       currentKeyword: string
     }
-    expect(vm.total).toBe(3)
-    expect(vm.list).toHaveLength(3)
+    expect(vm.total).toBe(2)
+    expect(vm.list).toHaveLength(2)
     expect(vm.currentKeyword).toBe('')
   })
 
@@ -181,12 +227,40 @@ describe('ModelList.vue', () => {
     vm.filter.name = '  GPT  '
     vm.handleQuery()
     await nextTick()
-    expect(pageModels).toHaveBeenLastCalledWith({ pageNum: 1, pageSize: 10 }, 'GPT')
+    expect(pageModels).toHaveBeenLastCalledWith({ pageNum: 1, pageSize: 10 }, undefined, 'GPT')
 
     vm.handleReset()
     await nextTick()
-    expect(pageModels).toHaveBeenLastCalledWith({ pageNum: 1, pageSize: 10 }, '')
+    expect(pageModels).toHaveBeenLastCalledWith({ pageNum: 1, pageSize: 10 }, undefined, '')
     expect(vm.filter.name).toBe('')
+  })
+
+  it('供应商 Tab：切到 providers 调 pageProviders，供应商编辑/删除走 ProviderFormDialog 与 deleteProvider', async () => {
+    stubPage()
+    const wrapper = mountList()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      activeTab: string
+      handleTabChange: (tab: string | number) => void
+      openProviderEdit: (row: AgentProvider) => void
+      editingProviderId: number | null
+      providerDialogVisible: boolean
+      handleProviderDelete: (row: AgentProvider) => Promise<void>
+    }
+    vm.handleTabChange('providers')
+    await nextTick()
+    expect(vm.activeTab).toBe('providers')
+    expect(pageProviders).toHaveBeenCalled()
+
+    vm.openProviderEdit(mockProviders[0])
+    await nextTick()
+    expect(vm.providerDialogVisible).toBe(true)
+    expect(vm.editingProviderId).toBe(101)
+
+    confirmMock.mockResolvedValueOnce('confirm')
+    await vm.handleProviderDelete(mockProviders[1])
+    expect(deleteProvider).toHaveBeenCalledWith(102)
   })
 
   it('编辑：行内按钮入口（editRow→openEdit）打开 ModelFormDialog 并携带行 id', async () => {
@@ -212,7 +286,7 @@ describe('ModelList.vue', () => {
     await nextTick()
     confirmMock.mockResolvedValueOnce('confirm')
 
-    const vm = wrapper.vm as unknown as { handleDelete: (row: AgentModelConfig) => Promise<void> }
+    const vm = wrapper.vm as unknown as { handleDelete: (row: AgentModel) => Promise<void> }
     await vm.handleDelete(mockModels[1])
 
     expect(confirmMock).toHaveBeenCalledOnce()
@@ -226,7 +300,7 @@ describe('ModelList.vue', () => {
     await nextTick()
     confirmMock.mockRejectedValueOnce('cancel')
 
-    const vm = wrapper.vm as unknown as { handleDelete: (row: AgentModelConfig) => Promise<void> }
+    const vm = wrapper.vm as unknown as { handleDelete: (row: AgentModel) => Promise<void> }
     await vm.handleDelete(mockModels[0])
 
     expect(deleteModel).not.toHaveBeenCalled()
@@ -240,7 +314,7 @@ describe('ModelList.vue', () => {
     vi.mocked(testModelConnection).mockResolvedValueOnce(testSuccess)
 
     const vm = wrapper.vm as unknown as {
-      handleTest: (row: AgentModelConfig) => Promise<void>
+      handleTest: (row: AgentModel) => Promise<void>
       testResult: AgentModelTestConnectionResp | null
       testDialogVisible: boolean
     }
@@ -250,8 +324,7 @@ describe('ModelList.vue', () => {
     expect(testModelConnection).toHaveBeenCalledWith(1)
     expect(vm.testResult).toEqual(testSuccess)
     expect(vm.testDialogVisible).toBe(true)
-    expect(wrapper.text()).toContain('服务可达')
-    expect(wrapper.text()).toContain('服务可达，鉴权通过')
+    expect(wrapper.text()).toContain(testSuccess.message)
     expect(wrapper.text()).toContain('320')
   })
 
@@ -262,7 +335,7 @@ describe('ModelList.vue', () => {
     vi.mocked(testModelConnection).mockResolvedValueOnce(testFail)
 
     const vm = wrapper.vm as unknown as {
-      handleTest: (row: AgentModelConfig) => Promise<void>
+      handleTest: (row: AgentModel) => Promise<void>
       testResult: AgentModelTestConnectionResp | null
     }
     await vm.handleTest(mockModels[0])
@@ -270,8 +343,7 @@ describe('ModelList.vue', () => {
 
     expect(testModelConnection).toHaveBeenCalledWith(1)
     expect(vm.testResult).toEqual(testFail)
-    expect(wrapper.text()).toContain('网络不可达')
-    expect(wrapper.text()).toContain('连接被拒绝：网络不可达')
+    expect(wrapper.text()).toContain(testFail.message)
     expect(wrapper.text()).toContain('1500')
   })
 
@@ -287,7 +359,6 @@ describe('ModelList.vue', () => {
     const vm = wrapper.vm as unknown as { canManage: boolean; canTest: boolean }
     expect(vm.canManage).toBe(false)
     expect(vm.canTest).toBe(true)
-    // 工具栏新建与空态新建均绑定 canManage
     const buttons = wrapper.findAll('.el-button')
     expect(buttons.some((b) => b.text().includes('新建'))).toBe(false)
     expect(buttons.some((b) => b.text().includes('查询'))).toBe(true)
@@ -310,21 +381,18 @@ describe('ModelList.vue', () => {
     expect(buttons.some((b) => b.text().includes('新建'))).toBe(true)
   })
 
-  it('无 Key 泄漏：列表数据只透传后端脱敏值，页面文本不含明文 Key 形态', async () => {
+  it('无 Key 泄漏：模型列表数据不含任何 Key 字段，页面文本不含明文 Key 形态', async () => {
     stubPage()
     const wrapper = mountList()
     await nextTick()
 
-    const vm = wrapper.vm as unknown as { list: AgentModelConfig[] }
-    // 列表透传的只有后端 apiKeyMasked（脱敏），无明文字段
+    const vm = wrapper.vm as unknown as { list: AgentModel[] }
     for (const m of vm.list) {
-      expect(m.apiKeyMasked === null || m.apiKeyMasked.startsWith('sk****')).toBe(true)
+      // F1 两级模型：密钥只在供应商侧，模型行不含 apiKeyMasked/apiKey
       expect('apiKey' in m).toBe(false)
+      expect('apiKeyMasked' in m).toBe(false)
     }
     expect(wrapper.text()).not.toContain('sk-mock-plaintext')
     expect(wrapper.html()).not.toContain('sk-mock-plaintext')
-    // 无 Key 的模型不展示任何脱敏残留
-    const noKey = vm.list.find((m) => m.id === 3)
-    expect(noKey?.apiKeyMasked).toBeNull()
   })
 })
