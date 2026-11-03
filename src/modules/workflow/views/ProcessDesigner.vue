@@ -7151,17 +7151,27 @@ function nodeLabelLines(label: string) {
  * 覆盖传送后的根节点。节点 12 的结构尺寸必须直接落在实际弹窗上。
  */
 :global(.el-dialog.approver-dialog) {
-  /* 审查24/27 D08-P：980 外框、三栏 200/404/294、56 行、80×32 底栏 */
+  /* 审查24/27 D08-P：980 外框、三栏 200/404/294、56 行、80×32 底栏。
+     B021-028：高度随视口收缩，弹窗内部纵向滚动，不再溢出窗口/看板。 */
   width: 980px !important;
-  height: 732px !important;
-  margin-top: 146px !important;
+  height: min(732px, calc(100vh - 32px)) !important;
+  /* 交还给 EP overlay 的 flex 居中，避免自算 margin 在矮视口下越界 */
+  margin: 0 auto !important;
   box-sizing: border-box;
   padding: 0 !important;
+  display: flex;
+  flex-direction: column;
   border: 1px solid #dde3ef;
   border-radius: 12px;
   box-shadow: 0 12px 32px rgba(19, 31, 58, 0.18);
   overflow: hidden;
   color: #19233b;
+}
+:global(.el-dialog.approver-dialog .el-dialog__header) {
+  flex: 0 0 auto;
+}
+:global(.el-dialog.approver-dialog .el-dialog__footer) {
+  flex: 0 0 auto;
 }
 :global(.el-dialog.approver-dialog .el-dialog__header) {
   box-sizing: border-box;
@@ -7179,6 +7189,11 @@ function nodeLabelLines(label: string) {
   font-size: 20px;
 }
 :global(.el-dialog.approver-dialog .el-dialog__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 16px 24px 16px;
 }
 :global(.el-dialog.approver-dialog .el-dialog__footer) {
@@ -7206,16 +7221,25 @@ function nodeLabelLines(label: string) {
   left: -2px;
 }
 :global(.el-dialog.approver-dialog .approver-dialog__panes) {
+  flex: 1 1 auto;
+  min-height: 0;
   grid-template-columns: 200px 404px 294px;
   gap: 16px;
 }
 :global(.el-dialog.approver-dialog .approver-pane) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   padding: 14px;
 }
 :global(.el-dialog.approver-dialog .approver-pane__workspace) {
   top: 8px;
 }
 :global(.el-dialog.approver-dialog .approver-pane--tree .el-tree) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   margin-top: 22.5px;
   margin-left: -8px;
 }
@@ -7223,6 +7247,10 @@ function nodeLabelLines(label: string) {
   height: 36px;
 }
 :global(.el-dialog.approver-dialog .approver-pane--list .approver-pane__rows) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   margin-top: 18px;
 }
 :global(.el-dialog.approver-dialog .approver-pane--list .approver-user) {

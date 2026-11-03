@@ -409,9 +409,9 @@ const RULE_TYPES = [
   display: grid;
   grid-template-columns: 200px 404px 294px;
   gap: 16px;
-  /* 设计（节点12）：三栏面板固定 450px，高度与底部分隔线对齐。 */
-  min-height: 450px;
-  height: 450px;
+  /* B021-028：高度跟随弹窗（body flex 剩余空间），三栏各自内部滚动，不再固定 450 溢出。 */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .approver-pane {
@@ -436,7 +436,10 @@ const RULE_TYPES = [
 
 .approver-pane__rows {
   margin-top: 10px;
-  min-height: 300px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .approver-pane__empty {
@@ -507,10 +510,12 @@ const RULE_TYPES = [
 }
 
 .approver-dialog__single {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   border: 1px solid #dde3ef;
   border-radius: 10px;
   padding: 14px;
-  min-height: 470px;
 }
 
 .approver-roles {
