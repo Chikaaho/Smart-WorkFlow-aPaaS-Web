@@ -75,7 +75,6 @@ const selectedIds = computed(() => new Set(selected.value.map((c) => c.id)))
 const filteredCandidates = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   return candidates.value.filter((c) => {
-    if (deptId.value != null && String(c.id).startsWith('dept-')) return false
     if (
       kw &&
       !c.username.toLowerCase().includes(kw) &&
@@ -86,11 +85,21 @@ const filteredCandidates = computed(() => {
   })
 })
 
+/** 组织架构节点点击：切换部门筛选并重查候选（再点同一节点取消筛选）。 */
+function onDeptNodeClick(node: PickerDept) {
+  const next = String(node.id)
+  deptId.value = next === deptId.value ? null : next
+  void load(keyword.value)
+}
+
 async function load(keywordText = '') {
   loading.value = true
   errorMsg.value = ''
   try {
-    candidates.value = await queryApproverCandidates(keywordText.trim() || undefined)
+    candidates.value = await queryApproverCandidates(
+      keywordText.trim() || undefined,
+      deptId.value ?? undefined,
+    )
     // 回显：候选中命中已存 id 的自动预选（仅首次加载；搜索过滤不重置已选）
     if (props.initialIds.length && selected.value.length === 0) {
       selected.value = candidates.value.filter((c) => props.initialIds.includes(c.id))
@@ -258,9 +267,7 @@ const RULE_TYPES = [
           :props="{ label: 'name', children: 'children' }"
           :expand-on-click-node="false"
           default-expand-all
-          @node-click="
-            (node: PickerDept) => (deptId = String(node.id) === deptId ? null : String(node.id))
-          "
+          @node-click="onDeptNodeClick"
         />
       </div>
 

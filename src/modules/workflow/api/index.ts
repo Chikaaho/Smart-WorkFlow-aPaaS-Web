@@ -305,12 +305,15 @@ export interface ApproverCandidate {
   department?: string | null
 }
 
-/** GET /workflow/defs/approver-candidates?keyword= → 审批人候选列表 */
-export async function queryApproverCandidates(keyword = ''): Promise<ApproverCandidate[]> {
+/** GET /workflow/defs/approver-candidates?keyword=&deptId= → 审批人候选列表（可按组织架构部门过滤） */
+export async function queryApproverCandidates(
+  keyword = '',
+  deptId?: string,
+): Promise<ApproverCandidate[]> {
   return request<ApproverCandidate[]>({
     method: 'GET',
     url: '/workflow/defs/approver-candidates',
-    params: { keyword },
+    params: deptId ? { keyword, deptId } : { keyword },
   })
 }
 
