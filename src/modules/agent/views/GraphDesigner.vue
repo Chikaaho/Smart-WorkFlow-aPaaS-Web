@@ -43,6 +43,7 @@ import {
   getGraphDef,
   listModelOptions,
   listToolOptions,
+  pageKnowledgeBases,
   publishGraphDef,
   saveDraftGraph,
 } from '@/modules/agent/api'
@@ -52,6 +53,7 @@ import {
   NODE_TYPE_END,
   NODE_TYPE_FORK,
   NODE_TYPE_JOIN,
+  NODE_TYPE_KNOWLEDGE,
   NODE_TYPE_LLM,
   NODE_TYPE_LOOP,
   NODE_TYPE_START,
@@ -65,6 +67,7 @@ import type {
   AgentGraphExecuteResp,
   AgentModelConfigOption,
   AgentToolOption,
+  KnowledgeBase,
   ProcessGraph,
 } from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
@@ -91,6 +94,7 @@ const graphInstance = ref<FlowGraphInstance | null>(null)
 const selectedNodeId = ref<string | null>(null)
 const modelOptions = ref<AgentModelConfigOption[]>([])
 const toolOptions = ref<AgentToolOption[]>([])
+const knowledgeOptions = ref<KnowledgeBase[]>([])
 
 // ─── 执行测试面板 ───
 const executeInput = ref('')
@@ -131,6 +135,7 @@ const NODE_TYPES = [
   NODE_TYPE_LOOP,
   NODE_TYPE_FORK,
   NODE_TYPE_JOIN,
+  NODE_TYPE_KNOWLEDGE,
 ]
 
 // ─── 画布事件 ───
@@ -301,9 +306,14 @@ async function loadGraph() {
 
 async function loadOptions() {
   try {
-    const [models, tools] = await Promise.all([listModelOptions(), listToolOptions()])
+    const [models, tools, knowledgePage] = await Promise.all([
+      listModelOptions(),
+      listToolOptions(),
+      pageKnowledgeBases({ pageNum: 1, pageSize: 100 }),
+    ])
     modelOptions.value = models
     toolOptions.value = tools
+    knowledgeOptions.value = knowledgePage.list
   } catch (err) {
     ElMessage.warning(
       t('agent.dropdownLoadFailed') + ((err as ApiError).msg ?? t('common.unknownError')),
@@ -456,6 +466,7 @@ onBeforeUnmount(() => {
             :label="panelLabel"
             :model-options="modelOptions"
             :tool-options="toolOptions"
+            :knowledge-options="knowledgeOptions"
             :condition-out-edges="conditionOutEdges"
             :edge-display-name="edgeDisplayName"
             @update-node-data="updateNodeData"

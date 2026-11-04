@@ -29,6 +29,11 @@ import type {
   AgentGraphDebugSession,
   AgentGraphDebugNode,
   AgentGraphDebugCreateReq,
+  KnowledgeBase,
+  KnowledgeBaseCreateReq,
+  KnowledgeDocument,
+  KnowledgeHit,
+  KnowledgeRetrievalReq,
 } from '@/contracts/agent'
 
 // ─── 后端分页原始形状（对齐 AgentGraphDefController.pageDefs 的 PageResult） ───
@@ -667,4 +672,89 @@ export async function pageDebugSessions(params: {
     params,
   })
   return adaptPage(raw)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// F1 阶段 3：知识库 / RAG（KnowledgeBaseController）
+// ═══════════════════════════════════════════════════════════════
+
+/** GET /agent/knowledge-bases → PageResult<KnowledgeBase> */
+export async function pageKnowledgeBases(params: {
+  pageNum: number
+  pageSize: number
+  nameKeyword?: string
+}): Promise<PageResult<KnowledgeBase>> {
+  const raw = await request<BackendPageResult<KnowledgeBase>>({
+    method: 'GET',
+    url: '/agent/knowledge-bases',
+    params,
+  })
+  return adaptPage(raw)
+}
+
+/** GET /agent/knowledge-bases/{id} → KnowledgeBase */
+export async function getKnowledgeBase(id: EntityId): Promise<KnowledgeBase> {
+  return request<KnowledgeBase>({
+    method: 'GET',
+    url: `/agent/knowledge-bases/${id}`,
+  })
+}
+
+/** POST /agent/knowledge-bases → KnowledgeBase */
+export async function createKnowledgeBase(req: KnowledgeBaseCreateReq): Promise<KnowledgeBase> {
+  return request<KnowledgeBase>({
+    method: 'POST',
+    url: '/agent/knowledge-bases',
+    data: req,
+  })
+}
+
+/** DELETE /agent/knowledge-bases/{id}（分片与向量一并删除） */
+export async function deleteKnowledgeBase(id: EntityId): Promise<void> {
+  return request<void>({
+    method: 'DELETE',
+    url: `/agent/knowledge-bases/${id}`,
+  })
+}
+
+/** GET /agent/knowledge-bases/{id}/documents → KnowledgeDocument[] */
+export async function listKnowledgeDocuments(id: EntityId): Promise<KnowledgeDocument[]> {
+  return request<KnowledgeDocument[]>({
+    method: 'GET',
+    url: `/agent/knowledge-bases/${id}/documents`,
+  })
+}
+
+/** POST /agent/knowledge-bases/{id}/documents (multipart) → KnowledgeDocument */
+export async function uploadKnowledgeDocument(
+  id: EntityId,
+  file: File,
+): Promise<KnowledgeDocument> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request<KnowledgeDocument>({
+    method: 'POST',
+    url: `/agent/knowledge-bases/${id}/documents`,
+    data: formData,
+  })
+}
+
+/** DELETE /agent/knowledge-bases/{id}/documents/{documentId} */
+export async function deleteKnowledgeDocument(id: EntityId, documentId: EntityId): Promise<void> {
+  return request<void>({
+    method: 'DELETE',
+    url: `/agent/knowledge-bases/${id}/documents/${documentId}`,
+  })
+}
+
+/** POST /agent/knowledge-bases/{id}/retrieve → KnowledgeHit[] */
+export async function retrieveKnowledge(
+  id: EntityId,
+  req: KnowledgeRetrievalReq,
+): Promise<KnowledgeHit[]> {
+  return request<KnowledgeHit[]>({
+    method: 'POST',
+    url: `/agent/knowledge-bases/${id}/retrieve`,
+    data: req,
+  })
 }

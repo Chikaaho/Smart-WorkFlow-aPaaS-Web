@@ -11,6 +11,7 @@ vi.mock('@/modules/agent/api', () => ({
   getGraphDef: vi.fn(),
   listModelOptions: vi.fn(),
   listToolOptions: vi.fn(),
+  pageKnowledgeBases: vi.fn(),
   publishGraphDef: vi.fn(),
   saveDraftGraph: vi.fn(),
 }))
@@ -43,6 +44,7 @@ import {
   getGraphDef,
   listModelOptions,
   listToolOptions,
+  pageKnowledgeBases,
   saveDraftGraph,
 } from '@/modules/agent/api'
 import { ElMessage } from 'element-plus'
@@ -228,6 +230,12 @@ function nodeById(data: FlowGraphData, id: string): FlowGraphNode {
 describe('GraphDesigner.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(pageKnowledgeBases).mockResolvedValue({
+      list: [],
+      total: 0,
+      pageNum: 1,
+      pageSize: 100,
+    })
   })
 
   it('加载：getGraphDef(42) → elementsToFlowGraphData → mountFlowGraph 挂载画布', async () => {
@@ -515,6 +523,7 @@ describe('GraphDesigner.vue', () => {
       '循环',
       '并行分支',
       '汇合',
+      '知识检索',
     ])
 
     const loopBtn = wrapper.findAll('.palette-item').find((b) => b.text() === '循环')!

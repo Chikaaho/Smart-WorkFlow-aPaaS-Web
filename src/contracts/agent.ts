@@ -483,3 +483,56 @@ export interface AgentGraphDebugCreateReq {
 export interface AgentGraphBreakpointsReq {
   breakpoints: string[]
 }
+
+// ═══════════════════════════════════════════════════════════════
+// F1 阶段 3：知识库 / RAG
+// ═══════════════════════════════════════════════════════════════
+
+/** 知识库（绑定一个 EMBEDDING 模型与切分参数） */
+export interface KnowledgeBase {
+  id: number | string
+  name: string
+  description?: string | null
+  embeddingModelId: number | string
+  chunkSize: number
+  chunkOverlap: number
+  createTime?: string
+}
+
+export interface KnowledgeBaseCreateReq {
+  name: string
+  description?: string
+  embeddingModelId: number | string
+  chunkSize: number
+  chunkOverlap: number
+}
+
+/** 知识库文档（处理状态与分片数） */
+export interface KnowledgeDocument {
+  id: number | string
+  kbId: number | string
+  name: string
+  fileName?: string | null
+  fileType?: string | null
+  fileSize?: number | null
+  status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | string
+  errorMessage?: string | null
+  chunkCount: number
+  createTime?: string
+}
+
+/** 检索命中分片 */
+export interface KnowledgeHit {
+  chunkId: number
+  documentId: number
+  documentName?: string | null
+  chunkIndex: number
+  content: string
+  similarity: number
+}
+
+export interface KnowledgeRetrievalReq {
+  query: string
+  topK?: number
+  similarityThreshold?: number
+}

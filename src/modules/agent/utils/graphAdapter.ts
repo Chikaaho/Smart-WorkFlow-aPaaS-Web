@@ -40,6 +40,12 @@ export const NODE_CONFIG_KEY_OUTPUT_VAR = 'outputVar'
 export const NODE_CONFIG_KEY_MAX_ITERATIONS = 'maxIterations'
 export const NODE_CONFIG_KEY_SYSTEM_PROMPT = 'systemPrompt'
 export const NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE = 'userPromptTemplate'
+/** KNOWLEDGE 节点：知识库 id */
+export const NODE_CONFIG_KEY_KNOWLEDGE_BASE_ID = 'knowledgeBaseId'
+/** KNOWLEDGE 节点：返回条数（1~20） */
+export const NODE_CONFIG_KEY_TOP_K = 'topK'
+/** KNOWLEDGE 节点：相似度阈值（0~1） */
+export const NODE_CONFIG_KEY_SIMILARITY_THRESHOLD = 'similarityThreshold'
 export const EDGE_CONFIG_KEY_KEYWORD = 'keyword'
 
 /** 默认变量名（与后端 AgentGraphInterpreter.DEFAULT_VARIABLE_NAME 对齐） */
@@ -54,6 +60,8 @@ export const NODE_TYPE_CONDITION = 'CONDITION'
 export const NODE_TYPE_LOOP = 'LOOP'
 export const NODE_TYPE_FORK = 'FORK'
 export const NODE_TYPE_JOIN = 'JOIN'
+/** 知识检索节点（阶段 3） */
+export const NODE_TYPE_KNOWLEDGE = 'KNOWLEDGE'
 
 /**
  * 节点类型 → 文案键（仅展示用途，不落库，往返无字段）。
@@ -70,6 +78,7 @@ export const NODE_TYPE_LABEL_KEYS: Record<string, string> = {
   [NODE_TYPE_LOOP]: 'agent.nodeLoop',
   [NODE_TYPE_FORK]: 'agent.nodeFork',
   [NODE_TYPE_JOIN]: 'agent.nodeJoin',
+  [NODE_TYPE_KNOWLEDGE]: 'agent.nodeKnowledge',
 }
 
 /** 节点类型显示名；未登记类型回落为类型本身（不回落为键名）。 */
