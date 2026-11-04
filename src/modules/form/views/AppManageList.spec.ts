@@ -259,4 +259,47 @@ describe('AppManageList', () => {
     expect(decisions).toEqual([{ formKey: 'op_form', newKey: 'op_form_new' }])
     expect(wrapper.text()).toContain('FIXED_USER')
   })
+
+  // F2-G1：服务端 CONFLICT 拒绝映射到对应冲突项的行内提示，改唯一 key 后提示消失且恢复可确认
+  it('导入：key 冲突拒绝在对应项下显示原因，改唯一 key 后可确认', async () => {
+    vi.mocked(previewBundleImport).mockResolvedValue(previewFixture)
+    vi.mocked(confirmBundleImport).mockRejectedValue({
+      code: 1902,
+      errorKey: 'form.bundle_opinion_key_conflict',
+      message: '审批意见表单新标识“op_form_x”在目标租户已存在，请修改后重试',
+    })
+    const wrapper = mount(AppManageList, { global: { stubs: minimalStubs } })
+    await nextTick()
+    await nextTick()
+
+    await wrapper.find('[data-testid="app-import"]').trigger('click')
+    await nextTick()
+    chooseBundleFile(wrapper)
+    await nextTick()
+    await wrapper.find('[data-testid="bundle-start-preview"]').trigger('click')
+    await Promise.resolve()
+    await Promise.resolve()
+    await nextTick()
+
+    // 改成当前租户已存在的 key → 确认 → 服务端拒绝映射为对应项行内提示，确认不可用
+    const keyInput = wrapper.find('[data-testid="bundle-opinion-key"]')
+    ;(keyInput.element as HTMLInputElement).value = 'op_form_x'
+    await keyInput.trigger('input')
+    await wrapper.find('[data-testid="bundle-confirm"]').trigger('click')
+    await Promise.resolve()
+    await Promise.resolve()
+    await nextTick()
+
+    expect(confirmBundleImport).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="bundle-opinion-error"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('该 key 在当前租户已存在')
+    expect(wrapper.find('[data-testid="bundle-confirm"]').attributes('disabled')).toBeDefined()
+
+    // 改成唯一 key → 提示消失，确认恢复可用
+    ;(keyInput.element as HTMLInputElement).value = 'op_form_ok'
+    await keyInput.trigger('input')
+    await nextTick()
+    expect(wrapper.find('[data-testid="bundle-opinion-error"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bundle-confirm"]').attributes('disabled')).toBeUndefined()
+  })
 })

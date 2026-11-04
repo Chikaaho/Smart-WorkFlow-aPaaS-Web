@@ -1273,6 +1273,7 @@ export default {
       importOpinionConflicts: '审批意见表单冲突（需逐个确认新 key）',
       importOpinionNone: '无冲突',
       importNewKeyPlaceholder: '新 key（唯一）',
+      importKeyTaken: '该 key 在当前租户已存在，请更换后重试',
       importDictActions: '字典类型处置',
       importDictReuse: '同编码复用',
       importDictCreate: '缺失新建',

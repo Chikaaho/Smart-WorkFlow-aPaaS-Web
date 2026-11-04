@@ -1306,6 +1306,7 @@ export default {
       importOpinionConflicts: 'Opinion form conflicts (confirm a new key for each)',
       importOpinionNone: 'No conflicts',
       importNewKeyPlaceholder: 'New key (unique)',
+      importKeyTaken: 'This key already exists in the current tenant; choose another one',
       importDictActions: 'Dict type actions',
       importDictReuse: 'Reuse same code',
       importDictCreate: 'Create when missing',

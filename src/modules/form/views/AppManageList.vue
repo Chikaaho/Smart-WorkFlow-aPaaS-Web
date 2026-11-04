@@ -273,6 +273,8 @@ const confirming = ref(false)
 const previewResult = ref<FormBundlePreviewResult | null>(null)
 /** 意见表单冲突的新 key 输入（formKey → newKey，默认采用服务端建议值） */
 const opinionKeyInputs = reactive<Record<string, string>>({})
+/** F2-G1：服务端 CONFLICT 拒绝后按冲突项落位的行内提示（formKey → 文案），改 key 即清除 */
+const opinionKeyErrors = reactive<Record<string, string>>({})
 const importReport = ref<FormBundleImportReport | null>(null)
 const importRecords = ref<FormAppImportRecord[]>([])
 const recordsLoading = ref(false)
@@ -283,6 +285,7 @@ function openImport() {
   previewResult.value = null
   importReport.value = null
   Object.keys(opinionKeyInputs).forEach((key) => delete opinionKeyInputs[key])
+  Object.keys(opinionKeyErrors).forEach((key) => delete opinionKeyErrors[key])
   importDialogVisible.value = true
 }
 
@@ -302,6 +305,7 @@ async function startPreview() {
   try {
     previewResult.value = await previewBundleImport(importFile.value)
     Object.keys(opinionKeyInputs).forEach((key) => delete opinionKeyInputs[key])
+    Object.keys(opinionKeyErrors).forEach((key) => delete opinionKeyErrors[key])
     for (const opinion of previewResult.value.opinionForms ?? []) {
       if (opinion.conflict) {
         opinionKeyInputs[opinion.formKey] = opinion.suggestedKey ?? ''
@@ -325,8 +329,30 @@ const opinionConflicts = computed(
 const opinionKeysValid = computed(() => {
   if (opinionConflicts.value.length === 0) return true
   const keys = opinionConflicts.value.map((o) => (opinionKeyInputs[o.formKey] ?? '').trim())
-  return keys.every((key) => key.length > 0) && new Set(keys).size === keys.length
+  if (!keys.every((key) => key.length > 0) || new Set(keys).size !== keys.length) return false
+  // F2-G1：存在服务端已判定的冲突项时不得确认；改 key 后提示消失即恢复可用
+  return opinionConflicts.value.every((o) => !opinionKeyErrors[o.formKey])
 })
+
+/**
+ * F2-G1（D022-12）：把服务端 BUNDLE_OPINION_KEY_CONFLICT 拒绝映射到对应冲突项的
+ * formKey——拒绝 msg 中的冲突 key（全角引号包裹，errorKey/目录参数保证任何语言下
+ * 都带 {0}）与当前输入值比对定位；定位不到返回 null，调用方退回全局 toast。
+ */
+function matchOpinionKeyError(err: { code?: number; errorKey?: string; message?: string }) {
+  const isConflict = err.errorKey === 'form.bundle_opinion_key_conflict' || err.code === 1902
+  if (!isConflict) return null
+  const taken = /“([^”]+)”/.exec(err.message ?? '')?.[1]
+  if (!taken) return null
+  return (
+    opinionConflicts.value.find((o) => (opinionKeyInputs[o.formKey] ?? '').trim() === taken)
+      ?.formKey ?? null
+  )
+}
+
+function clearOpinionKeyError(formKey: string) {
+  delete opinionKeyErrors[formKey]
+}
 
 function dictActionLabel(action: string) {
   if (action === 'REUSE') return t('form.appCenter.importDictReuse')
@@ -348,8 +374,14 @@ async function confirmImport() {
     ElMessage.success(t('form.appCenter.importSuccess'))
     await loadList()
   } catch (err: unknown) {
-    const errObj = err as { code?: number; message?: string }
-    ElMessage.error(getErrorMessage(errObj.code ?? 0, errObj.message))
+    const errObj = err as { code?: number; errorKey?: string; message?: string }
+    // F2-G1：拒绝定位到冲突项 → 行内提示（不重复弹 toast）；定位不到退回全局错误提示
+    const conflictedKey = matchOpinionKeyError(errObj)
+    if (conflictedKey) {
+      opinionKeyErrors[conflictedKey] = t('form.appCenter.importKeyTaken')
+    } else {
+      ElMessage.error(getErrorMessage(errObj.code ?? 0, errObj.message))
+    }
   } finally {
     confirming.value = false
   }
@@ -654,7 +686,16 @@ onMounted(() => {
               :placeholder="t('form.appCenter.importNewKeyPlaceholder')"
               size="small"
               data-testid="bundle-opinion-key"
+              @input="clearOpinionKeyError(opinion.formKey)"
             />
+            <!-- F2-G1：服务端 CONFLICT 拒绝的原因落位到对应冲突项下方 -->
+            <p
+              v-if="opinionKeyErrors[opinion.formKey]"
+              class="bundle-import__conflict-error"
+              data-testid="bundle-opinion-error"
+            >
+              {{ opinionKeyErrors[opinion.formKey] }}
+            </p>
           </div>
         </template>
 
@@ -865,10 +906,22 @@ onMounted(() => {
   font-weight: 600;
 }
 .bundle-import__conflict {
+  /* F2-G1：错误提示整行折下，落在对应输入框下方 */
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 4px 12px;
   margin-bottom: 8px;
+}
+.bundle-import__conflict > .el-input {
+  flex: 1 1 auto;
+}
+.bundle-import__conflict-error {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--el-color-danger, #c2303a);
+  font-size: var(--sw-font-caption);
+  line-height: 16px;
 }
 .bundle-import__conflict-name {
   flex: 0 0 auto;
