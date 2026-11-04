@@ -1292,6 +1292,8 @@ export default {
       importFinalApp: '新建应用：{name}',
       importCreated:
         '{forms} 表单 · {processes} 流程 · {opinions} 意见表单 · {dicts} 字典 · {actions} 交易动作 · {queries} 查询契约',
+      importDictsTitle: '字典',
+      importDictItemCount: '{count} 项',
       importClearedTitle: '置空的引用（发布前需补配）',
       importClearedEmpty: '无置空引用',
       importDownloadReport: '下载报告',

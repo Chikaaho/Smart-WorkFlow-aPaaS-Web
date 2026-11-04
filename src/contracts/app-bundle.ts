@@ -106,6 +106,8 @@ export interface FormBundleImportReport {
   createdProcesses?: BundleCreatedProcess[]
   createdTxnActions?: BundleCreatedTxnAction[]
   createdExtQueries?: BundleCreatedQuery[]
+  /** 新建的字典类型（编码、名称、字典项数；F2-G4） */
+  createdDictTypes?: BundleCreatedDictType[]
   reusedDictTypes?: BundleReusedObject[]
   reusedOpinionKeys?: BundleReusedObject[]
   matchedDatasources?: BundleReusedObject[]
@@ -133,6 +135,13 @@ export interface BundleCreatedProcess {
   newProcessKey?: string | null
   newDefId?: number | null
   formKey?: string | null
+}
+
+/** 新建的字典类型：导入报告按对象列出编码、名称与字典项数（F2-G4）。 */
+export interface BundleCreatedDictType {
+  code?: string | null
+  name?: string | null
+  itemCount?: number | null
 }
 
 export interface BundleCreatedTxnAction {

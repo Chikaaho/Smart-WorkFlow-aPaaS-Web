@@ -771,6 +771,35 @@ onMounted(() => {
             })
           }}
         </p>
+        <!-- F2-G4：报告按对象列出新建/复用的字典类型，与下载的报告文件同源 -->
+        <template
+          v-if="importReport.createdDictTypes?.length || importReport.reusedDictTypes?.length"
+        >
+          <h4 class="bundle-import__section">{{ t('form.appCenter.importDictsTitle') }}</h4>
+          <div class="bundle-import__refs">
+            <div
+              v-for="dict in importReport.createdDictTypes"
+              :key="`created-${dict.code}`"
+              class="bundle-import__ref"
+            >
+              <el-tag size="small" type="success">{{ dictActionLabel('CREATE') }}</el-tag>
+              <span class="bundle-import__ref-value">{{ dict.code }}</span>
+              <span class="bundle-import__ref-location">
+                {{ dict.name }} ·
+                {{ t('form.appCenter.importDictItemCount', { count: dict.itemCount ?? 0 }) }}
+              </span>
+            </div>
+            <div
+              v-for="dict in importReport.reusedDictTypes"
+              :key="`reused-${dict.value}`"
+              class="bundle-import__ref"
+            >
+              <el-tag size="small" type="info">{{ dictActionLabel('REUSE') }}</el-tag>
+              <span class="bundle-import__ref-value">{{ dict.value }}</span>
+              <span class="bundle-import__ref-location">{{ dict.name }}</span>
+            </div>
+          </div>
+        </template>
         <h4 class="bundle-import__section">{{ t('form.appCenter.importClearedTitle') }}</h4>
         <div v-if="importReport.clearedRefs?.length" class="bundle-import__refs">
           <div

@@ -1325,6 +1325,8 @@ export default {
       importFinalApp: 'Created app: {name}',
       importCreated:
         '{forms} forms · {processes} processes · {opinions} opinion forms · {dicts} dicts · {actions} txn actions · {queries} query contracts',
+      importDictsTitle: 'Dictionaries',
+      importDictItemCount: '{count} items',
       importClearedTitle: 'Cleared references (reconfigure before publishing)',
       importClearedEmpty: 'No cleared references',
       importDownloadReport: 'Download report',
