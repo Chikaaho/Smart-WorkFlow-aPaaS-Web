@@ -55,6 +55,12 @@ const hits = ref<KnowledgeHit[]>([])
 
 const total = ref(0)
 
+const emptyDescription = computed(() =>
+  knowledgeBases.value.length === 0
+    ? t('agent.knowledgeEmptyCreate')
+    : t('agent.knowledgeSelectKb'),
+)
+
 const selectedModelName = computed(() => {
   if (!selected.value) return '-'
   const model = embeddingModels.value.find(
@@ -313,7 +319,7 @@ onMounted(async () => {
       </el-table>
     </el-card>
 
-    <el-empty v-if="!selected" :description="t('agent.knowledgeSelectKb')" />
+    <el-empty v-if="!selected" :description="emptyDescription" />
 
     <template v-else>
       <el-card shadow="never" class="section-card">
