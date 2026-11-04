@@ -260,6 +260,8 @@ describe('AppManageList', () => {
     expect(fileArg?.name).toBe('crm_bundle.json')
     expect(decisions).toEqual([{ formKey: 'op_form', newKey: 'op_form_new' }])
     expect(wrapper.text()).toContain('FIXED_USER')
+    // F2-G4 返工：顶部汇总行字典计数改为「新建 N · 复用 M」双口径
+    expect(wrapper.text()).toContain('字典 新建 1 · 复用 1')
     // F2-G4：报告按对象展示新建字典（编码/名称/项数）与复用字典
     expect(wrapper.text()).toContain('dict_cust_level')
     expect(wrapper.text()).toContain('客户等级')

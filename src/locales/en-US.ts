@@ -1324,7 +1324,7 @@ export default {
       importSuccess: 'Import succeeded',
       importFinalApp: 'Created app: {name}',
       importCreated:
-        '{forms} forms · {processes} processes · {opinions} opinion forms · {dicts} dicts · {actions} txn actions · {queries} query contracts',
+        '{forms} forms · {processes} processes · {opinions} opinion forms · dicts created {dictsCreated} · reused {dictsReused} · {actions} txn actions · {queries} query contracts',
       importDictsTitle: 'Dictionaries',
       importDictItemCount: '{count} items',
       importClearedTitle: 'Cleared references (reconfigure before publishing)',

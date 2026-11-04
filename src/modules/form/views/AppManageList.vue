@@ -765,7 +765,8 @@ onMounted(() => {
               forms: importReport.createdForms?.length ?? 0,
               processes: importReport.createdProcesses?.length ?? 0,
               opinions: importReport.createdOpinionForms?.length ?? 0,
-              dicts: importReport.reusedDictTypes?.length ?? 0,
+              dictsCreated: importReport.createdDictTypes?.length ?? 0,
+              dictsReused: importReport.reusedDictTypes?.length ?? 0,
               actions: importReport.createdTxnActions?.length ?? 0,
               queries: importReport.createdExtQueries?.length ?? 0,
             })
