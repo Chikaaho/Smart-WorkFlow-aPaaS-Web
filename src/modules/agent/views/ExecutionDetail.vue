@@ -38,6 +38,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getExecutionDetail, listExecutionNodes } from '@/modules/agent/api'
 import type { AgentGraphExecutionDetail, AgentGraphExecutionNode } from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
+import { parseRouteId } from '@/modules/agent/utils/routeId'
 import NodeTrajectory from '@/modules/agent/components/execution/NodeTrajectory.vue'
 import SafeHtml from '@/security/SafeHtml.vue'
 
@@ -45,7 +46,7 @@ const route = useRoute()
 const router = useRouter()
 
 // ─── 路由参数 ───
-const executionId = computed(() => Number(route.params.executionId))
+const executionId = computed(() => parseRouteId(route.params.executionId))
 
 // ─── 状态变量 ───
 const loading = ref(false)
@@ -192,7 +193,7 @@ function goBack() {
 
 // ─── 挂载 ───
 onMounted(() => {
-  if (!executionId.value || isNaN(executionId.value)) {
+  if (!executionId.value || !/^\d+$/.test(String(executionId.value))) {
     error.value = t('agent.invalidExecutionId')
   } else {
     void loadDetail()
@@ -221,7 +222,9 @@ onMounted(() => {
           <span class="graph-name">{{ detail.graphName }}</span>
           <span class="divider">·</span>
           <span class="def-version">{{
-            t('agent.versionValueLabel', { version: detail.defVersion ?? '-' })
+            t('agent.snapshotVersionLabel', {
+              version: detail.graphDefVersion ?? detail.defVersion ?? '-',
+            })
           }}</span>
           <el-tag :type="(getStatusType(detail.status) || '') as any" size="small">
             {{ getStatusLabel(detail.status) }}
@@ -281,6 +284,9 @@ onMounted(() => {
           <div class="section-title error-title">{{ t('agent.errorInfoSection') }}</div>
         </template>
         <div class="error-content">
+          <div v-if="detail.errorCategory" class="error-category">
+            {{ t('agent.failureCategory') }}：{{ detail.errorCategory }}
+          </div>
           <!-- 使用 SafeHtml 组件进行安全的 HTML 渲染 -->
           <SafeHtml :html="detail.errorMessage" />
         </div>

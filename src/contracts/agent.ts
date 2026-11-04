@@ -25,8 +25,22 @@ export interface AgentGraphDef {
   defVersion: number
   /** 状态：DRAFT / PUBLISHED */
   status: 'DRAFT' | 'PUBLISHED' | string
+  /** 图级执行超时（秒，阶段 2） */
+  executionTimeoutSeconds?: number
   createTime: string
   updateTime: string
+}
+
+/** 图发布版本快照（D022-06，不含 graph_json）。 */
+export interface AgentGraphSnapshot {
+  /** 发布版本号 */
+  defVersion: number
+  /** 发布时图业务 key */
+  graphKey: string
+  /** 发布时图名称 */
+  name: string
+  /** 发布时间 */
+  createTime: string
 }
 
 /** 图元素 —— 节点或边（对齐后端 GraphElement）。 */
@@ -85,6 +99,9 @@ export interface AgentModelConfigOption {
   id: number
   name: string
   modelName: string
+  /** 所属供应商 id/名称（阶段 2 LLM 节点两级选择） */
+  providerId?: number | string
+  providerName?: string
   /** 所属供应商 API 格式（F1 两级模型，替代旧 protocolType） */
   providerApiFormat?: string
   enabled: boolean
@@ -128,6 +145,8 @@ export interface AgentModel {
   providerId: number
   providerName: string | null
   providerApiFormat: string | null
+  /** 供应商是否启用（阶段 2：供应商停用的模型在列表标注不可用，LLM 节点不可选） */
+  providerEnabled?: boolean | null
   name: string
   modelName: string
   /** 能力标注：CHAT / EMBEDDING（含式匹配，后端 capability 过滤） */
@@ -317,6 +336,8 @@ export interface AgentGraphExecutionDetail {
   graphName: string
   /** 所属图定义的版本号（扩展字段） */
   defVersion: number
+  /** 执行时绑定的发布快照版本（D022-06） */
+  graphDefVersion?: number
   /** 输入内容（初始累积文本，完整文本） */
   input: string
   /** 执行状态：RUNNING / SUCCESS / FAILED */
@@ -371,6 +392,8 @@ export interface AgentGraphExecutionNode {
   inputTokens?: number | null
   /** M07-F04-02: 该节点 LLM 调用的输出 Token（非 LLM 节点或供应商未返回时为 null） */
   outputTokens?: number | null
+  /** 阶段 2：该节点内工具调用轨迹（JSON 数组字符串：tool/arguments/result） */
+  toolCalls?: string | null
   /** 开始时间 */
   startTime?: string
   /** 结束时间 */

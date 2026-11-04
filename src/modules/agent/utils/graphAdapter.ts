@@ -30,6 +30,10 @@ import type { GraphElement } from '@/contracts/agent'
 
 /** 后端节点 config 键（与 AgentGraphInterpreter 常量对齐，非训练记忆） */
 export const NODE_CONFIG_KEY_MODEL_ID = 'agentModelConfigId'
+/** LLM 节点所选供应商 id（阶段 2 两级选择；执行时校验模型归属） */
+export const NODE_CONFIG_KEY_PROVIDER_ID = 'providerId'
+/** LLM 节点挂载的工具名列表（阶段 2，节点内工具调用循环） */
+export const NODE_CONFIG_KEY_TOOL_NAMES = 'toolNames'
 export const NODE_CONFIG_KEY_TOOL_NAME = 'toolName'
 export const NODE_CONFIG_KEY_INPUT_VAR = 'inputVar'
 export const NODE_CONFIG_KEY_OUTPUT_VAR = 'outputVar'

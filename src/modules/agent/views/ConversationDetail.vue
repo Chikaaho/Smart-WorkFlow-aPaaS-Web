@@ -13,12 +13,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { listConversationMessages } from '@/modules/agent/api'
 import type { AgentConversationMessage } from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
+import { parseRouteId } from '@/modules/agent/utils/routeId'
 
 const route = useRoute()
 const router = useRouter()
 
 // ─── 路由参数 ───
-const sessionId = computed(() => Number(route.params.sessionId))
+const sessionId = computed(() => parseRouteId(route.params.sessionId))
 
 // ─── 状态变量 ───
 const loading = ref(false)
@@ -106,7 +107,7 @@ function goBack() {
 
 // ─── 挂载 ───
 onMounted(() => {
-  if (!sessionId.value || isNaN(sessionId.value)) {
+  if (!sessionId.value || !/^\d+$/.test(String(sessionId.value))) {
     error.value = t('agent.invalidConversationId')
   } else {
     void loadMessages()

@@ -134,6 +134,28 @@ function isPureString(value?: string): boolean {
   }
 }
 
+/** 阶段 2：解析节点内工具调用轨迹（容错：非法/空值返回空数组）。 */
+function parseToolCalls(value?: string | null): Array<{
+  tool: string
+  arguments: string
+  result: string
+}> {
+  if (!value || value.trim() === '') return []
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((item) => item && typeof item === 'object')
+      .map((item) => ({
+        tool: String(item.tool ?? ''),
+        arguments: String(item.arguments ?? ''),
+        result: String(item.result ?? ''),
+      }))
+  } catch {
+    return []
+  }
+}
+
 /**
  * 对节点数据进行处理：仅按 nodeSeq 升序排序，保留后端返回的真实 branchId。
  * 不合成、不推断 branchId —— 分支标识完全由后端决定。
@@ -242,6 +264,27 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
                 </div>
                 <div v-else-if="node.output" class="text-preview">{{ node.output }}</div>
                 <div v-else class="empty-tip">{{ t('common.none') }}</div>
+              </div>
+            </div>
+
+            <div v-if="parseToolCalls(node.toolCalls).length > 0" class="detail-section">
+              <div class="detail-title">{{ t('agent.toolCallTrace') }}</div>
+              <div class="detail-content">
+                <div
+                  v-for="(call, index) in parseToolCalls(node.toolCalls)"
+                  :key="index"
+                  class="tool-call"
+                >
+                  <div class="tool-call__name">#{{ index + 1 }} {{ call.tool }}</div>
+                  <div class="tool-call__row">
+                    <span class="tool-call__label">{{ t('agent.toolArguments') }}</span>
+                    <pre class="json-preview">{{ call.arguments }}</pre>
+                  </div>
+                  <div class="tool-call__row">
+                    <span class="tool-call__label">{{ t('agent.toolResult') }}</span>
+                    <pre class="json-preview">{{ call.result }}</pre>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -419,6 +462,29 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
   word-break: break-all;
   max-height: 300px;
   overflow-y: auto;
+}
+
+.tool-call {
+  padding: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+}
+
+.tool-call__name {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.tool-call__row {
+  margin-top: 6px;
+}
+
+.tool-call__label {
+  display: block;
+  color: #909399;
+  font-size: 12px;
+  margin-bottom: 4px;
 }
 
 .text-preview {

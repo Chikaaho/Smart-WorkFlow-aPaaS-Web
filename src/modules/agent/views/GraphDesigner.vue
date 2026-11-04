@@ -68,11 +68,12 @@ import type {
   ProcessGraph,
 } from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
+import { parseRouteId } from '@/modules/agent/utils/routeId'
 
 const route = useRoute()
 const router = useRouter()
 
-const graphId = computed(() => Number(route.params.id as string))
+const graphId = computed(() => parseRouteId(route.params.id))
 
 // ─── 图状态 ───
 const graphName = ref('')

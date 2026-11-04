@@ -298,6 +298,30 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // 阶段 2：Agent 统一工作台（原空白首页）
+        path: 'agent',
+        name: 'agent-home',
+        component: () => import('@/modules/agent/views/AgentHome.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('agent.workspaceTitle')
+          },
+          authority: ['agent:model:view'],
+        },
+      },
+      {
+        // 知识库入口：管理功能在阶段 3 提供
+        path: 'agent/knowledge',
+        name: 'agent-knowledge',
+        component: () => import('@/modules/agent/views/KnowledgeHome.vue'),
+        meta: {
+          get title() {
+            return i18n.global.t('agent.overviewKnowledge')
+          },
+          authority: ['agent:model:view'],
+        },
+      },
+      {
         path: 'agent/graph-designer/:id',
         name: 'agent-graph-designer',
         component: () => import('@/modules/agent/views/GraphDesigner.vue'),

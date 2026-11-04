@@ -196,6 +196,8 @@ async function mountLoadedWith(graph: ProcessGraph) {
       id: 1,
       name: 'OpenAI 主配置',
       modelName: 'gpt-4o',
+      providerId: 101,
+      providerName: 'OpenAI 官方',
       providerApiFormat: 'OPENAI_CHAT',
       enabled: true,
     },
@@ -203,6 +205,8 @@ async function mountLoadedWith(graph: ProcessGraph) {
       id: 2,
       name: 'Ollama 本地',
       modelName: 'qwen2.5',
+      providerId: 102,
+      providerName: 'Ollama 本地',
       providerApiFormat: 'ollama',
       enabled: true,
     },
@@ -249,18 +253,21 @@ describe('GraphDesigner.vue', () => {
     const wrapper = await mountLoaded()
     const [, data, events] = lastMountCall()
 
-    // 点击 LLM 节点
+    // 点击 LLM 节点：供应商 + 模型 + 工具三个下拉
     events.onNodeClick?.(nodeById(data, 'llm-1'))
     await nextTick()
-    expect(wrapper.findAll('.el-select')).toHaveLength(1)
+    expect(wrapper.findAll('.el-select')).toHaveLength(3)
     const llmOptions = wrapper.findAll('.el-option').map((o) => ({
       value: o.attributes('data-value'),
       label: o.attributes('data-label'),
     }))
-    expect(llmOptions).toEqual([
-      { value: '1', label: 'OpenAI 主配置（gpt-4o）' },
-      { value: '2', label: 'Ollama 本地（qwen2.5）' },
-    ])
+    // 两级选择：未选供应商时先列供应商与挂载工具；模型选项按所选供应商过滤
+    expect(llmOptions).toEqual(
+      expect.arrayContaining([
+        { value: '101', label: 'OpenAI 官方' },
+        { value: '102', label: 'Ollama 本地' },
+      ]),
+    )
 
     // 点击 TOOL 节点：合并下拉，value=toolName 精确值，label 标注来源
     events.onNodeClick?.(nodeById(data, 'tool-1'))

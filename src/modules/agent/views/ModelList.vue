@@ -57,6 +57,18 @@ function getApiFormatLabel(apiFormat: string | null | undefined): string {
   return API_FORMAT_MAP[apiFormat] ?? apiFormat
 }
 
+/** 模型启停展示：供应商停用时明确标注不可用（阶段 2 带入事项）。 */
+function getModelStatus(row: AgentModel): {
+  label: string
+  type: 'success' | 'info' | 'warning'
+} {
+  if (!row.enabled) return { label: t('common.disable'), type: 'info' }
+  if (row.providerEnabled === false) {
+    return { label: t('agent.modelDisabledByProvider'), type: 'warning' }
+  }
+  return { label: t('common.enable'), type: 'success' }
+}
+
 // ─── 锁定状态（运行态只读展示） ───
 
 interface LockState {
@@ -498,10 +510,10 @@ onMounted(() => {
               {{ (row as AgentModel).capabilities || 'CHAT' }}
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.toggle')" width="80" align="center">
+          <el-table-column :label="t('common.toggle')" width="140" align="center">
             <template #default="{ row }">
-              <el-tag :type="(row as AgentModel).enabled ? 'success' : 'info'" size="small">
-                {{ (row as AgentModel).enabled ? t('common.enable') : t('common.disable') }}
+              <el-tag :type="getModelStatus(row as AgentModel).type" size="small">
+                {{ getModelStatus(row as AgentModel).label }}
               </el-tag>
             </template>
           </el-table-column>

@@ -33,13 +33,14 @@ import type {
   AgentGraphExecutionNode,
 } from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
+import { parseRouteId } from '@/modules/agent/utils/routeId'
 import NodeTrajectory from '@/modules/agent/components/execution/NodeTrajectory.vue'
 import SafeHtml from '@/security/SafeHtml.vue'
 
 const route = useRoute()
 const router = useRouter()
 
-const sessionId = computed(() => Number(route.params.sessionId))
+const sessionId = computed(() => parseRouteId(route.params.sessionId))
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -338,7 +339,7 @@ function goBack() {
 }
 
 onMounted(() => {
-  if (!sessionId.value || isNaN(sessionId.value)) {
+  if (!sessionId.value || !/^\d+$/.test(String(sessionId.value))) {
     error.value = t('agent.debugInvalidSessionId')
   } else {
     void loadSession()
@@ -372,7 +373,7 @@ onMounted(() => {
           }}</span>
           <span class="divider">·</span>
           <span class="def-version">{{
-            t('agent.versionLabel', { graphDefVersion: session.graphDefVersion })
+            t('agent.snapshotVersionLabel', { version: session.graphDefVersion })
           }}</span>
           <span class="trace-count">trace {{ session.traceCount }}</span>
           <span class="latency">{{ formatLatency(session.latencyMs) }}</span>
