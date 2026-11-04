@@ -14,6 +14,7 @@ import { listConversationMessages } from '@/modules/agent/api'
 import type { AgentConversationMessage } from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
 import { parseRouteId } from '@/modules/agent/utils/routeId'
+import { sumTokens, toTokenNumber } from '@/modules/agent/utils/token'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,12 +35,14 @@ const tokenSummary = computed(() => {
   let hasOutputData = false
 
   for (const msg of messages.value) {
-    if (msg.inputTokens !== null && msg.inputTokens !== undefined) {
-      totalInput += msg.inputTokens
+    const input = toTokenNumber(msg.inputTokens)
+    const output = toTokenNumber(msg.outputTokens)
+    if (input !== null) {
+      totalInput += input
       hasInputData = true
     }
-    if (msg.outputTokens !== null && msg.outputTokens !== undefined) {
-      totalOutput += msg.outputTokens
+    if (output !== null) {
+      totalOutput += output
       hasOutputData = true
     }
   }
@@ -47,7 +50,8 @@ const tokenSummary = computed(() => {
   return {
     totalInput: hasInputData ? totalInput : null,
     totalOutput: hasOutputData ? totalOutput : null,
-    totalTokens: hasInputData && hasOutputData ? totalInput + totalOutput : null,
+    // 后端 Long→String，两侧均已知时按数值相加；任一侧未知则整体未知
+    totalTokens: hasInputData && hasOutputData ? sumTokens(totalInput, totalOutput) : null,
   }
 })
 
@@ -68,14 +72,15 @@ function formatTimestamp(ts: string): string {
   }
 }
 
-function formatTokenCount(count: number | null | undefined): string {
-  if (count === null || count === undefined) {
+function formatTokenCount(count: number | string | null | undefined): string {
+  const value = toTokenNumber(count)
+  if (value === null) {
     return t('common.unknown')
   }
-  if (count === 0) {
+  if (value === 0) {
     return '0'
   }
-  return count.toLocaleString()
+  return value.toLocaleString()
 }
 
 // ─── 数据加载 ───

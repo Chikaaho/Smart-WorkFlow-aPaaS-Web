@@ -17,6 +17,7 @@ const { t } = useI18n()
  */
 import { computed } from 'vue'
 import type { AgentGraphExecutionNode } from '@/contracts/agent'
+import { toTokenNumber } from '@/modules/agent/utils/token'
 
 const props = defineProps<{
   nodes: AgentGraphExecutionNode[]
@@ -74,15 +75,16 @@ function formatLatency(latencyMs: number): string {
   return seconds < 60 ? `${seconds.toFixed(2)}s` : `${(seconds / 60).toFixed(2)}m`
 }
 
-// M07-F04-02: Token 格式化函数
-function formatTokenCount(count: number | null | undefined): string {
-  if (count === null || count === undefined) {
+// M07-F04-02: Token 格式化函数（后端 Long→String，统一归一化）
+function formatTokenCount(count: number | string | null | undefined): string {
+  const value = toTokenNumber(count)
+  if (value === null) {
     return t('common.unknown')
   }
-  if (count === 0) {
+  if (value === 0) {
     return '0'
   }
-  return count.toLocaleString()
+  return value.toLocaleString()
 }
 
 /**

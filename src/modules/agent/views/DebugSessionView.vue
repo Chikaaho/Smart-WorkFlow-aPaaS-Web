@@ -34,6 +34,7 @@ import type {
 } from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
 import { parseRouteId } from '@/modules/agent/utils/routeId'
+import { sumTokens, toTokenNumber } from '@/modules/agent/utils/token'
 import NodeTrajectory from '@/modules/agent/components/execution/NodeTrajectory.vue'
 import SafeHtml from '@/security/SafeHtml.vue'
 
@@ -125,18 +126,16 @@ function formatLatency(latencyMs: number | null | undefined): string {
   return s < 60 ? `${s.toFixed(2)}s` : `${(s / 60).toFixed(2)}m`
 }
 
-function formatTokenCount(count: number | null | undefined): string {
-  if (count === null || count === undefined) return t('common.unknown')
-  if (count === 0) return '0'
-  return count.toLocaleString()
+function formatTokenCount(count: number | string | null | undefined): string {
+  const value = toTokenNumber(count)
+  if (value === null) return t('common.unknown')
+  if (value === 0) return '0'
+  return value.toLocaleString()
 }
 
 const totalTokens = computed(() => {
   if (!session.value) return null
-  const i = session.value.inputTokens
-  const o = session.value.outputTokens
-  if (i === null || i === undefined || o === null || o === undefined) return null
-  return i + o
+  return sumTokens(session.value.inputTokens, session.value.outputTokens)
 })
 
 // variables 展示：JSON 美化，失败回落原文

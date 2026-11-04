@@ -568,4 +568,35 @@ describe('ExecutionList.vue - D126 §6 验收标准测试', () => {
     await nextTick()
     expect((wrapper.vm as unknown as { list: AgentGraphExecution[] }).list).toHaveLength(2)
   })
+
+  it('F1S2-G4: 列表 Token 为字符串时按数值相加 - 728/104 总 832 而非 728104', async () => {
+    vi.mocked(pageDebugSessions).mockResolvedValueOnce({
+      list: [],
+      total: 0,
+      pageNum: 1,
+      pageSize: 10,
+    } as any)
+    const stringTokenExec = {
+      ...MOCK_EXECUTION_LIST[0],
+      inputTokens: '728',
+      outputTokens: '104',
+    } as unknown as AgentGraphExecution
+    vi.mocked(pageGraphExecutionsWithVersion).mockResolvedValueOnce({
+      list: [stringTokenExec],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+    })
+    const wrapper = mount(ExecutionList, {
+      global: { plugins: [createPinia()], stubs: STUBS_LIST },
+    })
+    await nextTick()
+    await nextTick()
+    await nextTick()
+    const vm = wrapper.vm as unknown as {
+      list: AgentGraphExecution[]
+      totalTokensOf: (row: AgentGraphExecution) => number | null
+    }
+    expect(vm.totalTokensOf(vm.list[0])).toBe(832)
+  })
 })

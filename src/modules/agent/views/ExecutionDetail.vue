@@ -39,6 +39,7 @@ import { getExecutionDetail, listExecutionNodes } from '@/modules/agent/api'
 import type { AgentGraphExecutionDetail, AgentGraphExecutionNode } from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
 import { parseRouteId } from '@/modules/agent/utils/routeId'
+import { sumTokens, toTokenNumber } from '@/modules/agent/utils/token'
 import NodeTrajectory from '@/modules/agent/components/execution/NodeTrajectory.vue'
 import SafeHtml from '@/security/SafeHtml.vue'
 
@@ -113,25 +114,21 @@ function formatTimestamp(ts: string): string {
 }
 
 // M07-F04-02: Token 格式化函数
-function formatTokenCount(count: number | null | undefined): string {
-  if (count === null || count === undefined) {
+function formatTokenCount(count: number | string | null | undefined): string {
+  const value = toTokenNumber(count)
+  if (value === null) {
     return t('common.unknown')
   }
-  if (count === 0) {
+  if (value === 0) {
     return '0'
   }
-  return count.toLocaleString()
+  return value.toLocaleString()
 }
 
-// M07-F04-02: 总 Token 计算属性
+// M07-F04-02: 总 Token 计算属性（后端 Long→String，按数值相加，未知侧不补 0）
 const totalTokens = computed(() => {
   if (!detail.value) return null
-  const input = detail.value.inputTokens
-  const output = detail.value.outputTokens
-  if (input === null || input === undefined || output === null || output === undefined) {
-    return null
-  }
-  return input + output
+  return sumTokens(detail.value.inputTokens, detail.value.outputTokens)
 })
 
 // ─── 折叠状态 ───
