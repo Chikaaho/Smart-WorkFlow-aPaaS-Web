@@ -87,22 +87,20 @@ function formatTokenCount(count: number | null | undefined): string {
 
 /**
  * 格式化时间字符串 (去掉毫秒部分，便于对比)
- * ISO8601 -> YYYY-MM-DD HH:mm:ss
+ * ISO8601 -> YYYY-MM-DD HH:mm:ss；缺失或非法值显示占位符（避免 Invalid Date）
  */
-function formatTimestamp(ts: string): string {
-  try {
-    const date = new Date(ts)
-    return date.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
-  } catch {
-    return ts
-  }
+function formatTimestamp(ts?: string | null): string {
+  if (!ts) return '-'
+  const date = new Date(ts)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
 }
 
 /**
@@ -218,7 +216,9 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
           <!-- 序号 + 名称 -->
           <div class="node-header">
             <span class="node-seq">#{{ node.nodeSeq }}</span>
-            <span class="node-name">{{ node.nodeName }}</span>
+            <span class="node-name">{{
+              node.nodeName || enumLabel('AGENT_NODE_TYPE', node.nodeType)
+            }}</span>
           </div>
 
           <!-- 节点元信息 -->

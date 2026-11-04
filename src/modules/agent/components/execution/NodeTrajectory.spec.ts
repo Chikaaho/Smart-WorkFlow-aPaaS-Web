@@ -477,6 +477,55 @@ describe('NodeTrajectory.vue — FORK/JOIN/LOOP/失败节点专项测试', () =>
     expect(text).not.toContain('输出:')
     wrapper.unmount()
   })
+
+  it('F1S2-G1: 展开 LLM 节点显示真实输入/输出与开始/结束时间', async () => {
+    const llmNodes: AgentGraphExecutionNode[] = [
+      {
+        nodeSeq: 1,
+        nodeId: 'n1',
+        nodeType: 'LLM',
+        nodeName: '模型调用',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 100,
+        buildTime: '2026-11-04T10:00:00.000',
+        input: '写一段产品介绍',
+        output: '这是模型最终回答',
+        startTime: '2026-11-04T10:00:00',
+        endTime: '2026-11-04T10:00:01',
+      },
+    ]
+    const wrapper = mount(NodeTrajectory, { props: { nodes: llmNodes } })
+    await wrapper.findAll('.node-item')[0].trigger('click')
+    await nextTick()
+    const text = wrapper.text()
+    expect(text).toContain('写一段产品介绍')
+    expect(text).toContain('这是模型最终回答')
+    expect(text).not.toContain('Invalid Date')
+    expect(text).toContain('2026')
+    wrapper.unmount()
+  })
+
+  it('F1S2-G1: 缺时间数据时显示占位符而非 Invalid Date', async () => {
+    const llmNodes: AgentGraphExecutionNode[] = [
+      {
+        nodeSeq: 1,
+        nodeId: 'n1',
+        nodeType: 'LLM',
+        nodeName: '模型调用',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 100,
+        buildTime: '2026-11-04T10:00:00.000',
+      },
+    ]
+    const wrapper = mount(NodeTrajectory, { props: { nodes: llmNodes } })
+    await wrapper.findAll('.node-item')[0].trigger('click')
+    await nextTick()
+    expect(wrapper.text()).not.toContain('Invalid Date')
+    expect(wrapper.text()).toContain('-')
+    wrapper.unmount()
+  })
 })
 
 // Helper to extract displayed text from items
