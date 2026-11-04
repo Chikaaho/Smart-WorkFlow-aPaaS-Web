@@ -27,6 +27,7 @@ import type { AgentGraphExecution, AgentGraphDebugSession } from '@/contracts/ag
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 import { usePermission } from '@/foundation/permission'
+import { sumTokens, toTokenNumber } from '@/modules/agent/utils/token'
 
 const route = useRoute()
 const router = useRouter()
@@ -139,18 +140,19 @@ const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.l
 const canViewDetail = computed(() => hasPerm('agent:model:view'))
 
 // M07-F04-02: Token 格式化（未知与 0 严格区分，total=未知时显示未知）
-function formatTokenCount(count: number | null | undefined): string {
-  if (count === null || count === undefined) return t('common.unknown')
-  if (count === 0) return '0'
-  return count.toLocaleString()
+function formatTokenCount(count: number | string | null | undefined): string {
+  const value = toTokenNumber(count)
+  if (value === null) return t('common.unknown')
+  if (value === 0) return '0'
+  return value.toLocaleString()
 }
 function totalTokensOf(
   row: MergedRow | AgentGraphExecution | Record<string, unknown>,
 ): number | null {
-  const input = (row as { inputTokens?: number | null }).inputTokens
-  const output = (row as { outputTokens?: number | null }).outputTokens
-  if (input === null || input === undefined || output === null || output === undefined) return null
-  return input + output
+  const input = (row as { inputTokens?: number | string | null }).inputTokens
+  const output = (row as { outputTokens?: number | string | null }).outputTokens
+  // 后端 Long→String，Token 以字符串到达；必须按数值相加，未知侧不补 0
+  return sumTokens(input, output)
 }
 
 /** 加载列表数据：并行拉取执行与调试两域，合并入同一列表（G11 既有入口闭环） */

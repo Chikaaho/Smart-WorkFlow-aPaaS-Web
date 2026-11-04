@@ -6,7 +6,8 @@
  * 横向「图标 + 名称/表单数」，管理端额外叠加三点菜单与「新建应用」卡。
  * perRow 为空时按容器宽度自动铺排；传入时固定每行数量（用户端个人偏好）。
  */
-import { Delete, Edit, MoreFilled } from '@element-plus/icons-vue'
+import { Delete, Download, Edit, MoreFilled } from '@element-plus/icons-vue'
+import { hasPerm } from '@/foundation/permission'
 import AppIcon from './AppIcon.vue'
 import type { FormApp } from '@/contracts/app-center'
 import { useI18n } from '@/locales'
@@ -97,6 +98,12 @@ const { t } = useI18n()
           <el-dropdown-menu>
             <el-dropdown-item v-perm="'form:app:manage'" command="edit">
               <el-icon><Edit /></el-icon>{{ t('form.appCenter.editApp') }}
+            </el-dropdown-item>
+            <!-- F2（D022-10）：导出应用整包；独立按钮权限 form:app:export。
+                 v-perm 在 EP 弹层的 dropdown-item 上实测未生效（无权限用户仍可见），
+                 改 v-if 硬门控（真实鉴权仍在后端，前端仅 UX 显隐） -->
+            <el-dropdown-item v-if="hasPerm('form:app:export')" command="export">
+              <el-icon><Download /></el-icon>{{ t('form.appCenter.exportApp') }}
             </el-dropdown-item>
             <el-dropdown-item
               v-perm="'form:app:manage'"

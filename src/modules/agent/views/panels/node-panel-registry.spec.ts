@@ -9,10 +9,20 @@ import { NODE_TYPE_LABEL_KEYS } from '@/modules/agent/utils/graphAdapter'
 import { ENUM_LABEL_KEYS } from '@/foundation/i18n/enum-label'
 
 // 与图设计器 8 类节点全集对齐——新增/删减节点类型时本断言会逼着同步注册表。
-const EXPECTED_TYPES = ['START', 'END', 'LLM', 'TOOL', 'CONDITION', 'LOOP', 'FORK', 'JOIN']
+const EXPECTED_TYPES = [
+  'START',
+  'END',
+  'LLM',
+  'TOOL',
+  'CONDITION',
+  'LOOP',
+  'FORK',
+  'JOIN',
+  'KNOWLEDGE',
+]
 
 describe('NODE_PANEL_REGISTRY', () => {
-  it('covers exactly the 8 node types, one descriptor each', () => {
+  it('covers exactly the 9 node types, one descriptor each', () => {
     const types = NODE_PANEL_REGISTRY.map((d) => d.type)
     expect(types).toHaveLength(EXPECTED_TYPES.length)
     expect(new Set(types)).toEqual(new Set(EXPECTED_TYPES))

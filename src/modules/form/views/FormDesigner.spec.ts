@@ -342,4 +342,60 @@ describe('FormDesigner 工作台（P52）', () => {
     expect(mockConfirm.mock.calls[0][0]).toContain('确认发布')
     expect(mockPublishDefinition).toHaveBeenCalledTimes(1)
   })
+
+  // ==================== BF20261013-009 × F2 补配路径：自定义候选字典字段可发布 ====================
+
+  function addDictField(
+    wrapper: ReturnType<typeof mountDesigner> extends Promise<infer W> ? W : never,
+    field: Record<string, unknown>,
+  ) {
+    return wrapper.findComponent(designerStubs.FieldPalette).vm.$emit('add', {
+      id: 'f-dict',
+      field: {
+        name: 'source',
+        type: 'DICT',
+        label: '线索来源',
+        colSpan: 24,
+        subFields: [],
+        ...field,
+      },
+    })
+  }
+
+  it('DICT 字段 source=custom 且未绑字典：预校验放行，可走到发布确认', async () => {
+    mockConfirm.mockResolvedValue(undefined)
+    mockSaveDraftDefinition.mockResolvedValue({ id: 'uuid-1', status: 'DRAFT' })
+    mockPublishDefinition.mockResolvedValueOnce({ ...identityDto, status: 'PUBLISHED' })
+    const wrapper = await mountDesigner()
+
+    addDictField(wrapper, { source: 'custom', options: [{ key: 'ad', value: '广告推荐' }] })
+    await flushPromises()
+
+    const publishBtn = wrapper.findAll('button').find((b) => b.text() === '发布')!
+    await publishBtn.trigger('click')
+    await flushPromises()
+
+    // 与服务端发布校验（FormDefServiceImpl BF20261013-009）一致：custom 不要求 dictType
+    expect(mockMessage.warning).not.toHaveBeenCalled()
+    expect(mockPublishDefinition).toHaveBeenCalledTimes(1)
+  })
+
+  it('DICT 字段未绑字典且非 custom：预校验拦截，不进发布确认', async () => {
+    mockConfirm.mockResolvedValue(undefined)
+    mockSaveDraftDefinition.mockClear()
+    const wrapper = await mountDesigner()
+
+    addDictField(wrapper, {})
+    await flushPromises()
+
+    const publishBtn = wrapper.findAll('button').find((b) => b.text() === '发布')!
+    await publishBtn.trigger('click')
+    await flushPromises()
+
+    expect(mockMessage.warning).toHaveBeenCalledTimes(1)
+    // 仅脏保护框一次：发布确认从未打开
+    expect(mockConfirm).toHaveBeenCalledTimes(1)
+    expect(mockConfirm.mock.calls[0][0]).toContain('未保存')
+    expect(mockPublishDefinition).not.toHaveBeenCalled()
+  })
 })

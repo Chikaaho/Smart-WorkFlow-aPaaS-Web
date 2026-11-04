@@ -719,7 +719,8 @@ function preValidateBeforePublish(list: DesignerItem[]): string | null {
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(field.name)) {
       return t('form.invalidColumnName', { name: field.name })
     }
-    if (field.type === 'DICT' && !field.dictType) {
+    // BF20261013-009：source=custom 走自定义候选，允许 dictType 为空（与服务端发布校验一致）
+    if (field.type === 'DICT' && !field.dictType && field.source !== 'custom') {
       return t('form.dictFieldNoType', { name: field.name })
     }
     if (field.type === 'REFERENCE' && !field.targetFormId) {

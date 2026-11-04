@@ -5,7 +5,7 @@
  * 各 handler 只 import 所需常量，避免内联重复。
  */
 
-import type { AgentModelConfig } from '@/contracts/agent'
+import type { AgentModel, AgentProvider } from '@/contracts/agent'
 
 /** 用户种子（登录/会话放行用）。身份语义与 MOCK_SESSION_DATA* 一一对应。 */
 export const MOCK_USERS = [
@@ -3311,21 +3311,68 @@ export const MOCK_INSTANCE_DETAILS: Record<
   },
 }
 
-// ─── 大模型接入配置 Mock 种子（M07-F01） ──────────────────────
+// ─── 供应商/模型两级 Mock 种子（F1 D022-02） ──────────────────
 // 安全约束（硬边界）：种子与 handler 内存中只存 apiKeyMasked 脱敏展示值，
-// 绝不出现明文 Key、绝不出现 apiKeyCipher 密文字段——与后端 AgentModelConfigDTO
-// 出参形状严格一致（DTO 注释：明文生命周期仅在 ServiceImpl 内部）。
-// 覆盖矩阵：openai 带 Key（sk****abcd 形态）/ ollama 无 Key（apiKeyMasked=null）/
-// other / 同 groupKey 多条（不同 sort）/ 一条 lockedUntil 未来时间（运行态锁定中）/
-// 一条 lockedUntil 过去时间（已解锁）/ enabled 有 true/false。
-export const MOCK_AGENT_MODELS: AgentModelConfig[] = [
+// 绝不出现明文 Key、绝不出现密文字段——与后端 AgentProviderDTO 出参形状严格一致。
+// 覆盖矩阵：三格式各一供应商（OPENAI_CHAT 带 Key / OPENAI_RESPONSES 带 Key /
+// ANTHROPIC 带 Key）+ 一条停用；模型挂在供应商下，同 groupKey 多条（不同 sort）、
+// 一条 lockedUntil 未来时间（锁定中）/ 过去时间（已解锁）、enabled 有 true/false。
+export const MOCK_AGENT_PROVIDERS: AgentProvider[] = [
+  {
+    id: 101,
+    name: 'OpenAI 官方',
+    apiFormat: 'OPENAI_CHAT',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKeyMasked: 'sk****abcd',
+    enabled: true,
+    remark: 'Chat Completions 格式',
+    createTime: '2026-07-10 10:00:00',
+    updateTime: '2026-07-10 10:00:00',
+  },
+  {
+    id: 102,
+    name: 'Ollama 本地',
+    apiFormat: 'OPENAI_CHAT',
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    apiKeyMasked: null,
+    enabled: true,
+    remark: '本地部署，无需鉴权',
+    createTime: '2026-07-11 09:00:00',
+    updateTime: '2026-07-11 09:00:00',
+  },
+  {
+    id: 103,
+    name: 'Command Code 网关',
+    apiFormat: 'OPENAI_RESPONSES',
+    baseUrl: 'https://gateway.example.com/v1',
+    apiKeyMasked: 'sk****dcba',
+    enabled: true,
+    remark: 'Responses 格式',
+    createTime: '2026-07-12 14:00:00',
+    updateTime: '2026-07-13 11:30:00',
+  },
+  {
+    id: 104,
+    name: 'Anthropic 官方',
+    apiFormat: 'ANTHROPIC',
+    baseUrl: 'https://api.anthropic.com',
+    apiKeyMasked: 'sk****anth',
+    enabled: false,
+    remark: '备用通道，当前停用',
+    createTime: '2026-07-12 14:00:00',
+    updateTime: '2026-07-13 11:30:00',
+  },
+]
+
+export const MOCK_AGENT_MODELS: AgentModel[] = [
   {
     id: 1,
+    providerId: 101,
+    providerName: 'OpenAI 官方',
+    providerApiFormat: 'OPENAI_CHAT',
     name: 'OpenAI GPT-4o 主模型',
-    protocolType: 'openai',
-    baseUrl: 'https://api.openai.com/v1',
     modelName: 'gpt-4o',
-    apiKeyMasked: 'sk****abcd',
+    capabilities: 'CHAT',
     temperature: 0.7,
     maxTokens: 4096,
     topP: 1,
@@ -3342,18 +3389,19 @@ export const MOCK_AGENT_MODELS: AgentModelConfig[] = [
   },
   {
     id: 2,
+    providerId: 102,
+    providerName: 'Ollama 本地',
+    providerApiFormat: 'OPENAI_CHAT',
     name: 'Ollama 本地 Llama3',
-    protocolType: 'ollama',
-    baseUrl: 'http://127.0.0.1:11434',
     modelName: 'llama3',
-    apiKeyMasked: null,
+    capabilities: 'CHAT',
     temperature: 0.5,
     maxTokens: 2048,
     topP: 0.9,
     timeoutSeconds: 30,
     retryCount: 0,
     enabled: true,
-    remark: '本地部署，无需鉴权',
+    remark: '本地部署',
     groupKey: null,
     sort: 0,
     lockedUntil: null,
@@ -3363,18 +3411,19 @@ export const MOCK_AGENT_MODELS: AgentModelConfig[] = [
   },
   {
     id: 3,
-    name: 'Azure OpenAI 备用',
-    protocolType: 'other',
-    baseUrl: 'https://your-resource.openai.azure.com',
+    providerId: 103,
+    providerName: 'Command Code 网关',
+    providerApiFormat: 'OPENAI_RESPONSES',
+    name: 'Responses 格式示例模型',
     modelName: 'gpt-4o-mini',
-    apiKeyMasked: 'sk****dcba',
+    capabilities: 'CHAT',
     temperature: 0.3,
     maxTokens: 8192,
     topP: 0.95,
     timeoutSeconds: 120,
     retryCount: 3,
-    enabled: false,
-    remark: '备用通道，当前停用',
+    enabled: true,
+    remark: 'Responses 通道',
     groupKey: null,
     sort: 0,
     lockedUntil: null,
@@ -3384,11 +3433,12 @@ export const MOCK_AGENT_MODELS: AgentModelConfig[] = [
   },
   {
     id: 4,
+    providerId: 101,
+    providerName: 'OpenAI 官方',
+    providerApiFormat: 'OPENAI_CHAT',
     name: '多Key轮询-主Key',
-    protocolType: 'openai',
-    baseUrl: 'https://api.example.com/v1',
     modelName: 'gpt-4o',
-    apiKeyMasked: 'sk****1111',
+    capabilities: 'CHAT',
     temperature: 0.7,
     maxTokens: 4096,
     topP: 1,
@@ -3406,11 +3456,12 @@ export const MOCK_AGENT_MODELS: AgentModelConfig[] = [
   },
   {
     id: 5,
+    providerId: 101,
+    providerName: 'OpenAI 官方',
+    providerApiFormat: 'OPENAI_CHAT',
     name: '多Key轮询-备Key',
-    protocolType: 'openai',
-    baseUrl: 'https://api.example.com/v1',
     modelName: 'gpt-4o',
-    apiKeyMasked: 'sk****2222',
+    capabilities: 'CHAT',
     temperature: 0.7,
     maxTokens: 4096,
     topP: 1,
@@ -3428,11 +3479,12 @@ export const MOCK_AGENT_MODELS: AgentModelConfig[] = [
   },
   {
     id: 6,
-    name: 'DeepSeek 对话模型',
-    protocolType: 'openai',
-    baseUrl: 'https://api.deepseek.com/v1',
-    modelName: 'deepseek-chat',
-    apiKeyMasked: 'sk****efgh',
+    providerId: 104,
+    providerName: 'Anthropic 官方',
+    providerApiFormat: 'ANTHROPIC',
+    name: 'Claude 备用模型',
+    modelName: 'claude-sonnet',
+    capabilities: 'CHAT',
     temperature: 1,
     maxTokens: 4096,
     topP: null,

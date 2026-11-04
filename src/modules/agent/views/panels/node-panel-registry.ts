@@ -18,12 +18,13 @@
  */
 import type { Component } from 'vue'
 import type { FlowGraphEdge, FlowGraphNode } from '@/adapters/flow-graph'
-import type { AgentModelConfigOption, AgentToolOption } from '@/contracts/agent'
+import type { AgentModelConfigOption, AgentToolOption, KnowledgeBase } from '@/contracts/agent'
 import {
   NODE_TYPE_CONDITION,
   NODE_TYPE_END,
   NODE_TYPE_FORK,
   NODE_TYPE_JOIN,
+  NODE_TYPE_KNOWLEDGE,
   NODE_TYPE_LLM,
   NODE_TYPE_LOOP,
   NODE_TYPE_START,
@@ -36,6 +37,7 @@ import LoopPanel from './LoopPanel.vue'
 import ForkPanel from './ForkPanel.vue'
 import JoinPanel from './JoinPanel.vue'
 import ConditionPanel from './ConditionPanel.vue'
+import KnowledgePanel from './KnowledgePanel.vue'
 
 /** 属性面板统一入参（各面板按需消费；交互经 emit 上行，面板自身零副作用）。 */
 export interface NodePanelProps {
@@ -45,6 +47,8 @@ export interface NodePanelProps {
   modelOptions: AgentModelConfigOption[]
   /** TOOL 工具选项（internal/external 合并列表）。 */
   toolOptions: AgentToolOption[]
+  /** KNOWLEDGE 知识库选项（阶段 3）。 */
+  knowledgeOptions: KnowledgeBase[]
   /** CONDITION 节点出边（条件分支关键词编辑入口）。 */
   conditionOutEdges: FlowGraphEdge[]
   /** 出边显示名（起点 label → 终点 label）。 */
@@ -71,6 +75,7 @@ export const NODE_PANEL_REGISTRY: NodePanelDescriptor[] = [
   { type: NODE_TYPE_LOOP, labelKey: 'agent.nodeLoop', component: LoopPanel },
   { type: NODE_TYPE_FORK, labelKey: 'agent.nodeFork', component: ForkPanel },
   { type: NODE_TYPE_JOIN, labelKey: 'agent.nodeJoin', component: JoinPanel },
+  { type: NODE_TYPE_KNOWLEDGE, labelKey: 'agent.nodeKnowledge', component: KnowledgePanel },
 ]
 
 /** 按 type 取描述符；取不到返回 undefined（消费方兜底：无面板渲染）。 */
