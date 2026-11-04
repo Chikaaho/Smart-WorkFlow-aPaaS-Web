@@ -11,6 +11,7 @@ vi.mock('@/modules/agent/api', () => ({
   getGraphDef: vi.fn(),
   listModelOptions: vi.fn(),
   listToolOptions: vi.fn(),
+  pageKnowledgeBases: vi.fn(),
   publishGraphDef: vi.fn(),
   saveDraftGraph: vi.fn(),
 }))
@@ -43,6 +44,7 @@ import {
   getGraphDef,
   listModelOptions,
   listToolOptions,
+  pageKnowledgeBases,
   saveDraftGraph,
 } from '@/modules/agent/api'
 import { ElMessage } from 'element-plus'
@@ -192,8 +194,24 @@ async function mountLoaded() {
 async function mountLoadedWith(graph: ProcessGraph) {
   vi.mocked(getGraphDef).mockResolvedValueOnce(graph)
   vi.mocked(listModelOptions).mockResolvedValueOnce([
-    { id: 1, name: 'OpenAI 主配置', modelName: 'gpt-4o', protocolType: 'openai', enabled: true },
-    { id: 2, name: 'Ollama 本地', modelName: 'qwen2.5', protocolType: 'ollama', enabled: true },
+    {
+      id: 1,
+      name: 'OpenAI 主配置',
+      modelName: 'gpt-4o',
+      providerId: 101,
+      providerName: 'OpenAI 官方',
+      providerApiFormat: 'OPENAI_CHAT',
+      enabled: true,
+    },
+    {
+      id: 2,
+      name: 'Ollama 本地',
+      modelName: 'qwen2.5',
+      providerId: 102,
+      providerName: 'Ollama 本地',
+      providerApiFormat: 'ollama',
+      enabled: true,
+    },
   ])
   vi.mocked(listToolOptions).mockResolvedValueOnce([
     { toolName: 'http_echo', description: 'echo 工具', source: 'internal' },
@@ -212,6 +230,12 @@ function nodeById(data: FlowGraphData, id: string): FlowGraphNode {
 describe('GraphDesigner.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(pageKnowledgeBases).mockResolvedValue({
+      list: [],
+      total: 0,
+      pageNum: 1,
+      pageSize: 100,
+    })
   })
 
   it('加载：getGraphDef(42) → elementsToFlowGraphData → mountFlowGraph 挂载画布', async () => {
@@ -237,18 +261,21 @@ describe('GraphDesigner.vue', () => {
     const wrapper = await mountLoaded()
     const [, data, events] = lastMountCall()
 
-    // 点击 LLM 节点
+    // 点击 LLM 节点：供应商 + 模型 + 工具三个下拉
     events.onNodeClick?.(nodeById(data, 'llm-1'))
     await nextTick()
-    expect(wrapper.findAll('.el-select')).toHaveLength(1)
+    expect(wrapper.findAll('.el-select')).toHaveLength(3)
     const llmOptions = wrapper.findAll('.el-option').map((o) => ({
       value: o.attributes('data-value'),
       label: o.attributes('data-label'),
     }))
-    expect(llmOptions).toEqual([
-      { value: '1', label: 'OpenAI 主配置（gpt-4o）' },
-      { value: '2', label: 'Ollama 本地（qwen2.5）' },
-    ])
+    // 两级选择：未选供应商时先列供应商与挂载工具；模型选项按所选供应商过滤
+    expect(llmOptions).toEqual(
+      expect.arrayContaining([
+        { value: '101', label: 'OpenAI 官方' },
+        { value: '102', label: 'Ollama 本地' },
+      ]),
+    )
 
     // 点击 TOOL 节点：合并下拉，value=toolName 精确值，label 标注来源
     events.onNodeClick?.(nodeById(data, 'tool-1'))
@@ -496,6 +523,7 @@ describe('GraphDesigner.vue', () => {
       '循环',
       '并行分支',
       '汇合',
+      '知识检索',
     ])
 
     const loopBtn = wrapper.findAll('.palette-item').find((b) => b.text() === '循环')!

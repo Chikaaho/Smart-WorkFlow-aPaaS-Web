@@ -1,11 +1,17 @@
 import { request } from '@/foundation/request'
+
+/** 雪花 id 在 JSON 中是字符串，路由参数也可能是字符串；API 入参统一兼容 */
+type EntityId = number | string
 import type { PageQuery, PageResult } from '@/contracts/common'
 import type {
   AgentGraphDef,
+  AgentGraphSnapshot,
   AgentGraphCreateReq,
   AgentGraphExecuteReq,
   AgentGraphExecuteResp,
-  AgentModelConfig,
+  AgentProvider,
+  AgentProviderSaveReq,
+  AgentModel,
   AgentModelConfigOption,
   AgentModelSaveReq,
   AgentModelTestConnectionResp,
@@ -23,6 +29,11 @@ import type {
   AgentGraphDebugSession,
   AgentGraphDebugNode,
   AgentGraphDebugCreateReq,
+  KnowledgeBase,
+  KnowledgeBaseCreateReq,
+  KnowledgeDocument,
+  KnowledgeHit,
+  KnowledgeRetrievalReq,
 } from '@/contracts/agent'
 
 // ─── 后端分页原始形状（对齐 AgentGraphDefController.pageDefs 的 PageResult） ───
@@ -57,7 +68,7 @@ export async function createGraphDef(name: string): Promise<number> {
 }
 
 /** PUT /agent/graph-defs/{id}/graph → 保存草稿（全量覆盖 graph_json，不跑校验） */
-export async function saveDraftGraph(id: number, graph: ProcessGraph): Promise<void> {
+export async function saveDraftGraph(id: EntityId, graph: ProcessGraph): Promise<void> {
   return request<void>({
     method: 'PUT',
     url: `/agent/graph-defs/${id}/graph`,
@@ -66,7 +77,7 @@ export async function saveDraftGraph(id: number, graph: ProcessGraph): Promise<v
 }
 
 /** POST /agent/graph-defs/{id}/publish → 发布（defVersion 递增 + PUBLISHED） */
-export async function publishGraphDef(id: number): Promise<AgentGraphDef> {
+export async function publishGraphDef(id: EntityId): Promise<AgentGraphDef> {
   return request<AgentGraphDef>({
     method: 'POST',
     url: `/agent/graph-defs/${id}/publish`,
@@ -74,7 +85,7 @@ export async function publishGraphDef(id: number): Promise<AgentGraphDef> {
 }
 
 /** GET /agent/graph-defs/{id} → 图详情（设计器回显：解析后的 ProcessGraph） */
-export async function getGraphDef(id: number): Promise<ProcessGraph> {
+export async function getGraphDef(id: EntityId): Promise<ProcessGraph> {
   return request<ProcessGraph>({
     method: 'GET',
     url: `/agent/graph-defs/${id}`,
@@ -91,8 +102,28 @@ export async function pageGraphDefs(page: PageQuery): Promise<PageResult<AgentGr
   return adaptPage(raw)
 }
 
+/** GET /agent/graph-defs/{id}/versions → 历史发布版本（D022-06，新版本在前） */
+export async function listGraphDefVersions(id: EntityId): Promise<AgentGraphSnapshot[]> {
+  return request<AgentGraphSnapshot[]>({
+    method: 'GET',
+    url: `/agent/graph-defs/${id}/versions`,
+  })
+}
+
+/** PUT /agent/graph-defs/{id}/settings → 更新图级设置（执行超时秒数） */
+export async function updateGraphDefSettings(
+  id: EntityId,
+  executionTimeoutSeconds: number,
+): Promise<AgentGraphDef> {
+  return request<AgentGraphDef>({
+    method: 'PUT',
+    url: `/agent/graph-defs/${id}/settings`,
+    data: { executionTimeoutSeconds },
+  })
+}
+
 /** DELETE /agent/graph-defs/{id} → 删除（逻辑删除，幂等） */
-export async function deleteGraphDef(id: number): Promise<void> {
+export async function deleteGraphDef(id: EntityId): Promise<void> {
   return request<void>({
     method: 'DELETE',
     url: `/agent/graph-defs/${id}`,
@@ -100,7 +131,7 @@ export async function deleteGraphDef(id: number): Promise<void> {
 }
 
 /** POST /agent/graph-defs/{id}/execute {input} → 执行已发布图（一次性返回最终结果） */
-export async function executeGraph(id: number, input: string): Promise<AgentGraphExecuteResp> {
+export async function executeGraph(id: EntityId, input: string): Promise<AgentGraphExecuteResp> {
   const req: AgentGraphExecuteReq = { input }
   return request<AgentGraphExecuteResp>({
     method: 'POST',
@@ -110,17 +141,17 @@ export async function executeGraph(id: number, input: string): Promise<AgentGrap
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 大模型管理（AgentModelConfigController，权限：列表/详情 view、写 manage、测试 test）
+// 供应商管理（AgentProviderController，权限：查询 view / 写 manage，F1 D022-02）
 // ═══════════════════════════════════════════════════════════════
 
-/** GET /agent/models?pageNum=&pageSize=&nameKeyword= → PageResult<AgentModelConfig> */
-export async function pageModels(
+/** GET /agent/providers?pageNum=&pageSize=&nameKeyword= → PageResult<AgentProvider>（密钥脱敏） */
+export async function pageProviders(
   page: PageQuery,
   nameKeyword?: string,
-): Promise<PageResult<AgentModelConfig>> {
-  const raw = await request<BackendPageResult<AgentModelConfig>>({
+): Promise<PageResult<AgentProvider>> {
+  const raw = await request<BackendPageResult<AgentProvider>>({
     method: 'GET',
-    url: '/agent/models',
+    url: '/agent/providers',
     params: {
       ...page,
       ...(nameKeyword && nameKeyword.trim() ? { nameKeyword: nameKeyword.trim() } : {}),
@@ -129,15 +160,79 @@ export async function pageModels(
   return adaptPage(raw)
 }
 
-/** GET /agent/models/{id} → 模型配置详情（含 apiKeyMasked 脱敏展示值） */
-export async function getModel(id: number): Promise<AgentModelConfig> {
-  return request<AgentModelConfig>({
+/** GET /agent/providers/enabled → List<AgentProvider>（模型编辑下拉用） */
+export async function listEnabledProviders(): Promise<AgentProvider[]> {
+  return request<AgentProvider[]>({
+    method: 'GET',
+    url: '/agent/providers/enabled',
+  })
+}
+
+/** GET /agent/providers/{id} → 供应商详情（密钥脱敏） */
+export async function getProvider(id: number): Promise<AgentProvider> {
+  return request<AgentProvider>({
+    method: 'GET',
+    url: `/agent/providers/${id}`,
+  })
+}
+
+/** POST /agent/providers {req} → 新建（apiKey 非空时后端加密落库），返回新 id */
+export async function createProvider(req: AgentProviderSaveReq): Promise<number> {
+  return request<number>({
+    method: 'POST',
+    url: '/agent/providers',
+    data: req,
+  })
+}
+
+/** PUT /agent/providers/{id} {req} → 编辑（apiKey 为空/未传时后端保留旧密钥） */
+export async function updateProvider(id: number, req: AgentProviderSaveReq): Promise<void> {
+  return request<void>({
+    method: 'PUT',
+    url: `/agent/providers/${id}`,
+    data: req,
+  })
+}
+
+/** DELETE /agent/providers/{id} → 删除（逻辑删除，幂等） */
+export async function deleteProvider(id: number): Promise<void> {
+  return request<void>({
+    method: 'DELETE',
+    url: `/agent/providers/${id}`,
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 模型管理（AgentModelController，权限：列表/详情 view、写 manage、测试 test）
+// ═══════════════════════════════════════════════════════════════
+
+/** GET /agent/models?pageNum=&pageSize=&providerId=&nameKeyword= → PageResult<AgentModel> */
+export async function pageModels(
+  page: PageQuery,
+  providerId?: number,
+  nameKeyword?: string,
+): Promise<PageResult<AgentModel>> {
+  const raw = await request<BackendPageResult<AgentModel>>({
+    method: 'GET',
+    url: '/agent/models',
+    params: {
+      ...page,
+      ...(providerId ? { providerId } : {}),
+      ...(nameKeyword && nameKeyword.trim() ? { nameKeyword: nameKeyword.trim() } : {}),
+    },
+  })
+  return adaptPage(raw)
+}
+
+/** GET /agent/models/{id} → 模型详情 */
+export async function getModel(id: number): Promise<AgentModel> {
+  return request<AgentModel>({
     method: 'GET',
     url: `/agent/models/${id}`,
   })
 }
 
-/** POST /agent/models {req} → 新建（apiKey 非空时后端加密落库），返回新 id */
+/** POST /agent/models {req} → 新建，返回新 id */
 export async function createModel(req: AgentModelSaveReq): Promise<number> {
   return request<number>({
     method: 'POST',
@@ -146,7 +241,7 @@ export async function createModel(req: AgentModelSaveReq): Promise<number> {
   })
 }
 
-/** PUT /agent/models/{id} {req} → 编辑（apiKey 为空/未传时后端保留旧密钥） */
+/** PUT /agent/models/{id} {req} → 编辑 */
 export async function updateModel(id: number, req: AgentModelSaveReq): Promise<void> {
   return request<void>({
     method: 'PUT',
@@ -163,7 +258,7 @@ export async function deleteModel(id: number): Promise<void> {
   })
 }
 
-/** POST /agent/models/{id}/test-connection → 连通性测试（业务码 code≠0 表示不可测，不视为网络失败） */
+/** POST /agent/models/{id}/test-connection → 连通性测试（真实最小调用，code≠0 表示不可测） */
 export async function testModelConnection(id: number): Promise<AgentModelTestConnectionResp> {
   return request<AgentModelTestConnectionResp>({
     method: 'POST',
@@ -175,22 +270,32 @@ export async function testModelConnection(id: number): Promise<AgentModelTestCon
 // 只读下拉辅助（LLM/TOOL 节点属性面板数据源，非分页展示场景，一次性拉全量）
 // ═══════════════════════════════════════════════════════════════
 
-/** GET /agent/models?pageNum=&pageSize=1000 → 模型配置选项（仅取启用项） */
-export async function listModelOptions(): Promise<AgentModelConfigOption[]> {
-  const raw = await request<BackendPageResult<AgentModelConfigOption>>({
+/** GET /agent/models/enabled?capability=CHAT → 模型选项（仅启用项，F1 两级模型端点） */
+export async function listModelOptions(capability = 'CHAT'): Promise<AgentModelConfigOption[]> {
+  const list = await request<
+    {
+      id: number
+      name: string
+      modelName: string
+      providerId: number | null
+      providerName: string | null
+      providerApiFormat: string | null
+      enabled: boolean
+    }[]
+  >({
     method: 'GET',
-    url: '/agent/models',
-    params: { pageNum: 1, pageSize: 1000 },
+    url: '/agent/models/enabled',
+    params: capability ? { capability } : {},
   })
-  return raw.records
-    .filter((m) => m.enabled)
-    .map((m) => ({
-      id: m.id,
-      name: m.name,
-      modelName: m.modelName,
-      protocolType: m.protocolType,
-      enabled: m.enabled,
-    }))
+  return list.map((m) => ({
+    id: m.id,
+    name: m.name,
+    modelName: m.modelName,
+    providerId: m.providerId ?? undefined,
+    providerName: m.providerName ?? undefined,
+    providerApiFormat: m.providerApiFormat ?? undefined,
+    enabled: m.enabled,
+  }))
 }
 
 /** GET /agent/tool/internal + /agent/tool/external → 工具选项（合并，value=toolName 精确值，仅启用工具） */
@@ -370,7 +475,9 @@ export async function pageGraphExecutions(params: {
 }
 
 /** GET /agent/graph-executions/{executionId} → AgentGraphExecutionDetailDTO (404 若不存在) */
-export async function getExecutionDetail(executionId: number): Promise<AgentGraphExecutionDetail> {
+export async function getExecutionDetail(
+  executionId: EntityId,
+): Promise<AgentGraphExecutionDetail> {
   return request<AgentGraphExecutionDetail>({
     method: 'GET',
     url: `/agent/graph-executions/${executionId}`,
@@ -378,7 +485,9 @@ export async function getExecutionDetail(executionId: number): Promise<AgentGrap
 }
 
 /** GET /agent/graph-executions/{executionId}/nodes? → List<AgentGraphExecutionNodeDTO> (按 nodeSeq 排序) */
-export async function listExecutionNodes(executionId: number): Promise<AgentGraphExecutionNode[]> {
+export async function listExecutionNodes(
+  executionId: EntityId,
+): Promise<AgentGraphExecutionNode[]> {
   return request<AgentGraphExecutionNode[]>({
     method: 'GET',
     url: `/agent/graph-executions/${executionId}/nodes`,
@@ -394,7 +503,7 @@ interface GraphDefVersionInfo {
 }
 
 /** GET /agent/graph-defs/{id} → { id, name, defVersion }（轻量级，不带 graph_json） */
-export async function getGraphDefVersionOnly(id: number): Promise<GraphDefVersionInfo> {
+export async function getGraphDefVersionOnly(id: EntityId): Promise<GraphDefVersionInfo> {
   const raw = await request<GraphDefVersionInfo>({
     method: 'GET',
     url: `/agent/graph-defs/${id}`,
@@ -417,26 +526,31 @@ async function pageGraphExecutionsInternal(params: {
   // 2. 收集所有唯一的 graphDefId
   const graphDefIds = Array.from(new Set(result.list.map((e) => e.graphDefId)))
 
-  // 3. 并发拉取每个图的最新版本号
+  // 3. 并发拉取每个图的最新版本号与名称
   const versionMap = new Map<number, number>()
+  const nameMap = new Map<number, string>()
   if (graphDefIds.length > 0) {
     const versions = await Promise.all(
       graphDefIds.map(async (id) => {
         try {
           const info = await getGraphDefVersionOnly(id)
-          return { id, defVersion: info.defVersion }
+          return { id, defVersion: info.defVersion, name: info.name }
         } catch {
-          return { id, defVersion: 1 } // 兜底版本号
+          return { id, defVersion: 1, name: '' } // 兜底版本号
         }
       }),
     )
-    versions.forEach(({ id, defVersion }) => versionMap.set(id, defVersion))
+    versions.forEach(({ id, defVersion, name }) => {
+      versionMap.set(id, defVersion)
+      if (name) nameMap.set(id, name)
+    })
   }
 
-  // 4. 合并版本号到每条记录
+  // 4. 版本号优先取执行记录自身绑定的快照版本（D022-06）；缺失时才回退图当前版本
   const enrichedList: AgentGraphExecutionWithVersion[] = result.list.map((item) => ({
     ...item,
-    defVersion: versionMap.get(item.graphDefId) ?? 1,
+    graphName: item.graphName || nameMap.get(item.graphDefId) || '',
+    defVersion: item.graphDefVersion ?? versionMap.get(item.graphDefId) ?? 1,
   }))
 
   return {
@@ -467,7 +581,7 @@ export async function listConversations(agentModelConfigId?: number): Promise<Ag
 
 /** GET /agent/conversations/{sessionId}/messages → List<AgentConversationMessageDTO> */
 export async function listConversationMessages(
-  sessionId: number,
+  sessionId: EntityId,
 ): Promise<AgentConversationMessage[]> {
   return request<AgentConversationMessage[]>({
     method: 'GET',
@@ -491,7 +605,7 @@ export async function createDebugSession(
 }
 
 /** GET /agent/graph-debug-sessions/{id} → AgentGraphDebugSession */
-export async function getDebugSession(sessionId: number): Promise<AgentGraphDebugSession> {
+export async function getDebugSession(sessionId: EntityId): Promise<AgentGraphDebugSession> {
   return request<AgentGraphDebugSession>({
     method: 'GET',
     url: `/agent/graph-debug-sessions/${sessionId}`,
@@ -500,7 +614,7 @@ export async function getDebugSession(sessionId: number): Promise<AgentGraphDebu
 
 /** POST /agent/graph-debug-sessions/{id}/step?expectedVersion= → AgentGraphDebugSession */
 export async function stepDebugSession(
-  sessionId: number,
+  sessionId: EntityId,
   expectedVersion?: number,
 ): Promise<AgentGraphDebugSession> {
   return request<AgentGraphDebugSession>({
@@ -511,7 +625,7 @@ export async function stepDebugSession(
 }
 
 /** POST /agent/graph-debug-sessions/{id}/continue → AgentGraphDebugSession */
-export async function continueDebugSession(sessionId: number): Promise<AgentGraphDebugSession> {
+export async function continueDebugSession(sessionId: EntityId): Promise<AgentGraphDebugSession> {
   return request<AgentGraphDebugSession>({
     method: 'POST',
     url: `/agent/graph-debug-sessions/${sessionId}/continue`,
@@ -519,7 +633,7 @@ export async function continueDebugSession(sessionId: number): Promise<AgentGrap
 }
 
 /** POST /agent/graph-debug-sessions/{id}/stop → AgentGraphDebugSession */
-export async function stopDebugSession(sessionId: number): Promise<AgentGraphDebugSession> {
+export async function stopDebugSession(sessionId: EntityId): Promise<AgentGraphDebugSession> {
   return request<AgentGraphDebugSession>({
     method: 'POST',
     url: `/agent/graph-debug-sessions/${sessionId}/stop`,
@@ -528,7 +642,7 @@ export async function stopDebugSession(sessionId: number): Promise<AgentGraphDeb
 
 /** PUT /agent/graph-debug-sessions/{id}/breakpoints {breakpoints} → AgentGraphDebugSession */
 export async function updateDebugBreakpoints(
-  sessionId: number,
+  sessionId: EntityId,
   breakpoints: string[],
 ): Promise<AgentGraphDebugSession> {
   return request<AgentGraphDebugSession>({
@@ -539,7 +653,7 @@ export async function updateDebugBreakpoints(
 }
 
 /** GET /agent/graph-debug-sessions/{id}/nodes → AgentGraphDebugNode[] */
-export async function listDebugNodes(sessionId: number): Promise<AgentGraphDebugNode[]> {
+export async function listDebugNodes(sessionId: EntityId): Promise<AgentGraphDebugNode[]> {
   return request<AgentGraphDebugNode[]>({
     method: 'GET',
     url: `/agent/graph-debug-sessions/${sessionId}/nodes`,
@@ -558,4 +672,89 @@ export async function pageDebugSessions(params: {
     params,
   })
   return adaptPage(raw)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// F1 阶段 3：知识库 / RAG（KnowledgeBaseController）
+// ═══════════════════════════════════════════════════════════════
+
+/** GET /agent/knowledge-bases → PageResult<KnowledgeBase> */
+export async function pageKnowledgeBases(params: {
+  pageNum: number
+  pageSize: number
+  nameKeyword?: string
+}): Promise<PageResult<KnowledgeBase>> {
+  const raw = await request<BackendPageResult<KnowledgeBase>>({
+    method: 'GET',
+    url: '/agent/knowledge-bases',
+    params,
+  })
+  return adaptPage(raw)
+}
+
+/** GET /agent/knowledge-bases/{id} → KnowledgeBase */
+export async function getKnowledgeBase(id: EntityId): Promise<KnowledgeBase> {
+  return request<KnowledgeBase>({
+    method: 'GET',
+    url: `/agent/knowledge-bases/${id}`,
+  })
+}
+
+/** POST /agent/knowledge-bases → KnowledgeBase */
+export async function createKnowledgeBase(req: KnowledgeBaseCreateReq): Promise<KnowledgeBase> {
+  return request<KnowledgeBase>({
+    method: 'POST',
+    url: '/agent/knowledge-bases',
+    data: req,
+  })
+}
+
+/** DELETE /agent/knowledge-bases/{id}（分片与向量一并删除） */
+export async function deleteKnowledgeBase(id: EntityId): Promise<void> {
+  return request<void>({
+    method: 'DELETE',
+    url: `/agent/knowledge-bases/${id}`,
+  })
+}
+
+/** GET /agent/knowledge-bases/{id}/documents → KnowledgeDocument[] */
+export async function listKnowledgeDocuments(id: EntityId): Promise<KnowledgeDocument[]> {
+  return request<KnowledgeDocument[]>({
+    method: 'GET',
+    url: `/agent/knowledge-bases/${id}/documents`,
+  })
+}
+
+/** POST /agent/knowledge-bases/{id}/documents (multipart) → KnowledgeDocument */
+export async function uploadKnowledgeDocument(
+  id: EntityId,
+  file: File,
+): Promise<KnowledgeDocument> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request<KnowledgeDocument>({
+    method: 'POST',
+    url: `/agent/knowledge-bases/${id}/documents`,
+    data: formData,
+  })
+}
+
+/** DELETE /agent/knowledge-bases/{id}/documents/{documentId} */
+export async function deleteKnowledgeDocument(id: EntityId, documentId: EntityId): Promise<void> {
+  return request<void>({
+    method: 'DELETE',
+    url: `/agent/knowledge-bases/${id}/documents/${documentId}`,
+  })
+}
+
+/** POST /agent/knowledge-bases/{id}/retrieve → KnowledgeHit[] */
+export async function retrieveKnowledge(
+  id: EntityId,
+  req: KnowledgeRetrievalReq,
+): Promise<KnowledgeHit[]> {
+  return request<KnowledgeHit[]>({
+    method: 'POST',
+    url: `/agent/knowledge-bases/${id}/retrieve`,
+    data: req,
+  })
 }

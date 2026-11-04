@@ -503,4 +503,23 @@ describe('ExecutionDetail.vue - D126 §6 验收标准测试', () => {
     expect(text).toContain('100')
     expect(text).toContain('未知')
   })
+
+  it('F1S2-G4: 字符串 Token 按数值相加 - 728/104 显示总 832 而非 728104', async () => {
+    const stringTokenDetail = {
+      ...MOCK_DETAIL_SUCCESS,
+      inputTokens: '728',
+      outputTokens: '104',
+    } as unknown as AgentGraphExecutionDetail
+    vi.mocked(getExecutionDetail).mockResolvedValueOnce(stringTokenDetail)
+
+    const wrapper = await createWrapper()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('728')
+    expect(text).toContain('104')
+    expect(text).toContain('832')
+    expect(text).not.toContain('728104')
+  })
 })

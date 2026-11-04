@@ -117,6 +117,35 @@ describe('ConversationDetail — 会话消息 Token 展示（M07-F04-02 标准6/
     expect(text).toContain('未知')
   })
 
+  it('F1S2-G4: 字符串 Token 按数值聚合 - 10/20 + 30/40 总 100', async () => {
+    vi.mocked(listConversationMessages).mockResolvedValue([
+      message({
+        id: 1,
+        msgOrder: 0,
+        inputTokens: '10' as unknown as number,
+        outputTokens: '20' as unknown as number,
+      }),
+      message({
+        id: 2,
+        msgOrder: 1,
+        inputTokens: '30' as unknown as number,
+        outputTokens: '40' as unknown as number,
+      }),
+    ])
+
+    const wrapper = mount(ConversationDetail, {
+      global: { stubs: STUBS_DETAIL, plugins: [createPinia()] },
+    })
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('40')
+    expect(text).toContain('60')
+    expect(text).toContain('100')
+    expect(text).not.toContain('1030')
+  })
+
   it('无效会话 ID → 显示错误而非请求', async () => {
     delete routeParamsMock.sessionId
     const wrapper = mount(ConversationDetail, {

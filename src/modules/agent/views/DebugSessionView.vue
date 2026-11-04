@@ -33,13 +33,15 @@ import type {
   AgentGraphExecutionNode,
 } from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
+import { parseRouteId } from '@/modules/agent/utils/routeId'
+import { sumTokens, toTokenNumber } from '@/modules/agent/utils/token'
 import NodeTrajectory from '@/modules/agent/components/execution/NodeTrajectory.vue'
 import SafeHtml from '@/security/SafeHtml.vue'
 
 const route = useRoute()
 const router = useRouter()
 
-const sessionId = computed(() => Number(route.params.sessionId))
+const sessionId = computed(() => parseRouteId(route.params.sessionId))
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -124,18 +126,16 @@ function formatLatency(latencyMs: number | null | undefined): string {
   return s < 60 ? `${s.toFixed(2)}s` : `${(s / 60).toFixed(2)}m`
 }
 
-function formatTokenCount(count: number | null | undefined): string {
-  if (count === null || count === undefined) return t('common.unknown')
-  if (count === 0) return '0'
-  return count.toLocaleString()
+function formatTokenCount(count: number | string | null | undefined): string {
+  const value = toTokenNumber(count)
+  if (value === null) return t('common.unknown')
+  if (value === 0) return '0'
+  return value.toLocaleString()
 }
 
 const totalTokens = computed(() => {
   if (!session.value) return null
-  const i = session.value.inputTokens
-  const o = session.value.outputTokens
-  if (i === null || i === undefined || o === null || o === undefined) return null
-  return i + o
+  return sumTokens(session.value.inputTokens, session.value.outputTokens)
 })
 
 // variables 展示：JSON 美化，失败回落原文
@@ -338,7 +338,7 @@ function goBack() {
 }
 
 onMounted(() => {
-  if (!sessionId.value || isNaN(sessionId.value)) {
+  if (!sessionId.value || !/^\d+$/.test(String(sessionId.value))) {
     error.value = t('agent.debugInvalidSessionId')
   } else {
     void loadSession()
@@ -372,7 +372,7 @@ onMounted(() => {
           }}</span>
           <span class="divider">·</span>
           <span class="def-version">{{
-            t('agent.versionLabel', { graphDefVersion: session.graphDefVersion })
+            t('agent.snapshotVersionLabel', { version: session.graphDefVersion })
           }}</span>
           <span class="trace-count">trace {{ session.traceCount }}</span>
           <span class="latency">{{ formatLatency(session.latencyMs) }}</span>

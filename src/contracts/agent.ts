@@ -25,8 +25,22 @@ export interface AgentGraphDef {
   defVersion: number
   /** 状态：DRAFT / PUBLISHED */
   status: 'DRAFT' | 'PUBLISHED' | string
+  /** 图级执行超时（秒，阶段 2） */
+  executionTimeoutSeconds?: number
   createTime: string
   updateTime: string
+}
+
+/** 图发布版本快照（D022-06，不含 graph_json）。 */
+export interface AgentGraphSnapshot {
+  /** 发布版本号 */
+  defVersion: number
+  /** 发布时图业务 key */
+  graphKey: string
+  /** 发布时图名称 */
+  name: string
+  /** 发布时间 */
+  createTime: string
 }
 
 /** 图元素 —— 节点或边（对齐后端 GraphElement）。 */
@@ -85,31 +99,64 @@ export interface AgentModelConfigOption {
   id: number
   name: string
   modelName: string
-  protocolType: string
+  /** 所属供应商 id/名称（阶段 2 LLM 节点两级选择） */
+  providerId?: number | string
+  providerName?: string
+  /** 所属供应商 API 格式（F1 两级模型，替代旧 protocolType） */
+  providerApiFormat?: string
   enabled: boolean
 }
 
 /**
- * 大模型接入配置完整契约（对齐后端 AgentModelConfigDTO，M07-Step1/Step5 字段全量）。
+ * 供应商契约（对齐后端 AgentProviderDTO，F1 D022-02 两级模型）。
  * 安全约束：只含 apiKeyMasked（后端脱敏串，未配置时为 null），
- * 不含 apiKeyCipher（密文）也不含明文 Key——明文生命周期仅在当次提交请求内。
+ * 不含密文也不含明文 Key——明文生命周期仅在当次提交请求内。
  */
-export interface AgentModelConfig {
+export interface AgentProvider {
   id: number
   name: string
-  /** varchar 契约，前端不自创枚举（openai / ollama / other 由后端白名单校验） */
-  protocolType: 'openai' | 'ollama' | 'other' | string
+  /** API 格式三值契约：OPENAI_CHAT / OPENAI_RESPONSES / ANTHROPIC（后端白名单校验） */
+  apiFormat: 'OPENAI_CHAT' | 'OPENAI_RESPONSES' | 'ANTHROPIC' | string
   baseUrl: string
-  modelName: string
   /** 后端脱敏展示值（只显示后端返回的脱敏串，前端不回显/缓存明文） */
   apiKeyMasked: string | null
+  enabled: boolean
+  remark: string | null
+  createTime: string
+  updateTime: string
+}
+
+/** 供应商新增/编辑请求（对齐后端 AgentProviderSaveReqDTO）。apiKey 明文仅存在于当次提交。 */
+export interface AgentProviderSaveReq {
+  name: string
+  apiFormat: string
+  baseUrl: string
+  /** 明文仅存在于当次提交；空=保持旧密钥（编辑）/不配置（新增） */
+  apiKey?: string
+  enabled?: boolean
+  remark?: string
+}
+
+/**
+ * 模型契约（对齐后端 AgentModelDTO，挂在供应商下；密钥只在供应商侧）。
+ */
+export interface AgentModel {
+  id: number
+  providerId: number
+  providerName: string | null
+  providerApiFormat: string | null
+  /** 供应商是否启用（阶段 2：供应商停用的模型在列表标注不可用，LLM 节点不可选） */
+  providerEnabled?: boolean | null
+  name: string
+  modelName: string
+  /** 能力标注：CHAT / EMBEDDING（含式匹配，后端 capability 过滤） */
+  capabilities: string
   temperature: number | null
   maxTokens: number | null
   topP: number | null
   timeoutSeconds: number
   retryCount: number
   enabled: boolean
-  remark: string | null
   /** 多Key轮询候选分组标识，null=独立配置不参与轮询 */
   groupKey: string | null
   /** 组内优先级，数值越小优先级越高 */
@@ -118,22 +165,17 @@ export interface AgentModelConfig {
   lockedUntil: string | null
   /** 触发限流后的锁定冷却时长（秒） */
   quotaCooldownSeconds: number
+  remark: string | null
   createTime: string
   updateTime: string
 }
 
-/**
- * 大模型接入配置新增/编辑请求（对齐后端 AgentModelSaveReqDTO）。
- * apiKey 为明文，仅存在于当次提交：非空时后端加密落库；
- * 为空/未传时 create 场景存 null、update 场景保留旧密钥。
- */
+/** 模型新增/编辑请求（对齐后端 AgentModelSaveReqDTO；密钥在供应商侧，本请求不含 Key）。 */
 export interface AgentModelSaveReq {
+  providerId: number
   name: string
-  protocolType: string
-  baseUrl: string
   modelName: string
-  /** 明文仅存在于当次提交；空=保持旧密钥（编辑）/不配置（新增） */
-  apiKey?: string
+  capabilities?: string
   temperature?: number | null
   maxTokens?: number | null
   topP?: number | null
@@ -294,6 +336,8 @@ export interface AgentGraphExecutionDetail {
   graphName: string
   /** 所属图定义的版本号（扩展字段） */
   defVersion: number
+  /** 执行时绑定的发布快照版本（D022-06） */
+  graphDefVersion?: number
   /** 输入内容（初始累积文本，完整文本） */
   input: string
   /** 执行状态：RUNNING / SUCCESS / FAILED */
@@ -348,6 +392,8 @@ export interface AgentGraphExecutionNode {
   inputTokens?: number | null
   /** M07-F04-02: 该节点 LLM 调用的输出 Token（非 LLM 节点或供应商未返回时为 null） */
   outputTokens?: number | null
+  /** 阶段 2：该节点内工具调用轨迹（JSON 数组字符串：tool/arguments/result） */
+  toolCalls?: string | null
   /** 开始时间 */
   startTime?: string
   /** 结束时间 */
@@ -436,4 +482,57 @@ export interface AgentGraphDebugCreateReq {
 }
 export interface AgentGraphBreakpointsReq {
   breakpoints: string[]
+}
+
+// ═══════════════════════════════════════════════════════════════
+// F1 阶段 3：知识库 / RAG
+// ═══════════════════════════════════════════════════════════════
+
+/** 知识库（绑定一个 EMBEDDING 模型与切分参数） */
+export interface KnowledgeBase {
+  id: number | string
+  name: string
+  description?: string | null
+  embeddingModelId: number | string
+  chunkSize: number
+  chunkOverlap: number
+  createTime?: string
+}
+
+export interface KnowledgeBaseCreateReq {
+  name: string
+  description?: string
+  embeddingModelId: number | string
+  chunkSize: number
+  chunkOverlap: number
+}
+
+/** 知识库文档（处理状态与分片数） */
+export interface KnowledgeDocument {
+  id: number | string
+  kbId: number | string
+  name: string
+  fileName?: string | null
+  fileType?: string | null
+  fileSize?: number | null
+  status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | string
+  errorMessage?: string | null
+  chunkCount: number
+  createTime?: string
+}
+
+/** 检索命中分片 */
+export interface KnowledgeHit {
+  chunkId: number
+  documentId: number
+  documentName?: string | null
+  chunkIndex: number
+  content: string
+  similarity: number
+}
+
+export interface KnowledgeRetrievalReq {
+  query: string
+  topK?: number
+  similarityThreshold?: number
 }
