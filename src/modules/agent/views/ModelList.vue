@@ -19,6 +19,10 @@ const { t } = useI18n()
  *
  * 连通性测试语义（对齐后端 F1）：真实最小调用（chat "ping"），success=true 才可用；
  * 结果直接展示后端 message 与 latencyMs，不自行改判。测试为纯只读探测。
+ *
+ * 结果标题：success=true 显示“服务可达”；失败时后端 message 形如
+ * “鉴权失败（HTTP 401）：请检查 API Key 或权限”，取冒号前的失败类别作为标题，
+ * 避免鉴权失败/超时等可归类失败被一律显示成“网络不可达”。
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -304,6 +308,13 @@ async function handleTest(row: AgentModel) {
 function closeTestDialog() {
   testDialogVisible.value = false
   testResult.value = null
+}
+
+/** 结果标题取后端失败类别（message 冒号前），无类别时才回退“网络不可达”。 */
+function testResultHeadline(result: AgentModelTestConnectionResp): string {
+  if (result.success) return t('agent.serviceReachable')
+  const category = result.message.split('：')[0]?.trim()
+  return category || t('agent.networkUnreachable')
 }
 
 // ─── 删除（二次确认） ───
@@ -592,13 +603,7 @@ onMounted(() => {
       <div class="test-result">
         <div class="test-result__name">{{ t('agent.testConfigLabel', { testRowName }) }}</div>
         <el-alert
-          :title="
-            t('agent.connectivityTestTitle', {
-              result: testResult.success
-                ? t('agent.serviceReachable')
-                : t('agent.networkUnreachable'),
-            })
-          "
+          :title="t('agent.connectivityTestTitle', { result: testResultHeadline(testResult) })"
           :type="testResult.success ? 'success' : 'error'"
           :closable="false"
           show-icon

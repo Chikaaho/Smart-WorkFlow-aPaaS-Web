@@ -167,6 +167,12 @@ const testFail: AgentModelTestConnectionResp = {
   latencyMs: 1500,
 }
 
+const testAuthFail: AgentModelTestConnectionResp = {
+  success: false,
+  message: '鉴权失败（HTTP 401）：请检查 API Key 或权限',
+  latencyMs: 120,
+}
+
 function stubPage(models: AgentModel[] = mockModels) {
   vi.mocked(pageModels).mockResolvedValue({
     list: models,
@@ -345,6 +351,35 @@ describe('ModelList.vue', () => {
     expect(vm.testResult).toEqual(testFail)
     expect(wrapper.text()).toContain(testFail.message)
     expect(wrapper.text()).toContain('1500')
+    expect(wrapper.text()).toContain('测试结果：网络不可达')
+  })
+
+  it('连通性测试标题：401 鉴权失败显示失败类别，不显示“网络不可达”', async () => {
+    stubPage()
+    const wrapper = mountList()
+    await nextTick()
+    vi.mocked(testModelConnection).mockResolvedValueOnce(testAuthFail)
+
+    const vm = wrapper.vm as unknown as { handleTest: (row: AgentModel) => Promise<void> }
+    await vm.handleTest(mockModels[0])
+    await nextTick()
+
+    expect(wrapper.text()).toContain('测试结果：鉴权失败（HTTP 401）')
+    expect(wrapper.text()).not.toContain('测试结果：网络不可达')
+    expect(wrapper.text()).toContain(testAuthFail.message)
+  })
+
+  it('连通性测试标题：成功显示“服务可达”', async () => {
+    stubPage()
+    const wrapper = mountList()
+    await nextTick()
+    vi.mocked(testModelConnection).mockResolvedValueOnce(testSuccess)
+
+    const vm = wrapper.vm as unknown as { handleTest: (row: AgentModel) => Promise<void> }
+    await vm.handleTest(mockModels[0])
+    await nextTick()
+
+    expect(wrapper.text()).toContain('测试结果：服务可达')
   })
 
   it('权限：manage 缺失 → canManage=false、新建按钮（工具栏+空态）隐藏；test 仍可用', async () => {
