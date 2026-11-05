@@ -35,7 +35,12 @@ const { t } = useI18n()
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getExecutionDetail, listExecutionNodes } from '@/modules/agent/api'
+import {
+  getExecutionDetail,
+  getGraphDef,
+  getGraphExecutionLifecycle,
+  listExecutionNodes,
+} from '@/modules/agent/api'
 import type { AgentGraphExecutionDetail, AgentGraphExecutionNode } from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
 import { parseRouteId } from '@/modules/agent/utils/routeId'
@@ -151,15 +156,38 @@ async function loadDetail() {
   nodes.value = []
 
   try {
-    // 1. 优先拉取完整详情
+    // 生命周期执行使用独立持久化端点；旧同步执行继续使用原详情端点。
+    try {
+      const state = await getGraphExecutionLifecycle(executionId.value)
+      const graph = await getGraphDef(state.graphDefId)
+      detail.value = {
+        id: state.executionId,
+        graphDefId: state.graphDefId,
+        graphKey: graph.graphKey,
+        graphName: graph.name,
+        defVersion: state.graphDefVersion,
+        graphDefVersion: state.graphDefVersion,
+        input: state.input,
+        status: state.status,
+        output: state.output ?? '',
+        success: state.status === 'SUCCESS',
+        latencyMs: state.latencyMs ?? 0,
+        errorMessage: state.errorMessage,
+        errorCategory: state.errorCategory,
+        createTime: state.createTime ?? '',
+        updateTime: state.finishedAt ?? state.startedAt ?? state.createTime,
+        nodeDetails: [],
+      }
+      return
+    } catch {
+      // 兼容生命周期上线前的同步执行历史。
+    }
+
     const response = await getExecutionDetail(executionId.value)
     detail.value = response
-
-    // 2. 若响应含 nodeDetails，直接使用
     if (response.nodeDetails && response.nodeDetails.length > 0) {
       nodes.value = response.nodeDetails
     } else {
-      // 3. 否则单独拉取节点列表
       nodes.value = await listExecutionNodes(executionId.value)
     }
   } catch (err) {
