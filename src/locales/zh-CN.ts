@@ -423,6 +423,7 @@ export default {
     toolArguments: '入参',
     toolResult: '输出',
     executionSucceeded: '执行成功',
+    executionCancelled: '执行已取消',
     graphFallbackName: '图 #{graphDefId}',
     coolingUntil: '冷却至 {lockedUntil}',
     toolOptionLabel: '{toolName}（{source}）',

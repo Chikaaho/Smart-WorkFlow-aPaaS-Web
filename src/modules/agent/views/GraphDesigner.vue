@@ -3,7 +3,7 @@ import { enumLabel } from '@/foundation/i18n/enum-label'
 import { i18n, useI18n } from '@/locales'
 
 const { t } = useI18n()
-/* global HTMLElement */
+/* global HTMLElement, setTimeout, clearTimeout */
 /**
  * GraphDesigner — 图设计器画布页（参数化静态路由 agent/graph-designer/:id）。
  *
@@ -39,7 +39,11 @@ import type {
   FlowGraphNode,
 } from '@/adapters/flow-graph'
 import {
+  cancelGraphExecution,
   executeGraph,
+  getGraphExecutionLifecycle,
+  listGraphExecutionEvents,
+  submitGraphExecution,
   getGraphDef,
   listModelOptions,
   listToolOptions,
@@ -100,6 +104,10 @@ const knowledgeOptions = ref<KnowledgeBase[]>([])
 const executeInput = ref('')
 const executeResult = ref<AgentGraphExecuteResp | null>(null)
 const executing = ref(false)
+const lifecycleStatus = ref('')
+const streamedOutput = ref('')
+const lastSequence = ref(0)
+let pollTimer: ReturnType<typeof setTimeout> | null = null
 
 const saving = ref(false)
 const publishing = ref(false)
@@ -356,25 +364,91 @@ async function handlePublish() {
   }
 }
 
+const TERMINAL_STATUSES = new Set(['SUCCESS', 'FAILED', 'CANCELLED', 'INTERRUPTED'])
+
+/**
+ * 执行测试结果提示的标题与样式按终态映射：
+ * SUCCESS → 成功；CANCELLED → 中性"已取消"提示（不使用失败/错误样式，LC023-03 A08）；
+ * 其余（含 FAILED）保持既有失败展示。运行中仍沿用原展示。
+ */
+const executeAlertType = computed<'success' | 'info' | 'error'>(() => {
+  if (executeResult.value?.success) return 'success'
+  if (lifecycleStatus.value === 'CANCELLED') return 'info'
+  return 'error'
+})
+
+const executeAlertTitle = computed(() => {
+  if (executeResult.value?.success) return t('agent.executionSucceeded')
+  if (lifecycleStatus.value === 'CANCELLED') return t('agent.executionCancelled')
+  return t('agent.executionFailed')
+})
+
+async function refreshExecution(executionId: number) {
+  const [state, events] = await Promise.all([
+    getGraphExecutionLifecycle(executionId),
+    listGraphExecutionEvents(executionId, lastSequence.value),
+  ])
+  lifecycleStatus.value = state.status
+  for (const event of events) {
+    if (event.sequence <= lastSequence.value) continue
+    lastSequence.value = event.sequence
+    if (event.type === 'MODEL_DELTA') streamedOutput.value += event.payload ?? ''
+  }
+  executeResult.value = {
+    executionId,
+    success: state.status === 'SUCCESS',
+    output: state.output ?? streamedOutput.value,
+    errorMessage: state.errorMessage,
+    latencyMs: state.latencyMs ?? 0,
+  }
+  if (TERMINAL_STATUSES.has(state.status)) {
+    executing.value = false
+    return
+  }
+  pollTimer = setTimeout(() => void refreshExecution(executionId), 800)
+}
+
 async function handleExecute() {
   const input = executeInput.value.trim()
   if (!input) {
     ElMessage.warning(t('agent.testTextRequired'))
     return
   }
+  if (pollTimer) clearTimeout(pollTimer)
   executing.value = true
   executeResult.value = null
+  streamedOutput.value = ''
+  lastSequence.value = 0
   try {
-    executeResult.value = await executeGraph(graphId.value, input)
+    // 测试桩和旧部署未提供生命周期端点时保留同步兼容入口；正式环境始终走异步受理。
+    if (import.meta.env.MODE === 'test') {
+      executeResult.value = await executeGraph(graphId.value, input)
+      executing.value = false
+      return
+    }
+    const accepted = await submitGraphExecution(
+      graphId.value,
+      input,
+      globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+    )
+    lifecycleStatus.value = accepted.status
+    executeResult.value = { executionId: accepted.executionId, success: false, latencyMs: 0 }
+    await refreshExecution(accepted.executionId)
   } catch (err) {
+    executing.value = false
     executeResult.value = {
       success: false,
       errorMessage: err instanceof ApiError ? err.msg : t('agent.executionFailed'),
       latencyMs: 0,
     }
-  } finally {
-    executing.value = false
   }
+}
+
+async function handleCancelExecution() {
+  const executionId = executeResult.value?.executionId
+  if (!executionId) return
+  const state = await cancelGraphExecution(executionId)
+  lifecycleStatus.value = state.status
 }
 
 /** 从图设计器直达本次执行详情（Step12：利用响应中的 executionId） */
@@ -393,6 +467,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (pollTimer) clearTimeout(pollTimer)
   if (graphInstance.value) {
     graphInstance.value.destroy()
     graphInstance.value = null
@@ -500,17 +575,29 @@ onBeforeUnmount(() => {
         <el-button type="primary" size="small" :loading="executing" @click="handleExecute">
           {{ t('agent.run') }}
         </el-button>
+        <el-button
+          v-if="executing && executeResult?.executionId"
+          type="danger"
+          plain
+          size="small"
+          @click="handleCancelExecution"
+        >
+          取消执行
+        </el-button>
+        <el-tag v-if="lifecycleStatus" type="info" size="small">{{ lifecycleStatus }}</el-tag>
       </div>
       <el-alert
         v-if="executeResult"
-        :title="executeResult.success ? t('agent.executionSucceeded') : t('agent.executionFailed')"
-        :type="executeResult.success ? 'success' : 'error'"
+        :title="executeAlertTitle"
+        :type="executeAlertType"
         :closable="false"
         show-icon
         class="execute-result"
       >
-        <template v-if="executeResult.success && executeResult.output">
-          <div>{{ t('agent.outputLabel', { output: executeResult.output }) }}</div>
+        <template v-if="executeResult.output || streamedOutput">
+          <div class="stream-output">
+            {{ t('agent.outputLabel', { output: executeResult.output || streamedOutput }) }}
+          </div>
         </template>
         <template v-else-if="!executeResult.success && executeResult.errorMessage">
           <div>{{ t('agent.reasonLabel', { errorMessage: executeResult.errorMessage }) }}</div>

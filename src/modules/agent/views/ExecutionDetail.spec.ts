@@ -16,6 +16,8 @@ const { push, replace, routeParamsMock, routeQueryMock } = vi.hoisted(() => ({
 // Mock API module - must be at top level for hoisting
 vi.mock('@/modules/agent/api', () => ({
   getExecutionDetail: vi.fn(),
+  getGraphDef: vi.fn(),
+  getGraphExecutionLifecycle: vi.fn(),
   listExecutionNodes: vi.fn(),
 }))
 
@@ -37,7 +39,12 @@ vi.mock('element-plus', async (importOriginal) => {
 })
 
 // Import after all mocks
-import { getExecutionDetail, listExecutionNodes } from '@/modules/agent/api'
+import {
+  getExecutionDetail,
+  getGraphDef,
+  getGraphExecutionLifecycle,
+  listExecutionNodes,
+} from '@/modules/agent/api'
 import type { AgentGraphExecutionDetail, AgentGraphExecutionNode } from '@/contracts/agent'
 import ExecutionDetail from './ExecutionDetail.vue'
 
@@ -171,6 +178,38 @@ describe('ExecutionDetail.vue - D126 §6 验收标准测试', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     push.mockClear()
+    vi.mocked(getGraphExecutionLifecycle).mockRejectedValue(new Error('legacy execution'))
+  })
+
+  it('LC023-03: 生命周期执行从持久化端点加载并刷新后仍回显同一执行', async () => {
+    vi.mocked(getGraphExecutionLifecycle).mockResolvedValueOnce({
+      executionId: 90001,
+      graphDefId: 21,
+      graphDefVersion: 2,
+      status: 'SUCCESS',
+      input: 'headed-lc023-final',
+      output: 'headed-lc023-final',
+      latencyMs: 53,
+      createTime: '2026-11-05T20:00:00',
+      finishedAt: '2026-11-05T20:00:00.053',
+    })
+    vi.mocked(getGraphDef).mockResolvedValueOnce({
+      graphKey: 'lc023',
+      name: 'lc023-start-end',
+      version: 2,
+      elements: [],
+      canvas: {},
+    })
+
+    const wrapper = await createWrapper({ executionId: '90001' })
+    await nextTick()
+    await nextTick()
+
+    expect(getGraphExecutionLifecycle).toHaveBeenCalledWith(90001)
+    expect(getGraphDef).toHaveBeenCalledWith(21)
+    expect(getExecutionDetail).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('headed-lc023-final')
+    expect(wrapper.text()).toContain('90001')
   })
 
   // ──────────────────────────────────────────────────────────────
@@ -272,6 +311,8 @@ describe('ExecutionDetail.vue - D126 §6 验收标准测试', () => {
     vi.mocked(listExecutionNodes).mockResolvedValueOnce(MOCK_DETAIL_SUCCESS.nodeDetails)
 
     await createWrapper()
+    await nextTick()
+    await nextTick()
 
     expect(listExecutionNodes).toHaveBeenCalledWith(1)
   })

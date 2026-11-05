@@ -14,6 +14,10 @@ vi.mock('@/modules/agent/api', () => ({
   pageKnowledgeBases: vi.fn(),
   publishGraphDef: vi.fn(),
   saveDraftGraph: vi.fn(),
+  submitGraphExecution: vi.fn(),
+  getGraphExecutionLifecycle: vi.fn(),
+  listGraphExecutionEvents: vi.fn(),
+  cancelGraphExecution: vi.fn(),
 }))
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }))
@@ -42,11 +46,14 @@ import type {
 import {
   executeGraph,
   getGraphDef,
+  getGraphExecutionLifecycle,
+  listGraphExecutionEvents,
   listModelOptions,
   listToolOptions,
   pageKnowledgeBases,
   saveDraftGraph,
 } from '@/modules/agent/api'
+import type { AgentExecutionLifecycle } from '@/modules/agent/api'
 import { ElMessage } from 'element-plus'
 import {
   NODE_CONFIG_KEY_INPUT_VAR,
@@ -386,6 +393,77 @@ describe('GraphDesigner.vue', () => {
     expect(html).toContain('原因：条件分支无匹配且无默认边: cond-1')
     expect(html).toContain('耗时 3ms')
     wrapper.unmount()
+  })
+
+  // ─── 生命周期终态提示样式（LC023-03 A08：取消不展示为失败/错误样式）───
+  function lifecycleState(
+    status: string,
+    extra: Partial<AgentExecutionLifecycle> = {},
+  ): AgentExecutionLifecycle {
+    return {
+      executionId: 9,
+      graphDefId: 42,
+      graphDefVersion: 2,
+      status,
+      input: 'headed-lc023-cancel',
+      errorMessage: status === 'CANCELLED' ? '执行已取消' : '模型服务不可用',
+      ...extra,
+    }
+  }
+
+  async function driveRefreshToTerminal(
+    wrapper: Awaited<ReturnType<typeof mountLoaded>>,
+    status: string,
+    extra: Partial<AgentExecutionLifecycle> = {},
+  ) {
+    vi.mocked(getGraphExecutionLifecycle).mockResolvedValueOnce(lifecycleState(status, extra))
+    vi.mocked(listGraphExecutionEvents).mockResolvedValueOnce([])
+    const vm = wrapper.vm as unknown as {
+      streamedOutput: string
+      lastSequence: number
+      refreshExecution: (executionId: number) => Promise<void>
+    }
+    vm.streamedOutput = '增量-01 增量-02 增量-03 增量-04 增量-05 增量-06'
+    await vm.refreshExecution(9)
+    await nextTick()
+  }
+
+  it('取消终态：CANCELLED 展示中性"执行已取消"提示（info），保留输出/耗时/查看详情，不出现失败文案与错误样式', async () => {
+    const wrapper = await mountLoaded()
+    await driveRefreshToTerminal(wrapper, 'CANCELLED', { latencyMs: 1691 })
+
+    const alert = wrapper.find('.execute-result')
+    expect(alert.classes()).toContain('info')
+    expect(alert.classes()).not.toContain('error')
+    expect(alert.classes()).not.toContain('success')
+    const html = wrapper.html()
+    expect(html).toContain('执行已取消')
+    expect(html).not.toContain('执行失败')
+    expect(html).toContain('输出：增量-01 增量-02 增量-03 增量-04 增量-05 增量-06')
+    expect(html).toContain('耗时 1691ms')
+    expect(html).toContain('查看详情')
+    wrapper.unmount()
+  })
+
+  it('终态样式回归：FAILED 仍为失败样式与"执行失败"文案，SUCCESS 仍为成功样式与"执行成功"文案', async () => {
+    const wrapper = await mountLoaded()
+    await driveRefreshToTerminal(wrapper, 'FAILED', { latencyMs: 2156, output: '增量-01 增量-02' })
+
+    const failedAlert = wrapper.find('.execute-result')
+    expect(failedAlert.classes()).toContain('error')
+    expect(wrapper.html()).toContain('执行失败')
+    wrapper.unmount()
+
+    const okWrapper = await mountLoaded()
+    await driveRefreshToTerminal(okWrapper, 'SUCCESS', {
+      latencyMs: 6999,
+      output: '增量-01 增量-02',
+    })
+
+    const okAlert = okWrapper.find('.execute-result')
+    expect(okAlert.classes()).toContain('success')
+    expect(okWrapper.html()).toContain('执行成功')
+    okWrapper.unmount()
   })
 
   it('卸载时销毁画布实例', async () => {
