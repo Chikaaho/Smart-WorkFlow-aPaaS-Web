@@ -2035,6 +2035,13 @@ export default {
     ruleCreatedDraft: 'Rule created (draft)',
     eventRules: 'Event rules',
     processLinkage: 'Process linkage',
+    agentLinkage: 'Agent judgment linkage',
+    agentGraph: 'Judgment graph (published)',
+    agentGraphPlaceholder: 'Pick a published agent graph or enter its key',
+    agentInputMapping: 'Judgment input mapping JSON',
+    agentFailureTemplate: 'Failure escalation template',
+    agentFailureTemplatePlaceholder:
+      'Process template key started when judgment fails; empty = no escalation',
     triggerRecords: 'Trigger records',
     noRules: 'No rules',
     eligibleDevicesPlaceholder: 'Only published devices eligible for process linkage are shown',

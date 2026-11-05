@@ -116,6 +116,14 @@ export interface IotEventRule extends IotBase {
   processTemplateKey: string | null
   formMappingJson: string | null
   processEnabled: number
+  /** Agent 图联动：启用开关（0.2.4） */
+  agentEnabled: number
+  /** 目标已发布 Agent 图 key */
+  agentGraphKey: string | null
+  /** Agent 执行输入映射 JSON（source 词汇表同 formMappingJson，另支持 RECENT_SERIES） */
+  agentInputMappingJson: string | null
+  /** 研判执行失败升级的流程模板 key（空 = 不升级） */
+  agentFailureTemplateKey: string | null
   status: 'DRAFT' | 'PUBLISHED' | 'DISABLED'
   ruleVersion: number
   lastFiredTime: string | null

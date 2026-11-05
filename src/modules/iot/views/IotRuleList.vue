@@ -30,12 +30,15 @@ import {
   type IotDevice,
   type IotProcessTriggerRecord,
 } from '../api'
+import { listPublishedGraphOptions } from '@/adapters/agent-graph-catalog'
 
 const loading = ref(false)
 /** 本次加载的失败原因；非空时页面显示错误态而不是空态。 */
 const loadError = ref('')
 const list = ref<IotEventRule[]>([])
 const devices = ref<IotDevice[]>([])
+/** 已发布 Agent 图（0.2.4：Agent 图联动下拉可选，避免手抄图 key）。 */
+const publishedGraphs = ref<{ label: string; value: string }[]>([])
 
 const {
   keyword,
@@ -64,7 +67,15 @@ const form = reactive({
   processEnabled: 1,
   processTemplateKey: '',
   formMappingJson: '[{"field":"deviceKey","source":"DEVICE_KEY","required":true}]',
+  agentEnabled: 0,
+  agentGraphKey: '',
+  agentInputMappingJson:
+    '[{"field":"value","source":"PROPERTY_VALUE"},{"field":"reportTime","source":"REPORT_TIME"}]',
+  agentFailureTemplateKey: '',
 })
+
+/** 已发布图选项（下拉）：value=graphKey，label=名称（key） */
+const publishedGraphOptions = computed(() => publishedGraphs.value)
 
 const triggerVisible = ref(false)
 const triggers = ref<IotProcessTriggerRecord[]>([])
@@ -83,6 +94,12 @@ async function load() {
   try {
     list.value = await listRules()
     devices.value = await listEligibleDevices()
+    try {
+      publishedGraphs.value = await listPublishedGraphOptions()
+    } catch {
+      // 图列表加载失败不阻塞规则管理：Agent 联动退化为手输图 key
+      publishedGraphs.value = []
+    }
     pageNum.value = 1
   } catch (err) {
     loadError.value = err instanceof ApiError ? err.msg : t('common.loadFailed')
@@ -111,6 +128,11 @@ function openCreate() {
     processEnabled: 1,
     processTemplateKey: '',
     formMappingJson: '[{"field":"deviceKey","source":"DEVICE_KEY","required":true}]',
+    agentEnabled: 0,
+    agentGraphKey: '',
+    agentInputMappingJson:
+      '[{"field":"value","source":"PROPERTY_VALUE"},{"field":"reportTime","source":"REPORT_TIME"}]',
+    agentFailureTemplateKey: '',
   })
   dialogVisible.value = true
 }
@@ -240,6 +262,13 @@ function rowActions(r: unknown): ListAction[] {
           </el-tag>
         </template>
       </el-table-column>
+      <el-table-column :label="t('iot.agentLinkage')" width="90">
+        <template #default="{ row }">
+          <el-tag :type="row.agentEnabled === 1 ? 'success' : 'info'" size="small">
+            {{ row.agentEnabled === 1 ? row.agentGraphKey : '—' }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column :label="t('common.status')" width="90">
         <template #default="{ row }">
           <el-tag
@@ -305,6 +334,34 @@ function rowActions(r: unknown): ListAction[] {
       </el-form-item>
       <el-form-item v-if="form.processEnabled === 1" :label="t('iot.formMapping')">
         <el-input v-model="form.formMappingJson" type="textarea" :rows="4" />
+      </el-form-item>
+      <el-form-item :label="t('iot.agentLinkage')">
+        <el-switch v-model="form.agentEnabled" :active-value="1" :inactive-value="0" />
+      </el-form-item>
+      <el-form-item v-if="form.agentEnabled === 1" :label="t('iot.agentGraph')" required>
+        <el-select
+          v-model="form.agentGraphKey"
+          :placeholder="t('iot.agentGraphPlaceholder')"
+          filterable
+          allow-create
+          default-first-option
+        >
+          <el-option
+            v-for="g in publishedGraphOptions"
+            :key="g.value"
+            :label="g.label"
+            :value="g.value"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item v-if="form.agentEnabled === 1" :label="t('iot.agentInputMapping')">
+        <el-input v-model="form.agentInputMappingJson" type="textarea" :rows="4" />
+      </el-form-item>
+      <el-form-item v-if="form.agentEnabled === 1" :label="t('iot.agentFailureTemplate')">
+        <el-input
+          v-model="form.agentFailureTemplateKey"
+          :placeholder="t('iot.agentFailureTemplatePlaceholder')"
+        />
       </el-form-item>
     </el-form>
     <template #footer>
