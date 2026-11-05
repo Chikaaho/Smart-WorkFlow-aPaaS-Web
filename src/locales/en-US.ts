@@ -439,6 +439,7 @@ export default {
     toolArguments: 'Arguments',
     toolResult: 'Result',
     executionSucceeded: 'Execution succeeded',
+    executionCancelled: 'Execution cancelled',
     graphFallbackName: 'Graph #{graphDefId}',
     coolingUntil: 'Cooling down until {lockedUntil}',
     toolOptionLabel: '{toolName} ({source})',

@@ -140,6 +140,78 @@ export async function executeGraph(id: EntityId, input: string): Promise<AgentGr
   })
 }
 
+export interface AgentExecutionAccepted {
+  executionId: number
+  status: string
+}
+
+export interface AgentExecutionLifecycle {
+  executionId: number
+  graphDefId: number
+  graphDefVersion: number
+  status: string
+  input: string
+  output?: string
+  errorCategory?: string
+  errorMessage?: string
+  latencyMs?: number
+  createTime?: string
+  startedAt?: string
+  finishedAt?: string
+  cancelRequestedAt?: string
+}
+
+export interface AgentExecutionEvent {
+  sequence: number
+  type: string
+  nodeId?: string
+  payload?: string
+  createdAt?: string
+}
+
+/** 持久化受理后立即返回稳定执行标识。 */
+export async function submitGraphExecution(
+  id: EntityId,
+  input: string,
+  idempotencyKey: string,
+): Promise<AgentExecutionAccepted> {
+  return request<AgentExecutionAccepted>({
+    method: 'POST',
+    url: `/agent/graph-execution-lifecycle/graphs/${id}/executions`,
+    headers: { 'Idempotency-Key': idempotencyKey },
+    data: { input },
+  })
+}
+
+export async function getGraphExecutionLifecycle(
+  executionId: EntityId,
+): Promise<AgentExecutionLifecycle> {
+  return request<AgentExecutionLifecycle>({
+    method: 'GET',
+    url: `/agent/graph-execution-lifecycle/executions/${executionId}`,
+  })
+}
+
+export async function listGraphExecutionEvents(
+  executionId: EntityId,
+  afterSequence = 0,
+): Promise<AgentExecutionEvent[]> {
+  return request<AgentExecutionEvent[]>({
+    method: 'GET',
+    url: `/agent/graph-execution-lifecycle/executions/${executionId}/events`,
+    params: { afterSequence },
+  })
+}
+
+export async function cancelGraphExecution(
+  executionId: EntityId,
+): Promise<AgentExecutionLifecycle> {
+  return request<AgentExecutionLifecycle>({
+    method: 'POST',
+    url: `/agent/graph-execution-lifecycle/executions/${executionId}/cancel`,
+  })
+}
+
 // ═══════════════════════════════════════════════════════════════
 // 供应商管理（AgentProviderController，权限：查询 view / 写 manage，F1 D022-02）
 // ═══════════════════════════════════════════════════════════════
