@@ -366,6 +366,23 @@ async function handlePublish() {
 
 const TERMINAL_STATUSES = new Set(['SUCCESS', 'FAILED', 'CANCELLED', 'INTERRUPTED'])
 
+/**
+ * 执行测试结果提示的标题与样式按终态映射：
+ * SUCCESS → 成功；CANCELLED → 中性"已取消"提示（不使用失败/错误样式，LC023-03 A08）；
+ * 其余（含 FAILED）保持既有失败展示。运行中仍沿用原展示。
+ */
+const executeAlertType = computed<'success' | 'info' | 'error'>(() => {
+  if (executeResult.value?.success) return 'success'
+  if (lifecycleStatus.value === 'CANCELLED') return 'info'
+  return 'error'
+})
+
+const executeAlertTitle = computed(() => {
+  if (executeResult.value?.success) return t('agent.executionSucceeded')
+  if (lifecycleStatus.value === 'CANCELLED') return t('agent.executionCancelled')
+  return t('agent.executionFailed')
+})
+
 async function refreshExecution(executionId: number) {
   const [state, events] = await Promise.all([
     getGraphExecutionLifecycle(executionId),
@@ -571,8 +588,8 @@ onBeforeUnmount(() => {
       </div>
       <el-alert
         v-if="executeResult"
-        :title="executeResult.success ? t('agent.executionSucceeded') : t('agent.executionFailed')"
-        :type="executeResult.success ? 'success' : 'error'"
+        :title="executeAlertTitle"
+        :type="executeAlertType"
         :closable="false"
         show-icon
         class="execute-result"
