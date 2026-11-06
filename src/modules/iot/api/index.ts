@@ -124,6 +124,8 @@ export interface IotEventRule extends IotBase {
   agentInputMappingJson: string | null
   /** 研判执行失败升级的流程模板 key（空 = 不升级） */
   agentFailureTemplateKey: string | null
+  /** 失败升级通用配置 JSON（templateKey/formDataExtra/notify，0.2.4） */
+  agentFailureConfigJson: string | null
   status: 'DRAFT' | 'PUBLISHED' | 'DISABLED'
   ruleVersion: number
   lastFiredTime: string | null
@@ -303,6 +305,9 @@ export function listRules(deviceId?: number): Promise<IotEventRule[]> {
 }
 export function createRule(body: Record<string, unknown>): Promise<IotEventRule> {
   return post<IotEventRule>('/iot/rules', body)
+}
+export function updateRule(id: number, body: Record<string, unknown>): Promise<IotEventRule> {
+  return request<IotEventRule>({ method: 'PUT', url: `/iot/rules/${id}`, data: body })
 }
 export function publishRule(id: number): Promise<IotEventRule> {
   return post<IotEventRule>(`/iot/rules/${id}/publish`)

@@ -1987,6 +1987,18 @@ export default {
     agentInputMapping: '研判输入映射 JSON',
     agentFailureTemplate: '失败升级流程模板',
     agentFailureTemplatePlaceholder: '研判执行失败时发起的流程模板 key，留空则不升级',
+    agentJudgmentParams: '研判参数（键值）',
+    agentParamName: '参数名，如 slopeThreshold',
+    agentParamValue: '参数值，如 2.0',
+    agentParamAdd: '添加参数',
+    agentJudgmentParamsHint:
+      '保存时写入研判输入映射的 fixed 字段，供研判图提示词与工具读取；修改后下一次触发即生效。',
+    agentInputMappingInvalid: '研判输入映射必须是合法 JSON 数组',
+    agentFailureConfig: '失败升级配置 JSON',
+    agentFailureConfigPlaceholder:
+      '可选 templateKey、formDataExtra 与 notify（channels、recipientId）；留空则仅按失败升级流程模板处理',
+    agentFailureConfigInvalid: '失败升级配置必须是合法 JSON 对象',
+    ruleUpdated: '规则已更新',
     triggerRecords: '触发记录',
     noRules: '暂无规则',
     eligibleDevicesPlaceholder: '仅显示可接入流程的已发布设备',

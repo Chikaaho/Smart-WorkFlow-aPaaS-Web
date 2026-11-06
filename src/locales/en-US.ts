@@ -2042,6 +2042,18 @@ export default {
     agentFailureTemplate: 'Failure escalation template',
     agentFailureTemplatePlaceholder:
       'Process template key started when judgment fails; empty = no escalation',
+    agentJudgmentParams: 'Judgment parameters (key-value)',
+    agentParamName: 'Name, e.g. slopeThreshold',
+    agentParamValue: 'Value, e.g. 2.0',
+    agentParamAdd: 'Add parameter',
+    agentJudgmentParamsHint:
+      'Saved as fixed entries in the judgment input mapping for prompts and tools; effective on the next trigger.',
+    agentInputMappingInvalid: 'Judgment input mapping must be a valid JSON array',
+    agentFailureConfig: 'Failure escalation config JSON',
+    agentFailureConfigPlaceholder:
+      'Optional templateKey, formDataExtra and notify (channels, recipientId); empty = template-only escalation',
+    agentFailureConfigInvalid: 'Failure escalation config must be a valid JSON object',
+    ruleUpdated: 'Rule updated',
     triggerRecords: 'Trigger records',
     noRules: 'No rules',
     eligibleDevicesPlaceholder: 'Only published devices eligible for process linkage are shown',

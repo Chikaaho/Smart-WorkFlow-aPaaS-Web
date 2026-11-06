@@ -22,6 +22,7 @@ import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
 import {
   listRules,
   createRule,
+  updateRule,
   publishRule,
   disableRule,
   listRuleTriggers,
@@ -55,6 +56,13 @@ const {
 })
 
 const dialogVisible = ref(false)
+/** 编辑中的规则 ID；null = 新建 */
+const editingId = ref<number | null>(null)
+/**
+ * 研判参数（0.2.4 S3-01）：以「键=值」维护，保存时写入研判输入映射的 fixed 条目。
+ * 业务判定阈值/窗口/斜率等可调参数走这里，避免业务人员直接编辑整段映射 JSON。
+ */
+const agentParams = ref<{ key: string; value: string }[]>([])
 const form = reactive({
   code: '',
   name: '',
@@ -72,7 +80,52 @@ const form = reactive({
   agentInputMappingJson:
     '[{"field":"value","source":"PROPERTY_VALUE"},{"field":"reportTime","source":"REPORT_TIME"}]',
   agentFailureTemplateKey: '',
+  agentFailureConfigJson: '',
 })
+
+type MappingItem = { field?: string; source?: string; fixed?: unknown }
+
+function parseMappingItems(json: string): MappingItem[] | null {
+  try {
+    const parsed: unknown = JSON.parse(json)
+    return Array.isArray(parsed) ? (parsed as MappingItem[]) : null
+  } catch {
+    return null
+  }
+}
+
+/** 打开编辑时把固定参数从映射里抽到键值编辑器（其余映射保持原样）。 */
+function syncAgentParamsFromMapping() {
+  const items = parseMappingItems(form.agentInputMappingJson) ?? []
+  agentParams.value = items
+    .filter((item) => !item.source || item.source === 'fixed')
+    .filter((item) => item.field)
+    .map((item) => ({
+      key: String(item.field),
+      value: item.fixed == null ? '' : String(item.fixed),
+    }))
+}
+
+/** 保存前把键值编辑器合并回映射 JSON（替换全部 fixed 条目，保留其它来源）。 */
+function mergeAgentParamsIntoMapping() {
+  const items = parseMappingItems(form.agentInputMappingJson)
+  if (!items) return
+  const kept = items.filter((item) => item.source && item.source !== 'fixed')
+  for (const param of agentParams.value) {
+    const key = param.key.trim()
+    if (!key) continue
+    kept.push({ field: key, source: 'fixed', fixed: param.value })
+  }
+  form.agentInputMappingJson = JSON.stringify(kept)
+}
+
+function addAgentParam() {
+  agentParams.value.push({ key: '', value: '' })
+}
+
+function removeAgentParam(index: number) {
+  agentParams.value.splice(index, 1)
+}
 
 /** 已发布图选项（下拉）：value=graphKey，label=名称（key） */
 const publishedGraphOptions = computed(() => publishedGraphs.value)
@@ -116,6 +169,8 @@ function deviceName(deviceId: number): string {
 }
 
 function openCreate() {
+  editingId.value = null
+  agentParams.value = []
   Object.assign(form, {
     code: '',
     name: '',
@@ -133,13 +188,66 @@ function openCreate() {
     agentInputMappingJson:
       '[{"field":"value","source":"PROPERTY_VALUE"},{"field":"reportTime","source":"REPORT_TIME"}]',
     agentFailureTemplateKey: '',
+    agentFailureConfigJson: '',
   })
   dialogVisible.value = true
 }
 
+function openEdit(row: IotEventRule) {
+  editingId.value = row.id
+  Object.assign(form, {
+    code: row.code,
+    name: row.name,
+    deviceId: row.deviceId,
+    ruleType: row.ruleType,
+    conditionJson: row.conditionJson,
+    debounceMs: row.debounceMs,
+    cooldownMs: row.cooldownMs,
+    continuousCount: row.continuousCount,
+    processEnabled: row.processEnabled,
+    processTemplateKey: row.processTemplateKey ?? '',
+    formMappingJson: row.formMappingJson ?? '',
+    agentEnabled: row.agentEnabled,
+    agentGraphKey: row.agentGraphKey ?? '',
+    agentInputMappingJson: row.agentInputMappingJson ?? '',
+    agentFailureTemplateKey: row.agentFailureTemplateKey ?? '',
+    agentFailureConfigJson: row.agentFailureConfigJson ?? '',
+  })
+  syncAgentParamsFromMapping()
+  dialogVisible.value = true
+}
+
+function failureConfigIsValid(): boolean {
+  const text = form.agentFailureConfigJson.trim()
+  if (!text) return true
+  try {
+    const parsed: unknown = JSON.parse(text)
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+  } catch {
+    return false
+  }
+}
+
 async function save() {
-  await createRule({ ...form })
-  ElMessage.success(t('iot.ruleCreatedDraft'))
+  if (form.agentEnabled === 1) {
+    if (parseMappingItems(form.agentInputMappingJson) === null) {
+      ElMessage.error(t('iot.agentInputMappingInvalid'))
+      return
+    }
+    mergeAgentParamsIntoMapping()
+  }
+  if (!failureConfigIsValid()) {
+    ElMessage.error(t('iot.agentFailureConfigInvalid'))
+    return
+  }
+  const payload = { ...form, agentFailureConfigJson: form.agentFailureConfigJson.trim() }
+  if (editingId.value === null) {
+    await createRule(payload)
+    ElMessage.success(t('iot.ruleCreatedDraft'))
+  } else {
+    await updateRule(editingId.value, payload)
+    ElMessage.success(t('iot.ruleUpdated'))
+  }
   dialogVisible.value = false
   void load()
 }
@@ -177,6 +285,11 @@ onMounted(() => void load())
 function rowActions(r: unknown): ListAction[] {
   const row = r as IotEventRule
   return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      onClick: () => openEdit(row),
+    },
     {
       key: 'publish',
       label: t('common.publish'),
@@ -280,11 +393,15 @@ function rowActions(r: unknown): ListAction[] {
           >
         </template>
       </el-table-column>
-      <ListActionsColumn :actions="rowActions" :width="150" />
+      <ListActionsColumn :actions="rowActions" :width="210" />
     </el-table>
   </StandardListTemplate>
 
-  <el-dialog v-model="dialogVisible" :title="t('common.newRule')" width="640px">
+  <el-dialog
+    v-model="dialogVisible"
+    :title="editingId === null ? t('common.newRule') : t('common.edit')"
+    width="680px"
+  >
     <el-form label-width="100px">
       <el-form-item :label="t('common.code')" required
         ><el-input v-model="form.code"
@@ -354,13 +471,38 @@ function rowActions(r: unknown): ListAction[] {
           />
         </el-select>
       </el-form-item>
+      <el-form-item
+        v-if="form.agentEnabled === 1"
+        :label="t('iot.agentJudgmentParams')"
+        class="agent-params"
+      >
+        <div class="agent-params__list">
+          <div v-for="(param, index) in agentParams" :key="index" class="agent-params__row">
+            <el-input v-model="param.key" :placeholder="t('iot.agentParamName')" />
+            <el-input v-model="param.value" :placeholder="t('iot.agentParamValue')" />
+            <el-button link type="danger" @click="removeAgentParam(index)">
+              {{ t('common.delete') }}
+            </el-button>
+          </div>
+          <el-button size="small" @click="addAgentParam">{{ t('iot.agentParamAdd') }}</el-button>
+          <div class="agent-params__hint">{{ t('iot.agentJudgmentParamsHint') }}</div>
+        </div>
+      </el-form-item>
       <el-form-item v-if="form.agentEnabled === 1" :label="t('iot.agentInputMapping')">
-        <el-input v-model="form.agentInputMappingJson" type="textarea" :rows="4" />
+        <el-input v-model="form.agentInputMappingJson" type="textarea" :rows="3" />
       </el-form-item>
       <el-form-item v-if="form.agentEnabled === 1" :label="t('iot.agentFailureTemplate')">
         <el-input
           v-model="form.agentFailureTemplateKey"
           :placeholder="t('iot.agentFailureTemplatePlaceholder')"
+        />
+      </el-form-item>
+      <el-form-item v-if="form.agentEnabled === 1" :label="t('iot.agentFailureConfig')">
+        <el-input
+          v-model="form.agentFailureConfigJson"
+          type="textarea"
+          :rows="4"
+          :placeholder="t('iot.agentFailureConfigPlaceholder')"
         />
       </el-form-item>
     </el-form>
@@ -425,3 +567,20 @@ function rowActions(r: unknown): ListAction[] {
     >
   </el-dialog>
 </template>
+
+<style scoped>
+.agent-params__list {
+  width: 100%;
+}
+.agent-params__row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.agent-params__hint {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+</style>
