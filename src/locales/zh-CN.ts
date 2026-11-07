@@ -296,7 +296,7 @@ export default {
     recentExecutionsEmpty: '暂无执行记录',
     quickEntries: '快捷入口',
     executionId: '执行 ID',
-    knowledgeStage3: '知识库将在阶段 3 开放',
+    knowledgeCount: '{count} 个知识库',
     graphName: '图名称',
     graphKey: '图 Key',
     executionDetailLoadFailed: '加载执行详情失败',
