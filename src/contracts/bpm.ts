@@ -174,6 +174,8 @@ export interface MyInstanceDetail {
   status: ProcessInstance['status']
   progress: MyInstanceProgressNode[]
   history: ApprovalHistoryItem[]
+  /** 引擎变量中的 formData 快照；程序化发起实例（无表单记录）详情页据此回退渲染 */
+  formData?: Record<string, unknown> | null
 }
 
 // ─── 业务发起草稿 DTO（对齐后端 BpmDraft） ───

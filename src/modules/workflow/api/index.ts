@@ -121,6 +121,8 @@ export interface InstanceRelation {
   instance?: InstanceRelationInfo | null
   /** 与我的详情同装配口径的流转记录；NONE 时缺省 */
   approvalHistory?: ApprovalHistoryItem[]
+  /** 引擎变量中的 formData 快照；程序化发起实例（无表单记录）详情页据此回退渲染 */
+  formData?: Record<string, unknown> | null
 }
 
 export async function getInstanceRelation(

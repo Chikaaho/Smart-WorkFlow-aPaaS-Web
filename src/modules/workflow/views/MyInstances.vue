@@ -223,6 +223,14 @@ const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref<MyInstanceDetail | null>(null)
 
+/** 程序化发起实例（Agent/IoT/API）无表单记录：以引擎 formData 快照作为详情回退数据。 */
+const detailFallbackRecord = computed<Record<string, unknown> | null>(() => {
+  const raw = detail.value?.formData
+  return raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : null
+})
+
 async function openDetail(row: ProcessInstance) {
   detailLoading.value = true
   try {
@@ -512,6 +520,7 @@ onMounted(loadList)
     :title="t('common.detail')"
     :form-key="detail?.formKey ?? ''"
     :record-id="detail?.businessKey ?? ''"
+    :fallback-record="detailFallbackRecord"
     :approval-history="detail?.history ?? []"
     :process-definition-key="detail?.instance.processDefKey ?? ''"
     :current-node-key="detail?.progress?.[0]?.nodeKey ?? ''"

@@ -23,6 +23,8 @@ const props = withDefaults(
     formKey?: string | null
     recordId?: string | null
     record?: Record<string, unknown> | null
+    /** 表单记录缺失时的回退数据（如程序化发起实例的引擎 formData 快照） */
+    fallbackRecord?: Record<string, unknown> | null
     processDefinitionKey?: string | null
     currentNodeKey?: string | null
     approvalHistory?: ApprovalHistoryItem[] | null
@@ -33,6 +35,7 @@ const props = withDefaults(
     formKey: '',
     recordId: '',
     record: null,
+    fallbackRecord: null,
     processDefinitionKey: '',
     currentNodeKey: '',
     approvalHistory: null,
@@ -63,6 +66,14 @@ const currentNodeKey = computed(
 )
 const hasFlow = computed(() => history.value.length > 0 || Boolean(processKey.value))
 
+/** 空对象视为无回退数据（不伪造空表单）。 */
+function usableFallback(raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  return Object.keys(raw as Record<string, unknown>).length > 0
+    ? (raw as Record<string, unknown>)
+    : null
+}
+
 async function load() {
   if (!props.modelValue) return
   const token = ++loadToken
@@ -79,7 +90,11 @@ async function load() {
             if (token === loadToken) loadedRecord.value = row
           })
           .catch(() => {
-            if (token === loadToken) errorMsg.value = '表单数据暂时无法显示'
+            // 程序化发起实例（Agent/IoT/API）没有表单记录：回退实例 formData 快照渲染
+            if (token !== loadToken) return
+            const fallback = usableFallback(props.fallbackRecord)
+            if (fallback) loadedRecord.value = fallback
+            else errorMsg.value = '表单数据暂时无法显示'
           }),
       )
     }
@@ -95,13 +110,29 @@ async function load() {
       )
     }
     await Promise.all(tasks)
+    if (token === loadToken && !props.record && !loadedRecord.value) {
+      const loadedRelation = relation.value as InstanceRelation | null
+      const fallback =
+        usableFallback(props.fallbackRecord) ?? usableFallback(loadedRelation?.formData)
+      if (fallback) {
+        loadedRecord.value = fallback
+        errorMsg.value = ''
+      }
+    }
   } finally {
     if (token === loadToken) internalLoading.value = false
   }
 }
 
 watch(
-  () => [props.modelValue, props.formKey, props.recordId, props.record, props.approvalHistory],
+  () => [
+    props.modelValue,
+    props.formKey,
+    props.recordId,
+    props.record,
+    props.fallbackRecord,
+    props.approvalHistory,
+  ],
   () => void load(),
   { immediate: true },
 )

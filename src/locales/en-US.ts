@@ -304,7 +304,7 @@ export default {
     recentExecutionsEmpty: 'No executions yet',
     quickEntries: 'Quick entries',
     executionId: 'Execution ID',
-    knowledgeStage3: 'Knowledge bases will be available in stage 3',
+    knowledgeCount: '{count} knowledge bases',
     graphName: 'Graph name',
     graphKey: 'Graph key',
     executionDetailLoadFailed: 'Could not load the execution details.',
