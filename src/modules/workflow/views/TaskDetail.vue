@@ -159,7 +159,12 @@ async function loadFormRecord() {
     const { getFormData } = await import('@/adapters/form-runtime')
     formRecord.value = await getFormData(d.formKey, d.businessKey)
   } catch {
-    formRecord.value = null
+    // 程序化发起实例（Agent/IoT/API）没有表单记录：回退引擎变量中的 formData 快照
+    const raw = d.processVariables?.formData
+    formRecord.value =
+      raw && typeof raw === 'object' && !Array.isArray(raw) && Object.keys(raw).length > 0
+        ? (raw as Record<string, unknown>)
+        : null
   } finally {
     formRecordLoading.value = false
   }

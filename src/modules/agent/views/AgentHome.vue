@@ -5,6 +5,7 @@ import { useI18n } from '@/locales'
 import {
   pageGraphDefs,
   pageGraphExecutionsWithVersion,
+  pageKnowledgeBases,
   pageModels,
   pageProviders,
 } from '@/modules/agent/api'
@@ -14,14 +15,14 @@ import { ApiError } from '@/foundation/request'
 const router = useRouter()
 const { t } = useI18n()
 /**
- * Agent 统一工作台（阶段 2）：供应商与模型、图定义、知识库、最近执行的概览与入口。
- * 知识库管理在阶段 3 提供；此处保留入口与占位说明。
+ * Agent 统一工作台：供应商与模型、图定义、知识库、最近执行的概览与入口。
  */
 const loading = ref(false)
 const error = ref('')
 const providerCount = ref(0)
 const modelCount = ref(0)
 const graphCount = ref(0)
+const knowledgeCount = ref(0)
 const recentExecutions = ref<AgentGraphExecution[]>([])
 
 const overviewCards = computed(() => [
@@ -43,7 +44,7 @@ const overviewCards = computed(() => [
   {
     key: 'knowledge',
     title: t('agent.overviewKnowledge'),
-    value: t('agent.knowledgeStage3'),
+    value: t('agent.knowledgeCount', { count: knowledgeCount.value }),
     to: '/agent/knowledge',
   },
   {
@@ -113,15 +114,17 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [providers, models, graphs, executions] = await Promise.all([
+    const [providers, models, graphs, knowledgeBases, executions] = await Promise.all([
       pageProviders({ pageNum: 1, pageSize: 1 }),
       pageModels({ pageNum: 1, pageSize: 1 }),
       pageGraphDefs({ pageNum: 1, pageSize: 1 }),
+      pageKnowledgeBases({ pageNum: 1, pageSize: 1 }),
       pageGraphExecutionsWithVersion({ pageNum: 1, pageSize: 5 }),
     ])
     providerCount.value = providers.total
     modelCount.value = models.total
     graphCount.value = graphs.total
+    knowledgeCount.value = knowledgeBases.total
     recentExecutions.value = executions.list
   } catch (err) {
     error.value = err instanceof ApiError ? err.msg : t('agent.workspaceLoadFailed')
