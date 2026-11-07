@@ -184,9 +184,10 @@ export function serializeRichText(html: string): string {
   return `${RICH_TEXT_PREFIX}${clean}`
 }
 
-/** 只读/历史渲染：令牌转固定内联样式，返回已清洗 HTML。 */
+/** 只读/历史渲染：令牌转固定内联样式，返回已清洗 HTML。
+ *  兼容未带前缀的旧 HTML 值（如 `<p>…</p>`）：同样走富文本白名单清洗后渲染，不直接显示标签字符。 */
 export function renderRichTextHtml(value: unknown): string {
-  const clean = sanitizeRichTextBody(richTextBody(value))
+  const clean = sanitizeRichTextBody(isRichText(value) ? richTextBody(value) : String(value ?? ''))
   const doc = new DOMParser().parseFromString(`<body>${clean}</body>`, 'text/html')
   for (const span of Array.from(doc.body.querySelectorAll('span'))) {
     const font = span.getAttribute('data-rt-font')

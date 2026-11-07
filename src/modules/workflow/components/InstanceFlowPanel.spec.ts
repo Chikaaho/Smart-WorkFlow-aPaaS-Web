@@ -79,6 +79,48 @@ describe('InstanceFlowPanel（表单详情外挂流程信息唯一控制面）',
     expect(vm.flowRecordRows[0].event).toContain('已同意')
   })
 
+  it('流转记录事件列展示结构化意见摘要（结论项 + 关键值，多行文本不挤占）', () => {
+    const rows = history([
+      {},
+      {
+        approvalResult: 'APPROVED',
+        endTime: '2026-10-17T10:30:00',
+        opinionFields: [
+          {
+            name: 'planReadiness',
+            label: '方案完备性',
+            type: 'RADIO',
+            value: '完备',
+            displayValue: '完备',
+          },
+          {
+            name: 'fieldCommander',
+            label: '现场总指挥',
+            type: 'USER',
+            value: '9',
+            displayValue: '赵磊',
+          },
+          {
+            name: 'rollbackNotes',
+            label: '回退方案可行性说明',
+            type: 'TEXTAREA',
+            value: 'x',
+            displayValue: '回退脚本已预演通过',
+          },
+        ],
+      },
+      {},
+    ])
+    const wrapper = mount(InstanceFlowPanel, {
+      props: { approvalHistory: rows, processDefinitionKey: 'leave' },
+      global: { plugins: [i18n], stubs },
+    })
+
+    const vm = wrapper.vm as unknown as { flowRecordRows: { event: string }[] }
+    expect(vm.flowRecordRows[1].event).toBe('已同意 · 完备 · 现场总指挥：赵磊')
+    expect(vm.flowRecordRows[1].event).not.toContain('回退脚本已预演通过')
+  })
+
   it('审批详情列表排除会签派发通知行，仅保留审批人行', () => {
     const wrapper = mount(InstanceFlowPanel, {
       props: { approvalHistory: history(), processDefinitionKey: 'leave' },

@@ -119,6 +119,25 @@ export async function loadDeptChoices(): Promise<DeptChoice[]> {
   return out
 }
 
+/**
+ * 部门候选（只读回显数据源）：登录即可调用，返回当前租户正常部门的最小字段。
+ * <p>只读详情用它把部门 ID 解析为部门名，不依赖管理端的 system:dept:list 权限。</p>
+ */
+export async function loadDeptOptions(): Promise<DeptChoice[]> {
+  const rows = await request<
+    Array<{ id: string | number; name: string; parentId?: string | number | null }>
+  >({
+    method: 'GET',
+    url: '/system/dept/options',
+  })
+  return (rows ?? []).map((row) => ({
+    id: String(row.id),
+    label: row.name,
+    name: row.name,
+    parentId: row.parentId != null ? String(row.parentId) : null,
+  }))
+}
+
 // ==================== 受控外部数据源查询（设计预览与运行读取同一入口） ====================
 
 export interface ExtQueryRow {

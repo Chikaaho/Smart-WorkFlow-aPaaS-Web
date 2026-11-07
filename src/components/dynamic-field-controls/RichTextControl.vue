@@ -48,7 +48,11 @@ let pendingSize: number | null = null
 const fontOptions = RICH_TEXT_FONTS
 const sizeOptions = RICH_TEXT_SIZES
 const colorOptions = RICH_TEXT_COLORS
-const readonlyRich = computed(() => isRichText(props.modelValue))
+/** 旧数据兼容：未带富文本前缀但含 HTML 标签的值（如 `<p>…</p>`）同样按富文本只读渲染。 */
+const LEGACY_HTML_TAG_RE = /<\/?(?:p|div|br|ul|ol|li|strong|b|em|i|s|span|h[1-6])\b[^>]*>/i
+const readonlyRich = computed(
+  () => isRichText(props.modelValue) || LEGACY_HTML_TAG_RE.test(String(props.modelValue ?? '')),
+)
 const readonlyValue = computed(() => String(props.modelValue ?? ''))
 const visibleCount = computed(() => Array.from(richTextVisibleText(props.modelValue)).length)
 const maxLength = computed(() => Number(props.field.length ?? 0))

@@ -6,11 +6,12 @@ import type { DynamicFieldSchema } from '../dynamic-field-registry'
 
 vi.mock('@/modules/form/api/i2-choices', () => ({
   loadDeptChoices: vi.fn(),
+  loadDeptOptions: vi.fn(),
 }))
 
 // V012-BUG-019 复开：部门控件改为系统弹窗选择（不再下拉）
 import DeptControl from './DeptControl.vue'
-import { loadDeptChoices } from '@/modules/form/api/i2-choices'
+import { loadDeptChoices, loadDeptOptions } from '@/modules/form/api/i2-choices'
 
 const field = {
   name: 'dept',
@@ -33,6 +34,11 @@ describe('DeptControl 弹窗选择', () => {
       { id: '10', label: '总公司' },
       { id: '11', label: '　研发部' },
       { id: '12', label: '　市场部' },
+    ])
+    vi.mocked(loadDeptOptions).mockResolvedValue([
+      { id: '10', label: '总公司' },
+      { id: '11', label: '研发部' },
+      { id: '12', label: '市场部' },
     ])
   })
 
@@ -91,6 +97,7 @@ describe('DeptControl 弹窗选择', () => {
   })
 
   it('readonly 无组织目录权限时按业务数量兜底，不暴露内部 ID', async () => {
+    vi.mocked(loadDeptOptions).mockRejectedValueOnce(new Error('forbidden'))
     vi.mocked(loadDeptChoices).mockRejectedValueOnce(new Error('forbidden'))
     const wrapper = mount(DeptControl, {
       ...mountOptions,

@@ -17,7 +17,7 @@ import { computed, onMounted, ref } from 'vue'
 import { Search, CircleClose } from '@element-plus/icons-vue'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
 import { normalizeIdList } from '../dynamic-field-utils'
-import { loadDeptChoices } from '@/modules/form/api/i2-choices'
+import { loadDeptChoices, loadDeptOptions } from '@/modules/form/api/i2-choices'
 import ReadonlyValue from './ReadonlyValue.vue'
 import folderIcon from '@/assets/form-palette/folder.svg'
 
@@ -87,9 +87,28 @@ const unresolvedCount = computed(() =>
 
 onMounted(async () => {
   try {
-    options.value = await loadDeptChoices()
+    if (props.readonly) {
+      // 只读回显：先走部门树（管理端/既有行为），无权限或为空时回退
+      // 登录即可用的候选接口（不依赖管理端部门树权限），最后才按业务数量兜底。
+      let opts: typeof options.value = []
+      try {
+        opts = await loadDeptChoices()
+      } catch {
+        opts = []
+      }
+      if (opts.length === 0) {
+        try {
+          opts = await loadDeptOptions()
+        } catch {
+          opts = []
+        }
+      }
+      options.value = opts
+    } else {
+      options.value = await loadDeptChoices()
+    }
   } catch {
-    // 只读回看不弹错误提示：无组织目录权限时按业务数量兜底。
+    // 只读回看不弹错误提示：候选不可用时按业务数量兜底。
     if (!props.readonly) ElMessage.error(t('common.loadFailed'))
     // R2b：请求层只抛 ApiError、不做全局提示，catch 不说话用户就什么都看不到
     options.value = []
