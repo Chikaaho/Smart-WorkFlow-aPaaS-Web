@@ -28,12 +28,15 @@ const props = withDefaults(
     referenceLabel?: string
     formKey?: string
     recordId?: string
+    /** 是否渲染字段标题：父级已提供同名标签时传 false，避免标签重复。 */
+    showLabel?: boolean
   }>(),
   {
     readonly: false,
     referenceLabel: '',
     formKey: '',
     recordId: '',
+    showLabel: true,
   },
 )
 
@@ -49,8 +52,8 @@ const controlComponent = computed(
 /** 字段标题位置（缺省上方左对齐）。 */
 const labelPositionClass = computed(() => fieldLabelPositionClass(props.field.labelPosition))
 
-/** 文字组件不带独立标题：正文即内容，避免标题与正文重复。 */
-const showLabel = computed(() => props.field.type !== 'LABEL')
+/** 文字组件不带独立标题：正文即内容，避免标题与正文重复；父级显式关闭时不渲染。 */
+const showLabel = computed(() => props.showLabel !== false && props.field.type !== 'LABEL')
 
 /** 动态挂载控件的事件负载无静态类型（<component :is>），显式声明为 unknown。 */
 function onControlUpdate(value: unknown) {

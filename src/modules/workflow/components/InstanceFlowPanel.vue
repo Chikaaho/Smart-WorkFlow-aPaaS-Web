@@ -57,6 +57,23 @@ function getApprovalResultType(result: string | null): 'success' | 'danger' | 'i
   return APPROVAL_RESULT_MAP[result]?.type ?? 'info'
 }
 
+/** 流转记录“事件/结果”摘要：结论项 + 关键值（人员姓名/数值/多选），最多 3 段。
+ *  意见字段展示视图由后端按冻结表单配置给出，旧记录缺快照时回退意见备注。 */
+function opinionSummaryOf(row: ApprovalHistoryItem): string {
+  const fields = row.opinionFields ?? []
+  if (fields.length === 0) return ''
+  const parts: string[] = []
+  for (const field of fields) {
+    const value = String(field.displayValue ?? '').trim()
+    if (!value) continue
+    const longText = field.type === 'TEXTAREA' || field.type === 'TEXT'
+    if (longText && parts.length > 0) continue
+    parts.push(parts.length === 0 ? value : `${field.label}：${value}`)
+    if (parts.length >= 3) break
+  }
+  return parts.join(' · ')
+}
+
 /** 流转记录四列视图（时间/流转节点/操作人/事件·结果）：行数据完全由真实审批历史派生。 */
 const flowRecordRows = computed(() =>
   props.approvalHistory.map((row) => ({
@@ -67,9 +84,10 @@ const flowRecordRows = computed(() =>
     event:
       [
         row.approvalResult ? getApprovalResultLabel(row.approvalResult) : (row.action ?? null),
-        typeof row.opinionData?.comment === 'string' && row.opinionData.comment
-          ? row.opinionData.comment
-          : null,
+        opinionSummaryOf(row) ||
+          (typeof row.opinionData?.comment === 'string' && row.opinionData.comment
+            ? row.opinionData.comment
+            : null),
       ]
         .filter(Boolean)
         .join(' · ') || '-',
@@ -386,6 +404,7 @@ const OPINION_ATTACHMENT_KEY = /^(attachments?|files?|附录|附件)/i
 const opinionDetailEntries = computed(() => {
   const row = opinionDetailRow.value
   if (!row?.opinionData) return []
+  if (row.opinionFields?.length) return []
   return Object.entries(row.opinionData)
     .filter(
       ([key, value]) =>
@@ -401,6 +420,21 @@ const opinionDetailEntries = computed(() => {
         ? opinionUserDisplay(key, value)
         : String(value),
     }))
+})
+
+/** 结构化意见字段（后端按冻结表单配置给出的展示视图）：按表单顺序逐项渲染，长文本多行展示。 */
+const opinionDetailFieldRows = computed(() => {
+  const row = opinionDetailRow.value
+  if (!row?.opinionFields?.length) return []
+  return row.opinionFields.map((field) => {
+    const value = String(field.displayValue ?? '')
+    return {
+      name: field.name,
+      label: field.label || field.name,
+      value,
+      multiline: field.type === 'TEXTAREA' || (field.type === 'TEXT' && value.length > 40),
+    }
+  })
 })
 
 /** 设计（意见详情）的已确认检查项区块：仅当字段值为非空数组时按检查项芯片渲染。 */
@@ -618,9 +652,10 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
           <el-table-column :label="t('workflow.actionOpinion')" min-width="432">
             <template #default="{ row }">
               {{
-                row.opinionFormId
+                opinionSummaryOf(row) ||
+                (row.opinionFormId
                   ? t('taskDetailUi.customFormLabel')
-                  : (row.opinionData?.comment ?? row.action ?? '-')
+                  : (row.opinionData?.comment ?? row.action ?? '-'))
               }}
               ·
               {{ row.endTime ?? row.createTime }}
@@ -670,17 +705,33 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
         </div>
       </template>
       <div v-if="opinionDetailRow" class="p53-opinion-panel">
-        <h3 v-if="opinionDetailRow.opinionFormId">审批意见</h3>
+        <template v-if="opinionDetailFieldRows.length > 0">
+          <h3>审批意见</h3>
+          <div class="p53-opinion-grid">
+            <div v-for="entry in opinionDetailFieldRows" :key="entry.name">
+              <label>{{ entry.label }}</label>
+              <div v-if="entry.multiline" class="p53-opinion-text">
+                {{ entry.value || t('taskDetailUi.opinionEmpty') }}
+              </div>
+              <b v-else>{{ entry.value || t('taskDetailUi.opinionEmpty') }}</b>
+            </div>
+          </div>
+        </template>
+        <h3 v-else-if="opinionDetailRow.opinionFormId">审批意见</h3>
         <div v-if="opinionDetailEntries.length > 0" class="p53-opinion-grid">
           <div v-for="entry in opinionDetailEntries" :key="entry.key">
             <label>{{ entry.key }}</label>
             <b>{{ entry.value }}</b>
           </div>
         </div>
-        <label>{{ t('taskDetailUi.opinionCommentLabel') }}</label>
-        <div class="p53-opinion-comment">
-          {{ opinionDetailRow.opinionData?.comment ?? t('taskDetailUi.opinionEmpty') }}
-        </div>
+        <template
+          v-if="opinionDetailFieldRows.length === 0 || opinionDetailRow.opinionData?.comment"
+        >
+          <label>{{ t('taskDetailUi.opinionCommentLabel') }}</label>
+          <div class="p53-opinion-comment">
+            {{ opinionDetailRow.opinionData?.comment ?? t('taskDetailUi.opinionEmpty') }}
+          </div>
+        </template>
         <template v-for="entry in opinionDetailCheckEntries" :key="entry[0]">
           <label>{{ entry[0] }}</label>
           <div class="p53-opinion-checks">
@@ -1219,6 +1270,15 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
 .p53-opinion-grid b {
   font-size: 14px;
   color: var(--sw-text-primary);
+}
+/* 多行长文本（意见多行字段）：保留换行、不截断。 */
+.p53-opinion-text {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.7;
+  color: var(--sw-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .p53-opinion-comment {
   min-height: 46px;

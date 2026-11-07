@@ -1323,6 +1323,7 @@ onMounted(loadDetail)
                 v-else-if="field.type === 'USER'"
                 :field="{ name: field.key, type: 'USER', label: field.label }"
                 :model-value="opinionFieldValue(field)"
+                :show-label="false"
                 @update:model-value="setOpinionFieldValue(field.key, $event)"
               />
               <select
@@ -2026,10 +2027,13 @@ onMounted(loadDetail)
   flex-wrap: wrap;
   gap: 12px;
 }
+/* 单选项整项不收缩、不换行：避免窄容器把“按计划执行”挤成逐字折行。 */
 .opinion-option {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .required-mark {
   color: var(--el-color-danger);

@@ -102,6 +102,14 @@ describe('rich-text 编码与安全边界', () => {
     expect(clean).toContain('<li>列表项</li>')
   })
 
+  it('只读渲染兼容未带前缀的旧 HTML：按富文本清洗渲染，不直接显示标签字符', () => {
+    const html = renderRichTextHtml(
+      '<p>演练期间核心交易与订单服务各中断约 10 分钟。</p><p>已提前通知客服与运营。</p>',
+    )
+    expect(html).toContain('<p>演练期间核心交易与订单服务各中断约 10 分钟。</p>')
+    expect(html).not.toContain('&lt;p&gt;')
+    expect(renderRichTextHtml('<script>alert(1)</script>旧数据')).not.toContain('script')
+  })
   it('只读渲染把对齐/缩进令牌转固定内联样式', () => {
     const html = renderRichTextHtml(
       `${RICH_TEXT_PREFIX}<p data-rt-align="center" data-rt-indent="2">居中</p>`,
