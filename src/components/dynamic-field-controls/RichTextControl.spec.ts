@@ -41,3 +41,18 @@ describe('RichTextControl 基础排版工具栏', () => {
     expect(emitted!.at(-1)![0]).toBe(`${RICH_TEXT_PREFIX}<p>价格<s>99</s>1</p>`)
   })
 })
+
+describe('RichTextControl 只读旧数据兼容', () => {
+  it('未带前缀的旧 <p> 值按富文本渲染，不显示标签字符', () => {
+    const wrapper = mountControl('<p>演练期间核心交易各中断约 10 分钟。</p>', true)
+    const readonly = wrapper.find('[data-test="rich-text-readonly"]')
+    expect(readonly.exists()).toBe(true)
+    expect(readonly.text()).toContain('演练期间核心交易各中断约 10 分钟。')
+    expect(readonly.text()).not.toContain('<p>')
+  })
+
+  it('纯文本旧值仍按纯文本展示（不当作 HTML）', () => {
+    const wrapper = mountControl('两行文本\n第二行', true)
+    expect(wrapper.find('[data-test="rich-text-readonly"]').exists()).toBe(false)
+  })
+})

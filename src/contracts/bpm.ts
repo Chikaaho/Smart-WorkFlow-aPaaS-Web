@@ -70,7 +70,21 @@ export interface ApprovalHistoryItem {
   actionRecordId?: string | number | null
   opinionFormId?: string | null
   opinionFormVersion?: string | null
+  /**
+   * 意见表单字段展示视图（后端按提交时冻结配置给出中文标签与展示值）：
+   * 人员已解析姓名、日期本地格式、多选拼接；旧记录缺快照时为空。
+   */
+  opinionFields?: OpinionFieldView[] | null
   approvalResult: 'APPROVED' | 'REJECTED' | null // 审批结果：APPROVED=通过, REJECTED=驳回, null=进行中
+}
+
+/** 单个意见字段展示视图（对齐后端 ApprovalHistoryItemDTO.OpinionFieldView）。 */
+export interface OpinionFieldView {
+  name: string
+  label: string
+  type: string
+  value?: unknown
+  displayValue?: string | null
 }
 
 // ─── 已办任务 DTO（对齐后端 ProcessedTaskRespDTO） ───
