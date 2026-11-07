@@ -652,7 +652,7 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
           <el-table-column :label="t('workflow.actionOpinion')" min-width="432">
             <template #default="{ row }">
               {{
-                opinionSummaryOf(row) ||
+                opinionSummaryOf(row as ApprovalHistoryItem) ||
                 (row.opinionFormId
                   ? t('taskDetailUi.customFormLabel')
                   : (row.opinionData?.comment ?? row.action ?? '-'))
