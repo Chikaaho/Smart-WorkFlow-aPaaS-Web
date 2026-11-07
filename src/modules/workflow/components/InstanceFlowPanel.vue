@@ -437,10 +437,12 @@ const opinionDetailFieldRows = computed(() => {
   })
 })
 
-/** 设计（意见详情）的已确认检查项区块：仅当字段值为非空数组时按检查项芯片渲染。 */
+/** 设计（意见详情）的已确认检查项区块：仅当字段值为非空数组时按检查项芯片渲染。
+ *  结构化字段已包含这些数组字段（按表单顺序给出中文值），存在时不再重复渲染。 */
 const opinionDetailCheckEntries = computed(() => {
   const row = opinionDetailRow.value
   if (!row?.opinionData) return []
+  if (row.opinionFields?.length) return []
   return Object.entries(row.opinionData)
     .filter(([key, value]) => key !== 'comment' && Array.isArray(value) && value.length > 0)
     .map(

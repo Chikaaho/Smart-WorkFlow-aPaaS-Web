@@ -325,4 +325,41 @@ describe('InstanceFlowPanel 意见附件受控查看（direction-ui-completion-0
     await flushPromises()
     expect(mockDownloadOpinionAttachment).toHaveBeenCalledWith(77, 'store/key-1', '方案.pdf')
   })
+
+  it('结构化意见已含数组字段时，不再按旧检查项区块重复渲染同一标签', async () => {
+    const wrapper = mount(InstanceFlowPanel, {
+      props: { approvalHistory: [], processDefinitionKey: 'leave' },
+      global: { plugins: [i18n], stubs },
+    })
+    const vm = wrapper.vm as unknown as {
+      opinionDetailRow: ApprovalHistoryItem | null
+      opinionDetailVisible: boolean
+    }
+    vm.opinionDetailRow = {
+      taskId: 's2',
+      taskName: '技术委员会会签',
+      assignee: '9',
+      createTime: '2026-11-08T04:54:00',
+      endTime: '2026-11-08T04:54:04',
+      approvalResult: 'APPROVED',
+      action: 'APPROVE',
+      opinionData: { impactSystems: ['通信系统'] },
+      opinionFields: [
+        {
+          name: 'impactSystems',
+          label: '影响系统清单',
+          type: 'CHECKBOX',
+          value: ['通信系统'],
+          displayValue: '通信系统',
+        },
+      ],
+    }
+    vm.opinionDetailVisible = true
+    await flushPromises()
+
+    expect(wrapper.findAll('.p53-opinion-checks')).toHaveLength(0)
+    const labels = wrapper.findAll('.p53-opinion-grid label').map((node) => node.text())
+    expect(labels.filter((label) => label === '影响系统清单')).toHaveLength(1)
+    expect(wrapper.find('.p53-opinion-grid').text()).toContain('通信系统')
+  })
 })
