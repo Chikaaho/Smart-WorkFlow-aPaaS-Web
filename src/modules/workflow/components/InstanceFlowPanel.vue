@@ -77,32 +77,35 @@ function opinionSummarySegment(field: OpinionFieldView): string | null {
   return unit ? `${base}：${value} ${unit}` : `${base}：${value}`
 }
 
+function capSegment(segment: string, cap: boolean): string {
+  return cap && segment.length > 64 ? `${segment.slice(0, 64)}…` : segment
+}
+
+/** 无意见表单字段时的备注段：同样带标签（审批意见：…）。 */
+function opinionCommentSegment(row: ApprovalHistoryItem, cap: boolean): string {
+  const comment = typeof row.opinionData?.comment === 'string' ? row.opinionData.comment.trim() : ''
+  return comment ? capSegment(`${t('taskDetailUi.opinionCommentLabel')}：${comment}`, cap) : ''
+}
+
 /** 流转记录“事件/结果”摘要：每段「标签：值」（数值带单位），最多 3 段。
  *  cap=true 时长文本截断省略（悬浮标题仍给全文）；意见字段展示视图由后端按冻结表单
- *  配置给出，旧记录缺快照时回退意见备注。 */
+ *  配置给出，无字段（备注型意见、旧记录缺快照）时回退为「审批意见：备注」。 */
 function opinionSummaryOf(row: ApprovalHistoryItem, cap = false): string {
-  const fields = row.opinionFields ?? []
-  if (fields.length === 0) return ''
   const parts: string[] = []
-  for (const field of fields) {
+  for (const field of row.opinionFields ?? []) {
     const segment = opinionSummarySegment(field)
     if (!segment) continue
     const longText = field.type === 'TEXTAREA' || field.type === 'TEXT'
     if (longText && parts.length > 0) continue
-    parts.push(cap && longText && segment.length > 64 ? `${segment.slice(0, 64)}…` : segment)
+    parts.push(longText ? capSegment(segment, cap) : segment)
     if (parts.length >= 3) break
   }
-  return parts.join(' · ')
+  return parts.length > 0 ? parts.join(' · ') : opinionCommentSegment(row, cap)
 }
 
-/** 事件/意见列取值：结构化摘要优先（title 供悬浮全文），旧记录回退意见备注。 */
+/** 事件/意见列取值：显示截断摘要，title 供悬浮全文。 */
 function opinionEventOf(row: ApprovalHistoryItem): { event: string; title: string } {
-  const summary = opinionSummaryOf(row)
-  const fallback =
-    typeof row.opinionData?.comment === 'string' && row.opinionData.comment
-      ? row.opinionData.comment
-      : ''
-  return { event: opinionSummaryOf(row, true) || fallback, title: summary || fallback }
+  return { event: opinionSummaryOf(row, true), title: opinionSummaryOf(row) }
 }
 
 /** 会签弹窗行内意见：与流转记录同规则（每段「标签：值」），旧记录回退意见备注。 */
@@ -703,12 +706,12 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
               >
                 {{
                   opinionSummaryOf(row as ApprovalHistoryItem, true) ||
-                  (row.opinionFormId
-                    ? t('taskDetailUi.customFormLabel')
-                    : (row.opinionData?.comment ?? row.action ?? '-'))
+                  (row.opinionFormId ? t('taskDetailUi.customFormLabel') : (row.action ?? '-'))
                 }}
                 ·
-                {{ row.endTime ?? row.createTime }}
+                {{ t('taskDetailUi.approvalTimeLabel') }}：{{
+                  formatWhen(row.endTime ?? row.createTime) || '-'
+                }}
               </span>
             </template>
           </el-table-column>
@@ -877,9 +880,7 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
               >
                 {{
                   signOpinionText(row as ApprovalHistoryItem) ||
-                  (row.opinionFormId
-                    ? t('taskDetailUi.customFormLabel')
-                    : (row.opinionData?.comment ?? row.action ?? '-'))
+                  (row.opinionFormId ? t('taskDetailUi.customFormLabel') : (row.action ?? '-'))
                 }}
               </span>
             </template>
