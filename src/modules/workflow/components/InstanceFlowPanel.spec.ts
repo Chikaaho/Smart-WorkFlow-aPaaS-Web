@@ -567,4 +567,48 @@ describe('InstanceFlowPanel 意见摘要每段带标签（0.3.3 H6）', () => {
     )
     expect(vm.signOpinionText({ ...row, opinionFields: [] })).toBe('')
   })
+
+  it('备注型意见（无意见表单字段）同样带「审批意见」标签，长备注截断且悬浮全文', () => {
+    const remark = eventOf([], {
+      opinionFormId: 'DEFAULT_REMARK',
+      opinionData: { comment: '校保卫处已签收上报，要求 24 小时内提交书面处置报告，同意结档。' },
+    })
+    expect(remark.event).toBe(
+      '已同意 · 审批意见：校保卫处已签收上报，要求 24 小时内提交书面处置报告，同意结档。',
+    )
+
+    const longComment = '保卫部确认：演练期间 A/B 机房出入登记与监控值守已安排双人双岗。'.repeat(3)
+    const long = eventOf([], { opinionData: { comment: longComment } })
+    expect(long.event.endsWith('…')).toBe(true)
+    expect(long.eventTitle).toBe(`审批意见：${longComment}`)
+  })
+
+  it('会签弹窗：备注型意见显示「审批意见：备注」，不再只显示“自定义审批表单”', () => {
+    const wrapper = mount(InstanceFlowPanel, {
+      props: {
+        approvalHistory: history([
+          {},
+          {
+            taskId: 'bl-1',
+            taskName: '参与部门分管领导并行审批',
+            assignee: '9',
+            assigneeName: '赵磊',
+            approvalResult: 'APPROVED',
+            endTime: '2026-11-08T13:23:41.991',
+            opinionFormId: 'DEFAULT_REMARK',
+            opinionData: { comment: '保卫部确认：消防通道保持畅通。' },
+            opinionFields: [],
+          },
+          {},
+        ]),
+        processDefinitionKey: 'leave',
+      },
+      global: { plugins: [i18n], stubs },
+    })
+    const vm = wrapper.vm as unknown as {
+      signOpinionText: (row: ApprovalHistoryItem) => string
+    }
+    const row = wrapper.props('approvalHistory')[1] as ApprovalHistoryItem
+    expect(vm.signOpinionText(row)).toBe('审批意见：保卫部确认：消防通道保持畅通。')
+  })
 })
