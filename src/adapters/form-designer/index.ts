@@ -100,6 +100,11 @@ interface RawFieldDef extends RawSubFieldDef {
   subFields?: RawSubFieldDef[]
   /** 多行纯文本（TextField.multiline 契约键透传；缺省单行语义不变）。 */
   multiline?: boolean
+  /** 只读 JSON 参数中文映射（TextField.jsonDisplay 契约键透传；形状在 mapRawField 归一）。 */
+  jsonDisplay?: {
+    keyLabels?: Record<string, string>
+    valueLabels?: Record<string, string>
+  }
   colSpan?: unknown
   /** 字段标题位置（主字段专属；子表列头不适用）。 */
   labelPosition?: string
@@ -250,6 +255,8 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
       ...base,
       type,
       ...(raw.multiline !== undefined ? { multiline: raw.multiline } : {}),
+      // 0.3.6 H8：JSON 参数中文映射整键透传（键内非法条目在消费端按原样回退）
+      ...(raw.jsonDisplay !== undefined ? { jsonDisplay: raw.jsonDisplay } : {}),
     } as FormSchemaField
   }
 

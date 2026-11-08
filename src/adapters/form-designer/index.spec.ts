@@ -24,6 +24,33 @@ describe('adapters/form-designer/parseDefinition', () => {
     })
   })
 
+  it('maps TEXT jsonDisplay mapping verbatim；未配置不落键（0.3.6 H8 中文映射透传）', () => {
+    const raw = JSON.stringify({
+      title: 'Drill',
+      fields: [
+        {
+          name: 'deviceCommandPayload',
+          type: 'TEXT',
+          label: '到点下发的设备指令',
+          jsonDisplay: {
+            keyLabels: { drillCode: '演练编号', switchbackWithinMinutes: '回切时限（分钟）' },
+            valueLabels: { switch: '切换' },
+          },
+        },
+        { name: 'plain', type: 'TEXT', label: '普通文本' },
+      ],
+    })
+    const schema = parseDefinition(raw)
+    expect(schema.fields[0]).toMatchObject({
+      name: 'deviceCommandPayload',
+      jsonDisplay: {
+        keyLabels: { drillCode: '演练编号', switchbackWithinMinutes: '回切时限（分钟）' },
+        valueLabels: { switch: '切换' },
+      },
+    })
+    expect((schema.fields[1] as { jsonDisplay?: unknown }).jsonDisplay).toBeUndefined()
+  })
+
   it('normalizes allowed integration identifiers from the definition snapshot', () => {
     const raw = JSON.stringify({
       title: 'Integrated',
