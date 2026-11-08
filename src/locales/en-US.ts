@@ -1119,6 +1119,12 @@ export default {
     fieldInputMode: 'Input mode',
     fieldInputModeSingle: 'Single line',
     fieldInputModeMultiline: 'Multiple lines',
+    jsonKeyLabels: 'Key labels (JSON params)',
+    jsonKeyLabelsPlaceholder:
+      'One per line: key=Chinese label, e.g. drillCode=演练编号; leave empty to show raw keys',
+    jsonValueLabels: 'Value labels (JSON params)',
+    jsonValueLabelsPlaceholder:
+      'One per line: value=Chinese label, e.g. switch=切换; leave empty to show raw values',
     fieldTypeRichText: 'Rich text',
     richTextToolbar: 'Rich text formatting toolbar',
     richTextPlaceholder: 'Enter content',
