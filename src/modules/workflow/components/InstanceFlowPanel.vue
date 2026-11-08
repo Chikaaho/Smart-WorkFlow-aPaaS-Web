@@ -7,7 +7,7 @@ import ProcessGraphView from '@/components/ProcessGraphView.vue'
 import { ApiError } from '@/foundation/request'
 import { downloadOpinionAttachment } from '@/modules/workflow/api'
 import { getFormDefinition, resolveUserDisplayNames } from '@/adapters/form-runtime'
-import type { ApprovalHistoryItem } from '@/contracts/bpm'
+import type { ApprovalHistoryItem, OpinionFieldView } from '@/contracts/bpm'
 import type { ProcessGraphDocument } from '@/contracts/process-graph'
 import { deriveProcessTrace } from '../utils/process-trace'
 
@@ -57,41 +57,79 @@ function getApprovalResultType(result: string | null): 'success' | 'danger' | 'i
   return APPROVAL_RESULT_MAP[result]?.type ?? 'info'
 }
 
-/** 流转记录“事件/结果”摘要：结论项 + 关键值（人员姓名/数值/多选），最多 3 段。
- *  意见字段展示视图由后端按冻结表单配置给出，旧记录缺快照时回退意见备注。 */
-function opinionSummaryOf(row: ApprovalHistoryItem): string {
+/** 数值字段单位：标签尾部「（单位）」提升为值后单位（预计停机时长（分钟）+300 → 预计停机时长：300 分钟）。 */
+function labelUnitOf(label: string): { base: string; unit: string } {
+  const match = /（([^（）]+)）\s*$/.exec(label)
+  if (!match || match.index === undefined) return { base: label, unit: '' }
+  return { base: label.slice(0, match.index), unit: match[1] }
+}
+
+/** 单个意见字段的摘要段：统一「标签：值」，数值带单位，是/否字段映射中文。 */
+function opinionSummarySegment(field: OpinionFieldView): string | null {
+  let value = String(field.displayValue ?? '').trim()
+  if (!value) return null
+  if (field.type === 'BOOL') {
+    const raw = field.value
+    value = raw === true || raw === 'true' ? '是' : raw === false || raw === 'false' ? '否' : value
+  }
+  const { base, unit } =
+    field.type === 'NUMBER' ? labelUnitOf(field.label) : { base: field.label, unit: '' }
+  return unit ? `${base}：${value} ${unit}` : `${base}：${value}`
+}
+
+/** 流转记录“事件/结果”摘要：每段「标签：值」（数值带单位），最多 3 段。
+ *  cap=true 时长文本截断省略（悬浮标题仍给全文）；意见字段展示视图由后端按冻结表单
+ *  配置给出，旧记录缺快照时回退意见备注。 */
+function opinionSummaryOf(row: ApprovalHistoryItem, cap = false): string {
   const fields = row.opinionFields ?? []
   if (fields.length === 0) return ''
   const parts: string[] = []
   for (const field of fields) {
-    const value = String(field.displayValue ?? '').trim()
-    if (!value) continue
+    const segment = opinionSummarySegment(field)
+    if (!segment) continue
     const longText = field.type === 'TEXTAREA' || field.type === 'TEXT'
     if (longText && parts.length > 0) continue
-    parts.push(parts.length === 0 ? value : `${field.label}：${value}`)
+    parts.push(cap && longText && segment.length > 64 ? `${segment.slice(0, 64)}…` : segment)
     if (parts.length >= 3) break
   }
   return parts.join(' · ')
 }
 
-/** 流转记录四列视图（时间/流转节点/操作人/事件·结果）：行数据完全由真实审批历史派生。 */
+/** 事件/意见列取值：结构化摘要优先（title 供悬浮全文），旧记录回退意见备注。 */
+function opinionEventOf(row: ApprovalHistoryItem): { event: string; title: string } {
+  const summary = opinionSummaryOf(row)
+  const fallback =
+    typeof row.opinionData?.comment === 'string' && row.opinionData.comment
+      ? row.opinionData.comment
+      : ''
+  return { event: opinionSummaryOf(row, true) || fallback, title: summary || fallback }
+}
+
+/** 会签弹窗行内意见：与流转记录同规则（每段「标签：值」），旧记录回退意见备注。 */
+function signOpinionText(row: ApprovalHistoryItem): string {
+  return opinionSummaryOf(row, true)
+}
+
+/** 流转记录四列视图（时间/流转节点/操作人/事件·结果）：行数据完全由真实审批历史派生。
+ *  eventTitle 保留未截断摘要，供悬浮查看全文。 */
 const flowRecordRows = computed(() =>
-  props.approvalHistory.map((row) => ({
-    key: row.taskId,
-    time: row.createTime ? row.createTime.slice(5, 16).replace('T', ' ') : '-',
-    node: row.taskName,
-    operator: row.assigneeName ?? row.assignee ?? '-',
-    event:
-      [
-        row.approvalResult ? getApprovalResultLabel(row.approvalResult) : (row.action ?? null),
-        opinionSummaryOf(row) ||
-          (typeof row.opinionData?.comment === 'string' && row.opinionData.comment
-            ? row.opinionData.comment
-            : null),
-      ]
-        .filter(Boolean)
-        .join(' · ') || '-',
-  })),
+  props.approvalHistory.map((row) => {
+    const { event: summary, title } = opinionEventOf(row)
+    return {
+      key: row.taskId,
+      time: row.createTime ? row.createTime.slice(5, 16).replace('T', ' ') : '-',
+      node: row.taskName,
+      operator: row.assigneeName ?? row.assignee ?? '-',
+      event:
+        [
+          row.approvalResult ? getApprovalResultLabel(row.approvalResult) : (row.action ?? null),
+          summary,
+        ]
+          .filter(Boolean)
+          .join(' · ') || '-',
+      eventTitle: title,
+    }
+  }),
 )
 
 // ─── 流程图：定义图 + 真实轨迹高亮，切 tab 懒加载 ───
@@ -543,7 +581,13 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
             :label="t('taskDetailUi.operatorLabel')"
             min-width="186"
           />
-          <el-table-column prop="event" :label="t('taskDetailUi.recordEvent')" min-width="664" />
+          <el-table-column :label="t('taskDetailUi.recordEvent')" min-width="664">
+            <template #default="{ row }">
+              <span class="p53-event-cell" :title="row.eventTitle || row.event">{{
+                row.event
+              }}</span>
+            </template>
+          </el-table-column>
         </el-table>
       </el-tab-pane>
 
@@ -653,14 +697,19 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
           </el-table-column>
           <el-table-column :label="t('workflow.actionOpinion')" min-width="432">
             <template #default="{ row }">
-              {{
-                opinionSummaryOf(row as ApprovalHistoryItem) ||
-                (row.opinionFormId
-                  ? t('taskDetailUi.customFormLabel')
-                  : (row.opinionData?.comment ?? row.action ?? '-'))
-              }}
-              ·
-              {{ row.endTime ?? row.createTime }}
+              <span
+                class="p53-event-cell"
+                :title="opinionSummaryOf(row as ApprovalHistoryItem) || undefined"
+              >
+                {{
+                  opinionSummaryOf(row as ApprovalHistoryItem, true) ||
+                  (row.opinionFormId
+                    ? t('taskDetailUi.customFormLabel')
+                    : (row.opinionData?.comment ?? row.action ?? '-'))
+                }}
+                ·
+                {{ row.endTime ?? row.createTime }}
+              </span>
             </template>
           </el-table-column>
           <el-table-column :label="t('common.actions')" width="110" fixed="right">
@@ -821,11 +870,18 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
           </el-table-column>
           <el-table-column :label="t('workflow.actionOpinion')" min-width="280">
             <template #default="{ row }">
-              {{
-                row.opinionFormId
-                  ? t('taskDetailUi.customFormLabel')
-                  : (row.opinionData?.comment ?? row.action ?? '-')
-              }}
+              <span
+                class="p53-event-cell"
+                data-testid="sign-record-opinion"
+                :title="opinionSummaryOf(row as ApprovalHistoryItem) || undefined"
+              >
+                {{
+                  signOpinionText(row as ApprovalHistoryItem) ||
+                  (row.opinionFormId
+                    ? t('taskDetailUi.customFormLabel')
+                    : (row.opinionData?.comment ?? row.action ?? '-'))
+                }}
+              </span>
             </template>
           </el-table-column>
           <el-table-column :label="t('taskDetailUi.approvalTimeLabel')" width="132">
@@ -946,6 +1002,12 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
 .instance-flow-panel :deep(.detail-flow-table .cell) {
   padding: 0 16px;
   line-height: 20px;
+  overflow-wrap: anywhere;
+}
+/* 事件/意见摘要：折行展示、不撑出横向滚动，悬浮 title 可读未截断全文。 */
+.p53-event-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .instance-flow-panel :deep(.el-dialog .people-group__pending) {
   color: #a0a9bb;
