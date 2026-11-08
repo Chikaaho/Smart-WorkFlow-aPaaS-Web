@@ -155,10 +155,20 @@ interface BaseField {
   script?: FieldScript
 }
 
+/** 只读 JSON 参数的中文显示映射（0.3.6）：仅影响展示层；存储值与提交 API 值不变。 */
+export interface TextJsonDisplay {
+  /** 键名 → 中文名称；未命中的键回退显示原始键名。 */
+  keyLabels?: Record<string, string>
+  /** 取值 → 中文（作用于标量与数组字符串项）；未命中的值按原格式显示。 */
+  valueLabels?: Record<string, string>
+}
+
 export interface TextField extends BaseField {
   type: 'TEXT'
   /** 多行纯文本：以 textarea 填写，换行原样保存/回读；存储族仍为 VARCHAR/TEXT，不改变 API 值。 */
   multiline?: boolean
+  /** 只读 JSON 参数按字段展示的中文映射（0.3.6）：键名/取值映射，下发载荷与存储不变。 */
+  jsonDisplay?: TextJsonDisplay
 }
 
 export interface RichTextField extends BaseField {

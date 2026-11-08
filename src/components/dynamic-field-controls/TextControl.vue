@@ -2,28 +2,45 @@
 /**
  * 文本（TEXT）控件：单行输入，或多行纯文本（textarea，换行原样保存）。
  * 主渲染与子表单元格共用；只读显示实际值，编辑保留原输入控件。
- * 只读值为 JSON 对象（如设备指令参数）时按字段逐行展示，原文收进折叠的「技术参数」。
+ * 只读值为 JSON 对象（如设备指令参数）时按字段逐行展示，
+ * 键名/取值按 jsonDisplay 中文映射显示（0.3.6，无映射回退原键名/原值）；
+ * 原文收进折叠的「技术参数」，仅管理员/设计者（form:design:save）可见。
  */
 import { computed } from 'vue'
+import type { TextJsonDisplay } from '@/contracts/form-schema'
+import { hasPerm } from '@/foundation/permission'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
 import ReadonlyValue from './ReadonlyValue.vue'
 
 const props = defineProps<DynamicFieldControlProps>()
 defineEmits<{ 'update:modelValue': [value: unknown] }>()
 
-function formatJsonValue(value: unknown): string {
+function formatJsonValue(value: unknown, valueLabels?: Record<string, string>): string {
   if (value === null || value === undefined || value === '') return '—'
   if (typeof value === 'boolean') return value ? '是' : '否'
   if (Array.isArray(value)) {
     return (
       value
-        .map((item) => (typeof item === 'object' ? JSON.stringify(item) : String(item)))
+        .map((item) => {
+          if (typeof item === 'object') return JSON.stringify(item)
+          const text = String(item)
+          return valueLabels && valueLabels[text] !== undefined ? valueLabels[text] : text
+        })
         .join('、') || '—'
     )
   }
   if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
+  const text = String(value)
+  return valueLabels && valueLabels[text] !== undefined ? valueLabels[text] : text
 }
+
+/** 只读 JSON 的中文映射（仅主字段只读 JSON 展示场景消费）。 */
+const jsonDisplay = computed<TextJsonDisplay | undefined>(
+  () => (props.field as { jsonDisplay?: TextJsonDisplay }).jsonDisplay,
+)
+
+/** 技术参数原文仅管理员/设计者可见（普通审批人只看中文字段视图）。 */
+const canViewRawJson = computed(() => hasPerm('form:design:save'))
 
 /** 只读 JSON 对象的字段视图；非对象或解析失败时为 null（按原文本显示）。 */
 const jsonEntries = computed(() => {
@@ -35,7 +52,13 @@ const jsonEntries = computed(() => {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
     const entries = Object.entries(parsed as Record<string, unknown>)
     if (entries.length === 0) return null
-    return entries.map(([key, value]) => ({ key, value: formatJsonValue(value) }))
+    const keyLabels = jsonDisplay.value?.keyLabels
+    const valueLabels = jsonDisplay.value?.valueLabels
+    return entries.map(([key, value]) => ({
+      key,
+      label: keyLabels && keyLabels[key] !== undefined ? keyLabels[key] : key,
+      value: formatJsonValue(value, valueLabels),
+    }))
   } catch {
     return null
   }
@@ -54,11 +77,11 @@ const jsonRaw = computed(() => {
   <div v-if="jsonEntries" class="readonly-json" data-testid="readonly-json">
     <dl class="readonly-json__grid">
       <div v-for="entry in jsonEntries" :key="entry.key" class="readonly-json__row">
-        <dt>{{ entry.key }}</dt>
+        <dt>{{ entry.label }}</dt>
         <dd>{{ entry.value }}</dd>
       </div>
     </dl>
-    <details class="readonly-json__raw">
+    <details v-if="canViewRawJson" class="readonly-json__raw">
       <summary>技术参数（JSON 原文）</summary>
       <pre>{{ jsonRaw }}</pre>
     </details>

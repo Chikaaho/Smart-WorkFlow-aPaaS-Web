@@ -55,6 +55,8 @@ export interface FieldPatch {
   format?: string
   /** TEXT 多行纯文本（契约已落 TextField.multiline）：textarea 填写，存储族/API 不变。 */
   multiline?: boolean
+  /** TEXT 只读 JSON 参数中文映射（0.3.6 契约已落 TextField.jsonDisplay）：仅影响展示，存储/API 不变。 */
+  jsonDisplay?: import('@/contracts/form-schema').TextJsonDisplay
   /** 高级编辑脚本（BF20261013-021 契约已落 BaseField.script）：值变更时执行，onLoad 时装载后也执行。 */
   script?: import('@/contracts/form-schema').FieldScript
 }
