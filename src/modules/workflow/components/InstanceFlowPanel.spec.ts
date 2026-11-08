@@ -117,7 +117,7 @@ describe('InstanceFlowPanel（表单详情外挂流程信息唯一控制面）',
     })
 
     const vm = wrapper.vm as unknown as { flowRecordRows: { event: string }[] }
-    expect(vm.flowRecordRows[1].event).toBe('已同意 · 完备 · 现场总指挥：赵磊')
+    expect(vm.flowRecordRows[1].event).toBe('已同意 · 方案完备性：完备 · 现场总指挥：赵磊')
     expect(vm.flowRecordRows[1].event).not.toContain('回退脚本已预演通过')
   })
 
@@ -361,5 +361,210 @@ describe('InstanceFlowPanel 意见附件受控查看（direction-ui-completion-0
     const labels = wrapper.findAll('.p53-opinion-grid label').map((node) => node.text())
     expect(labels.filter((label) => label === '影响系统清单')).toHaveLength(1)
     expect(wrapper.find('.p53-opinion-grid').text()).toContain('通信系统')
+  })
+})
+
+describe('InstanceFlowPanel 意见摘要每段带标签（0.3.3 H6）', () => {
+  /** 构造单行审批历史，事件列由该行的 opinionFields 派生。 */
+  function eventOf(
+    fields: ApprovalHistoryItem['opinionFields'],
+    overrides: Partial<ApprovalHistoryItem> = {},
+  ) {
+    const wrapper = mount(InstanceFlowPanel, {
+      props: {
+        approvalHistory: history([
+          {},
+          {
+            approvalResult: 'APPROVED',
+            endTime: '2026-11-08T10:30:00',
+            opinionFields: fields ?? [],
+            ...overrides,
+          },
+          {},
+        ]),
+        processDefinitionKey: 'leave',
+      },
+      global: { plugins: [i18n], stubs },
+    })
+    return (
+      wrapper.vm as unknown as {
+        flowRecordRows: { event: string; eventTitle: string }[]
+      }
+    ).flowRecordRows[1]
+  }
+
+  it('单选、是/否、人员三类字段每段均为「标签：值」，首段不再裸值', () => {
+    const row = eventOf([
+      {
+        name: 'planReadiness',
+        label: '方案完备性',
+        type: 'RADIO',
+        value: '完备',
+        displayValue: '完备',
+      },
+      {
+        name: 'readyConfirm',
+        label: '演练准备就绪',
+        type: 'RADIO',
+        value: '是',
+        displayValue: '是',
+      },
+      {
+        name: 'fieldCommander',
+        label: '现场总指挥',
+        type: 'USER',
+        value: '9',
+        displayValue: '赵磊',
+      },
+    ])
+    expect(row.event).toBe('已同意 · 方案完备性：完备 · 演练准备就绪：是 · 现场总指挥：赵磊')
+    expect(row.event).not.toMatch(/·\s·|^完备/)
+  })
+
+  it('多选、数值、日期三类字段带标签；数值单位自标签尾部提升', () => {
+    const row = eventOf([
+      {
+        name: 'impactSystems',
+        label: '影响系统清单',
+        type: 'CHECKBOX',
+        value: ['调度自动化', '通信系统'],
+        displayValue: '调度自动化、通信系统',
+      },
+      {
+        name: 'downtimeMinutes',
+        label: '预计停机时长（分钟）',
+        type: 'NUMBER',
+        value: 300,
+        displayValue: '300',
+      },
+      {
+        name: 'plannedStart',
+        label: '调整后的演练时间',
+        type: 'DATETIME',
+        value: '2026-11-10 23:30',
+        displayValue: '2026-11-10 23:30',
+      },
+    ])
+    expect(row.event).toBe(
+      '已同意 · 影响系统清单：调度自动化、通信系统 · 预计停机时长：300 分钟 · 调整后的演练时间：2026-11-10 23:30',
+    )
+    expect(row.eventTitle).toBe(row.event.replace('已同意 · ', ''))
+  })
+
+  it('是/否布尔字段映射中文；标签无单位的数值只显示数值本身', () => {
+    const row = eventOf([
+      {
+        name: 'readyConfirm',
+        label: '演练准备就绪',
+        type: 'BOOL',
+        value: true,
+        displayValue: 'true',
+      },
+      {
+        name: 'measuredTemp',
+        label: '现场实测温度（℃）',
+        type: 'NUMBER',
+        value: 84.2,
+        displayValue: '84.2',
+      },
+      {
+        name: 'windowMinutes',
+        label: '维护窗口时长',
+        type: 'NUMBER',
+        value: 240,
+        displayValue: '240',
+      },
+    ])
+    expect(row.event).toBe('已同意 · 演练准备就绪：是 · 现场实测温度：84.2 ℃ · 维护窗口时长：240')
+  })
+
+  it('长文本截断省略且悬浮标题保留全文；其余字段在场时多行文本不进摘要', () => {
+    const longText =
+      '结档：校保卫处已签收上报并要求 24 小时内提交书面处置报告，值守班次交接单已增加时限核对项并通报处置进展，属地派出所未再接报相关警情，北门夜间安保值守延长至 24:00，同意结档归档。'
+    const truncated = eventOf([
+      {
+        name: 'closingNote',
+        label: '结档意见',
+        type: 'TEXTAREA',
+        value: longText,
+        displayValue: longText,
+      },
+    ])
+    expect(truncated.event.endsWith('…')).toBe(true)
+    expect(truncated.event.length).toBeLessThan(longText.length)
+    expect(truncated.eventTitle).toBe(`结档意见：${longText}`)
+
+    const skipped = eventOf([
+      {
+        name: 'factResult',
+        label: '事实核实结论',
+        type: 'RADIO',
+        value: '属实',
+        displayValue: '属实',
+      },
+      {
+        name: 'sceneDescription',
+        label: '现场情况描述',
+        type: 'TEXTAREA',
+        value: longText,
+        displayValue: longText,
+      },
+    ])
+    expect(skipped.event).toBe('已同意 · 事实核实结论：属实')
+    expect(skipped.eventTitle).toBe('事实核实结论：属实')
+  })
+
+  it('会签弹窗行内意见与流转记录同规则（标签：值摘要优先，旧备注回退）', () => {
+    const wrapper = mount(InstanceFlowPanel, {
+      props: {
+        approvalHistory: history([
+          {},
+          {
+            taskId: 'sign-1',
+            taskName: '技术委员会会签',
+            assignee: '9',
+            assigneeName: '杨帆',
+            approvalResult: 'APPROVED',
+            endTime: '2026-11-08T10:30:00',
+            opinionFormId: 'op_drill_tech',
+            opinionFields: [
+              {
+                name: 'riskRating',
+                label: '风险评级',
+                type: 'RADIO',
+                value: '中',
+                displayValue: '中',
+              },
+              {
+                name: 'impactSystems',
+                label: '影响系统清单',
+                type: 'CHECKBOX',
+                value: ['通信系统'],
+                displayValue: '通信系统',
+              },
+              {
+                name: 'downtimeMinutes',
+                label: '预计停机时长（分钟）',
+                type: 'NUMBER',
+                value: 240,
+                displayValue: '240',
+              },
+            ],
+          },
+          {},
+        ]),
+        processDefinitionKey: 'leave',
+      },
+      global: { plugins: [i18n], stubs },
+    })
+    const vm = wrapper.vm as unknown as {
+      signOpinionText: (row: ApprovalHistoryItem) => string
+      signDialogRows: ApprovalHistoryItem[]
+    }
+    const row = { ...(wrapper.props('approvalHistory')[1] as ApprovalHistoryItem) }
+    expect(vm.signOpinionText(row)).toBe(
+      '风险评级：中 · 影响系统清单：通信系统 · 预计停机时长：240 分钟',
+    )
+    expect(vm.signOpinionText({ ...row, opinionFields: [] })).toBe('')
   })
 })
