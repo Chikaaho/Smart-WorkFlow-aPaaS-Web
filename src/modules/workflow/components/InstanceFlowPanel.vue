@@ -577,14 +577,14 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
           show-icon
         />
         <el-table v-else class="detail-flow-table" :data="flowRecordRows" stripe>
-          <el-table-column prop="time" :label="t('taskDetailUi.recordTime')" min-width="244" />
-          <el-table-column prop="node" :label="t('taskDetailUi.recordNode')" min-width="344" />
+          <el-table-column prop="time" :label="t('taskDetailUi.recordTime')" min-width="146" />
+          <el-table-column prop="node" :label="t('taskDetailUi.recordNode')" min-width="206" />
           <el-table-column
             prop="operator"
             :label="t('taskDetailUi.operatorLabel')"
-            min-width="186"
+            min-width="112"
           />
-          <el-table-column :label="t('taskDetailUi.recordEvent')" min-width="664">
+          <el-table-column :label="t('taskDetailUi.recordEvent')" min-width="398">
             <template #default="{ row }">
               <span class="p53-event-cell" :title="row.eventTitle || row.event">{{
                 row.event
@@ -861,17 +861,17 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
           <span class="p53-sign-stats__rule">{{ t('taskDetailUi.parallelSignRule') }}</span>
         </p>
         <el-table class="detail-flow-table" :data="signDialogRows" stripe>
-          <el-table-column :label="t('workflow.approver')" min-width="120">
+          <el-table-column :label="t('workflow.approver')" min-width="80">
             <template #default="{ row }">
               {{ row.assigneeName ?? row.assignee ?? '-' }}
             </template>
           </el-table-column>
-          <el-table-column :label="t('taskDetailUi.opinionDeptLabel')" min-width="160">
+          <el-table-column :label="t('taskDetailUi.opinionDeptLabel')" min-width="100">
             <template #default="{ row }">
               {{ row.assigneeDept || '-' }}
             </template>
           </el-table-column>
-          <el-table-column :label="t('workflow.actionOpinion')" min-width="280">
+          <el-table-column :label="t('workflow.actionOpinion')" min-width="236">
             <template #default="{ row }">
               <span
                 class="p53-event-cell"
@@ -885,12 +885,12 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
               </span>
             </template>
           </el-table-column>
-          <el-table-column :label="t('taskDetailUi.approvalTimeLabel')" width="132">
+          <el-table-column :label="t('taskDetailUi.approvalTimeLabel')" width="100">
             <template #default="{ row }">
               {{ formatWhen(row.endTime ?? row.createTime) || '-' }}
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.status')" width="96">
+          <el-table-column :label="t('common.status')" width="72">
             <template #default="{ row }">
               <span
                 class="people-status"
@@ -900,7 +900,7 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
               </span>
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.actions')" width="80" fixed="right">
+          <el-table-column :label="t('common.actions')" width="64" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" size="small" @click="openOpinionDetailRow(row)">
                 {{ t('common.view') }}
