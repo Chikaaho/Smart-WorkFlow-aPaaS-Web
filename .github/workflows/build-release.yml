@@ -59,6 +59,7 @@ jobs:
           gh release view "${TAG}" >/dev/null 2>&1 && gh release delete "${TAG}" --yes || true
           gh release create "${TAG}" \
             --target "${GITHUB_SHA}" \
+            --latest=false \
             --title "CH-aPaaS-Web ${{ steps.package.outputs.version }} build ${GITHUB_SHA}" \
             --notes "自动构建产物（提交 ${GITHUB_SHA}，分支 main）" \
             "sw-web-dist-${{ steps.package.outputs.version }}.zip"
