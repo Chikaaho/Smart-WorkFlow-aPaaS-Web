@@ -119,13 +119,13 @@ Server 0.4.0 的改动集中在数据库适配（迁移脚本、SQL 种子和启
 
 ## 仓库结构与文档导航
 
-| 路径                                                                                                                           | 说明                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `src/foundation`                                                                                                               | 请求、认证会话、权限、菜单、字典、主题、i18n、mock                                 |
-| `src/modules`                                                                                                                  | form / workflow / system / notify / agent / iot / job / storage / openapi 业务模块 |
-| `src/adapters`                                                                                                                 | 设计器防腐层：form-create、流程图、Agent 图目录适配                                |
-| [工程宪法](docs/governance/engineering-constitution.md)                                                                        | 前端架构约束、验证门（typecheck/lint/test/build 四连）与开发命令                   |
-| [功能清单](https://github.com/Chikaaho/Smart-WorkFlow-Agent-Workspace/blob/develop-sw/Smart-WorkFlow-aPaaS-server/功能清单.md) | 正式功能与版本焦点（工作区仓库）                                                   |
+| 路径                                                                                                                  | 说明                                                                               |
+| --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `src/foundation`                                                                                                      | 请求、认证会话、权限、菜单、字典、主题、i18n、mock                                 |
+| `src/modules`                                                                                                         | form / workflow / system / notify / agent / iot / job / storage / openapi 业务模块 |
+| `src/adapters`                                                                                                        | 设计器防腐层：form-create、流程图、Agent 图目录适配                                |
+| [工程宪法](docs/governance/engineering-constitution.md)                                                               | 前端架构约束、验证门（typecheck/lint/test/build 四连）与开发命令                   |
+| [功能清单](https://github.com/Chikaaho/Smart-WorkFlow-aPaaS-server/blob/main/%E5%8A%9F%E8%83%BD%E6%B8%85%E5%8D%95.md) | 正式功能与版本焦点（登记于 Server 仓库）                                           |
 
 ## 版本
 
