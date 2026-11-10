@@ -1836,8 +1836,11 @@ onMounted(loadDetail)
   gap: 16px;
   flex: 0 0 auto;
 }
+/* W-b：页面为 flex 列容器，el-card 默认可被压缩且 overflow 裁切，
+   流程信息/操作卡按自然高度参与滚动，不随 1440×900 视口被压扁。 */
 .task-detail :deep(.instance-flow-panel),
 .task-detail :deep(.detail-card--actions) {
+  flex: 0 0 auto;
   margin-top: 12px;
 }
 .detail-card {

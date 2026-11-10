@@ -2791,6 +2791,20 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
+  // ── 审批意见草稿：任务详情加载时回查（mock 演示恒为空，未填过草稿） ──
+  {
+    method: 'GET',
+    pattern: '/api/workflow/tasks/:taskId/opinion-draft',
+    handler: () => ({ code: 0, message: 'ok', data: null }),
+  },
+
+  // ── 最新审批命令回查（P63 G05b）：mock 演示无历史命令 ──
+  {
+    method: 'GET',
+    pattern: '/api/workflow/commands/tasks/:taskId/latest',
+    handler: () => ({ code: 0, message: 'ok', data: null }),
+  },
+
   // ── 待办任务：完成审批 ─────────────────────────────────
   {
     method: 'POST',
@@ -5749,6 +5763,22 @@ export const mockRegistrations: MockRegistration[] = [
   // ═══════════════════════════════════════════════════
   // ── 图定义 CRUD + 执行（M07-F02-02，演示 prompt 配置语义） ──
   // ═══════════════════════════════════════════════════
+
+  // GET /api/agent/knowledge-bases — 知识库分页（设计器 KNOWLEDGE 面板下拉；mock 演示空列表）
+  {
+    method: 'GET',
+    pattern: '/api/agent/knowledge-bases',
+    handler: (_params, query) => ({
+      code: 0,
+      message: 'ok',
+      data: {
+        records: [],
+        total: 0,
+        pageNum: Number(query.pageNum ?? 1),
+        pageSize: Number(query.pageSize ?? 100),
+      },
+    }),
+  },
 
   // GET /api/agent/graph-defs/:id — 图详情（设计器回显：返回 ProcessGraph + 元数据）
   // 找不到 → code=404。响应同时包含 id/name/defVersion（供图执行历史关联版本号使用）。

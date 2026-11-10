@@ -4,6 +4,8 @@
 import { createApp, defineComponent, h, ref, type App as VueApp } from 'vue'
 import { VueFlow, type Node as VFNode, type Edge as VFEdge, type Connection } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
+import '@vue-flow/core/dist/theme-default.css'
+import './node-theme.css'
 
 /* ------------------------------------------------------------------ */
 /*  对外契约：业务层只消费这些类型和函数                                  */
@@ -106,13 +108,21 @@ export function mountFlowGraph(
 
       return () =>
         h(VueFlow, {
-          nodes: nodes.value.map((n) => ({
-            id: n.id,
-            type: n.type,
-            label: n.label,
-            position: n.position,
-            data: n.data,
-          })),
+          nodes: nodes.value.map((n) => {
+            // 业务节点类型（START/LLM/CONDITION…）不是 vue-flow 内置类型：
+            // 未注册类型回退渲染会报错，统一用 default 节点承载，
+            // 类型通过 vf-node-<type> class 表达（node-theme.css 按类型着色）。
+            const type = n.type
+            const builtIn = type === 'input' || type === 'output' || type === 'default'
+            return {
+              id: n.id,
+              type: builtIn ? type : 'default',
+              label: n.label,
+              position: n.position,
+              data: n.data,
+              class: type ? `vf-node-${type.toLowerCase()}` : undefined,
+            }
+          }),
           edges: edges.value.map((e) => ({
             id: e.id,
             source: e.source,
