@@ -46,3 +46,13 @@
   border-color: #7c3aed;
   background: #f5f0ff;
 }
+
+/* W-a2：画布 fitView 后仍保证节点文字可读（graph 较宽时 fit 缩放约 0.6~0.7） */
+.vue-flow__node.vue-flow__node-default {
+  font-size: 20px;
+}
+
+/* A1：连线标签与节点文字同一口径，fitView 缩放后渲染字号仍 ≥12px */
+.vue-flow__edge-text {
+  font-size: 20px;
+}
