@@ -438,12 +438,11 @@ function rowActions(row: unknown): ListAction[] {
           {{ (row as ProcessInstance).initiatorName ?? (row as ProcessInstance).initiatorId }}
         </template>
       </el-table-column>
-      <el-table-column
-        prop="createTime"
-        :label="t('common.startTimeShort')"
-        min-width="180"
-        show-overflow-tooltip
-      />
+      <el-table-column :label="t('common.startTimeShort')" min-width="180" show-overflow-tooltip>
+        <template #default="{ row }">
+          {{ formatDrawerTime((row as ProcessInstance).createTime) || '-' }}
+        </template>
+      </el-table-column>
       <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
 
