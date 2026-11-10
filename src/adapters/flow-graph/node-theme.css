@@ -1,0 +1,48 @@
+/**
+ * flow-graph 节点类型着色（W-a）。
+ * theme-default.css 提供基础外框/底色；本文件按节点类型叠加边框色与浅底色，
+ * 让 START/END/LLM/TOOL/CONDITION/LOOP/FORK/JOIN/KNOWLEDGE 在画布上一眼可分。
+ * 类名由 adapters/flow-graph/index.ts 按 `vf-node-<type 小写>` 注入。
+ */
+
+.vue-flow__node.vf-node-start,
+.vue-flow__node.vf-node-end {
+  border-color: var(--el-color-success, #67c23a);
+  background: var(--el-color-success-light-9, #f0f9eb);
+}
+
+.vue-flow__node.vf-node-start {
+  border-radius: 999px;
+}
+
+.vue-flow__node.vf-node-llm {
+  border-color: var(--sw-color-primary, #2563eb);
+  background: var(--sw-color-primary-soft, #e7effc);
+}
+
+.vue-flow__node.vf-node-tool {
+  border-color: var(--el-color-warning, #e6a23c);
+  background: var(--el-color-warning-light-9, #fdf6ec);
+}
+
+.vue-flow__node.vf-node-condition {
+  border-color: var(--el-color-danger, #f56c6c);
+  background: var(--el-color-danger-light-9, #fef0f0);
+}
+
+.vue-flow__node.vf-node-loop {
+  border-color: var(--el-color-info, #909399);
+  background: #f4f4f5;
+}
+
+.vue-flow__node.vf-node-fork,
+.vue-flow__node.vf-node-join {
+  border-color: var(--sw-color-primary-dark, #1e4fc0);
+  border-style: dashed;
+  background: #f5f7ff;
+}
+
+.vue-flow__node.vf-node-knowledge {
+  border-color: #7c3aed;
+  background: #f5f0ff;
+}
