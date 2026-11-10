@@ -20,6 +20,8 @@ Smart-WorkFlow-aPaaS-Web 是 **CH-aPaaS** 的前端界面（Vue 3 / TypeScript /
 | 表单设计器                                          | 流程设计器                                              |
 | --------------------------------------------------- | ------------------------------------------------------- |
 | ![表单设计器](docs/assets/readme/form-designer.png) | ![流程设计器](docs/assets/readme/workflow-designer.png) |
+| 智能体编排                                          | 工作台                                                  |
+| ![智能体编排](docs/assets/readme/agent-graph.png)   | ![工作台](docs/assets/readme/workspace.png)             |
 
 ## 能做什么
 
