@@ -24,10 +24,6 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        # 2026-11-10 临时覆盖：registry.npmmirror.com 从 GitHub runner 持续 5xx/超时，
-        # 仅本步骤改用官方源；锁文件与完整性校验不变，镜像恢复后还原。
-        env:
-          npm_config_registry: https://registry.npmjs.org
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck, lint, test and build
