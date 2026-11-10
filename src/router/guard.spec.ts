@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import type { Router, RouteLocationNormalized } from 'vue-router'
 
-vi.mock('@/foundation/auth/token', () => ({ getAccessToken: vi.fn(), clearToken: vi.fn() }))
+vi.mock('@/foundation/auth/token', () => ({
+  getAccessToken: vi.fn(),
+  clearToken: vi.fn(),
+  // 1.0.0 F1-4：首登改密守卫分支（默认不触发）
+  getMustChangePassword: vi.fn(() => false),
+}))
 vi.mock('@/foundation/auth', () => ({ refresh: vi.fn(), logout: vi.fn() }))
 vi.mock('@/foundation/session', () => ({ loadSession: vi.fn() }))
 vi.mock('@/foundation/menu', () => ({ loadMenu: vi.fn(), buildRoutesFromMenu: vi.fn() }))

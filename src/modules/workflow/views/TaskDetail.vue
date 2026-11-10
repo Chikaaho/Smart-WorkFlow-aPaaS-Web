@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /* global window */
+import PrintActions from '@/modules/workflow/components/PrintActions.vue'
 import { useTaskApproval } from '../composables/use-task-approval'
 import { useI18n } from '@/locales'
 
@@ -1146,6 +1147,14 @@ onMounted(loadDetail)
       >
         <el-icon><ArrowLeft /></el-icon>
       </button>
+      <!-- 1.0.0 F2：任务详情打印/PDF（内容与详情一致；PDF 走服务端权限过滤链） -->
+      <PrintActions
+        v-if="detail?.formKey && detail?.businessKey"
+        :form-key="detail.formKey"
+        :record-id="detail.businessKey"
+        :process-instance-id="detail.processInstanceId"
+        class="detail-header__print"
+      />
     </div>
 
     <!-- 错误提示 -->
@@ -1794,6 +1803,9 @@ onMounted(loadDetail)
   background: var(--sw-surface-page, #f5f7fa);
 }
 .detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   position: sticky;
   top: 0;
   z-index: 5;

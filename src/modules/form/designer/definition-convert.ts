@@ -4,6 +4,7 @@ import type {
   FormSchema,
   FormSchemaField,
   VisibilityRule,
+  FormPrintTemplate,
 } from '@/contracts/form-schema'
 import type { DesignerItem } from './types'
 import { nextDesignerItemId } from './types'
@@ -23,6 +24,7 @@ export function itemsToDefinition(
   description?: string,
   permissions?: Pick<FormSchema, 'fieldPermissions' | 'actionPermissions' | 'allowedIntegrations'>,
   events?: FormEvents,
+  printTemplate?: FormPrintTemplate,
 ): FormSchema {
   return {
     title: title.trim() || i18n.global.t('common.untitledForm'),
@@ -42,6 +44,8 @@ export function itemsToDefinition(
       ? { allowedIntegrations: permissions.allowedIntegrations }
       : {}),
     ...(events && Object.values(events).some((actions) => actions?.length) ? { events } : {}),
+    // 1.0.0 F2：打印模板随定义版本化；未配置时不落键（默认模板语义）
+    ...(printTemplate && Object.keys(printTemplate).length ? { printTemplate } : {}),
   }
 }
 

@@ -6,6 +6,8 @@
 let accessToken: string | null = null
 let expiresAt: number | null = null
 let lastUsername: string | null = null
+/** 首登强制改密标记（1.0.0 F1-4）：登录/刷新响应透传，改密成功后归 false */
+let mustChangePassword = false
 
 /** 提前刷新阈值：到期前 60 秒即触发刷新 */
 const EXPIRY_BUFFER_MS = 60_000
@@ -55,4 +57,15 @@ export function clearToken(): void {
   accessToken = null
   expiresAt = null
   lastUsername = null
+  mustChangePassword = false
+}
+
+// === 首登强制改密（1.0.0 F1-4） ===
+
+export function getMustChangePassword(): boolean {
+  return mustChangePassword
+}
+
+export function setMustChangePassword(value: boolean): void {
+  mustChangePassword = value
 }

@@ -320,6 +320,13 @@ export function parseDefinition(rawJson: string): FormSchema {
       const events = normalizeFormEvents((raw as unknown as { events?: unknown }).events)
       return events ? { events } : {}
     })(),
+    // 1.0.0 F2：打印模板随表单定义一起保存/版本化（缺省=默认模板，全部可见字段）
+    ...(() => {
+      const printTemplate = (raw as unknown as { printTemplate?: unknown }).printTemplate
+      return printTemplate !== undefined && printTemplate !== null
+        ? { printTemplate: printTemplate as FormSchema['printTemplate'] }
+        : {}
+    })(),
   }
 }
 

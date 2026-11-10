@@ -524,6 +524,7 @@ onMounted(loadList)
     :approval-history="detail?.history ?? []"
     :process-definition-key="detail?.instance.processDefKey ?? ''"
     :current-node-key="detail?.progress?.[0]?.nodeKey ?? ''"
+    :process-instance-id="detail?.instance.processInstanceId ?? ''"
   />
   <el-dialog
     v-model="supplementVisible"

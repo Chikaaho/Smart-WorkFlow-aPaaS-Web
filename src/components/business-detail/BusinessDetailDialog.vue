@@ -5,6 +5,7 @@
  * 抄送详情、表单数据详情、实例详情共用同一套弹窗布局：
  * 不展示流程名称/实例状态等元信息，只呈现业务表单字段与流程信息。
  */
+import PrintActions from '@/modules/workflow/components/PrintActions.vue'
 import { computed, ref, useSlots, watch } from 'vue'
 import { useI18n } from '@/locales'
 import BusinessFormReadonly from './BusinessFormReadonly.vue'
@@ -28,6 +29,8 @@ const props = withDefaults(
     processDefinitionKey?: string | null
     currentNodeKey?: string | null
     approvalHistory?: ApprovalHistoryItem[] | null
+    /** 流程实例标识（1.0.0 F2：有值时 PDF 并入审批历史；发起人/参与人/超管可见） */
+    processInstanceId?: string | null
   }>(),
   {
     title: '',
@@ -151,6 +154,14 @@ watch(
       <slot v-if="hasTaskSlot" name="task" />
 
       <template v-else>
+        <div class="business-detail-dialog__print-row">
+          <PrintActions
+            v-if="formKey && recordId"
+            :form-key="formKey"
+            :record-id="recordId"
+            :process-instance-id="processInstanceId ?? undefined"
+          />
+        </div>
         <el-alert v-if="errorMsg" :title="errorMsg" type="warning" :closable="false" show-icon />
 
         <BusinessFormReadonly

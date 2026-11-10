@@ -380,6 +380,25 @@ export interface FormSchema {
    * 缺省不产生任何隐式动作，兼容历史定义。
    */
   events?: FormEvents
+  /**
+   * 打印模板配置（1.0.0 F2）：随定义一起版本化。
+   * 缺省=默认模板（全部可见字段 + 明细表 + 审批历史）。
+   */
+  printTemplate?: FormPrintTemplate
+}
+
+/** 打印模板配置（1.0.0 F2）；服务端 PDF 与浏览器打印共用同一配置。 */
+export interface FormPrintTemplate {
+  /** 打印的字段 name 列表；缺省=全部非 TABLE 可见字段 */
+  fields?: string[]
+  /** 打印的明细表（TABLE 字段 name）列表；缺省=全部明细表 */
+  tables?: string[]
+  /** 是否包含审批历史；缺省=包含 */
+  includeHistory?: boolean
+  /** 页眉抬头文案 */
+  header?: string
+  /** 页脚文案 */
+  footer?: string
 }
 
 export type FormEventName = 'onLoad' | 'beforeSubmitHandler' | 'afterSubmitHandler'

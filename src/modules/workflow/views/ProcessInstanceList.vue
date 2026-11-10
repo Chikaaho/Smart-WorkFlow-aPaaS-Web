@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PrintActions from '@/modules/workflow/components/PrintActions.vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from '@/locales'
 import { enumLabel } from '@/foundation/i18n/enum-label'
@@ -435,7 +436,7 @@ function rowActions(row: unknown): ListAction[] {
       </el-table-column>
       <el-table-column :label="t('common.initiator')" min-width="130" show-overflow-tooltip>
         <template #default="{ row }">
-          {{ (row as ProcessInstance).initiatorName ?? (row as ProcessInstance).initiatorId }}
+          {{ (row as ProcessInstance).initiatorName ?? '—' }}
         </template>
       </el-table-column>
       <el-table-column :label="t('common.startTimeShort')" min-width="180" show-overflow-tooltip>
@@ -456,6 +457,14 @@ function rowActions(row: unknown): ListAction[] {
       @closed="closeDrawer"
     >
       <div v-loading="drawerLoading" class="drawer-content">
+        <!-- 1.0.0 F2：监控详情打印/PDF -->
+        <div v-if="detail?.formKey && detail?.businessKey" class="drawer-print-row">
+          <PrintActions
+            :form-key="detail.formKey"
+            :record-id="detail.businessKey"
+            :process-instance-id="detail.processInstanceId"
+          />
+        </div>
         <!-- 错误提示 -->
         <el-alert
           v-if="drawerError"
@@ -480,7 +489,7 @@ function rowActions(row: unknown): ListAction[] {
                 detail.businessKey
               }}</el-descriptions-item>
               <el-descriptions-item :label="t('common.initiator')">{{
-                detail.initiatorName ?? detail.initiatorId
+                detail.initiatorName ?? '—'
               }}</el-descriptions-item>
               <el-descriptions-item :label="t('common.status')">
                 <el-tag :type="getStatusType(detail.status)" size="small">
@@ -858,6 +867,11 @@ function rowActions(row: unknown): ListAction[] {
 .history-table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+.drawer-print-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 .drawer-content {
   padding: 0;
