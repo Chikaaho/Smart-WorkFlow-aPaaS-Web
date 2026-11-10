@@ -4,7 +4,7 @@
 
 Smart-WorkFlow-aPaaS-Web 是 **CH-aPaaS** 的前端界面（Vue 3 / TypeScript / Element Plus）。CH-aPaaS 是一个可以自己搭建业务应用的低代码平台：把业务做成表单和流程，就能在工作台上发起、审批和跟进。
 
-![Version](https://img.shields.io/badge/version-0.3.6-2563EB)
+![Version](https://img.shields.io/badge/version-0.3.7-2563EB)
 ![License](https://img.shields.io/badge/license-MIT-2563EB)
 ![Vue](https://img.shields.io/badge/Vue-3-42B883)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF)
@@ -13,7 +13,7 @@ Smart-WorkFlow-aPaaS-Web 是 **CH-aPaaS** 的前端界面（Vue 3 / TypeScript /
 
 ![工作台](docs/assets/readme/workspace.png)
 
-配套后端：[Smart-WorkFlow-aPaaS-server](https://github.com/Chikaaho/Smart-WorkFlow-aPaaS-server)（当前 0.4.0，本前端 0.3.6）
+配套后端：[Smart-WorkFlow-aPaaS-server](https://github.com/Chikaaho/Smart-WorkFlow-aPaaS-server)（当前 0.4.0，本前端 0.3.7）
 
 ## 界面预览
 
@@ -112,7 +112,7 @@ NODE_OPTIONS="--max-old-space-size=2048" pnpm dev
 
 ## 版本
 
-当前版本 **0.3.6**，与后端 0.4.0 搭配使用（演示环境当前运行的就是这一组合）。
+当前版本 **0.3.7**，与后端 0.4.0 搭配使用。
 
 历史版本和下载见 [Releases](https://github.com/Chikaaho/Smart-WorkFlow-aPaaS-Web/releases) 与 [CHANGELOG](https://github.com/Chikaaho/Smart-WorkFlow-Agent-Workspace/blob/develop-sw/CHANGELOG.md)。
 
