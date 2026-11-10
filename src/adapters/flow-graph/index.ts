@@ -2,7 +2,13 @@
  * @vue-flow/core 的防腐层。原生 API 只允许在本文件内出现，业务层只认下方导出的我方契约。
  */
 import { createApp, defineComponent, h, ref, type App as VueApp } from 'vue'
-import { VueFlow, type Node as VFNode, type Edge as VFEdge, type Connection } from '@vue-flow/core'
+import {
+  Position,
+  VueFlow,
+  type Node as VFNode,
+  type Edge as VFEdge,
+  type Connection,
+} from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import './node-theme.css'
@@ -125,6 +131,9 @@ export function mountFlowGraph(
               position: n.position,
               data: n.data,
               class: type ? `vf-node-${type.toLowerCase()}` : undefined,
+              // W-a2：流程按左→右阅读，连线从源节点右侧接目标节点左侧，避免上下绕弧
+              sourcePosition: Position.Right,
+              targetPosition: Position.Left,
             }
           }),
           edges: edges.value.map((e) => ({
@@ -134,6 +143,8 @@ export function mountFlowGraph(
             label: e.label,
           })),
           fitViewOnInit: true,
+          // W-a2：整图自动适配；节点基础字号在 node-theme.css 放大，保证 fit 后渲染 ≥12px
+          maxZoom: 2,
           onNodeClick: handleNodeClick,
           onConnect: handleConnect,
           'onUpdate:nodes': handleUpdateNodes,
