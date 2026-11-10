@@ -4,7 +4,7 @@
 
 Smart-WorkFlow-aPaaS-Web 是 **CH-aPaaS** 的前端界面（Vue 3 / TypeScript / Element Plus）。CH-aPaaS 是一个可以自己搭建业务应用的低代码平台：把业务做成表单和流程，就能在工作台上发起、审批和跟进。
 
-![Version](https://img.shields.io/badge/version-0.3.7-2563EB)
+![Version](https://img.shields.io/badge/version-0.3.8-2563EB)
 ![License](https://img.shields.io/badge/license-MIT-2563EB)
 ![Vue](https://img.shields.io/badge/Vue-3-42B883)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF)
@@ -13,7 +13,7 @@ Smart-WorkFlow-aPaaS-Web 是 **CH-aPaaS** 的前端界面（Vue 3 / TypeScript /
 
 ![工作台](docs/assets/readme/workspace.png)
 
-配套后端：[Smart-WorkFlow-aPaaS-server](https://github.com/Chikaaho/Smart-WorkFlow-aPaaS-server)（当前 0.4.0，本前端 0.3.7）
+配套后端：[Smart-WorkFlow-aPaaS-server](https://github.com/Chikaaho/Smart-WorkFlow-aPaaS-server)（当前 0.4.1，本前端 0.3.8）
 
 ## 界面预览
 
@@ -39,6 +39,10 @@ Smart-WorkFlow-aPaaS-Web 是 **CH-aPaaS** 的前端界面（Vue 3 / TypeScript /
 | 应急演练                                         | 校园门岗异常                                         | 设备温度监控                                     |
 | ------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------ |
 | ![应急演练审批](docs/assets/readme/sample-a.png) | ![校园门岗异常处置](docs/assets/readme/sample-b.png) | ![设备温度研判](docs/assets/readme/sample-c.png) |
+
+| 会签记录（意见摘要与部门）                          |
+| --------------------------------------------------- |
+| ![会签记录](docs/assets/readme/approval-detail.png) |
 
 - **应急演练**：跨部门演练计划的填报、会签与并行审批界面，审批通过后到点自动执行演练指令。
 - **校园门岗异常**：异常人流的分级处置界面，督办、上报、现场处理走不同分支。
@@ -79,7 +83,7 @@ flowchart TB
 | ------- | ------------------------------------ |
 | Node.js | 20+                                  |
 | pnpm    | 9+                                   |
-| 后端    | Server 0.4.0（见后端仓库的快速开始） |
+| 后端    | Server 0.4.1（见后端仓库的快速开始） |
 
 ### 1. 克隆与安装
 
@@ -114,7 +118,7 @@ NODE_OPTIONS="--max-old-space-size=2048" pnpm dev
 
 ## 版本
 
-当前版本 **0.3.7**，与后端 0.4.0 搭配使用。
+当前版本 **0.3.8**，与后端 0.4.1 搭配使用。
 
 历史版本和下载见 [Releases](https://github.com/Chikaaho/Smart-WorkFlow-aPaaS-Web/releases) 与 [CHANGELOG](https://github.com/Chikaaho/Smart-WorkFlow-Agent-Workspace/blob/develop-sw/CHANGELOG.md)。
 
