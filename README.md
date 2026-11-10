@@ -5,7 +5,7 @@
 Smart-WorkFlow-aPaaS-Web 是 **CH-aPaaS** 的前端界面（Vue 3 / TypeScript / Element Plus）。CH-aPaaS 是一个可以自己搭建业务应用的低代码平台：把业务做成表单和流程，就能在工作台上发起、审批和跟进。
 
 ![Version](https://img.shields.io/badge/version-0.3.6-2563EB)
-![License](https://img.shields.io/badge/license-internal%20demo-6B7280)
+![License](https://img.shields.io/badge/license-MIT-2563EB)
 ![Vue](https://img.shields.io/badge/Vue-3-42B883)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6)
@@ -126,6 +126,6 @@ NODE_OPTIONS="--max-old-space-size=2048" pnpm dev
 
 ## 许可证与致谢
 
-本项目当前未附带开源许可证；对外使用、分发或再发布前请先联系作者。
+本项目以 [MIT License](LICENSE) 开源，可自由使用、修改和分发。
 
 基于 Vue 3、Vite、TypeScript、Element Plus、Pinia、Vue Flow、form-create 等开源组件构建，感谢这些上游项目与贡献者。

@@ -92,6 +92,20 @@ function getStatusType(status: string): 'success' | 'warning' | 'danger' | 'info
   return STATUS_MAP[status]?.type ?? 'info'
 }
 
+/** 抽屉时间展示格式（W-d）：与 0.3.4 意见摘要时间同源——yyyy-MM-dd HH:mm，
+ *  不出现 T 与微秒；解析失败时保留原文前 16 位，空值由调用处按既有习惯显示。 */
+function formatDrawerTime(value: string | null | undefined): string {
+  if (!value) return ''
+  const text = String(value)
+  const d = new Date(text.includes('T') ? text : text.replace(' ', 'T'))
+  if (Number.isNaN(d.getTime())) return text.replace('T', ' ').slice(0, 16)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}`
+  )
+}
+
 // ─── 列表状态 ───
 
 const list = ref<ProcessInstance[]>([])
@@ -475,7 +489,7 @@ function rowActions(row: unknown): ListAction[] {
                 </el-tag>
               </el-descriptions-item>
               <el-descriptions-item :label="t('common.startTimeShort')">{{
-                detail.createTime
+                formatDrawerTime(detail.createTime) || '-'
               }}</el-descriptions-item>
             </el-descriptions>
           </el-card>
@@ -536,18 +550,21 @@ function rowActions(row: unknown): ListAction[] {
                   </template>
                 </el-table-column>
                 <el-table-column
-                  prop="startTime"
                   :label="t('common.startTime')"
                   min-width="175"
                   show-overflow-tooltip
-                />
+                >
+                  <template #default="{ row }">
+                    {{ formatDrawerTime(row.startTime) || '-' }}
+                  </template>
+                </el-table-column>
                 <el-table-column
                   :label="t('workflow.completedAt')"
                   min-width="175"
                   show-overflow-tooltip
                 >
                   <template #default="{ row }">
-                    {{ row.endTime ?? t('common.inProgressEllipsis') }}
+                    {{ formatDrawerTime(row.endTime) || t('common.inProgressEllipsis') }}
                   </template>
                 </el-table-column>
               </el-table>
