@@ -46,10 +46,11 @@ export interface FlowGraphInstance {
 /*  内部类型转换：@vue-flow/core 原生类型 ← 我方契约                      */
 /* ------------------------------------------------------------------ */
 
-function toFlowGraphNode(node: VFNode): FlowGraphNode {
+function toFlowGraphNode(node: VFNode, businessType?: string): FlowGraphNode {
   return {
     id: node.id,
-    type: node.type,
+    // 渲染层用 default 承载业务节点类型，事件/导出必须还原业务类型
+    type: businessType ?? node.type,
     label: typeof node.label === 'string' ? node.label : undefined,
     position: { x: node.position.x, y: node.position.y },
     data: node.data as Record<string, unknown> | undefined,
@@ -76,13 +77,15 @@ export function mountFlowGraph(
 ): FlowGraphInstance {
   const nodes = ref<FlowGraphNode[]>(initialData?.nodes ?? [])
   const edges = ref<FlowGraphEdge[]>(initialData?.edges ?? [])
+  // 业务类型 ↔ vf 节点的还原表：vue-flow 事件里拿不到被替换前的类型
+  const businessTypeById = new Map<string, string>()
   let destroyed = false
   let app: VueApp | null = null
 
   const Wrapper = defineComponent({
     setup() {
       function handleNodeClick(event: { node: VFNode }) {
-        events?.onNodeClick?.(toFlowGraphNode(event.node))
+        events?.onNodeClick?.(toFlowGraphNode(event.node, businessTypeById.get(event.node.id)))
       }
 
       function handleConnect(connection: Connection) {
@@ -97,7 +100,7 @@ export function mountFlowGraph(
       }
 
       function handleUpdateNodes(newNodes: VFNode[]) {
-        nodes.value = newNodes.map(toFlowGraphNode)
+        nodes.value = newNodes.map((n) => toFlowGraphNode(n, businessTypeById.get(n.id)))
         events?.onGraphChange?.({ nodes: nodes.value, edges: edges.value })
       }
 
@@ -114,6 +117,7 @@ export function mountFlowGraph(
             // 类型通过 vf-node-<type> class 表达（node-theme.css 按类型着色）。
             const type = n.type
             const builtIn = type === 'input' || type === 'output' || type === 'default'
+            if (type && !builtIn) businessTypeById.set(n.id, type)
             return {
               id: n.id,
               type: builtIn ? type : 'default',
