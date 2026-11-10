@@ -128,7 +128,7 @@ async function handleImport() {
     const result = await importUsers(
       importFile.value,
       importPassword.value,
-      userStore.superAdmin ? filter.tenantId : undefined,
+      userStore.superAdmin ? filterTenant.value?.id : undefined,
     )
     importResult.value = result
     importResultVisible.value = true
@@ -154,7 +154,7 @@ async function handleExport() {
         deptId: filter.deptId,
         postId: filter.postId,
         roleId: filter.roleId,
-        tenantId: filter.tenantId,
+        tenantId: filterTenant.value?.id,
       }),
       'users.xlsx',
     )
