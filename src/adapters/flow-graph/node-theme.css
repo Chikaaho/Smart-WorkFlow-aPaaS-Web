@@ -51,3 +51,8 @@
 .vue-flow__node.vue-flow__node-default {
   font-size: 20px;
 }
+
+/* A1：连线标签与节点文字同一口径，fitView 缩放后渲染字号仍 ≥12px */
+.vue-flow__edge-text {
+  font-size: 20px;
+}
