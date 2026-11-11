@@ -92,6 +92,11 @@ export interface TableSubField {
   type: FieldType
   label?: string
   required?: boolean
+  /** DATE 子字段格式：'datetime' = 值含时间部分；缺省仅日期。 */
+  format?: string
+  /** 数值显示小数位（precision 为历史同义键）；未配置时去掉尾随 0。 */
+  decimals?: number
+  precision?: number
   length?: number
   /** 非空文本的最小 Unicode 码点数。 */
   minLength?: number
@@ -131,6 +136,9 @@ interface BaseField {
   /** 字段标题位置；缺省为上方左对齐。 */
   labelPosition?: FieldLabelPosition
   required?: boolean
+  /** 数值显示小数位（precision 为历史同义键）；未配置时去掉尾随 0。 */
+  decimals?: number
+  precision?: number
   length?: number
   minLength?: number
   pattern?: string

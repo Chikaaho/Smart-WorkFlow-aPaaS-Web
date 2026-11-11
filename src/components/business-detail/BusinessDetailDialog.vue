@@ -70,6 +70,14 @@ const currentNodeKey = computed(
 )
 const hasFlow = computed(() => history.value.length > 0 || Boolean(processKey.value))
 
+/**
+ * 打印实例上下文：调用方显式传入优先，否则使用记录关联到的实例。
+ * 三处入口（表单详情/任务详情/我发起的）由此共用同一份提交时版本定位。
+ */
+const effectiveProcessInstanceId = computed(
+  () => props.processInstanceId || relation.value?.instance?.processInstanceId || undefined,
+)
+
 /** 空对象视为无回退数据（不伪造空表单）。 */
 function usableFallback(raw: unknown): Record<string, unknown> | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
@@ -160,7 +168,7 @@ watch(
             v-if="formKey && recordId"
             :form-key="formKey"
             :record-id="recordId"
-            :process-instance-id="processInstanceId ?? undefined"
+            :process-instance-id="effectiveProcessInstanceId"
           />
         </div>
         <el-alert v-if="errorMsg" :title="errorMsg" type="warning" :closable="false" show-icon />
