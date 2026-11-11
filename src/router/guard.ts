@@ -1,5 +1,5 @@
 import type { Router, RouteLocationNormalized, NavigationGuardNext } from 'vue-router'
-import { getAccessToken, clearToken } from '@/foundation/auth/token'
+import { getAccessToken, clearToken, getMustChangePassword } from '@/foundation/auth/token'
 import { refresh, logout } from '@/foundation/auth'
 import { loadSession } from '@/foundation/session'
 import { loadMenu, buildRoutesFromMenu } from '@/foundation/menu'
@@ -14,6 +14,10 @@ const NOT_FOUND_ROUTE_NAME = 'not-found-catchall'
 const FORBIDDEN_PATH = '/403'
 /** v0.0.2 P54/P55：三类身份登录后的默认首页（前台工作台）。 */
 export const WORKSPACE_PATH = '/workspace'
+/** 首登强制改密页（1.0.0 F1-4）；改密闭环外的业务路径全部重定向至此。 */
+export const CHANGE_PASSWORD_PATH = '/change-password'
+/** 改密前放行路径：改密页自身、登出（清态离开）与 403。 */
+const MUST_CHANGE_ALLOW_PATHS = [CHANGE_PASSWORD_PATH, '/login', '/403']
 
 let dynamicRoutesBuilt = false
 let buildingPromise: Promise<void> | null = null
@@ -172,6 +176,13 @@ export async function authGuard(
   // 根路径默认落地：三类身份统一进入前台工作台（v0.0.2 P54/P55）。
   if (to.path === '/') {
     next(WORKSPACE_PATH)
+    return
+  }
+
+  // 首登强制改密（1.0.0 F1-4）：服务端 403 兜底之外的前端路由收敛；
+  // 改密闭环（改密页/登出/403）之外一律重定向到改密页。
+  if (getMustChangePassword() && !MUST_CHANGE_ALLOW_PATHS.includes(to.path)) {
+    next(CHANGE_PASSWORD_PATH)
     return
   }
 

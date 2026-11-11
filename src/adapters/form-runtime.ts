@@ -51,6 +51,34 @@ export async function getFormData(
   return load(formKey, recordId)
 }
 
+/** 人员/部门 ID 批量解析显示名（打印纯文本版面用；失败返回空映射）。 */
+export async function resolvePartyNames(
+  type: 'USER' | 'DEPT',
+  ids: string[],
+): Promise<Record<string, string>> {
+  const distinct = [...new Set(ids.filter(Boolean))]
+  if (distinct.length === 0) return {}
+  const choices = await import('@/modules/form/api/i2-choices')
+  const list = type === 'USER' ? await choices.loadUserChoices() : await choices.loadDeptChoices()
+  const labels = new Map(list.map((item) => [item.id, item.label]))
+  const result: Record<string, string> = {}
+  for (const id of distinct) {
+    const label = labels.get(id)
+    if (label) result[id] = type === 'DEPT' ? label.replace(/^[\u3000]+/, '') : label
+  }
+  return result
+}
+
+/** 明细表导出（F2-6）：组件不直连业务模块，经防腐层转调。 */
+export async function exportFormTableExcel(
+  formKey: string,
+  recordId: string,
+  fieldName: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const { exportFormDetailTable } = await import('@/modules/form/api/form')
+  return exportFormDetailTable(formKey, recordId, fieldName)
+}
+
 /** 读取表单当前定义（防腐层已解析为 FormSchema）。 */
 export async function getFormDefinition(formKey: string): Promise<FormSchema> {
   const { getFormDefinition: load } = await import('@/modules/form/api/form')

@@ -28,6 +28,7 @@ import type {
   FormSchema,
   FormSchemaField,
   FormEvents,
+  FormPrintTemplate,
   TableSubField,
   VisibilityRule,
 } from '@/contracts/form-schema'
@@ -88,6 +89,55 @@ const fieldPermissions = ref<FormSchema['fieldPermissions']>({})
 const actionPermissions = ref<FormSchema['actionPermissions']>({})
 const allowedIntegrations = ref<string[]>([])
 const formEvents = ref<FormEvents>({})
+// 1.0.0 F2：打印模板随定义保存/版本化；缺省=默认模板（全部可见字段 + 明细表 + 审批历史）
+const printTemplate = ref<FormPrintTemplate | null>(null)
+const printDialogVisible = ref(false)
+const printFieldsSelected = ref<string[]>([])
+const printTablesSelected = ref<string[]>([])
+const printIncludeHistory = ref(true)
+const printHeader = ref('')
+const printFooter = ref('')
+
+/** 可选打印字段（非 TABLE）；明细表单列。 */
+const printableFieldOptions = computed(() =>
+  items.value
+    .filter((it) => it.field.type !== 'TABLE')
+    .map((it) => ({ name: it.field.name, label: it.field.label || it.field.name })),
+)
+const printableTableOptions = computed(() =>
+  items.value
+    .filter((it) => it.field.type === 'TABLE')
+    .map((it) => ({ name: it.field.name, label: it.field.label || it.field.name })),
+)
+
+function syncPrintDialogState() {
+  printFieldsSelected.value = printTemplate.value?.fields ? [...printTemplate.value.fields] : []
+  printTablesSelected.value = printTemplate.value?.tables ? [...printTemplate.value.tables] : []
+  printIncludeHistory.value = printTemplate.value?.includeHistory !== false
+  printHeader.value = printTemplate.value?.header ?? ''
+  printFooter.value = printTemplate.value?.footer ?? ''
+}
+
+function applyPrintTemplate() {
+  const config: FormPrintTemplate = {}
+  if (printFieldsSelected.value.length) config.fields = [...printFieldsSelected.value]
+  if (printTablesSelected.value.length) config.tables = [...printTablesSelected.value]
+  config.includeHistory = printIncludeHistory.value
+  if (printHeader.value.trim()) config.header = printHeader.value.trim()
+  if (printFooter.value.trim()) config.footer = printFooter.value.trim()
+  printTemplate.value = config
+  printDialogVisible.value = false
+  ElMessage.success('打印模板已保存，随下次保存/发布生效')
+}
+
+function resetPrintTemplate() {
+  printTemplate.value = null
+  syncPrintDialogState()
+}
+
+watch(printDialogVisible, (visible) => {
+  if (visible) syncPrintDialogState()
+})
 const previewVisible = ref(false)
 const loading = ref(false)
 /** 草稿已保存时间（P53 工作台文案：草稿已保存 HH:mm）。 */
@@ -262,6 +312,7 @@ function buildDefinition(): FormSchema {
       allowedIntegrations: allowedIntegrations.value,
     },
     formEvents.value,
+    printTemplate.value ?? undefined,
   )
 }
 
@@ -289,6 +340,7 @@ async function loadForm(id: string) {
     actionPermissions.value = schema.actionPermissions ? clonePlain(schema.actionPermissions) : {}
     allowedIntegrations.value = schema.allowedIntegrations ? [...schema.allowedIntegrations] : []
     formEvents.value = schema.events ? clonePlain(schema.events) : {}
+    printTemplate.value = schema.printTemplate ? clonePlain(schema.printTemplate) : null
     rejected.value = false
     void loadBreadcrumbCategory()
     await nextTick()
@@ -855,6 +907,8 @@ async function loadBreadcrumbCategory() {
           @click="historyVisible = true"
           >{{ t('form.versionEntry') }}</el-button
         >
+        <!-- 1.0.0 F2：打印模板配置（随定义版本化；缺省=默认模板） -->
+        <el-button @click="printDialogVisible = true">打印模板</el-button>
         <!-- BF20261013-015：预览自画布头部行上收至工具条动作组 -->
         <el-button @click="previewVisible = true">{{ t('common.preview') }}</el-button>
         <!-- 0.1.7 #14：已发布表单解锁画布编辑——「保存」持久化工作定义（运行时仍走已发布快照），
@@ -974,6 +1028,45 @@ async function loadBreadcrumbCategory() {
     />
 
     <PreviewModal v-model:visible="previewVisible" :schema="previewSchema" />
+
+    <!-- 1.0.0 F2：打印模板配置弹窗 -->
+    <el-dialog v-model="printDialogVisible" title="打印模板" width="560px" destroy-on-close>
+      <el-form label-position="top">
+        <el-form-item label="打印字段（不选=全部可见字段）">
+          <el-select v-model="printFieldsSelected" multiple clearable style="width: 100%">
+            <el-option
+              v-for="field in printableFieldOptions"
+              :key="field.name"
+              :label="field.label"
+              :value="field.name"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="打印明细表（不选=全部明细表）">
+          <el-select v-model="printTablesSelected" multiple clearable style="width: 100%">
+            <el-option
+              v-for="field in printableTableOptions"
+              :key="field.name"
+              :label="field.label"
+              :value="field.name"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="包含审批历史">
+          <el-switch v-model="printIncludeHistory" />
+        </el-form-item>
+        <el-form-item label="页眉抬头">
+          <el-input v-model="printHeader" placeholder="默认无抬头" clearable />
+        </el-form-item>
+        <el-form-item label="页脚文案">
+          <el-input v-model="printFooter" placeholder="默认无页脚（版本说明自动附加）" clearable />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="resetPrintTemplate">恢复默认</el-button>
+        <el-button type="primary" @click="applyPrintTemplate">保存配置</el-button>
+      </template>
+    </el-dialog>
 
     <HistoryVersionsDialog
       v-if="formId"

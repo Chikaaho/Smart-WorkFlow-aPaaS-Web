@@ -14,7 +14,12 @@ const { loadMenuMock, loadSessionMock } = vi.hoisted(() => ({
   loadSessionMock: vi.fn(),
 }))
 
-vi.mock('@/foundation/auth/token', () => ({ getAccessToken: vi.fn(), clearToken: vi.fn() }))
+vi.mock('@/foundation/auth/token', () => ({
+  getAccessToken: vi.fn(),
+  clearToken: vi.fn(),
+  // 1.0.0 F1-4：首登改密守卫分支（默认不触发）
+  getMustChangePassword: vi.fn(() => false),
+}))
 vi.mock('@/foundation/auth', () => ({ refresh: vi.fn(), logout: vi.fn() }))
 vi.mock('@/foundation/session', () => ({
   loadSession: loadSessionMock,

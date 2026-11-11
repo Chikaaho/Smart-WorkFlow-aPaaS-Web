@@ -86,6 +86,9 @@ interface RawSubFieldDef {
   /** P63：USER/DEPT 多选、DATE 日期时间格式（definition 契约键透传）。 */
   multiple?: boolean
   format?: string
+  /** 数值显示小数位（precision 为历史同义键；definition 契约键透传）。 */
+  decimals?: number
+  precision?: number
   /** BF20261013-021：高级编辑脚本（definition 契约键透传；形状在 mapRawField 校验）。 */
   script?: unknown
   dsBinding?: {
@@ -129,6 +132,8 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
     ...(raw.label !== undefined ? { label: raw.label } : {}),
     ...(isFieldLabelPosition(raw.labelPosition) ? { labelPosition: raw.labelPosition } : {}),
     required: raw.required ?? false,
+    ...(typeof raw.decimals === 'number' ? { decimals: raw.decimals } : {}),
+    ...(typeof raw.precision === 'number' ? { precision: raw.precision } : {}),
     ...(raw.length !== undefined ? { length: raw.length } : {}),
     ...(raw.minLength !== undefined ? { minLength: raw.minLength } : {}),
     ...(raw.pattern !== undefined ? { pattern: raw.pattern } : {}),
@@ -233,6 +238,9 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
         type: sf.type as FieldType,
         ...(sf.label !== undefined ? { label: sf.label } : {}),
         ...(sf.required !== undefined ? { required: sf.required } : {}),
+        ...(sf.format !== undefined ? { format: sf.format } : {}),
+        ...(typeof sf.decimals === 'number' ? { decimals: sf.decimals } : {}),
+        ...(typeof sf.precision === 'number' ? { precision: sf.precision } : {}),
         ...(sf.length !== undefined ? { length: sf.length } : {}),
         ...(sf.minLength !== undefined ? { minLength: sf.minLength } : {}),
         ...(sf.pattern !== undefined ? { pattern: sf.pattern } : {}),
@@ -319,6 +327,13 @@ export function parseDefinition(rawJson: string): FormSchema {
     ...(() => {
       const events = normalizeFormEvents((raw as unknown as { events?: unknown }).events)
       return events ? { events } : {}
+    })(),
+    // 1.0.0 F2：打印模板随表单定义一起保存/版本化（缺省=默认模板，全部可见字段）
+    ...(() => {
+      const printTemplate = (raw as unknown as { printTemplate?: unknown }).printTemplate
+      return printTemplate !== undefined && printTemplate !== null
+        ? { printTemplate: printTemplate as FormSchema['printTemplate'] }
+        : {}
     })(),
   }
 }

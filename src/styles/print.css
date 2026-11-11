@@ -1,0 +1,82 @@
+/**
+ * 打印版式（1.0.0 F2-2）：A4、隐藏界面骨架、明细表表头重复、行不截断。
+ * 打印入口（PrintActions）在触发时挂 body.sw-printing，打印结束移除。
+ */
+/* F2-2：打印专用版面（Teleport 到 body），屏幕隐藏 */
+.sw-print-sheet {
+  display: none;
+}
+
+@media print {
+  /* 打印专用版面独占纸张，应用界面整体不进纸 */
+  body.sw-printing > #app {
+    display: none !important;
+  }
+  body.sw-printing .sw-print-sheet {
+    display: block !important;
+    padding: 0;
+    margin: 0;
+  }
+  body.sw-printing .sw-print-sheet .el-card {
+    border: 0 !important;
+  }
+  body.sw-printing .sw-print-sheet .el-card__body {
+    padding: 0 !important;
+  }
+  body.sw-printing .sw-print-sheet .dynamic-field__table-toolbar {
+    display: none !important;
+  }
+
+  /* 界面骨架：侧栏、顶栏、页脚、非详情浮层一律不进纸 */
+  body.sw-printing .app-sidebar,
+  body.sw-printing .app-topbar,
+  body.sw-printing .app-footer,
+  body.sw-printing .el-popper,
+  body.sw-printing .el-message {
+    display: none !important;
+  }
+
+  /* 仅当前活动对话框内容打印：遮罩保持、其他内容隐藏 */
+  body.sw-printing .el-overlay:not(.el-overlay--active) {
+    display: none !important;
+  }
+  body.sw-printing .el-dialog {
+    box-shadow: none !important;
+    max-height: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  body.sw-printing .el-dialog__header {
+    padding-top: 0;
+  }
+  body.sw-printing .el-dialog__footer {
+    display: none !important;
+  }
+
+  /* A4 页面 */
+  @page {
+    size: A4 portrait;
+    margin: 18mm 14mm;
+  }
+
+  /* 明细表：表头每页重复、行不跨页截断 */
+  .sw-printing thead {
+    display: table-header-group;
+  }
+  .sw-printing tr,
+  .sw-printing .el-table__row {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .sw-printing .el-table__header-wrapper,
+  .sw-printing .el-table {
+    overflow: visible !important;
+  }
+
+  /* 中文正文 */
+  .sw-printing,
+  .sw-printing * {
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif !important;
+    color: #000 !important;
+  }
+}
