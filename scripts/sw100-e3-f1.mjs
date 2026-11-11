@@ -23,19 +23,35 @@ await download.saveAs(EV + '/f1_user_import_template.xlsx')
 console.log('template saved: ' + download.suggestedFilename())
 
 async function doImport(path, shotPrefix) {
-  if (!(await page.locator('input[type=file]').isVisible().catch(() => false))) {
+  if (
+    !(await page
+      .locator('input[type=file]')
+      .isVisible()
+      .catch(() => false))
+  ) {
     await page.getByRole('button', { name: '导入' }).click()
   }
   await page.waitForTimeout(700)
   await page.locator('input[type="file"]').setInputFiles(path)
-  await page.getByPlaceholder('所有导入账号共用；首次登录必须修改').fill('Sw100-Init-2026!')
+  await page
+    .getByPlaceholder('所有导入账号共用；首次登录必须修改')
+    .fill(process.env.SW_IMPORT_PASS ?? '')
   await page.screenshot({ path: `${EV}/${shotPrefix}_filled.png` })
   await page.getByRole('button', { name: '开始导入' }).click()
   await page.waitForTimeout(1800)
   await page.screenshot({ path: `${EV}/${shotPrefix}_result.png` })
   const body = await page.locator('body').innerText()
   const i = body.indexOf('导入结果')
-  console.log(shotPrefix + '=' + (i >= 0 ? body.slice(i, i + 300).split(String.fromCharCode(10)).join('|') : 'NO_RESULT_DIALOG'))
+  console.log(
+    shotPrefix +
+      '=' +
+      (i >= 0
+        ? body
+            .slice(i, i + 300)
+            .split(String.fromCharCode(10))
+            .join('|')
+        : 'NO_RESULT_DIALOG'),
+  )
   const ok = page.getByRole('button', { name: '知道了' })
   if (await ok.count()) {
     await ok.click()
@@ -43,8 +59,16 @@ async function doImport(path, shotPrefix) {
   } else {
     await page.keyboard.press('Escape')
     await page.waitForTimeout(900)
-    if (await page.locator('input[type=file]').isVisible().catch(() => false)) {
-      await page.getByRole('button', { name: '取消' }).click().catch(() => {})
+    if (
+      await page
+        .locator('input[type=file]')
+        .isVisible()
+        .catch(() => false)
+    ) {
+      await page
+        .getByRole('button', { name: '取消' })
+        .click()
+        .catch(() => {})
       await page.waitForTimeout(800)
     }
   }

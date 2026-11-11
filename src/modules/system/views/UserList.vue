@@ -90,6 +90,11 @@ const importResult = ref<UserImportResult | null>(null)
 const importFileInput = ref<HTMLInputElement | null>(null)
 
 function openImport() {
+  // R6：超管导入必须先明确目标租户，未选择时前端直接拦住并给出可读提示
+  if (userStore.superAdmin && !filterTenant.value?.id) {
+    ElMessage.warning('请先选择目标租户')
+    return
+  }
   importVisible.value = true
 }
 
@@ -123,6 +128,10 @@ async function handleTemplate() {
 
 async function handleImport() {
   if (!importFile.value || !importPassword.value) return
+  if (userStore.superAdmin && !filterTenant.value?.id) {
+    ElMessage.warning('请先选择目标租户')
+    return
+  }
   importing.value = true
   try {
     const result = await importUsers(

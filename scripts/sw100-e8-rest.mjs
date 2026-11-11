@@ -4,7 +4,9 @@ import { login, BASE, EV } from './sw100-lib.mjs'
 
 const browser = await chromium.launch()
 const { page } = await login(browser)
-page.on('console', (msg) => { if (msg.type() === 'error') console.log('console-error: ' + msg.text().slice(0, 120)) })
+page.on('console', (msg) => {
+  if (msg.type() === 'error') console.log('console-error: ' + msg.text().slice(0, 120))
+})
 
 // ── F4/F2: 监控列表 IoT 发起人 + 详情抽屉 + 打印/PDF ──
 await page.goto(BASE + '/workflow/monitor', { waitUntil: 'domcontentloaded' }).catch(() => {})
@@ -45,7 +47,9 @@ if (await firstDetail.count()) {
   await firstDetail.click()
   await page.waitForTimeout(3000)
   await page.screenshot({ path: EV + '/f2_my_instance_detail.png' })
-  console.log('print-actions-in-detail=' + await page.getByRole('button', { name: '下载 PDF' }).count())
+  console.log(
+    'print-actions-in-detail=' + (await page.getByRole('button', { name: '下载 PDF' }).count()),
+  )
   const [pdf] = await Promise.all([
     page.waitForEvent('download', { timeout: 60000 }),
     page.getByRole('button', { name: '下载 PDF' }).click(),

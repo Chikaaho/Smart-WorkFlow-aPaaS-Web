@@ -3,6 +3,17 @@
     <el-button size="small" @click="handleBrowserPrint">打印</el-button>
     <el-button size="small" :loading="downloading" @click="handleDownloadPdf">下载 PDF</el-button>
   </span>
+  <!-- F2-2：打印专用版面挂到 body；屏幕隐藏，打印时按 printTemplate 独占纸张 -->
+  <Teleport to="body">
+    <div v-if="formKey && recordId" class="sw-print-sheet">
+      <PrintSheet
+        :form-key="formKey"
+        :record-id="recordId"
+        :process-instance-id="processInstanceId"
+        @ready="printReady = $event"
+      />
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -10,6 +21,7 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError, request } from '@/foundation/request'
+import PrintSheet from './PrintSheet.vue'
 
 /**
  * 打印动作组（1.0.0 F2-2/F2-3）：表单详情、任务详情、「我发起的」三处共用。
@@ -23,8 +35,13 @@ const props = defineProps<{
 }>()
 
 const downloading = ref(false)
+const printReady = ref(false)
 
 function handleBrowserPrint() {
+  if (!printReady.value) {
+    ElMessage.warning('打印内容准备中，请稍候再试')
+    return
+  }
   document.body.classList.add('sw-printing')
   const cleanup = () => {
     document.body.classList.remove('sw-printing')

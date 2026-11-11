@@ -4,8 +4,15 @@ export const EV = 'E:/code/Smart-WorkFlow-Agent-Workspace/product/v1.0.0-release
 export const PW =
   'file:///E:/code/Smart-WorkFlow-Agent-Workspace/Smart-WorkFlow-aPaaS-Web/node_modules/.pnpm/playwright@1.63.0/node_modules/playwright/index.mjs'
 
-export async function login(browser, { user = 'admin', pass = 'Sw100-Test-Admin!', captcha = '1234', shot = null } = {}) {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true })
+export async function login(
+  browser,
+  { user = 'admin', pass = process.env.SW_ADMIN_PASS, captcha = '1234', shot = null } = {},
+) {
+  if (!pass) throw new Error('SW_ADMIN_PASS required')
+  const ctx = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    acceptDownloads: true,
+  })
   const page = await ctx.newPage()
   await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('img[src^="data:image"]', { timeout: 15000 })

@@ -1,4 +1,5 @@
 import { request } from '@/foundation/request'
+import { getAccessToken } from '@/foundation/auth/token'
 import type { PageQuery, PageResult } from '@/contracts/common'
 import { parseDefinition } from '@/adapters/form-designer'
 import type { FormSchema, FormSchemaField } from '@/contracts/form-schema'
@@ -27,6 +28,44 @@ export async function getFormDef(formKey: string): Promise<FormDefDTO> {
     method: 'GET',
     url: `/form/def/by-key/${formKey}`,
   })
+}
+
+/**
+ * GET /api/form/data/{formKey}/{recordId}/tables/{fieldName}/export → 明细表 xlsx
+ *
+ * 二进制下载不经 R<T>（与 storage 下载同口径用 fetch），文件名取服务端
+ * Content-Disposition（表单名_明细表名_记录编号.xlsx）。
+ */
+export async function exportFormDetailTable(
+  formKey: string,
+  recordId: string,
+  fieldName: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const token = getAccessToken()
+  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/+$/, '')
+  const url = `${apiBaseUrl}/form/data/${encodeURIComponent(formKey)}/${encodeURIComponent(
+    recordId,
+  )}/tables/${encodeURIComponent(fieldName)}/export`
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    let message = `导出失败（HTTP ${response.status}）`
+    try {
+      const body = (await response.json()) as { msg?: string }
+      if (body?.msg) message = body.msg
+    } catch {
+      // 非 JSON 错误体：保留状态码文案
+    }
+    throw new Error(message)
+  }
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const match =
+    disposition.match(/filename\*=(?:UTF-8''|utf-8'')(.+)/i) ??
+    disposition.match(/filename="?([^";]+)"?/i)
+  const fileName = match ? decodeURIComponent(match[1]) : `${formKey}_${fieldName}.xlsx`
+  return { blob, fileName }
 }
 
 /** 直连: GET /api/form/def/by-key/{formKey}/definition → 裸 JSON 字符串经防腐层解析为 FormSchema */

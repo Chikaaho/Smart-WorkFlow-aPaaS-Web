@@ -3,12 +3,14 @@ import { chromium } from 'file:///E:/code/Smart-WorkFlow-Agent-Workspace/Smart-W
 import { login, BASE, EV } from './sw100-lib.mjs'
 
 const browser = await chromium.launch()
-const { page } = await login(browser, { user: 'yangfan', pass: 'Sw100-Test-User!' })
+const { page } = await login(browser, { user: 'yangfan', pass: process.env.SW_USER_PASS })
 await page.goto(BASE + '/system/user', { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(2000)
 await page.screenshot({ path: EV + '/f15_user_list_no_perm.png' })
-console.log('import-btn=' + await page.getByRole('button', { name: '导入' }).count(),
-            'export-btn=' + await page.getByRole('button', { name: '导出' }).count())
+console.log(
+  'import-btn=' + (await page.getByRole('button', { name: '导入' }).count()),
+  'export-btn=' + (await page.getByRole('button', { name: '导出' }).count()),
+)
 let auth = ''
 page.on('request', (req) => {
   const h = req.headers()['authorization']
@@ -16,9 +18,12 @@ page.on('request', (req) => {
 })
 await page.reload({ waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(1200)
-const denied = await page.evaluate(async ({ auth }) => {
-  const r = await fetch('/api/system/user/import-template', { headers: { Authorization: auth } })
-  return { status: r.status, body: (await r.text()).slice(0, 160) }
-}, { auth })
+const denied = await page.evaluate(
+  async ({ auth }) => {
+    const r = await fetch('/api/system/user/import-template', { headers: { Authorization: auth } })
+    return { status: r.status, body: (await r.text()).slice(0, 160) }
+  },
+  { auth },
+)
 console.log('api=' + JSON.stringify(denied))
 await browser.close()

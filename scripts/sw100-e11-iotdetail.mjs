@@ -9,13 +9,22 @@ await page.waitForTimeout(2000)
 let iotRow = page.locator('.el-table__row').filter({ hasText: '系统（IoT）' }).first()
 for (let p = 0; p < 8 && !(await iotRow.count()); p++) {
   const next = page.locator('.el-pagination .btn-next')
-  if (await next.count() && await next.isEnabled()) { await next.click(); await page.waitForTimeout(1300); iotRow = page.locator('.el-table__row').filter({ hasText: '系统（IoT）' }).first() } else break
+  if ((await next.count()) && (await next.isEnabled())) {
+    await next.click()
+    await page.waitForTimeout(1300)
+    iotRow = page.locator('.el-table__row').filter({ hasText: '系统（IoT）' }).first()
+  } else break
 }
 await iotRow.locator('text=查看详情').first().click()
 await page.waitForTimeout(2800)
 await page.screenshot({ path: EV + '/f4_flow_monitor_iot_detail.png', fullPage: false })
 const body = await page.locator('body').innerText()
-console.log('drawer-iot=' + body.includes('系统（IoT）') + ' pdfbtn=' + await page.getByRole('button', { name: '下载 PDF' }).count())
+console.log(
+  'drawer-iot=' +
+    body.includes('系统（IoT）') +
+    ' pdfbtn=' +
+    (await page.getByRole('button', { name: '下载 PDF' }).count()),
+)
 const pdfBtn = page.getByRole('button', { name: '下载 PDF' }).first()
 if (await pdfBtn.count()) {
   const [pdf] = await Promise.all([

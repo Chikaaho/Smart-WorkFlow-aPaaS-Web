@@ -4,7 +4,8 @@ import { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync } from '
 
 const BASE = process.env.SW_BASE || 'http://localhost:5275'
 const USER = process.env.SW_USER || 'admin'
-const PASS = process.env.SW_PASS || 'Sw100-Test-Admin!'
+const PASS = process.env.SW_PASS
+if (!PASS) throw new Error('SW_PASS required')
 const CAP_FILE = 'E:/tmp/sw100-captcha.txt'
 const EV = 'E:/code/Smart-WorkFlow-Agent-Workspace/product/v1.0.0-release/receipts/evidence'
 mkdirSync(EV, { recursive: true })
@@ -15,7 +16,10 @@ const page = await ctx.newPage()
 await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('img[src^="data:image"]', { timeout: 10000 })
 await page.waitForTimeout(500)
-const src = await page.getByRole('img', { name: /点击刷新验证码/ }).first().evaluate((el) => el.src)
+const src = await page
+  .getByRole('img', { name: /点击刷新验证码/ })
+  .first()
+  .evaluate((el) => el.src)
 writeFileSync('E:/tmp/sw100-captcha.png', Buffer.from(src.split(',')[1], 'base64'))
 if (existsSync(CAP_FILE)) unlinkSync(CAP_FILE)
 console.log('CAPTCHA_READY')

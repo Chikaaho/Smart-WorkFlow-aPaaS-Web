@@ -42,6 +42,7 @@ const props = withDefaults(
     processDefinitionKey: '',
     currentNodeKey: '',
     approvalHistory: null,
+    processInstanceId: '',
   },
 )
 

@@ -18,12 +18,15 @@ const props = withDefaults(
     recordId?: string | null
     record?: Record<string, unknown> | null
     loading?: boolean
+    /** 打印模式（F2-2）：按定义里的 printTemplate 过滤字段/明细表，并输出抬头页脚。 */
+    printMode?: boolean
   }>(),
   {
     formKey: '',
     recordId: '',
     record: null,
     loading: false,
+    printMode: false,
   },
 )
 
@@ -38,9 +41,29 @@ const effectiveRecordId = computed(
   () => props.recordId || (typeof props.record?.id === 'string' ? props.record.id : ''),
 )
 
+/** 打印模板（F2-2/F2-3）：字段/明细表选择与抬头页脚随定义版本化。 */
+const printTemplate = computed(() =>
+  props.printMode && schema.value ? schema.value.printTemplate : undefined,
+)
+
+/** 打印模式下按模板筛选字段；模板未配置字段/明细表时保持全量（默认模板）。 */
+const visibleFields = computed(() => {
+  const fields = schema.value?.fields ?? []
+  const template = printTemplate.value
+  if (!template) return fields
+  const fieldNames = template.fields && template.fields.length > 0 ? new Set(template.fields) : null
+  const tableNames = template.tables && template.tables.length > 0 ? new Set(template.tables) : null
+  return fields.filter((field) => {
+    if (field.type === 'TABLE') {
+      return !tableNames || tableNames.has(field.name)
+    }
+    return !fieldNames || fieldNames.has(field.name)
+  })
+})
+
 const formItems = computed(() => {
   if (!schema.value) return []
-  return schema.value.fields.map((field) => {
+  return visibleFields.value.map((field) => {
     const recordKey = field.type === 'REFERENCE' ? 'ref_' + field.name + '_id' : field.name
     return {
       field,
@@ -107,6 +130,12 @@ watch(
 <template>
   <el-card class="business-form-card" shadow="never">
     <div v-loading="effectiveLoading" class="business-form">
+      <div v-if="printTemplate?.header" class="business-form__print-header">
+        {{ printTemplate.header }}
+      </div>
+      <h2 v-if="printTemplate && schema?.title" class="business-form__print-title">
+        {{ schema.title }}
+      </h2>
       <el-alert
         v-if="schemaUnavailable"
         title="表单信息暂时无法显示"
@@ -139,6 +168,9 @@ watch(
         </div>
       </div>
       <el-empty v-else-if="!effectiveLoading" description="该表单没有可显示的内容" />
+      <div v-if="printTemplate?.footer" class="business-form__print-footer">
+        {{ printTemplate.footer }}
+      </div>
     </div>
   </el-card>
 </template>
@@ -153,6 +185,26 @@ watch(
 }
 .business-form {
   min-height: 72px;
+}
+.business-form__print-header {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #333;
+  text-align: center;
+}
+.business-form__print-title {
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 600;
+  text-align: center;
+}
+.business-form__print-footer {
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid #999;
+  font-size: 12px;
+  color: #333;
+  text-align: center;
 }
 .business-form__grid {
   display: grid;

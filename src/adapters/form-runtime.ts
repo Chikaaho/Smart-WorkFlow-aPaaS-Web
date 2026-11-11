@@ -51,6 +51,16 @@ export async function getFormData(
   return load(formKey, recordId)
 }
 
+/** 明细表导出（F2-6）：组件不直连业务模块，经防腐层转调。 */
+export async function exportFormTableExcel(
+  formKey: string,
+  recordId: string,
+  fieldName: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const { exportFormDetailTable } = await import('@/modules/form/api/form')
+  return exportFormDetailTable(formKey, recordId, fieldName)
+}
+
 /** 读取表单当前定义（防腐层已解析为 FormSchema）。 */
 export async function getFormDefinition(formKey: string): Promise<FormSchema> {
   const { getFormDefinition: load } = await import('@/modules/form/api/form')
