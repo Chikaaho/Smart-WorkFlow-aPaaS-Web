@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
-vi.stubEnv('TZ', 'Asia/Shanghai')
-
 const mockGetPrintContext = vi.fn()
 const mockGetFormData = vi.fn()
 vi.mock('@/modules/workflow/api', () => ({
@@ -49,7 +47,10 @@ async function sheet(record: Record<string, unknown>) {
 }
 
 describe('PrintSheet 浏览器打印日期（与页面/PDF 同一时区口径）', () => {
+  // TZ stub 必须每条用例前重设：afterEach 的 unstubAllEnvs 会撤掉模块级 stub，
+  // 在 UTC runner 上后续用例回退 UTC 时区（17:00Z 跨日断言会打出 2026-11-11）。
   beforeEach(() => {
+    vi.stubEnv('TZ', 'Asia/Shanghai')
     mockGetPrintContext.mockReset()
     mockGetFormData.mockReset()
   })
