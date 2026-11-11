@@ -5,12 +5,33 @@ const { exportFormTableExcel } = vi.hoisted(() => ({ exportFormTableExcel: vi.fn
 vi.mock('@/adapters/form-runtime', () => ({ exportFormTableExcel }))
 
 import TableControl from './TableControl.vue'
+// 子表单元格控件由注册表模块的副作用写入（MULTISELECT → MultiSelectControl）
+import '@/components/dynamic-field-registry'
 
 const FIELD = {
   name: 'items',
   type: 'TABLE',
   label: '采购明细',
   subFields: [{ name: 'product', type: 'TEXT', label: '产品名称' }],
+} as const
+
+const MULTI_FIELD = {
+  name: 'items',
+  type: 'TABLE',
+  label: '采购明细',
+  subFields: [
+    { name: 'product', type: 'TEXT', label: '产品名称' },
+    {
+      name: 'tags',
+      type: 'MULTISELECT',
+      label: '标签',
+      options: [
+        { key: 'a', value: '蓝色' },
+        { key: 'b', value: '绿色' },
+        { key: 'c', value: '白色' },
+      ],
+    },
+  ],
 } as const
 
 function control(props: Record<string, unknown> = {}) {
@@ -46,5 +67,26 @@ describe('TableControl 明细表导出（F2-6）', () => {
   it('缺少记录上下文或编辑态不显示导出按钮', () => {
     expect(control({ recordId: '' }).text()).not.toContain('导出 Excel')
     expect(control({ readonly: false }).text()).not.toContain('导出 Excel')
+  })
+
+  it('U3 只读多选单元格按实际选中项回显（JSON 字符串归一为数组）', () => {
+    const wrapper = mount(TableControl, {
+      props: {
+        field: MULTI_FIELD,
+        modelValue: [{ product: '新版本部件-01', tags: '["a","b"]' }],
+        readonly: true,
+        formKey: 'demo_form',
+        recordId: 'rec-1',
+      },
+    })
+    const selected = wrapper
+      .findAll('.readonly-option.is-selected')
+      .map((item) => item.text().trim())
+    expect(selected).toEqual(['✓ 蓝色', '✓ 绿色'])
+    const unchecked = wrapper
+      .findAll('.readonly-option')
+      .filter((item) => !item.classes().includes('is-selected'))
+      .map((item) => item.text().trim())
+    expect(unchecked).toEqual(['白色'])
   })
 })

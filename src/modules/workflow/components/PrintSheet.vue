@@ -16,6 +16,7 @@ import { getInstanceRelation } from '@/adapters/instance-relation'
 import { getPrintContext } from '@/modules/workflow/api'
 import { parseDefinition } from '@/adapters/form-designer'
 import { loadDict } from '@/foundation/dict'
+import { normalizeFormDateValue } from '@/contracts/form-date'
 import type { ApprovalHistoryItem } from '@/contracts/bpm'
 import type {
   FormPrintTemplate,
@@ -62,6 +63,11 @@ function pad(value: number): string {
   return String(value).padStart(2, '0')
 }
 
+/**
+ * 打印日期与页面同一时区口径（form-date.normalizeFormDateValue）：
+ * 带时区的时间戳先还原浏览器本地时间；无时区历史值保持原义。
+ * datetime 字段输出 yyyy-MM-dd HH:mm（与 PDF TIME_FMT 一致），日期字段只到日。
+ */
 function formatDate(raw: unknown, datetime: boolean): string {
   if (raw == null || raw === '') return '—'
   if (typeof raw === 'number') {
@@ -69,7 +75,7 @@ function formatDate(raw: unknown, datetime: boolean): string {
     const text = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
     return datetime ? `${text} ${pad(date.getHours())}:${pad(date.getMinutes())}` : text
   }
-  const text = String(raw).replace('T', ' ')
+  const text = normalizeFormDateValue(raw, datetime)
   if (datetime) {
     return text.length >= 16 ? text.slice(0, 16) : text
   }

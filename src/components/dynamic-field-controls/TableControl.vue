@@ -14,6 +14,7 @@ const { t } = useI18n()
  */
 import { computed, ref } from 'vue'
 import type { TableField } from '@/contracts/form-schema'
+import { normalizeFormFieldValue } from '@/contracts/form-value'
 import { getSubFieldComponent } from '../dynamic-field-subfield'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
 
@@ -74,6 +75,16 @@ const subFields = computed(() =>
   props.field.type === 'TABLE' ? (props.field as TableField).subFields : [],
 )
 
+/**
+ * 单元格值与主表单同一归一口径（U3）：JSON 列存的多值（多选/多选字典/多人员/部门/附件）
+ * 是 JSON/逗号字符串，控件契约是数组；不归一会导致只读回看全部未勾选。
+ */
+function cellValue(rowIdx: number, subName: string): unknown {
+  const sub = subFields.value.find((sf) => sf.name === subName)
+  if (!sub) return tableRows.value[rowIdx]?.[subName] ?? ''
+  return normalizeFormFieldValue(sub, tableRows.value[rowIdx]?.[subName] ?? '')
+}
+
 function addRow() {
   if (props.field.type !== 'TABLE') return
   const row: Row = { _rowAction: 'ADD' }
@@ -133,7 +144,7 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
               <component
                 :is="getSubFieldComponent(sf.type)"
                 :field="sf"
-                :model-value="tableRows[rowIdx]?.[sf.name] ?? ''"
+                :model-value="cellValue(rowIdx, sf.name)"
                 :readonly="readonly"
                 :sub-field="true"
                 :form-key="formKey"
