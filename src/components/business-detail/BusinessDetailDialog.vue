@@ -5,6 +5,7 @@
  * 抄送详情、表单数据详情、实例详情共用同一套弹窗布局：
  * 不展示流程名称/实例状态等元信息，只呈现业务表单字段与流程信息。
  */
+import PrintActions from '@/modules/workflow/components/PrintActions.vue'
 import { computed, ref, useSlots, watch } from 'vue'
 import { useI18n } from '@/locales'
 import BusinessFormReadonly from './BusinessFormReadonly.vue'
@@ -28,6 +29,8 @@ const props = withDefaults(
     processDefinitionKey?: string | null
     currentNodeKey?: string | null
     approvalHistory?: ApprovalHistoryItem[] | null
+    /** 流程实例标识（1.0.0 F2：有值时 PDF 并入审批历史；发起人/参与人/超管可见） */
+    processInstanceId?: string | null
   }>(),
   {
     title: '',
@@ -39,6 +42,7 @@ const props = withDefaults(
     processDefinitionKey: '',
     currentNodeKey: '',
     approvalHistory: null,
+    processInstanceId: '',
   },
 )
 
@@ -65,6 +69,14 @@ const currentNodeKey = computed(
   () => props.currentNodeKey || relation.value?.instance?.currentNodeKeys?.[0] || '',
 )
 const hasFlow = computed(() => history.value.length > 0 || Boolean(processKey.value))
+
+/**
+ * 打印实例上下文：调用方显式传入优先，否则使用记录关联到的实例。
+ * 三处入口（表单详情/任务详情/我发起的）由此共用同一份提交时版本定位。
+ */
+const effectiveProcessInstanceId = computed(
+  () => props.processInstanceId || relation.value?.instance?.processInstanceId || undefined,
+)
 
 /** 空对象视为无回退数据（不伪造空表单）。 */
 function usableFallback(raw: unknown): Record<string, unknown> | null {
@@ -151,6 +163,14 @@ watch(
       <slot v-if="hasTaskSlot" name="task" />
 
       <template v-else>
+        <div class="business-detail-dialog__print-row">
+          <PrintActions
+            v-if="formKey && recordId"
+            :form-key="formKey"
+            :record-id="recordId"
+            :process-instance-id="effectiveProcessInstanceId"
+          />
+        </div>
         <el-alert v-if="errorMsg" :title="errorMsg" type="warning" :closable="false" show-icon />
 
         <BusinessFormReadonly

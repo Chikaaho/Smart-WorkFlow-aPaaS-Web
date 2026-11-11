@@ -1,5 +1,8 @@
 <script setup lang="ts">
+/* global document */
 import { useI18n } from '@/locales'
+import { ElMessage } from 'element-plus'
+import { exportFormTableExcel } from '@/adapters/form-runtime'
 
 const { t } = useI18n()
 /**
@@ -9,13 +12,46 @@ const { t } = useI18n()
  * （getSubFieldComponent：REFERENCE 降级占位 / TABLE 不递归 / 未知类型兜底）。
  * 只读语义：隐藏「操作」表头、删除与添加行按钮（子控件 disabled 语义由各控件自行承担）。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { TableField } from '@/contracts/form-schema'
+import { normalizeFormFieldValue } from '@/contracts/form-value'
 import { getSubFieldComponent } from '../dynamic-field-subfield'
 import type { DynamicFieldControlProps } from '../dynamic-field-registry'
 
 const props = defineProps<DynamicFieldControlProps>()
 const emit = defineEmits<{ 'update:modelValue': [value: unknown] }>()
+
+/** 只读详情（表单/任务/我发起的）有记录上下文时，每张明细表可单独导出 Excel（F2-6）。 */
+const canExport = computed(
+  () =>
+    props.readonly === true &&
+    props.design !== true &&
+    Boolean(props.formKey) &&
+    Boolean(props.recordId),
+)
+const exporting = ref(false)
+
+async function exportTable() {
+  if (!props.formKey || !props.recordId || exporting.value) return
+  exporting.value = true
+  try {
+    const { blob, fileName } = await exportFormTableExcel(
+      props.formKey,
+      props.recordId,
+      props.field.name,
+    )
+    const url = globalThis.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    a.click()
+    globalThis.URL.revokeObjectURL(url)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '导出失败，请稍后重试')
+  } finally {
+    exporting.value = false
+  }
+}
 
 type Row = Record<string, unknown> & {
   _rowAction?: 'ADD' | 'UPDATE' | 'DELETE' | 'UNCHANGED'
@@ -38,6 +74,16 @@ const sampleRows = computed(() =>
 const subFields = computed(() =>
   props.field.type === 'TABLE' ? (props.field as TableField).subFields : [],
 )
+
+/**
+ * 单元格值与主表单同一归一口径（U3）：JSON 列存的多值（多选/多选字典/多人员/部门/附件）
+ * 是 JSON/逗号字符串，控件契约是数组；不归一会导致只读回看全部未勾选。
+ */
+function cellValue(rowIdx: number, subName: string): unknown {
+  const sub = subFields.value.find((sf) => sf.name === subName)
+  if (!sub) return tableRows.value[rowIdx]?.[subName] ?? ''
+  return normalizeFormFieldValue(sub, tableRows.value[rowIdx]?.[subName] ?? '')
+}
 
 function addRow() {
   if (props.field.type !== 'TABLE') return
@@ -79,6 +125,11 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
       'dynamic-field__table--design': isDesign,
     }"
   >
+    <div v-if="canExport" class="dynamic-field__table-toolbar">
+      <el-button link type="primary" size="small" :loading="exporting" @click="exportTable">
+        导出 Excel
+      </el-button>
+    </div>
     <table class="dynamic-field__table-inner">
       <thead>
         <tr>
@@ -93,7 +144,7 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
               <component
                 :is="getSubFieldComponent(sf.type)"
                 :field="sf"
-                :model-value="tableRows[rowIdx]?.[sf.name] ?? ''"
+                :model-value="cellValue(rowIdx, sf.name)"
                 :readonly="readonly"
                 :sub-field="true"
                 :form-key="formKey"
@@ -128,6 +179,12 @@ function updateCell(rowIdx: number, subName: string, value: unknown) {
 /* ── 内嵌子表（视觉值仅引用 --sw-* token，零硬编码 px/hex） ── */
 .dynamic-field__table {
   width: 100%;
+}
+
+.dynamic-field__table-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--sw-space-4);
 }
 
 .dynamic-field__table-inner {

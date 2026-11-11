@@ -1,5 +1,11 @@
 import { request } from '@/foundation/request'
-import { getAccessToken, getCurrentUsername, setTokenResponse, clearToken } from './token'
+import {
+  getAccessToken,
+  getCurrentUsername,
+  setTokenResponse,
+  clearToken,
+  setMustChangePassword,
+} from './token'
 import { encryptPassword } from './rsa'
 import type { LoginChallengeDTO } from './rsa'
 
@@ -8,6 +14,8 @@ import type { LoginChallengeDTO } from './rsa'
 interface TokenResponseDTO {
   accessToken: string
   expiresIn: number
+  /** 首登强制改密标记（1.0.0 F1-4）；改密成功后为 false */
+  mustChangePassword?: boolean
 }
 
 // ========== 单飞锁 ==========
@@ -54,6 +62,7 @@ export async function login(payload: LoginPayload): Promise<void> {
     },
   })
   setTokenResponse(data.accessToken, data.expiresIn, payload.username)
+  setMustChangePassword(data.mustChangePassword === true)
 }
 
 export async function logout(): Promise<void> {
@@ -89,6 +98,7 @@ export async function refresh(): Promise<void> {
         url: '/auth/refresh',
       })
       setTokenResponse(data.accessToken, data.expiresIn)
+      setMustChangePassword(data.mustChangePassword === true)
     } finally {
       // 无论成败，释放单飞锁。失败时调用方（请求拦截器/guard）各自处理异常
       refreshPromise = null

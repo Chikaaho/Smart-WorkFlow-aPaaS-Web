@@ -29,6 +29,8 @@ const { loadMenuMock } = vi.hoisted(() => ({ loadMenuMock: vi.fn() }))
 vi.mock('@/foundation/auth/token', () => ({
   getAccessToken: vi.fn(() => 'valid-token'),
   clearToken: vi.fn(),
+  // 1.0.0 F1-4：首登改密守卫分支（默认不触发）
+  getMustChangePassword: vi.fn(() => false),
 }))
 vi.mock('@/foundation/auth', () => ({
   refresh: vi.fn(),

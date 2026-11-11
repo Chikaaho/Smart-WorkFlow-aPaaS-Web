@@ -136,6 +136,34 @@ export async function getInstanceRelation(
   })
 }
 
+/** 浏览器打印上下文（S1）：与 PDF 共用提交时版本定位。 */
+export interface PrintContext {
+  formName: string
+  /** 实际用于打印的定义 JSON（提交时快照或当前定义） */
+  definition: string
+  /** 实际用于打印的版本 */
+  formVersion: number
+  /** true=提交时版本；false=定位不到，按当前版本打印 */
+  versionPinned: boolean
+}
+
+/** GET /workflow/print/context → 浏览器打印定义与版本定位结果 */
+export async function getPrintContext(
+  formKey: string,
+  recordId: string,
+  processInstanceId?: string,
+): Promise<PrintContext> {
+  return request<PrintContext>({
+    method: 'GET',
+    url: '/workflow/print/context',
+    params: {
+      formKey,
+      recordId,
+      ...(processInstanceId ? { processInstanceId } : {}),
+    },
+  })
+}
+
 /** GET /workflow/commands/{commandId} → WorkflowCommandStatus */
 export async function queryCommandStatus(commandId: string): Promise<WorkflowCommandStatus> {
   return request<WorkflowCommandStatus>({

@@ -28,6 +28,8 @@ const schema = {
 }
 
 const stubs = {
+  // 打印动作与打印版面属于 F2 独立链路，本文件只验证记录来源与空态分支
+  PrintActions: { name: 'PrintActions', template: '<span class="print-actions-stub" />' },
   // 只渲染绑定值，隔离各类型控件的真实实现（本文件只验证记录来源与空态分支）
   DynamicField: {
     template: '<div class="df-stub">{{ modelValue }}</div>',

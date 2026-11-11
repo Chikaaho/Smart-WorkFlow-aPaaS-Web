@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* global File, HTMLInputElement, Event, Blob, document */
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
@@ -22,6 +23,12 @@ import {
   getUserRoles,
   getUserPosts,
 } from '@/modules/system/api/user'
+import {
+  downloadUserImportTemplate,
+  importUsers,
+  exportUsers,
+} from '@/modules/system/api/userImportExport'
+import type { UserImportResult } from '@/modules/system/api/userImportExport'
 import { pageRoles } from '@/modules/system/api/role'
 import { listDeptTree } from '@/modules/system/api/dept'
 import { pagePosts } from '@/modules/system/api/post'
@@ -71,6 +78,101 @@ const pageNum = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
 const errorMsg = ref('')
+
+// ═══ 人员批量导入导出（1.0.0 F1）═══
+const importing = ref(false)
+const exporting = ref(false)
+const importVisible = ref(false)
+const importResultVisible = ref(false)
+const importFile = ref<File | null>(null)
+const importPassword = ref('')
+const importResult = ref<UserImportResult | null>(null)
+const importFileInput = ref<HTMLInputElement | null>(null)
+
+function openImport() {
+  // R6：超管导入必须先明确目标租户，未选择时前端直接拦住并给出可读提示
+  if (userStore.superAdmin && !filterTenant.value?.id) {
+    ElMessage.warning('请先选择目标租户')
+    return
+  }
+  importVisible.value = true
+}
+
+function resetImport() {
+  importFile.value = null
+  importPassword.value = ''
+  if (importFileInput.value) importFileInput.value.value = ''
+}
+
+function onImportFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  importFile.value = input.files?.[0] ?? null
+}
+
+function saveBlob(blob: Blob, filename: string): void {
+  const url = globalThis.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  globalThis.URL.revokeObjectURL(url)
+}
+
+async function handleTemplate() {
+  try {
+    saveBlob(await downloadUserImportTemplate(), 'user-import-template.xlsx')
+  } catch (error) {
+    ElMessage.error(error instanceof ApiError ? error.message : '模板下载失败，请重试')
+  }
+}
+
+async function handleImport() {
+  if (!importFile.value || !importPassword.value) return
+  if (userStore.superAdmin && !filterTenant.value?.id) {
+    ElMessage.warning('请先选择目标租户')
+    return
+  }
+  importing.value = true
+  try {
+    const result = await importUsers(
+      importFile.value,
+      importPassword.value,
+      userStore.superAdmin ? filterTenant.value?.id : undefined,
+    )
+    importResult.value = result
+    importResultVisible.value = true
+    importVisible.value = false
+    if (!result.errors.length) {
+      ElMessage.success(`导入成功：共 ${result.successCount} 个账号`)
+      await loadList()
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof ApiError ? error.message : '导入失败，请检查文件后重试')
+  } finally {
+    importing.value = false
+  }
+}
+
+async function handleExport() {
+  exporting.value = true
+  try {
+    saveBlob(
+      await exportUsers({
+        username: filter.username,
+        status: filter.status,
+        deptId: filter.deptId,
+        postId: filter.postId,
+        roleId: filter.roleId,
+        tenantId: filterTenant.value?.id,
+      }),
+      'users.xlsx',
+    )
+  } catch (error) {
+    ElMessage.error(error instanceof ApiError ? error.message : '导出失败，请重试')
+  } finally {
+    exporting.value = false
+  }
+}
 
 const filter = reactive<UserFilter>({
   username: '',
@@ -477,11 +579,15 @@ onMounted(loadList)
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <!-- 工具栏：新建按钮 -->
+    <!-- 工具栏：新建 / 导入 / 导出 -->
     <template #toolbar-actions>
       <el-button v-perm="'system:user:create'" type="primary" @click="openCreate">{{
         t('system.newUser')
       }}</el-button>
+      <el-button v-perm="'system:user:import'" @click="openImport">导入</el-button>
+      <el-button v-perm="'system:user:export'" :loading="exporting" @click="handleExport"
+        >导出</el-button
+      >
     </template>
 
     <!-- 筛选区 -->
@@ -558,6 +664,84 @@ onMounted(loadList)
       <ListActionsColumn :actions="rowActions" :width="120" />
     </el-table>
   </StandardListTemplate>
+
+  <!-- 人员导入弹窗（1.0.0 F1）：统一初始密码 + 整批结果反馈 -->
+  <el-dialog
+    v-model="importVisible"
+    title="导入人员"
+    width="560px"
+    :close-on-click-modal="false"
+    destroy-on-close
+    @closed="resetImport"
+  >
+    <el-alert
+      type="info"
+      :closable="false"
+      show-icon
+      title="请使用「下载模板」生成的最新模板填写；任意一行有错则整批不入库。导入账号首次登录须修改密码。"
+      style="margin-bottom: 12px"
+    />
+    <el-form label-width="110px">
+      <el-form-item label="模板">
+        <el-button @click="handleTemplate">下载模板</el-button>
+      </el-form-item>
+      <el-form-item label="数据文件" required>
+        <input ref="importFileInput" type="file" accept=".xlsx" @change="onImportFileChange" />
+      </el-form-item>
+      <el-form-item label="统一初始密码" required>
+        <el-input
+          v-model="importPassword"
+          type="password"
+          show-password
+          placeholder="所有导入账号共用；首次登录必须修改"
+        />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button :disabled="importing" @click="importVisible = false">取消</el-button>
+      <el-button
+        type="primary"
+        :loading="importing"
+        :disabled="!importFile || !importPassword"
+        @click="handleImport"
+      >
+        开始导入
+      </el-button>
+    </template>
+  </el-dialog>
+
+  <!-- 导入结果弹窗 -->
+  <el-dialog v-model="importResultVisible" title="导入结果" width="620px" destroy-on-close>
+    <template v-if="importResult">
+      <el-alert
+        :type="importResult.errors.length ? 'error' : 'success'"
+        :closable="false"
+        show-icon
+        :title="
+          importResult.errors.length
+            ? `导入失败：${importResult.errors.length} 行有错，整批未入库（0 行落库）`
+            : `导入成功：共 ${importResult.successCount} 个账号`
+        "
+        style="margin-bottom: 12px"
+      />
+      <el-alert
+        v-for="(warning, idx) in importResult.warnings"
+        :key="'w' + idx"
+        type="warning"
+        :closable="false"
+        show-icon
+        :title="warning"
+        style="margin-bottom: 8px"
+      />
+      <el-table v-if="importResult.errors.length" :data="importResult.errors" size="small">
+        <el-table-column prop="rowNum" label="行号" width="80" />
+        <el-table-column prop="message" label="原因" min-width="280" show-overflow-tooltip />
+      </el-table>
+    </template>
+    <template #footer>
+      <el-button type="primary" @click="importResultVisible = false">知道了</el-button>
+    </template>
+  </el-dialog>
 
   <!-- 新建/编辑弹窗 -->
   <el-dialog

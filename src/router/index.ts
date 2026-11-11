@@ -684,6 +684,17 @@ export const routes: RouteRecordRaw[] = [
     meta: { public: true },
   },
   {
+    // 1.0.0 F1-4：首登强制改密页（已认证会话内；守卫收敛业务路由至此）
+    path: '/change-password',
+    name: 'change-password',
+    component: () => import('@/views/ChangePasswordView.vue'),
+    meta: {
+      get title() {
+        return i18n.global.t('auth.changePassword')
+      },
+    },
+  },
+  {
     // I5：账号绑定管理（个人中心入口；已认证会话内使用）
     path: '/account/bindings',
     name: 'account-bindings',
