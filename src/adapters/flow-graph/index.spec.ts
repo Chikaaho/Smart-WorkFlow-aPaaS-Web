@@ -106,4 +106,98 @@ describe('adapters/flow-graph', () => {
     instance2.destroy()
     instance.destroy()
   })
+
+  describe('G1-1 命令式更新（不销毁重挂载）', () => {
+    function mountWithData(events?: Parameters<typeof mountFlowGraph>[2]) {
+      const container = document.createElement('div')
+      const data: FlowGraphData = {
+        nodes: [
+          {
+            id: 'n1',
+            type: 'START',
+            label: '开始',
+            position: { x: 0, y: 0 },
+            data: { inputVar: 'input' },
+            presentation: { icon: 'play', accent: '#67c23a', summary: '文本入参' },
+          },
+        ],
+        edges: [],
+      }
+      const instance = mountFlowGraph(container, data, events)
+      return { container, instance }
+    }
+
+    it('addNode/updateNode/removeNode 更新导出数据并通过 onGraphChange 回传', () => {
+      const onGraphChange = vi.fn()
+      const { instance } = mountWithData({ onGraphChange })
+      instance.addNode({ id: 'n2', type: 'LLM', label: 'LLM 调用', position: { x: 300, y: 0 } })
+      expect(instance.exportGraph().nodes.map((n) => n.id)).toEqual(['n1', 'n2'])
+      expect(onGraphChange).toHaveBeenCalled()
+
+      instance.updateNode({
+        id: 'n2',
+        type: 'LLM',
+        label: 'LLM 调用',
+        position: { x: 320, y: 10 },
+        presentation: { icon: 'spark', summary: 'DeepSeek V3' },
+      })
+      const updated = instance.exportGraph().nodes.find((n) => n.id === 'n2')
+      expect(updated?.position).toEqual({ x: 320, y: 10 })
+      expect(updated?.presentation?.summary).toBe('DeepSeek V3')
+
+      instance.removeNode('n2')
+      expect(instance.exportGraph().nodes.map((n) => n.id)).toEqual(['n1'])
+      instance.destroy()
+    })
+
+    it('removeNode 连带删除其入/出边', () => {
+      const { instance } = mountWithData()
+      instance.addNode({ id: 'n2', position: { x: 200, y: 0 } })
+      instance.addEdge({ id: 'e1', source: 'n1', target: 'n2' })
+      instance.addEdge({ id: 'e2', source: 'n2', target: 'n1' })
+      instance.removeNode('n2')
+      expect(instance.exportGraph().edges).toEqual([])
+      instance.destroy()
+    })
+
+    it('setData 整体替换节点与边', () => {
+      const { instance } = mountWithData()
+      instance.setData({
+        nodes: [{ id: 'a', position: { x: 1, y: 2 } }],
+        edges: [{ id: 'e', source: 'a', target: 'a' }],
+      })
+      const result = instance.exportGraph()
+      expect(result.nodes.map((n) => n.id)).toEqual(['a'])
+      expect(result.edges.map((e) => e.id)).toEqual(['e'])
+      instance.destroy()
+    })
+
+    it('presentation 不污染业务 data（导出时剥离保留键）', () => {
+      const { instance } = mountWithData()
+      instance.updateNode({
+        id: 'n1',
+        type: 'START',
+        label: '开始',
+        position: { x: 0, y: 0 },
+        data: { inputVar: 'input' },
+        presentation: { icon: 'play', summary: '文本入参', status: 'success' },
+      })
+      const node = instance.exportGraph().nodes[0]
+      expect(node.data).toEqual({ inputVar: 'input' })
+      expect(node.presentation).toEqual({ icon: 'play', summary: '文本入参', status: 'success' })
+      expect(JSON.stringify(node.data)).not.toContain('__swFlowPresentation')
+      instance.destroy()
+    })
+
+    it('addEdge/updateEdge/removeEdge 更新边数据', () => {
+      const { instance } = mountWithData()
+      instance.addNode({ id: 'n2', position: { x: 200, y: 0 } })
+      instance.addEdge({ id: 'e1', source: 'n1', target: 'n2' })
+      instance.updateEdge({ id: 'e1', source: 'n1', target: 'n2', label: '通过' })
+      expect(instance.exportGraph().edges[0].label).toBe('通过')
+      instance.removeEdge('e1')
+      expect(instance.exportGraph().edges).toEqual([])
+      instance.destroy()
+    })
+  })
 })
