@@ -51,6 +51,49 @@ export const EDGE_CONFIG_KEY_KEYWORD = 'keyword'
 export const NODE_CONFIG_KEY_INPUT_PARAMS = 'params'
 /** 结束节点输出参数声明（G1-4）：config.outputs = EndOutputParam[] */
 export const NODE_CONFIG_KEY_OUTPUT_PARAMS = 'outputs'
+/** HUMAN 节点（G3）：给处理人的说明（支持 {{变量}} 插值） */
+export const NODE_CONFIG_KEY_HUMAN_INSTRUCTIONS = 'instructions'
+/** HUMAN 节点：填写字段声明（{name,label,type}[]，type=text/number/select） */
+export const NODE_CONFIG_KEY_HUMAN_FIELDS = 'fields'
+/** HUMAN 节点：决策按钮（{keyword,label}[]，每个 keyword 对应一条出边） */
+export const NODE_CONFIG_KEY_HUMAN_BUTTONS = 'buttons'
+/** HUMAN 节点：指定处理人用户 id 列表 */
+export const NODE_CONFIG_KEY_HUMAN_ASSIGNEE_USER_IDS = 'assigneeUserIds'
+/** HUMAN 节点：指定处理人角色 code 列表 */
+export const NODE_CONFIG_KEY_HUMAN_ASSIGNEE_ROLE_CODES = 'assigneeRoleCodes'
+/** HUMAN 节点：超时秒数（缺省不限时） */
+export const NODE_CONFIG_KEY_HUMAN_TIMEOUT_SECONDS = 'timeoutSeconds'
+/** HUMAN 节点：超时走哪条出边（缺省 = 以失败结束） */
+export const NODE_CONFIG_KEY_HUMAN_TIMEOUT_KEYWORD = 'timeoutKeyword'
+/** SUBGRAPH 节点（G3）：被调用图定义 id */
+export const NODE_CONFIG_KEY_SUBGRAPH_DEF_ID = 'graphDefId'
+/** SUBGRAPH 节点：固定版本号 */
+export const NODE_CONFIG_KEY_SUBGRAPH_DEF_VERSION = 'graphDefVersion'
+/** SUBGRAPH 节点：入参映射（name=子图开始参数名，source=父执行变量名） */
+export const NODE_CONFIG_KEY_SUBGRAPH_INPUTS = 'inputMappings'
+/** SUBGRAPH 节点：出参映射（name=父执行变量名，source=子图输出名） */
+export const NODE_CONFIG_KEY_SUBGRAPH_OUTPUTS = 'outputMappings'
+
+/** 人工节点填写字段（G3） */
+export interface HumanField {
+  name: string
+  label: string
+  type: 'text' | 'number' | 'select'
+  required?: boolean
+  options?: string
+}
+
+/** 人工节点决策按钮（G3） */
+export interface HumanButton {
+  keyword: string
+  label: string
+}
+
+/** 子图映射行（G3） */
+export interface SubgraphMapping {
+  name: string
+  source: string
+}
 
 /** 开始节点输入参数（类型限文本/数字/布尔/JSON，对齐 G1-4） */
 export interface StartParam {
@@ -81,6 +124,10 @@ export const NODE_TYPE_FORK = 'FORK'
 export const NODE_TYPE_JOIN = 'JOIN'
 /** 知识检索节点（阶段 3） */
 export const NODE_TYPE_KNOWLEDGE = 'KNOWLEDGE'
+/** 人工节点（G3：暂停等待处理人填写/决策） */
+export const NODE_TYPE_HUMAN = 'HUMAN'
+/** 子图节点（G3：调用另一个已发布 Graph 的固定版本） */
+export const NODE_TYPE_SUBGRAPH = 'SUBGRAPH'
 
 /**
  * 节点类型 → 文案键（仅展示用途，不落库，往返无字段）。
@@ -98,6 +145,8 @@ export const NODE_TYPE_LABEL_KEYS: Record<string, string> = {
   [NODE_TYPE_FORK]: 'agent.nodeFork',
   [NODE_TYPE_JOIN]: 'agent.nodeJoin',
   [NODE_TYPE_KNOWLEDGE]: 'agent.nodeKnowledge',
+  [NODE_TYPE_HUMAN]: 'agent.nodeHuman',
+  [NODE_TYPE_SUBGRAPH]: 'agent.nodeSubgraph',
 }
 
 /** 节点类型显示名；未登记类型回落为类型本身（不回落为键名）。 */

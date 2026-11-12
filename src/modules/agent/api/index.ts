@@ -34,6 +34,7 @@ import type {
   KnowledgeDocument,
   KnowledgeHit,
   KnowledgeRetrievalReq,
+  AgentHumanTask,
 } from '@/contracts/agent'
 
 // ─── 后端分页原始形状（对齐 AgentGraphDefController.pageDefs 的 PageResult） ───
@@ -239,6 +240,56 @@ export async function cancelGraphExecution(
     method: 'POST',
     url: `/agent/graph-execution-lifecycle/executions/${executionId}/cancel`,
   })
+}
+
+// ─── G3 人工任务 ───
+
+/** 待我处理列表（直接指派给当前用户或当前用户角色） */
+export async function listMyHumanTasks(): Promise<AgentHumanTask[]> {
+  return request<AgentHumanTask[]>({
+    method: 'GET',
+    url: '/agent/graph-execution-lifecycle/human-tasks/mine',
+  })
+}
+
+/** 指定执行的人工任务列表（执行详情展示等待/已处理） */
+export async function listExecutionHumanTasks(executionId: EntityId): Promise<AgentHumanTask[]> {
+  return request<AgentHumanTask[]>({
+    method: 'GET',
+    url: `/agent/graph-execution-lifecycle/executions/${executionId}/human-tasks`,
+  })
+}
+
+/** 提交人工任务：填写值 + 决策按钮 keyword；服务端校验处理人并恢复执行 */
+export async function submitHumanTask(
+  executionId: EntityId,
+  taskId: EntityId,
+  values: Record<string, string>,
+  decision: string,
+): Promise<AgentExecutionLifecycle> {
+  return request<AgentExecutionLifecycle>({
+    method: 'POST',
+    url: `/agent/graph-execution-lifecycle/executions/${executionId}/human-tasks/${taskId}/submit`,
+    data: { values, decision },
+  })
+}
+
+/** 处理人候选（登录即可调用的最小用户选项，服务端按租户过滤） */
+export async function listUserChoices(): Promise<Array<{ id: string; label: string }>> {
+  interface UserOption {
+    id: string | number
+    username?: string
+    realName?: string
+  }
+  const list = await request<UserOption[]>({
+    method: 'GET',
+    url: '/system/user/options',
+    params: { limit: 100 },
+  })
+  return (list ?? []).map((u) => ({
+    id: String(u.id),
+    label: u.realName || u.username || String(u.id),
+  }))
 }
 
 // ═══════════════════════════════════════════════════════════════

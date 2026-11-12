@@ -12,6 +12,12 @@ import {
   NODE_CONFIG_KEY_MODEL_ID,
   NODE_CONFIG_KEY_TOOL_NAME,
   NODE_CONFIG_KEY_TOP_K,
+  NODE_CONFIG_KEY_HUMAN_ASSIGNEE_ROLE_CODES,
+  NODE_CONFIG_KEY_HUMAN_ASSIGNEE_USER_IDS,
+  NODE_CONFIG_KEY_HUMAN_INSTRUCTIONS,
+  NODE_CONFIG_KEY_HUMAN_TIMEOUT_SECONDS,
+  NODE_CONFIG_KEY_SUBGRAPH_DEF_ID,
+  NODE_CONFIG_KEY_SUBGRAPH_DEF_VERSION,
   NODE_TYPE_CONDITION,
   NODE_TYPE_END,
   NODE_TYPE_FORK,
@@ -19,7 +25,9 @@ import {
   NODE_TYPE_KNOWLEDGE,
   NODE_TYPE_LLM,
   NODE_TYPE_LOOP,
+  NODE_TYPE_HUMAN,
   NODE_TYPE_START,
+  NODE_TYPE_SUBGRAPH,
   NODE_TYPE_TOOL,
 } from './graphAdapter'
 
@@ -34,6 +42,8 @@ export const NODE_TYPE_ICONS: Record<string, string> = {
   [NODE_TYPE_FORK]: 'fork',
   [NODE_TYPE_JOIN]: 'join',
   [NODE_TYPE_KNOWLEDGE]: 'book',
+  [NODE_TYPE_HUMAN]: 'user',
+  [NODE_TYPE_SUBGRAPH]: 'subgraph',
 }
 
 /** 节点类型 → 主色（对齐流程设计器视觉：开始/结束绿、智能能力主色、工具橙、条件红） */
@@ -47,12 +57,16 @@ export const NODE_TYPE_ACCENTS: Record<string, string> = {
   [NODE_TYPE_FORK]: '#652656',
   [NODE_TYPE_JOIN]: '#652656',
   [NODE_TYPE_KNOWLEDGE]: '#7c3aed',
+  [NODE_TYPE_HUMAN]: '#409eff',
+  [NODE_TYPE_SUBGRAPH]: '#652656',
 }
 
 export interface NodePresentationContext {
   modelOptions: AgentModelConfigOption[]
   toolOptions: AgentToolOption[]
   knowledgeOptions: KnowledgeBase[]
+  /** 已发布图（SUBGRAPH 节点展示被调用图名与版本） */
+  graphOptions?: Array<{ id: number | string; name: string; defVersion?: number }>
   edges: FlowGraphEdge[]
 }
 
@@ -125,6 +139,34 @@ export function nodeSummary(node: FlowGraphNode, ctx: NodePresentationContext): 
       return typeof topK === 'number' && topK > 0
         ? t('agent.summaryKnowledgeTopK', { name, topK })
         : name
+    }
+    case NODE_TYPE_HUMAN: {
+      const instructions = data[NODE_CONFIG_KEY_HUMAN_INSTRUCTIONS]
+      if (typeof instructions === 'string' && instructions.trim()) {
+        const firstLine = instructions
+          .trim()
+          .split(String.fromCharCode(10))[0]
+          .replace(String.fromCharCode(13), '')
+        return firstLine.length > 24 ? `${firstLine.slice(0, 24)}…` : firstLine
+      }
+      const users = data[NODE_CONFIG_KEY_HUMAN_ASSIGNEE_USER_IDS]
+      const roles = data[NODE_CONFIG_KEY_HUMAN_ASSIGNEE_ROLE_CODES]
+      const count =
+        (Array.isArray(users) ? users.length : 0) + (Array.isArray(roles) ? roles.length : 0)
+      if (count === 0) return t('agent.summaryHumanUnset')
+      const timeout = data[NODE_CONFIG_KEY_HUMAN_TIMEOUT_SECONDS]
+      return typeof timeout === 'number' && timeout > 0
+        ? t('agent.summaryHumanTimeout', { count, seconds: timeout })
+        : t('agent.summaryHuman', { count })
+    }
+    case NODE_TYPE_SUBGRAPH: {
+      const defId = data[NODE_CONFIG_KEY_SUBGRAPH_DEF_ID]
+      const defVersion = data[NODE_CONFIG_KEY_SUBGRAPH_DEF_VERSION]
+      const graph = (ctx.graphOptions ?? []).find((g) => String(g.id) === String(defId))
+      if (!graph) return t('agent.summarySubgraphUnset')
+      return typeof defVersion === 'number' && defVersion > 0
+        ? t('agent.summarySubgraph', { name: graph.name, version: defVersion })
+        : graph.name
     }
     default:
       return ''

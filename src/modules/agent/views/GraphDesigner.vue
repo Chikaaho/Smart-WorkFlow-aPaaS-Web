@@ -36,6 +36,10 @@ import {
   executeGraph,
   getGraphExecutionLifecycle,
   listGraphExecutionEvents,
+  listExecutionHumanTasks,
+  listUserChoices,
+  listGraphDefVersions,
+  pageGraphDefs,
   runGraphNode,
   submitGraphExecution,
   getGraphDef,
@@ -45,20 +49,32 @@ import {
   publishGraphDef,
   saveDraftGraph,
 } from '@/modules/agent/api'
-import type { AgentNodeRunResult } from '@/modules/agent/api'
+import type { AgentExecutionLifecycle, AgentNodeRunResult } from '@/modules/agent/api'
+import type {
+  AgentHumanTask,
+  AgentGraphExecuteResp,
+  AgentModelConfigOption,
+  AgentToolOption,
+  KnowledgeBase,
+  ProcessGraph,
+} from '@/contracts/agent'
+import HumanTaskSubmitDialog from '@/modules/agent/components/execution/HumanTaskSubmitDialog.vue'
 import {
   NODE_CONFIG_KEY_INPUT_PARAMS,
   NODE_CONFIG_KEY_MAX_ITERATIONS,
+  NODE_CONFIG_KEY_SUBGRAPH_DEF_ID,
   NODE_CONFIG_KEY_SYSTEM_PROMPT,
   NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE,
   NODE_TYPE_CONDITION,
   NODE_TYPE_END,
   NODE_TYPE_FORK,
+  NODE_TYPE_HUMAN,
   NODE_TYPE_JOIN,
   NODE_TYPE_KNOWLEDGE,
   NODE_TYPE_LLM,
   NODE_TYPE_LOOP,
   NODE_TYPE_START,
+  NODE_TYPE_SUBGRAPH,
   NODE_TYPE_TOOL,
   elementsToFlowGraphData,
   flowGraphDataToElements,
@@ -78,13 +94,6 @@ import {
   validateGraphVariables,
 } from '@/modules/agent/utils/variableReferences'
 import { getNodePanelDescriptor } from './panels/node-panel-registry'
-import type {
-  AgentGraphExecuteResp,
-  AgentModelConfigOption,
-  AgentToolOption,
-  KnowledgeBase,
-  ProcessGraph,
-} from '@/contracts/agent'
 import { ApiError } from '@/foundation/request'
 import { parseRouteId } from '@/modules/agent/utils/routeId'
 
@@ -113,6 +122,11 @@ const activeNodeTab = ref<'config' | 'connection'>('config')
 const modelOptions = ref<AgentModelConfigOption[]>([])
 const toolOptions = ref<AgentToolOption[]>([])
 const knowledgeOptions = ref<KnowledgeBase[]>([])
+/** G3：已发布图（SUBGRAPH 选择）与处理人候选（HUMAN 选择） */
+const graphOptions = ref<Array<{ id: number | string; name: string; defVersion?: number }>>([])
+const userOptions = ref<Array<{ id: string; label: string }>>([])
+/** G3：当前选中子图节点的发布版本快照 */
+const subgraphVersions = ref<Array<{ defVersion: number }>>([])
 
 // ─── 历史（撤销/重做） ───
 const history = ref<FlowGraphData[]>([])
@@ -138,6 +152,8 @@ interface NodeRunState {
   input?: string
   output?: string
   errorMessage?: string
+  /** G3：SUBGRAPH 节点的子执行 id */
+  childExecutionId?: number
 }
 const nodeRunStates = ref<Record<string, NodeRunState>>({})
 
@@ -169,6 +185,22 @@ function paramValue(name: string): string | boolean {
 function setParamValue(name: string, value: string | boolean) {
   structuredInputs.value = { ...structuredInputs.value, [name]: value }
 }
+
+// ─── G3 等待人工 ───
+const waitingHumanTask = ref<AgentHumanTask | null>(null)
+const humanTaskDialogVisible = ref(false)
+
+/** 等待处理人展示名：角色 code > 用户姓名 > 用户 id */
+const waitingAssigneeLabel = computed(() => {
+  const task = waitingHumanTask.value
+  if (!task) return ''
+  if (task.assigneeRoleCode) return task.assigneeRoleCode
+  if (task.assigneeUserId !== null && task.assigneeUserId !== undefined) {
+    const user = userOptions.value.find((u) => u.id === String(task.assigneeUserId))
+    return user?.label ?? `#${task.assigneeUserId}`
+  }
+  return t('agent.humanTaskPending')
+})
 
 // ─── G1-8 单节点运行 ───
 const singleNodeDialogVisible = ref(false)
@@ -217,6 +249,7 @@ const presentationCtx = computed(() => ({
   modelOptions: modelOptions.value,
   toolOptions: toolOptions.value,
   knowledgeOptions: knowledgeOptions.value,
+  graphOptions: graphOptions.value,
   edges: graphData.value.edges,
 }))
 
@@ -284,6 +317,8 @@ function handleRunEvent(type: string, nodeId: string | undefined, payload: strin
       input: typeof detail.input === 'string' ? detail.input : undefined,
       output: typeof detail.output === 'string' ? detail.output : undefined,
       errorMessage: typeof detail.errorMessage === 'string' ? detail.errorMessage : undefined,
+      childExecutionId:
+        typeof detail.childExecutionId === 'number' ? detail.childExecutionId : undefined,
     },
   }
   applyNodeRunStatus(nodeId, status)
@@ -337,6 +372,8 @@ const NODE_TYPES = [
   NODE_TYPE_FORK,
   NODE_TYPE_JOIN,
   NODE_TYPE_KNOWLEDGE,
+  NODE_TYPE_HUMAN,
+  NODE_TYPE_SUBGRAPH,
 ]
 
 const PALETTE_GROUPS: Array<{ labelKey: string; types: string[] }> = [
@@ -348,6 +385,10 @@ const PALETTE_GROUPS: Array<{ labelKey: string; types: string[] }> = [
   {
     labelKey: 'agent.paletteGroupControl',
     types: [NODE_TYPE_CONDITION, NODE_TYPE_LOOP, NODE_TYPE_FORK, NODE_TYPE_JOIN],
+  },
+  {
+    labelKey: 'agent.paletteGroupInteraction',
+    types: [NODE_TYPE_HUMAN, NODE_TYPE_SUBGRAPH],
   },
 ]
 
@@ -680,6 +721,33 @@ async function loadGraph() {
   }
 }
 
+/** G3：加载选中子图节点的发布版本快照 */
+async function loadSubgraphVersions(defId: string) {
+  if (!defId) {
+    subgraphVersions.value = []
+    return
+  }
+  try {
+    const snapshots = await listGraphDefVersions(defId)
+    subgraphVersions.value = snapshots
+      .map((s) => ({ defVersion: s.defVersion }))
+      .sort((a, b) => b.defVersion - a.defVersion)
+  } catch {
+    subgraphVersions.value = []
+  }
+}
+
+watch(
+  () => [selectedNodeType.value, selectedNode.value?.data?.[NODE_CONFIG_KEY_SUBGRAPH_DEF_ID]],
+  ([type, defId]) => {
+    if (type !== NODE_TYPE_SUBGRAPH) {
+      subgraphVersions.value = []
+      return
+    }
+    void loadSubgraphVersions(defId === undefined || defId === null ? '' : String(defId))
+  },
+)
+
 async function loadOptions() {
   try {
     const [models, tools, knowledgePage] = await Promise.all([
@@ -690,6 +758,21 @@ async function loadOptions() {
     modelOptions.value = models
     toolOptions.value = tools
     knowledgeOptions.value = knowledgePage.list
+    refreshAllPresentations()
+    // G3 附属选项：处理人/已发布图加载失败不阻断设计器主流程
+    const usersPromise =
+      typeof listUserChoices === 'function'
+        ? listUserChoices().catch(() => [])
+        : Promise.resolve([])
+    const graphsPromise =
+      typeof pageGraphDefs === 'function'
+        ? pageGraphDefs({ pageNum: 1, pageSize: 100 }).catch(() => ({ list: [] }))
+        : Promise.resolve({ list: [] })
+    const [users, graphPage] = await Promise.all([usersPromise, graphsPromise])
+    userOptions.value = users ?? []
+    graphOptions.value = (graphPage.list ?? [])
+      .filter((g) => g.status === 'PUBLISHED' && String(g.id) !== String(graphId.value))
+      .map((g) => ({ id: g.id, name: g.name, defVersion: g.defVersion }))
     refreshAllPresentations()
   } catch (err) {
     ElMessage.warning(
@@ -763,15 +846,33 @@ const TERMINAL_STATUSES = new Set(['SUCCESS', 'FAILED', 'CANCELLED', 'INTERRUPTE
 
 const executeAlertType = computed<'success' | 'info' | 'error'>(() => {
   if (executeResult.value?.success) return 'success'
-  if (lifecycleStatus.value === 'CANCELLED') return 'info'
+  if (lifecycleStatus.value === 'CANCELLED' || lifecycleStatus.value === 'WAITING_HUMAN') {
+    return 'info'
+  }
   return 'error'
 })
 
 const executeAlertTitle = computed(() => {
   if (executeResult.value?.success) return t('agent.executionSucceeded')
   if (lifecycleStatus.value === 'CANCELLED') return t('agent.executionCancelled')
+  if (lifecycleStatus.value === 'WAITING_HUMAN') return t('agent.humanWaitingAlert')
   return t('agent.executionFailed')
 })
+
+const LIFECYCLE_STATUS_KEYS: Record<string, string> = {
+  RUNNING: 'common.statusRunning',
+  QUEUED: 'agent.nodeStatusWaiting',
+  WAITING_HUMAN: 'agent.humanTaskWaitStatus',
+  SUCCESS: 'common.resultSuccess',
+  FAILED: 'common.resultFailed',
+  CANCELLED: 'agent.executionCancelled',
+}
+
+const lifecycleStatusLabel = computed(() =>
+  lifecycleStatus.value
+    ? t(LIFECYCLE_STATUS_KEYS[lifecycleStatus.value] ?? lifecycleStatus.value)
+    : '',
+)
 
 async function refreshExecution(executionId: number) {
   const [state, events] = await Promise.all([
@@ -779,6 +880,11 @@ async function refreshExecution(executionId: number) {
     listGraphExecutionEvents(executionId, lastSequence.value),
   ])
   lifecycleStatus.value = state.status
+  if (state.status === 'WAITING_HUMAN') {
+    await syncWaitingHuman(executionId)
+  } else {
+    waitingHumanTask.value = null
+  }
   for (const event of events) {
     if (event.sequence <= lastSequence.value) continue
     lastSequence.value = event.sequence
@@ -801,6 +907,36 @@ async function refreshExecution(executionId: number) {
     return
   }
   pollTimer = setTimeout(() => void refreshExecution(executionId), 800)
+}
+
+/** G3：等待人工——把待处理节点置「等待」并准备提交入口 */
+async function syncWaitingHuman(executionId: number) {
+  try {
+    const tasks = await listExecutionHumanTasks(executionId)
+    const pending = tasks.filter((task) => task.status === 'PENDING')
+    waitingHumanTask.value = pending[0] ?? null
+    for (const task of pending) {
+      nodeRunStates.value = {
+        ...nodeRunStates.value,
+        [task.nodeId]: { status: 'waiting' },
+      }
+      applyNodeRunStatus(task.nodeId, 'waiting')
+    }
+  } catch {
+    waitingHumanTask.value = null
+  }
+}
+
+/** G3：人工任务提交成功——清空等待并继续轮询直到终态 */
+async function handleHumanTaskSubmitted(_state: AgentExecutionLifecycle) {
+  ElMessage.success(t('agent.humanTaskSubmitted'))
+  waitingHumanTask.value = null
+  humanTaskDialogVisible.value = false
+  const executionId = executeResult.value?.executionId
+  if (executionId) {
+    if (pollTimer) clearTimeout(pollTimer)
+    await refreshExecution(executionId)
+  }
 }
 
 async function handleExecute() {
@@ -931,6 +1067,11 @@ async function confirmSingleNodeRun() {
 watch(selectedNodeId, () => {
   activeNodeTab.value = 'config'
 })
+
+/** G3：执行详情跳转子执行 */
+function openChildExecution(childExecutionId: number) {
+  void router.push(`/agent/executions/detail/${childExecutionId}`)
+}
 
 onMounted(() => {
   void loadGraph()
@@ -1066,7 +1207,11 @@ onBeforeUnmount(() => {
                 :condition-out-edges="conditionOutEdges"
                 :edge-display-name="edgeDisplayName"
                 :variable-groups="variableGroups"
+                :user-options="userOptions"
+                :graph-options="graphOptions"
+                :subgraph-versions="subgraphVersions"
                 @update-node-data="updateNodeData"
+                @subgraph-graph-change="loadSubgraphVersions"
                 @var-name-change="handleVarNameChange"
                 @max-iterations-change="handleMaxIterationsChange"
                 @keyword-change="handleKeywordChange"
@@ -1128,6 +1273,20 @@ onBeforeUnmount(() => {
                 <div class="panel-field__label">{{ t('agent.nodeRunError') }}</div>
                 <pre class="node-run-text node-run-error">{{ selectedNodeRun.errorMessage }}</pre>
               </template>
+              <div v-if="selectedNodeRun.childExecutionId" class="panel-meta">
+                <el-button
+                  size="small"
+                  link
+                  type="primary"
+                  @click="openChildExecution(selectedNodeRun.childExecutionId)"
+                >
+                  {{
+                    t('agent.subgraphChildExecutionLink', {
+                      id: selectedNodeRun.childExecutionId,
+                    })
+                  }}
+                </el-button>
+              </div>
             </el-tab-pane>
           </el-tabs>
 
@@ -1224,6 +1383,12 @@ onBeforeUnmount(() => {
       </template>
     </el-dialog>
 
+    <HumanTaskSubmitDialog
+      v-model="humanTaskDialogVisible"
+      :task="waitingHumanTask"
+      @submitted="handleHumanTaskSubmitted"
+    />
+
     <!-- 执行测试面板（结果不落库，刷新即失） -->
     <div class="execute-panel">
       <div class="execute-row">
@@ -1248,7 +1413,31 @@ onBeforeUnmount(() => {
         >
           取消执行
         </el-button>
-        <el-tag v-if="lifecycleStatus" type="info" size="small">{{ lifecycleStatus }}</el-tag>
+        <el-tag v-if="lifecycleStatus" type="info" size="small">
+          {{ lifecycleStatusLabel }}
+        </el-tag>
+      </div>
+      <!-- G3-6：等待人工处理，直接在当前页提交 -->
+      <div v-if="lifecycleStatus === 'WAITING_HUMAN'" class="human-waiting-card">
+        <div class="human-waiting-card__text">
+          <div class="human-waiting-card__title">
+            {{ t('agent.humanWaitingFor', { assignee: waitingAssigneeLabel }) }}
+          </div>
+          <div v-if="waitingHumanTask?.instructions" class="human-waiting-card__hint">
+            {{ waitingHumanTask.instructions }}
+          </div>
+          <div v-else-if="waitingHumanTask" class="human-waiting-card__hint">
+            {{ t('agent.humanTaskNode') }}：{{ waitingHumanTask.nodeId }}
+          </div>
+        </div>
+        <el-button
+          v-if="waitingHumanTask"
+          size="small"
+          type="primary"
+          @click="humanTaskDialogVisible = true"
+        >
+          {{ t('agent.humanInboxOpen') }}
+        </el-button>
       </div>
       <!-- G1-4：开始节点参数声明 → 结构化入参表单 -->
       <div v-if="startParams.length > 0" class="params-form">
@@ -1528,6 +1717,29 @@ onBeforeUnmount(() => {
 .insert-grid .el-button {
   width: 100%;
   margin-left: 0 !important;
+}
+
+.human-waiting-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  background: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-color-primary-light-7);
+  border-radius: 4px;
+}
+
+.human-waiting-card__title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.human-waiting-card__hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-top: 2px;
 }
 
 .execute-panel {

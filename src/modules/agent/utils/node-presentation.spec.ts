@@ -23,8 +23,20 @@ function node(type: string, data?: Record<string, unknown>): FlowGraphNode {
 }
 
 describe('node-presentation', () => {
-  it('类型 → 图标/主色映射完整（9 类节点）', () => {
-    const types = ['START', 'END', 'LLM', 'TOOL', 'CONDITION', 'LOOP', 'FORK', 'JOIN', 'KNOWLEDGE']
+  it('类型 → 图标/主色映射完整（11 类节点）', () => {
+    const types = [
+      'START',
+      'END',
+      'LLM',
+      'TOOL',
+      'CONDITION',
+      'LOOP',
+      'FORK',
+      'JOIN',
+      'KNOWLEDGE',
+      'HUMAN',
+      'SUBGRAPH',
+    ]
     for (const type of types) {
       expect(NODE_TYPE_ICONS[type]).toBeTruthy()
       expect(NODE_TYPE_ACCENTS[type]).toBeTruthy()
@@ -117,6 +129,26 @@ describe('node-presentation', () => {
       ).summary,
     ).toBe('1 个出参')
     expect(nodePresentation(node('END', {}), emptyCtx).summary).toBe('未声明出参')
+  })
+
+  it('HUMAN 摘要：优先说明首行，否则处理人数量与超时', () => {
+    expect(nodePresentation(node('HUMAN', { instructions: '请确认发布' }), emptyCtx).summary).toBe(
+      '请确认发布',
+    )
+    expect(
+      nodePresentation(node('HUMAN', { assigneeUserIds: ['1'], timeoutSeconds: 60 }), emptyCtx)
+        .summary,
+    ).toContain('1 个处理人')
+    expect(nodePresentation(node('HUMAN', {}), emptyCtx).summary).toBe('未配置处理人')
+  })
+
+  it('SUBGRAPH 摘要：被调用图名称 + 固定版本', () => {
+    const presentation = nodePresentation(
+      node('SUBGRAPH', { graphDefId: '88', graphDefVersion: 2 }),
+      ctx({ graphOptions: [{ id: 88, name: '审批子图', defVersion: 3 }] }),
+    )
+    expect(presentation.summary).toBe('审批子图 · v2')
+    expect(nodePresentation(node('SUBGRAPH', {}), emptyCtx).summary).toBe('未选择子图')
   })
 
   it('保留既有运行状态（G1-7 节点状态色）', () => {

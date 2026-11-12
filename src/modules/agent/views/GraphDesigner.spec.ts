@@ -680,7 +680,7 @@ describe('GraphDesigner.vue', () => {
   it('色板渲染 LOOP/FORK/JOIN 新类型按钮，点击后画布新增对应类型节点', async () => {
     const wrapper = await mountLoaded()
     const paletteTexts = wrapper.findAll('.palette-item').map((b) => b.text())
-    // G1-3 分组后顺序：基础 / 智能能力 / 流程控制
+    // 分组后顺序：基础 / 智能能力 / 流程控制 / 人工与子图
     expect(paletteTexts).toEqual([
       '开始',
       '结束',
@@ -691,6 +691,8 @@ describe('GraphDesigner.vue', () => {
       '循环',
       '并行分支',
       '汇合',
+      '人工处理',
+      '子图',
     ])
 
     const loopBtn = wrapper.findAll('.palette-item').find((b) => b.text() === '循环')!

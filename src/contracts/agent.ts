@@ -402,6 +402,42 @@ export interface AgentGraphExecutionNode {
   errorMessage?: string
   /** 构建时间（用于确定父子关系，相同 buildTime 的节点属于同一时刻并行分支） */
   buildTime: string
+  /** G3：SUBGRAPH 节点对应的子执行 id（执行详情可跳转） */
+  childExecutionId?: number | null
+}
+
+// ═══════════════════════════════════════════════════════════════
+// G3 人工任务（AgentHumanTaskDTO，等待人工节点）
+// ═══════════════════════════════════════════════════════════════
+
+export interface AgentHumanTaskField {
+  name: string
+  label?: string
+  type?: 'text' | 'number' | 'select' | string
+  required?: boolean
+  options?: string
+}
+
+export interface AgentHumanTaskButton {
+  keyword: string
+  label?: string
+}
+
+/** 人工任务（待办/已办；payload 已由服务端展开为说明/字段/按钮） */
+export interface AgentHumanTask {
+  id: number
+  executionId: number
+  nodeId: string
+  status: 'PENDING' | 'SUBMITTED' | 'TIMEOUT' | 'CANCELLED' | string
+  assigneeUserId?: number | null
+  assigneeRoleCode?: string | null
+  resultJson?: string | null
+  createTime?: string
+  submittedAt?: string | null
+  instructions?: string | null
+  fields?: AgentHumanTaskField[]
+  buttons?: AgentHumanTaskButton[]
+  timeoutSeconds?: number | null
 }
 
 // ═══════════════════════════════════════════════════════════════

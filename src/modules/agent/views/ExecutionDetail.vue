@@ -39,9 +39,15 @@ import {
   getExecutionDetail,
   getGraphDef,
   getGraphExecutionLifecycle,
+  listExecutionHumanTasks,
   listExecutionNodes,
 } from '@/modules/agent/api'
-import type { AgentGraphExecutionDetail, AgentGraphExecutionNode } from '@/contracts/agent'
+import type {
+  AgentGraphExecutionDetail,
+  AgentGraphExecutionNode,
+  AgentHumanTask,
+} from '@/contracts/agent'
+import HumanTaskSubmitDialog from '@/modules/agent/components/execution/HumanTaskSubmitDialog.vue'
 import { ApiError } from '@/foundation/request'
 import { parseRouteId } from '@/modules/agent/utils/routeId'
 import { sumTokens, toTokenNumber } from '@/modules/agent/utils/token'
@@ -60,6 +66,29 @@ const error = ref<string | null>(null)
 const detail = ref<AgentGraphExecutionDetail | null>(null)
 const nodes = ref<AgentGraphExecutionNode[]>([])
 
+// ─── G3 人工任务 ───
+const humanTasks = ref<AgentHumanTask[]>([])
+const humanDialogVisible = ref(false)
+const activeHumanTask = ref<AgentHumanTask | null>(null)
+
+async function loadHumanTasks() {
+  try {
+    humanTasks.value = (await listExecutionHumanTasks(executionId.value)) ?? []
+  } catch {
+    humanTasks.value = []
+  }
+}
+
+function openHumanTask(task: AgentHumanTask) {
+  activeHumanTask.value = task
+  humanDialogVisible.value = true
+}
+
+function handleHumanSubmitted() {
+  activeHumanTask.value = null
+  void loadDetail()
+}
+
 // ─── 状态映射 ───
 const STATUS_MAP: Record<
   string,
@@ -68,6 +97,12 @@ const STATUS_MAP: Record<
   RUNNING: {
     get label() {
       return t('common.statusRunning')
+    },
+    type: 'warning',
+  },
+  WAITING_HUMAN: {
+    get label() {
+      return t('agent.humanTaskWaitStatus')
     },
     type: 'warning',
   },
@@ -154,6 +189,7 @@ async function loadDetail() {
   error.value = null
   detail.value = null
   nodes.value = []
+  humanTasks.value = []
 
   try {
     // 生命周期执行使用独立持久化端点；旧同步执行继续使用原详情端点。
@@ -186,6 +222,7 @@ async function loadDetail() {
           nodes.value = []
         }
       }
+      void loadHumanTasks()
       return
     } catch {
       // 兼容生命周期上线前的同步执行历史。
@@ -374,19 +411,72 @@ onMounted(() => {
         </div>
       </el-card>
 
+      <!-- G3：人工任务（等待/已处理） -->
+      <el-card v-if="humanTasks.length > 0" shadow="never" class="detail-section">
+        <template #header>
+          <div class="section-title">{{ t('agent.humanTasksTitle') }}</div>
+        </template>
+        <div v-for="task in humanTasks" :key="task.id" class="human-task-row">
+          <div class="human-task-row__main">
+            <div class="human-task-row__title">
+              {{ task.nodeId }}
+              <el-tag
+                size="small"
+                :type="task.status === 'PENDING' ? 'warning' : 'info'"
+                effect="plain"
+              >
+                {{ task.status === 'PENDING' ? t('agent.humanTaskPending') : task.status }}
+              </el-tag>
+            </div>
+            <div v-if="task.instructions" class="human-task-row__instructions">
+              {{ task.instructions }}
+            </div>
+            <div class="human-task-row__meta">
+              <span v-if="task.assigneeRoleCode">
+                {{ t('agent.humanTaskAssignee') }}：{{ task.assigneeRoleCode }}
+              </span>
+              <span v-else-if="task.assigneeUserId">
+                {{ t('agent.humanTaskAssignee') }}：#{{ task.assigneeUserId }}
+              </span>
+              <span v-if="task.timeoutSeconds">
+                {{ t('agent.humanTaskTimeoutLabel', { seconds: task.timeoutSeconds }) }}
+              </span>
+              <span>{{ t('agent.humanTaskCreatedAt') }}：{{ task.createTime || '-' }}</span>
+            </div>
+          </div>
+          <el-button
+            v-if="task.status === 'PENDING'"
+            size="small"
+            type="primary"
+            @click="openHumanTask(task)"
+          >
+            {{ t('agent.humanInboxOpen') }}
+          </el-button>
+        </div>
+      </el-card>
+
       <!-- 节点轨迹子视图 -->
       <el-card shadow="never" class="detail-section trajectory-section">
         <template #header>
           <div class="section-title">{{ t('agent.nodeTrajectory') }}</div>
         </template>
         <div class="trajectory-body">
-          <NodeTrajectory :nodes="nodes" />
+          <NodeTrajectory
+            :nodes="nodes"
+            @view-child-execution="(id) => router.push(`/agent/executions/detail/${id}`)"
+          />
         </div>
       </el-card>
     </template>
 
     <!-- 未找到状态 -->
     <el-empty v-else :description="t('agent.noExecutionDetailData')" />
+
+    <HumanTaskSubmitDialog
+      v-model="humanDialogVisible"
+      :task="activeHumanTask"
+      @submitted="handleHumanSubmitted"
+    />
   </div>
 </template>
 
@@ -577,5 +667,39 @@ onMounted(() => {
   font-size: 11px;
   color: #909399;
   line-height: 1.5;
+}
+.human-task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.human-task-row:last-child {
+  border-bottom: none;
+}
+
+.human-task-row__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.human-task-row__instructions {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  margin-top: 2px;
+}
+
+.human-task-row__meta {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  margin-top: 2px;
 }
 </style>

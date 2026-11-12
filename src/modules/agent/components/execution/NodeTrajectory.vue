@@ -25,6 +25,8 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   nodeClick: [node: AgentGraphExecutionNode]
+  /** G3：跳转 SUBGRAPH 节点的子执行详情 */
+  viewChildExecution: [childExecutionId: number]
 }>()
 
 /** 状态映射 */
@@ -55,6 +57,18 @@ const STATUS_MAP: Record<
       return t('common.resultFailed')
     },
     type: 'danger',
+  },
+  WAITING: {
+    get label() {
+      return t('agent.humanTaskWaitStatus')
+    },
+    type: 'warning',
+  },
+  WAITING_HUMAN: {
+    get label() {
+      return t('agent.humanTaskWaitStatus')
+    },
+    type: 'warning',
   },
 }
 
@@ -239,6 +253,16 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
             <span v-if="node.nodeType === 'LLM'" class="node-token">
               {{ t('agent.outputTokensInline', { value: formatTokenCount(node.outputTokens) }) }}
             </span>
+            <el-button
+              v-if="node.childExecutionId"
+              size="small"
+              link
+              type="primary"
+              class="node-child-link"
+              @click.stop="emits('viewChildExecution', node.childExecutionId)"
+            >
+              {{ t('agent.subgraphChildExecutionLink', { id: node.childExecutionId }) }}
+            </el-button>
           </div>
 
           <!-- 展开区域：变量快照 -->
