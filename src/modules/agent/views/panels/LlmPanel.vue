@@ -22,6 +22,7 @@ import {
 } from '@/modules/agent/utils/graphAdapter'
 import type { NodePanelProps } from './node-panel-registry'
 import type { AgentModelConfigOption } from '@/contracts/agent'
+import VariablePicker from './VariablePicker.vue'
 
 const props = defineProps<NodePanelProps>()
 
@@ -93,6 +94,23 @@ function onPromptChange(key: string, val: unknown) {
   const v = typeof val === 'string' ? val : ''
   emit('updateNodeData', key, v.trim() ? v : undefined)
 }
+
+/** 变量选择（G1-5）：追加到 prompt 文本尾部 */
+function onInsertVariable(key: string, reference: string) {
+  const existing =
+    typeof props.node.data?.[key] === 'string' ? (props.node.data?.[key] as string) : ''
+  const next = existing.trim() ? `${existing} ${reference}` : reference
+  emit('updateNodeData', key, next)
+}
+
+/** 上游变量名回填 inputVar（只写变量名，不写花括号；节点作用域取点后的变量名） */
+function onPickInputVar(reference: string) {
+  const raw = reference.replace(/^\{\{/, '').replace(/\}\}$/, '').trim()
+  const name = raw.includes('.') ? raw.slice(raw.indexOf('.') + 1) : raw
+  emit('varNameChange', NODE_CONFIG_KEY_INPUT_VAR, name)
+}
+
+const variableGroups = computed(() => props.variableGroups ?? [])
 </script>
 
 <template>
@@ -148,6 +166,10 @@ function onPromptChange(key: string, val: unknown) {
   <div class="field-row">
     <div class="field-label">
       {{ t('agent.systemPromptLabel') }}
+      <VariablePicker
+        :groups="variableGroups"
+        @pick="(ref) => onInsertVariable(NODE_CONFIG_KEY_SYSTEM_PROMPT, ref)"
+      />
     </div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_SYSTEM_PROMPT] as string | undefined) ?? ''"
@@ -162,6 +184,10 @@ function onPromptChange(key: string, val: unknown) {
     <div class="field-label">
       {{ t('agent.userPromptLabel') }}
       <HintTip :content="userPromptHint" />
+      <VariablePicker
+        :groups="variableGroups"
+        @pick="(ref) => onInsertVariable(NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE, ref)"
+      />
     </div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE] as string | undefined) ?? ''"
@@ -173,7 +199,10 @@ function onPromptChange(key: string, val: unknown) {
     />
   </div>
   <div class="field-row">
-    <div class="field-label">{{ t('agent.inputVariableName') }}</div>
+    <div class="field-label">
+      {{ t('agent.inputVariableName') }}
+      <VariablePicker :groups="variableGroups" @pick="onPickInputVar" />
+    </div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_INPUT_VAR] as string | undefined) ?? ''"
       :placeholder="t('agent.varNamePlaceholder', { DEFAULT_VARIABLE_NAME })"

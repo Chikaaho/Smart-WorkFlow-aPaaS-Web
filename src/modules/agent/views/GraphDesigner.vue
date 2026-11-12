@@ -66,6 +66,10 @@ import {
   positionBetweenNodes,
 } from '@/modules/agent/utils/graphLayout'
 import { nodePresentation } from '@/modules/agent/utils/node-presentation'
+import {
+  buildVariableGroups,
+  validateGraphVariables,
+} from '@/modules/agent/utils/variableReferences'
 import { getNodePanelDescriptor } from './panels/node-panel-registry'
 import type {
   AgentGraphExecuteResp,
@@ -165,6 +169,13 @@ const panelDescriptor = computed(() => getNodePanelDescriptor(selectedNodeType.v
 const panelComponent = computed(() => panelDescriptor.value?.component ?? null)
 const panelLabel = computed(() =>
   panelDescriptor.value ? i18n.global.t(panelDescriptor.value.labelKey) : selectedNodeType.value,
+)
+
+/** 当前节点可用变量（G1-5：只列上游可达节点输出 + 开始参数） */
+const variableGroups = computed(() =>
+  selectedNode.value
+    ? buildVariableGroups(selectedNode.value, graphData.value.nodes, graphData.value.edges)
+    : [],
 )
 
 const NODE_TYPES = [
@@ -574,6 +585,18 @@ async function handleSaveDraft() {
 }
 
 async function handlePublish() {
+  // G1-5：发布前校验参数声明与变量引用（精确到节点/字段/引用）
+  const errors = validateGraphVariables(graphData.value.nodes, graphData.value.edges)
+  if (errors.length > 0) {
+    const detail = errors
+      .slice(0, 3)
+      .map(
+        (e) => `${e.nodeLabel} · ${e.field}${e.reference ? ` · ${e.reference}` : ''}：${e.reason}`,
+      )
+      .join('；')
+    ElMessage.error(`${t('agent.publishValidationFailed', { count: errors.length })}${detail}`)
+    return
+  }
   publishing.value = true
   try {
     const published = await publishGraphDef(graphId.value)
@@ -816,6 +839,7 @@ onBeforeUnmount(() => {
                 :knowledge-options="knowledgeOptions"
                 :condition-out-edges="conditionOutEdges"
                 :edge-display-name="edgeDisplayName"
+                :variable-groups="variableGroups"
                 @update-node-data="updateNodeData"
                 @var-name-change="handleVarNameChange"
                 @max-iterations-change="handleMaxIterationsChange"

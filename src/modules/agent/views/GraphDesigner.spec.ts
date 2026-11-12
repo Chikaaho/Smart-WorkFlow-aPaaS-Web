@@ -105,6 +105,7 @@ import {
   listModelOptions,
   listToolOptions,
   pageKnowledgeBases,
+  publishGraphDef,
   saveDraftGraph,
 } from '@/modules/agent/api'
 import type { AgentExecutionLifecycle } from '@/modules/agent/api'
@@ -412,6 +413,25 @@ describe('GraphDesigner.vue', () => {
     expect(edge4?.config).toEqual({ keyword: '加急' })
     const edge5 = graph.elements.find((el) => el.id === 'edge-5')
     expect(edge5?.config).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('G1-5 发布校验：模板引用不存在节点时拦截发布并提示节点/引用', async () => {
+    const wrapper = await mountLoaded()
+    const vm = wrapper.vm as unknown as {
+      graphData: FlowGraphData
+      handlePublish: () => Promise<void>
+    }
+    const llm = vm.graphData.nodes.find((n) => n.id === 'llm-1')!
+    llm.data = { ...(llm.data ?? {}), userPromptTemplate: '请根据 {{n-404.x}} 生成' }
+
+    await vm.handlePublish()
+
+    expect(vi.mocked(publishGraphDef)).not.toHaveBeenCalled()
+    expect(vi.mocked(ElMessage.error)).toHaveBeenCalled()
+    const message = vi.mocked(ElMessage.error).mock.calls[0][0] as string
+    expect(message).toContain('发布校验未通过')
+    expect(message).toContain('n-404.x')
     wrapper.unmount()
   })
 

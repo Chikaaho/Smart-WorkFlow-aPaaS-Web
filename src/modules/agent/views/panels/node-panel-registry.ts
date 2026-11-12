@@ -56,6 +56,8 @@ export interface NodePanelProps {
   edgeDisplayName: (edge: FlowGraphEdge) => string
   /** 节点类型中文名（空态说明等展示用）。 */
   label: string
+  /** 当前节点可用变量（G1-5：只列上游可达的节点输出与开始参数）。 */
+  variableGroups?: import('@/modules/agent/utils/variableReferences').VariableGroup[]
 }
 
 export interface NodePanelDescriptor {
