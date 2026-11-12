@@ -8,8 +8,9 @@
  *   timeoutSeconds / timeoutKeyword
  * 每个按钮 keyword 必须有一条对应出边（连线关键词），发布时服务端校验。
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from '@/locales'
+import { listRoleChoices } from '@/modules/agent/api'
 import {
   NODE_CONFIG_KEY_HUMAN_ASSIGNEE_ROLE_CODES,
   NODE_CONFIG_KEY_HUMAN_ASSIGNEE_USER_IDS,
@@ -76,7 +77,21 @@ function readStringList(key: string): string[] {
 const fieldRows = ref<HumanField[]>(readFields())
 const buttonRows = ref<HumanButton[]>(readButtons())
 const assigneeUserIds = ref<string[]>(readStringList(NODE_CONFIG_KEY_HUMAN_ASSIGNEE_USER_IDS))
-const roleCodesText = ref(readStringList(NODE_CONFIG_KEY_HUMAN_ASSIGNEE_ROLE_CODES).join(', '))
+const assigneeRoleCodes = ref<string[]>(readStringList(NODE_CONFIG_KEY_HUMAN_ASSIGNEE_ROLE_CODES))
+
+/** 角色选择器候选（裁决 2：系统管理角色列表；加载失败退化为手输编码） */
+const roleOptions = ref<Array<{ code: string; name: string }>>([])
+const roleOptionsLoading = ref(false)
+onMounted(async () => {
+  roleOptionsLoading.value = true
+  try {
+    roleOptions.value = await listRoleChoices()
+  } catch {
+    roleOptions.value = []
+  } finally {
+    roleOptionsLoading.value = false
+  }
+})
 
 watch(
   () => props.node.id,
@@ -84,7 +99,7 @@ watch(
     fieldRows.value = readFields()
     buttonRows.value = readButtons()
     assigneeUserIds.value = readStringList(NODE_CONFIG_KEY_HUMAN_ASSIGNEE_USER_IDS)
-    roleCodesText.value = readStringList(NODE_CONFIG_KEY_HUMAN_ASSIGNEE_ROLE_CODES).join(', ')
+    assigneeRoleCodes.value = readStringList(NODE_CONFIG_KEY_HUMAN_ASSIGNEE_ROLE_CODES)
   },
 )
 
@@ -153,11 +168,8 @@ function commitAssignees() {
 }
 
 function commitRoles() {
-  const roles = roleCodesText.value
-    .split(',')
-    .map((r) => r.trim())
-    .filter((r) => r !== '')
-  emit('updateNodeData', NODE_CONFIG_KEY_HUMAN_ASSIGNEE_ROLE_CODES, roles)
+  // 裁决（planning-review-110-02 §4-2）：角色选择器多选，保存的仍是角色编码
+  emit('updateNodeData', NODE_CONFIG_KEY_HUMAN_ASSIGNEE_ROLE_CODES, [...assigneeRoleCodes.value])
 }
 
 function commitTimeout(value: number | undefined) {
@@ -287,12 +299,25 @@ function commitTimeoutKeyword(value: string) {
       >
         <el-option v-for="u in userOptions ?? []" :key="u.id" :label="u.label" :value="u.id" />
       </el-select>
-      <el-input
-        v-model="roleCodesText"
+      <el-select
+        v-model="assigneeRoleCodes"
+        multiple
+        filterable
+        allow-create
+        default-first-option
         size="small"
         :placeholder="t('agent.humanAssigneeRolesPlaceholder')"
+        :loading="roleOptionsLoading"
+        style="width: 100%"
         @change="commitRoles"
-      />
+      >
+        <el-option
+          v-for="r in roleOptions"
+          :key="r.code"
+          :label="r.name ? `${r.name}（${r.code}）` : r.code"
+          :value="r.code"
+        />
+      </el-select>
     </div>
 
     <div class="field-row">

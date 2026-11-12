@@ -156,12 +156,42 @@ const activeHumanTask = ref<AgentHumanTask | null>(null)
 async function loadHumanTasks() {
   humanLoading.value = true
   try {
-    humanTasks.value = (await listMyHumanTasks()) ?? []
+    humanTasks.value = aggregateHumanTasks((await listMyHumanTasks()) ?? [])
   } catch {
     humanTasks.value = []
   } finally {
     humanLoading.value = false
   }
+}
+
+/** 展示层时间：yyyy-MM-dd HH:mm:ss，不带 T 与微秒（V4 与监控页同一口径）。 */
+function formatInboxTime(value: string | null | undefined): string {
+  if (!value) return '-'
+  const text = String(value)
+  const date = new Date(text.includes('T') ? text : text.replace(' ', 'T'))
+  if (Number.isNaN(date.getTime())) return text.replace('T', ' ').slice(0, 19)
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  )
+}
+
+/**
+ * 待办按「执行 + 节点」聚合（planning-review-110-02 裁决 3）：同一人工节点同时配置
+ * 用户与角色时会生成多行任务，用户只看到一行；提交一次服务端会关闭全部兄弟任务。
+ */
+function aggregateHumanTasks(tasks: AgentHumanTask[]): AgentHumanTask[] {
+  const byKey = new Map<string, AgentHumanTask>()
+  for (const task of tasks) {
+    if (task.status !== 'PENDING') continue
+    const key = `${task.executionId}#${task.nodeId}`
+    const existing = byKey.get(key)
+    if (!existing || (task.createTime ?? '') < (existing.createTime ?? '')) {
+      byKey.set(key, task)
+    }
+  }
+  return [...byKey.values()].sort((a, b) => ((a.createTime ?? '') < (b.createTime ?? '') ? 1 : -1))
 }
 
 function openHumanTask(task: AgentHumanTask) {
@@ -327,9 +357,7 @@ onMounted(() => {
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <template #toolbar-actions>
-      <!-- 工具栏扩展操作（如需） -->
-    </template>
+    <!-- V4：空 toolbar-actions 槽位会在列表顶部渲染一条空白工具栏，已移除 -->
 
     <!-- G3-2：待我处理（人工节点等待队列） -->
     <div v-loading="humanLoading" class="human-inbox">
@@ -358,7 +386,7 @@ onMounted(() => {
             {{ task.instructions || t('agent.humanTaskPending') }}
           </div>
           <div class="human-inbox__meta">
-            <span>{{ t('agent.humanTaskCreatedAt') }}：{{ task.createTime || '-' }}</span>
+            <span>{{ t('agent.humanTaskCreatedAt') }}：{{ formatInboxTime(task.createTime) }}</span>
             <span v-if="task.timeoutSeconds">
               {{ t('agent.humanTaskTimeoutLabel', { seconds: task.timeoutSeconds }) }}
             </span>

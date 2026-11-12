@@ -224,8 +224,10 @@ function handleNodeClick(node: AgentGraphExecutionNode) {
         }"
         @click="handleNodeClick(node)"
       >
-        <!-- 分支标识 -->
-        <div class="node-branch-label">{{ node.branchId }}</div>
+        <!-- 分支标识（V3：根路径 branchId="0" 对用户无意义，不显示；仅并行分支显示） -->
+        <div v-if="node.branchId && node.branchId !== '0'" class="node-branch-label">
+          {{ node.branchId }}
+        </div>
 
         <!-- 节点内容 -->
         <div class="node-content">

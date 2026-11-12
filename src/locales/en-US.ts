@@ -420,6 +420,8 @@ export default {
     paletteGroupControl: 'Flow control',
     paletteGroupInteraction: 'Human & subgraph',
     paletteDragHint: 'Drag onto the canvas or click to add',
+    readOnlyMode: 'Read-only: no edit permission, view only',
+    readOnlyRunRecordsHint: 'View run records in the executions list',
     insertNodeTitle: 'Choose node type',
     insertAfterNodeHint: 'Insert after "{label}"',
     insertIntoEdgeHint: 'Insert into the connection',

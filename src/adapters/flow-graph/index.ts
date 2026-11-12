@@ -10,7 +10,7 @@
  *
  * I48（flow-graph 契约限制）在 1.1.0 已按本文件扩展，见 known-issues。
  */
-import { createApp, defineComponent, h, ref, type App as VueApp } from 'vue'
+import { createApp, defineComponent, h, ref, unref, watch, type App as VueApp } from 'vue'
 import {
   Position,
   VueFlow,
@@ -50,6 +50,7 @@ export type {
   FlowNodeStatus,
 } from './types'
 export { FLOW_PRESENTATION_KEY } from './types'
+export { FLOW_ICON_PATHS } from './icons'
 
 /* ------------------------------------------------------------------ */
 /*  内部转换：@vue-flow/core 原生类型 ↔ 我方契约                          */
@@ -156,6 +157,8 @@ export function mountFlowGraph(
   let destroyed = false
   let app: VueApp | null = null
   let currentZoom = 1
+  // 首批节点尺寸就绪后的「小图 ≥80%」只抬一次；适配画布走 fitView() 内的同一钳制
+  let initialFitPending = true
   // 画布实例能力：在 Wrapper setup 内捕获（useVueFlow 只能在 setup 中取 store）
   let fitViewFn: ((options?: FlowGraphFitViewOptions) => void) | null = null
   let zoomInFn: (() => void) | null = null
@@ -191,6 +194,16 @@ export function mountFlowGraph(
     },
   }
 
+  /** 打开时的「小图 ≥80%」：初始 fit 完成后（fitViewOnInitDone）一次性抬升 */
+  function clampAfterInitialFit(store: Record<string, unknown>) {
+    if (!unref(store.fitViewOnInitDone)) return false
+    const nodeCount = (unref(store.getNodes) as unknown[] | undefined)?.length ?? 0
+    if (nodeCount > 8) return true
+    const zoom = (unref(store.viewport) as { zoom?: number } | undefined)?.zoom ?? 1
+    if (zoom < 0.8) zoomToFn?.(0.8)
+    return true
+  }
+
   const Wrapper = defineComponent({
     setup() {
       const store = useVueFlow()
@@ -198,6 +211,8 @@ export function mountFlowGraph(
         void store.fitView({
           padding: options?.padding ?? 0.16,
           duration: options?.duration ?? 200,
+          // V1：小图（≤8 节点）适应画布后不低于 80%
+          ...(nodes.value.length <= 8 ? { minZoom: 0.8 } : {}),
         })
       }
       zoomInFn = () => {
@@ -214,6 +229,15 @@ export function mountFlowGraph(
         currentZoom = viewport.zoom
         events?.onViewportChange?.(viewport.zoom)
       })
+      // V1：初始 fit 完成后，≤8 节点的小图抬到 ≥80%（watch fitViewOnInitDone）
+      watch(
+        () => unref(store.fitViewOnInitDone),
+        (done) => {
+          if (initialFitPending && clampAfterInitialFit(store)) initialFitPending = false
+          void done
+        },
+        { immediate: true },
+      )
       store.onNodeClick(({ node }) => {
         events?.onNodeClick?.(toFlowGraphNode(node, businessTypeById.get(node.id)))
       })
@@ -236,6 +260,7 @@ export function mountFlowGraph(
           edges: edges.value.map(toVfEdge),
           nodeTypes: NODE_TYPES,
           edgeTypes: EDGE_TYPES,
+          // V1：打开即适配；fit 完成后小图（≤8 节点）抬到 ≥80%（见 clampAfterInitialFit）
           fitViewOnInit: true,
           // W-a2：整图自动适配；节点基础字号在 node-theme.css 放大，保证 fit 后渲染 ≥12px
           maxZoom: 2,
@@ -270,6 +295,7 @@ export function mountFlowGraph(
   const instance: FlowGraphInstance = {
     exportGraph,
     setData(data: FlowGraphData) {
+      initialFitPending = true
       nodes.value = (data.nodes ?? []).map(cloneNode)
       edges.value = (data.edges ?? []).map(cloneEdge)
       emitChange()

@@ -22,7 +22,7 @@ const { t } = useI18n()
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { mountFlowGraph } from '@/adapters/flow-graph'
+import { FLOW_ICON_PATHS, mountFlowGraph } from '@/adapters/flow-graph'
 import type {
   FlowGraphData,
   FlowGraphEdge,
@@ -87,7 +87,12 @@ import {
   positionAfterNode,
   positionBetweenNodes,
 } from '@/modules/agent/utils/graphLayout'
-import { nodePresentation } from '@/modules/agent/utils/node-presentation'
+import {
+  NODE_TYPE_ACCENTS,
+  NODE_TYPE_ICONS,
+  nodePresentation,
+  nodePresentationReset,
+} from '@/modules/agent/utils/node-presentation'
 import {
   buildVariableGroups,
   extractVariableRefs,
@@ -95,12 +100,16 @@ import {
 } from '@/modules/agent/utils/variableReferences'
 import { getNodePanelDescriptor } from './panels/node-panel-registry'
 import { ApiError } from '@/foundation/request'
+import { hasPerm } from '@/foundation/permission'
 import { parseRouteId } from '@/modules/agent/utils/routeId'
 
 const route = useRoute()
 const router = useRouter()
 
 const graphId = computed(() => parseRouteId(route.params.id))
+
+// G1-9 权限与空态：只有 agent:model:manage 才能改图/发布/试运行；否则整页只读（可看、可看运行记录）
+const canEdit = computed(() => hasPerm('agent:model:manage'))
 
 // ─── 图状态 ───
 const graphName = ref('')
@@ -275,19 +284,22 @@ function nodeStatusLabel(status: NodeRunState['status']): string {
   return t(NODE_STATUS_LABEL_KEYS[status])
 }
 
-/** 把运行状态写到节点卡片（presentation.status → 适配层状态色） */
-function applyNodeRunStatus(nodeId: string, status: NodeRunState['status']) {
+/** 把运行状态写到节点卡片（presentation.status → 适配层状态色；V2：未开始不标） */
+function applyNodeRunStatus(nodeId: string, status: NodeRunState['status'] | undefined) {
   const node = graphData.value.nodes.find((n) => n.id === nodeId)
   if (!node) return
-  const presentation = nodePresentation(node, presentationCtx.value, status)
+  // undefined = 清除运行态（不回填旧状态），「等待人工」只留给真正暂停的 HUMAN 节点
+  const presentation = status
+    ? nodePresentation(node, presentationCtx.value, status)
+    : nodePresentationReset(node, presentationCtx.value)
   graphInstance.value?.updateNode({ ...node, presentation })
 }
 
-/** 运行开始：全部节点置「等待」并清空上一轮详情 */
+/** 运行开始：清空上一轮状态，未开始节点不标任何状态角标（V2，planning-review-110-02） */
 function resetRunStates() {
   nodeRunStates.value = {}
   for (const node of graphData.value.nodes) {
-    applyNodeRunStatus(node.id, 'waiting')
+    applyNodeRunStatus(node.id, undefined)
   }
 }
 
@@ -397,6 +409,15 @@ const INSERTABLE_TYPES = NODE_TYPES.filter(
   (type) => type !== NODE_TYPE_START && type !== NODE_TYPE_END,
 )
 
+/** V1：面板/插入对话框共用图标字形（适配层中性图标词汇） */
+const PALETTE_ICON_PATHS = FLOW_ICON_PATHS
+
+/** 插入对话框按分组展示（剔除开始/结束） */
+const INSERT_GROUPS = PALETTE_GROUPS.map((group) => ({
+  labelKey: group.labelKey,
+  types: group.types.filter((type) => INSERTABLE_TYPES.includes(type)),
+})).filter((group) => group.types.length > 0)
+
 const insertHint = computed(() => {
   const target = insertTarget.value
   if (!target) return ''
@@ -470,6 +491,8 @@ const graphEvents: FlowGraphEvents = {
     pushHistory()
   },
   onInsertAfter: (target: FlowInsertTarget) => {
+    // G1-9：只读模式不弹出插入对话框
+    if (!canEdit.value) return
     insertTarget.value = target
     insertDialogVisible.value = true
   },
@@ -506,6 +529,8 @@ function buildNode(type: string, position: { x: number; y: number }): FlowGraphN
 
 /** 添加节点（palette 点击/拖入）：自动找不重叠空位，插入后选中 */
 function addNode(type: string, position?: { x: number; y: number }) {
+  // G1-9：只读模式禁止改图
+  if (!canEdit.value) return
   const target = position
     ? findFreePosition(graphData.value.nodes, position)
     : findFreePosition(graphData.value.nodes)
@@ -691,6 +716,11 @@ function handleZoomOut() {
 
 function handleFitView() {
   graphInstance.value?.fitView()
+}
+
+/** 点击缩放百分比：精确恢复 100% */
+function resetZoom() {
+  graphInstance.value?.setZoom(1)
 }
 
 // ─── 加载 ───
@@ -1094,23 +1124,26 @@ onBeforeUnmount(() => {
         <el-tag v-if="version" size="small" type="info">v{{ version }}</el-tag>
       </div>
       <div class="header-actions">
-        <el-button-group>
-          <el-button size="small" :disabled="!canUndo" @click="undo">{{
-            t('agent.undo')
+        <el-tag v-if="!canEdit" size="small" type="warning">{{ t('agent.readOnlyMode') }}</el-tag>
+        <template v-if="canEdit">
+          <el-button-group>
+            <el-button size="small" :disabled="!canUndo" @click="undo">{{
+              t('agent.undo')
+            }}</el-button>
+            <el-button size="small" :disabled="!canRedo" @click="redo">{{
+              t('agent.redo')
+            }}</el-button>
+          </el-button-group>
+          <el-button size="small" @click="handleAutoLayout">{{ t('agent.autoLayout') }}</el-button>
+          <el-button size="small" type="primary" :loading="saving" @click="handleSaveDraft">{{
+            t('common.saveDraft')
           }}</el-button>
-          <el-button size="small" :disabled="!canRedo" @click="redo">{{
-            t('agent.redo')
+          <el-button size="small" type="success" :loading="publishing" @click="handlePublish">{{
+            t('common.publish')
           }}</el-button>
-        </el-button-group>
-        <el-button size="small" @click="handleAutoLayout">{{ t('agent.autoLayout') }}</el-button>
+        </template>
         <el-button size="small" @click="router.push('/agent/graph-def')">{{
           t('common.backToList')
-        }}</el-button>
-        <el-button size="small" type="primary" :loading="saving" @click="handleSaveDraft">{{
-          t('common.saveDraft')
-        }}</el-button>
-        <el-button size="small" type="success" :loading="publishing" @click="handlePublish">{{
-          t('common.publish')
         }}</el-button>
       </div>
     </div>
@@ -1125,21 +1158,41 @@ onBeforeUnmount(() => {
     />
 
     <div v-else v-loading="loading" class="designer-body">
-      <!-- 节点面板（分组 + 拖入/点击添加） -->
-      <div class="palette">
+      <el-alert
+        v-if="!canEdit"
+        :title="t('agent.readOnlyMode')"
+        :description="t('agent.readOnlyRunRecordsHint')"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 8px"
+      />
+      <!-- 节点面板（分组 + 图标 + 名称；点击/拖入添加，V1 对齐流程设计器节点库；G1-9 无编辑权限时隐藏） -->
+      <div v-if="canEdit" class="palette">
         <div v-for="group in PALETTE_GROUPS" :key="group.labelKey" class="palette-group">
           <div class="palette-title">{{ t(group.labelKey) }}</div>
-          <el-button
-            v-for="type in group.types"
-            :key="type"
-            size="small"
-            class="palette-item"
-            draggable="true"
-            @dragstart="onPaletteDragStart(type, $event)"
-            @click="addNode(type)"
-          >
-            {{ nodeTypeLabel(type) }}
-          </el-button>
+          <div class="palette-grid">
+            <button
+              v-for="type in group.types"
+              :key="type"
+              type="button"
+              class="palette-item"
+              :style="{ '--sw-palette-accent': NODE_TYPE_ACCENTS[type] }"
+              draggable="true"
+              :data-node-type="type"
+              @dragstart="onPaletteDragStart(type, $event)"
+              @click="addNode(type)"
+            >
+              <svg class="palette-item__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  :d="PALETTE_ICON_PATHS[NODE_TYPE_ICONS[type] ?? 'dot']"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <span class="palette-item__name">{{ nodeTypeLabel(type) }}</span>
+            </button>
+          </div>
         </div>
         <div class="palette-hint">{{ t('agent.paletteDragHint') }}</div>
       </div>
@@ -1149,7 +1202,9 @@ onBeforeUnmount(() => {
         <div ref="canvasRef" class="canvas" />
         <div class="zoom-bar">
           <button type="button" :aria-label="t('agent.zoomOut')" @click="handleZoomOut">−</button>
-          <span class="zoom-value">{{ zoomPercent }}%</span>
+          <span class="zoom-value" title="点击恢复 100%" @click="resetZoom">
+            {{ zoomPercent }}%
+          </span>
           <button type="button" :aria-label="t('agent.zoomIn')" @click="handleZoomIn">+</button>
           <button type="button" class="zoom-fit" @click="handleFitView">
             {{ t('agent.zoomFit') }}
@@ -1157,8 +1212,8 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- 属性面板 -->
-      <div class="property-panel">
+      <!-- 属性面板（G1-9 无编辑权限时隐藏，避免只读用户改配置） -->
+      <div v-if="canEdit" class="property-panel">
         <!-- 连线属性 -->
         <template v-if="selectedEdge">
           <div class="panel-title">{{ t('agent.edgeProperties') }}</div>
@@ -1322,17 +1377,29 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- 插入节点类型选择 -->
-    <el-dialog v-model="insertDialogVisible" :title="t('agent.insertNodeTitle')" width="420px">
+    <el-dialog v-model="insertDialogVisible" :title="t('agent.insertNodeTitle')" width="520px">
       <div class="insert-hint">{{ insertHint }}</div>
-      <div class="insert-grid">
-        <el-button
-          v-for="type in INSERTABLE_TYPES"
-          :key="type"
-          size="small"
-          @click="confirmInsert(type)"
-        >
-          {{ nodeTypeLabel(type) }}
-        </el-button>
+      <div v-for="group in INSERT_GROUPS" :key="group.labelKey" class="insert-group">
+        <div class="insert-group__title">{{ t(group.labelKey) }}</div>
+        <div class="insert-grid">
+          <button
+            v-for="type in group.types"
+            :key="type"
+            type="button"
+            class="insert-item"
+            :style="{ '--sw-palette-accent': NODE_TYPE_ACCENTS[type] }"
+            @click="confirmInsert(type)"
+          >
+            <svg class="insert-item__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                :d="PALETTE_ICON_PATHS[NODE_TYPE_ICONS[type] ?? 'dot']"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span class="insert-item__name">{{ nodeTypeLabel(type) }}</span>
+          </button>
+        </div>
       </div>
     </el-dialog>
 
@@ -1389,8 +1456,8 @@ onBeforeUnmount(() => {
       @submitted="handleHumanTaskSubmitted"
     />
 
-    <!-- 执行测试面板（结果不落库，刷新即失） -->
-    <div class="execute-panel">
+    <!-- 执行测试面板（结果不落库，刷新即失；G1-9 无编辑权限不能运行，隐藏） -->
+    <div v-if="canEdit" class="execute-panel">
       <div class="execute-row">
         <span class="execute-label">{{ t('agent.runTest') }}</span>
         <el-input
@@ -1538,7 +1605,7 @@ onBeforeUnmount(() => {
 }
 
 .palette {
-  width: 132px;
+  width: 168px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1562,13 +1629,45 @@ onBeforeUnmount(() => {
   padding-bottom: 4px;
 }
 
-.palette-item {
-  width: 100%;
-  margin-left: 0 !important;
+/* V1：图标 + 名称卡片，两列网格，风格对齐流程设计器节点库 */
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
 }
 
-.palette-item + .palette-item {
-  margin-left: 0 !important;
+.palette-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.palette-item:hover {
+  border-color: var(--sw-palette-accent, var(--el-color-primary));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.palette-item__icon {
+  width: 20px;
+  height: 20px;
+  stroke: var(--sw-palette-accent, var(--el-color-primary));
+  stroke-width: 1.8;
+}
+
+.palette-item__name {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
 }
 
 .palette-hint {
@@ -1708,15 +1807,55 @@ onBeforeUnmount(() => {
   margin-bottom: 10px;
 }
 
+.insert-group + .insert-group {
+  margin-top: 10px;
+}
+
+.insert-group__title {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 6px;
+}
+
 .insert-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
-.insert-grid .el-button {
-  width: 100%;
-  margin-left: 0 !important;
+/* V1：插入对话框与节点面板同一「图标 + 名称」卡片风格 */
+.insert-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px 8px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.insert-item:hover {
+  border-color: var(--sw-palette-accent, var(--el-color-primary));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.insert-item__icon {
+  width: 22px;
+  height: 22px;
+  stroke: var(--sw-palette-accent, var(--el-color-primary));
+  stroke-width: 1.8;
+}
+
+.insert-item__name {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
 }
 
 .human-waiting-card {

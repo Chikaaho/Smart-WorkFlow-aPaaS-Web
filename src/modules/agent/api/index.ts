@@ -292,6 +292,20 @@ export async function listUserChoices(): Promise<Array<{ id: string; label: stri
   }))
 }
 
+/** 角色选项（登录即可调用的最小角色选项，服务端按租户过滤，仅启用角色） */
+export async function listRoleChoices(): Promise<Array<{ code: string; name: string }>> {
+  interface RoleOption {
+    id: string | number
+    code: string
+    name?: string
+  }
+  const list = await request<RoleOption[]>({
+    method: 'GET',
+    url: '/system/role/options',
+  })
+  return (list ?? []).map((r) => ({ code: String(r.code), name: r.name || String(r.code) }))
+}
+
 // ═══════════════════════════════════════════════════════════════
 // 供应商管理（AgentProviderController，权限：查询 view / 写 manage，F1 D022-02）
 // ═══════════════════════════════════════════════════════════════

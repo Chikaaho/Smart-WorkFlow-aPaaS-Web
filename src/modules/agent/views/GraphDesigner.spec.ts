@@ -2,9 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, nextTick } from 'vue'
 
+// G1-9 只读：canEdit 走 hasPerm（Pinia store）；单测环境无 Pinia，直接 mock 权限判定
+vi.mock('@/foundation/permission', () => ({ hasPerm: vi.fn(() => true) }))
+
 vi.mock('@/adapters/flow-graph', () => ({
   // 功能型 fake：状态与入参共享引用，命令式方法同步回传 onGraphChange，
   // 与真实适配层契约一致（测试断言依赖同一份数据引用）。
+  // V1：面板/插入对话框消费 FLOW_ICON_PATHS 图标字形，mock 提供空路径字典即可。
+  FLOW_ICON_PATHS: {},
   mountFlowGraph: vi.fn(
     (
       _container: HTMLElement,

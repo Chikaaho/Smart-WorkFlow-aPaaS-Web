@@ -410,6 +410,8 @@ export default {
     paletteGroupControl: '流程控制',
     paletteGroupInteraction: '人工与子图',
     paletteDragHint: '拖入画布或点击添加',
+    readOnlyMode: '只读模式：无编辑权限，仅可查看',
+    readOnlyRunRecordsHint: '运行记录请在执行列表查看',
     insertNodeTitle: '选择节点类型',
     insertAfterNodeHint: '在「{label}」后插入',
     insertIntoEdgeHint: '在连线中插入',

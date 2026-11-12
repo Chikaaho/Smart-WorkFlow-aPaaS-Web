@@ -173,7 +173,7 @@ export function nodeSummary(node: FlowGraphNode, ctx: NodePresentationContext): 
   }
 }
 
-/** 组装节点展示元数据（保留已有 status，供运行态覆盖） */
+/** 组装节点展示元数据；status 传 undefined 表示清除运行态（V2：未开始不标） */
 export function nodePresentation(
   node: FlowGraphNode,
   ctx: NodePresentationContext,
@@ -186,5 +186,17 @@ export function nodePresentation(
     ...((status ?? node.presentation?.status)
       ? { status: status ?? node.presentation?.status }
       : {}),
+  }
+}
+
+/** 组装节点展示元数据（清除版：不回填旧 status） */
+export function nodePresentationReset(
+  node: FlowGraphNode,
+  ctx: NodePresentationContext,
+): FlowNodePresentation {
+  return {
+    icon: NODE_TYPE_ICONS[node.type ?? ''] ?? 'dot',
+    accent: NODE_TYPE_ACCENTS[node.type ?? ''] ?? '#909399',
+    summary: nodeSummary(node, ctx),
   }
 }
