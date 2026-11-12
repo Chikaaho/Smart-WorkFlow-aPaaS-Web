@@ -47,6 +47,7 @@ import type {
   AgentGraphExecutionNode,
   AgentHumanTask,
 } from '@/contracts/agent'
+import type { AgentExecutionLifecycle } from '@/modules/agent/api'
 import HumanTaskSubmitDialog from '@/modules/agent/components/execution/HumanTaskSubmitDialog.vue'
 import { ApiError } from '@/foundation/request'
 import { parseRouteId } from '@/modules/agent/utils/routeId'
@@ -59,6 +60,15 @@ const router = useRouter()
 
 // ─── 路由参数 ───
 const executionId = computed(() => parseRouteId(route.params.executionId))
+
+// ─── W5 统一执行编号 ───
+/** 生命周期受理行（executionId=受理编号，resultExecutionId=执行编号） */
+const lifecycleState = ref<AgentExecutionLifecycle | null>(null)
+/** 页面统一展示执行编号：优先结果执行 id（与列表/待办一致） */
+const displayExecutionId = computed(
+  () => lifecycleState.value?.resultExecutionId ?? executionId.value,
+)
+const acceptedExecutionId = computed(() => lifecycleState.value?.executionId ?? null)
 
 // ─── 状态变量 ───
 const loading = ref(false)
@@ -73,7 +83,9 @@ const activeHumanTask = ref<AgentHumanTask | null>(null)
 
 async function loadHumanTasks() {
   try {
-    humanTasks.value = (await listExecutionHumanTasks(executionId.value)) ?? []
+    // W5：任务行按受理编号查询（服务端已兼容执行编号入参，双保险）
+    const queryId = lifecycleState.value?.executionId ?? executionId.value
+    humanTasks.value = (await listExecutionHumanTasks(queryId)) ?? []
   } catch {
     humanTasks.value = []
   }
@@ -190,11 +202,13 @@ async function loadDetail() {
   detail.value = null
   nodes.value = []
   humanTasks.value = []
+  lifecycleState.value = null
 
   try {
     // 生命周期执行使用独立持久化端点；旧同步执行继续使用原详情端点。
     try {
       const state = await getGraphExecutionLifecycle(executionId.value)
+      lifecycleState.value = state
       const graph = await getGraphDef(state.graphDefId)
       detail.value = {
         id: state.executionId,
@@ -288,7 +302,14 @@ onMounted(() => {
           {{ t('common.backToList') }}
         </el-button>
         <div class="header-info">
-          <span class="execution-id">#{{ executionId }}</span>
+          <span class="execution-id">#{{ displayExecutionId }}</span>
+          <!-- W5：受理编号（生命周期请求行）仅详情透出，避免两个编号混用 -->
+          <span
+            v-if="acceptedExecutionId && acceptedExecutionId !== displayExecutionId"
+            class="execution-id execution-id--accepted"
+          >
+            {{ t('agent.acceptedNoLabel') }} #{{ acceptedExecutionId }}
+          </span>
           <span class="graph-name">{{ detail.graphName }}</span>
           <span class="divider">·</span>
           <span class="def-version">{{
@@ -503,6 +524,20 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   flex: 1;
+}
+
+/* W5：执行编号主标识 + 受理号次标识 */
+.execution-id {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+  font-family: monospace;
+}
+
+.execution-id--accepted {
+  font-size: 12px;
+  font-weight: 400;
+  color: #909399;
 }
 
 .graph-name {

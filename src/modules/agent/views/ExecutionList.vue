@@ -379,7 +379,7 @@ onMounted(() => {
       <div v-for="task in humanTasks" :key="task.id" class="human-inbox__item">
         <div class="human-inbox__item-main">
           <div class="human-inbox__item-title">
-            {{ t('agent.humanTaskExecution') }} #{{ task.executionId }}
+            {{ t('agent.humanTaskExecution') }} #{{ task.resultExecutionId ?? task.executionId }}
             <span class="human-inbox__node">{{ task.nodeId }}</span>
           </div>
           <div class="human-inbox__instructions">

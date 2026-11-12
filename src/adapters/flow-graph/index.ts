@@ -194,13 +194,36 @@ export function mountFlowGraph(
     },
   }
 
-  /** 打开时的「小图 ≥80%」：初始 fit 完成后（fitViewOnInitDone）一次性抬升 */
+  /** 打开时的「小图 ≥80%」：初始 fit 完成后（fitViewOnInitDone）一次性抬升。
+   *  W4：仅当 0.8 放大后画布仍装得下才抬升——宽/高超出视口的图优先完整可见。 */
   function clampAfterInitialFit(store: Record<string, unknown>) {
     if (!unref(store.fitViewOnInitDone)) return false
-    const nodeCount = (unref(store.getNodes) as unknown[] | undefined)?.length ?? 0
-    if (nodeCount > 8) return true
+    const nodesSnapshot =
+      (unref(store.getNodes) as
+        | Array<{
+            position?: { x: number; y: number }
+            dimensions?: { width?: number; height?: number }
+          }>
+        | undefined) ?? []
+    if (nodesSnapshot.length > 8) return true
     const zoom = (unref(store.viewport) as { zoom?: number } | undefined)?.zoom ?? 1
-    if (zoom < 0.8) zoomToFn?.(0.8)
+    if (zoom >= 0.8) return true
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const n of nodesSnapshot) {
+      const x = n.position?.x ?? 0
+      const y = n.position?.y ?? 0
+      minX = Math.min(minX, x)
+      minY = Math.min(minY, y)
+      maxX = Math.max(maxX, x + (n.dimensions?.width ?? 220))
+      maxY = Math.max(maxY, y + (n.dimensions?.height ?? 96))
+    }
+    const dim = (unref(store.dimensions) as { width?: number; height?: number } | undefined) ?? {}
+    const availW = (dim.width ?? 0) * (1 - 2 * 0.16)
+    const availH = (dim.height ?? 0) * (1 - 2 * 0.16)
+    if ((maxX - minX) * 0.8 <= availW && (maxY - minY) * 0.8 <= availH) zoomToFn?.(0.8)
     return true
   }
 
@@ -208,11 +231,10 @@ export function mountFlowGraph(
     setup() {
       const store = useVueFlow()
       fitViewFn = (options?: FlowGraphFitViewOptions) => {
+        // W4：适配画布以完整可见优先；「小图 ≥80%」由 clampAfterInitialFit 在装得下时抬升
         void store.fitView({
           padding: options?.padding ?? 0.16,
           duration: options?.duration ?? 200,
-          // V1：小图（≤8 节点）适应画布后不低于 80%
-          ...(nodes.value.length <= 8 ? { minZoom: 0.8 } : {}),
         })
       }
       zoomInFn = () => {

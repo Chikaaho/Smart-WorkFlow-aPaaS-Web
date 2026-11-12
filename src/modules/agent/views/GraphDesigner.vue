@@ -697,12 +697,15 @@ function onCanvasDrop(event: DragEvent) {
   addNode(type, point)
 }
 
-function handleAutoLayout() {
+async function handleAutoLayout() {
   const laidOut = layoutGraph(graphData.value.nodes, graphData.value.edges)
   graphInstance.value?.setData({
     nodes: withPresentation(laidOut),
     edges: graphData.value.edges.map((e) => ({ ...e })),
   })
+  // W4：整理后适配视口，避免首尾节点被画布边缘裁切
+  await nextTick()
+  graphInstance.value?.fitView({ padding: 0.2 })
   pushHistory()
 }
 
@@ -926,6 +929,8 @@ async function refreshExecution(executionId: number) {
   }
   executeResult.value = {
     executionId,
+    // W5：执行编号优先（与待办/列表/详情一致）；executionId 保留受理编号用于取消
+    resultExecutionId: state.resultExecutionId,
     success: state.status === 'SUCCESS',
     output: state.output ?? streamedOutput.value,
     errorMessage: state.errorMessage,
@@ -1033,9 +1038,9 @@ async function handleCancelExecution() {
   lifecycleStatus.value = state.status
 }
 
-/** 从图设计器直达本次执行详情 */
+/** 从图设计器直达本次执行详情（W5：跳转与展示统一用执行编号，详情页可双编号互认） */
 function handleViewExecutionDetail() {
-  const eid = executeResult.value?.executionId
+  const eid = executeResult.value?.resultExecutionId ?? executeResult.value?.executionId
   if (eid) {
     void router.push(`/agent/executions/detail/${eid}`)
   } else {

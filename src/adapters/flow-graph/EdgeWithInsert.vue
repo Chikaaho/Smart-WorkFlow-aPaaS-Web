@@ -37,7 +37,13 @@ const path = computed(() => {
   return edgePath
 })
 
-/** 标签位置取贝塞尔中点（getBezierPath 第二三返回值） */
+/**
+ * 关键词标签位置（W4）：默认取贝塞尔中点；当两卡之间水平空间放不下标签
+ * （整理布局后相邻列间距 ~60px < 标签半宽 ×2）时，标签落到两卡下方空白带，
+ * 避免压住卡片标题/卡体。卡片半高按 node-theme 卡片（padding 10 + 双行 ≈ 40px）估算。
+ */
+const LABEL_MIN_SPAN = 200
+const LABEL_CLEAR_BELOW = 64
 const labelPos = computed(() => {
   const [, labelX, labelY] = getBezierPath({
     sourceX: props.sourceX,
@@ -47,6 +53,13 @@ const labelPos = computed(() => {
     targetY: props.targetY,
     targetPosition: props.targetPosition,
   })
+  const span = Math.abs(props.targetX - props.sourceX)
+  if (span < LABEL_MIN_SPAN) {
+    return {
+      x: labelX,
+      y: Math.max(props.sourceY, props.targetY) + LABEL_CLEAR_BELOW,
+    }
+  }
   return { x: labelX, y: labelY }
 })
 

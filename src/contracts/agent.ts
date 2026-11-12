@@ -92,6 +92,8 @@ export interface AgentGraphExecuteResp {
   latencyMs: number
   /** 执行历史记录 id（Step12，成功/失败均返回，可用于直达详情页） */
   executionId?: number
+  /** 执行编号（W5：结果执行行 id，详情/列表统一展示它；受理编号仍存 executionId） */
+  resultExecutionId?: number
 }
 
 /** 模型配置下拉选项（对齐 AgentModelConfigDTO 的只读展示字段）。 */
@@ -426,7 +428,10 @@ export interface AgentHumanTaskButton {
 /** 人工任务（待办/已办；payload 已由服务端展开为说明/字段/按钮） */
 export interface AgentHumanTask {
   id: number
+  /** 受理编号（生命周期请求行 id，提交/取消仍用它） */
   executionId: number
+  /** 执行编号（结果执行行 id，W5：待办/详情统一展示它） */
+  resultExecutionId?: number
   nodeId: string
   status: 'PENDING' | 'SUBMITTED' | 'TIMEOUT' | 'CANCELLED' | string
   assigneeUserId?: number | null
