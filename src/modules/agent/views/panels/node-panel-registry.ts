@@ -30,7 +30,8 @@ import {
   NODE_TYPE_START,
   NODE_TYPE_TOOL,
 } from '@/modules/agent/utils/graphAdapter'
-import EmptyPanel from './EmptyPanel.vue'
+import StartPanel from './StartPanel.vue'
+import EndPanel from './EndPanel.vue'
 import LlmPanel from './LlmPanel.vue'
 import ToolPanel from './ToolPanel.vue'
 import LoopPanel from './LoopPanel.vue'
@@ -67,8 +68,8 @@ export interface NodePanelDescriptor {
 }
 
 export const NODE_PANEL_REGISTRY: NodePanelDescriptor[] = [
-  { type: NODE_TYPE_START, labelKey: 'agent.nodeStart', component: EmptyPanel },
-  { type: NODE_TYPE_END, labelKey: 'agent.nodeEnd', component: EmptyPanel },
+  { type: NODE_TYPE_START, labelKey: 'agent.nodeStart', component: StartPanel },
+  { type: NODE_TYPE_END, labelKey: 'agent.nodeEnd', component: EndPanel },
   { type: NODE_TYPE_LLM, labelKey: 'agent.nodeLlm', component: LlmPanel },
   { type: NODE_TYPE_TOOL, labelKey: 'agent.nodeTool', component: ToolPanel },
   { type: NODE_TYPE_CONDITION, labelKey: 'agent.nodeCondition', component: ConditionPanel },

@@ -161,6 +161,7 @@ export function mountFlowGraph(
   let zoomInFn: (() => void) | null = null
   let zoomOutFn: (() => void) | null = null
   let zoomToFn: ((zoom: number) => void) | null = null
+  let projectFn: ((position: { x: number; y: number }) => { x: number; y: number }) | null = null
 
   function exportGraph(): FlowGraphData {
     return {
@@ -208,6 +209,7 @@ export function mountFlowGraph(
       zoomToFn = (zoom: number) => {
         void store.zoomTo(zoom, { duration: 150 })
       }
+      projectFn = (position: { x: number; y: number }) => store.project(position)
       store.onViewportChange((viewport) => {
         currentZoom = viewport.zoom
         events?.onViewportChange?.(viewport.zoom)
@@ -221,10 +223,11 @@ export function mountFlowGraph(
       store.onPaneClick(() => {
         events?.onPaneClick?.()
       })
-      store.onNodeDragStop(() => {
+      store.onNodeDragStop(({ node }) => {
         // 拖拽结束后把最新坐标同步给业务层（拖拽过程不逐帧回写）
         syncNodesFromStore(store.getNodes.value)
         emitChange()
+        events?.onNodeDragStop?.(toFlowGraphNode(node, businessTypeById.get(node.id)))
       })
 
       return () =>
@@ -310,6 +313,9 @@ export function mountFlowGraph(
     },
     getZoom() {
       return currentZoom
+    },
+    screenToGraphPoint(clientX: number, clientY: number) {
+      return projectFn?.({ x: clientX, y: clientY }) ?? { x: clientX, y: clientY }
     },
     destroy(): void {
       if (destroyed) return

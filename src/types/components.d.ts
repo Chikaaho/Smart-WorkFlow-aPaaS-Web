@@ -28,6 +28,7 @@ declare module 'vue' {
     ElAutocomplete: typeof import('element-plus/es')['ElAutocomplete']
     ElBadge: typeof import('element-plus/es')['ElBadge']
     ElButton: typeof import('element-plus/es')['ElButton']
+    ElButtonGroup: typeof import('element-plus/es')['ElButtonGroup']
     ElCard: typeof import('element-plus/es')['ElCard']
     ElCheckbox: typeof import('element-plus/es')['ElCheckbox']
     ElCheckboxButton: typeof import('element-plus/es')['ElCheckboxButton']

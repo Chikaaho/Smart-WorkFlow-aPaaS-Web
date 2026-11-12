@@ -41,13 +41,15 @@ describe('NODE_PANEL_REGISTRY', () => {
     }
   })
 
-  it('START/END share the empty panel; LLM/TOOL/LOOP/FORK/JOIN/CONDITION each have their own', () => {
-    const empty = getNodePanelDescriptor('START')!.component
-    expect(getNodePanelDescriptor('END')!.component).toBe(empty)
+  it('START/END 各自有参数面板（G1-4），9 类节点面板互不复用', () => {
+    const startPanel = getNodePanelDescriptor('START')!.component
+    const endPanel = getNodePanelDescriptor('END')!.component
+    expect(startPanel).toBeTruthy()
+    expect(endPanel).toBeTruthy()
+    expect(startPanel).not.toBe(endPanel)
 
-    const others = ['LLM', 'TOOL', 'CONDITION', 'LOOP', 'FORK', 'JOIN']
-    const components = others.map((t) => getNodePanelDescriptor(t)!.component)
-    expect(new Set(components).size).toBe(others.length)
+    const all = EXPECTED_TYPES.map((t) => getNodePanelDescriptor(t)!.component)
+    expect(new Set(all).size).toBe(EXPECTED_TYPES.length)
   })
 
   it('getNodePanelDescriptor looks up by type / misses gracefully', () => {

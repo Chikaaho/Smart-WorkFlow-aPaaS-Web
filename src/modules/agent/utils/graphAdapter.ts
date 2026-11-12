@@ -47,6 +47,25 @@ export const NODE_CONFIG_KEY_TOP_K = 'topK'
 /** KNOWLEDGE 节点：相似度阈值（0~1） */
 export const NODE_CONFIG_KEY_SIMILARITY_THRESHOLD = 'similarityThreshold'
 export const EDGE_CONFIG_KEY_KEYWORD = 'keyword'
+/** 开始节点输入参数声明（G1-4）：config.params = StartParam[] */
+export const NODE_CONFIG_KEY_INPUT_PARAMS = 'params'
+/** 结束节点输出参数声明（G1-4）：config.outputs = EndOutputParam[] */
+export const NODE_CONFIG_KEY_OUTPUT_PARAMS = 'outputs'
+
+/** 开始节点输入参数（类型限文本/数字/布尔/JSON，对齐 G1-4） */
+export interface StartParam {
+  name: string
+  type: 'text' | 'number' | 'boolean' | 'json'
+  required: boolean
+  description?: string
+}
+
+/** 结束节点输出参数（source 写「节点ID.变量名」或全局变量名） */
+export interface EndOutputParam {
+  name: string
+  source: string
+  description?: string
+}
 
 /** 默认变量名（与后端 AgentGraphInterpreter.DEFAULT_VARIABLE_NAME 对齐） */
 export const DEFAULT_VARIABLE_NAME = 'input'

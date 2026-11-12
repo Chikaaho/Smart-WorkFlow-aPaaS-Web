@@ -53,6 +53,7 @@ export interface FlowGraphEvents {
   onNodeClick?: (node: FlowGraphNode) => void
   onEdgeClick?: (edge: FlowGraphEdge) => void
   onPaneClick?: () => void
+  onNodeDragStop?: (node: FlowGraphNode) => void
   onEdgeCreate?: (edge: FlowGraphEdge) => void
   onGraphChange?: (data: FlowGraphData) => void
   /** 节点/连线中点「+」点击（业务层弹类型选择并插入） */
@@ -82,5 +83,7 @@ export interface FlowGraphInstance {
   zoomOut(): void
   setZoom(zoom: number): void
   getZoom(): number
+  /** 屏幕坐标（如拖放事件的 clientX/clientY）→ 画布坐标 */
+  screenToGraphPoint(clientX: number, clientY: number): { x: number; y: number }
   destroy(): void
 }

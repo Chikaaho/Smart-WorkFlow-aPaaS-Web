@@ -3,7 +3,61 @@ import { mount } from '@vue/test-utils'
 import { defineComponent, nextTick } from 'vue'
 
 vi.mock('@/adapters/flow-graph', () => ({
-  mountFlowGraph: vi.fn(() => ({ exportGraph: vi.fn(), destroy: vi.fn() })),
+  // 功能型 fake：状态与入参共享引用，命令式方法同步回传 onGraphChange，
+  // 与真实适配层契约一致（测试断言依赖同一份数据引用）。
+  mountFlowGraph: vi.fn(
+    (
+      _container: HTMLElement,
+      data?: {
+        nodes: Array<{ id: string; [k: string]: unknown }>
+        edges: Array<{ id: string; [k: string]: unknown }>
+      },
+      events?: { onGraphChange?: (d: unknown) => void },
+    ) => {
+      const state = data ?? { nodes: [], edges: [] }
+      const emit = () => events?.onGraphChange?.(state)
+      return {
+        exportGraph: () => state,
+        setData: (next: typeof state) => {
+          state.nodes = next.nodes
+          state.edges = next.edges
+          emit()
+        },
+        addNode: (node: { id: string }) => {
+          state.nodes = [...state.nodes, node]
+          emit()
+        },
+        updateNode: (node: { id: string }) => {
+          state.nodes = state.nodes.map((n) => (n.id === node.id ? node : n))
+          emit()
+        },
+        removeNode: (id: string) => {
+          state.nodes = state.nodes.filter((n) => n.id !== id)
+          state.edges = state.edges.filter((e) => e.source !== id && e.target !== id)
+          emit()
+        },
+        addEdge: (edge: { id: string }) => {
+          state.edges = [...state.edges, edge]
+          emit()
+        },
+        updateEdge: (edge: { id: string }) => {
+          state.edges = state.edges.map((e) => (e.id === edge.id ? edge : e))
+          emit()
+        },
+        removeEdge: (id: string) => {
+          state.edges = state.edges.filter((e) => e.id !== id)
+          emit()
+        },
+        fitView: vi.fn(),
+        zoomIn: vi.fn(),
+        zoomOut: vi.fn(),
+        setZoom: vi.fn(),
+        getZoom: vi.fn(() => 1),
+        screenToGraphPoint: vi.fn((x: number, y: number) => ({ x, y })),
+        destroy: vi.fn(),
+      }
+    },
+  ),
 }))
 
 vi.mock('@/modules/agent/api', () => ({
@@ -92,8 +146,22 @@ const stubs = {
     emits: ['change'],
   },
   'el-empty': {
-    template: '<div class="el-empty">{{ description }}</div>',
+    template: '<div class="el-empty">{{ description }}<slot name="description"/></div>',
     props: ['description', 'imageSize'],
+  },
+  'el-tabs': { template: '<div class="el-tabs"><slot/></div>', props: ['modelValue'] },
+  'el-tab-pane': {
+    template: '<div class="el-tab-pane"><slot/></div>',
+    props: ['label', 'name'],
+  },
+  'el-dialog': {
+    template: '<div v-if="modelValue" class="el-dialog"><slot/><slot name="footer"/></div>',
+    props: ['modelValue', 'title', 'width'],
+  },
+  'el-button-group': { template: '<div class="el-button-group"><slot/></div>' },
+  'el-checkbox': {
+    template: '<label class="el-checkbox"><slot/></label>',
+    props: ['modelValue'],
   },
 }
 
@@ -302,10 +370,10 @@ describe('GraphDesigner.vue', () => {
     const wrapper = await mountLoaded()
     const [, data, events] = lastMountCall()
 
-    // START/END 无可编辑项
+    // START：参数声明面板（G1-4/G1-6，不再是空面板）
     events.onNodeClick?.(nodeById(data, 'start-1'))
     await nextTick()
-    expect(wrapper.text()).toContain('开始节点无可编辑属性')
+    expect(wrapper.text()).toContain('输入参数')
 
     // CONDITION：出边逐条显示关键词输入框（属性面板内，排除执行面板输入框）
     events.onNodeClick?.(nodeById(data, 'cond-1'))
@@ -592,16 +660,17 @@ describe('GraphDesigner.vue', () => {
   it('色板渲染 LOOP/FORK/JOIN 新类型按钮，点击后画布新增对应类型节点', async () => {
     const wrapper = await mountLoaded()
     const paletteTexts = wrapper.findAll('.palette-item').map((b) => b.text())
+    // G1-3 分组后顺序：基础 / 智能能力 / 流程控制
     expect(paletteTexts).toEqual([
       '开始',
       '结束',
       'LLM 调用',
       '工具调用',
+      '知识检索',
       '条件分支',
       '循环',
       '并行分支',
       '汇合',
-      '知识检索',
     ])
 
     const loopBtn = wrapper.findAll('.palette-item').find((b) => b.text() === '循环')!
