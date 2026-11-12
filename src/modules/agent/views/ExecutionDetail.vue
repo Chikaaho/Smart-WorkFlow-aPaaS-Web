@@ -178,6 +178,14 @@ async function loadDetail() {
         updateTime: state.finishedAt ?? state.startedAt ?? state.createTime,
         nodeDetails: [],
       }
+      // G1-7：异步执行按结果执行 id 回查节点轨迹（此前该路径恒为空）
+      if (state.resultExecutionId) {
+        try {
+          nodes.value = await listExecutionNodes(state.resultExecutionId)
+        } catch {
+          nodes.value = []
+        }
+      }
       return
     } catch {
       // 兼容生命周期上线前的同步执行历史。

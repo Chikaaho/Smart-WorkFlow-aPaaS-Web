@@ -152,6 +152,10 @@ export interface AgentExecutionLifecycle {
   status: string
   input: string
   output?: string
+  /** G1-7：结果执行记录 id（异步执行读节点轨迹用） */
+  resultExecutionId?: number
+  /** G1-4：END 输出声明解析结果 */
+  outputs?: Record<string, string>
   errorCategory?: string
   errorMessage?: string
   latencyMs?: number
@@ -174,12 +178,37 @@ export async function submitGraphExecution(
   id: EntityId,
   input: string,
   idempotencyKey: string,
+  inputs?: Record<string, string>,
 ): Promise<AgentExecutionAccepted> {
   return request<AgentExecutionAccepted>({
     method: 'POST',
     url: `/agent/graph-execution-lifecycle/graphs/${id}/executions`,
     headers: { 'Idempotency-Key': idempotencyKey },
-    data: { input },
+    // G1-4：结构化入参随体提交；旧契约 input 为空时不发送
+    data:
+      inputs && Object.keys(inputs).length > 0 ? { input: input || undefined, inputs } : { input },
+  })
+}
+
+/** 单节点运行结果（G1-8 调试语义，不产生正式执行记录） */
+export interface AgentNodeRunResult {
+  success: boolean
+  status: string
+  output?: string
+  errorMessage?: string
+  latencyMs: number
+}
+
+/** 单节点运行（G1-8）：对已发布快照中的 LLM/TOOL/KNOWLEDGE 节点单独执行一次 */
+export async function runGraphNode(
+  graphDefId: EntityId,
+  nodeId: string,
+  inputs: Record<string, string>,
+): Promise<AgentNodeRunResult> {
+  return request<AgentNodeRunResult>({
+    method: 'POST',
+    url: '/agent/graph-executions/node-run',
+    data: { graphDefId, nodeId, inputs },
   })
 }
 

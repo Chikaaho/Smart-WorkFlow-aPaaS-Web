@@ -11,6 +11,8 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ListFilterItem, ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
+import UserFilterSelect from '@/components/UserFilterSelect.vue'
+import { enumLabel } from '@/foundation/i18n/enum-label'
 import {
   pageMonitorInstances,
   interveneInstance,
@@ -31,11 +33,16 @@ const errorMsg = ref('')
 // 七类条件
 const processDefKey = ref('')
 const processInstanceId = ref('')
-const initiatorId = ref<number | undefined>()
+// 用户 ID 以字符串承载（64 位 ID 不过 Number）；系统发起人固定为 0
+const initiatorId = ref<string | number | undefined>()
 const status = ref('')
 const nodeKey = ref('')
 const assignee = ref<number | undefined>()
 const timeRange = ref<[string, string] | null>(null)
+
+const initiatorFixedOptions = computed(() => [
+  { value: 0, label: t('workflow.initiatorSystemIot') },
+])
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
 
@@ -43,7 +50,7 @@ function filters() {
   return {
     processDefKey: processDefKey.value || undefined,
     processInstanceId: processInstanceId.value || undefined,
-    initiatorId: initiatorId.value,
+    initiatorId: initiatorId.value === '' ? undefined : (initiatorId.value ?? undefined),
     status: status.value || undefined,
     nodeKey: nodeKey.value || undefined,
     assignee: assignee.value,
@@ -65,6 +72,19 @@ async function loadList() {
   } finally {
     loading.value = false
   }
+}
+
+/** 展示层时间：yyyy-MM-dd HH:mm:ss，不带 T 与微秒（列表与干预历史统一）。 */
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return '—'
+  const text = String(value)
+  const date = new Date(text.includes('T') ? text : text.replace(' ', 'T'))
+  if (Number.isNaN(date.getTime())) return text.replace('T', ' ').slice(0, 19)
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  )
 }
 
 function search() {
@@ -222,12 +242,11 @@ onMounted(loadList)
       <ListFilterItem :label="t('common.instanceId')">
         <el-input v-model="processInstanceId" :placeholder="t('common.pleaseInput')" clearable />
       </ListFilterItem>
-      <ListFilterItem :label="t('workflow.initiatorId')">
-        <el-input-number
+      <ListFilterItem :label="t('common.initiator')">
+        <UserFilterSelect
           v-model="initiatorId"
-          :placeholder="t('common.pleaseInput')"
-          :min="1"
-          controls-position="right"
+          :fixed-options="initiatorFixedOptions"
+          :placeholder="t('common.all')"
         />
       </ListFilterItem>
       <ListFilterItem :label="t('common.status')">
@@ -269,11 +288,13 @@ onMounted(loadList)
         <template #default="{ $index }">{{ list[$index]?.instance.processInstanceId }}</template>
       </el-table-column>
       <el-table-column :label="t('common.processDef')" min-width="140">
-        <template #default="{ $index }">{{ list[$index]?.instance.processDefKey }}</template>
+        <template #default="{ $index }">{{
+          list[$index]?.instance.processDefName ?? list[$index]?.instance.processDefKey
+        }}</template>
       </el-table-column>
       <el-table-column :label="t('common.status')" width="100">
         <template #default="{ $index }">
-          <el-tag>{{ list[$index]?.instance.status }}</el-tag>
+          <el-tag>{{ enumLabel('WORKFLOW_INSTANCE', list[$index]?.instance.status) }}</el-tag>
           <el-tag v-if="list[$index]?.suspended" type="warning" size="small">{{
             t('common.statusSuspended')
           }}</el-tag>
@@ -281,11 +302,13 @@ onMounted(loadList)
       </el-table-column>
       <el-table-column :label="t('common.currentNode')" min-width="120">
         <template #default="{ $index }">{{
-          rowOf(list[$index]).activeNodeIds.join(t('common.enumSeparator')) || '—'
+          (list[$index]?.activeNodeIds ?? []).join(t('common.enumSeparator')) || '—'
         }}</template>
       </el-table-column>
       <el-table-column :label="t('common.startTimeShort')" min-width="160">
-        <template #default="{ $index }">{{ list[$index]?.instance.createTime }}</template>
+        <template #default="{ $index }">{{
+          formatDateTime(list[$index]?.instance.createTime)
+        }}</template>
       </el-table-column>
       <ListActionsColumn :actions="rowActions" :label="t('workflow.intervene')" :width="160" />
       <template #empty>{{ t('workflow.noInstances') }}</template>
@@ -321,10 +344,22 @@ onMounted(loadList)
     <el-dialog v-model="historyVisible" :title="t('workflow.interveneHistory')" width="640px">
       <el-table :data="historyList" size="small">
         <el-table-column prop="action" :label="t('common.action')" width="90" />
-        <el-table-column prop="beforeState" :label="t('workflow.stateBefore')" width="100" />
-        <el-table-column prop="afterState" :label="t('workflow.stateAfter')" width="100" />
+        <el-table-column :label="t('workflow.stateBefore')" width="100">
+          <template #default="{ $index }">{{
+            enumLabel('WORKFLOW_INSTANCE', historyList[$index]?.beforeState)
+          }}</template>
+        </el-table-column>
+        <el-table-column :label="t('workflow.stateAfter')" width="100">
+          <template #default="{ $index }">{{
+            enumLabel('WORKFLOW_INSTANCE', historyList[$index]?.afterState)
+          }}</template>
+        </el-table-column>
         <el-table-column prop="reason" :label="t('common.reason')" min-width="140" />
-        <el-table-column prop="intervenedAt" :label="t('common.time')" min-width="160" />
+        <el-table-column :label="t('common.time')" min-width="160">
+          <template #default="{ $index }">{{
+            formatDateTime(historyList[$index]?.intervenedAt)
+          }}</template>
+        </el-table-column>
         <template #empty>{{ t('workflow.noInterventionRecords') }}</template>
       </el-table>
     </el-dialog>

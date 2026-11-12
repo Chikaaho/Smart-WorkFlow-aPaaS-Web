@@ -21,7 +21,7 @@ const { t } = useI18n()
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { mountFlowGraph } from '@/adapters/flow-graph'
 import type {
   FlowGraphData,
@@ -36,6 +36,7 @@ import {
   executeGraph,
   getGraphExecutionLifecycle,
   listGraphExecutionEvents,
+  runGraphNode,
   submitGraphExecution,
   getGraphDef,
   listModelOptions,
@@ -44,8 +45,12 @@ import {
   publishGraphDef,
   saveDraftGraph,
 } from '@/modules/agent/api'
+import type { AgentNodeRunResult } from '@/modules/agent/api'
 import {
+  NODE_CONFIG_KEY_INPUT_PARAMS,
   NODE_CONFIG_KEY_MAX_ITERATIONS,
+  NODE_CONFIG_KEY_SYSTEM_PROMPT,
+  NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE,
   NODE_TYPE_CONDITION,
   NODE_TYPE_END,
   NODE_TYPE_FORK,
@@ -58,6 +63,7 @@ import {
   elementsToFlowGraphData,
   flowGraphDataToElements,
   nodeTypeLabel,
+  type StartParam,
 } from '@/modules/agent/utils/graphAdapter'
 import {
   findFreePosition,
@@ -68,6 +74,7 @@ import {
 import { nodePresentation } from '@/modules/agent/utils/node-presentation'
 import {
   buildVariableGroups,
+  extractVariableRefs,
   validateGraphVariables,
 } from '@/modules/agent/utils/variableReferences'
 import { getNodePanelDescriptor } from './panels/node-panel-registry'
@@ -124,6 +131,75 @@ const streamedOutput = ref('')
 const lastSequence = ref(0)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 
+// ─── G1-7 节点运行状态与详情 ───
+interface NodeRunState {
+  status: 'waiting' | 'running' | 'success' | 'failed' | 'skipped'
+  latencyMs?: number
+  input?: string
+  output?: string
+  errorMessage?: string
+}
+const nodeRunStates = ref<Record<string, NodeRunState>>({})
+
+// ─── G1-4 开始参数表单 ───
+/** 开始节点声明的输入参数（无声明 = 旧单文本契约） */
+const startParams = computed<StartParam[]>(() => {
+  const start = graphData.value.nodes.find((n) => n.type === NODE_TYPE_START)
+  const raw = start?.data?.[NODE_CONFIG_KEY_INPUT_PARAMS]
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
+    .map((p) => ({
+      name: String(p.name ?? '').trim(),
+      type: (['text', 'number', 'boolean', 'json'] as const).includes(p.type as StartParam['type'])
+        ? (p.type as StartParam['type'])
+        : 'text',
+      required: p.required === true,
+      description: typeof p.description === 'string' ? p.description : '',
+    }))
+    .filter((p) => p.name !== '')
+})
+const structuredInputs = ref<Record<string, string | boolean>>({})
+
+/** 参数表单取值/写回（boolean 开关与文本输入共用） */
+function paramValue(name: string): string | boolean {
+  return structuredInputs.value[name] ?? ''
+}
+
+function setParamValue(name: string, value: string | boolean) {
+  structuredInputs.value = { ...structuredInputs.value, [name]: value }
+}
+
+// ─── G1-8 单节点运行 ───
+const singleNodeDialogVisible = ref(false)
+const singleNodeInputs = ref<Record<string, string>>({})
+const singleNodeResult = ref<AgentNodeRunResult | null>(null)
+const singleNodeRunning = ref(false)
+
+const RUNNABLE_NODE_TYPES = [NODE_TYPE_LLM, NODE_TYPE_TOOL, NODE_TYPE_KNOWLEDGE]
+
+/** 单节点运行所需变量名：节点 inputVar + Prompt 模板中引用的变量（去重） */
+const singleNodeVariableNames = computed<string[]>(() => {
+  const node = selectedNode.value
+  if (!node) return []
+  const names = new Set<string>()
+  const inputVar = node.data?.inputVar
+  names.add(typeof inputVar === 'string' && inputVar.trim() ? inputVar.trim() : 'input')
+  for (const key of [NODE_CONFIG_KEY_SYSTEM_PROMPT, NODE_CONFIG_KEY_USER_PROMPT_TEMPLATE]) {
+    const text = node.data?.[key]
+    if (typeof text !== 'string') continue
+    for (const ref of extractVariableRefs(text)) {
+      if (!ref.includes('.')) names.add(ref)
+    }
+  }
+  return Array.from(names)
+})
+
+/** 当前选中节点的运行详情（G1-7：点节点看耗时/入参/出参/错误） */
+const selectedNodeRun = computed<NodeRunState | null>(() =>
+  selectedNodeId.value ? (nodeRunStates.value[selectedNodeId.value] ?? null) : null,
+)
+
 const saving = ref(false)
 const publishing = ref(false)
 
@@ -150,6 +226,79 @@ function withPresentation(nodes: FlowGraphNode[]): FlowGraphNode[] {
     ...node,
     presentation: nodePresentation(node, presentationCtx.value, node.presentation?.status),
   }))
+}
+
+// ─── G1-7 节点运行状态 ───
+
+const NODE_STATUS_LABEL_KEYS: Record<NodeRunState['status'], string> = {
+  waiting: 'agent.nodeStatusWaiting',
+  running: 'agent.nodeStatusRunning',
+  success: 'agent.nodeStatusSuccess',
+  failed: 'agent.nodeStatusFailed',
+  skipped: 'agent.nodeStatusSkipped',
+}
+
+function nodeStatusLabel(status: NodeRunState['status']): string {
+  return t(NODE_STATUS_LABEL_KEYS[status])
+}
+
+/** 把运行状态写到节点卡片（presentation.status → 适配层状态色） */
+function applyNodeRunStatus(nodeId: string, status: NodeRunState['status']) {
+  const node = graphData.value.nodes.find((n) => n.id === nodeId)
+  if (!node) return
+  const presentation = nodePresentation(node, presentationCtx.value, status)
+  graphInstance.value?.updateNode({ ...node, presentation })
+}
+
+/** 运行开始：全部节点置「等待」并清空上一轮详情 */
+function resetRunStates() {
+  nodeRunStates.value = {}
+  for (const node of graphData.value.nodes) {
+    applyNodeRunStatus(node.id, 'waiting')
+  }
+}
+
+/** 解析逐节点事件（NODE_STARTED / NODE_FINISHED） */
+function handleRunEvent(type: string, nodeId: string | undefined, payload: string | undefined) {
+  if (!nodeId) return
+  if (type === 'NODE_STARTED') {
+    nodeRunStates.value = { ...nodeRunStates.value, [nodeId]: { status: 'running' } }
+    applyNodeRunStatus(nodeId, 'running')
+    return
+  }
+  if (type !== 'NODE_FINISHED') return
+  let detail: Record<string, unknown> = {}
+  if (payload) {
+    try {
+      detail = JSON.parse(payload) as Record<string, unknown>
+    } catch {
+      detail = {}
+    }
+  }
+  const status: NodeRunState['status'] = detail.status === 'FAILED' ? 'failed' : 'success'
+  nodeRunStates.value = {
+    ...nodeRunStates.value,
+    [nodeId]: {
+      status,
+      latencyMs: typeof detail.latencyMs === 'number' ? detail.latencyMs : undefined,
+      input: typeof detail.input === 'string' ? detail.input : undefined,
+      output: typeof detail.output === 'string' ? detail.output : undefined,
+      errorMessage: typeof detail.errorMessage === 'string' ? detail.errorMessage : undefined,
+    },
+  }
+  applyNodeRunStatus(nodeId, status)
+}
+
+/** 执行终态：从未开始的节点标记为「跳过」（未走到的分支） */
+function markRemainingSkipped() {
+  const next = { ...nodeRunStates.value }
+  for (const node of graphData.value.nodes) {
+    if (!next[node.id] || next[node.id].status === 'running') {
+      next[node.id] = { ...(next[node.id] ?? {}), status: 'skipped' }
+      applyNodeRunStatus(node.id, 'skipped')
+    }
+  }
+  nodeRunStates.value = next
 }
 
 const incomingEdges = computed(() =>
@@ -633,7 +782,11 @@ async function refreshExecution(executionId: number) {
   for (const event of events) {
     if (event.sequence <= lastSequence.value) continue
     lastSequence.value = event.sequence
-    if (event.type === 'MODEL_DELTA') streamedOutput.value += event.payload ?? ''
+    if (event.type === 'MODEL_DELTA') {
+      streamedOutput.value += event.payload ?? ''
+    } else if (event.type === 'NODE_STARTED' || event.type === 'NODE_FINISHED') {
+      handleRunEvent(event.type, event.nodeId, event.payload)
+    }
   }
   executeResult.value = {
     executionId,
@@ -644,33 +797,55 @@ async function refreshExecution(executionId: number) {
   }
   if (TERMINAL_STATUSES.has(state.status)) {
     executing.value = false
+    markRemainingSkipped()
     return
   }
   pollTimer = setTimeout(() => void refreshExecution(executionId), 800)
 }
 
 async function handleExecute() {
-  const input = executeInput.value.trim()
-  if (!input) {
-    ElMessage.warning(t('agent.testTextRequired'))
-    return
+  // G1-4：有参数声明的图走结构化入参；无声明保持旧单文本契约
+  const params = startParams.value
+  let submitInput = ''
+  let inputs: Record<string, string> | undefined
+  if (params.length > 0) {
+    const values: Record<string, string> = {}
+    for (const param of params) {
+      const raw = structuredInputs.value[param.name]
+      const value = typeof raw === 'boolean' ? String(raw) : String(raw ?? '').trim()
+      if (param.required && value === '') {
+        ElMessage.warning(t('agent.structuredInputRequired', { name: param.name }))
+        return
+      }
+      if (value !== '') values[param.name] = value
+    }
+    inputs = values
+  } else {
+    const input = executeInput.value.trim()
+    if (!input) {
+      ElMessage.warning(t('agent.testTextRequired'))
+      return
+    }
+    submitInput = input
   }
   if (pollTimer) clearTimeout(pollTimer)
   executing.value = true
   executeResult.value = null
   streamedOutput.value = ''
   lastSequence.value = 0
+  resetRunStates()
   try {
     // 测试桩和旧部署未提供生命周期端点时保留同步兼容入口；正式环境始终走异步受理。
     if (import.meta.env.MODE === 'test') {
-      executeResult.value = await executeGraph(graphId.value, input)
+      executeResult.value = await executeGraph(graphId.value, submitInput)
       executing.value = false
       return
     }
     const accepted = await submitGraphExecution(
       graphId.value,
-      input,
+      submitInput,
       globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+      inputs,
     )
     lifecycleStatus.value = accepted.status
     executeResult.value = { executionId: accepted.executionId, success: false, latencyMs: 0 }
@@ -699,6 +874,57 @@ function handleViewExecutionDetail() {
     void router.push(`/agent/executions/detail/${eid}`)
   } else {
     ElMessage.warning(t('agent.noExecutionToJumpTo'))
+  }
+}
+
+// ─── G1-8 单节点运行 ───
+
+function openSingleNodeDialog() {
+  if (!selectedNode.value) return
+  singleNodeResult.value = null
+  const initial: Record<string, string> = {}
+  for (const name of singleNodeVariableNames.value) {
+    initial[name] = singleNodeInputs.value[name] ?? ''
+  }
+  singleNodeInputs.value = initial
+  singleNodeDialogVisible.value = true
+}
+
+async function confirmSingleNodeRun() {
+  const node = selectedNode.value
+  if (!node) return
+  const inputs: Record<string, string> = {}
+  for (const name of singleNodeVariableNames.value) {
+    const value = String(singleNodeInputs.value[name] ?? '')
+    if (value.trim() !== '') inputs[name] = value
+  }
+  if (Object.keys(inputs).length === 0) {
+    ElMessage.warning(t('agent.nodeRunRequiredInput'))
+    return
+  }
+  if (node.type === NODE_TYPE_TOOL) {
+    try {
+      await ElMessageBox.confirm(
+        t('agent.toolRunConfirmBody', { tool: String(node.data?.toolName ?? '') }),
+        t('agent.toolRunConfirmTitle'),
+        { type: 'warning' },
+      )
+    } catch {
+      return
+    }
+  }
+  singleNodeRunning.value = true
+  try {
+    singleNodeResult.value = await runGraphNode(graphId.value, node.id, inputs)
+  } catch (err) {
+    singleNodeResult.value = {
+      success: false,
+      status: 'FAILED',
+      errorMessage: err instanceof ApiError ? err.msg : t('agent.executionFailed'),
+      latencyMs: 0,
+    }
+  } finally {
+    singleNodeRunning.value = false
   }
 }
 
@@ -882,10 +1108,46 @@ onBeforeUnmount(() => {
                 <div>{{ t('agent.nodeIdLabel') }}：{{ selectedNode.id }}</div>
               </div>
             </el-tab-pane>
+            <el-tab-pane v-if="selectedNodeRun" :label="t('agent.nodeTabRun')" name="run">
+              <div class="panel-field__label">{{ t('agent.nodeRunStatus') }}</div>
+              <el-tag size="small" :type="selectedNodeRun.status === 'failed' ? 'danger' : 'info'">
+                {{ nodeStatusLabel(selectedNodeRun.status) }}
+              </el-tag>
+              <div v-if="selectedNodeRun.latencyMs !== undefined" class="panel-meta">
+                {{ t('agent.nodeRunLatency') }}：{{ selectedNodeRun.latencyMs }}ms
+              </div>
+              <template v-if="selectedNodeRun.input">
+                <div class="panel-field__label">{{ t('agent.nodeRunInput') }}</div>
+                <pre class="node-run-text">{{ selectedNodeRun.input }}</pre>
+              </template>
+              <template v-if="selectedNodeRun.output">
+                <div class="panel-field__label">{{ t('agent.nodeRunOutput') }}</div>
+                <pre class="node-run-text">{{ selectedNodeRun.output }}</pre>
+              </template>
+              <template v-if="selectedNodeRun.errorMessage">
+                <div class="panel-field__label">{{ t('agent.nodeRunError') }}</div>
+                <pre class="node-run-text node-run-error">{{ selectedNodeRun.errorMessage }}</pre>
+              </template>
+            </el-tab-pane>
           </el-tabs>
 
-          <div v-if="selectedNodeType !== NODE_TYPE_START" class="panel-footer">
-            <el-button size="small" type="danger" plain @click="removeSelectedNode">
+          <div class="panel-footer">
+            <el-button
+              v-if="RUNNABLE_NODE_TYPES.includes(selectedNodeType)"
+              size="small"
+              type="primary"
+              plain
+              @click="openSingleNodeDialog"
+            >
+              {{ t('agent.runNode') }}
+            </el-button>
+            <el-button
+              v-if="selectedNodeType !== NODE_TYPE_START"
+              size="small"
+              type="danger"
+              plain
+              @click="removeSelectedNode"
+            >
               {{ t('agent.deleteNode') }}
             </el-button>
           </div>
@@ -915,16 +1177,65 @@ onBeforeUnmount(() => {
       </div>
     </el-dialog>
 
+    <!-- 单节点运行（G1-8 调试语义，不产生正式执行记录） -->
+    <el-dialog v-model="singleNodeDialogVisible" :title="t('agent.runNode')" width="480px">
+      <div class="insert-hint">{{ t('agent.runNodeHint') }}</div>
+      <div class="panel-field__label">{{ t('agent.nodeRunInputsTitle') }}</div>
+      <div v-for="name in singleNodeVariableNames" :key="name" class="single-run-field">
+        <span class="single-run-field__name">{{ name }}</span>
+        <el-input
+          v-model="singleNodeInputs[name]"
+          size="small"
+          :placeholder="t('agent.nodeRunInputPlaceholder')"
+        />
+      </div>
+      <el-alert
+        v-if="singleNodeResult"
+        :title="
+          singleNodeResult.success ? t('agent.nodeStatusSuccess') : t('agent.nodeStatusFailed')
+        "
+        :type="singleNodeResult.success ? 'success' : 'error'"
+        :closable="false"
+        show-icon
+        class="execute-result"
+      >
+        <div v-if="singleNodeResult.output" class="node-run-text">
+          {{ singleNodeResult.output }}
+        </div>
+        <div v-if="singleNodeResult.errorMessage" class="node-run-text node-run-error">
+          {{ singleNodeResult.errorMessage }}
+        </div>
+        <div class="execute-meta">
+          {{ t('agent.nodeRunLatency') }}：{{ singleNodeResult.latencyMs }}ms
+        </div>
+      </el-alert>
+      <template #footer>
+        <el-button size="small" @click="singleNodeDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          size="small"
+          type="primary"
+          :loading="singleNodeRunning"
+          @click="confirmSingleNodeRun"
+        >
+          {{ t('agent.run') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 执行测试面板（结果不落库，刷新即失） -->
     <div class="execute-panel">
       <div class="execute-row">
         <span class="execute-label">{{ t('agent.runTest') }}</span>
         <el-input
+          v-if="startParams.length === 0"
           v-model="executeInput"
           :placeholder="t('agent.testTextPlaceholder')"
           style="width: 360px"
           size="small"
         />
+        <span v-else class="execute-label">{{ t('agent.structuredInputsTitle') }}</span>
         <el-button type="primary" size="small" :loading="executing" @click="handleExecute">
           {{ t('agent.run') }}
         </el-button>
@@ -938,6 +1249,29 @@ onBeforeUnmount(() => {
           取消执行
         </el-button>
         <el-tag v-if="lifecycleStatus" type="info" size="small">{{ lifecycleStatus }}</el-tag>
+      </div>
+      <!-- G1-4：开始节点参数声明 → 结构化入参表单 -->
+      <div v-if="startParams.length > 0" class="params-form">
+        <div v-for="param in startParams" :key="param.name" class="param-field">
+          <span class="param-field__label">
+            {{ param.name }}<span v-if="param.required" class="param-required">*</span>
+          </span>
+          <el-switch
+            v-if="param.type === 'boolean'"
+            :model-value="paramValue(param.name) === true"
+            @update:model-value="(value) => setParamValue(param.name, value === true)"
+          />
+          <el-input
+            v-else
+            :model-value="String(paramValue(param.name) ?? '')"
+            :type="param.type === 'json' ? 'textarea' : 'text'"
+            :rows="param.type === 'json' ? 2 : undefined"
+            :placeholder="param.description || t('agent.nodeRunInputPlaceholder')"
+            size="small"
+            style="width: 280px"
+            @update:model-value="(value) => setParamValue(param.name, String(value))"
+          />
+        </div>
       </div>
       <el-alert
         v-if="executeResult"
@@ -1200,6 +1534,61 @@ onBeforeUnmount(() => {
   border: 1px solid var(--el-border-color-light);
   border-radius: 6px;
   padding: 12px;
+}
+
+.params-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 10px;
+}
+
+.param-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.param-field__label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.param-required {
+  color: var(--el-color-danger);
+  margin-left: 2px;
+}
+
+.single-run-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.single-run-field__name {
+  width: 110px;
+  flex: none;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  word-break: break-all;
+}
+
+.node-run-text {
+  margin: 4px 0;
+  padding: 6px 8px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.node-run-error {
+  color: var(--el-color-danger);
 }
 
 .execute-row {
