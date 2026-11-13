@@ -919,8 +919,11 @@ async function refreshExecution(executionId: number) {
     waitingHumanTask.value = null
   }
   for (const event of events) {
-    if (event.sequence <= lastSequence.value) continue
-    lastSequence.value = event.sequence
+    // 服务端 Long→String 序列化：sequence 到达前端是字符串，必须先转数值再比较，
+    // 否则 "10" <= "9" 的字符串比较为真，序号 ≥10 的事件会被整体跳过（UAT 复测发现的真 bug）。
+    const sequence = typeof event.sequence === 'number' ? event.sequence : Number(event.sequence)
+    if (!Number.isFinite(sequence) || sequence <= lastSequence.value) continue
+    lastSequence.value = sequence
     if (event.type === 'MODEL_DELTA') {
       streamedOutput.value += event.payload ?? ''
     } else if (event.type === 'NODE_STARTED' || event.type === 'NODE_FINISHED') {
