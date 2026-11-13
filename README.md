@@ -4,7 +4,7 @@
 
 Smart-WorkFlow-aPaaS-Web 是 **CH-aPaaS** 的前端界面（Vue 3 / TypeScript / Element Plus）。CH-aPaaS 是一个可以自己搭建业务应用的低代码平台：把业务做成表单和流程，就能在工作台上发起、审批和跟进。
 
-![Version](https://img.shields.io/badge/version-1.0.0-2563EB)
+![Version](https://img.shields.io/badge/version-1.1.1-2563EB)
 ![License](https://img.shields.io/badge/license-MIT-2563EB)
 ![Vue](https://img.shields.io/badge/Vue-3-42B883)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF)
@@ -13,7 +13,7 @@ Smart-WorkFlow-aPaaS-Web 是 **CH-aPaaS** 的前端界面（Vue 3 / TypeScript /
 
 ![工作台](docs/assets/readme/workspace.png)
 
-配套后端：[Smart-WorkFlow-aPaaS-server](https://github.com/Chikaaho/Smart-WorkFlow-aPaaS-server)（当前 1.0.0，本前端 1.0.0）
+配套后端：[Smart-WorkFlow-aPaaS-server](https://github.com/Chikaaho/Smart-WorkFlow-aPaaS-server)（当前 1.1.0，本前端 1.1.1）
 
 ## 界面预览
 
