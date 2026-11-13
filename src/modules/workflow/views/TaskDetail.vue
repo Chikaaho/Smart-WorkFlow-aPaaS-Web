@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/* global window */
+/* global window, HTMLElement, ResizeObserver */
 import PrintActions from '@/modules/workflow/components/PrintActions.vue'
 import { useTaskApproval } from '../composables/use-task-approval'
 import { useI18n } from '@/locales'
@@ -208,6 +208,41 @@ const nodeFieldScripts = createFieldScripts({
   orgContext: () => scriptOrgContext.value,
 })
 onUnmounted(() => nodeFieldScripts.dispose())
+
+// G4-1：操作卡吸底，滚动容器按其**实测高度**预留底部空间；
+// 只用固定 padding 会在意见框展开后重新遮挡明细最后一行。
+const actionsCardRef = ref<{ $el?: unknown } | null>(null)
+const actionsCardHeight = ref(0)
+let actionsResizeObserver: ResizeObserver | null = null
+
+function syncActionsCardHeight(): void {
+  const element = actionsCardRef.value?.$el
+  if (!(element instanceof HTMLElement)) {
+    actionsCardHeight.value = 0
+    return
+  }
+  actionsCardHeight.value = Math.ceil(element.getBoundingClientRect().height)
+}
+
+watch(actionsCardRef, (card) => {
+  actionsResizeObserver?.disconnect()
+  actionsResizeObserver = null
+  const element = card?.$el
+  if (!(element instanceof HTMLElement)) {
+    actionsCardHeight.value = 0
+    return
+  }
+  syncActionsCardHeight()
+  if (typeof ResizeObserver === 'undefined') return
+  actionsResizeObserver = new ResizeObserver(syncActionsCardHeight)
+  actionsResizeObserver.observe(element)
+})
+
+onUnmounted(() => actionsResizeObserver?.disconnect())
+
+const detailScrollStyle = computed(() => ({
+  paddingBottom: `${actionsCardHeight.value + (props.embedded ? 0 : 24)}px`,
+}))
 
 /** 脚本隐藏的节点字段集合（隐藏不渲染、不参与必填校验、最终提交不携带）。 */
 const nodeFormHiddenAll = computed(() => {
@@ -1135,7 +1170,12 @@ onMounted(loadDetail)
 </script>
 
 <template>
-  <div v-loading="loading" class="task-detail" :class="{ 'task-detail--embedded': embedded }">
+  <div
+    v-loading="loading"
+    class="task-detail"
+    :class="{ 'task-detail--embedded': embedded }"
+    :style="detailScrollStyle"
+  >
     <!-- 0.1.7 #18：页头只留左上角返回箭头，标题/状态/发起人等噪音全部去掉 -->
     <div v-if="!embedded" class="detail-header">
       <button
@@ -1271,7 +1311,11 @@ onMounted(loadDetail)
     />
 
     <!-- 0.1.7 #18：审批意见在下方，全部操作按钮右下角；发起人常驻催办入口 -->
-    <el-card v-if="detail && (canAct || canUrge)" class="detail-card detail-card--actions">
+    <el-card
+      v-if="detail && (canAct || canUrge)"
+      ref="actionsCardRef"
+      class="detail-card detail-card--actions"
+    >
       <template v-if="canAct" #header>
         <span class="detail-actions__title">{{ t('workflow.approvalSection') }}</span>
       </template>
@@ -1921,12 +1965,25 @@ onMounted(loadDetail)
   color: var(--sw-color-primary);
 }
 /* 设计（节点20）：标题行状态标签为品牌紫底 */
-/* 0.1.7 #18：操作卡吸底，按钮统一右下角 */
+/* X1：操作卡固定在**视口底部**（不是内容流末端）——页面滚到任何位置都不盖住
+   表单内容；滚动容器按实测高度预留 padding-bottom，滚到底时明细最后一行
+   完整露出在操作卡上方。表格贴条形按钮区，卡片不再悬浮在页面中部。 */
 .detail-card--actions {
-  position: sticky;
+  position: fixed;
+  left: 24px;
+  right: 24px;
   bottom: 0;
   z-index: 5;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06);
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+}
+/* 嵌入统一详情弹窗：由弹窗正文滚动，操作栏回到容器内吸底。 */
+.task-detail--embedded .detail-card--actions {
+  position: sticky;
+  left: auto;
+  right: auto;
+  bottom: 0;
+  border-radius: 0 0 8px 8px;
 }
 .detail-actions__title {
   color: var(--sw-color-primary);

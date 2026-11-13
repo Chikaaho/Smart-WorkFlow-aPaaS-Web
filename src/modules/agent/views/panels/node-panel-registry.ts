@@ -24,13 +24,16 @@ import {
   NODE_TYPE_END,
   NODE_TYPE_FORK,
   NODE_TYPE_JOIN,
+  NODE_TYPE_HUMAN,
   NODE_TYPE_KNOWLEDGE,
   NODE_TYPE_LLM,
   NODE_TYPE_LOOP,
   NODE_TYPE_START,
+  NODE_TYPE_SUBGRAPH,
   NODE_TYPE_TOOL,
 } from '@/modules/agent/utils/graphAdapter'
-import EmptyPanel from './EmptyPanel.vue'
+import StartPanel from './StartPanel.vue'
+import EndPanel from './EndPanel.vue'
 import LlmPanel from './LlmPanel.vue'
 import ToolPanel from './ToolPanel.vue'
 import LoopPanel from './LoopPanel.vue'
@@ -38,6 +41,8 @@ import ForkPanel from './ForkPanel.vue'
 import JoinPanel from './JoinPanel.vue'
 import ConditionPanel from './ConditionPanel.vue'
 import KnowledgePanel from './KnowledgePanel.vue'
+import HumanPanel from './HumanPanel.vue'
+import SubgraphPanel from './SubgraphPanel.vue'
 
 /** 属性面板统一入参（各面板按需消费；交互经 emit 上行，面板自身零副作用）。 */
 export interface NodePanelProps {
@@ -55,6 +60,14 @@ export interface NodePanelProps {
   edgeDisplayName: (edge: FlowGraphEdge) => string
   /** 节点类型中文名（空态说明等展示用）。 */
   label: string
+  /** 当前节点可用变量（G1-5：只列上游可达的节点输出与开始参数）。 */
+  variableGroups?: import('@/modules/agent/utils/variableReferences').VariableGroup[]
+  /** HUMAN 节点处理人候选（G3）。 */
+  userOptions?: Array<{ id: string; label: string }>
+  /** SUBGRAPH 节点可选的已发布图（G3）。 */
+  graphOptions?: Array<{ id: number | string; name: string; defVersion?: number }>
+  /** SUBGRAPH 节点所选图的发布版本快照（G3，由父级加载）。 */
+  subgraphVersions?: Array<{ defVersion: number }>
 }
 
 export interface NodePanelDescriptor {
@@ -67,8 +80,8 @@ export interface NodePanelDescriptor {
 }
 
 export const NODE_PANEL_REGISTRY: NodePanelDescriptor[] = [
-  { type: NODE_TYPE_START, labelKey: 'agent.nodeStart', component: EmptyPanel },
-  { type: NODE_TYPE_END, labelKey: 'agent.nodeEnd', component: EmptyPanel },
+  { type: NODE_TYPE_START, labelKey: 'agent.nodeStart', component: StartPanel },
+  { type: NODE_TYPE_END, labelKey: 'agent.nodeEnd', component: EndPanel },
   { type: NODE_TYPE_LLM, labelKey: 'agent.nodeLlm', component: LlmPanel },
   { type: NODE_TYPE_TOOL, labelKey: 'agent.nodeTool', component: ToolPanel },
   { type: NODE_TYPE_CONDITION, labelKey: 'agent.nodeCondition', component: ConditionPanel },
@@ -76,6 +89,8 @@ export const NODE_PANEL_REGISTRY: NodePanelDescriptor[] = [
   { type: NODE_TYPE_FORK, labelKey: 'agent.nodeFork', component: ForkPanel },
   { type: NODE_TYPE_JOIN, labelKey: 'agent.nodeJoin', component: JoinPanel },
   { type: NODE_TYPE_KNOWLEDGE, labelKey: 'agent.nodeKnowledge', component: KnowledgePanel },
+  { type: NODE_TYPE_HUMAN, labelKey: 'agent.nodeHuman', component: HumanPanel },
+  { type: NODE_TYPE_SUBGRAPH, labelKey: 'agent.nodeSubgraph', component: SubgraphPanel },
 ]
 
 /** 按 type 取描述符；取不到返回 undefined（消费方兜底：无面板渲染）。 */

@@ -39,9 +39,16 @@ import {
   getExecutionDetail,
   getGraphDef,
   getGraphExecutionLifecycle,
+  listExecutionHumanTasks,
   listExecutionNodes,
 } from '@/modules/agent/api'
-import type { AgentGraphExecutionDetail, AgentGraphExecutionNode } from '@/contracts/agent'
+import type {
+  AgentGraphExecutionDetail,
+  AgentGraphExecutionNode,
+  AgentHumanTask,
+} from '@/contracts/agent'
+import type { AgentExecutionLifecycle } from '@/modules/agent/api'
+import HumanTaskSubmitDialog from '@/modules/agent/components/execution/HumanTaskSubmitDialog.vue'
 import { ApiError } from '@/foundation/request'
 import { parseRouteId } from '@/modules/agent/utils/routeId'
 import { sumTokens, toTokenNumber } from '@/modules/agent/utils/token'
@@ -54,11 +61,45 @@ const router = useRouter()
 // ─── 路由参数 ───
 const executionId = computed(() => parseRouteId(route.params.executionId))
 
+// ─── W5 统一执行编号 ───
+/** 生命周期受理行（executionId=受理编号，resultExecutionId=执行编号） */
+const lifecycleState = ref<AgentExecutionLifecycle | null>(null)
+/** 页面统一展示执行编号：优先结果执行 id（与列表/待办一致） */
+const displayExecutionId = computed(
+  () => lifecycleState.value?.resultExecutionId ?? executionId.value,
+)
+const acceptedExecutionId = computed(() => lifecycleState.value?.executionId ?? null)
+
 // ─── 状态变量 ───
 const loading = ref(false)
 const error = ref<string | null>(null)
 const detail = ref<AgentGraphExecutionDetail | null>(null)
 const nodes = ref<AgentGraphExecutionNode[]>([])
+
+// ─── G3 人工任务 ───
+const humanTasks = ref<AgentHumanTask[]>([])
+const humanDialogVisible = ref(false)
+const activeHumanTask = ref<AgentHumanTask | null>(null)
+
+async function loadHumanTasks() {
+  try {
+    // W5：任务行按受理编号查询（服务端已兼容执行编号入参，双保险）
+    const queryId = lifecycleState.value?.executionId ?? executionId.value
+    humanTasks.value = (await listExecutionHumanTasks(queryId)) ?? []
+  } catch {
+    humanTasks.value = []
+  }
+}
+
+function openHumanTask(task: AgentHumanTask) {
+  activeHumanTask.value = task
+  humanDialogVisible.value = true
+}
+
+function handleHumanSubmitted() {
+  activeHumanTask.value = null
+  void loadDetail()
+}
 
 // ─── 状态映射 ───
 const STATUS_MAP: Record<
@@ -68,6 +109,12 @@ const STATUS_MAP: Record<
   RUNNING: {
     get label() {
       return t('common.statusRunning')
+    },
+    type: 'warning',
+  },
+  WAITING_HUMAN: {
+    get label() {
+      return t('agent.humanTaskWaitStatus')
     },
     type: 'warning',
   },
@@ -154,11 +201,14 @@ async function loadDetail() {
   error.value = null
   detail.value = null
   nodes.value = []
+  humanTasks.value = []
+  lifecycleState.value = null
 
   try {
     // 生命周期执行使用独立持久化端点；旧同步执行继续使用原详情端点。
     try {
       const state = await getGraphExecutionLifecycle(executionId.value)
+      lifecycleState.value = state
       const graph = await getGraphDef(state.graphDefId)
       detail.value = {
         id: state.executionId,
@@ -178,6 +228,15 @@ async function loadDetail() {
         updateTime: state.finishedAt ?? state.startedAt ?? state.createTime,
         nodeDetails: [],
       }
+      // G1-7：异步执行按结果执行 id 回查节点轨迹（此前该路径恒为空）
+      if (state.resultExecutionId) {
+        try {
+          nodes.value = await listExecutionNodes(state.resultExecutionId)
+        } catch {
+          nodes.value = []
+        }
+      }
+      void loadHumanTasks()
       return
     } catch {
       // 兼容生命周期上线前的同步执行历史。
@@ -243,7 +302,14 @@ onMounted(() => {
           {{ t('common.backToList') }}
         </el-button>
         <div class="header-info">
-          <span class="execution-id">#{{ executionId }}</span>
+          <span class="execution-id">#{{ displayExecutionId }}</span>
+          <!-- W5：受理编号（生命周期请求行）仅详情透出，避免两个编号混用 -->
+          <span
+            v-if="acceptedExecutionId && acceptedExecutionId !== displayExecutionId"
+            class="execution-id execution-id--accepted"
+          >
+            {{ t('agent.acceptedNoLabel') }} #{{ acceptedExecutionId }}
+          </span>
           <span class="graph-name">{{ detail.graphName }}</span>
           <span class="divider">·</span>
           <span class="def-version">{{
@@ -366,19 +432,72 @@ onMounted(() => {
         </div>
       </el-card>
 
+      <!-- G3：人工任务（等待/已处理） -->
+      <el-card v-if="humanTasks.length > 0" shadow="never" class="detail-section">
+        <template #header>
+          <div class="section-title">{{ t('agent.humanTasksTitle') }}</div>
+        </template>
+        <div v-for="task in humanTasks" :key="task.id" class="human-task-row">
+          <div class="human-task-row__main">
+            <div class="human-task-row__title">
+              {{ task.nodeId }}
+              <el-tag
+                size="small"
+                :type="task.status === 'PENDING' ? 'warning' : 'info'"
+                effect="plain"
+              >
+                {{ task.status === 'PENDING' ? t('agent.humanTaskPending') : task.status }}
+              </el-tag>
+            </div>
+            <div v-if="task.instructions" class="human-task-row__instructions">
+              {{ task.instructions }}
+            </div>
+            <div class="human-task-row__meta">
+              <span v-if="task.assigneeRoleCode">
+                {{ t('agent.humanTaskAssignee') }}：{{ task.assigneeRoleCode }}
+              </span>
+              <span v-else-if="task.assigneeUserId">
+                {{ t('agent.humanTaskAssignee') }}：#{{ task.assigneeUserId }}
+              </span>
+              <span v-if="task.timeoutSeconds">
+                {{ t('agent.humanTaskTimeoutLabel', { seconds: task.timeoutSeconds }) }}
+              </span>
+              <span>{{ t('agent.humanTaskCreatedAt') }}：{{ task.createTime || '-' }}</span>
+            </div>
+          </div>
+          <el-button
+            v-if="task.status === 'PENDING'"
+            size="small"
+            type="primary"
+            @click="openHumanTask(task)"
+          >
+            {{ t('agent.humanInboxOpen') }}
+          </el-button>
+        </div>
+      </el-card>
+
       <!-- 节点轨迹子视图 -->
       <el-card shadow="never" class="detail-section trajectory-section">
         <template #header>
           <div class="section-title">{{ t('agent.nodeTrajectory') }}</div>
         </template>
         <div class="trajectory-body">
-          <NodeTrajectory :nodes="nodes" />
+          <NodeTrajectory
+            :nodes="nodes"
+            @view-child-execution="(id) => router.push(`/agent/executions/detail/${id}`)"
+          />
         </div>
       </el-card>
     </template>
 
     <!-- 未找到状态 -->
     <el-empty v-else :description="t('agent.noExecutionDetailData')" />
+
+    <HumanTaskSubmitDialog
+      v-model="humanDialogVisible"
+      :task="activeHumanTask"
+      @submitted="handleHumanSubmitted"
+    />
   </div>
 </template>
 
@@ -405,6 +524,20 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   flex: 1;
+}
+
+/* W5：执行编号主标识 + 受理号次标识 */
+.execution-id {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--sw-text-primary);
+  font-family: monospace;
+}
+
+.execution-id--accepted {
+  font-size: 12px;
+  font-weight: 400;
+  color: #909399;
 }
 
 .graph-name {
@@ -569,5 +702,39 @@ onMounted(() => {
   font-size: 11px;
   color: #909399;
   line-height: 1.5;
+}
+.human-task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.human-task-row:last-child {
+  border-bottom: none;
+}
+
+.human-task-row__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.human-task-row__instructions {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  margin-top: 2px;
+}
+
+.human-task-row__meta {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  margin-top: 2px;
 }
 </style>

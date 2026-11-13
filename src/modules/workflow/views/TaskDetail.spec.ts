@@ -719,6 +719,26 @@ describe('TaskDetail.vue', () => {
     expect(wrapper.findAll('.detail-card--actions')).toHaveLength(1)
   })
 
+  it('G4-1: 吸底操作卡按实测高度预留滚动空间，意见框展开后仍不遮挡明细', async () => {
+    const wrapper = await mountActionable()
+    const card = wrapper.find('.detail-card--actions')
+    expect(card.exists()).toBe(true)
+
+    const rectSpy = vi
+      .spyOn(card.element, 'getBoundingClientRect')
+      .mockReturnValue({ height: 168 } as DOMRect)
+    const vm = wrapper.vm as unknown as { syncActionsCardHeight: () => void }
+    vm.syncActionsCardHeight()
+    await nextTick()
+    expect(wrapper.find('.task-detail').attributes('style')).toContain('padding-bottom: 192px')
+
+    // 展开审批意见框后操作卡变高：预留空间跟随更新，滚动到底仍能完整看到明细最后一行
+    rectSpy.mockReturnValue({ height: 240 } as DOMRect)
+    vm.syncActionsCardHeight()
+    await nextTick()
+    expect(wrapper.find('.task-detail').attributes('style')).toContain('padding-bottom: 264px')
+  })
+
   it('does not label a freshly saved opinion draft as restored', async () => {
     vi.mocked(queryTaskDetail).mockResolvedValueOnce({ ...mockDetail, canHandle: true })
     vi.mocked(saveApprovalOpinionDraft).mockResolvedValueOnce({} as never)
