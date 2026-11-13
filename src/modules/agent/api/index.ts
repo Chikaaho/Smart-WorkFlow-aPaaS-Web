@@ -34,6 +34,7 @@ import type {
   KnowledgeDocument,
   KnowledgeHit,
   KnowledgeRetrievalReq,
+  AgentHumanTask,
 } from '@/contracts/agent'
 
 // ─── 后端分页原始形状（对齐 AgentGraphDefController.pageDefs 的 PageResult） ───
@@ -152,6 +153,10 @@ export interface AgentExecutionLifecycle {
   status: string
   input: string
   output?: string
+  /** G1-7：结果执行记录 id（异步执行读节点轨迹用） */
+  resultExecutionId?: number
+  /** G1-4：END 输出声明解析结果 */
+  outputs?: Record<string, string>
   errorCategory?: string
   errorMessage?: string
   latencyMs?: number
@@ -174,12 +179,37 @@ export async function submitGraphExecution(
   id: EntityId,
   input: string,
   idempotencyKey: string,
+  inputs?: Record<string, string>,
 ): Promise<AgentExecutionAccepted> {
   return request<AgentExecutionAccepted>({
     method: 'POST',
     url: `/agent/graph-execution-lifecycle/graphs/${id}/executions`,
     headers: { 'Idempotency-Key': idempotencyKey },
-    data: { input },
+    // G1-4：结构化入参随体提交；旧契约 input 为空时不发送
+    data:
+      inputs && Object.keys(inputs).length > 0 ? { input: input || undefined, inputs } : { input },
+  })
+}
+
+/** 单节点运行结果（G1-8 调试语义，不产生正式执行记录） */
+export interface AgentNodeRunResult {
+  success: boolean
+  status: string
+  output?: string
+  errorMessage?: string
+  latencyMs: number
+}
+
+/** 单节点运行（G1-8）：对已发布快照中的 LLM/TOOL/KNOWLEDGE 节点单独执行一次 */
+export async function runGraphNode(
+  graphDefId: EntityId,
+  nodeId: string,
+  inputs: Record<string, string>,
+): Promise<AgentNodeRunResult> {
+  return request<AgentNodeRunResult>({
+    method: 'POST',
+    url: '/agent/graph-executions/node-run',
+    data: { graphDefId, nodeId, inputs },
   })
 }
 
@@ -210,6 +240,70 @@ export async function cancelGraphExecution(
     method: 'POST',
     url: `/agent/graph-execution-lifecycle/executions/${executionId}/cancel`,
   })
+}
+
+// ─── G3 人工任务 ───
+
+/** 待我处理列表（直接指派给当前用户或当前用户角色） */
+export async function listMyHumanTasks(): Promise<AgentHumanTask[]> {
+  return request<AgentHumanTask[]>({
+    method: 'GET',
+    url: '/agent/graph-execution-lifecycle/human-tasks/mine',
+  })
+}
+
+/** 指定执行的人工任务列表（执行详情展示等待/已处理） */
+export async function listExecutionHumanTasks(executionId: EntityId): Promise<AgentHumanTask[]> {
+  return request<AgentHumanTask[]>({
+    method: 'GET',
+    url: `/agent/graph-execution-lifecycle/executions/${executionId}/human-tasks`,
+  })
+}
+
+/** 提交人工任务：填写值 + 决策按钮 keyword；服务端校验处理人并恢复执行 */
+export async function submitHumanTask(
+  executionId: EntityId,
+  taskId: EntityId,
+  values: Record<string, string>,
+  decision: string,
+): Promise<AgentExecutionLifecycle> {
+  return request<AgentExecutionLifecycle>({
+    method: 'POST',
+    url: `/agent/graph-execution-lifecycle/executions/${executionId}/human-tasks/${taskId}/submit`,
+    data: { values, decision },
+  })
+}
+
+/** 处理人候选（登录即可调用的最小用户选项，服务端按租户过滤） */
+export async function listUserChoices(): Promise<Array<{ id: string; label: string }>> {
+  interface UserOption {
+    id: string | number
+    username?: string
+    realName?: string
+  }
+  const list = await request<UserOption[]>({
+    method: 'GET',
+    url: '/system/user/options',
+    params: { limit: 100 },
+  })
+  return (list ?? []).map((u) => ({
+    id: String(u.id),
+    label: u.realName || u.username || String(u.id),
+  }))
+}
+
+/** 角色选项（登录即可调用的最小角色选项，服务端按租户过滤，仅启用角色） */
+export async function listRoleChoices(): Promise<Array<{ code: string; name: string }>> {
+  interface RoleOption {
+    id: string | number
+    code: string
+    name?: string
+  }
+  const list = await request<RoleOption[]>({
+    method: 'GET',
+    url: '/system/role/options',
+  })
+  return (list ?? []).map((r) => ({ code: String(r.code), name: r.name || String(r.code) }))
 }
 
 // ═══════════════════════════════════════════════════════════════

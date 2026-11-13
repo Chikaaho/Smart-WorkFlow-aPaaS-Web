@@ -1,58 +1,35 @@
 /**
- * flow-graph 节点类型着色（W-a）。
- * theme-default.css 提供基础外框/底色；本文件按节点类型叠加边框色与浅底色，
- * 让 START/END/LLM/TOOL/CONDITION/LOOP/FORK/JOIN/KNOWLEDGE 在画布上一眼可分。
- * 类名由 adapters/flow-graph/index.ts 按 `vf-node-<type 小写>` 注入。
+ * flow-graph 画布视觉（V1 返修，planning-review-110-02）。
+ *
+ * theme-default.css 会给 `.vue-flow__node-default` 外壳加白底/边框/固定宽度，
+ * 与自定义卡片叠加成「双层框」。本文件把外壳样式剥离（卡片即节点，无外壳），
+ * 并给画布加流程设计器同款点阵底纹。节点配色由 NodeCard 的 presentation 决定。
  */
 
-.vue-flow__node.vf-node-start,
-.vue-flow__node.vf-node-end {
-  border-color: var(--el-color-success, #67c23a);
-  background: var(--el-color-success-light-9, #f0f9eb);
-}
-
-.vue-flow__node.vf-node-start {
-  border-radius: 999px;
-}
-
-.vue-flow__node.vf-node-llm {
-  border-color: var(--sw-color-primary, #2563eb);
-  background: var(--sw-color-primary-soft, #e7effc);
-}
-
-.vue-flow__node.vf-node-tool {
-  border-color: var(--el-color-warning, #e6a23c);
-  background: var(--el-color-warning-light-9, #fdf6ec);
-}
-
-.vue-flow__node.vf-node-condition {
-  border-color: var(--el-color-danger, #f56c6c);
-  background: var(--el-color-danger-light-9, #fef0f0);
-}
-
-.vue-flow__node.vf-node-loop {
-  border-color: var(--el-color-info, #909399);
-  background: #f4f4f5;
-}
-
-.vue-flow__node.vf-node-fork,
-.vue-flow__node.vf-node-join {
-  border-color: var(--sw-color-primary-dark, #1e4fc0);
-  border-style: dashed;
-  background: #f5f7ff;
-}
-
-.vue-flow__node.vf-node-knowledge {
-  border-color: #7c3aed;
-  background: #f5f0ff;
-}
-
-/* W-a2：画布 fitView 后仍保证节点文字可读（graph 较宽时 fit 缩放约 0.6~0.7） */
+/* 剥离 Vue Flow 默认节点外壳：无底色、无边框、不限定宽度，尺寸完全由卡片决定 */
 .vue-flow__node.vue-flow__node-default {
-  font-size: 20px;
+  width: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: inherit;
+  color: inherit;
 }
 
-/* A1：连线标签与节点文字同一口径，fitView 缩放后渲染字号仍 ≥12px */
+/* 点阵底纹（对齐流程设计器画布） */
+.vue-flow__pane {
+  background-color: #fafbfc;
+  background-image: radial-gradient(#d4d7de 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+/* 连线标签：与卡片摘要同一字号口径（100% 缩放 12px） */
 .vue-flow__edge-text {
-  font-size: 20px;
+  font-size: 12px;
+}
+
+.vue-flow__edge-textbg {
+  fill: #fafbfc;
 }

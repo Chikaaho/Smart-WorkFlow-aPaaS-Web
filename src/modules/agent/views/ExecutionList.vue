@@ -22,8 +22,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { StandardListTemplate, ListActionsColumn } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
-import { pageGraphExecutionsWithVersion, pageDebugSessions } from '@/modules/agent/api'
-import type { AgentGraphExecution, AgentGraphDebugSession } from '@/contracts/agent'
+import {
+  pageGraphExecutionsWithVersion,
+  pageDebugSessions,
+  listMyHumanTasks,
+} from '@/modules/agent/api'
+import type { AgentGraphExecution, AgentGraphDebugSession, AgentHumanTask } from '@/contracts/agent'
+import HumanTaskSubmitDialog from '@/modules/agent/components/execution/HumanTaskSubmitDialog.vue'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 import { usePermission } from '@/foundation/permission'
@@ -42,6 +47,12 @@ const STATUS_MAP: Record<
   RUNNING: {
     get label() {
       return t('common.statusRunning')
+    },
+    type: 'warning',
+  },
+  WAITING_HUMAN: {
+    get label() {
+      return t('agent.humanTaskWaitStatus')
     },
     type: 'warning',
   },
@@ -135,6 +146,64 @@ const errorMsg = ref('')
 const graphDefId = computed(() => Number(route.query.graphDefId || 0))
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
+
+// ─── G3 待我处理 ───
+const humanTasks = ref<AgentHumanTask[]>([])
+const humanLoading = ref(false)
+const humanDialogVisible = ref(false)
+const activeHumanTask = ref<AgentHumanTask | null>(null)
+
+async function loadHumanTasks() {
+  humanLoading.value = true
+  try {
+    humanTasks.value = aggregateHumanTasks((await listMyHumanTasks()) ?? [])
+  } catch {
+    humanTasks.value = []
+  } finally {
+    humanLoading.value = false
+  }
+}
+
+/** 展示层时间：yyyy-MM-dd HH:mm:ss，不带 T 与微秒（V4 与监控页同一口径）。 */
+function formatInboxTime(value: string | null | undefined): string {
+  if (!value) return '-'
+  const text = String(value)
+  const date = new Date(text.includes('T') ? text : text.replace(' ', 'T'))
+  if (Number.isNaN(date.getTime())) return text.replace('T', ' ').slice(0, 19)
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  )
+}
+
+/**
+ * 待办按「执行 + 节点」聚合（planning-review-110-02 裁决 3）：同一人工节点同时配置
+ * 用户与角色时会生成多行任务，用户只看到一行；提交一次服务端会关闭全部兄弟任务。
+ */
+function aggregateHumanTasks(tasks: AgentHumanTask[]): AgentHumanTask[] {
+  const byKey = new Map<string, AgentHumanTask>()
+  for (const task of tasks) {
+    if (task.status !== 'PENDING') continue
+    const key = `${task.executionId}#${task.nodeId}`
+    const existing = byKey.get(key)
+    if (!existing || (task.createTime ?? '') < (existing.createTime ?? '')) {
+      byKey.set(key, task)
+    }
+  }
+  return [...byKey.values()].sort((a, b) => ((a.createTime ?? '') < (b.createTime ?? '') ? 1 : -1))
+}
+
+function openHumanTask(task: AgentHumanTask) {
+  activeHumanTask.value = task
+  humanDialogVisible.value = true
+}
+
+function handleHumanSubmitted() {
+  activeHumanTask.value = null
+  void loadHumanTasks()
+  void loadList()
+}
 
 // 按钮级权限控制
 const canViewDetail = computed(() => hasPerm('agent:model:view'))
@@ -275,6 +344,7 @@ function rowActions(r: unknown): ListAction[] {
 
 onMounted(() => {
   void loadList()
+  void loadHumanTasks()
 })
 </script>
 
@@ -287,9 +357,46 @@ onMounted(() => {
     @update:page-num="handlePageNumChange"
     @update:page-size="handlePageSizeChange"
   >
-    <template #toolbar-actions>
-      <!-- 工具栏扩展操作（如需） -->
-    </template>
+    <!-- V4：空 toolbar-actions 槽位会在列表顶部渲染一条空白工具栏，已移除 -->
+
+    <!-- G3-2：待我处理（人工节点等待队列） -->
+    <div v-loading="humanLoading" class="human-inbox">
+      <div class="human-inbox__header">
+        <div>
+          <span class="human-inbox__title">{{ t('agent.humanInboxTitle') }}</span>
+          <el-tag v-if="humanTasks.length" size="small" type="warning" effect="plain">
+            {{ humanTasks.length }}
+          </el-tag>
+        </div>
+        <el-button size="small" link type="primary" @click="loadHumanTasks">
+          {{ t('agent.humanInboxRefresh') }}
+        </el-button>
+      </div>
+      <div class="human-inbox__hint">{{ t('agent.humanInboxHint') }}</div>
+      <div v-if="humanTasks.length === 0" class="human-inbox__empty">
+        {{ t('agent.humanInboxEmpty') }}
+      </div>
+      <div v-for="task in humanTasks" :key="task.id" class="human-inbox__item">
+        <div class="human-inbox__item-main">
+          <div class="human-inbox__item-title">
+            {{ t('agent.humanTaskExecution') }} #{{ task.resultExecutionId ?? task.executionId }}
+            <span class="human-inbox__node">{{ task.nodeId }}</span>
+          </div>
+          <div class="human-inbox__instructions">
+            {{ task.instructions || t('agent.humanTaskPending') }}
+          </div>
+          <div class="human-inbox__meta">
+            <span>{{ t('agent.humanTaskCreatedAt') }}：{{ formatInboxTime(task.createTime) }}</span>
+            <span v-if="task.timeoutSeconds">
+              {{ t('agent.humanTaskTimeoutLabel', { seconds: task.timeoutSeconds }) }}
+            </span>
+          </div>
+        </div>
+        <el-button size="small" type="primary" @click="openHumanTask(task)">
+          {{ t('agent.humanInboxOpen') }}
+        </el-button>
+      </div>
+    </div>
 
     <!-- 错误提示 -->
     <el-alert
@@ -368,6 +475,11 @@ onMounted(() => {
       <el-table-column prop="createTime" :label="t('agent.occurredAt')" width="180" />
       <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
+    <HumanTaskSubmitDialog
+      v-model="humanDialogVisible"
+      :task="activeHumanTask"
+      @submitted="handleHumanSubmitted"
+    />
   </StandardListTemplate>
 </template>
 
@@ -398,6 +510,80 @@ onMounted(() => {
 .token-cell {
   font-family: 'Courier New', Monaco, monospace;
   font-size: 12px;
+}
+
+.human-inbox {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: var(--el-fill-color-blank);
+}
+
+.human-inbox__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.human-inbox__title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.human-inbox__hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin: 4px 0 8px;
+}
+
+.human-inbox__empty {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+  padding: 8px 0;
+}
+
+.human-inbox__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.human-inbox__item-main {
+  min-width: 0;
+}
+
+.human-inbox__item-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.human-inbox__node {
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
+  margin-left: 8px;
+}
+
+.human-inbox__instructions {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 640px;
+}
+
+.human-inbox__meta {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  margin-top: 2px;
 }
 
 .token-disclaimer {

@@ -249,14 +249,11 @@ describe('NodeTrajectory.vue — FORK/JOIN/LOOP/失败节点专项测试', () =>
     const items = wrapper.findAll('.node-item')
     expect(items.length).toBe(6)
 
-    // START/END/FORK/JOIN → "0"; LLM-A → "0-0"; LLM-B → "0-1"
+    // V3：根路径 branchId="0" 对用户无意义不渲染；仅并行分支（0-0/0-1）显示分支标识
     const branchLabels = wrapper.findAll('.node-branch-label')
-    expect(branchLabels[0].text().trim()).toBe('0') // START
-    expect(branchLabels[1].text().trim()).toBe('0') // FORK
-    expect(branchLabels[2].text().trim()).toBe('0-0') // LLM-A
-    expect(branchLabels[3].text().trim()).toBe('0-1') // LLM-B
-    expect(branchLabels[4].text().trim()).toBe('0') // JOIN
-    expect(branchLabels[5].text().trim()).toBe('0') // END
+    expect(branchLabels.length).toBe(2)
+    expect(branchLabels[0].text().trim()).toBe('0-0') // LLM-A
+    expect(branchLabels[1].text().trim()).toBe('0-1') // LLM-B
     wrapper.unmount()
   })
 

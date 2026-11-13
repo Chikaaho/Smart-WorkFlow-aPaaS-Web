@@ -8,7 +8,7 @@ import {
 import { NODE_TYPE_LABEL_KEYS } from '@/modules/agent/utils/graphAdapter'
 import { ENUM_LABEL_KEYS } from '@/foundation/i18n/enum-label'
 
-// 与图设计器 8 类节点全集对齐——新增/删减节点类型时本断言会逼着同步注册表。
+// 与图设计器节点全集对齐——新增/删减节点类型时本断言会逼着同步注册表。
 const EXPECTED_TYPES = [
   'START',
   'END',
@@ -19,10 +19,12 @@ const EXPECTED_TYPES = [
   'FORK',
   'JOIN',
   'KNOWLEDGE',
+  'HUMAN',
+  'SUBGRAPH',
 ]
 
 describe('NODE_PANEL_REGISTRY', () => {
-  it('covers exactly the 9 node types, one descriptor each', () => {
+  it('covers exactly the 11 node types, one descriptor each', () => {
     const types = NODE_PANEL_REGISTRY.map((d) => d.type)
     expect(types).toHaveLength(EXPECTED_TYPES.length)
     expect(new Set(types)).toEqual(new Set(EXPECTED_TYPES))
@@ -41,13 +43,15 @@ describe('NODE_PANEL_REGISTRY', () => {
     }
   })
 
-  it('START/END share the empty panel; LLM/TOOL/LOOP/FORK/JOIN/CONDITION each have their own', () => {
-    const empty = getNodePanelDescriptor('START')!.component
-    expect(getNodePanelDescriptor('END')!.component).toBe(empty)
+  it('START/END 各自有参数面板（G1-4），11 类节点面板互不复用', () => {
+    const startPanel = getNodePanelDescriptor('START')!.component
+    const endPanel = getNodePanelDescriptor('END')!.component
+    expect(startPanel).toBeTruthy()
+    expect(endPanel).toBeTruthy()
+    expect(startPanel).not.toBe(endPanel)
 
-    const others = ['LLM', 'TOOL', 'CONDITION', 'LOOP', 'FORK', 'JOIN']
-    const components = others.map((t) => getNodePanelDescriptor(t)!.component)
-    expect(new Set(components).size).toBe(others.length)
+    const all = EXPECTED_TYPES.map((t) => getNodePanelDescriptor(t)!.component)
+    expect(new Set(all).size).toBe(EXPECTED_TYPES.length)
   })
 
   it('getNodePanelDescriptor looks up by type / misses gracefully', () => {

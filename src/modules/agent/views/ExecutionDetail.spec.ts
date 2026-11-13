@@ -19,6 +19,7 @@ vi.mock('@/modules/agent/api', () => ({
   getGraphDef: vi.fn(),
   getGraphExecutionLifecycle: vi.fn(),
   listExecutionNodes: vi.fn(),
+  listExecutionHumanTasks: vi.fn().mockResolvedValue([]),
 }))
 
 // Mock router using hoisted variable

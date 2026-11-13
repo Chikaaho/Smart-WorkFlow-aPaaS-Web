@@ -35,3 +35,8 @@ test-results/
 playwright-report/
 # Playwright 人工复核截图存档（运行产物不入库；断言基线 e2e/visual/**-snapshots 仍入库）
 e2e/.artifacts/
+
+# 本地产物/临时上传响应，不入库
+sw-web-dist-*.zip
+up-jar-resp.json
+up-web-resp.json

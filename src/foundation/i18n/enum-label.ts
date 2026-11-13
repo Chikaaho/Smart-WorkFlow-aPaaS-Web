@@ -98,6 +98,8 @@ export const ENUM_LABEL_KEYS = {
     FORK: 'agent.nodeFork',
     JOIN: 'agent.nodeJoin',
     KNOWLEDGE: 'agent.nodeKnowledge',
+    HUMAN: 'agent.nodeHuman',
+    SUBGRAPH: 'agent.nodeSubgraph',
   },
   /** 流程定义节点类型（与后端 ProcessGraph element.type 对齐）。 */
   WORKFLOW_NODE_TYPE: {

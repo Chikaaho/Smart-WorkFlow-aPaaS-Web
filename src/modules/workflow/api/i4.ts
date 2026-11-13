@@ -100,6 +100,8 @@ export interface MonitorInstance {
     id: number
     processInstanceId: string
     processDefKey: string
+    /** 流程定义名称；旧数据缺省时页面回退展示 processDefKey */
+    processDefName?: string
     initiatorId: number
     status: string
     businessKey: string
@@ -114,7 +116,8 @@ export interface MonitorInstance {
 export interface MonitorQueryParams {
   processDefKey?: string
   processInstanceId?: string
-  initiatorId?: number
+  /** 用户 ID 以字符串承载，避免 64 位 ID 经 Number 转换丢精度；系统发起人为 0 */
+  initiatorId?: number | string
   status?: string
   nodeKey?: string
   assignee?: number

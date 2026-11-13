@@ -28,6 +28,7 @@ declare module 'vue' {
     ElAutocomplete: typeof import('element-plus/es')['ElAutocomplete']
     ElBadge: typeof import('element-plus/es')['ElBadge']
     ElButton: typeof import('element-plus/es')['ElButton']
+    ElButtonGroup: typeof import('element-plus/es')['ElButtonGroup']
     ElCard: typeof import('element-plus/es')['ElCard']
     ElCheckbox: typeof import('element-plus/es')['ElCheckbox']
     ElCheckboxButton: typeof import('element-plus/es')['ElCheckboxButton']
@@ -107,6 +108,7 @@ declare module 'vue' {
     TextControl: typeof import('./../components/dynamic-field-controls/TextControl.vue')['default']
     TimeControl: typeof import('./../components/dynamic-field-controls/TimeControl.vue')['default']
     UserControl: typeof import('./../components/dynamic-field-controls/UserControl.vue')['default']
+    UserFilterSelect: typeof import('./../components/UserFilterSelect.vue')['default']
     UserRemoteSelect: typeof import('./../components/UserRemoteSelect.vue')['default']
   }
   export interface GlobalDirectives {

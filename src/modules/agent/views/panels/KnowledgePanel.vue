@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from '@/locales'
 /**
  * KNOWLEDGE 节点属性面板（F1 阶段 3）：知识库、topK、相似度阈值、输入/输出变量。
@@ -13,13 +14,23 @@ import {
   NODE_CONFIG_KEY_TOP_K,
 } from '@/modules/agent/utils/graphAdapter'
 import type { NodePanelProps } from './node-panel-registry'
+import VariablePicker from './VariablePicker.vue'
 
-defineProps<NodePanelProps>()
+const props = defineProps<NodePanelProps>()
 
-defineEmits<{
+const emit = defineEmits<{
   updateNodeData: [key: string, value: unknown]
   varNameChange: [key: string, value: unknown]
 }>()
+
+const variableGroups = computed(() => props.variableGroups ?? [])
+
+/** 上游变量名回填 inputVar（G1-5；节点作用域取点后的变量名） */
+function onPickInputVar(reference: string) {
+  const raw = reference.replace(/^\{\{/, '').replace(/\}\}$/, '').trim()
+  const name = raw.includes('.') ? raw.slice(raw.indexOf('.') + 1) : raw
+  emit('varNameChange', NODE_CONFIG_KEY_INPUT_VAR, name)
+}
 
 const { t } = useI18n()
 </script>
@@ -61,7 +72,10 @@ const { t } = useI18n()
     />
   </div>
   <div class="field-row">
-    <div class="field-label">{{ t('agent.inputVariableName') }}</div>
+    <div class="field-label">
+      {{ t('agent.inputVariableName') }}
+      <VariablePicker :groups="variableGroups" @pick="onPickInputVar" />
+    </div>
     <el-input
       :model-value="(node.data?.[NODE_CONFIG_KEY_INPUT_VAR] as string | undefined) ?? ''"
       :placeholder="t('agent.varNamePlaceholder', { DEFAULT_VARIABLE_NAME })"
