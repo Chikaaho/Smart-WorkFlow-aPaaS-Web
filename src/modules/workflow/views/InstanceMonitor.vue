@@ -343,7 +343,12 @@ onMounted(loadList)
 
     <el-dialog v-model="historyVisible" :title="t('workflow.interveneHistory')" width="640px">
       <el-table :data="historyList" size="small">
-        <el-table-column prop="action" :label="t('common.action')" width="90" />
+        <!-- X4：动作显示中文（挂起/恢复/终止/转办），未知动作回退原值 -->
+        <el-table-column :label="t('common.action')" width="90">
+          <template #default="{ $index }">{{
+            ACTION_LABELS[historyList[$index]?.action ?? ''] || historyList[$index]?.action
+          }}</template>
+        </el-table-column>
         <el-table-column :label="t('workflow.stateBefore')" width="100">
           <template #default="{ $index }">{{
             enumLabel('WORKFLOW_INSTANCE', historyList[$index]?.beforeState)

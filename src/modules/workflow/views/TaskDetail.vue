@@ -1965,12 +1965,25 @@ onMounted(loadDetail)
   color: var(--sw-color-primary);
 }
 /* 设计（节点20）：标题行状态标签为品牌紫底 */
-/* 0.1.7 #18：操作卡吸底，按钮统一右下角 */
+/* X1：操作卡固定在**视口底部**（不是内容流末端）——页面滚到任何位置都不盖住
+   表单内容；滚动容器按实测高度预留 padding-bottom，滚到底时明细最后一行
+   完整露出在操作卡上方。表格贴条形按钮区，卡片不再悬浮在页面中部。 */
 .detail-card--actions {
-  position: sticky;
+  position: fixed;
+  left: 24px;
+  right: 24px;
   bottom: 0;
   z-index: 5;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06);
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+}
+/* 嵌入统一详情弹窗：由弹窗正文滚动，操作栏回到容器内吸底。 */
+.task-detail--embedded .detail-card--actions {
+  position: sticky;
+  left: auto;
+  right: auto;
+  bottom: 0;
+  border-radius: 0 0 8px 8px;
 }
 .detail-actions__title {
   color: var(--sw-color-primary);

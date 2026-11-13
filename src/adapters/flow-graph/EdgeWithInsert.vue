@@ -37,15 +37,20 @@ const path = computed(() => {
   return edgePath
 })
 
+const labelText = computed(() =>
+  typeof props.label === 'string' && props.label.trim() !== '' ? props.label.trim() : '',
+)
+
 /**
- * 关键词标签位置（W4）：默认取贝塞尔中点；当两卡之间水平空间放不下标签
- * （整理布局后相邻列间距 ~60px < 标签半宽 ×2）时，标签落到两卡下方空白带，
- * 避免压住卡片标题/卡体。卡片半高按 node-theme 卡片（padding 10 + 双行 ≈ 40px）估算。
+ * 关键词标签位置（X2）：标签贴着所属连线（贝塞尔中点，白色底片压线），
+ * 横向钳制在两卡之间的间隙内，避免压住卡片；间隙连标签都放不下（手工拖近）时
+ * 才落到两卡下方空白带。
  */
-const LABEL_MIN_SPAN = 200
+const LABEL_CHAR_W = 12
+const LABEL_PAD = 18
 const LABEL_CLEAR_BELOW = 64
 const labelPos = computed(() => {
-  const [, labelX, labelY] = getBezierPath({
+  const [, bezX, bezY] = getBezierPath({
     sourceX: props.sourceX,
     sourceY: props.sourceY,
     sourcePosition: props.sourcePosition,
@@ -53,19 +58,20 @@ const labelPos = computed(() => {
     targetY: props.targetY,
     targetPosition: props.targetPosition,
   })
-  const span = Math.abs(props.targetX - props.sourceX)
-  if (span < LABEL_MIN_SPAN) {
-    return {
-      x: labelX,
-      y: Math.max(props.sourceY, props.targetY) + LABEL_CLEAR_BELOW,
-    }
+  const gap = Math.abs(props.targetX - props.sourceX)
+  const estWidth = labelText.value.length * LABEL_CHAR_W + LABEL_PAD
+  if (gap >= estWidth + 10) {
+    const half = estWidth / 2 + 2
+    const lo = Math.min(props.sourceX, props.targetX) + half
+    const hi = Math.max(props.sourceX, props.targetX) - half
+    const x = Math.min(Math.max(bezX, lo), hi)
+    return { x, y: bezY }
   }
-  return { x: labelX, y: labelY }
+  return {
+    x: bezX,
+    y: Math.max(props.sourceY, props.targetY) + LABEL_CLEAR_BELOW,
+  }
 })
-
-const labelText = computed(() =>
-  typeof props.label === 'string' && props.label.trim() !== '' ? props.label.trim() : '',
-)
 
 function handleInsert() {
   actions?.insertAfter({ kind: 'edge', id: props.id })
