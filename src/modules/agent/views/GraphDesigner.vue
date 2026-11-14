@@ -877,10 +877,11 @@ async function handlePublish() {
 
 const TERMINAL_STATUSES = new Set(['SUCCESS', 'FAILED', 'CANCELLED', 'INTERRUPTED'])
 
-/** B2：运行中（含排队）属未完成中间态；空状态 = 旧同步结果，本身就是终态 */
-const executionTerminal = computed(
-  () => lifecycleStatus.value === '' || TERMINAL_STATUSES.has(lifecycleStatus.value),
-)
+/** G3（112-01）：仅成功/失败展示耗时——取消/中断路径耗时为空，显示 0ms 与实际不符 */
+const showExecutionLatency = computed(() => {
+  if (lifecycleStatus.value === '') return true
+  return lifecycleStatus.value === 'SUCCESS' || lifecycleStatus.value === 'FAILED'
+})
 
 const executeAlertType = computed<'success' | 'info' | 'error'>(() => {
   if (executeResult.value?.success) return 'success'
@@ -1563,8 +1564,8 @@ onBeforeUnmount(() => {
         <template v-else-if="!executeResult.success && executeResult.errorMessage">
           <div>{{ t('agent.reasonLabel', { errorMessage: executeResult.errorMessage }) }}</div>
         </template>
-        <!-- B2：耗时只在终态展示；运行中 0ms 不是真实耗时 -->
-        <div v-if="executionTerminal" class="execute-meta">
+        <!-- B2/G3：耗时只在成功/失败终态展示；取消/中断与运行中不显示 -->
+        <div v-if="showExecutionLatency" class="execute-meta">
           {{ t('agent.latencyLabel', { latencyMs: executeResult.latencyMs }) }}
         </div>
         <div v-if="executeResult.executionId" class="execute-detail-link">
