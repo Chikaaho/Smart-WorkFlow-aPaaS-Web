@@ -112,6 +112,12 @@ const STATUS_MAP: Record<
     },
     type: 'warning',
   },
+  QUEUED: {
+    get label() {
+      return t('agent.nodeStatusWaiting')
+    },
+    type: 'info',
+  },
   WAITING_HUMAN: {
     get label() {
       return t('agent.humanTaskWaitStatus')
@@ -129,6 +135,18 @@ const STATUS_MAP: Record<
       return t('common.resultFailed')
     },
     type: 'danger',
+  },
+  CANCELLED: {
+    get label() {
+      return t('workflow.runtimeStateCancelled')
+    },
+    type: 'info',
+  },
+  INTERRUPTED: {
+    get label() {
+      return t('agent.executionInterrupted')
+    },
+    type: 'info',
   },
 }
 

@@ -559,6 +559,19 @@ describe('GraphDesigner.vue', () => {
     okWrapper.unmount()
   })
 
+  it('B2：运行中显示「运行中」（info 样式），不出现失败文案与耗时 0ms', async () => {
+    const wrapper = await mountLoaded()
+    await driveRefreshToTerminal(wrapper, 'RUNNING', { errorMessage: undefined, latencyMs: 0 })
+
+    const alert = wrapper.find('.execute-result')
+    expect(alert.classes()).toContain('info')
+    expect(alert.classes()).not.toContain('error')
+    expect(wrapper.html()).toContain('运行中')
+    expect(wrapper.html()).not.toContain('执行失败')
+    expect(wrapper.html()).not.toContain('耗时 0ms')
+    wrapper.unmount()
+  })
+
   it('卸载时销毁画布实例', async () => {
     const wrapper = await mountLoaded()
     const instance = vi.mocked(mountFlowGraph).mock.results[0].value as FlowGraphInstance

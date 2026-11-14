@@ -594,6 +594,7 @@ interface MockMonitorRow {
     updateTime: string
   }
   activeNodeIds: string[]
+  activeNodeNames?: Record<string, string>
   suspended: boolean
 }
 
@@ -611,6 +612,7 @@ const MOCK_I4_INSTANCES: MockMonitorRow[] = [
       updateTime: '2026-09-12 10:00:00',
     },
     activeNodeIds: ['dept_approve'],
+    activeNodeNames: { dept_approve: '部门审批' },
     suspended: false,
   },
 ]

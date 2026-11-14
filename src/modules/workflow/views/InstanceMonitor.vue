@@ -87,6 +87,13 @@ function formatDateTime(value: string | null | undefined): string {
   )
 }
 
+/** P70/B5：当前节点优先展示名称（服务端按部署模型解析），名称取不到回退节点编码。 */
+function displayActiveNodes(row: MonitorInstance | undefined): string {
+  if (!row) return ''
+  const names = row.activeNodeNames ?? {}
+  return (row.activeNodeIds ?? []).map((id) => names[id] ?? id).join(t('common.enumSeparator'))
+}
+
 function search() {
   pageNum.value = 1
   void loadList()
@@ -301,9 +308,7 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column :label="t('common.currentNode')" min-width="120">
-        <template #default="{ $index }">{{
-          (list[$index]?.activeNodeIds ?? []).join(t('common.enumSeparator')) || '—'
-        }}</template>
+        <template #default="{ $index }">{{ displayActiveNodes(list[$index]) || '—' }}</template>
       </el-table-column>
       <el-table-column :label="t('common.startTimeShort')" min-width="160">
         <template #default="{ $index }">{{

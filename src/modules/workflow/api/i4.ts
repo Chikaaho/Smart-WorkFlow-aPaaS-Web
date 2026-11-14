@@ -110,6 +110,8 @@ export interface MonitorInstance {
     updateTime: string
   }
   activeNodeIds: string[]
+  /** 活跃节点 activityId → 名称映射（P70/B5，服务端按部署模型解析）；缺项回退展示 id */
+  activeNodeNames?: Record<string, string> | null
   suspended: boolean
 }
 
