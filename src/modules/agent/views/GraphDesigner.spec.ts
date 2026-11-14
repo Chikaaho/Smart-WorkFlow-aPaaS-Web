@@ -521,7 +521,7 @@ describe('GraphDesigner.vue', () => {
     await nextTick()
   }
 
-  it('取消终态：CANCELLED 展示中性"执行已取消"提示（info），保留输出/耗时/查看详情，不出现失败文案与错误样式', async () => {
+  it('取消终态：CANCELLED 展示中性"执行已取消"提示（info），保留输出/查看详情，不出现失败文案、错误样式与耗时行（G3）', async () => {
     const wrapper = await mountLoaded()
     await driveRefreshToTerminal(wrapper, 'CANCELLED', { latencyMs: 1691 })
 
@@ -529,11 +529,12 @@ describe('GraphDesigner.vue', () => {
     expect(alert.classes()).toContain('info')
     expect(alert.classes()).not.toContain('error')
     expect(alert.classes()).not.toContain('success')
+    const alertText = alert.text()
+    expect(alertText).toContain('执行已取消')
+    expect(alertText).not.toContain('耗时')
     const html = wrapper.html()
-    expect(html).toContain('执行已取消')
     expect(html).not.toContain('执行失败')
     expect(html).toContain('输出：增量-01 增量-02 增量-03 增量-04 增量-05 增量-06')
-    expect(html).toContain('耗时 1691ms')
     expect(html).toContain('查看详情')
     wrapper.unmount()
   })
@@ -557,6 +558,19 @@ describe('GraphDesigner.vue', () => {
     expect(okAlert.classes()).toContain('success')
     expect(okWrapper.html()).toContain('执行成功')
     okWrapper.unmount()
+  })
+
+  it('B2：运行中显示「运行中」（info 样式），不出现失败文案与耗时 0ms', async () => {
+    const wrapper = await mountLoaded()
+    await driveRefreshToTerminal(wrapper, 'RUNNING', { errorMessage: undefined, latencyMs: 0 })
+
+    const alert = wrapper.find('.execute-result')
+    expect(alert.classes()).toContain('info')
+    expect(alert.classes()).not.toContain('error')
+    expect(wrapper.html()).toContain('运行中')
+    expect(wrapper.html()).not.toContain('执行失败')
+    expect(wrapper.html()).not.toContain('耗时 0ms')
+    wrapper.unmount()
   })
 
   it('卸载时销毁画布实例', async () => {

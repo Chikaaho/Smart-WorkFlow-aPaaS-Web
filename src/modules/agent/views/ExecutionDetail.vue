@@ -112,6 +112,12 @@ const STATUS_MAP: Record<
     },
     type: 'warning',
   },
+  QUEUED: {
+    get label() {
+      return t('agent.nodeStatusWaiting')
+    },
+    type: 'info',
+  },
   WAITING_HUMAN: {
     get label() {
       return t('agent.humanTaskWaitStatus')
@@ -130,10 +136,40 @@ const STATUS_MAP: Record<
     },
     type: 'danger',
   },
+  CANCELLED: {
+    get label() {
+      return t('workflow.runtimeStateCancelled')
+    },
+    type: 'info',
+  },
+  INTERRUPTED: {
+    get label() {
+      return t('agent.executionInterrupted')
+    },
+    type: 'info',
+  },
 }
 
 function getStatusLabel(status: string): string {
   return STATUS_MAP[status]?.label ?? status
+}
+
+/** G3（112-01）：头部耗时仅成功/失败展示，取消/中断不显示（避免空值显示成 0ms） */
+const showHeaderLatency = computed(
+  () => detail.value?.status === 'SUCCESS' || detail.value?.status === 'FAILED',
+)
+
+/** P70/B3：人工任务行状态标签中文化（PENDING/已提交/已关闭/已超时）。 */
+const HUMAN_TASK_STATUS_KEYS: Record<string, string> = {
+  PENDING: 'agent.humanTaskPending',
+  SUBMITTED: 'agent.humanTaskStatusSubmitted',
+  CANCELLED: 'agent.humanTaskStatusCancelled',
+  TIMEOUT: 'agent.humanTaskStatusTimeout',
+}
+
+function humanTaskStatusLabel(status: string): string {
+  const key = HUMAN_TASK_STATUS_KEYS[status]
+  return key ? t(key) : status
 }
 
 function getStatusType(status: string): 'success' | 'warning' | 'info' | 'danger' | '' {
@@ -320,7 +356,10 @@ onMounted(() => {
           <el-tag :type="(getStatusType(detail.status) || '') as any" size="small">
             {{ getStatusLabel(detail.status) }}
           </el-tag>
-          <span class="latency">{{ formatLatency(detail.latencyMs) }}</span>
+          <!-- G3（112-01）：仅成功/失败展示耗时；取消/中断路径耗时为空，不显示与实际不符的 0ms -->
+          <span v-if="showHeaderLatency" class="latency">{{
+            formatLatency(detail.latencyMs)
+          }}</span>
         </div>
       </div>
 
@@ -446,7 +485,7 @@ onMounted(() => {
                 :type="task.status === 'PENDING' ? 'warning' : 'info'"
                 effect="plain"
               >
-                {{ task.status === 'PENDING' ? t('agent.humanTaskPending') : task.status }}
+                {{ humanTaskStatusLabel(task.status) }}
               </el-tag>
             </div>
             <div v-if="task.instructions" class="human-task-row__instructions">

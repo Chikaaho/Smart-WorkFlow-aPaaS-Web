@@ -86,6 +86,9 @@ export const ENUM_LABEL_KEYS = {
     CANCELLED: 'workflow.runtimeStateCancelled',
     TERMINATED: 'common.statusTerminated',
     SUSPENDED: 'common.statusSuspended',
+    FAILED: 'common.resultFailed',
+    WITHDRAWN: 'common.statusWithdrawn',
+    DISCARDED: 'workflow.statusDiscarded',
   },
   /** Agent 图节点类型。 */
   AGENT_NODE_TYPE: {
