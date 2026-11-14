@@ -33,6 +33,7 @@ import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 import { usePermission } from '@/foundation/permission'
 import { sumTokens, toTokenNumber } from '@/modules/agent/utils/token'
+import { failureCategoryLabel } from '@/modules/agent/utils/error-category'
 
 const route = useRoute()
 const router = useRouter()
@@ -49,6 +50,12 @@ const STATUS_MAP: Record<
       return t('common.statusRunning')
     },
     type: 'warning',
+  },
+  QUEUED: {
+    get label() {
+      return t('agent.nodeStatusWaiting')
+    },
+    type: 'info',
   },
   WAITING_HUMAN: {
     get label() {
@@ -67,6 +74,18 @@ const STATUS_MAP: Record<
       return t('common.resultFailed')
     },
     type: 'danger',
+  },
+  CANCELLED: {
+    get label() {
+      return t('workflow.runtimeStateCancelled')
+    },
+    type: 'info',
+  },
+  INTERRUPTED: {
+    get label() {
+      return t('agent.executionInterrupted')
+    },
+    type: 'info',
   },
   PAUSED: {
     get label() {
@@ -458,9 +477,16 @@ onMounted(() => {
       </el-table-column>
       <el-table-column prop="errorCategory" :label="t('agent.failureCategory')" width="160">
         <template #default="{ row }">
-          <span v-if="row.errorCategory" class="error-category">
-            {{ row.errorCategory }}
-          </span>
+          <el-tooltip
+            v-if="row.errorCategory"
+            :content="row.errorCategory"
+            :disabled="failureCategoryLabel(row.errorCategory) === row.errorCategory"
+            placement="top"
+          >
+            <span class="error-category">
+              {{ failureCategoryLabel(row.errorCategory) }}
+            </span>
+          </el-tooltip>
           <span v-else class="text-muted">—</span>
         </template>
       </el-table-column>

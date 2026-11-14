@@ -877,9 +877,18 @@ async function handlePublish() {
 
 const TERMINAL_STATUSES = new Set(['SUCCESS', 'FAILED', 'CANCELLED', 'INTERRUPTED'])
 
+/** G3（112-01）：仅成功/失败展示耗时——取消/中断路径耗时为空，显示 0ms 与实际不符 */
+const showExecutionLatency = computed(() => {
+  if (lifecycleStatus.value === '') return true
+  return lifecycleStatus.value === 'SUCCESS' || lifecycleStatus.value === 'FAILED'
+})
+
 const executeAlertType = computed<'success' | 'info' | 'error'>(() => {
   if (executeResult.value?.success) return 'success'
   if (lifecycleStatus.value === 'CANCELLED' || lifecycleStatus.value === 'WAITING_HUMAN') {
+    return 'info'
+  }
+  if (lifecycleStatus.value === 'RUNNING' || lifecycleStatus.value === 'QUEUED') {
     return 'info'
   }
   return 'error'
@@ -889,6 +898,8 @@ const executeAlertTitle = computed(() => {
   if (executeResult.value?.success) return t('agent.executionSucceeded')
   if (lifecycleStatus.value === 'CANCELLED') return t('agent.executionCancelled')
   if (lifecycleStatus.value === 'WAITING_HUMAN') return t('agent.humanWaitingAlert')
+  if (lifecycleStatus.value === 'RUNNING') return t('common.statusRunning')
+  if (lifecycleStatus.value === 'QUEUED') return t('agent.nodeStatusWaiting')
   return t('agent.executionFailed')
 })
 
@@ -1553,7 +1564,8 @@ onBeforeUnmount(() => {
         <template v-else-if="!executeResult.success && executeResult.errorMessage">
           <div>{{ t('agent.reasonLabel', { errorMessage: executeResult.errorMessage }) }}</div>
         </template>
-        <div class="execute-meta">
+        <!-- B2/G3：耗时只在成功/失败终态展示；取消/中断与运行中不显示 -->
+        <div v-if="showExecutionLatency" class="execute-meta">
           {{ t('agent.latencyLabel', { latencyMs: executeResult.latencyMs }) }}
         </div>
         <div v-if="executeResult.executionId" class="execute-detail-link">
