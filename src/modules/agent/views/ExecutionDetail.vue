@@ -154,6 +154,19 @@ function getStatusLabel(status: string): string {
   return STATUS_MAP[status]?.label ?? status
 }
 
+/** P70/B3：人工任务行状态标签中文化（PENDING/已提交/已关闭/已超时）。 */
+const HUMAN_TASK_STATUS_KEYS: Record<string, string> = {
+  PENDING: 'agent.humanTaskPending',
+  SUBMITTED: 'agent.humanTaskStatusSubmitted',
+  CANCELLED: 'agent.humanTaskStatusCancelled',
+  TIMEOUT: 'agent.humanTaskStatusTimeout',
+}
+
+function humanTaskStatusLabel(status: string): string {
+  const key = HUMAN_TASK_STATUS_KEYS[status]
+  return key ? t(key) : status
+}
+
 function getStatusType(status: string): 'success' | 'warning' | 'info' | 'danger' | '' {
   return (STATUS_MAP[status]?.type || '') as 'success' | 'warning' | 'info' | 'danger' | ''
 }
@@ -464,7 +477,7 @@ onMounted(() => {
                 :type="task.status === 'PENDING' ? 'warning' : 'info'"
                 effect="plain"
               >
-                {{ task.status === 'PENDING' ? t('agent.humanTaskPending') : task.status }}
+                {{ humanTaskStatusLabel(task.status) }}
               </el-tag>
             </div>
             <div v-if="task.instructions" class="human-task-row__instructions">
