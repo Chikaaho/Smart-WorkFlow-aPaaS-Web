@@ -160,6 +160,14 @@ const detailFormKey = computed(() =>
   String(detailCopy.value.formKey ?? detailInstance.value?.formKey ?? ''),
 )
 const detailNodeKey = computed(() => String(detailCopy.value.nodeKey ?? ''))
+/** 抄送记录一定来自真实流程实例，即该表单是有流程的表单。 */
+const detailProcessInstanceId = computed(() =>
+  String(detailCopy.value.processInstanceId ?? detailInstance.value?.processInstanceId ?? ''),
+)
+/** 抄送详情来自真实实例，直接声明为有流程的表单，无需再等接口判定。 */
+const detailFormHasProcess = computed(
+  () => Boolean(detailProcessInstanceId.value) || Boolean(detailProcessKey.value),
+)
 
 /** 抄送详情与任务详情共用流程信息面板：历史行转换为统一审批历史形状。 */
 const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
@@ -291,5 +299,7 @@ onMounted(loadList)
     :approval-history="approvalHistory"
     :process-definition-key="detailProcessKey"
     :current-node-key="detailNodeKey"
+    :process-instance-id="detailProcessInstanceId"
+    :form-has-process="detailFormHasProcess"
   />
 </template>

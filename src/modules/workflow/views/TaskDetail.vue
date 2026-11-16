@@ -1454,6 +1454,28 @@ onMounted(loadDetail)
             >
           </div>
           <div class="detail-actions__btns">
+            <template v-if="canAct">
+              <el-button
+                v-if="negativeAction"
+                type="danger"
+                plain
+                data-testid="negative-action-button"
+                :loading="acting === 'reject'"
+                :disabled="acting !== null"
+                @click="quickReject"
+              >
+                {{ negativeAction === 'REJECT' ? t('common.reject') : t('workflow.disapprove') }}
+              </el-button>
+              <el-button
+                v-if="canApprove"
+                type="primary"
+                :loading="acting === 'approve'"
+                :disabled="acting !== null"
+                @click="quickApprove"
+              >
+                {{ t('workflow.approveTask') }}
+              </el-button>
+            </template>
             <el-dropdown
               v-if="hasApprovalMoreActions"
               class="detail-actions__more"
@@ -1488,28 +1510,6 @@ onMounted(loadDetail)
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-            <template v-if="canAct">
-              <el-button
-                v-if="negativeAction"
-                type="danger"
-                plain
-                data-testid="negative-action-button"
-                :loading="acting === 'reject'"
-                :disabled="acting !== null"
-                @click="quickReject"
-              >
-                {{ negativeAction === 'REJECT' ? t('common.reject') : t('workflow.disapprove') }}
-              </el-button>
-              <el-button
-                v-if="canApprove"
-                type="primary"
-                :loading="acting === 'approve'"
-                :disabled="acting !== null"
-                @click="quickApprove"
-              >
-                {{ t('workflow.approveTask') }}
-              </el-button>
-            </template>
           </div>
         </div>
       </div>
@@ -2028,7 +2028,13 @@ onMounted(loadDetail)
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
+  gap: 12px;
   margin-left: auto;
+}
+/* Element Plus 只给相邻 el-button 加 margin-left，dropdown 包裹的「更多」不在该选择器内，
+   导致按钮间距不一致；改为容器统一 gap 后归零，保证任意相邻按钮间距相同。 */
+.detail-actions__btns :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 .detail-actions__more {
   flex: 0 0 auto;

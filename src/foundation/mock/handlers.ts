@@ -4985,6 +4985,79 @@ export const mockRegistrations: MockRegistration[] = [
     },
   },
 
+  // GET /api/workflow/my/instances/relations — 统一详情关系（0.1.7 #30）
+  // formHasProcess 与实例存在性无关：纯数据表单恒 false；有流程但尚未发起时为 true 且
+  // relation=NONE。真实后端须在「实例不存在提前返回」之前写入该字段，否则纯表单路径取不到值。
+  {
+    method: 'GET',
+    pattern: '/api/workflow/my/instances/relations',
+    handler: (_params, query) => {
+      const uid = mockSessionUid()
+      if (!uid) return { code: 401, message: '未认证', data: null }
+      const formKey = String(query.formKey ?? '')
+      const businessKey = String(query.businessKey ?? '')
+      const formHasProcess = MOCK_PROCESS_DEFS.some(
+        (d) => d.formKey === formKey && d.status === 'PUBLISHED',
+      )
+      const instance = MOCK_INSTANCES.filter(
+        (i) => i.formKey === formKey && i.businessKey === businessKey,
+      ).sort((a, b) => b.createTime.localeCompare(a.createTime))[0]
+      if (!instance) {
+        return { code: 0, message: 'ok', data: { relation: 'NONE', formHasProcess } }
+      }
+      const trace = MOCK_INSTANCE_DETAILS[instance.processInstanceId]?.flowTrace ?? []
+      const activeTasks = trace.filter((n) => n.activityType === 'userTask' && n.endTime === null)
+      const pendingTaskId = activeTasks.find((t) => t.assignee === uid)?.taskId ?? null
+      const initiator = String(instance.initiatorId) === uid
+      const historyDone = trace.filter((n) => n.activityType === 'userTask' && n.endTime !== null)
+      const historyParticipant = historyDone.some((t) => t.assignee === uid)
+      const relation = pendingTaskId
+        ? 'APPROVER'
+        : initiator || historyParticipant
+          ? 'PARTICIPANT'
+          : 'NONE'
+      if (relation === 'NONE') {
+        return { code: 0, message: 'ok', data: { relation: 'NONE', formHasProcess } }
+      }
+      return {
+        code: 0,
+        message: 'ok',
+        data: {
+          relation,
+          formHasProcess,
+          pendingTaskId,
+          instance: {
+            id: instance.id,
+            processInstanceId: instance.processInstanceId,
+            processDefKey: instance.processDefKey,
+            processName: instance.processName,
+            theme: null,
+            status: instance.status,
+            initiatorId: instance.initiatorId,
+            initiatorName: null,
+            createTime: instance.createTime,
+            currentNodes: activeTasks.map((t) => t.activityName ?? '').filter(Boolean),
+            currentNodeKeys: activeTasks.map((t) => t.activityId),
+          },
+          approvalHistory: historyDone.map((n) => ({
+            taskId: n.taskId ?? '',
+            taskName: n.activityName ?? '',
+            nodeKey: n.activityId,
+            assignee: n.assignee ?? '',
+            assigneeName: null,
+            assigneeDept: null,
+            createTime: n.startTime ?? '',
+            endTime: n.endTime,
+            action: 'APPROVE' as const,
+            opinionData: null,
+            approvalResult: 'APPROVED' as const,
+          })),
+          formData: null,
+        },
+      }
+    },
+  },
+
   // GET /api/workflow/my/instances/:id — 我发起的流程详情（进度 + 流转记录）
   {
     method: 'GET',

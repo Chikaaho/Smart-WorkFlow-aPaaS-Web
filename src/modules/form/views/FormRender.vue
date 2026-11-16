@@ -82,11 +82,15 @@ const actionSubmitting = computed(() => approval.value?.submitting.value ?? '')
 
 /**
  * 有流程的表单详情：流程信息作为表单下方的外挂组件渲染（无流程不渲染）。
+ * 判定以「该表单是否绑定流程」为准（relations 的 formHasProcess，与实例无关）：
+ * 纯数据表单永不渲染；流程表单在尚未发起、历史为空时也展示流程区。
  * 权限链与表单共用：表单数据权限（记录可读）→ 参与人 → 审批人。
  */
-const hasProcessInfo = computed(
-  () => relation.value?.relation !== 'NONE' && !!relation.value?.instance,
-)
+const hasProcessInfo = computed(() => {
+  const declared = relation.value?.formHasProcess
+  if (typeof declared === 'boolean') return declared
+  return relation.value?.relation !== 'NONE' && !!relation.value?.instance
+})
 const approvalHistory = computed(() => relation.value?.approvalHistory ?? [])
 const currentNodeKey = computed(() => relation.value?.instance?.currentNodeKeys?.[0] ?? null)
 

@@ -31,6 +31,11 @@ const props = withDefaults(
     approvalHistory?: ApprovalHistoryItem[] | null
     /** 流程实例标识（1.0.0 F2：有值时 PDF 并入审批历史；发起人/参与人/超管可见） */
     processInstanceId?: string | null
+    /**
+     * 该表单是否绑定流程（调用方已知时直接给，如草稿自带流程定义标识）。
+     * 未给时按 relations 接口的 formHasProcess 判定；都拿不到才回落实例/历史判定。
+     */
+    formHasProcess?: boolean | null
   }>(),
   {
     title: '',
@@ -43,6 +48,7 @@ const props = withDefaults(
     currentNodeKey: '',
     approvalHistory: null,
     processInstanceId: '',
+    formHasProcess: null,
   },
 )
 
@@ -68,7 +74,26 @@ const processKey = computed(
 const currentNodeKey = computed(
   () => props.currentNodeKey || relation.value?.instance?.currentNodeKeys?.[0] || '',
 )
-const hasFlow = computed(() => history.value.length > 0 || Boolean(processKey.value))
+/**
+ * 流程信息区是否渲染：以「该表单是否绑定流程」为准，而非是否已有实例。
+ *
+ * 系统只有两类表单——无流程的纯数据表单、有流程的流程数据表单。前者任何情况下都
+ * 不渲染流程信息（流转记录/流程图/审批详情）；后者在尚未发起、历史为空时也要展示。
+ * 判定优先级：
+ * 1. 调用方显式给出 formHasProcess（草稿自带流程定义标识、抄送记录必有实例）；
+ * 2. relations 接口的 formHasProcess（按 formKey 查流程绑定，与实例无关）；
+ * 3. 两者都缺时只认真实证据（审批历史、关联实例、实例标识），
+ *    绝不以「有流程定义 key」判为有流程。
+ */
+const hasFlow = computed(() => {
+  const declared = props.formHasProcess ?? relation.value?.formHasProcess
+  if (typeof declared === 'boolean') return declared
+  return (
+    history.value.length > 0 ||
+    Boolean(relation.value?.instance) ||
+    Boolean(props.processInstanceId)
+  )
+})
 
 /**
  * 打印实例上下文：调用方显式传入优先，否则使用记录关联到的实例。

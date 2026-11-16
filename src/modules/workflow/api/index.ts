@@ -117,6 +117,11 @@ export interface InstanceRelationInfo {
 
 export interface InstanceRelation {
   relation: 'APPROVER' | 'PARTICIPANT' | 'NONE'
+  /**
+   * 该表单是否绑定流程（与实例是否存在无关）：纯数据表单恒 false；
+   * 有流程但尚未发起时为 true 且 relation=NONE。后端未上线时缺省，调用方回落旧判定。
+   */
+  formHasProcess?: boolean
   pendingTaskId?: string | null
   instance?: InstanceRelationInfo | null
   /** 与我的详情同装配口径的流转记录；NONE 时缺省 */
