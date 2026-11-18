@@ -28,18 +28,32 @@ async function api(method, url, body, contentType) {
     },
     { method, url, body, auth, contentType },
   )
-  console.log(method + ' ' + url + ' -> ' + r.status + ' ' + r.body.replace(/\s+/g, ' ').slice(0, 120))
+  console.log(
+    method + ' ' + url + ' -> ' + r.status + ' ' + r.body.replace(/\s+/g, ' ').slice(0, 120),
+  )
 }
 
 // 1) 导出成功（二进制响应不得再记为失败）
 await api('POST', '/system/user/export', JSON.stringify({}))
 // 2) 表单配置修改（保存同一份定义）
-const def = JSON.parse(JSON.parse((await page.evaluate(async ({ auth, formKey }) => {
-  const r = await fetch('/api/form/def/by-key/' + formKey + '/definition', { headers: { Authorization: auth } })
-  return r.text()
-}, { auth, formKey: setup.formKey }))).data)
-await api('POST', '/form/def/' + setup.formId + '/config',
-  JSON.stringify({ definition: JSON.stringify(def) }))
+const def = JSON.parse(
+  JSON.parse(
+    await page.evaluate(
+      async ({ auth, formKey }) => {
+        const r = await fetch('/api/form/def/by-key/' + formKey + '/definition', {
+          headers: { Authorization: auth },
+        })
+        return r.text()
+      },
+      { auth, formKey: setup.formKey },
+    ),
+  ).data,
+)
+await api(
+  'POST',
+  '/form/def/' + setup.formId + '/config',
+  JSON.stringify({ definition: JSON.stringify(def) }),
+)
 // 3) 导入失败（无文件 → 400，失败原因应可读）
 await api('POST', '/system/user/import', new FormData())
 // 4) 查询类：关键字检索用户（修复后应 200，且不产生操作审计）

@@ -10,8 +10,18 @@ await page.getByPlaceholder('模块').fill('系统管理')
 await page.getByRole('button', { name: '查询', exact: true }).click()
 await page.waitForTimeout(1500)
 const expand = page.locator('.el-table__expand-icon').first()
-if (await expand.count()) { await expand.click(); await page.waitForTimeout(600) }
+if (await expand.count()) {
+  await expand.click()
+  await page.waitForTimeout(600)
+}
 await page.screenshot({ path: EV + '/b8_log_exception_field.png', fullPage: true })
 const text = await page.locator('body').innerText()
-console.log('hasType=' + text.includes('异常类型') + ' hasTrace=' + text.includes('事件引用') + ' hasTarget=' + text.includes('/system/user/import'))
+console.log(
+  'hasType=' +
+    text.includes('异常类型') +
+    ' hasTrace=' +
+    text.includes('事件引用') +
+    ' hasTarget=' +
+    text.includes('/system/user/import'),
+)
 await browser.close()
