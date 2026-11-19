@@ -127,7 +127,7 @@ describe('ExecutionList.vue - D126 §6 验收标准测试', () => {
       pageSize: 10,
     })
 
-    Object.assign(routeQueryObj, { graphDefId: 1 })
+    Object.assign(routeQueryObj, { graphDefId: '1' }) // vue-router query 值恒为字符串（B4 对齐真实语义）
     const wrapper = mount(ExecutionList, {
       global: { plugins: [createPinia()], stubs: STUBS_LIST },
     })
@@ -136,7 +136,7 @@ describe('ExecutionList.vue - D126 §6 验收标准测试', () => {
     expect(pageGraphExecutionsWithVersion).toHaveBeenCalledWith({
       pageNum: 1,
       pageSize: 10,
-      graphDefId: 1,
+      graphDefId: '1',
     })
     expect(wrapper.exists()).toBe(true)
   })
@@ -161,6 +161,31 @@ describe('ExecutionList.vue - D126 §6 验收标准测试', () => {
       pageNum: 1,
       pageSize: 10,
     })
+    expect(wrapper.exists()).toBe(true)
+  })
+
+  it('113-B4: graphDefId 超 2^53 时按字符串透传，不丢精度', async () => {
+    vi.mocked(pageGraphExecutionsWithVersion).mockResolvedValueOnce({
+      list: [],
+      total: 0,
+      pageNum: 1,
+      pageSize: 10,
+    })
+
+    // 雪花 ID 超 Number.MAX_SAFE_INTEGER，Number() 会得到 …9200
+    const snowflakeId = '2123356778938249217'
+    Object.assign(routeQueryObj, { graphDefId: snowflakeId })
+    const wrapper = mount(ExecutionList, {
+      global: { plugins: [createPinia()], stubs: STUBS_LIST },
+    })
+    await nextTick()
+
+    expect(pageGraphExecutionsWithVersion).toHaveBeenCalledWith({
+      pageNum: 1,
+      pageSize: 10,
+      graphDefId: snowflakeId, // 原样字符串，不是 2123356778938249200
+    })
+    expect(String(Number(snowflakeId))).not.toBe(snowflakeId) // 前置自证：Number 确实丢精度
     expect(wrapper.exists()).toBe(true)
   })
 

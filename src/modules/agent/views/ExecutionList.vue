@@ -163,7 +163,12 @@ const loading = ref(false)
 const errorMsg = ref('')
 
 // graphDefId 来自 URL query，用于过滤
-const graphDefId = computed(() => Number(route.query.graphDefId || 0))
+// B4（1.1.3）：雪花 ID 超 Number.MAX_SAFE_INTEGER，Number() 会丢精度（…217→…200），
+// 从路由到请求全程按字符串透传，由后端 String→Long 精确绑定
+const graphDefId = computed(() => {
+  const raw = route.query.graphDefId
+  return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : ''
+})
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && list.value.length === 0)
 
@@ -252,7 +257,7 @@ async function loadList() {
   errorMsg.value = ''
   try {
     const page: PageQuery = { pageNum: pageNum.value, pageSize: pageSize.value }
-    const params = graphDefId.value > 0 ? { ...page, graphDefId: graphDefId.value } : page
+    const params = graphDefId.value !== '' ? { ...page, graphDefId: graphDefId.value } : page
     const debugPromise: Promise<{
       list: AgentGraphDebugSession[]
       total: number
