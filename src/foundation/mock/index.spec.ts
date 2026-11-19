@@ -364,6 +364,107 @@ describe('foundation/mock/index', () => {
     expect(typeof result!.data).toBe('string')
   })
 
+  // ── 匹配优先级：静态段优先于 :param ────────────────────────
+
+  /**
+   * 回归：字面量路径段必须优先于同位置的 :param 通配。
+   * 曾因只按注册顺序匹配，`GET /api/workflow/tasks/processed` 落进
+   * `GET /api/workflow/tasks/:taskId`，已办列表显示「任务不存在」。
+   */
+  it('静态路径段优先于 :param 通配（不受注册顺序影响）', async () => {
+    const mod = await import('@/foundation/mock/index')
+
+    const processed = await mod.dispatchMock(
+      'GET',
+      '/workflow/tasks/processed',
+      '/api',
+      { pageNum: '1', pageSize: '10' },
+      {},
+    )
+    expect(processed).toBeDefined()
+    expect(processed!.code).toBe(0)
+    const page = processed!.data as { records: unknown[]; total: number }
+    expect(Array.isArray(page.records)).toBe(true)
+    expect(typeof page.total).toBe('number')
+
+    const todo = await mod.dispatchMock('GET', '/workflow/tasks/todo', '/api', {}, {})
+    expect(todo).toBeDefined()
+    expect(todo!.code).toBe(0)
+
+    // 同一前缀下 :param 仍然可用（不因静态优先而失效）
+    const missing = await mod.dispatchMock('GET', '/workflow/tasks/not-exist', '/api', {}, {})
+    expect(missing).toBeDefined()
+    expect(missing!.code).toBe(404)
+  })
+
+  it('静态段优先同样适用于更深层路径（user-group/candidates）', async () => {
+    const mod = await import('@/foundation/mock/index')
+    const candidates = await mod.dispatchMock(
+      'GET',
+      '/system/user-group/candidates',
+      '/api',
+      {},
+      {},
+    )
+    expect(candidates).toBeDefined()
+    // 命中 candidates handler 而非把 "candidates" 当作 :id 查详情
+    expect(candidates!.code).toBe(0)
+  })
+
+  // ── 详情关系端点契约：formHasProcess 与实例无关 ──────────────
+
+  /**
+   * 契约：不论实例是否已产生，relations 都必须返回 formHasProcess（表单是否绑定流程）。
+   * 这是「纯数据表单不展示流程信息」的唯一权威来源——前端不得用「有实例」代替它。
+   */
+  it('relations 对无实例的纯数据表单返回 formHasProcess=false 且不泄露实例', async () => {
+    const mod = await import('@/foundation/mock/index')
+    const result = await mod.dispatchMock(
+      'GET',
+      '/workflow/my/instances/relations',
+      '/api',
+      { formKey: 'pure_data_form', businessKey: 'rec-none' },
+      {},
+    )
+    expect(result).toBeDefined()
+    expect(result!.code).toBe(0)
+    const data = result!.data as Record<string, unknown>
+    expect(data.relation).toBe('NONE')
+    expect(data.formHasProcess).toBe(false)
+    expect(data.instance).toBeUndefined()
+  })
+
+  it('relations 对已绑定流程但尚未发起的数据返回 formHasProcess=true 且 relation=NONE', async () => {
+    const mod = await import('@/foundation/mock/index')
+    const result = await mod.dispatchMock(
+      'GET',
+      '/workflow/my/instances/relations',
+      '/api',
+      // leave-request 在种子中有 PUBLISHED 流程定义，但该 businessKey 无实例
+      { formKey: 'leave-request', businessKey: 'rec-not-started' },
+      {},
+    )
+    expect(result).toBeDefined()
+    const data = result!.data as Record<string, unknown>
+    expect(data.formHasProcess).toBe(true)
+    expect(data.relation).toBe('NONE')
+  })
+
+  it('relations 对已存在实例的表单仍要带 formHasProcess=true', async () => {
+    const mod = await import('@/foundation/mock/index')
+    const result = await mod.dispatchMock(
+      'GET',
+      '/workflow/my/instances/relations',
+      '/api',
+      { formKey: 'leave-request', businessKey: 'rec-leave-001' },
+      {},
+    )
+    expect(result).toBeDefined()
+    const data = result!.data as Record<string, unknown>
+    expect(data.formHasProcess).toBe(true)
+    expect(data.relation).toBe('PARTICIPANT')
+  })
+
   // ── fallthrough ──────────────────────────────────────────
 
   it('dispatchMock 对未注册端点 fallthrough（返回 undefined）', async () => {

@@ -23,10 +23,15 @@ vi.mock('@/modules/agent/api', () => ({
 }))
 
 // Mock router using hoisted variable
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push, replace }),
-  useRoute: () => ({ params: routeParamsMock, query: routeQueryMock }),
-}))
+// 113-E2：params 走 reactive 代理（Vue 对同一 target 缓存同一代理），
+// 测试里可通过 reactive(routeParamsMock) 触发组件对路由参数变化的 watch
+vi.mock('vue-router', async () => {
+  const { reactive } = await import('vue')
+  return {
+    useRouter: () => ({ push, replace }),
+    useRoute: () => ({ params: reactive(routeParamsMock), query: reactive(routeQueryMock) }),
+  }
+})
 
 // Mock element-plus stubs using importOriginal pattern (like GraphDefList.spec.ts)
 vi.mock('element-plus', async (importOriginal) => {
@@ -211,6 +216,49 @@ describe('ExecutionDetail.vue - D126 §6 验收标准测试', () => {
     expect(getExecutionDetail).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('headed-lc023-final')
     expect(wrapper.text()).toContain('90001')
+  })
+
+  it('113-E2: 父行跳子行（同路由仅换参数）后内容重新加载', async () => {
+    // 按入参分派而非 Once 队列：本文件用例不卸载组件，前序实例仍 watch 共享路由，
+    // 参数变化会触发多个组件重载，Once 队列会被旧实例抢先消费
+    const stateFor = (id: number) => ({
+      executionId: id,
+      graphDefId: 21,
+      graphDefVersion: 2,
+      status: 'SUCCESS',
+      input: id === 90001 ? 'e2-parent-run' : 'e2-child-run',
+      output: id === 90001 ? 'e2-parent-run' : 'e2-child-run',
+      latencyMs: 10,
+      createTime: '2026-11-19T19:00:00',
+      finishedAt: '2026-11-19T19:00:00.010',
+    })
+    vi.mocked(getGraphExecutionLifecycle).mockReset()
+    vi.mocked(getGraphDef).mockReset()
+    vi.mocked(getGraphExecutionLifecycle).mockImplementation(async (id: any) =>
+      stateFor(Number(id)),
+    )
+    vi.mocked(getGraphDef).mockResolvedValue({
+      graphKey: 'e2-graph',
+      name: 'e2-graph',
+      version: 2,
+      elements: [],
+      canvas: {},
+    })
+
+    const wrapper = await createWrapper({ executionId: '90001' })
+    for (let i = 0; i < 10 && !wrapper.text().includes('e2-parent-run'); i++) await nextTick()
+    expect(getGraphExecutionLifecycle).toHaveBeenCalledWith(90001)
+    expect(wrapper.text()).toContain('e2-parent-run')
+
+    // 模拟父行轨迹里点「查看子执行」：同路由仅换 executionId 参数（组件复用）
+    const { reactive } = await import('vue')
+    reactive(routeParamsMock).executionId = '90002'
+    for (let i = 0; i < 10 && !wrapper.text().includes('e2-child-run'); i++) await nextTick()
+
+    expect(getGraphExecutionLifecycle).toHaveBeenLastCalledWith(90002)
+    expect(wrapper.text()).toContain('e2-child-run')
+    expect(wrapper.text()).not.toContain('e2-parent-run')
+    wrapper.unmount()
   })
 
   // ──────────────────────────────────────────────────────────────

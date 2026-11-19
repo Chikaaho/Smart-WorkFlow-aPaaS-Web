@@ -16,11 +16,16 @@ await page.screenshot({ path: EV + '/b9_iot_list.png', fullPage: true })
 const row = page.locator('.el-table__row').filter({ hasText: 'iot-2118780073471991810' }).first()
 console.log('iot row count=' + (await row.count()))
 if (await row.count()) {
-  await row.getByRole('button', { name: /查看|详情/ }).first().click()
+  await row
+    .getByRole('button', { name: /查看|详情/ })
+    .first()
+    .click()
   await page.waitForTimeout(2500)
   await page.screenshot({ path: EV + '/b9_iot_detail.png' })
   const text = await page.locator('body').innerText()
-  console.log('detail systemIot=' + text.includes('系统（IoT）') + ' initiatorSys=' + text.includes('系统'))
+  console.log(
+    'detail systemIot=' + text.includes('系统（IoT）') + ' initiatorSys=' + text.includes('系统'),
+  )
 }
 // 实例监控干预页：确认是否有发起人列（planner §5 观察）
 await page.goto(BASE + '/workflow/monitor', { waitUntil: 'domcontentloaded' })

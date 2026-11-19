@@ -70,6 +70,21 @@ const STATUS_MAP: Record<
     },
     type: 'warning',
   },
+  // 1.1.3/P73：取消后轨迹等待行改判「已取消」，与头部状态、人工任务行一致；
+  // 文案键沿用 1.1.2 B3 的状态中文映射，不另起一套叫法
+  CANCELLED: {
+    get label() {
+      return t('workflow.runtimeStateCancelled')
+    },
+    type: 'info',
+  },
+  // 1.1.3：重启收尾/被恢复行取代的轨迹行显示「已中断」
+  INTERRUPTED: {
+    get label() {
+      return t('agent.executionInterrupted')
+    },
+    type: 'info',
+  },
 }
 
 function getStatusLabel(status: string): string {

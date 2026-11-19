@@ -25,7 +25,9 @@ async function resetBlobCapture() {
 }
 
 async function saveCapturedBlob(name) {
-  await page.waitForFunction(() => globalThis.__capturedBlobs?.length > 0, undefined, { timeout: 60000 })
+  await page.waitForFunction(() => globalThis.__capturedBlobs?.length > 0, undefined, {
+    timeout: 60000,
+  })
   const b64 = await page.evaluate(async () => {
     const bytes = new Uint8Array(await globalThis.__capturedBlobs[0].arrayBuffer())
     let bin = ''

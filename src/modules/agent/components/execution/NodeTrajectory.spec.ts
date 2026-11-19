@@ -523,6 +523,62 @@ describe('NodeTrajectory.vue — FORK/JOIN/LOOP/失败节点专项测试', () =>
     expect(wrapper.text()).toContain('-')
     wrapper.unmount()
   })
+
+  // ──────────────────────────────────────────────────────────────
+  // 1.1.3/P73：取消/重启后轨迹行状态与头部一致（不再停留「等待人工」）
+  // ──────────────────────────────────────────────────────────────
+  it('113-B2: 取消后人工节点轨迹行显示「已取消」，不显示「等待人工」', () => {
+    const cancelledNodes: AgentGraphExecutionNode[] = [
+      {
+        nodeSeq: 1,
+        nodeId: 'start',
+        nodeType: 'START',
+        nodeName: '开始',
+        status: 'SUCCESS',
+        success: true,
+        nodeLatencyMs: 5,
+        branchId: '0',
+        buildTime: '2026-11-19T10:00:00.000',
+      },
+      {
+        nodeSeq: 2,
+        nodeId: 'human_1',
+        nodeType: 'HUMAN',
+        nodeName: '人工审批',
+        status: 'CANCELLED',
+        success: false,
+        nodeLatencyMs: 0,
+        branchId: '0',
+        buildTime: '2026-11-19T10:00:00.000',
+      },
+    ]
+    const wrapper = mount(NodeTrajectory, { props: { nodes: cancelledNodes } })
+    const texts = itemsText(wrapper)
+    expect(texts[1]).toContain('已取消')
+    expect(texts[1]).not.toContain('等待人工')
+    wrapper.unmount()
+  })
+
+  it('113-B2: 重启收尾的轨迹行显示「已中断」，不显示「等待人工」', () => {
+    const interruptedNodes: AgentGraphExecutionNode[] = [
+      {
+        nodeSeq: 1,
+        nodeId: 'human_1',
+        nodeType: 'HUMAN',
+        nodeName: '人工审批',
+        status: 'INTERRUPTED',
+        success: false,
+        nodeLatencyMs: 0,
+        branchId: '0',
+        buildTime: '2026-11-19T10:00:00.000',
+      },
+    ]
+    const wrapper = mount(NodeTrajectory, { props: { nodes: interruptedNodes } })
+    const texts = itemsText(wrapper)
+    expect(texts[0]).toContain('已中断')
+    expect(texts[0]).not.toContain('等待人工')
+    wrapper.unmount()
+  })
 })
 
 // Helper to extract displayed text from items

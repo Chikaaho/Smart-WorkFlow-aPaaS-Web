@@ -28,7 +28,9 @@ async function api(method, url, body) {
     },
     { method, url, body, auth },
   )
-  console.log(method + ' ' + url + ' -> ' + r.status + ' ' + r.body.replace(/\s+/g, ' ').slice(0, 240))
+  console.log(
+    method + ' ' + url + ' -> ' + r.status + ' ' + r.body.replace(/\s+/g, ' ').slice(0, 240),
+  )
   return r
 }
 

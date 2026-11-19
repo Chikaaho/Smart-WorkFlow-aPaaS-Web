@@ -109,3 +109,129 @@ describe('BusinessDetailDialog.vue 程序化发起实例的表单数据回退', 
     expect(wrapper.text()).toContain('表单数据暂时无法显示')
   })
 })
+
+describe('BusinessDetailDialog.vue 流程信息区只按真实流程证据渲染', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getFormDefinition).mockResolvedValue(schema as never)
+    vi.mocked(getFormData).mockResolvedValue({ assessmentRationale: '纯表单记录' } as never)
+  })
+
+  it('纯表单只有 processDefinitionKey、无历史无实例时整块流程信息不渲染', async () => {
+    vi.mocked(getInstanceRelation).mockResolvedValue({
+      relation: 'PARTICIPANT',
+      instance: null,
+      approvalHistory: [],
+    } as never)
+    const wrapper = mountDialog({ processDefinitionKey: 'bpm_leave01' })
+    await flushPromises()
+
+    expect(wrapper.find('.flow-panel-stub').exists()).toBe(false)
+  })
+
+  it('有审批历史时渲染流程信息区', async () => {
+    vi.mocked(getInstanceRelation).mockResolvedValue({
+      relation: 'PARTICIPANT',
+      instance: null,
+      approvalHistory: [],
+    } as never)
+    const wrapper = mountDialog({
+      processDefinitionKey: 'bpm_leave01',
+      approvalHistory: [
+        {
+          taskId: 't-1',
+          taskName: '审批',
+          nodeKey: 'approve',
+          assignee: '1',
+          createTime: '2026-11-16 10:00:00',
+          endTime: '2026-11-16 11:00:00',
+          approvalResult: 'APPROVED',
+        },
+      ],
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.flow-panel-stub').exists()).toBe(true)
+  })
+
+  it('已关联到流程实例时渲染流程信息区', async () => {
+    vi.mocked(getInstanceRelation).mockResolvedValue({
+      relation: 'PARTICIPANT',
+      instance: {
+        id: 1,
+        processInstanceId: 'pi-1',
+        processDefKey: 'bpm_leave01',
+        processName: '请假',
+        theme: null,
+        status: 'RUNNING',
+        initiatorId: 1,
+        initiatorName: '张三',
+        createTime: '2026-11-16 09:00:00',
+        currentNodes: ['审批'],
+        currentNodeKeys: ['approve'],
+      },
+      approvalHistory: [],
+    } as never)
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    expect(wrapper.find('.flow-panel-stub').exists()).toBe(true)
+  })
+
+  it('草稿预览（有流程定义 key、尚无实例）同样不渲染流程信息区', async () => {
+    vi.mocked(getInstanceRelation).mockRejectedValue(new Error('草稿无实例'))
+    const wrapper = mountDialog({ processDefinitionKey: 'leave_approval' })
+    await flushPromises()
+
+    expect(wrapper.find('.flow-panel-stub').exists()).toBe(false)
+  })
+
+  it('调用方显式传入实例标识时渲染流程信息区', async () => {
+    vi.mocked(getInstanceRelation).mockResolvedValue({
+      relation: 'PARTICIPANT',
+      instance: null,
+      approvalHistory: [],
+    } as never)
+    const wrapper = mountDialog({ processInstanceId: 'pi-9' })
+    await flushPromises()
+
+    expect(wrapper.find('.flow-panel-stub').exists()).toBe(true)
+  })
+
+  it('relations 声明 formHasProcess=true 时，即使尚无实例也渲染流程信息区', async () => {
+    vi.mocked(getInstanceRelation).mockResolvedValue({
+      relation: 'NONE',
+      instance: null,
+      approvalHistory: [],
+      formHasProcess: true,
+    } as never)
+    const wrapper = mountDialog({ formKey: 'bpm_leave01', recordId: 'rec-1' })
+    await flushPromises()
+
+    expect(wrapper.find('.flow-panel-stub').exists()).toBe(true)
+  })
+
+  it('relations 声明 formHasProcess=false 时，纯数据表单即使带流程定义 key 也不渲染', async () => {
+    vi.mocked(getInstanceRelation).mockResolvedValue({
+      relation: 'PARTICIPANT',
+      instance: null,
+      approvalHistory: [],
+      formHasProcess: false,
+    } as never)
+    const wrapper = mountDialog({ processDefinitionKey: 'bpm_leave01' })
+    await flushPromises()
+
+    expect(wrapper.find('.flow-panel-stub').exists()).toBe(false)
+  })
+
+  it('调用方已知并有流程时（草稿预览）渲染流程信息区，不等接口判定', async () => {
+    vi.mocked(getInstanceRelation).mockRejectedValue(new Error('草稿无实例'))
+    const wrapper = mountDialog({
+      processDefinitionKey: 'leave_approval',
+      formHasProcess: true,
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.flow-panel-stub').exists()).toBe(true)
+  })
+})

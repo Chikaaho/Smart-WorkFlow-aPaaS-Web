@@ -129,8 +129,18 @@ interface MatchResult {
   params: Record<string, string>
 }
 
+/**
+ * 按路径匹配 handler；多条模式同时命中时选**静态段最多**的那条。
+ *
+ * 不能只靠注册顺序：一旦 `GET /a/:id` 排在 `GET /a/processed` 之前，
+ * 后者的字面量 `processed` 会被当作 `id` 值抢先命中（真实缺陷，曾导致已办列表
+ * 显示「任务不存在」）。这里显式让字面量段优先，顺序不再是隐式契约。
+ */
 function tryMatch(method: string, pathname: string): MatchResult | null {
   const actualTokens = tokenize(pathname)
+
+  let best: MatchResult | null = null
+  let bestDynamicCount = Number.POSITIVE_INFINITY
 
   for (const [key, handler] of registry) {
     const sepIdx = key.indexOf(' ')
@@ -143,12 +153,14 @@ function tryMatch(method: string, pathname: string): MatchResult | null {
     if (actualTokens.length !== expectedTokens.length) continue
 
     const params: Record<string, string> = {}
+    let dynamicCount = 0
     let match = true
 
     for (let i = 0; i < expectedTokens.length; i++) {
       const exp = expectedTokens[i]
       const act = actualTokens[i]
       if (exp.startsWith(':')) {
+        dynamicCount++
         params[exp.slice(1)] = decodeURIComponent(act)
       } else if (exp !== act) {
         match = false
@@ -156,10 +168,13 @@ function tryMatch(method: string, pathname: string): MatchResult | null {
       }
     }
 
-    if (match) {
-      return { key, handler, params }
+    // 动态段更少即更具体；相同具体度时保持先注册者优先（原语义）。
+    if (match && dynamicCount < bestDynamicCount) {
+      best = { key, handler, params }
+      bestDynamicCount = dynamicCount
+      if (dynamicCount === 0) break
     }
   }
 
-  return null
+  return best
 }

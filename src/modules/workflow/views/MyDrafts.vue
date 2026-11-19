@@ -339,13 +339,14 @@ onMounted(() => {
     </el-table>
   </StandardListTemplate>
 
-  <!-- 278:1437：流程 ID 并入行详情 -->
+  <!-- 278:1437：流程 ID 并入行详情；草稿自带流程定义标识即说明该表单有流程 -->
   <BusinessDetailDialog
     v-model="detailVisible"
     :title="t('common.detail')"
     :form-key="detailFormKey"
     :record="detailRecord"
     :process-definition-key="detailProcessKey"
+    :form-has-process="Boolean(detailProcessKey)"
   />
 </template>
 

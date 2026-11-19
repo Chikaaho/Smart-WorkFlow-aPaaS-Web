@@ -33,7 +33,7 @@ const { t } = useI18n()
  * 404 处理:
  * - executionId 不存在或跨租户 → HTTP 404 → 路由到 /404 页
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getExecutionDetail,
@@ -314,6 +314,17 @@ function goBack() {
 // ─── 挂载 ───
 onMounted(() => {
   if (!executionId.value || !/^\d+$/.test(String(executionId.value))) {
+    error.value = t('agent.invalidExecutionId')
+  } else {
+    void loadDetail()
+  }
+})
+
+// E2（1.1.3）：父行详情点「查看子执行」是同路由仅换参数（router.push 换 executionId），
+// 组件被复用、onMounted 不会再触发——不 watch 的话地址栏变了内容仍是旧执行。
+// loadDetail 开头会重置全部状态，这里复用挂载时的同一套入参校验。
+watch(executionId, (id) => {
+  if (!id || !/^\d+$/.test(String(id))) {
     error.value = t('agent.invalidExecutionId')
   } else {
     void loadDetail()

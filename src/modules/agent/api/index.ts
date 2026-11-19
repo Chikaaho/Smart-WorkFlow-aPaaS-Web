@@ -630,7 +630,7 @@ export async function toggleExternalTool(id: number, enabled: boolean): Promise<
 export async function pageGraphExecutions(params: {
   pageNum: number
   pageSize: number
-  graphDefId?: number
+  graphDefId?: EntityId // B4（1.1.3）：雪花 ID 超 2^53，调用方按字符串透传
 }): Promise<PageResult<AgentGraphExecution>> {
   const raw = await request<BackendPageResult<AgentGraphExecution>>({
     method: 'GET',
@@ -684,7 +684,7 @@ type AgentGraphExecutionWithVersion = AgentGraphExecution & { defVersion: number
 async function pageGraphExecutionsInternal(params: {
   pageNum: number
   pageSize: number
-  graphDefId?: number
+  graphDefId?: EntityId // B4（1.1.3）：雪花 ID 超 2^53，调用方按字符串透传
 }): Promise<PageResult<AgentGraphExecutionWithVersion>> {
   // 1. 先拉取执行列表
   const result = await pageGraphExecutions(params)
@@ -830,7 +830,7 @@ export async function listDebugNodes(sessionId: EntityId): Promise<AgentGraphDeb
 export async function pageDebugSessions(params: {
   pageNum: number
   pageSize: number
-  graphDefId?: number
+  graphDefId?: EntityId // B4（1.1.3）：雪花 ID 超 2^53，调用方按字符串透传
 }): Promise<PageResult<AgentGraphDebugSession>> {
   const raw = await request<BackendPageResult<AgentGraphDebugSession>>({
     method: 'GET',
