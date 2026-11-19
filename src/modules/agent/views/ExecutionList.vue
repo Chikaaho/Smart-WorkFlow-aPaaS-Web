@@ -34,6 +34,7 @@ import { ApiError } from '@/foundation/request'
 import { usePermission } from '@/foundation/permission'
 import { sumTokens, toTokenNumber } from '@/modules/agent/utils/token'
 import { failureCategoryLabel } from '@/modules/agent/utils/error-category'
+import { formatOccurredTime } from '@/modules/agent/utils/format-time'
 
 const route = useRoute()
 const router = useRouter()
@@ -183,17 +184,19 @@ async function loadHumanTasks() {
   }
 }
 
-/** 展示层时间：yyyy-MM-dd HH:mm:ss，不带 T 与微秒（V4 与监控页同一口径）。 */
-function formatInboxTime(value: string | null | undefined): string {
-  if (!value) return '-'
-  const text = String(value)
-  const date = new Date(text.includes('T') ? text : text.replace(' ', 'T'))
-  if (Number.isNaN(date.getTime())) return text.replace('T', ' ').slice(0, 19)
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-  )
+/** 展示层时间（V4 与监控页同一口径）：待办卡片与列表列共用。 */
+const formatInboxTime = formatOccurredTime
+
+/**
+ * 列表「发生时间」列格式化（1.1.3/B3）：后端返回 ISO 原值（2026-11-14T16:04:57），
+ * 展示统一为 yyyy-MM-dd HH:mm:ss，与流程模块列表（InstanceMonitor 等）同格式。
+ */
+function formatOccurredAt(
+  _row: Record<string, unknown>,
+  _column: unknown,
+  cellValue: unknown,
+): string {
+  return formatOccurredTime(cellValue as string | null | undefined)
 }
 
 /**
@@ -498,7 +501,12 @@ onMounted(() => {
           <span v-else class="text-muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" :label="t('agent.occurredAt')" width="180" />
+      <el-table-column
+        prop="createTime"
+        :label="t('agent.occurredAt')"
+        width="180"
+        :formatter="formatOccurredAt"
+      />
       <ListActionsColumn :actions="rowActions" :width="90" />
     </el-table>
     <HumanTaskSubmitDialog
