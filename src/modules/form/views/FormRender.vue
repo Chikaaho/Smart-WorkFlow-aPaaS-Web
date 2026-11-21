@@ -331,14 +331,18 @@ async function runGraphAction(actionId: string) {
     for (const field of schema.value?.fields ?? []) {
       fieldValues[field.name] = formData[field.name]
     }
-    const outputs = await runFormGraphAction(formKey, actionId, {
+    const result = await runFormGraphAction(formKey, actionId, {
       recordId: recordId ? recordId : null,
       fieldValues,
     })
-    for (const [field, value] of Object.entries(outputs ?? {})) {
+    for (const [field, value] of Object.entries(result.outputs ?? {})) {
       if (value !== undefined && value !== null) {
         formData[field] = value
       }
+    }
+    // F1-type：类型不符的输出未回填，逐条提示原因（已填内容不受影响）
+    for (const warning of result.warnings ?? []) {
+      ElMessage.warning(warning)
     }
     ElMessage.success(t('common.operationSuccess'))
   } catch (err) {

@@ -371,6 +371,7 @@ const propsPanelApi = {
   ...participantResult,
   ...dpResult,
   ...graphExecResult,
+  canvasNodes,
   ...formFieldsResult,
   ...subflowResult,
   ...scriptDialogResult,

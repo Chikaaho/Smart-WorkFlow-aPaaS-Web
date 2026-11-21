@@ -167,12 +167,19 @@ export async function submitForm(
  * 返回出参回填字段映射（field → value）。失败以 ApiError 返回（调用方只提示，
  * 不清空已填内容）；提交前触发不经本函数——由提交端点在服务端执行。
  */
+export interface FormGraphActionResult {
+  /** 回填字段映射（类型不符的输出不回填——F1-type）。 */
+  outputs: Record<string, string>
+  /** 类型不符被拦下的原因（按钮触发只提示不阻断）。 */
+  warnings: string[]
+}
+
 export async function runFormGraphAction(
   formKey: string,
   actionId: string,
   body: { recordId: string | null; fieldValues: Record<string, unknown> },
-): Promise<Record<string, string>> {
-  return request<Record<string, string>>({
+): Promise<FormGraphActionResult> {
+  return request<FormGraphActionResult>({
     method: 'POST',
     url: `/form/data/${formKey}/graph-actions/${encodeURIComponent(actionId)}`,
     data: body,

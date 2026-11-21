@@ -167,7 +167,7 @@ const businessSource = ref('')
 
 const BUSINESS_SOURCE_MAP: Record<
   string,
-  { get label(): string; type: 'primary' | 'success' | 'info' }
+  { get label(): string; type: 'primary' | 'success' | 'info' | 'warning' }
 > = {
   PROCESS: {
     get label() {
@@ -186,6 +186,12 @@ const BUSINESS_SOURCE_MAP: Record<
       return t('agent.sourceDirect')
     },
     type: 'info',
+  },
+  IOT: {
+    get label() {
+      return t('agent.sourceIot')
+    },
+    type: 'warning',
   },
 }
 
@@ -481,6 +487,7 @@ onMounted(() => {
         <el-option value="PROCESS" :label="t('agent.sourceProcess')" />
         <el-option value="FORM" :label="t('agent.sourceForm')" />
         <el-option value="DIRECT" :label="t('agent.sourceDirect')" />
+        <el-option value="IOT" :label="t('agent.sourceIot')" />
       </el-select>
     </div>
 

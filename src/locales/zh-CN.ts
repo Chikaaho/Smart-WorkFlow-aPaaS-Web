@@ -524,6 +524,7 @@ export default {
     sourceDebug: '调试',
     sourceFilterAll: '全部来源',
     sourceDirect: '直接调用',
+    sourceIot: 'IoT 触发',
     sourceForm: '表单',
     sourceProcess: '流程',
     sourceExecution: '执行',

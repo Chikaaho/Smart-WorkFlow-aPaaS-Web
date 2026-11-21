@@ -11,6 +11,8 @@ import type { DesignerGraphExecPanelApi } from './DesignerGraphExecPanel.vue'
 import DesignerGraphExecPanel from './DesignerGraphExecPanel.vue'
 import DesignerFieldStatesPanel from './DesignerFieldStatesPanel.vue'
 import type { DesignerFieldStatesPanelApi } from './DesignerFieldStatesPanel.vue'
+import { computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import type { Ref, ComputedRef } from 'vue'
 import type { GraphValidationError } from '@/modules/workflow/api'
 import type { BpmNodeConfigField } from '@/contracts/bpm-node'
@@ -32,6 +34,8 @@ export interface DesignerPropsPanelApi
   selectedNode: ComputedRef<PositionedNode | null>
   selectionId: Ref<string | null>
   validationErrors: Ref<GraphValidationError[]>
+  /** 画布节点（R2-ui：CONDITION 面板收集 Graph 执行状态变量候选）。 */
+  canvasNodes: ComputedRef<PositionedNode[]>
   /** 节点类型灰色说明（能力清单 displayName 回退）。 */
   nodeTypeHint: (type: string) => string
   /* ── 页签 ── */
@@ -146,9 +150,48 @@ const {
   graphExecActive,
 } = props.api
 
+/* ── 1.2.0 R2-ui：Graph 执行器状态变量候选（CONDITION 面板展示、点击复制） ── */
+
+const canvasNodesForVars = computed(() => props.api.canvasNodes?.value ?? [])
+/** 画布上全部 Graph 执行器节点 → 可选状态变量（条件分流直接引用，不手写）。 */
+const graphExecStatusVars = computed(() =>
+  canvasNodesForVars.value
+    .filter((node) => node.type === 'GRAPH_EXEC')
+    .flatMap((node) => [
+      {
+        nodeId: node.id,
+        variable: `graphExec.${node.id}.status`,
+        desc: '执行结果（SUCCESS / FAILED）',
+      },
+      {
+        nodeId: node.id,
+        variable: `graphExec.${node.id}.errorCategory`,
+        desc: '失败分类（TIMEOUT / GRAPH_FAILED / OUTPUT_MISSING…）',
+      },
+      { nodeId: node.id, variable: `graphExec.${node.id}.errorMessage`, desc: '失败原因' },
+      {
+        nodeId: node.id,
+        variable: `graphExec.${node.id}.executionId`,
+        desc: 'Graph 执行编号（可跳执行详情）',
+      },
+    ]),
+)
+
+async function copyGraphExecVar(variable: string) {
+  try {
+    const clipboard = globalThis.navigator?.clipboard
+    if (!clipboard) throw new Error('clipboard unavailable')
+    await clipboard.writeText(variable)
+    ElMessage.success(`${variable} 已复制`)
+  } catch {
+    ElMessage.warning('复制失败，请手动选择复制')
+  }
+}
+
 /** Graph 执行器子面板绑定包：从聚合 api 中取同一段 refs（保持 Ref 形态传给子组件）。 */
 const graphExecPanelApi: DesignerGraphExecPanelApi = {
   graphExecActive: props.api.graphExecActive,
+  failureStrategy: props.api.failureStrategy,
   graphs: props.api.graphs,
   graphsLoading: props.api.graphsLoading,
   versions: props.api.versions,
@@ -303,6 +346,20 @@ const graphExecPanelApi: DesignerGraphExecPanelApi = {
           <DesignerParticipantPanel v-if="participantField" :api="api" />
           <!-- ═══ 1.2.0 P67（E1-1）Graph 执行器面板：绑定已发布图 + 固定版本 + 参数映射 ═══ -->
           <DesignerGraphExecPanel v-if="graphExecActive" :api="graphExecPanelApi" />
+          <!-- R2-ui：条件节点直接选 Graph 执行状态变量（点击复制，不手写） -->
+          <template v-if="selectedNode?.type === 'CONDITION' && graphExecStatusVars.length">
+            <div class="props-section">Graph 执行状态变量（点击复制）</div>
+            <div
+              v-for="item in graphExecStatusVars"
+              :key="item.variable"
+              class="graph-exec-var-row"
+              data-testid="graph-exec-var-candidate"
+              @click="copyGraphExecVar(item.variable)"
+            >
+              <code class="graph-exec-var-name">{{ item.variable }}</code>
+              <small class="participant-hint">{{ item.desc }}</small>
+            </div>
+          </template>
           <!-- ═══ P63 动态并行专属面板（semanticVersion 开关 = 新语义按对象分支） ═══ -->
           <template v-if="dynamicParallelActive">
             <!-- Q11（273:1332）：并行分支配置入口——面板回显摘要，编辑走 820 设置面 -->
@@ -769,6 +826,25 @@ const graphExecPanelApi: DesignerGraphExecPanelApi = {
   font-size: 14px !important;
   line-height: 22px;
 }
+.graph-exec-var-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.graph-exec-var-row:hover {
+  background: var(--el-fill-color-light, #f5f7fa);
+}
+
+.graph-exec-var-name {
+  font-family: var(--el-font-family-mono, monospace);
+  font-size: 12px;
+  color: var(--el-color-primary);
+}
+
 /* 审查23 D08-B：来源/通过条件分段通栏、32 高（通过条件等共用分段保持连体样式） */
 .participant-source-seg {
   display: flex;

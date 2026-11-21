@@ -17,6 +17,8 @@ import type { GraphExecInputRow, GraphExecOutputRow } from '../composables/use-d
 export interface DesignerGraphExecPanelApi {
   /** 当前节点是否 Graph 执行器（属性面板渲染开关）。 */
   graphExecActive: ComputedRef<boolean>
+  /** 失败策略（R2-ui：CONTINUE 时写明条件分流方式）。 */
+  failureStrategy: ComputedRef<string>
   graphs: Ref<AgentGraphDef[]>
   graphsLoading: Ref<boolean>
   versions: Ref<AgentGraphSnapshot[]>
@@ -35,6 +37,7 @@ export interface DesignerGraphExecPanelApi {
 
 const props = defineProps<{ api: DesignerGraphExecPanelApi }>()
 const {
+  failureStrategy,
   graphs,
   graphsLoading,
   versions,
@@ -90,6 +93,15 @@ const { t } = useI18n()
       </el-select>
     </el-form-item>
 
+    <!-- R2-ui：CONTINUE = 异常分支（下游条件节点按状态变量分流） -->
+    <el-alert
+      v-if="failureStrategy === 'CONTINUE'"
+      type="info"
+      :closable="false"
+      class="continue-hint"
+      :title="t('workflow.graphExecContinueHint')"
+      data-testid="graph-exec-continue-hint"
+    />
     <el-alert
       v-if="binding?.containsHumanNode"
       type="warning"

@@ -540,6 +540,7 @@ export default {
     sourceProcess: 'Process',
     sourceForm: 'Form',
     sourceDirect: 'Direct',
+    sourceIot: 'IoT',
     sourceFilterAll: 'All sources',
     sourceExecution: 'Execution',
     usageCaliber: 'Basis',

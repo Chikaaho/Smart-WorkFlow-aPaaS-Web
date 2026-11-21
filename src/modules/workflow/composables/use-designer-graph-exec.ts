@@ -56,6 +56,12 @@ export function useDesignerGraphExec(options: DesignerGraphExecOptions) {
 
   const graphExecActive = computed(() => selectedNode.value?.type === 'GRAPH_EXEC')
 
+  /** 失败策略（R2-ui：CONTINUE 时面板写明分流方式）。 */
+  const failureStrategy = computed(() => {
+    const config = (selectedNode.value?.config ?? {}) as Record<string, unknown>
+    return typeof config.failureStrategy === 'string' ? config.failureStrategy : 'BLOCK'
+  })
+
   const graphs = ref<AgentGraphDef[]>([])
   const graphsLoading = ref(false)
   const versions = ref<AgentGraphSnapshot[]>([])
@@ -199,6 +205,7 @@ export function useDesignerGraphExec(options: DesignerGraphExecOptions) {
 
   return {
     graphExecActive,
+    failureStrategy,
     graphs,
     graphsLoading,
     versions,
