@@ -74,9 +74,13 @@ export function useDesignerGraphExec(options: DesignerGraphExecOptions) {
   const inputRows = ref<GraphExecInputRow[]>([])
   const outputRows = ref<GraphExecOutputRow[]>([])
 
-  /** 映射变量候选：流程变量名（运行期 setVariable/getVariable 的键）。 */
+  /** 映射变量候选：流程变量（varId=运行期 getVariable/setVariable 的键，name=展示名）。
+   *  修复（120-06 §2 同族）：此前映射候选只给 name，运行期按 name 取变量必然缺失。 */
   const variableOptions = computed(() =>
-    (graph.value?.variables ?? []).map((variable: BpmVariableDef) => variable.name),
+    (graph.value?.variables ?? []).map((variable: BpmVariableDef) => ({
+      varId: variable.varId,
+      name: variable.name,
+    })),
   )
 
   function applyGraphExec() {

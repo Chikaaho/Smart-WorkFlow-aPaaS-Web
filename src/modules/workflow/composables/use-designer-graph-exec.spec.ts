@@ -111,8 +111,8 @@ describe('use-designer-graph-exec（1.2.0 E1-1 Graph 执行器面板状态）', 
     expect(snapshot).toHaveBeenCalled()
   })
 
-  it('variableOptions：来自流程变量名', () => {
+  it('variableOptions：来自流程变量（varId=运行期键，name=展示名）', () => {
     const api = mountComposable({})
-    expect(api.variableOptions.value).toEqual(['formCity'])
+    expect(api.variableOptions.value).toEqual([{ varId: 'v1', name: 'formCity' }])
   })
 })

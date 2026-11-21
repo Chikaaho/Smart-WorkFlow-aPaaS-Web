@@ -13,6 +13,12 @@ import type {
 } from '@/adapters/agent-graph-catalog'
 import type { GraphExecInputRow, GraphExecOutputRow } from '../composables/use-designer-graph-exec'
 
+/** 映射变量候选（varId=运行期键）。 */
+interface VariableOption {
+  varId: string
+  name: string
+}
+
 /** Graph 执行器面板绑定包（主文件装配）。 */
 export interface DesignerGraphExecPanelApi {
   /** 当前节点是否 Graph 执行器（属性面板渲染开关）。 */
@@ -29,7 +35,7 @@ export interface DesignerGraphExecPanelApi {
   graphDefVersion: Ref<string>
   inputRows: Ref<GraphExecInputRow[]>
   outputRows: Ref<GraphExecOutputRow[]>
-  variableOptions: ComputedRef<string[]>
+  variableOptions: ComputedRef<VariableOption[]>
   onGraphChange: (id: string) => Promise<void>
   onVersionChange: (version: string) => Promise<void>
   applyGraphExec: () => void
@@ -134,9 +140,9 @@ const { t } = useI18n()
         >
           <el-option
             v-for="variable in variableOptions"
-            :key="variable"
-            :value="variable"
-            :label="variable"
+            :key="variable.varId"
+            :value="variable.varId"
+            :label="`${variable.name} (${variable.varId})`"
           />
         </el-select>
         <small v-if="row.description" class="participant-hint">{{ row.description }}</small>
@@ -157,9 +163,9 @@ const { t } = useI18n()
         >
           <el-option
             v-for="variable in variableOptions"
-            :key="variable"
-            :value="variable"
-            :label="variable"
+            :key="variable.varId"
+            :value="variable.varId"
+            :label="`${variable.name} (${variable.varId})`"
           />
         </el-select>
         <small v-if="row.description" class="participant-hint">{{ row.description }}</small>
