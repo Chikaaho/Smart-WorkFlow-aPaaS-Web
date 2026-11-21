@@ -21,6 +21,7 @@ import {
   getProcessDefDefinitionByKey,
 } from '@/modules/workflow/api'
 import type { ProcessInstance, InstanceDetail } from '@/contracts/bpm'
+import type { AgentGraphExecutionBrief } from '@/contracts/agent'
 import type { PageQuery } from '@/contracts/common'
 import { ApiError } from '@/foundation/request'
 import ProcessGraphView from '@/components/ProcessGraphView.vue'
@@ -249,6 +250,11 @@ function toDetailGraph(
       []) as import('@/contracts/process-graph').ProcessGraphElement[],
     canvas: definition.canvas ?? {},
   }
+}
+
+/** 1.2.0 E1-7：跳转 Graph 执行详情（agent 执行详情路由，全局路径）。 */
+function openGraphExecution(executionId: number) {
+  void pcRouter2.push(`/agent/executions/detail/${executionId}`)
 }
 
 /** 打开详情抽屉（图数据直接取已保存 ProcessGraph，状态高亮来自真实轨迹） */
@@ -518,6 +524,65 @@ function rowActions(row: unknown): ListAction[] {
               :trace="detailTrace"
               :height="400"
             />
+          </el-card>
+
+          <!-- 1.2.0 E1-7：Graph 执行器节点关联执行（编号/耗时/结果，可跳转执行详情） -->
+          <el-card v-if="detail.graphExecutions?.length" class="detail-section">
+            <template #header
+              ><span>{{ t('workflow.graphExecSection') }}</span></template
+            >
+            <el-table :data="detail.graphExecutions" size="small" stripe>
+              <el-table-column
+                prop="executionId"
+                :label="t('agent.humanTaskExecution')"
+                width="170"
+              >
+                <template #default="{ row }">
+                  <el-link
+                    type="primary"
+                    :underline="false"
+                    @click="openGraphExecution((row as AgentGraphExecutionBrief).executionId)"
+                  >
+                    #{{ (row as AgentGraphExecutionBrief).executionId }}
+                  </el-link>
+                </template>
+              </el-table-column>
+              <el-table-column prop="graphName" :label="t('agent.graphName')" min-width="140">
+                <template #default="{ row }">
+                  {{ (row as AgentGraphExecutionBrief).graphName ?? '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="graphDefVersion" :label="t('common.version')" width="80">
+                <template #default="{ row }">
+                  v{{ (row as AgentGraphExecutionBrief).graphDefVersion ?? '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="status" :label="t('common.status')" width="110">
+                <template #default="{ row }">
+                  <el-tag size="small">{{ (row as AgentGraphExecutionBrief).status }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column
+                prop="latencyMs"
+                :label="t('common.durationMs')"
+                width="90"
+                align="right"
+              >
+                <template #default="{ row }">
+                  {{ (row as AgentGraphExecutionBrief).latencyMs ?? '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column
+                prop="errorMessage"
+                :label="t('common.failureReason')"
+                min-width="160"
+                show-overflow-tooltip
+              >
+                <template #default="{ row }">
+                  {{ (row as AgentGraphExecutionBrief).errorMessage ?? '-' }}
+                </template>
+              </el-table-column>
+            </el-table>
           </el-card>
 
           <!-- 流转时间线 -->

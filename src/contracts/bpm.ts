@@ -1,3 +1,4 @@
+import type { AgentGraphExecutionBrief } from '@/contracts/agent'
 import type { ApprovalOpinionConfig } from './bpm-node'
 
 // ─── 待办任务 DTO（对齐后端 TodoTaskRespDTO） ───
@@ -273,4 +274,6 @@ export interface MyProcessedItem {
 export interface InstanceDetail extends ProcessInstance {
   activeNodeIds: string[] // 当前活跃节点 activity ID 列表（流程图绿色高亮）。实例已结束时为空
   flowTrace: ActivityNode[] // 全部历史活动节点（按结束时间升序，进行中节点排末尾）
+  // 1.2.0 E1-7：关联 Graph 执行摘要（Graph 执行器节点触发；智能体模块未装配时缺省）
+  graphExecutions?: AgentGraphExecutionBrief[]
 }

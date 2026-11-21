@@ -6,6 +6,7 @@ import type { PageQuery, PageResult } from '@/contracts/common'
 import type {
   AgentGraphDef,
   AgentGraphSnapshot,
+  AgentGraphVersionBinding,
   AgentGraphCreateReq,
   AgentGraphExecuteReq,
   AgentGraphExecuteResp,
@@ -108,6 +109,18 @@ export async function listGraphDefVersions(id: EntityId): Promise<AgentGraphSnap
   return request<AgentGraphSnapshot[]>({
     method: 'GET',
     url: `/agent/graph-defs/${id}/versions`,
+  })
+}
+
+/** GET /agent/graph-defs/{id}/versions/{version}/binding → 固定版本绑定描述（1.2.0 P67，
+ * 流程设计器 Graph 执行器节点与发布校验共用同一数据源；不可绑定 → 404 语义）。 */
+export async function getGraphVersionBinding(
+  id: EntityId,
+  version: number,
+): Promise<AgentGraphVersionBinding> {
+  return request<AgentGraphVersionBinding>({
+    method: 'GET',
+    url: `/agent/graph-defs/${id}/versions/${version}/binding`,
   })
 }
 
@@ -626,11 +639,12 @@ export async function toggleExternalTool(id: number, enabled: boolean): Promise<
 // 图执行历史（AgentGraphExecutionController）
 // ═══════════════════════════════════════════════════════════════
 
-/** GET /agent/graph-executions?pageNum=&pageSize=&graphDefId= → PageResult<AgentGraphExecutionDTO> */
+/** GET /agent/graph-executions?pageNum=&pageSize=&graphDefId=&businessSource= → PageResult<AgentGraphExecutionDTO> */
 export async function pageGraphExecutions(params: {
   pageNum: number
   pageSize: number
   graphDefId?: EntityId // B4（1.1.3）：雪花 ID 超 2^53，调用方按字符串透传
+  businessSource?: string // 1.2.0 E1-7：来源筛选 PROCESS / FORM / DIRECT
 }): Promise<PageResult<AgentGraphExecution>> {
   const raw = await request<BackendPageResult<AgentGraphExecution>>({
     method: 'GET',

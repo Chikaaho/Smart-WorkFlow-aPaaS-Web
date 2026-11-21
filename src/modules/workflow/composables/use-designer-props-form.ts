@@ -374,6 +374,10 @@ export function useDesignerPropsForm(options: DesignerPropsFormOptions) {
   const genericConfigFields = computed(() => {
     const fields = selectedCapability.value?.configFields ?? []
     if (dynamicParallelActive()) return []
+    // 1.2.0 P67：绑定与映射由 Graph 执行器专属面板承载（下拉选图/版本，不手写）
+    if (selectedNode.value?.type === 'GRAPH_EXEC') {
+      return fields.filter((field) => !['graphDefId', 'graphDefVersion'].includes(field.key))
+    }
     const participantKey = participantField()?.key
     return fields.filter(
       (field) =>

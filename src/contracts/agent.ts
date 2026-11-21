@@ -43,6 +43,46 @@ export interface AgentGraphSnapshot {
   createTime: string
 }
 
+/** 1.2.0 P67：开始节点参数声明（固定版本绑定描述内）。 */
+export interface AgentGraphBindingParam {
+  name: string
+  type: string
+  required: boolean
+  description: string
+}
+
+/** 1.2.0 P67：结束节点输出声明（固定版本绑定描述内；声明即必产出）。 */
+export interface AgentGraphBindingOutput {
+  name: string
+  description: string
+}
+
+/** 1.2.0 E1-7：业务关联执行摘要（流程实例/表单记录详情反查展示）。 */
+export interface AgentGraphExecutionBrief {
+  executionId: number
+  graphKey: string | null
+  graphName: string | null
+  graphDefVersion: number | null
+  status: string
+  businessSource: string
+  latencyMs: number | null
+  errorCategory: string | null
+  errorMessage: string | null
+  createTime: string | null
+}
+
+/** 1.2.0 P67：固定版本绑定描述（GET /agent/graph-defs/{id}/versions/{v}/binding）。 */
+export interface AgentGraphVersionBinding {
+  graphDefId: number
+  graphKey: string
+  name: string
+  defVersion: number
+  executionTimeoutSeconds: number
+  containsHumanNode: boolean
+  startParams: AgentGraphBindingParam[]
+  endParams: AgentGraphBindingOutput[]
+}
+
 /** 图元素 —— 节点或边（对齐后端 GraphElement）。 */
 export interface GraphElement {
   /** 元素唯一标识（设计器分配） */
@@ -294,6 +334,8 @@ export interface AgentToolExternalSaveReq {
 export interface AgentGraphExecution {
   /** 执行 ID（服务端生成） */
   id: number
+  /** 业务来源（1.2.0 E1-7）：PROCESS / FORM / DIRECT（受理行为 null 时按 DIRECT） */
+  businessSource?: string
   /** 所属图定义 ID */
   graphDefId: number
   /** 图业务 key（冗余字段，便于前端展示） */

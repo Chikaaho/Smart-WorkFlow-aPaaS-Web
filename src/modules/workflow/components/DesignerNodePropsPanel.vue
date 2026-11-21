@@ -7,6 +7,8 @@
 import { useI18n } from '@/locales'
 import DesignerParticipantPanel from './DesignerParticipantPanel.vue'
 import type { DesignerParticipantPanelApi } from './DesignerParticipantPanel.vue'
+import type { DesignerGraphExecPanelApi } from './DesignerGraphExecPanel.vue'
+import DesignerGraphExecPanel from './DesignerGraphExecPanel.vue'
 import DesignerFieldStatesPanel from './DesignerFieldStatesPanel.vue'
 import type { DesignerFieldStatesPanelApi } from './DesignerFieldStatesPanel.vue'
 import type { Ref, ComputedRef } from 'vue'
@@ -25,7 +27,7 @@ const { t } = useI18n()
  * （isVersionPreview 来自字段三态 Api；participantField/nodeMeta 等来自参与人 Api）。
  */
 export interface DesignerPropsPanelApi
-  extends DesignerParticipantPanelApi, DesignerFieldStatesPanelApi {
+  extends DesignerParticipantPanelApi, DesignerFieldStatesPanelApi, DesignerGraphExecPanelApi {
   /* ── 共享状态 ── */
   selectedNode: ComputedRef<PositionedNode | null>
   selectionId: Ref<string | null>
@@ -141,7 +143,27 @@ const {
   configArrayValue,
   configArrayOptions,
   onConfigArrayChange,
+  graphExecActive,
 } = props.api
+
+/** Graph 执行器子面板绑定包：从聚合 api 中取同一段 refs（保持 Ref 形态传给子组件）。 */
+const graphExecPanelApi: DesignerGraphExecPanelApi = {
+  graphExecActive: props.api.graphExecActive,
+  graphs: props.api.graphs,
+  graphsLoading: props.api.graphsLoading,
+  versions: props.api.versions,
+  binding: props.api.binding,
+  bindingLoading: props.api.bindingLoading,
+  bindingError: props.api.bindingError,
+  graphDefId: props.api.graphDefId,
+  graphDefVersion: props.api.graphDefVersion,
+  inputRows: props.api.inputRows,
+  outputRows: props.api.outputRows,
+  variableOptions: props.api.variableOptions,
+  onGraphChange: props.api.onGraphChange,
+  onVersionChange: props.api.onVersionChange,
+  applyGraphExec: props.api.applyGraphExec,
+}
 </script>
 
 <template>
@@ -279,6 +301,8 @@ const {
           </el-form-item>
           <!-- ═══ P63 参与人结构化面板（APPROVAL/CONSENSUS）：策略下拉 + 按策略取值编辑 ═══ -->
           <DesignerParticipantPanel v-if="participantField" :api="api" />
+          <!-- ═══ 1.2.0 P67（E1-1）Graph 执行器面板：绑定已发布图 + 固定版本 + 参数映射 ═══ -->
+          <DesignerGraphExecPanel v-if="graphExecActive" :api="graphExecPanelApi" />
           <!-- ═══ P63 动态并行专属面板（semanticVersion 开关 = 新语义按对象分支） ═══ -->
           <template v-if="dynamicParallelActive">
             <!-- Q11（273:1332）：并行分支配置入口——面板回显摘要，编辑走 820 设置面 -->
