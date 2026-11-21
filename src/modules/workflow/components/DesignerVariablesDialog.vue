@@ -203,30 +203,30 @@ const {
       </el-button>
     </el-form>
   </el-dialog>
-
-  <style scoped>
-    /* ── P64 弹窗内分区样式（与触发器弹窗同源；随弹窗模板迁入本组件） ── */
-    .p64-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 8px;
-    }
-    .p64-table {
-      width: 100%;
-    }
-    .p64-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      column-gap: 16px;
-    }
-    .p64-errors {
-      margin: 8px 0;
-      color: var(--el-color-danger, #f56c6c);
-      font-size: 12px;
-    }
-    .p64-errors p {
-      margin: 2px 0;
-    }
-  </style>
 </template>
+
+<style scoped>
+/* ── P64 弹窗内分区样式（与触发器弹窗同源；随弹窗模板迁入本组件） ── */
+.p64-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.p64-table {
+  width: 100%;
+}
+.p64-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  column-gap: 16px;
+}
+.p64-errors {
+  margin: 8px 0;
+  color: var(--el-color-danger, #f56c6c);
+  font-size: 12px;
+}
+.p64-errors p {
+  margin: 2px 0;
+}
+</style>

@@ -196,21 +196,6 @@ const {
     </template>
   </el-dialog>
 
-  <style scoped>
-    /* ── 参与人面板共用行样式副本（随弹窗模板迁入本组件） ── */
-    .participant-picker-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-    }
-    .participant-picker-row :deep(.el-button) {
-      border-color: #cbd6e8;
-      color: var(--sw-color-primary);
-      background: #fff;
-    }
-  </style>
-
   <!-- P64 弹窗可达性全局规则：append-to-body 传送后不带 scoped 属性，需全局选择器。 -->
   <style>
     /* ═══ Q11（273:1332）：动态并行 820 设置面——复用 node-op-dialog 几何；
@@ -254,3 +239,18 @@ const {
     }
   </style>
 </template>
+
+<style scoped>
+/* ── 参与人面板共用行样式副本（随弹窗模板迁入本组件） ── */
+.participant-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.participant-picker-row :deep(.el-button) {
+  border-color: #cbd6e8;
+  color: var(--sw-color-primary);
+  background: #fff;
+}
+</style>
