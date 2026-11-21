@@ -208,7 +208,8 @@ async function load(resetPage: boolean) {
       endTime: range.value?.[1] || undefined,
     })
     rows.value = page.records
-    total.value = page.total
+    // 后端 Long → JSON string：el-pagination 的 total 必须为 number，否则分页条静默消失
+    total.value = Number(page.total) || 0
   } finally {
     loading.value = false
   }

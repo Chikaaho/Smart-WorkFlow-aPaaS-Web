@@ -286,7 +286,8 @@ async function loadList() {
 
     if (execRes.status === 'fulfilled') {
       for (const e of execRes.value.list) execList.push(toMergedExecRow(e))
-      execTotal = execRes.value.total
+      // 后端 Long → JSON string：total 是字符串，不归一化会在下方相加时变成拼接
+      execTotal = Number(execRes.value.total) || 0
     } else if (execRes.reason instanceof ApiError) {
       // 执行域失败：记录错误但不阻断调试域展示
       errorMsg.value = execRes.reason.msg
@@ -300,7 +301,7 @@ async function loadList() {
       if (Array.isArray(dv.list)) {
         for (const s of dv.list) debugList.push(debugToRow(s))
       }
-      debugTotal = (debugRes as unknown as { value: { total?: number } }).value?.total ?? 0
+      debugTotal = Number((debugRes as unknown as { value: { total?: number } }).value?.total) || 0
     } else {
       // 调试域失败：静默降级为仅执行列表（不覆盖执行域错误）
       // 若执行域也失败，errorMsg 已设置
