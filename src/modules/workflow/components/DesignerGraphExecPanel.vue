@@ -42,6 +42,15 @@ export interface DesignerGraphExecPanelApi {
 }
 
 const props = defineProps<{ api: DesignerGraphExecPanelApi }>()
+
+/** E1-1 修复（review-120-02）：版本时间 ISO 原值改 yyyy-MM-dd HH:mm:ss（与 1.1.3 B3 同类问题）。 */
+function formatVersionTime(raw: string | null | undefined): string {
+  if (!raw) return ''
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return raw
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
 const {
   failureStrategy,
   graphs,
@@ -94,7 +103,7 @@ const { t } = useI18n()
           v-for="version in versions"
           :key="version.defVersion"
           :value="String(version.defVersion)"
-          :label="`v${version.defVersion} · ${version.createTime ?? ''}`"
+          :label="`v${version.defVersion} · ${formatVersionTime(version.createTime)}`"
         />
       </el-select>
     </el-form-item>
