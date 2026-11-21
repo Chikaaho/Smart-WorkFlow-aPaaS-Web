@@ -18,12 +18,18 @@
           placeholder="按 logger 名称搜索（包或类）"
           clearable
           class="filter-input"
-          @keyup.enter="load"
+          @input="applyFilter"
+          @keyup.enter="applyFilter"
         />
-        <el-button type="primary" @click="load">查询</el-button>
+        <el-button type="primary" @click="reset">查询</el-button>
         <el-button @click="reset">重置</el-button>
       </div>
 
+      <div class="render-hint" data-testid="loglevel-total">
+        匹配 {{ total }} 个 logger{{
+          total > RENDER_LIMIT ? '，当前展示前 ' + RENDER_LIMIT + ' 个' : ''
+        }}
+      </div>
       <el-table v-loading="loading" :data="rows" class="level-table">
         <el-table-column label="Logger" prop="name" min-width="280" show-overflow-tooltip>
           <template #default="{ row }">
@@ -82,15 +88,33 @@ import type { LogLevelEntry } from '../api/logLevel'
 const LEVELS = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'OFF']
 
 const keyword = ref('')
+const allRows = ref<LogLevelEntry[]>([])
 const rows = ref<LogLevelEntry[]>([])
+const total = ref(0)
 const loading = ref(false)
+
+/** Log4j2 运行期 logger 数量可达数千；全量渲染会冻结主线程，展示层限流 200 行，
+ *  服务端 keyword 过滤先行，前端再本地过滤兜底（E2-1：按名称搜索）。 */
+const RENDER_LIMIT = 200
+
+function applyFilter() {
+  const needle = keyword.value.trim().toLowerCase()
+  const source = needle
+    ? allRows.value.filter((row) => row.name.toLowerCase().includes(needle))
+    : allRows.value
+  total.value = source.length
+  rows.value = source.slice(0, RENDER_LIMIT)
+}
 
 async function load() {
   loading.value = true
   try {
-    rows.value = (await listLogLevels(keyword.value || undefined)) ?? []
+    allRows.value = (await listLogLevels()) ?? []
+    applyFilter()
   } catch {
+    allRows.value = []
     rows.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
@@ -98,7 +122,7 @@ async function load() {
 
 function reset() {
   keyword.value = ''
-  void load()
+  applyFilter()
 }
 
 /** 调整（level=null 恢复默认）；ROOT 调 DEBUG/TRACE 先二次确认（E2-5）。 */
@@ -166,6 +190,12 @@ onMounted(() => {
 
 .inherited {
   color: var(--el-text-color-secondary);
+}
+
+.render-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  margin-bottom: 8px;
 }
 
 .level-select {
