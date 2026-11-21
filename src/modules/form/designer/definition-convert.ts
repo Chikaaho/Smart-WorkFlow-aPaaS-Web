@@ -25,6 +25,7 @@ export function itemsToDefinition(
   permissions?: Pick<FormSchema, 'fieldPermissions' | 'actionPermissions' | 'allowedIntegrations'>,
   events?: FormEvents,
   printTemplate?: FormPrintTemplate,
+  graphActions?: FormSchema['graphActions'],
 ): FormSchema {
   return {
     title: title.trim() || i18n.global.t('common.untitledForm'),
@@ -46,6 +47,8 @@ export function itemsToDefinition(
     ...(events && Object.values(events).some((actions) => actions?.length) ? { events } : {}),
     // 1.0.0 F2：打印模板随定义版本化；未配置时不落键（默认模板语义）
     ...(printTemplate && Object.keys(printTemplate).length ? { printTemplate } : {}),
+    // 1.2.0 E1-6：Graph 动作随定义版本化；未配置不落键
+    ...(graphActions?.length ? { graphActions } : {}),
   }
 }
 

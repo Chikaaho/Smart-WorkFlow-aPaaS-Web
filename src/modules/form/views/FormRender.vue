@@ -28,6 +28,7 @@ import {
   getFormDefinitionVersion,
   invokeFormIntegration,
   submitForm,
+  runFormGraphAction,
   getFormData,
   updateFormData,
   normalizeSubmitData,
@@ -313,6 +314,40 @@ const draftRefreshVersion = ref(false) // 保存时是否重绑表单最新已�
 
 // 查看只读模式：有 recordId 且 mode=view；无 recordId 时永远是新建（可编辑）
 const isViewMode = computed(() => !!recordId && mode === 'view')
+
+/* ── 1.2.0 E1-6：按钮触发的「调用 Graph」动作（服务端执行，出参回填字段） ── */
+
+const buttonGraphActions = computed(
+  () => schema.value?.graphActions?.filter((action) => action.trigger === 'BUTTON') ?? [],
+)
+const graphActionRunning = ref('')
+
+/** 按钮 Graph 动作：成功回填字段；失败只提示原因，不清空已填内容。 */
+async function runGraphAction(actionId: string) {
+  if (graphActionRunning.value) return
+  graphActionRunning.value = actionId
+  try {
+    const fieldValues: Record<string, unknown> = {}
+    for (const field of schema.value?.fields ?? []) {
+      fieldValues[field.name] = formData[field.name]
+    }
+    const outputs = await runFormGraphAction(formKey, actionId, {
+      recordId: recordId ? recordId : null,
+      fieldValues,
+    })
+    for (const [field, value] of Object.entries(outputs ?? {})) {
+      if (value !== undefined && value !== null) {
+        formData[field] = value
+      }
+    }
+    ElMessage.success(t('common.operationSuccess'))
+  } catch (err) {
+    // E1-6：按钮失败只提示，不清空已填内容
+    ElMessage.error(`${t('form.graphActionRunFailed')}: ${err instanceof ApiError ? err.msg : ''}`)
+  } finally {
+    graphActionRunning.value = ''
+  }
+}
 
 /** 页面标题只表达动作，不展示表单名/流程名（0.1.7 #13）。 */
 const pageTitle = computed(() => {
@@ -1221,6 +1256,17 @@ onMounted(() => {
                 <!-- 0.1.7 #19：提交，不再暗示必有流程 -->
                 {{ t('common.submit') }}
               </el-button>
+              <!-- 1.2.0 E1-6：按钮触发的 Graph 动作（服务端执行，出参回填） -->
+              <el-button
+                v-for="action in buttonGraphActions"
+                :key="action.id"
+                round
+                :loading="graphActionRunning === action.id"
+                :data-testid="`form-graph-action-${action.id}`"
+                @click="runGraphAction(action.id)"
+              >
+                {{ action.name || action.id }}
+              </el-button>
             </template>
           </div>
           <!-- 0.2.0 参考节点 101:2：发起填写态关闭入口固定在标题栏右侧 -->
@@ -1344,6 +1390,15 @@ onMounted(() => {
               @click="handleSubmit"
             >
               {{ t('common.submit') }}
+            </el-button>
+            <el-button
+              v-for="action in buttonGraphActions"
+              :key="action.id"
+              :loading="graphActionRunning === action.id"
+              :data-testid="`form-graph-action-${action.id}`"
+              @click="runGraphAction(action.id)"
+            >
+              {{ action.name || action.id }}
             </el-button>
           </div>
         </footer>

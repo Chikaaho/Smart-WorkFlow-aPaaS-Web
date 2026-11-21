@@ -163,6 +163,23 @@ export async function submitForm(
 }
 
 /**
+ * 按钮「调用 Graph」动作（1.2.0 E1-6）：以当前字段值在服务端同步执行指定动作，
+ * 返回出参回填字段映射（field → value）。失败以 ApiError 返回（调用方只提示，
+ * 不清空已填内容）；提交前触发不经本函数——由提交端点在服务端执行。
+ */
+export async function runFormGraphAction(
+  formKey: string,
+  actionId: string,
+  body: { recordId: string | null; fieldValues: Record<string, unknown> },
+): Promise<Record<string, string>> {
+  return request<Record<string, string>>({
+    method: 'POST',
+    url: `/form/data/${formKey}/graph-actions/${encodeURIComponent(actionId)}`,
+    data: body,
+  })
+}
+
+/**
  * 提交前归一层：按字段 type 转换值，对齐后端期望格式。
  *
  * - BOOL: true/false → 1/0
