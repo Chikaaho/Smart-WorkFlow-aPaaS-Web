@@ -197,47 +197,6 @@ const {
   </el-dialog>
 
   <!-- P64 弹窗可达性全局规则：append-to-body 传送后不带 scoped 属性，需全局选择器。 -->
-  <style>
-    /* ═══ Q11（273:1332）：动态并行 820 设置面——复用 node-op-dialog 几何；
-     表单纵向可自然增长滚动，控件统一 32 高。 ═══ */
-    .el-dialog.dynamic-parallel-dialog {
-      display: flex;
-      flex-direction: column;
-      max-height: 88vh;
-      margin-top: 6vh;
-      margin-bottom: 6vh;
-    }
-    .el-dialog.dynamic-parallel-dialog .el-dialog__body {
-      overflow: auto;
-    }
-    .dynamic-parallel-dialog__form .el-form-item {
-      margin-bottom: 16px;
-    }
-    .dynamic-parallel-dialog__form .el-form-item__label {
-      margin-bottom: 4px;
-      line-height: 22px;
-    }
-    .dynamic-parallel-dialog__form .el-select,
-    .dynamic-parallel-dialog__form .el-input,
-    .dynamic-parallel-dialog__form .el-input-number,
-    .dynamic-parallel-dialog__form .el-radio-group {
-      width: 100%;
-    }
-    .dynamic-parallel-dialog__form .el-select__wrapper,
-    .dynamic-parallel-dialog__form .el-input__wrapper {
-      min-height: 32px;
-    }
-    .dynamic-parallel-dialog__form .el-input__inner {
-      height: 32px;
-      line-height: 32px;
-    }
-    .dynamic-parallel-dialog__form .el-input-number {
-      height: 32px;
-    }
-    .dynamic-parallel-dialog__form .el-input-number .el-input__inner {
-      text-align: left;
-    }
-  </style>
 </template>
 
 <style scoped>
@@ -252,5 +211,47 @@ const {
   border-color: #cbd6e8;
   color: var(--sw-color-primary);
   background: #fff;
+}
+</style>
+
+<style>
+/* ═══ Q11（273:1332）：动态并行 820 设置面——复用 node-op-dialog 几何；
+     表单纵向可自然增长滚动，控件统一 32 高。 ═══ */
+.el-dialog.dynamic-parallel-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+  margin-top: 6vh;
+  margin-bottom: 6vh;
+}
+.el-dialog.dynamic-parallel-dialog .el-dialog__body {
+  overflow: auto;
+}
+.dynamic-parallel-dialog__form .el-form-item {
+  margin-bottom: 16px;
+}
+.dynamic-parallel-dialog__form .el-form-item__label {
+  margin-bottom: 4px;
+  line-height: 22px;
+}
+.dynamic-parallel-dialog__form .el-select,
+.dynamic-parallel-dialog__form .el-input,
+.dynamic-parallel-dialog__form .el-input-number,
+.dynamic-parallel-dialog__form .el-radio-group {
+  width: 100%;
+}
+.dynamic-parallel-dialog__form .el-select__wrapper,
+.dynamic-parallel-dialog__form .el-input__wrapper {
+  min-height: 32px;
+}
+.dynamic-parallel-dialog__form .el-input__inner {
+  height: 32px;
+  line-height: 32px;
+}
+.dynamic-parallel-dialog__form .el-input-number {
+  height: 32px;
+}
+.dynamic-parallel-dialog__form .el-input-number .el-input__inner {
+  text-align: left;
 }
 </style>
