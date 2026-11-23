@@ -957,7 +957,8 @@ async function waitForInstanceByBusinessKey(formKey: string, recordId: string): 
 async function resolveFlowStartFailure(recordId: string): Promise<string> {
   if (!recordId) return ''
   const { queryFlowStartCommandStatus } = await import('@/adapters/process-runtime')
-  for (let attempt = 0; attempt < 10; attempt++) {
+  // 命令可能带重试：BLOCK 失败最迟约 26s 落终态；最多等 30s 再提示处理中
+  for (let attempt = 0; attempt < 60; attempt++) {
     try {
       const command = await queryFlowStartCommandStatus(recordId)
       if (command?.status === 'FAILED') {
@@ -966,7 +967,7 @@ async function resolveFlowStartFailure(recordId: string): Promise<string> {
           : '流程发起失败，请稍后在「我发起的」查看'
       }
       if (command?.status === 'COMPLETED') return ''
-      if (command && attempt >= 6) {
+      if (command && attempt >= 55) {
         return '流程发起处理中，请稍后在「我发起的」查看'
       }
     } catch {
