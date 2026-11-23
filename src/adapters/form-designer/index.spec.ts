@@ -715,3 +715,52 @@ describe('I2 低代码表单收口 · 防腐层', () => {
     expect((typed[4].__dsBinding__ as { queryKey: string }).queryKey).toBe('vendors')
   })
 })
+
+describe('adapters/form-designer/parseDefinition graphActions（1.2.0 E1-6）', () => {
+  it('保留合法 graphActions（触发时机/数字图 id 与版本/映射数组）', () => {
+    const raw = JSON.stringify({
+      title: 'Graph 动作',
+      fields: [{ name: 'field_city', type: 'TEXT' }],
+      graphActions: [
+        {
+          id: 'bs_ok',
+          name: '提交前回填',
+          trigger: 'BEFORE_SUBMIT',
+          graphDefId: 123,
+          graphDefVersion: 2,
+          inputMappings: [{ name: 'city', field: 'field_city' }],
+          outputMappings: [{ field: 'field_city', source: 'score' }],
+          timeoutSeconds: 30,
+        },
+      ],
+    })
+    const schema = parseDefinition(raw)
+    expect(schema.graphActions).toEqual([
+      {
+        id: 'bs_ok',
+        name: '提交前回填',
+        trigger: 'BEFORE_SUBMIT',
+        graphDefId: 123,
+        graphDefVersion: 2,
+        inputMappings: [{ name: 'city', field: 'field_city' }],
+        outputMappings: [{ field: 'field_city', source: 'score' }],
+        timeoutSeconds: 30,
+      },
+    ])
+  })
+
+  it('非法项跳过（缺 id/触发时机/图 id 或版本），不阻断其余字段', () => {
+    const raw = JSON.stringify({
+      title: 'Graph 动作',
+      fields: [{ name: 'field_city', type: 'TEXT' }],
+      graphActions: [
+        { id: '', trigger: 'BUTTON', graphDefId: 1, graphDefVersion: 1 },
+        { id: 'no_trigger', graphDefId: 1, graphDefVersion: 1 },
+        { id: 'no_graph', trigger: 'BUTTON', graphDefVersion: 1 },
+      ],
+    })
+    const schema = parseDefinition(raw)
+    expect(schema.fields).toHaveLength(1)
+    expect(schema.graphActions).toBeUndefined()
+  })
+})
