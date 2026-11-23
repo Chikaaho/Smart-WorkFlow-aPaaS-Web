@@ -62,7 +62,8 @@ function rowMeta(row: Record<string, unknown>): string {
 
 function openTask(row: Record<string, unknown>): void {
   const taskId = String(row.taskId ?? '')
-  if (!taskId) return
+  // E4-2：ACTION#<processInstanceId> 是实例级审计动作的伪任务 ID，不能当任务详情打开
+  if (!taskId || taskId.startsWith('ACTION#')) return
   void router.push({
     path: `/workflow/task/${taskId}`,
     query: activeTab.value === 'processed' ? { source: 'processed' } : undefined,
@@ -284,7 +285,7 @@ onMounted(async () => {
             <span>{{ rowMeta(row) }}</span>
           </button>
           <button type="button" class="wsys__row-action" @click="openTask(row)">
-            {{ t('workspace.handleTask') }}
+            {{ activeTab === 'todo' ? t('workspace.handleTask') : t('common.view') }}
           </button>
         </li>
       </ul>

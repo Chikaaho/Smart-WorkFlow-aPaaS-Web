@@ -815,6 +815,7 @@ export default {
     updateSuccess: 'Updated',
     deleteSuccess: 'Deleted',
     deleteFailed: 'Could not delete. Please try again.',
+    operationSuccess: 'Operation successful',
     operationFailed: 'The operation did not complete. Please try again.',
     publishSuccess: 'Published',
     emptyData: 'No data',
@@ -3822,6 +3823,8 @@ export default {
     graphExecVersionPlaceholder: 'Select a published version (fixed)',
     graphExecHumanWarning:
       'This version contains human nodes: synchronous calls are not supported; publishing the process will be rejected (E1-5)',
+    graphExecContinueHint:
+      'Continue on failure (no rollback): downstream condition nodes branch on graphExec.node_ge.status (SUCCESS / FAILED / TIMEOUT / OUTPUT_MISSING); see graphExec.node_ge.errorCategory for the failure reason',
     graphExecTimeoutLimit: 'Graph execution timeout limit',
     graphExecInputSection: 'Input mappings (process variable → graph param)',
     graphExecOutputSection: 'Output mappings (graph output → process variable)',

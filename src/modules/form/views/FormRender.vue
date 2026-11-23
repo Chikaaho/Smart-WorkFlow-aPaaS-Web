@@ -341,9 +341,12 @@ async function runGraphAction(actionId: string) {
       }
     }
     // F1-type：类型不符的输出未回填，逐条提示原因（已填内容不受影响）
-    for (const warning of result.warnings ?? []) {
+    const warnings = result.warnings ?? []
+    for (const warning of warnings) {
       ElMessage.warning(warning)
     }
+    // 有未回填的警告时不再叠加成功提示（E1-6）
+    if (warnings.length > 0) return
     ElMessage.success(t('common.operationSuccess'))
   } catch (err) {
     // E1-6：按钮失败只提示，不清空已填内容
@@ -883,6 +886,14 @@ async function handleSubmit() {
     // 探测实例是否真实创建（决定确认后的去向）；提示文案统一为「提交成功」。
     // 实例由表单提交事件在事务提交后异步创建，短暂轮询等待其可见（最多约 5s）。
     const started = await waitForInstanceByBusinessKey(formKey, id)
+    if (!started) {
+      // E1-4：BLOCK 启动失败时 Flowable 事务回滚、实例不存在；回查 FLOW_START 显示具体原因
+      const failureReason = await resolveFlowStartFailure(id)
+      if (failureReason) {
+        errorMsg.value = failureReason
+        return
+      }
+    }
     // 0.1.7 #16：提交结果以居中确认弹窗呈现，由用户点击确认后再离开本页
     submitDialogGotoInstances.value = started
     submitDialogVisible.value = true
@@ -937,6 +948,34 @@ async function waitForInstanceByBusinessKey(formKey: string, recordId: string): 
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
   return false
+}
+
+/**
+ * E1-4：实例未出现时回查 FLOW_START 子命令。
+ * FAILED 返回 failureReason；仍在处理返回「发起处理中」；查不到/已完成返回空（走原确认弹窗）。
+ */
+async function resolveFlowStartFailure(recordId: string): Promise<string> {
+  if (!recordId) return ''
+  const { queryFlowStartCommandStatus } = await import('@/adapters/process-runtime')
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const command = await queryFlowStartCommandStatus(recordId)
+      if (command?.status === 'FAILED') {
+        return command.failureReason
+          ? `流程发起失败：${command.failureReason}`
+          : '流程发起失败，请稍后在「我发起的」查看'
+      }
+      if (command?.status === 'COMPLETED') return ''
+      if (command && attempt >= 6) {
+        return '流程发起处理中，请稍后在「我发起的」查看'
+      }
+    } catch {
+      // 回查失败不阻断：继续重试直到上限
+    }
+    // eslint-disable-next-line no-undef
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  return '流程发起处理中，请稍后在「我发起的」查看'
 }
 
 /* ── 草稿模式：反填 / 保存 / 提交 ── */

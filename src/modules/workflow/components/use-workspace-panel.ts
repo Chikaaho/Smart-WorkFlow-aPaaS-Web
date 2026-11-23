@@ -156,7 +156,8 @@ export function useWorkspacePanel(deps: WorkspacePanelDeps) {
   /** 待办面板深链：已办页签携带 source=processed，详情页按已办只读渲染并回跳（V012-BUG-001）。 */
   function openPanelTask(row: Record<string, unknown>) {
     const taskId = String(row.taskId ?? '')
-    if (!taskId) return
+    // E4-2：ACTION#<processInstanceId> 是实例级审计动作的伪任务 ID，不能当任务详情打开
+    if (!taskId || taskId.startsWith('ACTION#')) return
     const query = activeTodoTab.value === 'processed' ? { source: 'processed' } : undefined
     void router.push({ path: `/workflow/task/${taskId}`, query })
   }

@@ -5,6 +5,7 @@
  * import（保持懒加载、不建立静态跨模块依赖），类型按具名契约转出。
  */
 import type { ProcessGraphPayload } from '@/modules/workflow/api'
+import type { WorkflowCommandStatus } from '@/contracts/bpm'
 
 /**
  * 按 processKey 读取当前流程定义图（表单下方流程图渲染数据源）。
@@ -30,4 +31,15 @@ export async function countProcessInstancesByBusinessKey(
 ): Promise<number> {
   const { countMyInstancesByBusinessKey } = await import('@/modules/workflow/api')
   return countMyInstancesByBusinessKey(formKey, businessKey)
+}
+
+/**
+ * E1-4：按表单记录 ID 回查 FLOW_START 子命令终态（BLOCK 启动失败时实例不存在，
+ * 发起页据此展示失败原因）。返回 null 表示命令尚未受理。
+ */
+export async function queryFlowStartCommandStatus(
+  recordId: string,
+): Promise<WorkflowCommandStatus | null> {
+  const { queryFlowStartCommand } = await import('@/modules/workflow/api')
+  return queryFlowStartCommand(recordId)
 }
