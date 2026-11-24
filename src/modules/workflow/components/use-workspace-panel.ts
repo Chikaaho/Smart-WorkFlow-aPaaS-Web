@@ -155,6 +155,12 @@ export function useWorkspacePanel(deps: WorkspacePanelDeps) {
 
   /** 待办面板深链：已办页签携带 source=processed，详情页按已办只读渲染并回跳（V012-BUG-001）。 */
   function openPanelTask(row: Record<string, unknown>) {
+    // T4：抄送页签按抄送记录 id 打开发送详情，不能走任务详情（接收人通常不是办理人）
+    if (activeTodoTab.value === 'cc') {
+      const copyId = String(row.id ?? '')
+      if (copyId) void router.push({ path: '/workflow/my-cc', query: { copyId } })
+      return
+    }
     const taskId = String(row.taskId ?? '')
     // E4-2：ACTION#<processInstanceId> 是实例级审计动作的伪任务 ID，不能当任务详情打开
     if (!taskId || taskId.startsWith('ACTION#')) return

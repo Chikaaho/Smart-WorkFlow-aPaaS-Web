@@ -166,7 +166,7 @@ const graphExecStatusVars = computed(() =>
       {
         nodeId: node.id,
         variable: `graphExec.${node.id}.errorCategory`,
-        desc: '失败分类（TIMEOUT / GRAPH_FAILED / OUTPUT_MISSING…）',
+        desc: '失败分类（TIMEOUT / EXECUTION_ERROR / OUTPUT_MISSING 等，按实际取值）',
       },
       { nodeId: node.id, variable: `graphExec.${node.id}.errorMessage`, desc: '失败原因' },
       {
@@ -828,7 +828,7 @@ const graphExecPanelApi: DesignerGraphExecPanelApi = {
 }
 .graph-exec-var-row {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 8px;
   padding: 4px 8px;
   cursor: pointer;
@@ -840,9 +840,20 @@ const graphExecPanelApi: DesignerGraphExecPanelApi = {
 }
 
 .graph-exec-var-name {
+  flex: 0 0 auto;
   font-family: var(--el-font-family-mono, monospace);
   font-size: 12px;
   color: var(--el-color-primary);
+  white-space: nowrap;
+}
+
+/* T1：变量说明必须在面板内折行，不能超出右边界被截断 */
+.graph-exec-var-row .participant-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 /* 审查23 D08-B：来源/通过条件分段通栏、32 高（通过条件等共用分段保持连体样式） */

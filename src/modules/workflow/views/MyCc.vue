@@ -3,6 +3,7 @@ import { enumLabel } from '@/foundation/i18n/enum-label'
 import { useI18n } from '@/locales'
 
 const { t } = useI18n()
+const route = useRoute()
 /**
  * MyCc — 抄送我的（v0.0.2 OA 个人办理，页型 B）。
  *
@@ -11,6 +12,7 @@ const { t } = useI18n()
  * 抄送身份不含审批操作权（无同意/驳回入口）。
  */
 import { ref, computed, onMounted, reactive } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ListFilterItem, ListActionsColumn, StandardListTemplate } from '@/components/page-layout'
 import type { ListAction } from '@/components/page-layout/ListActionsColumn.vue'
@@ -205,7 +207,15 @@ const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
   })
 })
 
-onMounted(loadList)
+onMounted(async () => {
+  await loadList()
+  // T4：工作台抄送页签带 copyId 跳转时，直接打开对应抄送详情
+  const copyId = route.query.copyId
+  if (typeof copyId === 'string' && copyId) {
+    const row = list.value.find((item) => String(item.id) === copyId)
+    if (row) await openDetail(row)
+  }
+})
 </script>
 
 <template>

@@ -3824,7 +3824,7 @@ export default {
     graphExecHumanWarning:
       'This version contains human nodes: synchronous calls are not supported; publishing the process will be rejected (E1-5)',
     graphExecContinueHint:
-      'Continue on failure (no rollback): downstream condition nodes branch on graphExec.node_ge.status (SUCCESS / FAILED / TIMEOUT / OUTPUT_MISSING); see graphExec.node_ge.errorCategory for the failure reason',
+      'Continue on failure (no rollback): status is only SUCCESS / FAILED; the failure reason is in errorCategory (TIMEOUT / EXECUTION_ERROR / OUTPUT_MISSING, etc. as actually recorded). Downstream condition nodes branch on these two variables',
     graphExecTimeoutLimit: 'Graph execution timeout limit',
     graphExecInputSection: 'Input mappings (process variable → graph param)',
     graphExecOutputSection: 'Output mappings (graph output → process variable)',

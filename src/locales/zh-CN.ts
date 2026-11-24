@@ -3715,7 +3715,7 @@ export default {
     graphExecVersionPlaceholder: '选择发布版本（固定版本）',
     graphExecHumanWarning: '该版本含人工节点：同步调用不支持，发布流程时将被拒绝（E1-5）',
     graphExecContinueHint:
-      '异常时继续执行（不回滚）：下游条件节点按 graphExec.node_ge.status 分流（SUCCESS / FAILED / TIMEOUT / OUTPUT_MISSING），失败原因见 graphExec.node_ge.errorCategory',
+      '异常时继续执行（不回滚）：status 只有 SUCCESS / FAILED，失败原因看 errorCategory（TIMEOUT / EXECUTION_ERROR / OUTPUT_MISSING 等，按实际取值）；下游条件节点按这两个变量分流',
     graphExecTimeoutLimit: '图执行超时上限',
     graphExecInputSection: '入参映射（流程变量 → 图入参）',
     graphExecOutputSection: '出参映射（图出参 → 流程变量）',
