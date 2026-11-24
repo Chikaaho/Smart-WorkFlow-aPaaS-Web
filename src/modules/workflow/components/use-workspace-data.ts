@@ -5,6 +5,7 @@ import { useI18n } from '@/locales'
 import { Document } from '@element-plus/icons-vue'
 import { queryCatalogItems, queryMyCopies, type CatalogItem } from '@/modules/workflow/api/oa'
 import { queryTodoTasks, myInstances, myDrafts, myProcessed } from '@/modules/workflow/api'
+import { useWorkflowDisplayNames } from '../composables/use-workflow-display-names'
 import type { WorkspaceComponent } from '@/contracts/catalog'
 
 export type PageExtra = { badge?: string; urgentTotal?: number }
@@ -26,6 +27,8 @@ export interface WorkspaceDataDeps {
 export function useWorkspaceData(deps: WorkspaceDataDeps) {
   const { t } = useI18n()
   const { components, favoriteKeys, rendererKeyOf, showTodoPanel, showStats, showActivity } = deps
+  // 抄送列表接口只下发 processDefKey（CopyItemVO 无 processName），行标题经此解析为流程名
+  const { ensureProcess, processName } = useWorkflowDisplayNames()
 
   // ─── 组件数据 ───
   const todoList = ref<Array<Record<string, unknown>>>([])
@@ -191,6 +194,14 @@ export function useWorkspaceData(deps: WorkspaceDataDeps) {
           .then((page) => {
             ccList.value = page.list as unknown as Array<Record<string, unknown>>
             ccTotal.value = page.total
+            // T4②：抄送行标题要有流程名，不能回退成 formKey/「-」；经显示名解析器补齐 processName
+            for (const row of ccList.value) {
+              const key = typeof row.processDefKey === 'string' ? row.processDefKey : ''
+              if (!key) continue
+              void ensureProcess(key).then(() => {
+                row.processName = processName(key)
+              })
+            }
           })
           .catch(() => {
             ccList.value = []
