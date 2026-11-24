@@ -828,8 +828,9 @@ const graphExecPanelApi: DesignerGraphExecPanelApi = {
 }
 .graph-exec-var-row {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 2px;
   padding: 4px 8px;
   cursor: pointer;
   border-radius: 4px;
@@ -840,17 +841,18 @@ const graphExecPanelApi: DesignerGraphExecPanelApi = {
 }
 
 .graph-exec-var-name {
-  flex: 0 0 auto;
   font-family: var(--el-font-family-mono, monospace);
   font-size: 12px;
   color: var(--el-color-primary);
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-all;
 }
 
-/* T1：变量说明必须在面板内折行，不能超出右边界被截断 */
+/* T1：变量说明整行铺满面板宽度并折行，不超出右边界被截断 */
 .graph-exec-var-row .participant-hint {
-  flex: 1 1 auto;
-  min-width: 0;
+  display: block;
+  width: 100%;
+  margin-top: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: normal;
