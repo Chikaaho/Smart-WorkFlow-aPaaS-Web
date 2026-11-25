@@ -28,6 +28,7 @@ import {
   getFormDefinitionVersion,
   invokeFormIntegration,
   submitForm,
+  runFormGraphAction,
   getFormData,
   updateFormData,
   normalizeSubmitData,
@@ -313,6 +314,47 @@ const draftRefreshVersion = ref(false) // 保存时是否重绑表单最新已�
 
 // 查看只读模式：有 recordId 且 mode=view；无 recordId 时永远是新建（可编辑）
 const isViewMode = computed(() => !!recordId && mode === 'view')
+
+/* ── 1.2.0 E1-6：按钮触发的「调用 Graph」动作（服务端执行，出参回填字段） ── */
+
+const buttonGraphActions = computed(
+  () => schema.value?.graphActions?.filter((action) => action.trigger === 'BUTTON') ?? [],
+)
+const graphActionRunning = ref('')
+
+/** 按钮 Graph 动作：成功回填字段；失败只提示原因，不清空已填内容。 */
+async function runGraphAction(actionId: string) {
+  if (graphActionRunning.value) return
+  graphActionRunning.value = actionId
+  try {
+    const fieldValues: Record<string, unknown> = {}
+    for (const field of schema.value?.fields ?? []) {
+      fieldValues[field.name] = formData[field.name]
+    }
+    const result = await runFormGraphAction(formKey, actionId, {
+      recordId: recordId ? recordId : null,
+      fieldValues,
+    })
+    for (const [field, value] of Object.entries(result.outputs ?? {})) {
+      if (value !== undefined && value !== null) {
+        formData[field] = value
+      }
+    }
+    // F1-type：类型不符的输出未回填，逐条提示原因（已填内容不受影响）
+    const warnings = result.warnings ?? []
+    for (const warning of warnings) {
+      ElMessage.warning(warning)
+    }
+    // 有未回填的警告时不再叠加成功提示（E1-6）
+    if (warnings.length > 0) return
+    ElMessage.success(t('common.operationSuccess'))
+  } catch (err) {
+    // E1-6：按钮失败只提示，不清空已填内容
+    ElMessage.error(`${t('form.graphActionRunFailed')}: ${err instanceof ApiError ? err.msg : ''}`)
+  } finally {
+    graphActionRunning.value = ''
+  }
+}
 
 /** 页面标题只表达动作，不展示表单名/流程名（0.1.7 #13）。 */
 const pageTitle = computed(() => {
@@ -844,6 +886,14 @@ async function handleSubmit() {
     // 探测实例是否真实创建（决定确认后的去向）；提示文案统一为「提交成功」。
     // 实例由表单提交事件在事务提交后异步创建，短暂轮询等待其可见（最多约 5s）。
     const started = await waitForInstanceByBusinessKey(formKey, id)
+    if (!started) {
+      // E1-4：BLOCK 启动失败时 Flowable 事务回滚、实例不存在；回查 FLOW_START 显示具体原因
+      const failureReason = await resolveFlowStartFailure(id)
+      if (failureReason) {
+        errorMsg.value = failureReason
+        return
+      }
+    }
     // 0.1.7 #16：提交结果以居中确认弹窗呈现，由用户点击确认后再离开本页
     submitDialogGotoInstances.value = started
     submitDialogVisible.value = true
@@ -898,6 +948,35 @@ async function waitForInstanceByBusinessKey(formKey: string, recordId: string): 
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
   return false
+}
+
+/**
+ * E1-4：实例未出现时回查 FLOW_START 子命令。
+ * FAILED 返回 failureReason；仍在处理返回「发起处理中」；查不到/已完成返回空（走原确认弹窗）。
+ */
+async function resolveFlowStartFailure(recordId: string): Promise<string> {
+  if (!recordId) return ''
+  const { queryFlowStartCommandStatus } = await import('@/adapters/process-runtime')
+  // 命令可能带重试：BLOCK 失败最迟约 26s 落终态；最多等 30s 再提示处理中
+  for (let attempt = 0; attempt < 60; attempt++) {
+    try {
+      const command = await queryFlowStartCommandStatus(recordId)
+      if (command?.status === 'FAILED') {
+        return command.failureReason
+          ? `流程发起失败：${command.failureReason}`
+          : '流程发起失败，请稍后在「我发起的」查看'
+      }
+      if (command?.status === 'COMPLETED') return ''
+      if (command && attempt >= 55) {
+        return '流程发起处理中，请稍后在「我发起的」查看'
+      }
+    } catch {
+      // 回查失败不阻断：继续重试直到上限
+    }
+    // eslint-disable-next-line no-undef
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  return '流程发起处理中，请稍后在「我发起的」查看'
 }
 
 /* ── 草稿模式：反填 / 保存 / 提交 ── */
@@ -1221,6 +1300,17 @@ onMounted(() => {
                 <!-- 0.1.7 #19：提交，不再暗示必有流程 -->
                 {{ t('common.submit') }}
               </el-button>
+              <!-- 1.2.0 E1-6：按钮触发的 Graph 动作（服务端执行，出参回填） -->
+              <el-button
+                v-for="action in buttonGraphActions"
+                :key="action.id"
+                round
+                :loading="graphActionRunning === action.id"
+                :data-testid="`form-graph-action-${action.id}`"
+                @click="runGraphAction(action.id)"
+              >
+                {{ action.name || action.id }}
+              </el-button>
             </template>
           </div>
           <!-- 0.2.0 参考节点 101:2：发起填写态关闭入口固定在标题栏右侧 -->
@@ -1344,6 +1434,15 @@ onMounted(() => {
               @click="handleSubmit"
             >
               {{ t('common.submit') }}
+            </el-button>
+            <el-button
+              v-for="action in buttonGraphActions"
+              :key="action.id"
+              :loading="graphActionRunning === action.id"
+              :data-testid="`form-graph-action-${action.id}`"
+              @click="runGraphAction(action.id)"
+            >
+              {{ action.name || action.id }}
             </el-button>
           </div>
         </footer>

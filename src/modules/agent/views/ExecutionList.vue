@@ -162,6 +162,48 @@ const pageSize = ref(10)
 const loading = ref(false)
 const errorMsg = ref('')
 
+// 1.2.0 E1-7：业务来源筛选（流程 / 表单 / 直接调用；空 = 全部）
+const businessSource = ref('')
+
+const BUSINESS_SOURCE_MAP: Record<
+  string,
+  { get label(): string; type: 'primary' | 'success' | 'info' | 'warning' }
+> = {
+  PROCESS: {
+    get label() {
+      return t('agent.sourceProcess')
+    },
+    type: 'primary',
+  },
+  FORM: {
+    get label() {
+      return t('agent.sourceForm')
+    },
+    type: 'success',
+  },
+  DIRECT: {
+    get label() {
+      return t('agent.sourceDirect')
+    },
+    type: 'info',
+  },
+  IOT: {
+    get label() {
+      return t('agent.sourceIot')
+    },
+    type: 'warning',
+  },
+}
+
+function normalizedBusinessSource(row: MergedRow): string {
+  return BUSINESS_SOURCE_MAP[row.businessSource ?? ''] ? (row.businessSource as string) : 'DIRECT'
+}
+
+function handleBusinessSourceChange() {
+  pageNum.value = 1
+  void loadList()
+}
+
 // graphDefId 来自 URL query，用于过滤
 // B4（1.1.3）：雪花 ID 超 Number.MAX_SAFE_INTEGER，Number() 会丢精度（…217→…200），
 // 从路由到请求全程按字符串透传，由后端 String→Long 精确绑定
@@ -257,7 +299,14 @@ async function loadList() {
   errorMsg.value = ''
   try {
     const page: PageQuery = { pageNum: pageNum.value, pageSize: pageSize.value }
-    const params = graphDefId.value !== '' ? { ...page, graphDefId: graphDefId.value } : page
+    const params: {
+      pageNum: number
+      pageSize: number
+      graphDefId?: string
+      businessSource?: string
+    } = { ...page }
+    if (graphDefId.value !== '') params.graphDefId = graphDefId.value
+    if (businessSource.value !== '') params.businessSource = businessSource.value
     const debugPromise: Promise<{
       list: AgentGraphDebugSession[]
       total: number
@@ -286,7 +335,8 @@ async function loadList() {
 
     if (execRes.status === 'fulfilled') {
       for (const e of execRes.value.list) execList.push(toMergedExecRow(e))
-      execTotal = execRes.value.total
+      // 后端 Long → JSON string：total 是字符串，不归一化会在下方相加时变成拼接
+      execTotal = Number(execRes.value.total) || 0
     } else if (execRes.reason instanceof ApiError) {
       // 执行域失败：记录错误但不阻断调试域展示
       errorMsg.value = execRes.reason.msg
@@ -300,7 +350,7 @@ async function loadList() {
       if (Array.isArray(dv.list)) {
         for (const s of dv.list) debugList.push(debugToRow(s))
       }
-      debugTotal = (debugRes as unknown as { value: { total?: number } }).value?.total ?? 0
+      debugTotal = Number((debugRes as unknown as { value: { total?: number } }).value?.total) || 0
     } else {
       // 调试域失败：静默降级为仅执行列表（不覆盖执行域错误）
       // 若执行域也失败，errorMsg 已设置
@@ -425,6 +475,22 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- 1.2.0 E1-7：业务来源筛选 -->
+    <div class="source-filter" data-testid="graph-exec-source-filter">
+      <el-select
+        v-model="businessSource"
+        clearable
+        :placeholder="t('agent.sourceFilterAll')"
+        style="width: 160px"
+        @change="handleBusinessSourceChange"
+      >
+        <el-option value="PROCESS" :label="t('agent.sourceProcess')" />
+        <el-option value="FORM" :label="t('agent.sourceForm')" />
+        <el-option value="DIRECT" :label="t('agent.sourceDirect')" />
+        <el-option value="IOT" :label="t('agent.sourceIot')" />
+      </el-select>
+    </div>
+
     <!-- 错误提示 -->
     <el-alert
       v-if="errorMsg"
@@ -437,10 +503,16 @@ onMounted(() => {
 
     <!-- 表格 -->
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column :label="t('common.source')" width="90">
+      <el-table-column :label="t('common.source')" width="110">
         <template #default="{ row }">
           <el-tag v-if="row._debug" type="info" size="small">{{ t('agent.sourceDebug') }}</el-tag>
-          <el-tag v-else size="small">{{ t('agent.sourceExecution') }}</el-tag>
+          <el-tag
+            v-else
+            size="small"
+            :type="BUSINESS_SOURCE_MAP[normalizedBusinessSource(row as MergedRow)].type"
+          >
+            {{ BUSINESS_SOURCE_MAP[normalizedBusinessSource(row as MergedRow)].label }}
+          </el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="graphName" :label="t('agent.graphName')" min-width="180" />
@@ -523,6 +595,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.source-filter {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
 .error-category {
   font-family: 'Courier New', Monaco, monospace;
   font-size: 12px;

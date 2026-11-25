@@ -61,8 +61,15 @@ function rowMeta(row: Record<string, unknown>): string {
 }
 
 function openTask(row: Record<string, unknown>): void {
+  // T4：抄送页签按抄送记录 id 打开发送详情，不能走任务详情
+  if (activeTab.value === 'cc') {
+    const copyId = String(row.id ?? '')
+    if (copyId) void router.push({ path: '/workflow/my-cc', query: { copyId } })
+    return
+  }
   const taskId = String(row.taskId ?? '')
-  if (!taskId) return
+  // E4-2：ACTION#<processInstanceId> 是实例级审计动作的伪任务 ID，不能当任务详情打开
+  if (!taskId || taskId.startsWith('ACTION#')) return
   void router.push({
     path: `/workflow/task/${taskId}`,
     query: activeTab.value === 'processed' ? { source: 'processed' } : undefined,
@@ -284,7 +291,7 @@ onMounted(async () => {
             <span>{{ rowMeta(row) }}</span>
           </button>
           <button type="button" class="wsys__row-action" @click="openTask(row)">
-            {{ t('workspace.handleTask') }}
+            {{ activeTab === 'todo' ? t('workspace.handleTask') : t('common.view') }}
           </button>
         </li>
       </ul>

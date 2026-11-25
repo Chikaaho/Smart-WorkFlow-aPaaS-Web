@@ -40,6 +40,10 @@ watch(
   },
 )
 
+// X3-endpanel（1.1.0 G1-4 缺陷，并入 1.2.0）：行值变更即提交——此前只靠 @change，
+// fill/Tab/blur 在部分交互序列下不触发 el-input 的 change 事件，行值丢失。
+watch(rows, () => commit(), { deep: true })
+
 function commit() {
   emit(
     'updateNodeData',

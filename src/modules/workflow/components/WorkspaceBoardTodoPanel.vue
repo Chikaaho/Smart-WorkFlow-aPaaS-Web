@@ -62,7 +62,7 @@ const router = useRouter()
           >{{ dueChip(row) }}</span
         >
         <button class="wsd-task__action" type="button" @click="openPanelTask(row)">
-          {{ t('workspace.handleTask') }}
+          {{ activeTab === 'todo' ? t('workspace.handleTask') : t('common.view') }}
         </button>
       </li>
     </ul>

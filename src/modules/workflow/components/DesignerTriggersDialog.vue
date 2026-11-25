@@ -466,49 +466,49 @@ const {
       </el-button>
     </el-form>
   </el-dialog>
+</template>
 
-  <style scoped>
-    /* ── P64 弹窗内分区样式（与变量弹窗同源；随弹窗模板迁入本组件） ── */
-    .p64-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 8px;
-    }
-    /* P64 宽/矮视口可达性（审查02 P1-03b）：弹窗不超出视口，内容区滚动，
+<style scoped>
+/* ── P64 弹窗内分区样式（与变量弹窗同源；随弹窗模板迁入本组件） ── */
+.p64-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+/* P64 宽/矮视口可达性（审查02 P1-03b）：弹窗不超出视口，内容区滚动，
    关闭/保存/映射等控件在大变量与多分支配置下仍可到达。append-to-body 传送后
    弹窗不带 scoped 属性，外壳规则见全局样式块。 */
-    .p64-hint {
-      color: var(--el-text-color-secondary);
-      font-size: 12px;
-    }
-    .p64-subtitle {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--sw-color-primary);
-    }
-    .p64-table {
-      width: 100%;
-    }
-    .p64-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      column-gap: 16px;
-    }
-    .p64-branch-card,
-    .p64-action-card {
-      border: 1px solid var(--el-border-color-lighter, #e4e7ed);
-      border-radius: 6px;
-      padding: 12px;
-      margin-bottom: 12px;
-    }
-    .p64-errors {
-      margin: 8px 0;
-      color: var(--el-color-danger, #f56c6c);
-      font-size: 12px;
-    }
-    .p64-errors p {
-      margin: 2px 0;
-    }
-  </style>
-</template>
+.p64-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.p64-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sw-color-primary);
+}
+.p64-table {
+  width: 100%;
+}
+.p64-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  column-gap: 16px;
+}
+.p64-branch-card,
+.p64-action-card {
+  border: 1px solid var(--el-border-color-lighter, #e4e7ed);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.p64-errors {
+  margin: 8px 0;
+  color: var(--el-color-danger, #f56c6c);
+  font-size: 12px;
+}
+.p64-errors p {
+  margin: 2px 0;
+}
+</style>

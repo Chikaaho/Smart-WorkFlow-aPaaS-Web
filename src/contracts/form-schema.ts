@@ -393,6 +393,32 @@ export interface FormSchema {
    * 缺省=默认模板（全部可见字段 + 明细表 + 审批历史）。
    */
   printTemplate?: FormPrintTemplate
+  /**
+   * 「调用 Graph」服务端动作（1.2.0 P67/E1-6）：提交前阻止失败提交并回填出参，
+   * 按钮在运行页触发、成功回填字段、失败只提示。入参来自表单字段、出参回填到字段，
+   * 服务端经 agent 受控端口执行（不在前端脚本解释器内调用）。
+   */
+  graphActions?: FormGraphActionConfig[]
+}
+
+/** 单个「调用 Graph」动作配置（1.2.0 E1-6，随定义版本化）。 */
+export interface FormGraphActionConfig {
+  /** 动作 id（表单内稳定；服务端作为业务关联 nodeId 落执行请求）。 */
+  id: string
+  /** 动作名称（按钮文案 / 审计展示）。 */
+  name: string
+  /** 触发时机：BEFORE_SUBMIT（提交前）/ BUTTON（按钮）。 */
+  trigger: 'BEFORE_SUBMIT' | 'BUTTON'
+  /** 绑定已发布 Graph 定义 id（固定版本绑定）。 */
+  graphDefId: number
+  /** 绑定版本（发布快照版本号）。 */
+  graphDefVersion: number
+  /** 入参映射：图开始节点参数名 ← 表单字段名。 */
+  inputMappings: Array<{ name: string; field: string }>
+  /** 出参映射：表单字段名 ← 图结束节点输出名。 */
+  outputMappings: Array<{ field: string; source: string }>
+  /** 超时（秒；不得超过图自身执行超时）。 */
+  timeoutSeconds?: number
 }
 
 /** 打印模板配置（1.0.0 F2）；服务端 PDF 与浏览器打印共用同一配置。 */

@@ -7,6 +7,7 @@ import {
   parseFormFieldOptions,
   type FieldScript,
   type FormFieldOption,
+  type FormGraphActionConfig,
   type FormSchema,
   type FormSchemaField,
   type FieldType,
@@ -273,6 +274,65 @@ function mapRawField(raw: RawFieldDef): FormSchemaField | null {
 }
 
 /** 将后端裸 definition JSON 字符串解析并映射为前端稳定的 FormSchema。 */
+/**
+ * E1-6：解析 definition 的 graphActions 段（表单「调用 Graph」动作）。
+ * 服务端按同一形状执行（FormGraphActionRules）；前端运行页要按此渲染按钮，
+ * 缺映射则按钮不出现、再次保存还会丢动作。非法项跳过，不阻断其余字段解析。
+ */
+function parseGraphActions(raw: unknown): FormGraphActionConfig[] {
+  if (!Array.isArray(raw)) return []
+  const actions: FormGraphActionConfig[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const action = item as Record<string, unknown>
+    const id = typeof action.id === 'string' ? action.id.trim() : ''
+    const trigger =
+      action.trigger === 'BEFORE_SUBMIT' || action.trigger === 'BUTTON' ? action.trigger : null
+    const graphDefId = Number(action.graphDefId)
+    const graphDefVersion = Number(action.graphDefVersion)
+    if (
+      !id ||
+      !trigger ||
+      !Number.isFinite(graphDefId) ||
+      graphDefId <= 0 ||
+      !Number.isFinite(graphDefVersion) ||
+      graphDefVersion <= 0
+    ) {
+      continue
+    }
+    const inputMappings = Array.isArray(action.inputMappings)
+      ? action.inputMappings.flatMap<{ name: string; field: string }>((mapping) => {
+          if (!mapping || typeof mapping !== 'object') return []
+          const entry = mapping as Record<string, unknown>
+          const name = typeof entry.name === 'string' ? entry.name.trim() : ''
+          const field = typeof entry.field === 'string' ? entry.field.trim() : ''
+          return name && field ? [{ name, field }] : []
+        })
+      : []
+    const outputMappings = Array.isArray(action.outputMappings)
+      ? action.outputMappings.flatMap<{ field: string; source: string }>((mapping) => {
+          if (!mapping || typeof mapping !== 'object') return []
+          const entry = mapping as Record<string, unknown>
+          const field = typeof entry.field === 'string' ? entry.field.trim() : ''
+          const source = typeof entry.source === 'string' ? entry.source.trim() : ''
+          return field && source ? [{ field, source }] : []
+        })
+      : []
+    const timeoutSeconds = Number(action.timeoutSeconds)
+    actions.push({
+      id,
+      name: typeof action.name === 'string' ? action.name : '',
+      trigger,
+      graphDefId,
+      graphDefVersion,
+      inputMappings,
+      outputMappings,
+      ...(Number.isFinite(timeoutSeconds) && timeoutSeconds > 0 ? { timeoutSeconds } : {}),
+    })
+  }
+  return actions
+}
+
 export function parseDefinition(rawJson: string): FormSchema {
   let parsed: unknown
   try {
@@ -334,6 +394,13 @@ export function parseDefinition(rawJson: string): FormSchema {
       return printTemplate !== undefined && printTemplate !== null
         ? { printTemplate: printTemplate as FormSchema['printTemplate'] }
         : {}
+    })(),
+    // 1.2.0 E1-6：「调用 Graph」动作随定义版本化，运行页按钮/回填依赖此段
+    ...(() => {
+      const graphActions = parseGraphActions(
+        (raw as unknown as { graphActions?: unknown }).graphActions,
+      )
+      return graphActions.length ? { graphActions } : {}
     })(),
   }
 }

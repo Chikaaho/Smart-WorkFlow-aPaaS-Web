@@ -624,4 +624,51 @@ describe('ExecutionList.vue - D126 §6 验收标准测试', () => {
     }
     expect(vm.totalTokensOf(vm.list[0])).toBe(832)
   })
+
+  // P74：后端 Long → JSON string，total 为字符串时按数值相加，不得拼接
+  it('P74: 字符串 total 按数值相加 - "10"+0 得 10 而非 "100"，"10"+"2" 得 12 而非 "102"', async () => {
+    vi.mocked(pageDebugSessions).mockResolvedValueOnce({
+      list: [],
+      total: 0,
+      pageNum: 1,
+      pageSize: 10,
+    } as any)
+    vi.mocked(pageGraphExecutionsWithVersion).mockResolvedValueOnce({
+      list: MOCK_EXECUTION_LIST,
+      total: '10', // 后端 JacksonLongToStringConfig：PageResult.total 运行时是字符串
+      pageNum: 1,
+      pageSize: 10,
+    } as any)
+    const wrapper = mount(ExecutionList, {
+      global: { plugins: [createPinia()], stubs: STUBS_LIST },
+    })
+    await nextTick()
+    await nextTick()
+    await nextTick()
+    const vm1 = wrapper.vm as unknown as { total: number }
+    expect(vm1.total).toBe(10)
+    expect(typeof vm1.total).toBe('number')
+
+    vi.mocked(pageDebugSessions).mockResolvedValueOnce({
+      list: [],
+      total: '2',
+      pageNum: 1,
+      pageSize: 10,
+    } as any)
+    vi.mocked(pageGraphExecutionsWithVersion).mockResolvedValueOnce({
+      list: MOCK_EXECUTION_LIST,
+      total: '10',
+      pageNum: 1,
+      pageSize: 10,
+    } as any)
+    const wrapper2 = mount(ExecutionList, {
+      global: { plugins: [createPinia()], stubs: STUBS_LIST },
+    })
+    await nextTick()
+    await nextTick()
+    await nextTick()
+    const vm2 = wrapper2.vm as unknown as { total: number }
+    expect(vm2.total).toBe(12)
+    expect(typeof vm2.total).toBe('number')
+  })
 })

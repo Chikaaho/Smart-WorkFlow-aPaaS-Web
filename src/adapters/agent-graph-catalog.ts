@@ -20,3 +20,31 @@ export async function listPublishedGraphOptions(): Promise<AgentGraphOption[]> {
     .filter((g) => g.status === 'PUBLISHED')
     .map((g) => ({ label: `${g.name} (${g.graphKey})`, value: g.graphKey }))
 }
+
+/* ── 1.2.0 P67（E1-1）：流程设计器 Graph 执行器节点的绑定数据源 ── */
+
+import type { AgentGraphDef, AgentGraphSnapshot, AgentGraphVersionBinding } from '@/contracts/agent'
+
+export type { AgentGraphDef, AgentGraphSnapshot, AgentGraphVersionBinding }
+
+/** 已发布图定义列表（含 id/最新版本/执行超时；设计器绑定下拉数据源）。 */
+export async function listPublishedGraphDefs(): Promise<AgentGraphDef[]> {
+  const { pageGraphDefs } = await import('@/modules/agent/api')
+  const page = await pageGraphDefs({ pageNum: 1, pageSize: 100 })
+  return page.list.filter((g) => g.status === 'PUBLISHED')
+}
+
+/** 指定图的历史发布版本（新版本在前）。 */
+export async function listGraphVersions(id: number | string): Promise<AgentGraphSnapshot[]> {
+  const { listGraphDefVersions } = await import('@/modules/agent/api')
+  return listGraphDefVersions(id)
+}
+
+/** 固定版本绑定描述：开始/结束参数声明、执行超时上限、是否含人工节点。 */
+export async function getGraphVersionBinding(
+  id: number | string,
+  version: number,
+): Promise<AgentGraphVersionBinding> {
+  const { getGraphVersionBinding: fetch } = await import('@/modules/agent/api')
+  return fetch(id, version)
+}

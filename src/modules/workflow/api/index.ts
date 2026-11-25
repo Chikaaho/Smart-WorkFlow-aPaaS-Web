@@ -177,6 +177,19 @@ export async function queryCommandStatus(commandId: string): Promise<WorkflowCom
   })
 }
 
+/**
+ * E1-4：按表单记录 ID 回查 FLOW_START 子命令（仅发起人本人）。
+ * BLOCK 启动失败时实例行不存在，发起页靠它展示 failureReason。
+ */
+export async function queryFlowStartCommand(
+  recordId: string,
+): Promise<WorkflowCommandStatus | null> {
+  return request<WorkflowCommandStatus | null>({
+    method: 'GET',
+    url: `/workflow/commands/flow-start/${recordId}`,
+  })
+}
+
 export interface CommandPollOptions {
   intervalMs?: number // 默认 500ms
   maxAttempts?: number // 默认 10 次

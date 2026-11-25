@@ -57,6 +57,15 @@ function getApprovalResultType(result: string | null): 'success' | 'danger' | 'i
   return APPROVAL_RESULT_MAP[result]?.type ?? 'info'
 }
 
+/** T3：意见详情头部时间统一 yyyy-MM-dd HH:mm:ss（后端返回 ISO 原值）。 */
+function formatOpinionTime(value: string | null | undefined): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
 /** 数值字段单位：标签尾部「（单位）」提升为值后单位（预计停机时长（分钟）+300 → 预计停机时长：300 分钟）。 */
 function labelUnitOf(label: string): { base: string; unit: string } {
   const match = /（([^（）]+)）\s*$/.exec(label)
@@ -751,7 +760,7 @@ async function downloadOpinionAttachmentItem(item: OpinionAttachmentItem): Promi
           </b>
           <p>
             {{ getApprovalResultLabel(opinionDetailRow.approvalResult) }} ·
-            {{ opinionDetailRow.endTime ?? opinionDetailRow.createTime }}
+            {{ formatOpinionTime(opinionDetailRow.endTime ?? opinionDetailRow.createTime) }}
             <template v-if="opinionDetailRow.opinionFormVersion">
               · {{ t('taskDetailUi.formVersionLabel') }} v{{ opinionDetailRow.opinionFormVersion }}
             </template>

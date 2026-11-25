@@ -57,6 +57,7 @@ import { useDesignerSave } from '../composables/use-designer-save'
 import { useDesignerFormFields } from '../composables/use-designer-form-fields'
 import { useDesignerParticipant } from '../composables/use-designer-participant'
 import { useDesignerDynamicParallel } from '../composables/use-designer-dynamic-parallel'
+import { useDesignerGraphExec } from '../composables/use-designer-graph-exec'
 import { useDesignerPropsForm } from '../composables/use-designer-props-form'
 import { useDesignerVariablesTriggers } from '../composables/use-designer-variables-triggers'
 import { useDesignerSubflow } from '../composables/use-designer-subflow'
@@ -270,6 +271,14 @@ const dpResult = useDesignerDynamicParallel({
   tableColumnOptionsFor: participantResult.tableColumnOptionsFor,
 })
 
+const graphExecResult = useDesignerGraphExec({
+  selectedNode,
+  model: modelRef,
+  isVersionPreview,
+  graph,
+  snapshot,
+})
+
 const propsFormResult = useDesignerPropsForm({
   selectedNode,
   selectedCapability,
@@ -361,6 +370,8 @@ const propsPanelApi = {
   ...propsFormResult,
   ...participantResult,
   ...dpResult,
+  ...graphExecResult,
+  canvasNodes,
   ...formFieldsResult,
   ...subflowResult,
   ...scriptDialogResult,

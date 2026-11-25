@@ -59,6 +59,8 @@ export const NODE_ICON_PATHS: Record<string, readonly string[]> = {
 }
 
 export function nodeIconPaths(type: string): readonly string[] {
+  // Graph 执行器（1.2.0 P67）：复用智能体机器人字形
+  if (type === 'GRAPH_EXEC') return NODE_ICON_PATHS.AGENT!
   return NODE_ICON_PATHS[type] ?? NODE_ICON_PATHS.DEFAULT!
 }
 
@@ -81,7 +83,7 @@ export const PALETTE_GROUP_TYPES: ReadonlyArray<{
   {
     key: 'automatic',
     labelKey: 'workflow.paletteAutomatic',
-    types: ['COPY', 'NOTIFICATION', 'TXN_ACTION', 'IOT_COMMAND', 'AGENT'],
+    types: ['COPY', 'NOTIFICATION', 'TXN_ACTION', 'IOT_COMMAND', 'AGENT', 'GRAPH_EXEC'],
   },
 ]
 
